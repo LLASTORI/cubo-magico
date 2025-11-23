@@ -21,26 +21,31 @@ async function getHotmartToken(): Promise<string> {
     throw new Error('Hotmart credentials not configured');
   }
 
+  // Create form data for OAuth2
+  const formData = new URLSearchParams();
+  formData.append('grant_type', 'client_credentials');
+  formData.append('client_id', clientId);
+  formData.append('client_secret', clientSecret);
+
+  console.log('Requesting Hotmart token...');
+
   const response = await fetch('https://api-sec-vlc.hotmart.com/security/oauth/token', {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${basicAuth}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify({
-      grant_type: 'client_credentials',
-      client_id: clientId,
-      client_secret: clientSecret,
-    }),
+    body: formData.toString(),
   });
 
   if (!response.ok) {
     const error = await response.text();
     console.error('Failed to get Hotmart token:', error);
-    throw new Error('Failed to authenticate with Hotmart');
+    throw new Error(`Failed to authenticate with Hotmart: ${response.status}`);
   }
 
   const data: HotmartTokenResponse = await response.json();
+  console.log('Token obtained successfully');
   return data.access_token;
 }
 

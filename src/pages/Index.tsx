@@ -1,33 +1,38 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
+import SalesFilters, { FilterParams } from "@/components/SalesFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<any>(null);
+  const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchHotmartData();
-  }, []);
-
-  const fetchHotmartData = async () => {
+  const fetchHotmartData = async (filters: FilterParams) => {
     try {
       setLoading(true);
+      setCurrentFilters(filters);
       
-      // Get current date and 30 days ago
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
+      // Convert dates to timestamps
+      const startTimestamp = new Date(filters.startDate).getTime();
+      const endTimestamp = new Date(filters.endDate).getTime();
 
-      const params = {
-        start_date: startDate.getTime(),
-        end_date: endDate.getTime(),
-        max_results: 10,
+      const params: any = {
+        start_date: startTimestamp,
+        end_date: endTimestamp,
+        max_results: filters.maxResults,
       };
+
+      if (filters.transactionStatus) {
+        params.transaction_status = filters.transactionStatus.toUpperCase();
+      }
+
+      console.log('Requesting with params:', params);
 
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
@@ -38,8 +43,13 @@ const Index = () => {
 
       if (error) throw error;
 
-      console.log('Hotmart data:', data);
+      console.log('Hotmart data received:', data);
       setSalesData(data);
+
+      toast({
+        title: "Dados carregados com sucesso!",
+        description: `${data?.items?.length || 0} transações encontradas`,
+      });
     } catch (error: any) {
       console.error('Error fetching Hotmart data:', error);
       toast({
@@ -52,99 +62,144 @@ const Index = () => {
     }
   };
 
-  // Mock data for demonstration
-  const mockMetrics = {
-    totalSales: "R$ 47.350,00",
-    transactions: 156,
-    customers: 89,
-    growth: "+12.5%",
+  const handleRefresh = () => {
+    if (currentFilters) {
+      fetchHotmartData(currentFilters);
+    }
   };
 
-  const mockSales = [
-    {
-      transaction: "HP123456",
-      product: "Curso de Marketing Digital",
-      buyer: "João Silva",
-      value: 497.00,
-      status: "Approved",
-      date: "22/11/2025",
-    },
-    {
-      transaction: "HP123457",
-      product: "Ebook: Vendas Online",
-      buyer: "Maria Santos",
-      value: 97.00,
-      status: "Complete",
-      date: "22/11/2025",
-    },
-    {
-      transaction: "HP123458",
-      product: "Consultoria Premium",
-      buyer: "Pedro Costa",
-      value: 1997.00,
-      status: "Pending",
-      date: "21/11/2025",
-    },
-  ];
+  // Calculate metrics from real data
+  const calculateMetrics = () => {
+    if (!salesData?.items) {
+      return {
+        totalSales: "R$ 0,00",
+        transactions: 0,
+        customers: 0,
+        growth: "0%",
+      };
+    }
+
+    const items = salesData.items;
+    const total = items.reduce((sum: number, item: any) => {
+      return sum + (item.purchase?.price?.value || 0);
+    }, 0);
+
+    const uniqueCustomers = new Set(items.map((item: any) => item.buyer?.email)).size;
+
+    return {
+      totalSales: new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(total / 100), // Hotmart returns values in cents
+      transactions: items.length,
+      customers: uniqueCustomers,
+      growth: "+--",
+    };
+  };
+
+  const formatSalesData = () => {
+    if (!salesData?.items) return [];
+
+    return salesData.items.map((item: any) => ({
+      transaction: item.transaction,
+      product: item.product?.name || 'N/A',
+      buyer: item.buyer?.name || item.buyer?.email || 'N/A',
+      value: (item.purchase?.price?.value || 0) / 100, // Convert from cents
+      status: item.purchase?.status || 'unknown',
+      date: new Date(item.purchase?.approved_date || item.created_at).toLocaleDateString('pt-BR'),
+    }));
+  };
+
+  const metrics = calculateMetrics();
+  const formattedSales = formatSalesData();
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card shadow-sm">
         <div className="container mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Dashboard Hotmart
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Acompanhe suas vendas e métricas em tempo real
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                Dashboard Hotmart
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Consulte suas vendas e transações da API
+              </p>
+            </div>
+            {salesData && (
+              <Button
+                onClick={handleRefresh}
+                disabled={loading}
+                variant="outline"
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          </div>
-        ) : (
-          <div className="space-y-8 animate-fade-in">
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <MetricCard
-                title="Vendas Totais"
-                value={mockMetrics.totalSales}
-                icon={DollarSign}
-                trend={mockMetrics.growth}
-                trendUp={true}
-              />
-              <MetricCard
-                title="Transações"
-                value={mockMetrics.transactions}
-                icon={ShoppingCart}
-                trend="+8 hoje"
-                trendUp={true}
-              />
-              <MetricCard
-                title="Clientes"
-                value={mockMetrics.customers}
-                icon={Users}
-                trend="+5 novos"
-                trendUp={true}
-              />
-              <MetricCard
-                title="Crescimento"
-                value={mockMetrics.growth}
-                icon={TrendingUp}
-                trend="vs. mês anterior"
-                trendUp={true}
-              />
-            </div>
+        <div className="space-y-6">
+          {/* Filters */}
+          <SalesFilters onFilter={fetchHotmartData} />
 
-            {/* Sales Table */}
-            <SalesTable sales={mockSales} />
-          </div>
-        )}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <p className="text-muted-foreground">Consultando API da Hotmart...</p>
+            </div>
+          ) : salesData ? (
+            <div className="space-y-6 animate-fade-in">
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <MetricCard
+                  title="Vendas Totais"
+                  value={metrics.totalSales}
+                  icon={DollarSign}
+                />
+                <MetricCard
+                  title="Transações"
+                  value={metrics.transactions}
+                  icon={ShoppingCart}
+                />
+                <MetricCard
+                  title="Clientes Únicos"
+                  value={metrics.customers}
+                  icon={Users}
+                />
+                <MetricCard
+                  title="Total de Registros"
+                  value={formattedSales.length}
+                  icon={TrendingUp}
+                />
+              </div>
+
+              {/* Sales Table */}
+              {formattedSales.length > 0 ? (
+                <SalesTable sales={formattedSales} />
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  Nenhuma transação encontrada para os filtros selecionados
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <Filter className="w-16 h-16 text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                Configure os Filtros
+              </h3>
+              <p className="text-muted-foreground">
+                Selecione as datas e filtros desejados para buscar as transações da Hotmart
+              </p>
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

@@ -15,25 +15,23 @@ interface HotmartTokenResponse {
 async function getHotmartToken(): Promise<string> {
   const clientId = Deno.env.get('HOTMART_CLIENT_ID');
   const clientSecret = Deno.env.get('HOTMART_CLIENT_SECRET');
+  const basicToken = Deno.env.get('HOTMART_BASIC_AUTH');
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Hotmart credentials not configured');
+  if (!clientId || !clientSecret || !basicToken) {
+    throw new Error('Hotmart credentials not configured (client_id, client_secret, basic token)');
   }
-
-  // Create form data for OAuth2
-  const formData = new URLSearchParams();
-  formData.append('grant_type', 'client_credentials');
-  formData.append('client_id', clientId);
-  formData.append('client_secret', clientSecret);
 
   console.log('Requesting Hotmart token...');
 
-  const response = await fetch('https://api-sec-vlc.hotmart.com/security/oauth/token', {
+  // According to Hotmart docs, send client_id and client_secret as query params + Basic token in header
+  const url = `https://api-sec-vlc.hotmart.com/security/oauth/token?grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}`;
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${basicToken}`,
     },
-    body: formData.toString(),
   });
 
   if (!response.ok) {

@@ -23,14 +23,14 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
 
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
-  const [transactionStatus, setTransactionStatus] = useState<string>("");
+  const [transactionStatus, setTransactionStatus] = useState<string>("all");
   const [maxResults, setMaxResults] = useState("50");
 
   const handleApplyFilters = () => {
     onFilter({
       startDate,
       endDate,
-      transactionStatus: transactionStatus || undefined,
+      transactionStatus: transactionStatus === "all" ? undefined : transactionStatus,
       maxResults: parseInt(maxResults),
     });
   };
@@ -81,7 +81,7 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="approved">Aprovado</SelectItem>
               <SelectItem value="complete">Completo</SelectItem>
               <SelectItem value="pending">Pendente</SelectItem>

@@ -14,18 +14,14 @@ interface HotmartTokenResponse {
 
 async function getHotmartToken(): Promise<string> {
   const basicAuth = Deno.env.get('HOTMART_BASIC_AUTH');
-  const clientId = Deno.env.get('HOTMART_CLIENT_ID');
-  const clientSecret = Deno.env.get('HOTMART_CLIENT_SECRET');
 
-  if (!basicAuth || !clientId || !clientSecret) {
-    throw new Error('Hotmart credentials not configured');
+  if (!basicAuth) {
+    throw new Error('Hotmart Basic Auth credential not configured');
   }
 
   // Create form data for OAuth2
   const formData = new URLSearchParams();
   formData.append('grant_type', 'client_credentials');
-  formData.append('client_id', clientId);
-  formData.append('client_secret', clientSecret);
 
   console.log('Requesting Hotmart token...');
 
@@ -40,7 +36,8 @@ async function getHotmartToken(): Promise<string> {
 
   if (!response.ok) {
     const error = await response.text();
-    console.error('Failed to get Hotmart token:', error);
+    console.error('Failed to get Hotmart token. Status:', response.status);
+    console.error('Error response:', error);
     throw new Error(`Failed to authenticate with Hotmart: ${response.status}`);
   }
 

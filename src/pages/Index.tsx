@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
   const [salesData, setSalesData] = useState<any>(null);
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
   const { toast } = useToast();
@@ -65,6 +66,36 @@ const Index = () => {
   const handleRefresh = () => {
     if (currentFilters) {
       fetchHotmartData(currentFilters);
+    }
+  };
+
+  const testConnection = async () => {
+    try {
+      setTestingConnection(true);
+      
+      // Make a minimal request to test authentication
+      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          endpoint: '/sales/summary',
+          params: {},
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✓ Conexão bem-sucedida!",
+        description: "As credenciais da Hotmart estão configuradas corretamente",
+      });
+    } catch (error: any) {
+      console.error('Connection test failed:', error);
+      toast({
+        title: "✗ Falha na conexão",
+        description: error.message || "Verifique suas credenciais da Hotmart",
+        variant: "destructive",
+      });
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -127,17 +158,28 @@ const Index = () => {
                 Consulte suas vendas e transações da API
               </p>
             </div>
-            {salesData && (
+            <div className="flex gap-2">
               <Button
-                onClick={handleRefresh}
-                disabled={loading}
+                onClick={testConnection}
+                disabled={testingConnection || loading}
                 variant="outline"
                 className="gap-2"
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Atualizar
+                <Zap className={`w-4 h-4 ${testingConnection ? 'animate-pulse' : ''}`} />
+                Testar Conexão
               </Button>
-            )}
+              {salesData && (
+                <Button
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </header>

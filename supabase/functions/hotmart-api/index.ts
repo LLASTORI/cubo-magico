@@ -13,22 +13,24 @@ interface HotmartTokenResponse {
 }
 
 async function getHotmartToken(): Promise<string> {
-  const basicAuth = Deno.env.get('HOTMART_BASIC_AUTH');
+  const clientId = Deno.env.get('HOTMART_CLIENT_ID');
+  const clientSecret = Deno.env.get('HOTMART_CLIENT_SECRET');
 
-  if (!basicAuth) {
-    throw new Error('Hotmart Basic Auth credential not configured');
+  if (!clientId || !clientSecret) {
+    throw new Error('Hotmart credentials not configured');
   }
 
   // Create form data for OAuth2
   const formData = new URLSearchParams();
   formData.append('grant_type', 'client_credentials');
+  formData.append('client_id', clientId);
+  formData.append('client_secret', clientSecret);
 
   console.log('Requesting Hotmart token...');
 
   const response = await fetch('https://api-sec-vlc.hotmart.com/security/oauth/token', {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${basicAuth}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: formData.toString(),

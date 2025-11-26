@@ -14,7 +14,192 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      hotmart_sales: {
+        Row: {
+          affiliate_code: string | null
+          affiliate_name: string | null
+          buyer_address: string | null
+          buyer_address_complement: string | null
+          buyer_address_number: string | null
+          buyer_cep: string | null
+          buyer_city: string | null
+          buyer_country: string | null
+          buyer_document: string | null
+          buyer_email: string | null
+          buyer_instagram: string | null
+          buyer_name: string | null
+          buyer_neighborhood: string | null
+          buyer_phone: string | null
+          buyer_phone_ddd: string | null
+          buyer_state: string | null
+          checkout_origin: string | null
+          confirmation_date: string | null
+          coupon: string | null
+          created_at: string
+          due_date: string | null
+          exchange_rate: number | null
+          free_period: string | null
+          has_coproduction: boolean | null
+          id: string
+          installment_number: number | null
+          invoice_number: string | null
+          is_upgrade: boolean | null
+          items_quantity: number | null
+          net_revenue: number | null
+          offer_code: string | null
+          offer_currency: string | null
+          offer_price: number | null
+          origin: string | null
+          original_price: number | null
+          payment_method: string | null
+          payment_type: string | null
+          producer_document: string | null
+          producer_name: string | null
+          product_code: string | null
+          product_currency: string | null
+          product_name: string
+          product_price: number | null
+          received_value: number | null
+          recurrence: number | null
+          sale_date: string | null
+          sale_origin: string | null
+          shipping_value: number | null
+          sold_as: string | null
+          status: string
+          subscriber_code: string | null
+          total_price: number | null
+          transaction_id: string
+          updated_at: string
+          utm_adset_name: string | null
+          utm_campaign_id: string | null
+          utm_creative: string | null
+          utm_placement: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          affiliate_code?: string | null
+          affiliate_name?: string | null
+          buyer_address?: string | null
+          buyer_address_complement?: string | null
+          buyer_address_number?: string | null
+          buyer_cep?: string | null
+          buyer_city?: string | null
+          buyer_country?: string | null
+          buyer_document?: string | null
+          buyer_email?: string | null
+          buyer_instagram?: string | null
+          buyer_name?: string | null
+          buyer_neighborhood?: string | null
+          buyer_phone?: string | null
+          buyer_phone_ddd?: string | null
+          buyer_state?: string | null
+          checkout_origin?: string | null
+          confirmation_date?: string | null
+          coupon?: string | null
+          created_at?: string
+          due_date?: string | null
+          exchange_rate?: number | null
+          free_period?: string | null
+          has_coproduction?: boolean | null
+          id?: string
+          installment_number?: number | null
+          invoice_number?: string | null
+          is_upgrade?: boolean | null
+          items_quantity?: number | null
+          net_revenue?: number | null
+          offer_code?: string | null
+          offer_currency?: string | null
+          offer_price?: number | null
+          origin?: string | null
+          original_price?: number | null
+          payment_method?: string | null
+          payment_type?: string | null
+          producer_document?: string | null
+          producer_name?: string | null
+          product_code?: string | null
+          product_currency?: string | null
+          product_name: string
+          product_price?: number | null
+          received_value?: number | null
+          recurrence?: number | null
+          sale_date?: string | null
+          sale_origin?: string | null
+          shipping_value?: number | null
+          sold_as?: string | null
+          status: string
+          subscriber_code?: string | null
+          total_price?: number | null
+          transaction_id: string
+          updated_at?: string
+          utm_adset_name?: string | null
+          utm_campaign_id?: string | null
+          utm_creative?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          affiliate_code?: string | null
+          affiliate_name?: string | null
+          buyer_address?: string | null
+          buyer_address_complement?: string | null
+          buyer_address_number?: string | null
+          buyer_cep?: string | null
+          buyer_city?: string | null
+          buyer_country?: string | null
+          buyer_document?: string | null
+          buyer_email?: string | null
+          buyer_instagram?: string | null
+          buyer_name?: string | null
+          buyer_neighborhood?: string | null
+          buyer_phone?: string | null
+          buyer_phone_ddd?: string | null
+          buyer_state?: string | null
+          checkout_origin?: string | null
+          confirmation_date?: string | null
+          coupon?: string | null
+          created_at?: string
+          due_date?: string | null
+          exchange_rate?: number | null
+          free_period?: string | null
+          has_coproduction?: boolean | null
+          id?: string
+          installment_number?: number | null
+          invoice_number?: string | null
+          is_upgrade?: boolean | null
+          items_quantity?: number | null
+          net_revenue?: number | null
+          offer_code?: string | null
+          offer_currency?: string | null
+          offer_price?: number | null
+          origin?: string | null
+          original_price?: number | null
+          payment_method?: string | null
+          payment_type?: string | null
+          producer_document?: string | null
+          producer_name?: string | null
+          product_code?: string | null
+          product_currency?: string | null
+          product_name?: string
+          product_price?: number | null
+          received_value?: number | null
+          recurrence?: number | null
+          sale_date?: string | null
+          sale_origin?: string | null
+          shipping_value?: number | null
+          sold_as?: string | null
+          status?: string
+          subscriber_code?: string | null
+          total_price?: number | null
+          transaction_id?: string
+          updated_at?: string
+          utm_adset_name?: string | null
+          utm_campaign_id?: string | null
+          utm_creative?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

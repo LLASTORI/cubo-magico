@@ -16,6 +16,11 @@ interface Sale {
   value: number;
   status: string;
   date: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  utmAdset?: string;
+  utmPlacement?: string;
+  utmCreative?: string;
 }
 
 interface SalesTableProps {
@@ -58,6 +63,8 @@ const SalesTable = ({ sales }: SalesTableProps) => {
                 <TableHead className="text-muted-foreground">Comprador</TableHead>
                 <TableHead className="text-muted-foreground">Valor</TableHead>
                 <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground">UTM Source</TableHead>
+                <TableHead className="text-muted-foreground">Campanha</TableHead>
                 <TableHead className="text-muted-foreground">Data</TableHead>
               </TableRow>
             </TableHeader>
@@ -72,6 +79,12 @@ const SalesTable = ({ sales }: SalesTableProps) => {
                     <Badge variant="outline" className={getStatusColor(sale.status)}>
                       {sale.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {sale.utmSource || '-'}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={sale.utmCampaign}>
+                    {sale.utmCampaign || '-'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{sale.date}</TableCell>
                 </TableRow>

@@ -128,17 +128,37 @@ const Index = () => {
     };
   };
 
+  const parseUtmFromSourceSck = (sourceSck: string) => {
+    if (!sourceSck) return {};
+    
+    // Format: Meta-Ads|campaign_id|adset_name|placement|creative
+    const parts = sourceSck.split('|');
+    
+    return {
+      utmSource: parts[0] || undefined,
+      utmCampaign: parts[1] || undefined,
+      utmAdset: parts[2] || undefined,
+      utmPlacement: parts[3] || undefined,
+      utmCreative: parts[4] || undefined,
+    };
+  };
+
   const formatSalesData = () => {
     if (!salesData?.items) return [];
 
-    return salesData.items.map((item: any) => ({
-      transaction: item.transaction,
-      product: item.product?.name || 'N/A',
-      buyer: item.buyer?.name || item.buyer?.email || 'N/A',
-      value: (item.purchase?.price?.value || 0) / 100, // Convert from cents
-      status: item.purchase?.status || 'unknown',
-      date: new Date(item.purchase?.approved_date || item.created_at).toLocaleDateString('pt-BR'),
-    }));
+    return salesData.items.map((item: any) => {
+      const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
+      
+      return {
+        transaction: item.purchase?.transaction || 'N/A',
+        product: item.product?.name || 'N/A',
+        buyer: item.buyer?.name || item.buyer?.email || 'N/A',
+        value: item.purchase?.price?.value || 0,
+        status: item.purchase?.status || 'unknown',
+        date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
+        ...utmData,
+      };
+    });
   };
 
   const metrics = calculateMetrics();

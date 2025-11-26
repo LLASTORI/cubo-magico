@@ -15,6 +15,11 @@ export interface FilterParams {
   endDate: string;
   transactionStatus?: string;
   maxResults: number;
+  utmSource?: string;
+  utmCampaign?: string;
+  utmAdset?: string;
+  utmPlacement?: string;
+  utmCreative?: string;
 }
 
 const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
@@ -25,6 +30,13 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [endDate, setEndDate] = useState(today);
   const [transactionStatus, setTransactionStatus] = useState<string>("all");
   const [maxResults, setMaxResults] = useState("50");
+  
+  // UTM Filters
+  const [utmSource, setUtmSource] = useState("");
+  const [utmCampaign, setUtmCampaign] = useState("");
+  const [utmAdset, setUtmAdset] = useState("");
+  const [utmPlacement, setUtmPlacement] = useState("");
+  const [utmCreative, setUtmCreative] = useState("");
 
   const handleApplyFilters = () => {
     onFilter({
@@ -32,6 +44,11 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
       endDate,
       transactionStatus: transactionStatus === "all" ? undefined : transactionStatus,
       maxResults: parseInt(maxResults),
+      utmSource: utmSource || undefined,
+      utmCampaign: utmCampaign || undefined,
+      utmAdset: utmAdset || undefined,
+      utmPlacement: utmPlacement || undefined,
+      utmCreative: utmCreative || undefined,
     });
   };
 
@@ -135,6 +152,67 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
           <Calendar className="w-4 h-4 mr-2" />
           Últimos 90 dias
         </Button>
+      </div>
+
+      {/* UTM Filters Section */}
+      <div className="border-t border-border pt-4 mt-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3">Filtros de UTM</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <div className="space-y-2">
+            <Label htmlFor="utmSource" className="text-foreground">UTM Source</Label>
+            <Input
+              id="utmSource"
+              placeholder="Ex: Meta-Ads"
+              value={utmSource}
+              onChange={(e) => setUtmSource(e.target.value)}
+              className="border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="utmCampaign" className="text-foreground">Campanha</Label>
+            <Input
+              id="utmCampaign"
+              placeholder="Ex: 00_ADVANTAGE_..."
+              value={utmCampaign}
+              onChange={(e) => setUtmCampaign(e.target.value)}
+              className="border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="utmAdset" className="text-foreground">Conjunto de Anúncios</Label>
+            <Input
+              id="utmAdset"
+              placeholder="Ex: PERPETUO_MAKEPRATICA..."
+              value={utmAdset}
+              onChange={(e) => setUtmAdset(e.target.value)}
+              className="border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="utmPlacement" className="text-foreground">Posicionamento</Label>
+            <Input
+              id="utmPlacement"
+              placeholder="Ex: Instagram_Stories"
+              value={utmPlacement}
+              onChange={(e) => setUtmPlacement(e.target.value)}
+              className="border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="utmCreative" className="text-foreground">Criativo</Label>
+            <Input
+              id="utmCreative"
+              placeholder="Ex: VENDA_VIDEO_02..."
+              value={utmCreative}
+              onChange={(e) => setUtmCreative(e.target.value)}
+              className="border-border"
+            />
+          </div>
+        </div>
       </div>
 
       <Button onClick={handleApplyFilters} className="w-full">

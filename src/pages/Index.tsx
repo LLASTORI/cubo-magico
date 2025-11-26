@@ -146,7 +146,7 @@ const Index = () => {
   const formatSalesData = () => {
     if (!salesData?.items) return [];
 
-    return salesData.items.map((item: any) => {
+    let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
       return {
@@ -159,6 +159,35 @@ const Index = () => {
         ...utmData,
       };
     });
+
+    // Apply UTM filters locally
+    if (currentFilters.utmSource) {
+      filteredItems = filteredItems.filter(item => 
+        item.utmSource?.toLowerCase().includes(currentFilters.utmSource!.toLowerCase())
+      );
+    }
+    if (currentFilters.utmCampaign) {
+      filteredItems = filteredItems.filter(item => 
+        item.utmCampaign?.toLowerCase().includes(currentFilters.utmCampaign!.toLowerCase())
+      );
+    }
+    if (currentFilters.utmAdset) {
+      filteredItems = filteredItems.filter(item => 
+        item.utmAdset?.toLowerCase().includes(currentFilters.utmAdset!.toLowerCase())
+      );
+    }
+    if (currentFilters.utmPlacement) {
+      filteredItems = filteredItems.filter(item => 
+        item.utmPlacement?.toLowerCase().includes(currentFilters.utmPlacement!.toLowerCase())
+      );
+    }
+    if (currentFilters.utmCreative) {
+      filteredItems = filteredItems.filter(item => 
+        item.utmCreative?.toLowerCase().includes(currentFilters.utmCreative!.toLowerCase())
+      );
+    }
+
+    return filteredItems;
   };
 
   const metrics = calculateMetrics();

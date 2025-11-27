@@ -26,7 +26,7 @@ const Index = () => {
       const params: any = {
         start_date: startTimestamp,
         end_date: endTimestamp,
-        max_results: filters.maxResults,
+        max_results: 500, // Maximum allowed by API
       };
 
       if (filters.transactionStatus) {
@@ -35,21 +35,51 @@ const Index = () => {
 
       console.log('Requesting with params:', params);
 
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/sales/history',
-          params,
-        },
-      });
+      // Fetch all pages of data
+      let allItems: any[] = [];
+      let nextPageToken: string | null = null;
+      let totalResults = 0;
+      
+      do {
+        const requestParams = { ...params };
+        if (nextPageToken) {
+          requestParams.page_token = nextPageToken;
+        }
 
-      if (error) throw error;
+        const { data, error } = await supabase.functions.invoke('hotmart-api', {
+          body: {
+            endpoint: '/sales/history',
+            params: requestParams,
+          },
+        });
 
-      console.log('Hotmart data received:', data);
-      setSalesData(data);
+        if (error) throw error;
+
+        console.log(`Fetched page with ${data?.items?.length || 0} items`);
+        
+        if (data?.items) {
+          allItems = [...allItems, ...data.items];
+        }
+        
+        totalResults = data?.page_info?.total_results || 0;
+        nextPageToken = data?.page_info?.next_page_token || null;
+        
+      } while (nextPageToken);
+
+      const finalData = {
+        items: allItems,
+        page_info: {
+          total_results: totalResults,
+          results_per_page: allItems.length,
+        }
+      };
+
+      console.log(`Total items fetched: ${allItems.length} of ${totalResults}`);
+      setSalesData(finalData);
 
       toast({
         title: "Dados carregados com sucesso!",
-        description: `${data?.items?.length || 0} transações encontradas`,
+        description: `${allItems.length} transações carregadas`,
       });
     } catch (error: any) {
       console.error('Error fetching Hotmart data:', error);

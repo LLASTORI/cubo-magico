@@ -131,13 +131,14 @@ const Index = () => {
   const parseUtmFromSourceSck = (sourceSck: string) => {
     if (!sourceSck) return {};
     
-    // Format: Meta-Ads|campaign_id|adset_name|placement|creative
+    // Format: Source|Conjunto|Campanha|Posicionamento|Criativo
+    // Example: Meta-Ads|01_ADVANTAGE_ABERTA_6840169073892|PERPETUO_MAQUIAGEM35+_VENDA31_CBO_ANDROMEDA_6840169073692|Instagram_Reels|VENDA_VIDEO_06_MAKE35+_6840173725692
     const parts = sourceSck.split('|');
     
     return {
       utmSource: parts[0] || undefined,
-      utmCampaign: parts[1] || undefined,
-      utmAdset: parts[2] || undefined,
+      utmAdset: parts[1] || undefined,        // Conjunto (position 1)
+      utmCampaign: parts[2] || undefined,     // Campanha (position 2)
       utmPlacement: parts[3] || undefined,
       utmCreative: parts[4] || undefined,
     };

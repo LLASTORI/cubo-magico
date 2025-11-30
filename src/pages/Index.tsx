@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
@@ -13,6 +14,7 @@ const Index = () => {
   const [salesData, setSalesData] = useState<any>(null);
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const fetchHotmartData = async (filters: FilterParams) => {
     try {
@@ -239,6 +241,14 @@ const Index = () => {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                onClick={() => navigate('/offer-mappings')}
+                variant="outline"
+                className="gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Mapeamento de Ofertas
+              </Button>
               <Button
                 onClick={testConnection}
                 disabled={testingConnection || loading}

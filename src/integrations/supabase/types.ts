@@ -200,6 +200,54 @@ export type Database = {
         }
         Relationships: []
       }
+      offer_mappings: {
+        Row: {
+          anotacoes: string | null
+          codigo_oferta: string | null
+          created_at: string
+          data_ativacao: string | null
+          data_desativacao: string | null
+          id: string
+          id_funil: string
+          id_produto: string | null
+          nome_oferta: string | null
+          nome_produto: string
+          status: string | null
+          updated_at: string
+          valor: number | null
+        }
+        Insert: {
+          anotacoes?: string | null
+          codigo_oferta?: string | null
+          created_at?: string
+          data_ativacao?: string | null
+          data_desativacao?: string | null
+          id?: string
+          id_funil: string
+          id_produto?: string | null
+          nome_oferta?: string | null
+          nome_produto: string
+          status?: string | null
+          updated_at?: string
+          valor?: number | null
+        }
+        Update: {
+          anotacoes?: string | null
+          codigo_oferta?: string | null
+          created_at?: string
+          data_ativacao?: string | null
+          data_desativacao?: string | null
+          id?: string
+          id_funil?: string
+          id_produto?: string | null
+          nome_oferta?: string | null
+          nome_produto?: string
+          status?: string | null
+          updated_at?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -193,7 +193,7 @@ const Index = () => {
   };
 
   const formatSalesData = () => {
-    if (!salesData?.items) return [];
+    if (!salesData?.items || !currentFilters) return [];
 
     let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
@@ -209,6 +209,24 @@ const Index = () => {
         ...utmData,
       };
     });
+
+    // Apply funnel filter first (if specified)
+    if (currentFilters.idFunil) {
+      const offerCodesForFunnel = offerMappings
+        .filter(mapping => mapping.id_funil === currentFilters.idFunil)
+        .map(mapping => mapping.codigo_oferta)
+        .filter(Boolean);
+      
+      console.log('Funil selecionado:', currentFilters.idFunil);
+      console.log('Códigos de oferta do funil:', offerCodesForFunnel);
+      console.log('Exemplo de offer codes nos items:', filteredItems.slice(0, 5).map(i => i.offerCode));
+      
+      filteredItems = filteredItems.filter(item => 
+        item.offerCode && offerCodesForFunnel.includes(item.offerCode)
+      );
+      
+      console.log('Items após filtro de funil:', filteredItems.length);
+    }
 
     // Apply UTM filters locally
     if (currentFilters.utmSource) {
@@ -234,18 +252,6 @@ const Index = () => {
     if (currentFilters.utmCreative) {
       filteredItems = filteredItems.filter(item => 
         item.utmCreative?.toLowerCase().includes(currentFilters.utmCreative!.toLowerCase())
-      );
-    }
-
-    // Apply funnel filter
-    if (currentFilters.idFunil) {
-      const offerCodesForFunnel = offerMappings
-        .filter(mapping => mapping.id_funil === currentFilters.idFunil)
-        .map(mapping => mapping.codigo_oferta)
-        .filter(Boolean);
-      
-      filteredItems = filteredItems.filter(item => 
-        item.offerCode && offerCodesForFunnel.includes(item.offerCode)
       );
     }
 

@@ -198,6 +198,11 @@ const Index = () => {
     let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
+      // Log first item to see structure
+      if (filteredItems.length === 0) {
+        console.log('Estrutura do primeiro item da API:', JSON.stringify(item, null, 2));
+      }
+      
       return {
         transaction: item.purchase?.transaction || 'N/A',
         product: item.product?.name || 'N/A',
@@ -205,7 +210,7 @@ const Index = () => {
         value: item.purchase?.price?.value || 0,
         status: item.purchase?.status || 'unknown',
         date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
-        offerCode: item.product?.offer?.code || undefined,
+        offerCode: item.product?.offer?.code || item.offer?.code || undefined,
         ...utmData,
       };
     });

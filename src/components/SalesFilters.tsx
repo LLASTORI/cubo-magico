@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Filter } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SalesFiltersProps {
   onFilter: (filters: FilterParams) => void;
@@ -20,6 +21,7 @@ export interface FilterParams {
   utmAdset?: string;
   utmPlacement?: string;
   utmCreative?: string;
+  idFunil?: string;
 }
 
 const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
@@ -30,6 +32,8 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [endDate, setEndDate] = useState(today);
   const [transactionStatus, setTransactionStatus] = useState<string>("all");
   const [maxResults, setMaxResults] = useState("50");
+  const [idFunil, setIdFunil] = useState<string>("all");
+  const [funis, setFunis] = useState<string[]>([]);
   
   // UTM Filters
   const [utmSource, setUtmSource] = useState("");
@@ -37,6 +41,22 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [utmAdset, setUtmAdset] = useState("");
   const [utmPlacement, setUtmPlacement] = useState("");
   const [utmCreative, setUtmCreative] = useState("");
+
+  useEffect(() => {
+    const fetchFunis = async () => {
+      const { data, error } = await supabase
+        .from('offer_mappings')
+        .select('id_funil')
+        .order('id_funil');
+      
+      if (data && !error) {
+        const uniqueFunis = Array.from(new Set(data.map(item => item.id_funil)));
+        setFunis(uniqueFunis);
+      }
+    };
+    
+    fetchFunis();
+  }, []);
 
   const handleApplyFilters = () => {
     onFilter({
@@ -49,6 +69,7 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
       utmAdset: utmAdset || undefined,
       utmPlacement: utmPlacement || undefined,
       utmCreative: utmCreative || undefined,
+      idFunil: idFunil === "all" ? undefined : idFunil,
     });
   };
 
@@ -121,6 +142,23 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
             max="500"
             className="border-border"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="funil" className="text-foreground">Funil</Label>
+          <Select value={idFunil} onValueChange={setIdFunil}>
+            <SelectTrigger className="border-border">
+              <SelectValue placeholder="Todos os Funis" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Funis</SelectItem>
+              {funis.map((funil) => (
+                <SelectItem key={funil} value={funil}>
+                  {funil}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

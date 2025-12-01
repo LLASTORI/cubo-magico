@@ -13,8 +13,24 @@ const Index = () => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [salesData, setSalesData] = useState<any>(null);
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
+  const [offerMappings, setOfferMappings] = useState<any[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Load offer mappings on mount
+  useEffect(() => {
+    const fetchOfferMappings = async () => {
+      const { data } = await supabase
+        .from('offer_mappings')
+        .select('codigo_oferta, id_funil');
+      
+      if (data) {
+        setOfferMappings(data);
+      }
+    };
+    
+    fetchOfferMappings();
+  }, []);
 
   const fetchHotmartData = async (filters: FilterParams) => {
     try {
@@ -189,6 +205,7 @@ const Index = () => {
         value: item.purchase?.price?.value || 0,
         status: item.purchase?.status || 'unknown',
         date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
+        offerCode: item.product?.offer?.code || undefined,
         ...utmData,
       };
     });
@@ -217,6 +234,18 @@ const Index = () => {
     if (currentFilters.utmCreative) {
       filteredItems = filteredItems.filter(item => 
         item.utmCreative?.toLowerCase().includes(currentFilters.utmCreative!.toLowerCase())
+      );
+    }
+
+    // Apply funnel filter
+    if (currentFilters.idFunil) {
+      const offerCodesForFunnel = offerMappings
+        .filter(mapping => mapping.id_funil === currentFilters.idFunil)
+        .map(mapping => mapping.codigo_oferta)
+        .filter(Boolean);
+      
+      filteredItems = filteredItems.filter(item => 
+        item.offerCode && offerCodesForFunnel.includes(item.offerCode)
       );
     }
 

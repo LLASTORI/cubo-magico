@@ -12,6 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
+import TemporalChart from "@/components/funnel/TemporalChart";
+import UTMAnalysis from "@/components/funnel/UTMAnalysis";
+import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
+import CustomerCohort from "@/components/funnel/CustomerCohort";
 interface OfferMapping {
   id: string;
   id_funil: string;
@@ -311,9 +315,13 @@ const FunnelAnalysis = () => {
 
             {selectedFunnel ? (
               <Tabs defaultValue="overview" className="space-y-6">
-                <TabsList className="grid grid-cols-3 w-full max-w-md">
+                <TabsList className="flex flex-wrap w-full max-w-4xl gap-1">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                  <TabsTrigger value="temporal">Gráfico Temporal</TabsTrigger>
                   <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
+                  <TabsTrigger value="utm">UTM</TabsTrigger>
+                  <TabsTrigger value="payment">Pagamentos</TabsTrigger>
+                  <TabsTrigger value="cohort">Clientes</TabsTrigger>
                   <TabsTrigger value="changelog">Histórico</TabsTrigger>
                 </TabsList>
 
@@ -536,8 +544,36 @@ const FunnelAnalysis = () => {
                 </Card>
                 </TabsContent>
 
+                <TabsContent value="temporal">
+                  <TemporalChart
+                    selectedFunnel={selectedFunnel}
+                    funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  />
+                </TabsContent>
+
                 <TabsContent value="comparison">
                   <PeriodComparison
+                    selectedFunnel={selectedFunnel}
+                    funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="utm">
+                  <UTMAnalysis
+                    selectedFunnel={selectedFunnel}
+                    funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="payment">
+                  <PaymentMethodAnalysis
+                    selectedFunnel={selectedFunnel}
+                    funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="cohort">
+                  <CustomerCohort
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
                   />

@@ -69,7 +69,8 @@ serve(async (req) => {
 
     // Construct query string
     const queryString = params ? new URLSearchParams(params).toString() : '';
-    const url = `${baseUrl}${endpoint}${queryString ? `?${queryString}` : ''}`;
+    // Ensure there's a / between baseUrl and endpoint
+    const url = `${baseUrl}/${endpoint}${queryString ? `?${queryString}` : ''}`;
 
     console.log('Calling Hotmart API:', url);
 

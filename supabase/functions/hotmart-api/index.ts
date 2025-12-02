@@ -55,14 +55,21 @@ serve(async (req) => {
   }
 
   try {
-    const { endpoint, params } = await req.json();
-    console.log('Fetching Hotmart data:', { endpoint, params });
+    const { endpoint, params, apiType } = await req.json();
+    console.log('Fetching Hotmart data:', { endpoint, params, apiType });
 
     const token = await getHotmartToken();
 
+    // Determine base URL based on API type
+    // Products API: https://developers.hotmart.com/products/api/v1
+    // Payments API: https://developers.hotmart.com/payments/api/v1
+    const baseUrl = apiType === 'products' 
+      ? 'https://developers.hotmart.com/products/api/v1'
+      : 'https://developers.hotmart.com/payments/api/v1';
+
     // Construct query string
     const queryString = params ? new URLSearchParams(params).toString() : '';
-    const url = `https://developers.hotmart.com/payments/api/v1${endpoint}${queryString ? `?${queryString}` : ''}`;
+    const url = `${baseUrl}${endpoint}${queryString ? `?${queryString}` : ''}`;
 
     console.log('Calling Hotmart API:', url);
 

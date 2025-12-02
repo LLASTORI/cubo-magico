@@ -48,9 +48,9 @@ interface UTMMetrics {
 
 interface DrilldownPath {
   source?: string;
-  adset?: string;
   campaign?: string;
-  placement?: string;
+  adset?: string;
+  creative?: string;
 }
 
 const COLORS = [
@@ -69,7 +69,7 @@ const chartConfig = {
   revenue: { label: "Receita", color: "hsl(142, 76%, 36%)" },
 };
 
-const HIERARCHY = ['source', 'adset', 'campaign', 'placement', 'creative'] as const;
+const HIERARCHY = ['source', 'campaign', 'adset', 'creative', 'placement'] as const;
 type HierarchyLevel = typeof HIERARCHY[number];
 
 const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
@@ -90,9 +90,9 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
 
   const currentLevel = useMemo(() => {
     if (!drilldownPath.source) return 0;
-    if (!drilldownPath.adset) return 1;
-    if (!drilldownPath.campaign) return 2;
-    if (!drilldownPath.placement) return 3;
+    if (!drilldownPath.campaign) return 1;
+    if (!drilldownPath.adset) return 2;
+    if (!drilldownPath.creative) return 3;
     return 4;
   }, [drilldownPath]);
 
@@ -196,9 +196,9 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
       const utmParams = parseUTMFromSck(sck);
       
       if (drilldownPath.source && utmParams.source !== drilldownPath.source) return false;
-      if (drilldownPath.adset && utmParams.adset !== drilldownPath.adset) return false;
       if (drilldownPath.campaign && utmParams.campaign !== drilldownPath.campaign) return false;
-      if (drilldownPath.placement && utmParams.placement !== drilldownPath.placement) return false;
+      if (drilldownPath.adset && utmParams.adset !== drilldownPath.adset) return false;
+      if (drilldownPath.creative && utmParams.creative !== drilldownPath.creative) return false;
       
       return true;
     });
@@ -266,9 +266,9 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
     
     const newPath = { ...drilldownPath };
     if (currentLevel === 0) newPath.source = value;
-    else if (currentLevel === 1) newPath.adset = value;
-    else if (currentLevel === 2) newPath.campaign = value;
-    else if (currentLevel === 3) newPath.placement = value;
+    else if (currentLevel === 1) newPath.campaign = value;
+    else if (currentLevel === 2) newPath.adset = value;
+    else if (currentLevel === 3) newPath.creative = value;
     
     setDrilldownPath(newPath);
   };
@@ -279,11 +279,11 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
     } else if (level === 0) {
       setDrilldownPath({ source: drilldownPath.source });
     } else if (level === 1) {
-      setDrilldownPath({ source: drilldownPath.source, adset: drilldownPath.adset });
+      setDrilldownPath({ source: drilldownPath.source, campaign: drilldownPath.campaign });
     } else if (level === 2) {
-      setDrilldownPath({ source: drilldownPath.source, adset: drilldownPath.adset, campaign: drilldownPath.campaign });
+      setDrilldownPath({ source: drilldownPath.source, campaign: drilldownPath.campaign, adset: drilldownPath.adset });
     } else if (level === 3) {
-      setDrilldownPath({ source: drilldownPath.source, adset: drilldownPath.adset, campaign: drilldownPath.campaign, placement: drilldownPath.placement });
+      setDrilldownPath({ source: drilldownPath.source, campaign: drilldownPath.campaign, adset: drilldownPath.adset, creative: drilldownPath.creative });
     }
   };
 
@@ -470,7 +470,7 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
                 </>
               )}
               
-              {drilldownPath.adset && (
+              {drilldownPath.campaign && (
                 <>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   <Button 
@@ -479,13 +479,13 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
                     onClick={() => handleBreadcrumbClick(1)}
                     className={cn("gap-1", currentLevel === 2 && "bg-primary/10 text-primary")}
                   >
-                    <Layers className="w-3 h-3" />
-                    <span className="max-w-[120px] truncate">{drilldownPath.adset}</span>
+                    <Megaphone className="w-3 h-3" />
+                    <span className="max-w-[120px] truncate">{drilldownPath.campaign}</span>
                   </Button>
                 </>
               )}
               
-              {drilldownPath.campaign && (
+              {drilldownPath.adset && (
                 <>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   <Button 
@@ -494,13 +494,13 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
                     onClick={() => handleBreadcrumbClick(2)}
                     className={cn("gap-1", currentLevel === 3 && "bg-primary/10 text-primary")}
                   >
-                    <Megaphone className="w-3 h-3" />
-                    <span className="max-w-[120px] truncate">{drilldownPath.campaign}</span>
+                    <Layers className="w-3 h-3" />
+                    <span className="max-w-[120px] truncate">{drilldownPath.adset}</span>
                   </Button>
                 </>
               )}
               
-              {drilldownPath.placement && (
+              {drilldownPath.creative && (
                 <>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   <Button 
@@ -509,8 +509,8 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
                     onClick={() => handleBreadcrumbClick(3)}
                     className={cn("gap-1", currentLevel === 4 && "bg-primary/10 text-primary")}
                   >
-                    <MousePointer className="w-3 h-3" />
-                    <span className="max-w-[120px] truncate">{drilldownPath.placement}</span>
+                    <Sparkles className="w-3 h-3" />
+                    <span className="max-w-[120px] truncate">{drilldownPath.creative}</span>
                   </Button>
                 </>
               )}

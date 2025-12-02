@@ -47,7 +47,7 @@ interface PositionMetrics {
 // Função para calcular a ordem correta no funil:
 // FRONT -> OB1-5 -> US1 -> DS1 -> US2 -> DS2 -> US3 -> DS3 -> etc.
 const getPositionSortOrder = (tipo: string, ordem: number): number => {
-  if (tipo === 'FE') return 0; // FRONT sempre primeiro
+  if (tipo === 'FRONT' || tipo === 'FE') return 0; // FRONT sempre primeiro
   if (tipo === 'OB') return ordem; // OB1=1, OB2=2, OB3=3, OB4=4, OB5=5
   // US e DS são intercalados: US1=6, DS1=7, US2=8, DS2=9, etc.
   if (tipo === 'US') return 5 + (ordem * 2) - 1; // US1=6, US2=8, US3=10
@@ -56,6 +56,7 @@ const getPositionSortOrder = (tipo: string, ordem: number): number => {
 };
 
 const POSITION_COLORS: Record<string, string> = {
+  'FRONT': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   'FE': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   'OB': 'bg-green-500/20 text-green-400 border-green-500/30',
   'US': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
@@ -134,9 +135,9 @@ const FunnelAnalysis = () => {
         return orderA - orderB;
       });
 
-    // Find FE (Frontend) sales as base for conversion
+    // Find FRONT (Frontend) sales as base for conversion
     const feSales = funnelMappings
-      .filter(m => m.tipo_posicao === 'FE')
+      .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => {
         const sale = salesData.find(s => s.offer_code === m.codigo_oferta);
         return sum + (sale?.total_sales || 0);

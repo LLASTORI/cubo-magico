@@ -22,6 +22,8 @@ export interface FilterParams {
   utmPlacement?: string;
   utmCreative?: string;
   idFunil?: string;
+  productName?: string;
+  offerCode?: string;
 }
 
 const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
@@ -33,7 +35,11 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [transactionStatus, setTransactionStatus] = useState<string>("all");
   const [maxResults, setMaxResults] = useState("50");
   const [idFunil, setIdFunil] = useState<string>("all");
+  const [productName, setProductName] = useState<string>("all");
+  const [offerCode, setOfferCode] = useState<string>("all");
   const [funis, setFunis] = useState<string[]>([]);
+  const [products, setProducts] = useState<string[]>([]);
+  const [offers, setOffers] = useState<{ code: string; name: string }[]>([]);
   
   // UTM Filters
   const [utmSource, setUtmSource] = useState("");
@@ -43,19 +49,27 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [utmCreative, setUtmCreative] = useState("");
 
   useEffect(() => {
-    const fetchFunis = async () => {
+    const fetchFilterOptions = async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id_funil')
+        .select('id_funil, nome_produto, codigo_oferta, nome_oferta')
         .order('id_funil');
       
       if (data && !error) {
         const uniqueFunis = Array.from(new Set(data.map(item => item.id_funil)));
+        const uniqueProducts = Array.from(new Set(data.map(item => item.nome_produto)));
+        const uniqueOffers = data
+          .filter(item => item.codigo_oferta)
+          .map(item => ({ code: item.codigo_oferta!, name: item.nome_oferta || item.codigo_oferta! }))
+          .filter((offer, index, self) => self.findIndex(o => o.code === offer.code) === index);
+        
         setFunis(uniqueFunis);
+        setProducts(uniqueProducts);
+        setOffers(uniqueOffers);
       }
     };
     
-    fetchFunis();
+    fetchFilterOptions();
   }, []);
 
   const handleApplyFilters = () => {
@@ -70,6 +84,8 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
       utmPlacement: utmPlacement || undefined,
       utmCreative: utmCreative || undefined,
       idFunil: idFunil === "all" ? undefined : idFunil,
+      productName: productName === "all" ? undefined : productName,
+      offerCode: offerCode === "all" ? undefined : offerCode,
     });
   };
 
@@ -155,6 +171,40 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
               {funis.map((funil) => (
                 <SelectItem key={funil} value={funil}>
                   {funil}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="product" className="text-foreground">Produto</Label>
+          <Select value={productName} onValueChange={setProductName}>
+            <SelectTrigger className="border-border">
+              <SelectValue placeholder="Todos os Produtos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Produtos</SelectItem>
+              {products.map((product) => (
+                <SelectItem key={product} value={product}>
+                  {product}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="offer" className="text-foreground">Oferta</Label>
+          <Select value={offerCode} onValueChange={setOfferCode}>
+            <SelectTrigger className="border-border">
+              <SelectValue placeholder="Todas as Ofertas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as Ofertas</SelectItem>
+              {offers.map((offer) => (
+                <SelectItem key={offer.code} value={offer.code}>
+                  {offer.name}
                 </SelectItem>
               ))}
             </SelectContent>

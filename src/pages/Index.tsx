@@ -195,13 +195,8 @@ const Index = () => {
   const formatSalesData = () => {
     if (!salesData?.items || !currentFilters) return [];
 
-    let filteredItems = salesData.items.map((item: any, index: number) => {
+    let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
-      
-      // Log first item to see structure
-      if (index === 0) {
-        console.log('Estrutura do primeiro item da API:', JSON.stringify(item, null, 2));
-      }
       
       return {
         transaction: item.purchase?.transaction || 'N/A',
@@ -222,15 +217,23 @@ const Index = () => {
         .map(mapping => mapping.codigo_oferta)
         .filter(Boolean);
       
-      console.log('Funil selecionado:', currentFilters.idFunil);
-      console.log('Códigos de oferta do funil:', offerCodesForFunnel);
-      console.log('Exemplo de offer codes nos items:', filteredItems.slice(0, 5).map(i => i.offerCode));
-      
       filteredItems = filteredItems.filter(item => 
         item.offerCode && offerCodesForFunnel.includes(item.offerCode)
       );
-      
-      console.log('Items após filtro de funil:', filteredItems.length);
+    }
+
+    // Apply product filter
+    if (currentFilters.productName) {
+      filteredItems = filteredItems.filter(item => 
+        item.product === currentFilters.productName
+      );
+    }
+
+    // Apply offer filter
+    if (currentFilters.offerCode) {
+      filteredItems = filteredItems.filter(item => 
+        item.offerCode === currentFilters.offerCode
+      );
     }
 
     // Apply UTM filters locally

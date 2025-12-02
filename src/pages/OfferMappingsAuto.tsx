@@ -39,6 +39,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 interface OfferMapping {
   id: string;
   id_produto: string | null;
+  id_produto_visual: string | null;
   nome_produto: string;
   nome_oferta: string | null;
   codigo_oferta: string | null;
@@ -361,6 +362,7 @@ export default function OfferMappingsAuto() {
       
       interface OfferToImport {
         id_produto: string;
+        id_produto_visual: string;
         nome_produto: string;
         nome_oferta: string;
         codigo_oferta: string;
@@ -382,7 +384,8 @@ export default function OfferMappingsAuto() {
               const exists = mappings.some(m => m.codigo_oferta === offer.code);
               if (!exists) {
                 offersToImport.push({
-                  id_produto: product.ucode,
+                  id_produto: product.ucode, // UUID for API calls
+                  id_produto_visual: `ID ${product.id}`, // Numeric ID for display
                   nome_produto: product.name,
                   nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
                   codigo_oferta: offer.code,
@@ -553,18 +556,23 @@ export default function OfferMappingsAuto() {
     }
   };
 
-  // Fix product IDs that were stored in wrong format (ID XXXXX -> UUID)
+  // Fix product IDs and populate visual IDs
   const fixProductIds = async () => {
     try {
       setFixingIds(true);
       
-      // Get mappings with old ID format
-      const mappingsToFix = mappings.filter(m => m.id_produto?.startsWith('ID '));
+      // Get mappings that need fixing:
+      // 1. Old format "ID XXXXX" -> convert to UUID
+      // 2. Has UUID but no visual ID -> populate visual ID
+      const mappingsWithOldFormat = mappings.filter(m => m.id_produto?.startsWith('ID '));
+      const mappingsNeedingVisualId = mappings.filter(m => 
+        m.id_produto && !m.id_produto.startsWith('ID ') && !m.id_produto_visual
+      );
       
-      if (mappingsToFix.length === 0) {
+      if (mappingsWithOldFormat.length === 0 && mappingsNeedingVisualId.length === 0) {
         toast({
           title: 'Nada para corrigir',
-          description: 'Todos os IDs já estão no formato correto',
+          description: 'Todos os IDs já estão corretos',
         });
         return;
       }
@@ -586,18 +594,20 @@ export default function OfferMappingsAuto() {
       
       const products: HotmartProduct[] = productsData.items || productsData || [];
       
-      // Create mapping of numeric ID to UUID
+      // Create mappings: numeric ID -> UUID and UUID -> numeric ID
       const idToUcode = new Map<string, string>();
+      const ucodeToId = new Map<string, string>();
       products.forEach(p => {
         idToUcode.set(String(p.id), p.ucode);
+        ucodeToId.set(p.ucode, `ID ${p.id}`);
       });
       
-      console.log('ID to UUID mapping:', Object.fromEntries(idToUcode));
+      console.log('ID mappings created for', products.length, 'products');
       
       let fixedCount = 0;
       
-      // Update each mapping with wrong format
-      for (const mapping of mappingsToFix) {
+      // Fix mappings with old "ID XXXXX" format
+      for (const mapping of mappingsWithOldFormat) {
         const numericId = mapping.id_produto!.replace('ID ', '');
         const correctUcode = idToUcode.get(numericId);
         
@@ -606,30 +616,39 @@ export default function OfferMappingsAuto() {
             .from('offer_mappings')
             .update({ 
               id_produto: correctUcode,
+              id_produto_visual: mapping.id_produto, // Keep the "ID XXXXX" format for display
               anotacoes: `${mapping.anotacoes || ''}\n[${new Date().toLocaleDateString('pt-BR')}] ID corrigido: ${mapping.id_produto} → ${correctUcode}`.trim()
             })
             .eq('id', mapping.id);
           
-          if (!error) {
-            fixedCount++;
-          } else {
-            console.error(`Error fixing mapping ${mapping.id}:`, error);
-          }
-        } else {
-          console.warn(`No UUID found for product ID: ${numericId}`);
+          if (!error) fixedCount++;
+        }
+      }
+      
+      // Populate visual IDs for mappings that have UUID but no visual ID
+      for (const mapping of mappingsNeedingVisualId) {
+        const visualId = ucodeToId.get(mapping.id_produto!);
+        
+        if (visualId) {
+          const { error } = await supabase
+            .from('offer_mappings')
+            .update({ id_produto_visual: visualId })
+            .eq('id', mapping.id);
+          
+          if (!error) fixedCount++;
         }
       }
       
       if (fixedCount > 0) {
         toast({
-          title: 'IDs corrigidos!',
-          description: `${fixedCount} de ${mappingsToFix.length} registros atualizados`,
+          title: 'IDs atualizados!',
+          description: `${fixedCount} registros atualizados`,
         });
         fetchMappings();
       } else {
         toast({
-          title: 'Nenhum ID corrigido',
-          description: 'Não foi possível encontrar os UUIDs correspondentes na Hotmart',
+          title: 'Nenhum ID atualizado',
+          description: 'Não foi possível encontrar correspondências na Hotmart',
           variant: 'destructive',
         });
       }
@@ -772,7 +791,10 @@ export default function OfferMappingsAuto() {
                   <div className="flex items-center gap-2">
                     <Button 
                       onClick={fixProductIds}
-                      disabled={fixingIds || mappings.filter(m => m.id_produto?.startsWith('ID ')).length === 0}
+                      disabled={fixingIds || (
+                        mappings.filter(m => m.id_produto?.startsWith('ID ')).length === 0 &&
+                        mappings.filter(m => m.id_produto && !m.id_produto.startsWith('ID ') && !m.id_produto_visual).length === 0
+                      )}
                       variant="outline"
                       className="gap-2"
                     >
@@ -889,7 +911,7 @@ export default function OfferMappingsAuto() {
                             )}
                           </TableCell>
                           <TableCell className="font-mono text-xs">
-                            {mapping.id_produto || '-'}
+                            {mapping.id_produto_visual || mapping.id_produto || '-'}
                           </TableCell>
                           <TableCell className="font-medium max-w-[200px] truncate">
                             {mapping.nome_produto}

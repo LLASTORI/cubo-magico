@@ -210,6 +210,7 @@ export type Database = {
           id: string
           id_funil: string
           id_produto: string | null
+          id_produto_visual: string | null
           nome_oferta: string | null
           nome_posicao: string | null
           nome_produto: string
@@ -228,6 +229,7 @@ export type Database = {
           id?: string
           id_funil: string
           id_produto?: string | null
+          id_produto_visual?: string | null
           nome_oferta?: string | null
           nome_posicao?: string | null
           nome_produto: string
@@ -246,6 +248,7 @@ export type Database = {
           id?: string
           id_funil?: string
           id_produto?: string | null
+          id_produto_visual?: string | null
           nome_oferta?: string | null
           nome_posicao?: string | null
           nome_produto?: string

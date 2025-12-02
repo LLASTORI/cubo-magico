@@ -44,11 +44,15 @@ interface PositionMetrics {
   roas: number;
 }
 
-const POSITION_ORDER: Record<string, number> = {
-  'FE': 1,
-  'OB': 2,
-  'US': 3,
-  'DS': 4,
+// Função para calcular a ordem correta no funil:
+// FRONT -> OB1-5 -> US1 -> DS1 -> US2 -> DS2 -> US3 -> DS3 -> etc.
+const getPositionSortOrder = (tipo: string, ordem: number): number => {
+  if (tipo === 'FE') return 0; // FRONT sempre primeiro
+  if (tipo === 'OB') return ordem; // OB1=1, OB2=2, OB3=3, OB4=4, OB5=5
+  // US e DS são intercalados: US1=6, DS1=7, US2=8, DS2=9, etc.
+  if (tipo === 'US') return 5 + (ordem * 2) - 1; // US1=6, US2=8, US3=10
+  if (tipo === 'DS') return 5 + (ordem * 2); // DS1=7, DS2=9, DS3=11
+  return 999;
 };
 
 const POSITION_COLORS: Record<string, string> = {
@@ -125,10 +129,9 @@ const FunnelAnalysis = () => {
     const funnelMappings = mappings
       .filter(m => m.id_funil === selectedFunnel)
       .sort((a, b) => {
-        const orderA = POSITION_ORDER[a.tipo_posicao || ''] || 99;
-        const orderB = POSITION_ORDER[b.tipo_posicao || ''] || 99;
-        if (orderA !== orderB) return orderA - orderB;
-        return (a.ordem_posicao || 0) - (b.ordem_posicao || 0);
+        const orderA = getPositionSortOrder(a.tipo_posicao || '', a.ordem_posicao || 0);
+        const orderB = getPositionSortOrder(b.tipo_posicao || '', b.ordem_posicao || 0);
+        return orderA - orderB;
       });
 
     // Find FE (Frontend) sales as base for conversion

@@ -478,12 +478,13 @@ export default function OfferMappingsAuto() {
             }
           });
           
-          if (error) {
-            console.error(`Error fetching offers for product ${productId}:`, error);
+          // Handle both error object and error in data
+          if (error || data?.error) {
+            console.error(`Error fetching offers for product ${productId}:`, error || data?.error);
             continue;
           }
           
-          const hotmartOffers: HotmartOffer[] = data.items || data || [];
+          const hotmartOffers: HotmartOffer[] = data?.items || (Array.isArray(data) ? data : []);
           
           // Compare with local mappings
           for (const hotmartOffer of hotmartOffers) {

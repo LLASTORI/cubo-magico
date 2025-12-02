@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -299,6 +299,14 @@ const Index = () => {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                onClick={() => navigate('/funnel-analysis')}
+                variant="outline"
+                className="gap-2"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Análise de Funil
+              </Button>
               <Button
                 onClick={() => navigate('/offer-mappings')}
                 variant="outline"

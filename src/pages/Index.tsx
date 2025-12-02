@@ -147,32 +147,29 @@ const Index = () => {
     }
   };
 
-  // Calculate metrics from real data
-  const calculateMetrics = () => {
-    if (!salesData?.items) {
+  // Calculate metrics from filtered data
+  const calculateMetrics = (filteredSales: any[]) => {
+    if (!filteredSales || filteredSales.length === 0) {
       return {
         totalSales: "R$ 0,00",
         transactions: 0,
         customers: 0,
-        growth: "0%",
       };
     }
 
-    const items = salesData.items;
-    const total = items.reduce((sum: number, item: any) => {
-      return sum + (item.purchase?.price?.value || 0);
+    const total = filteredSales.reduce((sum: number, item: any) => {
+      return sum + (item.value || 0);
     }, 0);
 
-    const uniqueCustomers = new Set(items.map((item: any) => item.buyer?.email)).size;
+    const uniqueCustomers = new Set(filteredSales.map((item: any) => item.buyer)).size;
 
     return {
       totalSales: new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
       }).format(total / 100), // Hotmart returns values in cents
-      transactions: items.length,
+      transactions: filteredSales.length,
       customers: uniqueCustomers,
-      growth: "+--",
     };
   };
 
@@ -266,8 +263,8 @@ const Index = () => {
     return filteredItems;
   };
 
-  const metrics = calculateMetrics();
   const formattedSales = formatSalesData();
+  const metrics = calculateMetrics(formattedSales);
 
   // Extract unique products and offers from sales data
   const availableProducts = salesData?.items 

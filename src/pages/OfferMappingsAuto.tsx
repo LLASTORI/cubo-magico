@@ -114,6 +114,7 @@ export default function OfferMappingsAuto() {
   const [importingOffers, setImportingOffers] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [syncingOffers, setSyncingOffers] = useState(false);
+  const [fixingIds, setFixingIds] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -552,6 +553,99 @@ export default function OfferMappingsAuto() {
     }
   };
 
+  // Fix product IDs that were stored in wrong format (ID XXXXX -> UUID)
+  const fixProductIds = async () => {
+    try {
+      setFixingIds(true);
+      
+      // Get mappings with old ID format
+      const mappingsToFix = mappings.filter(m => m.id_produto?.startsWith('ID '));
+      
+      if (mappingsToFix.length === 0) {
+        toast({
+          title: 'Nada para corrigir',
+          description: 'Todos os IDs já estão no formato correto',
+        });
+        return;
+      }
+      
+      toast({
+        title: 'Buscando produtos...',
+        description: 'Carregando dados da Hotmart para mapear IDs',
+      });
+      
+      // Fetch all products from Hotmart
+      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          endpoint: '/products',
+          apiType: 'products'
+        }
+      });
+      
+      if (productsError) throw productsError;
+      
+      const products: HotmartProduct[] = productsData.items || productsData || [];
+      
+      // Create mapping of numeric ID to UUID
+      const idToUcode = new Map<string, string>();
+      products.forEach(p => {
+        idToUcode.set(String(p.id), p.ucode);
+      });
+      
+      console.log('ID to UUID mapping:', Object.fromEntries(idToUcode));
+      
+      let fixedCount = 0;
+      
+      // Update each mapping with wrong format
+      for (const mapping of mappingsToFix) {
+        const numericId = mapping.id_produto!.replace('ID ', '');
+        const correctUcode = idToUcode.get(numericId);
+        
+        if (correctUcode) {
+          const { error } = await supabase
+            .from('offer_mappings')
+            .update({ 
+              id_produto: correctUcode,
+              anotacoes: `${mapping.anotacoes || ''}\n[${new Date().toLocaleDateString('pt-BR')}] ID corrigido: ${mapping.id_produto} → ${correctUcode}`.trim()
+            })
+            .eq('id', mapping.id);
+          
+          if (!error) {
+            fixedCount++;
+          } else {
+            console.error(`Error fixing mapping ${mapping.id}:`, error);
+          }
+        } else {
+          console.warn(`No UUID found for product ID: ${numericId}`);
+        }
+      }
+      
+      if (fixedCount > 0) {
+        toast({
+          title: 'IDs corrigidos!',
+          description: `${fixedCount} de ${mappingsToFix.length} registros atualizados`,
+        });
+        fetchMappings();
+      } else {
+        toast({
+          title: 'Nenhum ID corrigido',
+          description: 'Não foi possível encontrar os UUIDs correspondentes na Hotmart',
+          variant: 'destructive',
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('Error fixing IDs:', error);
+      toast({
+        title: 'Erro ao corrigir IDs',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setFixingIds(false);
+    }
+  };
+
   useEffect(() => {
     fetchMappings();
   }, []);
@@ -676,6 +770,19 @@ export default function OfferMappingsAuto() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={fixProductIds}
+                      disabled={fixingIds || mappings.filter(m => m.id_produto?.startsWith('ID ')).length === 0}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {fixingIds ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      Corrigir IDs
+                    </Button>
                     <Button 
                       onClick={syncOffersWithHotmart}
                       disabled={syncingOffers || mappings.length === 0}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, CalendarIcon } from "lucide-react";
+import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, CalendarIcon, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,7 +76,8 @@ const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const [mappings, setMappings] = useState<OfferMapping[]>([]);
   const [rawSalesData, setRawSalesData] = useState<SaleData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadingMappings, setLoadingMappings] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string>("");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
@@ -87,31 +88,10 @@ const FunnelAnalysis = () => {
     return uniqueFunnels.sort();
   }, [mappings]);
 
-  // Filter and aggregate sales by date range
+  // Aggregate sales by offer_code
   const salesData = useMemo((): AggregatedSaleData[] => {
-    let filteredSales = rawSalesData;
-
-    if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      filteredSales = filteredSales.filter(sale => {
-        if (!sale.sale_date) return false;
-        return new Date(sale.sale_date) >= start;
-      });
-    }
-
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      filteredSales = filteredSales.filter(sale => {
-        if (!sale.sale_date) return false;
-        return new Date(sale.sale_date) <= end;
-      });
-    }
-
-    // Aggregate by offer_code
     const aggregated: Record<string, AggregatedSaleData> = {};
-    filteredSales.forEach(sale => {
+    rawSalesData.forEach(sale => {
       const code = sale.offer_code || 'unknown';
       if (!aggregated[code]) {
         aggregated[code] = {
@@ -125,14 +105,12 @@ const FunnelAnalysis = () => {
     });
 
     return Object.values(aggregated);
-  }, [rawSalesData, startDate, endDate]);
+  }, [rawSalesData]);
 
-  // Fetch data
+  // Fetch offer mappings on mount
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      
-      // Fetch offer mappings
+    const fetchMappings = async () => {
+      setLoadingMappings(true);
       const { data: mappingsData } = await supabase
         .from('offer_mappings')
         .select('*')
@@ -141,26 +119,70 @@ const FunnelAnalysis = () => {
       if (mappingsData) {
         setMappings(mappingsData);
       }
-
-      // Fetch all completed sales with dates
-      const { data: salesRaw } = await supabase
-        .from('hotmart_sales')
-        .select('offer_code, total_price, sale_date')
-        .eq('status', 'COMPLETE');
-
-      if (salesRaw) {
-        setRawSalesData(salesRaw.map(sale => ({
-          offer_code: sale.offer_code || 'unknown',
-          total_price: sale.total_price || 0,
-          sale_date: sale.sale_date,
-        })));
-      }
-
-      setLoading(false);
+      setLoadingMappings(false);
     };
 
-    fetchData();
+    fetchMappings();
   }, []);
+
+  // Fetch sales from Hotmart API
+  const fetchSalesData = async () => {
+    if (!startDate || !endDate) return;
+
+    try {
+      setLoading(true);
+      
+      const startTimestamp = startDate.getTime();
+      const endTimestamp = endDate.getTime();
+
+      const params: any = {
+        start_date: startTimestamp,
+        end_date: endTimestamp,
+        max_results: 500,
+        transaction_status: 'APPROVED',
+      };
+
+      let allItems: any[] = [];
+      let nextPageToken: string | null = null;
+      
+      do {
+        const requestParams = { ...params };
+        if (nextPageToken) {
+          requestParams.page_token = nextPageToken;
+        }
+
+        const { data, error } = await supabase.functions.invoke('hotmart-api', {
+          body: {
+            endpoint: '/sales/history',
+            params: requestParams,
+          },
+        });
+
+        if (error) throw error;
+        
+        if (data?.items) {
+          allItems = [...allItems, ...data.items];
+        }
+        
+        nextPageToken = data?.page_info?.next_page_token || null;
+        
+      } while (nextPageToken);
+
+      // Process and set sales data
+      const processedSales: SaleData[] = allItems.map(item => ({
+        offer_code: item.purchase?.offer?.code || 'unknown',
+        total_price: item.purchase?.price?.value || 0,
+        sale_date: item.purchase?.approved_date ? new Date(item.purchase.approved_date).toISOString() : null,
+      }));
+
+      setRawSalesData(processedSales);
+
+    } catch (error: any) {
+      console.error('Error fetching Hotmart data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calculate metrics for selected funnel
   const funnelMetrics = useMemo(() => {
@@ -262,16 +284,16 @@ const FunnelAnalysis = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        {loading ? (
+        {loadingMappings ? (
           <div className="flex flex-col items-center justify-center h-64 gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            <p className="text-muted-foreground">Carregando dados...</p>
+            <p className="text-muted-foreground">Carregando configurações...</p>
           </div>
         ) : (
           <div className="space-y-6">
             {/* Filters */}
             <Card className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="space-y-2">
                   <Label>Funil</Label>
                   <Select value={selectedFunnel} onValueChange={setSelectedFunnel}>
@@ -339,20 +361,37 @@ const FunnelAnalysis = () => {
                     </PopoverContent>
                   </Popover>
                 </div>
+                <div className="space-y-2">
+                  <Label>&nbsp;</Label>
+                  <Button 
+                    onClick={fetchSalesData}
+                    disabled={!startDate || !endDate || loading}
+                    className="w-full gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground"></div>
+                        Buscando...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4" />
+                        Buscar Dados
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              {(startDate || endDate) && (
+              {rawSalesData.length > 0 && (
                 <div className="mt-4 flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs">
-                    Período: {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Início"} até {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Fim"}
+                    {rawSalesData.length} vendas carregadas
                   </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setStartDate(undefined); setEndDate(undefined); }}
-                    className="h-6 px-2 text-xs"
-                  >
-                    Limpar período
-                  </Button>
+                  {startDate && endDate && (
+                    <Badge variant="outline" className="text-xs">
+                      Período: {format(startDate, "dd/MM/yyyy", { locale: ptBR })} até {format(endDate, "dd/MM/yyyy", { locale: ptBR })}
+                    </Badge>
+                  )}
                 </div>
               )}
             </Card>
@@ -479,10 +518,13 @@ const FunnelAnalysis = () => {
               <div className="flex flex-col items-center justify-center h-64 text-center">
                 <BarChart3 className="w-16 h-16 text-muted-foreground mb-4" />
                 <h3 className="text-xl font-semibold text-foreground mb-2">
-                  Selecione um Funil
+                  {rawSalesData.length === 0 ? "Busque os Dados" : "Selecione um Funil"}
                 </h3>
-                <p className="text-muted-foreground">
-                  Escolha um funil para visualizar as métricas de conversão e ROAS
+                <p className="text-muted-foreground max-w-md">
+                  {rawSalesData.length === 0 
+                    ? "Selecione as datas de início e fim e clique em 'Buscar Dados' para carregar as vendas da Hotmart"
+                    : "Escolha um funil para visualizar as métricas de conversão"
+                  }
                 </p>
               </div>
             )}

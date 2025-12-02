@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      funnel_changes: {
+        Row: {
+          anotacoes: string | null
+          codigo_oferta: string | null
+          created_at: string
+          data_alteracao: string
+          descricao: string
+          id: string
+          id_funil: string
+          tipo_alteracao: string
+          updated_at: string
+          valor_anterior: number | null
+          valor_novo: number | null
+        }
+        Insert: {
+          anotacoes?: string | null
+          codigo_oferta?: string | null
+          created_at?: string
+          data_alteracao?: string
+          descricao: string
+          id?: string
+          id_funil: string
+          tipo_alteracao: string
+          updated_at?: string
+          valor_anterior?: number | null
+          valor_novo?: number | null
+        }
+        Update: {
+          anotacoes?: string | null
+          codigo_oferta?: string | null
+          created_at?: string
+          data_alteracao?: string
+          descricao?: string
+          id?: string
+          id_funil?: string
+          tipo_alteracao?: string
+          updated_at?: string
+          valor_anterior?: number | null
+          valor_novo?: number | null
+        }
+        Relationships: []
+      }
       hotmart_sales: {
         Row: {
           affiliate_code: string | null

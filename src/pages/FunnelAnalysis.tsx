@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import PeriodComparison from "@/components/funnel/PeriodComparison";
+import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 interface OfferMapping {
   id: string;
   id_funil: string;
@@ -308,11 +310,18 @@ const FunnelAnalysis = () => {
             </Card>
 
             {selectedFunnel ? (
-              <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+              <Tabs defaultValue="overview" className="space-y-6">
+                <TabsList className="grid grid-cols-3 w-full max-w-md">
+                  <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                  <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
+                  <TabsTrigger value="changelog">Histórico</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="space-y-6">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                       <Card className="p-6 cursor-help">
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
@@ -525,7 +534,26 @@ const FunnelAnalysis = () => {
                     </Table>
                   </div>
                 </Card>
-              </>
+                </TabsContent>
+
+                <TabsContent value="comparison">
+                  <PeriodComparison
+                    salesData={salesFromDashboard}
+                    selectedFunnel={selectedFunnel}
+                    funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="changelog">
+                  <FunnelChangelog
+                    selectedFunnel={selectedFunnel}
+                    offerOptions={funnelMetrics.map(m => ({
+                      codigo_oferta: m.codigo_oferta,
+                      nome_oferta: m.nome_oferta
+                    }))}
+                  />
+                </TabsContent>
+              </Tabs>
             ) : (
               <Card className="p-12 text-center">
                 <Target className="w-16 h-16 text-muted-foreground mx-auto mb-4" />

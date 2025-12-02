@@ -440,8 +440,12 @@ export default function OfferMappingsAuto() {
     try {
       setSyncingOffers(true);
       
-      // Get unique product IDs from existing mappings
-      const productIds = [...new Set(mappings.filter(m => m.id_produto).map(m => m.id_produto!))];
+      // Get unique product IDs from existing mappings (clean "ID " prefix if present)
+      const productIds = [...new Set(mappings.filter(m => m.id_produto).map(m => {
+        const id = m.id_produto!;
+        // Remove "ID " prefix if present (some products were stored with this format)
+        return id.startsWith('ID ') ? id.substring(3) : id;
+      }))];
       
       if (productIds.length === 0) {
         toast({

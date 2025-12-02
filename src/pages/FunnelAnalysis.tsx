@@ -1,19 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, CalendarIcon, Search } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { useNavigate, useLocation } from "react-router-dom";
+import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 
 interface OfferMapping {
   id: string;
@@ -28,10 +22,19 @@ interface OfferMapping {
   status: string | null;
 }
 
-interface SaleData {
-  offer_code: string;
-  total_price: number;
-  sale_date: string | null;
+interface DashboardSale {
+  transaction: string;
+  product: string;
+  buyer: string;
+  value: number;
+  status: string;
+  date: string;
+  offerCode?: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  utmAdset?: string;
+  utmPlacement?: string;
+  utmCreative?: string;
 }
 
 interface AggregatedSaleData {
@@ -56,11 +59,10 @@ interface PositionMetrics {
 // Função para calcular a ordem correta no funil:
 // FRONT -> OB1-5 -> US1 -> DS1 -> US2 -> DS2 -> US3 -> DS3 -> etc.
 const getPositionSortOrder = (tipo: string, ordem: number): number => {
-  if (tipo === 'FRONT' || tipo === 'FE') return 0; // FRONT sempre primeiro
-  if (tipo === 'OB') return ordem; // OB1=1, OB2=2, OB3=3, OB4=4, OB5=5
-  // US e DS são intercalados: US1=6, DS1=7, US2=8, DS2=9, etc.
-  if (tipo === 'US') return 5 + (ordem * 2) - 1; // US1=6, US2=8, US3=10
-  if (tipo === 'DS') return 5 + (ordem * 2); // DS1=7, DS2=9, DS3=11
+  if (tipo === 'FRONT' || tipo === 'FE') return 0;
+  if (tipo === 'OB') return ordem;
+  if (tipo === 'US') return 5 + (ordem * 2) - 1;
+  if (tipo === 'DS') return 5 + (ordem * 2);
   return 999;
 };
 
@@ -74,13 +76,14 @@ const POSITION_COLORS: Record<string, string> = {
 
 const FunnelAnalysis = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [mappings, setMappings] = useState<OfferMapping[]>([]);
-  const [rawSalesData, setRawSalesData] = useState<SaleData[]>([]);
-  const [loading, setLoading] = useState(false);
   const [loadingMappings, setLoadingMappings] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string>("");
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+
+  // Get sales data from Dashboard navigation state
+  const dashboardData = location.state as { salesData?: DashboardSale[]; filters?: any } | null;
+  const salesFromDashboard = dashboardData?.salesData || [];
 
   // Get unique funnels
   const funnels = useMemo(() => {
@@ -88,11 +91,12 @@ const FunnelAnalysis = () => {
     return uniqueFunnels.sort();
   }, [mappings]);
 
-  // Aggregate sales by offer_code
+  // Aggregate sales by offer_code from Dashboard data
   const salesData = useMemo((): AggregatedSaleData[] => {
     const aggregated: Record<string, AggregatedSaleData> = {};
-    rawSalesData.forEach(sale => {
-      const code = sale.offer_code || 'unknown';
+    
+    salesFromDashboard.forEach(sale => {
+      const code = sale.offerCode || 'unknown';
       if (!aggregated[code]) {
         aggregated[code] = {
           offer_code: code,
@@ -101,11 +105,11 @@ const FunnelAnalysis = () => {
         };
       }
       aggregated[code].total_sales += 1;
-      aggregated[code].total_value += sale.total_price || 0;
+      aggregated[code].total_value += sale.value || 0;
     });
 
     return Object.values(aggregated);
-  }, [rawSalesData]);
+  }, [salesFromDashboard]);
 
   // Fetch offer mappings on mount
   useEffect(() => {
@@ -125,102 +129,6 @@ const FunnelAnalysis = () => {
     fetchMappings();
   }, []);
 
-  // Fetch sales from Hotmart API
-  const fetchSalesData = async () => {
-    if (!startDate || !endDate) return;
-
-    try {
-      setLoading(true);
-      
-      // Create date range in UTC to avoid timezone issues
-      // For start date: beginning of day in UTC
-      const startYear = startDate.getFullYear();
-      const startMonth = startDate.getMonth();
-      const startDay = startDate.getDate();
-      const startUTC = Date.UTC(startYear, startMonth, startDay, 0, 0, 0, 0);
-      
-      // For end date: end of day in UTC (23:59:59.999)
-      const endYear = endDate.getFullYear();
-      const endMonth = endDate.getMonth();
-      const endDay = endDate.getDate();
-      const endUTC = Date.UTC(endYear, endMonth, endDay, 23, 59, 59, 999);
-
-      console.log('=== DEBUG DATAS ===');
-      console.log('startDate selecionado:', startDate.toISOString());
-      console.log('endDate selecionado:', endDate.toISOString());
-      console.log('startUTC timestamp:', startUTC, '=', new Date(startUTC).toISOString());
-      console.log('endUTC timestamp:', endUTC, '=', new Date(endUTC).toISOString());
-
-      const params: any = {
-        start_date: startUTC,
-        end_date: endUTC,
-        max_results: 500,
-        transaction_status: 'APPROVED',
-      };
-
-      let allItems: any[] = [];
-      let nextPageToken: string | null = null;
-      
-      do {
-        const requestParams = { ...params };
-        if (nextPageToken) {
-          requestParams.page_token = nextPageToken;
-        }
-
-        const { data, error } = await supabase.functions.invoke('hotmart-api', {
-          body: {
-            endpoint: '/sales/history',
-            params: requestParams,
-          },
-        });
-
-        if (error) throw error;
-        
-        console.log('=== API RESPONSE ===');
-        console.log('page_info:', data?.page_info);
-        console.log('items nesta página:', data?.items?.length || 0);
-        
-        if (data?.items) {
-          allItems = [...allItems, ...data.items];
-        }
-        
-        nextPageToken = data?.page_info?.next_page_token || null;
-        console.log('nextPageToken:', nextPageToken);
-        
-      } while (nextPageToken);
-
-      console.log('=== TOTAL FINAL ===');
-      console.log('Total de itens buscados:', allItems.length);
-
-      // Process and set sales data
-      const processedSales: SaleData[] = allItems.map(item => ({
-        offer_code: item.purchase?.offer?.code || 'unknown',
-        total_price: item.purchase?.price?.value || 0,
-        sale_date: item.purchase?.approved_date ? new Date(item.purchase.approved_date).toISOString() : null,
-      }));
-
-      // Debug: Log unique offer codes from API
-      const uniqueApiCodes = [...new Set(processedSales.map(s => s.offer_code))];
-      console.log('=== DEBUG: Códigos de oferta da API ===');
-      console.log('Total de vendas:', processedSales.length);
-      console.log('Códigos únicos:', uniqueApiCodes);
-      
-      // Count sales per offer code
-      const salesPerCode: Record<string, number> = {};
-      processedSales.forEach(s => {
-        salesPerCode[s.offer_code] = (salesPerCode[s.offer_code] || 0) + 1;
-      });
-      console.log('Vendas por código:', salesPerCode);
-
-      setRawSalesData(processedSales);
-
-    } catch (error: any) {
-      console.error('Error fetching Hotmart data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Calculate metrics for selected funnel
   const funnelMetrics = useMemo(() => {
     if (!selectedFunnel) return [];
@@ -233,7 +141,6 @@ const FunnelAnalysis = () => {
         return orderA - orderB;
       });
 
-    // Debug: Log mappings and sales data
     console.log('=== DEBUG: Análise de Funil ===');
     console.log('Funil selecionado:', selectedFunnel);
     console.log('Mapeamentos do funil:', funnelMappings.map(m => ({ 
@@ -264,10 +171,7 @@ const FunnelAnalysis = () => {
       const totalVendas = sale?.total_sales || 0;
       const totalReceita = sale?.total_value || 0;
 
-      // Conversion rate relative to FE
       const taxaConversao = feSales > 0 ? (totalVendas / feSales) * 100 : 0;
-      
-      // Revenue percentage
       const percentualReceita = totalFunnelRevenue > 0 ? (totalReceita / totalFunnelRevenue) * 100 : 0;
 
       return {
@@ -305,6 +209,44 @@ const FunnelAnalysis = () => {
     return `${value.toFixed(2)}%`;
   };
 
+  // If no data from Dashboard, show message
+  if (salesFromDashboard.length === 0) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="border-b border-border bg-card shadow-sm">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  Análise de Funil
+                </h1>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="container mx-auto px-6 py-8">
+          <Card className="p-12 text-center">
+            <BarChart3 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              Nenhum dado disponível
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Primeiro, busque os dados no Dashboard usando os filtros desejados.
+              Depois, clique em "Análise de Funil" para analisar os dados filtrados.
+            </p>
+            <Button onClick={() => navigate('/')} className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Voltar ao Dashboard
+            </Button>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -312,11 +254,7 @@ const FunnelAnalysis = () => {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/')}
-              >
+              <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
@@ -328,6 +266,9 @@ const FunnelAnalysis = () => {
                 </p>
               </div>
             </div>
+            <Badge variant="secondary" className="text-sm">
+              {salesFromDashboard.length} vendas do Dashboard
+            </Badge>
           </div>
         </div>
       </header>
@@ -341,11 +282,11 @@ const FunnelAnalysis = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Filters */}
+            {/* Funnel Selector */}
             <Card className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="space-y-2">
-                  <Label>Funil</Label>
+              <div className="flex items-center gap-4">
+                <div className="space-y-2 flex-1 max-w-sm">
+                  <Label>Selecione o Funil</Label>
                   <Select value={selectedFunnel} onValueChange={setSelectedFunnel}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um funil" />
@@ -359,91 +300,7 @@ const FunnelAnalysis = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Data Início</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !startDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={setStartDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label>Data Fim</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !endDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endDate}
-                        onSelect={setEndDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label>&nbsp;</Label>
-                  <Button 
-                    onClick={fetchSalesData}
-                    disabled={!startDate || !endDate || loading}
-                    className="w-full gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground"></div>
-                        Buscando...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-4 h-4" />
-                        Buscar Dados
-                      </>
-                    )}
-                  </Button>
-                </div>
               </div>
-              {rawSalesData.length > 0 && (
-                <div className="mt-4 flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {rawSalesData.length} vendas carregadas
-                  </Badge>
-                  {startDate && endDate && (
-                    <Badge variant="outline" className="text-xs">
-                      Período: {format(startDate, "dd/MM/yyyy", { locale: ptBR })} até {format(endDate, "dd/MM/yyyy", { locale: ptBR })}
-                    </Badge>
-                  )}
-                </div>
-              )}
             </Card>
 
             {selectedFunnel ? (
@@ -467,8 +324,8 @@ const FunnelAnalysis = () => {
                         <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
                         <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalReceita)}</p>
                       </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
-                        <DollarSign className="w-6 h-6 text-primary-foreground" />
+                      <div className="p-3 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
+                        <DollarSign className="w-6 h-6 text-white" />
                       </div>
                     </div>
                   </Card>
@@ -478,8 +335,8 @@ const FunnelAnalysis = () => {
                         <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
                         <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryMetrics.ticketMedio)}</p>
                       </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
-                        <Target className="w-6 h-6 text-primary-foreground" />
+                      <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+                        <Target className="w-6 h-6 text-white" />
                       </div>
                     </div>
                   </Card>
@@ -487,22 +344,14 @@ const FunnelAnalysis = () => {
 
                 {/* Funnel Flow Visualization */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <ArrowRight className="w-5 h-5" />
-                    Fluxo do Funil
-                  </h3>
+                  <h3 className="text-lg font-semibold mb-4">Fluxo do Funil</h3>
                   <div className="flex flex-wrap items-center gap-2">
                     {funnelMetrics.map((metric, index) => (
                       <div key={metric.codigo_oferta} className="flex items-center gap-2">
-                        <div className="flex flex-col items-center">
-                          <Badge 
-                            variant="outline" 
-                            className={`${POSITION_COLORS[metric.tipo_posicao] || 'bg-muted'} px-3 py-1`}
-                          >
-                            {metric.tipo_posicao}{metric.ordem_posicao > 0 ? metric.ordem_posicao : ''}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground mt-1">{metric.total_vendas} vendas</span>
-                          <span className="text-xs font-medium">{formatPercent(metric.taxa_conversao)}</span>
+                        <div className={`px-4 py-3 rounded-lg border ${POSITION_COLORS[metric.tipo_posicao] || 'bg-muted'}`}>
+                          <div className="text-xs font-medium opacity-70">{metric.tipo_posicao}{metric.ordem_posicao || ''}</div>
+                          <div className="text-lg font-bold">{metric.total_vendas}</div>
+                          <div className="text-xs opacity-70">{formatPercent(metric.taxa_conversao)}</div>
                         </div>
                         {index < funnelMetrics.length - 1 && (
                           <ArrowRight className="w-4 h-4 text-muted-foreground" />
@@ -514,17 +363,15 @@ const FunnelAnalysis = () => {
 
                 {/* Detailed Table */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Percent className="w-5 h-5" />
-                    Métricas por Posição
-                  </h3>
-                  <div className="overflow-x-auto">
+                  <h3 className="text-lg font-semibold mb-4">Detalhamento por Posição</h3>
+                  <div className="rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Posição</TableHead>
                           <TableHead>Oferta</TableHead>
-                          <TableHead className="text-right">Valor Oferta</TableHead>
+                          <TableHead>Código</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
                           <TableHead className="text-right">Vendas</TableHead>
                           <TableHead className="text-right">Receita</TableHead>
                           <TableHead className="text-right">Taxa Conv.</TableHead>
@@ -535,26 +382,19 @@ const FunnelAnalysis = () => {
                         {funnelMetrics.map((metric) => (
                           <TableRow key={metric.codigo_oferta}>
                             <TableCell>
-                              <Badge 
-                                variant="outline" 
-                                className={`${POSITION_COLORS[metric.tipo_posicao] || 'bg-muted'}`}
-                              >
-                                {metric.nome_posicao || `${metric.tipo_posicao}${metric.ordem_posicao > 0 ? metric.ordem_posicao : ''}`}
+                              <Badge variant="outline" className={POSITION_COLORS[metric.tipo_posicao]}>
+                                {metric.tipo_posicao}{metric.ordem_posicao || ''}
                               </Badge>
                             </TableCell>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{metric.nome_oferta || '-'}</p>
-                                <p className="text-xs text-muted-foreground">{metric.codigo_oferta}</p>
-                              </div>
-                            </TableCell>
+                            <TableCell className="font-medium">{metric.nome_oferta || '-'}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground font-mono">{metric.codigo_oferta}</TableCell>
                             <TableCell className="text-right">{formatCurrency(metric.valor_oferta)}</TableCell>
-                            <TableCell className="text-right font-medium">{metric.total_vendas}</TableCell>
-                            <TableCell className="text-right font-medium">{formatCurrency(metric.total_receita)}</TableCell>
+                            <TableCell className="text-right font-bold">{metric.total_vendas}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(metric.total_receita)}</TableCell>
                             <TableCell className="text-right">
-                              <span className={metric.taxa_conversao >= 100 ? 'text-green-500' : 'text-foreground'}>
+                              <Badge variant={metric.taxa_conversao > 10 ? "default" : "secondary"}>
                                 {formatPercent(metric.taxa_conversao)}
-                              </span>
+                              </Badge>
                             </TableCell>
                             <TableCell className="text-right">{formatPercent(metric.percentual_receita)}</TableCell>
                           </TableRow>
@@ -565,18 +405,15 @@ const FunnelAnalysis = () => {
                 </Card>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <BarChart3 className="w-16 h-16 text-muted-foreground mb-4" />
+              <Card className="p-12 text-center">
+                <Target className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-foreground mb-2">
-                  {rawSalesData.length === 0 ? "Busque os Dados" : "Selecione um Funil"}
+                  Selecione um Funil
                 </h3>
-                <p className="text-muted-foreground max-w-md">
-                  {rawSalesData.length === 0 
-                    ? "Selecione as datas de início e fim e clique em 'Buscar Dados' para carregar as vendas da Hotmart"
-                    : "Escolha um funil para visualizar as métricas de conversão"
-                  }
+                <p className="text-muted-foreground">
+                  Escolha um funil acima para visualizar as métricas de conversão
                 </p>
-              </div>
+              </Card>
             )}
           </div>
         )}

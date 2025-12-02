@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, subDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, RefreshCw, Users, UserPlus, Repeat, ShoppingCart, Package, MessageCircle } from "lucide-react";
+import { Calendar, RefreshCw, Users, UserPlus, Repeat, ShoppingCart, Package, MessageCircle, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -320,6 +320,51 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  // Export customers to CSV
+  const exportToCSV = () => {
+    const headers = [
+      'Nome',
+      'Email',
+      'Telefone',
+      'Compras (Recorrência)',
+      'Produtos (neste funil)',
+      'Total Gasto',
+      'Ticket Médio',
+      'Status',
+      'Outros Funis',
+      'Produtos Outros Funis'
+    ];
+    
+    const rows = filteredCustomers.map(c => [
+      c.name,
+      c.email,
+      c.phone || '',
+      1 + c.otherFunnels.length,
+      c.products.length,
+      c.totalSpent.toFixed(2),
+      (c.totalSpent / c.products.length).toFixed(2),
+      c.isRecurrent ? 'Recorrente' : 'Novo',
+      c.otherFunnels.join('; '),
+      c.otherFunnelProducts.map(f => `${f.funnel}: ${f.products.map(p => offerToProductName[p] || p).join(', ')}`).join(' | ')
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ranking-clientes-${selectedFunnel}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Arquivo CSV exportado com sucesso!');
+  };
+
   // Filter customers based on selected filter
   const filteredCustomers = useMemo(() => {
     let customers = cohortMetrics.allCustomers;
@@ -545,7 +590,18 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
           {/* Top Customers Table */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold">Top 10 Clientes (por valor gasto)</h4>
+              <div className="flex items-center gap-3">
+                <h4 className="font-semibold">Top 50 Clientes (por valor gasto)</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportToCSV}
+                  className="gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Exportar CSV
+                </Button>
+              </div>
               <div className="flex gap-2">
                 <Button
                   variant={customerFilter === 'all' ? 'default' : 'outline'}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, TrendingUp, Percent, DollarSign, BarChart3, Target, ArrowRight, CalendarIcon } from "lucide-react";
+import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,7 +51,6 @@ interface PositionMetrics {
   total_receita: number;
   taxa_conversao: number;
   percentual_receita: number;
-  roas: number;
 }
 
 // Função para calcular a ordem correta no funil:
@@ -79,7 +78,6 @@ const FunnelAnalysis = () => {
   const [rawSalesData, setRawSalesData] = useState<SaleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string>("");
-  const [investimento, setInvestimento] = useState<string>("");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
@@ -189,8 +187,6 @@ const FunnelAnalysis = () => {
       return sum + (sale?.total_value || 0);
     }, 0);
 
-    const investimentoNum = parseFloat(investimento) || 0;
-
     return funnelMappings.map(mapping => {
       const sale = salesData.find(s => s.offer_code === mapping.codigo_oferta);
       const totalVendas = sale?.total_sales || 0;
@@ -201,9 +197,6 @@ const FunnelAnalysis = () => {
       
       // Revenue percentage
       const percentualReceita = totalFunnelRevenue > 0 ? (totalReceita / totalFunnelRevenue) * 100 : 0;
-
-      // ROAS calculation (if investment is provided)
-      const roas = investimentoNum > 0 ? totalReceita / investimentoNum : 0;
 
       return {
         tipo_posicao: mapping.tipo_posicao || '',
@@ -216,21 +209,18 @@ const FunnelAnalysis = () => {
         total_receita: totalReceita,
         taxa_conversao: taxaConversao,
         percentual_receita: percentualReceita,
-        roas: roas,
       } as PositionMetrics;
     });
-  }, [selectedFunnel, mappings, salesData, investimento]);
+  }, [selectedFunnel, mappings, salesData]);
 
   // Summary metrics
   const summaryMetrics = useMemo(() => {
     const totalVendas = funnelMetrics.reduce((sum, m) => sum + m.total_vendas, 0);
     const totalReceita = funnelMetrics.reduce((sum, m) => sum + m.total_receita, 0);
-    const investimentoNum = parseFloat(investimento) || 0;
-    const roasTotal = investimentoNum > 0 ? totalReceita / investimentoNum : 0;
     const ticketMedio = totalVendas > 0 ? totalReceita / totalVendas : 0;
 
-    return { totalVendas, totalReceita, roasTotal, ticketMedio };
-  }, [funnelMetrics, investimento]);
+    return { totalVendas, totalReceita, ticketMedio };
+  }, [funnelMetrics]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -262,7 +252,7 @@ const FunnelAnalysis = () => {
                   Análise de Funil
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Taxas de conversão, percentuais e ROAS por posição
+                  Taxas de conversão e métricas de vendas por posição
                 </p>
               </div>
             </div>
@@ -349,15 +339,6 @@ const FunnelAnalysis = () => {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="space-y-2">
-                  <Label>Investimento (R$)</Label>
-                  <Input
-                    type="number"
-                    placeholder="Ex: 1000.00"
-                    value={investimento}
-                    onChange={(e) => setInvestimento(e.target.value)}
-                  />
-                </div>
               </div>
               {(startDate || endDate) && (
                 <div className="mt-4 flex items-center gap-2">
@@ -379,7 +360,7 @@ const FunnelAnalysis = () => {
             {selectedFunnel ? (
               <>
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Card className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
@@ -410,19 +391,6 @@ const FunnelAnalysis = () => {
                       </div>
                       <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
                         <Target className="w-6 h-6 text-primary-foreground" />
-                      </div>
-                    </div>
-                  </Card>
-                  <Card className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">ROAS Total</p>
-                        <p className="text-3xl font-bold text-foreground">
-                          {summaryMetrics.roasTotal > 0 ? `${summaryMetrics.roasTotal.toFixed(2)}x` : '-'}
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
-                        <TrendingUp className="w-6 h-6 text-primary-foreground" />
                       </div>
                     </div>
                   </Card>
@@ -472,7 +440,6 @@ const FunnelAnalysis = () => {
                           <TableHead className="text-right">Receita</TableHead>
                           <TableHead className="text-right">Taxa Conv.</TableHead>
                           <TableHead className="text-right">% Receita</TableHead>
-                          <TableHead className="text-right">ROAS</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -501,13 +468,6 @@ const FunnelAnalysis = () => {
                               </span>
                             </TableCell>
                             <TableCell className="text-right">{formatPercent(metric.percentual_receita)}</TableCell>
-                            <TableCell className="text-right">
-                              {metric.roas > 0 ? (
-                                <span className={metric.roas >= 2 ? 'text-green-500' : metric.roas >= 1 ? 'text-yellow-500' : 'text-red-500'}>
-                                  {metric.roas.toFixed(2)}x
-                                </span>
-                              ) : '-'}
-                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

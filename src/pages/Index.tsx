@@ -195,11 +195,11 @@ const Index = () => {
   const formatSalesData = () => {
     if (!salesData?.items || !currentFilters) return [];
 
-    let filteredItems = salesData.items.map((item: any) => {
+    let filteredItems = salesData.items.map((item: any, index: number) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
       // Log first item to see structure
-      if (filteredItems.length === 0) {
+      if (index === 0) {
         console.log('Estrutura do primeiro item da API:', JSON.stringify(item, null, 2));
       }
       

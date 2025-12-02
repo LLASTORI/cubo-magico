@@ -421,18 +421,59 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                   : '0%'}
               </p>
             </div>
-            <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Repeat className="w-5 h-5 text-purple-500" />
-                <span className="text-xs text-muted-foreground">Recorrentes (outros funis)</span>
-              </div>
-              <p className="text-2xl font-bold">{cohortMetrics.recurrentCustomers}</p>
-              <p className="text-xs text-muted-foreground">
-                {cohortMetrics.uniqueCustomers > 0 
-                  ? `${((cohortMetrics.recurrentCustomers / cohortMetrics.uniqueCustomers) * 100).toFixed(0)}%`
-                  : '0%'}
-              </p>
-            </div>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Repeat className="w-5 h-5 text-purple-500" />
+                    <span className="text-xs text-muted-foreground">Recorrentes (outros funis)</span>
+                  </div>
+                  <p className="text-2xl font-bold">{cohortMetrics.recurrentCustomers}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {cohortMetrics.uniqueCustomers > 0 
+                      ? `${((cohortMetrics.recurrentCustomers / cohortMetrics.uniqueCustomers) * 100).toFixed(0)}%`
+                      : '0%'}
+                  </p>
+                </div>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-96" align="start">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Repeat className="w-4 h-4 text-purple-500" />
+                    <span className="font-semibold">Clientes Recorrentes</span>
+                    <Badge variant="secondary" className="ml-auto">
+                      {cohortMetrics.recurrentCustomers} clientes
+                    </Badge>
+                  </div>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {cohortMetrics.topCustomers
+                      .filter(c => c.isRecurrent)
+                      .slice(0, 10)
+                      .map((customer, idx) => (
+                        <div key={idx} className="p-2 rounded-md bg-muted/50 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium truncate max-w-[200px]">{customer.name}</span>
+                            <span className="text-xs text-muted-foreground">{formatCurrency(customer.totalSpent)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {customer.otherFunnels.map((funnel, fIdx) => (
+                              <Badge key={fIdx} variant="outline" className="text-xs">
+                                {funnel}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                  {cohortMetrics.recurrentCustomers > 10 && (
+                    <p className="text-xs text-muted-foreground text-center pt-2 border-t">
+                      Mostrando 10 de {cohortMetrics.recurrentCustomers} clientes recorrentes
+                    </p>
+                  )}
+                </div>
+              </HoverCardContent>
+            </HoverCard>
             <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <ShoppingCart className="w-5 h-5 text-orange-500" />

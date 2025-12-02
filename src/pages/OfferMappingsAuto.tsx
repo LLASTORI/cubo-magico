@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw, CheckSquare, XSquare } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw, CheckSquare, XSquare, RotateCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -113,6 +113,7 @@ export default function OfferMappingsAuto() {
   const [selectedOffers, setSelectedOffers] = useState<Map<string, Set<string>>>(new Map());
   const [importingOffers, setImportingOffers] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [syncingOffers, setSyncingOffers] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -434,6 +435,119 @@ export default function OfferMappingsAuto() {
     }
   };
 
+  // Sync existing offers with Hotmart data
+  const syncOffersWithHotmart = async () => {
+    try {
+      setSyncingOffers(true);
+      
+      // Get unique product IDs from existing mappings
+      const productIds = [...new Set(mappings.filter(m => m.id_produto).map(m => m.id_produto!))];
+      
+      if (productIds.length === 0) {
+        toast({
+          title: 'Nada para sincronizar',
+          description: 'Não há ofertas importadas com ID de produto',
+        });
+        return;
+      }
+      
+      toast({
+        title: 'Sincronizando...',
+        description: `Buscando dados de ${productIds.length} produtos na Hotmart`,
+      });
+      
+      let updatedCount = 0;
+      const changes: string[] = [];
+      
+      // For each product, fetch offers and compare
+      for (const productId of productIds) {
+        try {
+          const { data, error } = await supabase.functions.invoke('hotmart-api', {
+            body: {
+              endpoint: `products/${productId}/offers`,
+              params: {},
+              apiType: 'products'
+            }
+          });
+          
+          if (error) {
+            console.error(`Error fetching offers for product ${productId}:`, error);
+            continue;
+          }
+          
+          const hotmartOffers: HotmartOffer[] = data.items || data || [];
+          
+          // Compare with local mappings
+          for (const hotmartOffer of hotmartOffers) {
+            const localMapping = mappings.find(m => m.codigo_oferta === hotmartOffer.code);
+            
+            if (localMapping) {
+              const changesForOffer: string[] = [];
+              const now = new Date().toLocaleDateString('pt-BR');
+              
+              // Check for price change
+              if (hotmartOffer.price?.value && localMapping.valor !== hotmartOffer.price.value) {
+                changesForOffer.push(`Valor: R$ ${localMapping.valor?.toFixed(2) || '0'} → R$ ${hotmartOffer.price.value.toFixed(2)}`);
+              }
+              
+              // Check for name change
+              const hotmartOfferName = hotmartOffer.name || (hotmartOffer.is_main_offer ? 'Oferta Principal' : 'Sem Nome');
+              if (hotmartOfferName !== localMapping.nome_oferta) {
+                changesForOffer.push(`Nome: "${localMapping.nome_oferta}" → "${hotmartOfferName}"`);
+              }
+              
+              if (changesForOffer.length > 0) {
+                // Update the mapping with new data and add annotation
+                const existingNotes = localMapping.anotacoes || '';
+                const newNote = `[${now}] Alterações sincronizadas da Hotmart:\n${changesForOffer.join('\n')}`;
+                const updatedNotes = existingNotes ? `${newNote}\n\n${existingNotes}` : newNote;
+                
+                const { error: updateError } = await supabase
+                  .from('offer_mappings')
+                  .update({
+                    valor: hotmartOffer.price?.value || localMapping.valor,
+                    nome_oferta: hotmartOfferName,
+                    anotacoes: updatedNotes,
+                  })
+                  .eq('id', localMapping.id);
+                
+                if (!updateError) {
+                  updatedCount++;
+                  changes.push(`${localMapping.nome_produto} - ${hotmartOfferName}`);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`Error processing product ${productId}:`, e);
+        }
+      }
+      
+      if (updatedCount > 0) {
+        toast({
+          title: 'Sincronização concluída!',
+          description: `${updatedCount} oferta(s) atualizada(s). Alterações anotadas automaticamente.`,
+        });
+        fetchMappings();
+      } else {
+        toast({
+          title: 'Tudo sincronizado!',
+          description: 'Nenhuma alteração detectada nas ofertas',
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('Error syncing offers:', error);
+      toast({
+        title: 'Erro na sincronização',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncingOffers(false);
+    }
+  };
+
   useEffect(() => {
     fetchMappings();
   }, []);
@@ -557,10 +671,25 @@ export default function OfferMappingsAuto() {
                       </Button>
                     )}
                   </div>
-                  <Button onClick={handleAdd} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Nova Oferta
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={syncOffersWithHotmart}
+                      disabled={syncingOffers || mappings.length === 0}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {syncingOffers ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCw className="h-4 w-4" />
+                      )}
+                      Sincronizar com Hotmart
+                    </Button>
+                    <Button onClick={handleAdd} className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Nova Oferta
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="flex items-center gap-4 flex-wrap">

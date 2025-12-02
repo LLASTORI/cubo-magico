@@ -34,7 +34,7 @@ const POSITION_TYPES = [
   { value: 'FRONT', label: 'FRONT - Produto Principal', maxOrder: 1 },
   { value: 'OB', label: 'OB - Order Bump (1-5)', maxOrder: 5 },
   { value: 'US', label: 'US - Upsell (1-5)', maxOrder: 5 },
-  { value: 'DS', label: 'DS - Downsell', maxOrder: 1 },
+  { value: 'DS', label: 'DS - Downsell (1-5)', maxOrder: 5 },
 ];
 
 const ORDER_OPTIONS = [1, 2, 3, 4, 5];

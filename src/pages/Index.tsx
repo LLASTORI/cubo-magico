@@ -210,7 +210,7 @@ const Index = () => {
         value: item.purchase?.price?.value || 0,
         status: item.purchase?.status || 'unknown',
         date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
-        offerCode: item.product?.offer?.code || item.offer?.code || undefined,
+        offerCode: item.purchase?.offer?.code || undefined,
         ...utmData,
       };
     });

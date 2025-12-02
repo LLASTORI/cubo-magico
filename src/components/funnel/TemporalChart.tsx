@@ -43,7 +43,7 @@ interface DailyData {
 
 const chartConfig = {
   sales: {
-    label: "Vendas",
+    label: "Produtos Vendidos",
     color: "hsl(var(--primary))",
   },
   revenue: {
@@ -327,7 +327,7 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps)
           {/* Charts */}
           <Tabs defaultValue="sales" className="space-y-4">
             <TabsList>
-              <TabsTrigger value="sales">Vendas</TabsTrigger>
+              <TabsTrigger value="sales">Produtos Vendidos</TabsTrigger>
               <TabsTrigger value="revenue">Receita</TabsTrigger>
               <TabsTrigger value="combined">Combinado</TabsTrigger>
             </TabsList>

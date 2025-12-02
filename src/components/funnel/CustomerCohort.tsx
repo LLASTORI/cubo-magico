@@ -51,6 +51,7 @@ interface CustomerData {
   products: string[];
   isRecurrent: boolean;
   otherFunnels: string[]; // Names of other funnels where customer bought
+  otherFunnelProducts: { funnel: string; products: string[] }[]; // Products grouped by other funnels
 }
 
 interface CohortMetrics {
@@ -210,19 +211,25 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
       // Check if customer has purchases outside this funnel
       const hasOtherSales = salesOutsideFunnel.length > 0;
       
-      // Get unique other funnel IDs (excluding current funnel and null)
-      const otherFunnelIds = [...new Set(
-        salesOutsideFunnel
-          .map(s => s.funnelId)
-          .filter((id): id is string => id !== null && id !== selectedFunnel)
-      )];
+      // Group products by funnel for other funnels
+      const funnelProductsMap: Record<string, Set<string>> = {};
+      salesOutsideFunnel.forEach(s => {
+        const funnelName = s.funnelId || 'Sem funil';
+        if (funnelName !== selectedFunnel) {
+          if (!funnelProductsMap[funnelName]) {
+            funnelProductsMap[funnelName] = new Set();
+          }
+          funnelProductsMap[funnelName].add(s.offerCode);
+        }
+      });
       
-      // Include "Sem funil" if there are sales without any funnel mapping
-      const hasSalesWithoutFunnel = salesOutsideFunnel.some(s => s.funnelId === null);
-      const otherFunnels = [...otherFunnelIds];
-      if (hasSalesWithoutFunnel) {
-        otherFunnels.push('Sem funil');
-      }
+      // Convert to array format
+      const otherFunnelProducts = Object.entries(funnelProductsMap).map(([funnel, productsSet]) => ({
+        funnel,
+        products: [...productsSet],
+      }));
+      
+      const otherFunnels = otherFunnelProducts.map(f => f.funnel);
       
       let avgDaysBetween = 0;
       if (sortedSalesInFunnel.length > 1) {
@@ -242,6 +249,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
         products,
         isRecurrent: hasOtherSales,
         otherFunnels,
+        otherFunnelProducts,
       };
     });
 
@@ -450,19 +458,24 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                       .filter(c => c.isRecurrent)
                       .slice(0, 10)
                       .map((customer, idx) => (
-                        <div key={idx} className="p-2 rounded-md bg-muted/50 space-y-1">
+                        <div key={idx} className="p-2 rounded-md bg-muted/50 space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium truncate max-w-[200px]">{customer.name}</span>
                             <span className="text-xs text-muted-foreground">{formatCurrency(customer.totalSpent)}</span>
                           </div>
                           <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {customer.otherFunnels.map((funnel, fIdx) => (
-                              <Badge key={fIdx} variant="outline" className="text-xs">
-                                {funnel}
-                              </Badge>
-                            ))}
-                          </div>
+                          {customer.otherFunnelProducts.map((funnelData, fIdx) => (
+                            <div key={fIdx} className="pl-2 border-l-2 border-purple-500/30 space-y-1">
+                              <span className="text-xs font-medium text-purple-600">{funnelData.funnel}</span>
+                              <div className="flex flex-wrap gap-1">
+                                {funnelData.products.map((productCode, pIdx) => (
+                                  <Badge key={pIdx} variant="outline" className="text-xs">
+                                    {offerToProductName[productCode] || productCode}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                   </div>
@@ -649,14 +662,40 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                         <Badge variant={customer.isRecurrent ? "default" : "secondary"}>
                           {customer.isRecurrent ? 'Recorrente' : 'Novo'}
                         </Badge>
-                        {customer.isRecurrent && customer.otherFunnels.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {customer.otherFunnels.map((funnel, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">
-                                {funnel}
-                              </Badge>
-                            ))}
-                          </div>
+                        {customer.isRecurrent && customer.otherFunnelProducts.length > 0 && (
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <div className="flex flex-wrap gap-1 cursor-pointer">
+                                {customer.otherFunnels.slice(0, 2).map((funnel, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs hover:bg-muted">
+                                    {funnel}
+                                  </Badge>
+                                ))}
+                                {customer.otherFunnels.length > 2 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{customer.otherFunnels.length - 2}
+                                  </Badge>
+                                )}
+                              </div>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-80" align="end">
+                              <div className="space-y-2">
+                                <span className="text-sm font-semibold">Outros Funis e Produtos</span>
+                                {customer.otherFunnelProducts.map((funnelData, fIdx) => (
+                                  <div key={fIdx} className="pl-2 border-l-2 border-purple-500/30 space-y-1">
+                                    <span className="text-xs font-medium text-purple-600">{funnelData.funnel}</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {funnelData.products.map((productCode, pIdx) => (
+                                        <Badge key={pIdx} variant="secondary" className="text-xs">
+                                          {offerToProductName[productCode] || productCode}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
                         )}
                       </div>
                     </TableCell>

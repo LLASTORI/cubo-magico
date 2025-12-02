@@ -3,9 +3,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
 interface SalesFiltersProps {
   onFilter: (filters: FilterParams) => void;
@@ -16,22 +16,16 @@ interface SalesFiltersProps {
 export interface FilterParams {
   startDate: string;
   endDate: string;
-  transactionStatus?: string;
+  transactionStatus?: string[];
   maxResults: number;
   utmSource?: string;
   utmCampaign?: string;
   utmAdset?: string;
   utmPlacement?: string;
   utmCreative?: string;
-  idFunil?: string;
-  productName?: string;
-  offerCode?: string;
-}
-
-interface SalesFiltersProps {
-  onFilter: (filters: FilterParams) => void;
-  availableProducts?: string[];
-  availableOffers?: { code: string; name: string }[];
+  idFunil?: string[];
+  productName?: string[];
+  offerCode?: string[];
 }
 
 const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }: SalesFiltersProps) => {
@@ -40,11 +34,11 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
 
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
-  const [transactionStatus, setTransactionStatus] = useState<string>("all");
+  const [transactionStatus, setTransactionStatus] = useState<string[]>([]);
   const [maxResults, setMaxResults] = useState("50");
-  const [idFunil, setIdFunil] = useState<string>("all");
-  const [productName, setProductName] = useState<string>("all");
-  const [offerCode, setOfferCode] = useState<string>("all");
+  const [idFunil, setIdFunil] = useState<string[]>([]);
+  const [productName, setProductName] = useState<string[]>([]);
+  const [offerCode, setOfferCode] = useState<string[]>([]);
   const [funis, setFunis] = useState<string[]>([]);
   const [mappedProducts, setMappedProducts] = useState<string[]>([]);
   const [mappedOffers, setMappedOffers] = useState<{ code: string; name: string }[]>([]);
@@ -84,20 +78,46 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
   const displayProducts = availableProducts.length > 0 ? availableProducts : mappedProducts;
   const displayOffers = availableOffers.length > 0 ? availableOffers : mappedOffers;
 
+  // Convert to MultiSelect options
+  const statusOptions: MultiSelectOption[] = [
+    { value: "approved", label: "Aprovado" },
+    { value: "complete", label: "Completo" },
+    { value: "pending", label: "Pendente" },
+    { value: "refunded", label: "Reembolsado" },
+    { value: "cancelled", label: "Cancelado" },
+    { value: "chargeback", label: "Chargeback" },
+    { value: "blocked", label: "Bloqueado" },
+  ];
+
+  const funilOptions: MultiSelectOption[] = funis.map(funil => ({
+    value: funil,
+    label: funil,
+  }));
+
+  const productOptions: MultiSelectOption[] = displayProducts.map(product => ({
+    value: product,
+    label: product,
+  }));
+
+  const offerOptions: MultiSelectOption[] = displayOffers.map(offer => ({
+    value: offer.code,
+    label: offer.name,
+  }));
+
   const handleApplyFilters = () => {
     onFilter({
       startDate,
       endDate,
-      transactionStatus: transactionStatus === "all" ? undefined : transactionStatus,
+      transactionStatus: transactionStatus.length > 0 ? transactionStatus : undefined,
       maxResults: parseInt(maxResults),
       utmSource: utmSource || undefined,
       utmCampaign: utmCampaign || undefined,
       utmAdset: utmAdset || undefined,
       utmPlacement: utmPlacement || undefined,
       utmCreative: utmCreative || undefined,
-      idFunil: idFunil === "all" ? undefined : idFunil,
-      productName: productName === "all" ? undefined : productName,
-      offerCode: offerCode === "all" ? undefined : offerCode,
+      idFunil: idFunil.length > 0 ? idFunil : undefined,
+      productName: productName.length > 0 ? productName : undefined,
+      offerCode: offerCode.length > 0 ? offerCode : undefined,
     });
   };
 
@@ -141,22 +161,13 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="status" className="text-foreground">Status da Transação</Label>
-          <Select value={transactionStatus} onValueChange={setTransactionStatus}>
-            <SelectTrigger className="border-border">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="approved">Aprovado</SelectItem>
-              <SelectItem value="complete">Completo</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="refunded">Reembolsado</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
-              <SelectItem value="chargeback">Chargeback</SelectItem>
-              <SelectItem value="blocked">Bloqueado</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label className="text-foreground">Status da Transação</Label>
+          <MultiSelect
+            options={statusOptions}
+            selected={transactionStatus}
+            onChange={setTransactionStatus}
+            placeholder="Todos"
+          />
         </div>
 
         <div className="space-y-2">
@@ -173,54 +184,33 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="funil" className="text-foreground">Funil</Label>
-          <Select value={idFunil} onValueChange={setIdFunil}>
-            <SelectTrigger className="border-border">
-              <SelectValue placeholder="Todos os Funis" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Funis</SelectItem>
-              {funis.map((funil) => (
-                <SelectItem key={funil} value={funil}>
-                  {funil}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-foreground">Funil</Label>
+          <MultiSelect
+            options={funilOptions}
+            selected={idFunil}
+            onChange={setIdFunil}
+            placeholder="Todos os Funis"
+          />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="product" className="text-foreground">Produto</Label>
-          <Select value={productName} onValueChange={setProductName}>
-            <SelectTrigger className="border-border">
-              <SelectValue placeholder="Todos os Produtos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Produtos</SelectItem>
-              {displayProducts.map((product) => (
-                <SelectItem key={product} value={product}>
-                  {product}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-foreground">Produto</Label>
+          <MultiSelect
+            options={productOptions}
+            selected={productName}
+            onChange={setProductName}
+            placeholder="Todos os Produtos"
+          />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="offer" className="text-foreground">Oferta</Label>
-          <Select value={offerCode} onValueChange={setOfferCode}>
-            <SelectTrigger className="border-border">
-              <SelectValue placeholder="Todas as Ofertas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as Ofertas</SelectItem>
-              {displayOffers.map((offer) => (
-                <SelectItem key={offer.code} value={offer.code}>
-                  {offer.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-foreground">Oferta</Label>
+          <MultiSelect
+            options={offerOptions}
+            selected={offerCode}
+            onChange={setOfferCode}
+            placeholder="Todas as Ofertas"
+          />
         </div>
       </div>
 

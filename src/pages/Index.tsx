@@ -345,9 +345,15 @@ const Index = () => {
             </div>
             <div className="flex gap-2">
               <Button
-                onClick={() => navigate('/funnel-analysis')}
+                onClick={() => navigate('/funnel-analysis', { 
+                  state: { 
+                    salesData: formattedSales,
+                    filters: currentFilters 
+                  } 
+                })}
                 variant="outline"
                 className="gap-2"
+                disabled={!salesData}
               >
                 <BarChart3 className="w-4 h-4" />
                 Análise de Funil

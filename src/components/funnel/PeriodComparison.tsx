@@ -44,12 +44,21 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
   const [periodBEnd, setPeriodBEnd] = useState<Date>(today);
 
   const filterSalesByPeriod = (start: Date, end: Date): DashboardSale[] => {
-    return salesData.filter(sale => {
+    console.log('=== DEBUG PeriodComparison ===');
+    console.log('Total salesData:', salesData.length);
+    console.log('funnelOfferCodes:', funnelOfferCodes);
+    console.log('Período:', format(start, 'dd/MM/yyyy'), 'até', format(end, 'dd/MM/yyyy'));
+    
+    const filtered = salesData.filter(sale => {
       const saleDate = new Date(sale.date);
       const isInPeriod = saleDate >= startOfDay(start) && saleDate <= endOfDay(end);
-      const isInFunnel = funnelOfferCodes.includes(sale.offerCode || '');
+      // Se temos códigos do funil, filtra por eles. Se não, considera todas as vendas
+      const isInFunnel = funnelOfferCodes.length === 0 || funnelOfferCodes.includes(sale.offerCode || '');
       return isInPeriod && isInFunnel;
     });
+    
+    console.log('Vendas filtradas:', filtered.length);
+    return filtered;
   };
 
   const calculateMetrics = (sales: DashboardSale[]): PeriodMetrics => {

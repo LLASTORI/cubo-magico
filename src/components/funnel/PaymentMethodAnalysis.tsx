@@ -42,6 +42,7 @@ interface PaymentMetrics {
   method: string;
   icon: any;
   sales: number;
+  customers: number;
   revenue: number;
   avgTicket: number;
   percentage: number;
@@ -128,18 +129,21 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
     const groups: Record<string, { 
       sales: number; 
       revenue: number;
+      customers: Set<string>;
       installments: Record<number, { count: number; revenue: number }>;
     }> = {};
     
     filtered.forEach(sale => {
       const method = sale.purchase?.payment?.type || 'OTHER';
       const installments = sale.purchase?.payment?.installments_number || 1;
+      const email = sale.buyer?.email || '';
       
       if (!groups[method]) {
-        groups[method] = { sales: 0, revenue: 0, installments: {} };
+        groups[method] = { sales: 0, revenue: 0, customers: new Set(), installments: {} };
       }
       groups[method].sales += 1;
       groups[method].revenue += sale.purchase?.price?.value || 0;
+      if (email) groups[method].customers.add(email);
 
       if (!groups[method].installments[installments]) {
         groups[method].installments[installments] = { count: 0, revenue: 0 };
@@ -153,6 +157,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
         method,
         icon: PAYMENT_ICONS[method] || Wallet,
         sales: data.sales,
+        customers: data.customers.size,
         revenue: data.revenue,
         avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
         percentage: totalSales > 0 ? (data.sales / totalSales) * 100 : 0,
@@ -307,6 +312,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
               <TableHeader>
                 <TableRow>
                   <TableHead>Método</TableHead>
+                  <TableHead className="text-right">Clientes</TableHead>
                   <TableHead className="text-right">Produtos Vendidos</TableHead>
                   <TableHead className="text-right">Receita</TableHead>
                   <TableHead className="text-right">Ticket Médio</TableHead>
@@ -334,6 +340,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
                           </span>
                         </div>
                       </TableCell>
+                      <TableCell className="text-right">{item.customers}</TableCell>
                       <TableCell className="text-right">{item.sales}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.revenue)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.avgTicket)}</TableCell>
@@ -342,7 +349,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
                           <Progress 
                             value={item.percentage} 
                             className="h-2"
-                            style={{ 
+                            style={{
                               '--progress-background': PAYMENT_COLORS[item.method] || PAYMENT_COLORS.OTHER 
                             } as React.CSSProperties}
                           />

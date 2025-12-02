@@ -37,13 +37,33 @@ const Index = () => {
       setLoading(true);
       setCurrentFilters(filters);
       
-      // Convert dates to timestamps
-      const startTimestamp = new Date(filters.startDate).getTime();
-      const endTimestamp = new Date(filters.endDate).getTime();
+      // Convert dates to timestamps using UTC to avoid timezone issues
+      const startDateObj = new Date(filters.startDate);
+      const endDateObj = new Date(filters.endDate);
+      
+      // Start of start date (00:00:00 UTC)
+      const startUTC = Date.UTC(
+        startDateObj.getFullYear(),
+        startDateObj.getMonth(),
+        startDateObj.getDate(),
+        0, 0, 0, 0
+      );
+      
+      // End of end date (23:59:59.999 UTC)
+      const endUTC = Date.UTC(
+        endDateObj.getFullYear(),
+        endDateObj.getMonth(),
+        endDateObj.getDate(),
+        23, 59, 59, 999
+      );
+
+      console.log('=== DEBUG DATAS ===');
+      console.log('startDate:', filters.startDate, '-> UTC:', new Date(startUTC).toISOString());
+      console.log('endDate:', filters.endDate, '-> UTC:', new Date(endUTC).toISOString());
 
       const params: any = {
-        start_date: startTimestamp,
-        end_date: endTimestamp,
+        start_date: startUTC,
+        end_date: endUTC,
         max_results: 500, // Maximum allowed by API
       };
 
@@ -192,6 +212,11 @@ const Index = () => {
   const formatSalesData = () => {
     if (!salesData?.items || !currentFilters) return [];
 
+    console.log('=== DEBUG FILTROS ===');
+    console.log('Total de itens da API:', salesData.items.length);
+    console.log('Filtros aplicados:', currentFilters);
+    console.log('Mapeamentos de ofertas:', offerMappings);
+
     let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
@@ -207,6 +232,8 @@ const Index = () => {
       };
     });
 
+    console.log('Após mapeamento:', filteredItems.length, 'itens');
+
     // Apply funnel filter first (if specified)
     if (currentFilters.idFunil) {
       const offerCodesForFunnel = offerMappings
@@ -214,9 +241,14 @@ const Index = () => {
         .map(mapping => mapping.codigo_oferta)
         .filter(Boolean);
       
+      console.log('Filtro de funil:', currentFilters.idFunil);
+      console.log('Códigos de oferta do funil:', offerCodesForFunnel);
+      
+      const beforeFilter = filteredItems.length;
       filteredItems = filteredItems.filter(item => 
         item.offerCode && offerCodesForFunnel.includes(item.offerCode)
       );
+      console.log('Após filtro de funil:', filteredItems.length, 'de', beforeFilter);
     }
 
     // Apply product filter
@@ -259,6 +291,9 @@ const Index = () => {
         item.utmCreative?.toLowerCase().includes(currentFilters.utmCreative!.toLowerCase())
       );
     }
+
+    console.log('=== RESULTADO FINAL ===');
+    console.log('Total após todos os filtros:', filteredItems.length);
 
     return filteredItems;
   };

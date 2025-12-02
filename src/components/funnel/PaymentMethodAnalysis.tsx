@@ -368,20 +368,105 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
             {paymentMetrics.metrics.find(m => m.method === 'CREDIT_CARD')?.installmentBreakdown && (
               <div className="mt-6">
                 <h4 className="text-sm font-semibold mb-3">Distribuição de Parcelas (Cartão)</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {paymentMetrics.metrics
-                    .find(m => m.method === 'CREDIT_CARD')
-                    ?.installmentBreakdown?.map(({ installments, count, revenue }) => (
-                      <div 
-                        key={installments} 
-                        className="p-3 rounded-lg bg-muted/30 border border-border/50 text-center"
-                      >
-                        <p className="text-xs text-muted-foreground">{installments}x</p>
-                        <p className="text-lg font-bold">{count}</p>
-                        <p className="text-xs text-muted-foreground">{formatCurrency(revenue)}</p>
+                {(() => {
+                  const breakdown = paymentMetrics.metrics.find(m => m.method === 'CREDIT_CARD')?.installmentBreakdown || [];
+                  const totalCount = breakdown.reduce((sum, b) => sum + b.count, 0);
+                  const totalRevenue = breakdown.reduce((sum, b) => sum + b.revenue, 0);
+                  const maxCount = Math.max(...breakdown.map(b => b.count));
+                  const maxRevenue = Math.max(...breakdown.map(b => b.revenue));
+                  
+                  return (
+                    <div className="space-y-4">
+                      {/* Summary highlight */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+                          <p className="text-xs text-muted-foreground mb-1">Parcela mais escolhida</p>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-bold text-primary">
+                              {breakdown.find(b => b.count === maxCount)?.installments}x
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              ({((maxCount / totalCount) * 100).toFixed(0)}% das vendas)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                          <p className="text-xs text-muted-foreground mb-1">Maior faturamento</p>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              {breakdown.find(b => b.revenue === maxRevenue)?.installments}x
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              ({formatCurrency(maxRevenue)})
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                </div>
+                      
+                      {/* Detailed breakdown */}
+                      <div className="space-y-2">
+                        {breakdown.map(({ installments, count, revenue }) => {
+                          const countPercentage = totalCount > 0 ? (count / totalCount) * 100 : 0;
+                          const isMaxCount = count === maxCount;
+                          const isMaxRevenue = revenue === maxRevenue;
+                          
+                          return (
+                            <div 
+                              key={installments} 
+                              className={cn(
+                                "p-3 rounded-lg border transition-all",
+                                isMaxCount 
+                                  ? "bg-primary/10 border-primary/30" 
+                                  : "bg-muted/20 border-border/50"
+                              )}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={cn(
+                                    "text-lg font-bold",
+                                    isMaxCount && "text-primary"
+                                  )}>
+                                    {installments}x
+                                  </span>
+                                  {isMaxCount && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                                      Mais escolhida
+                                    </span>
+                                  )}
+                                  {isMaxRevenue && !isMaxCount && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-600 dark:text-green-400">
+                                      Maior receita
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-semibold">{count}</span>
+                                  <span className="text-muted-foreground text-sm ml-1">vendas</span>
+                                  <span className="text-muted-foreground mx-2">•</span>
+                                  <span className={cn(
+                                    "font-semibold",
+                                    isMaxRevenue && "text-green-600 dark:text-green-400"
+                                  )}>
+                                    {formatCurrency(revenue)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="relative">
+                                <Progress 
+                                  value={countPercentage} 
+                                  className="h-2"
+                                />
+                                <span className="absolute right-0 -top-5 text-xs text-muted-foreground">
+                                  {countPercentage.toFixed(0)}%
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

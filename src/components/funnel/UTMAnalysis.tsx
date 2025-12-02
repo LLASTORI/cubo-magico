@@ -65,7 +65,7 @@ const COLORS = [
 ];
 
 const chartConfig = {
-  sales: { label: "Vendas", color: "hsl(var(--primary))" },
+  sales: { label: "Produtos Vendidos", color: "hsl(var(--primary))" },
   revenue: { label: "Receita", color: "hsl(142, 76%, 36%)" },
 };
 
@@ -297,9 +297,9 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
         <TableHeader>
           <TableRow>
             <TableHead>Valor</TableHead>
-            <TableHead className="text-right">Vendas</TableHead>
+            <TableHead className="text-right">Produtos Vendidos</TableHead>
             <TableHead className="text-right">Receita</TableHead>
-            <TableHead className="text-right">Ticket</TableHead>
+            <TableHead className="text-right">Ticket Médio</TableHead>
             <TableHead className="w-[120px]">%</TableHead>
           </TableRow>
         </TableHeader>
@@ -551,9 +551,9 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
                   <TableHeader>
                     <TableRow>
                       <TableHead>Valor</TableHead>
-                      <TableHead className="text-right">Vendas</TableHead>
+                      <TableHead className="text-right">Produtos Vendidos</TableHead>
                       <TableHead className="text-right">Receita</TableHead>
-                      <TableHead className="text-right">Ticket</TableHead>
+                      <TableHead className="text-right">Ticket Médio</TableHead>
                       <TableHead className="w-[100px]">%</TableHead>
                     </TableRow>
                   </TableHeader>

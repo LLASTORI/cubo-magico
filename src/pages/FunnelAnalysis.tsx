@@ -175,6 +175,19 @@ const FunnelAnalysis = () => {
         sale_date: item.purchase?.approved_date ? new Date(item.purchase.approved_date).toISOString() : null,
       }));
 
+      // Debug: Log unique offer codes from API
+      const uniqueApiCodes = [...new Set(processedSales.map(s => s.offer_code))];
+      console.log('=== DEBUG: Códigos de oferta da API ===');
+      console.log('Total de vendas:', processedSales.length);
+      console.log('Códigos únicos:', uniqueApiCodes);
+      
+      // Count sales per offer code
+      const salesPerCode: Record<string, number> = {};
+      processedSales.forEach(s => {
+        salesPerCode[s.offer_code] = (salesPerCode[s.offer_code] || 0) + 1;
+      });
+      console.log('Vendas por código:', salesPerCode);
+
       setRawSalesData(processedSales);
 
     } catch (error: any) {
@@ -196,13 +209,26 @@ const FunnelAnalysis = () => {
         return orderA - orderB;
       });
 
+    // Debug: Log mappings and sales data
+    console.log('=== DEBUG: Análise de Funil ===');
+    console.log('Funil selecionado:', selectedFunnel);
+    console.log('Mapeamentos do funil:', funnelMappings.map(m => ({ 
+      codigo: m.codigo_oferta, 
+      posicao: m.tipo_posicao,
+      nome: m.nome_oferta 
+    })));
+    console.log('salesData agregado:', salesData);
+
     // Find FRONT (Frontend) sales as base for conversion
     const feSales = funnelMappings
       .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => {
         const sale = salesData.find(s => s.offer_code === m.codigo_oferta);
+        console.log(`FRONT código ${m.codigo_oferta}: encontrado=${!!sale}, vendas=${sale?.total_sales || 0}`);
         return sum + (sale?.total_sales || 0);
       }, 0);
+
+    console.log('Total vendas FRONT:', feSales);
 
     const totalFunnelRevenue = funnelMappings.reduce((sum, m) => {
       const sale = salesData.find(s => s.offer_code === m.codigo_oferta);

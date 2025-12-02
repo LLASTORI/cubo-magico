@@ -91,17 +91,19 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
     return allItems;
   };
 
+  // Parse source_sck format: "source|adset_name_id|campaign_name_id|placement|creative_name_id"
   const parseUTMFromSck = (sck: string | undefined): Record<string, string> => {
     if (!sck) return {};
-    const params: Record<string, string> = {};
     const parts = sck.split('|');
-    parts.forEach(part => {
-      const [key, value] = part.split(':');
-      if (key && value) {
-        params[key.toLowerCase()] = value;
-      }
-    });
-    return params;
+    
+    // Format: source|adset|campaign|placement|creative
+    return {
+      source: parts[0] || '',
+      adset: parts[1] || '',
+      campaign: parts[2] || '',
+      placement: parts[3] || '',
+      creative: parts[4] || '',
+    };
   };
 
   const analyzeUTM = useMemo(() => {
@@ -141,11 +143,11 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
     };
 
     return {
-      source: analyzeByField('src'),
-      campaign: analyzeByField('cmp'),
+      source: analyzeByField('source'),
+      campaign: analyzeByField('campaign'),
       adset: analyzeByField('adset'),
-      placement: analyzeByField('plc'),
-      creative: analyzeByField('crv'),
+      placement: analyzeByField('placement'),
+      creative: analyzeByField('creative'),
       totalSales,
       totalRevenue,
     };

@@ -286,30 +286,42 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps)
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-              <div className="flex items-center gap-2 mb-1">
-                <BarChart3 className="w-4 h-4 text-primary" />
-                <span className="text-xs text-muted-foreground">Total Vendas</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Total de Produtos Vendidos</p>
+                  <p className="text-3xl font-bold text-foreground">{totals.sales}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
+                  <BarChart3 className="w-6 h-6 text-primary-foreground" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">{totals.sales}</p>
-            </div>
-            <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="flex items-center gap-2 mb-1">
-                <DollarSign className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-muted-foreground">Receita Total</span>
+            </Card>
+            <Card className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
+                  <p className="text-3xl font-bold text-foreground">{formatCurrency(totals.revenue)}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
+                  <DollarSign className="w-6 h-6 text-primary-foreground" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(totals.revenue)}</p>
-            </div>
-            <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="w-4 h-4 text-purple-500" />
-                <span className="text-xs text-muted-foreground">Ticket Médio</span>
+            </Card>
+            <Card className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
+                  <p className="text-3xl font-bold text-foreground">
+                    {formatCurrency(totals.sales > 0 ? totals.revenue / totals.sales : 0)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+                  <TrendingUp className="w-6 h-6 text-primary-foreground" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">
-                {formatCurrency(totals.sales > 0 ? totals.revenue / totals.sales : 0)}
-              </p>
-            </div>
+            </Card>
           </div>
 
           {/* Charts */}

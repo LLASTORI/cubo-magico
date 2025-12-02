@@ -333,7 +333,7 @@ const FunnelAnalysis = () => {
                       <Card className="p-6 cursor-help">
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
-                            <p className="text-sm font-medium text-muted-foreground">Total de Vendas</p>
+                            <p className="text-sm font-medium text-muted-foreground">Total de Produtos Vendidos</p>
                             <p className="text-3xl font-bold text-foreground">{summaryMetrics.totalVendas}</p>
                           </div>
                           <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">

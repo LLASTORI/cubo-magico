@@ -72,12 +72,40 @@ const chartConfig = {
   recurrentCustomers: { label: "Recorrentes", color: "hsl(262, 83%, 58%)" },
 };
 
+interface OfferMapping {
+  codigo_oferta: string;
+  nome_produto: string;
+}
+
 const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProps) => {
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(today);
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<HotmartSale[]>([]);
+  const [offerMappings, setOfferMappings] = useState<OfferMapping[]>([]);
+
+  // Create a map of offer code to product name
+  const offerToProductName = useMemo(() => {
+    const map: Record<string, string> = {};
+    offerMappings.forEach(m => {
+      if (m.codigo_oferta) {
+        map[m.codigo_oferta] = m.nome_produto;
+      }
+    });
+    return map;
+  }, [offerMappings]);
+
+  // Fetch offer mappings
+  useEffect(() => {
+    const fetchMappings = async () => {
+      const { data } = await supabase
+        .from('offer_mappings')
+        .select('codigo_oferta, nome_produto');
+      if (data) setOfferMappings(data);
+    };
+    fetchMappings();
+  }, []);
 
   const fetchDataFromAPI = async (): Promise<HotmartSale[]> => {
     const startUTC = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0);
@@ -426,8 +454,11 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                             </div>
                             <div className="space-y-2 max-h-[200px] overflow-y-auto">
                               {customer.products.map((productCode, idx) => (
-                                <div key={idx} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-                                  <span className="text-xs font-mono bg-primary/10 px-2 py-0.5 rounded">
+                                <div key={idx} className="flex flex-col gap-1 p-2 rounded-md bg-muted/50">
+                                  <span className="text-sm font-medium">
+                                    {offerToProductName[productCode] || 'Produto não mapeado'}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground font-mono">
                                     {productCode}
                                   </span>
                                 </div>

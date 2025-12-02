@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw, CheckSquare, XSquare } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -304,6 +304,52 @@ export default function OfferMappingsAuto() {
       
       next.set(productUcode, productOffers);
       return next;
+    });
+  };
+
+  const selectAllProductsAndOffers = async () => {
+    // First, load offers for all products that don't have offers loaded
+    const productsWithoutOffers = hotmartProducts.filter(p => p.offers.length === 0 && !p.loadingOffers);
+    
+    if (productsWithoutOffers.length > 0) {
+      toast({
+        title: 'Carregando ofertas...',
+        description: `Buscando ofertas de ${productsWithoutOffers.length} produtos`,
+      });
+      
+      // Load offers for all products
+      await Promise.all(productsWithoutOffers.map(p => fetchProductOffers(p)));
+    }
+    
+    // Wait a bit for state to update
+    setTimeout(() => {
+      // Select all products
+      const allProductUcodes = new Set(hotmartProducts.map(p => p.ucode));
+      setSelectedProducts(allProductUcodes);
+      
+      // Select all offers from all products
+      const allOffers = new Map<string, Set<string>>();
+      hotmartProducts.forEach(product => {
+        if (product.offers.length > 0) {
+          const offerCodes = new Set(product.offers.map(o => o.code));
+          allOffers.set(product.ucode, offerCodes);
+        }
+      });
+      setSelectedOffers(allOffers);
+      
+      toast({
+        title: 'Tudo selecionado!',
+        description: 'Todos os produtos e ofertas foram selecionados',
+      });
+    }, productsWithoutOffers.length > 0 ? 2000 : 0);
+  };
+
+  const deselectAll = () => {
+    setSelectedProducts(new Set());
+    setSelectedOffers(new Map());
+    toast({
+      title: 'Seleção limpa',
+      description: 'Todas as seleções foram removidas',
     });
   };
 
@@ -667,6 +713,28 @@ export default function OfferMappingsAuto() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {hotmartProducts.length > 0 && (
+                    <>
+                      <Button 
+                        onClick={selectAllProductsAndOffers}
+                        variant="outline"
+                        className="gap-2"
+                      >
+                        <CheckSquare className="h-4 w-4" />
+                        Selecionar Tudo
+                      </Button>
+                      {getSelectedOffersCount() > 0 && (
+                        <Button 
+                          onClick={deselectAll}
+                          variant="ghost"
+                          className="gap-2"
+                        >
+                          <XSquare className="h-4 w-4" />
+                          Limpar
+                        </Button>
+                      )}
+                    </>
+                  )}
                   {getSelectedOffersCount() > 0 && (
                     <Button 
                       onClick={importSelectedOffers}

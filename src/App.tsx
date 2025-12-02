@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import OfferMappings from "./pages/OfferMappings";
+import OfferMappingsAuto from "./pages/OfferMappingsAuto";
 import FunnelAnalysis from "./pages/FunnelAnalysis";
 import NotFound from "./pages/NotFound";
 
@@ -19,6 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/offer-mappings" element={<OfferMappings />} />
+          <Route path="/offer-mappings-auto" element={<OfferMappingsAuto />} />
           <Route path="/funnel-analysis" element={<FunnelAnalysis />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

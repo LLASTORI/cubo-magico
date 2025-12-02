@@ -3,7 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, ArrowLeft, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft, Filter, Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -70,6 +71,7 @@ export default function OfferMappings() {
   const [selectedMapping, setSelectedMapping] = useState<OfferMapping | null>(null);
   const [mappingToDelete, setMappingToDelete] = useState<string | null>(null);
   const [selectedFunnel, setSelectedFunnel] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -85,9 +87,20 @@ export default function OfferMappings() {
       .sort((a, b) => a.id.localeCompare(b.id));
   }, [mappings]);
 
-  // Filter mappings by selected funnel and sort by position
+  // Filter mappings by selected funnel, search term and sort by position
   const filteredMappings = useMemo(() => {
     let filtered = selectedFunnel === 'all' ? mappings : mappings.filter(m => m.id_funil === selectedFunnel);
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(m => 
+        (m.nome_produto?.toLowerCase().includes(search)) ||
+        (m.nome_oferta?.toLowerCase().includes(search)) ||
+        (m.codigo_oferta?.toLowerCase().includes(search)) ||
+        (m.id_produto?.toLowerCase().includes(search))
+      );
+    }
     
     // Sort by position: FRONT first, then OB by order, US by order, DS by order
     const positionOrder = { FRONT: 0, OB: 1, US: 2, DS: 3 };
@@ -104,7 +117,7 @@ export default function OfferMappings() {
       // Finally by ordem_posicao
       return (a.ordem_posicao || 0) - (b.ordem_posicao || 0);
     });
-  }, [mappings, selectedFunnel]);
+  }, [mappings, selectedFunnel, searchTerm]);
 
   const fetchMappings = async () => {
     try {
@@ -218,54 +231,88 @@ export default function OfferMappings() {
         </div>
 
         <Card className="p-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Filtrar por Funil:</span>
+          <div className="flex flex-col gap-4">
+            {/* Campo de busca */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome do produto, código da oferta ou ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-9"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-            <Select value={selectedFunnel} onValueChange={setSelectedFunnel}>
-              <SelectTrigger className="w-[280px]">
-                <SelectValue placeholder="Selecione um funil" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  <div className="flex items-center gap-2">
-                    <span>Todos os Funis</span>
-                    <Badge variant="secondary" className="ml-2">
-                      {mappings.length}
-                    </Badge>
-                  </div>
-                </SelectItem>
-                {funnelData.map(({ id, count }) => (
-                  <SelectItem key={id} value={id}>
+            
+            {/* Filtros */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Filtrar por Funil:</span>
+              </div>
+              <Select value={selectedFunnel} onValueChange={setSelectedFunnel}>
+                <SelectTrigger className="w-[280px]">
+                  <SelectValue placeholder="Selecione um funil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
                     <div className="flex items-center gap-2">
-                      <span>{id}</span>
+                      <span>Todos os Funis</span>
                       <Badge variant="secondary" className="ml-2">
-                        {count}
+                        {mappings.length}
                       </Badge>
                     </div>
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedFunnel !== 'all' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedFunnel('all')}
-              >
-                Limpar filtro
-              </Button>
-            )}
-            
-            {/* Legenda das posições */}
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs text-muted-foreground">Posições:</span>
-              <Badge className={POSITION_COLORS.FRONT}>FRONT</Badge>
-              <Badge className={POSITION_COLORS.OB}>OB</Badge>
-              <Badge className={POSITION_COLORS.US}>US</Badge>
-              <Badge className={POSITION_COLORS.DS}>DS</Badge>
+                  {funnelData.map(({ id, count }) => (
+                    <SelectItem key={id} value={id}>
+                      <div className="flex items-center gap-2">
+                        <span>{id}</span>
+                        <Badge variant="secondary" className="ml-2">
+                          {count}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(selectedFunnel !== 'all' || searchTerm) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedFunnel('all');
+                    setSearchTerm('');
+                  }}
+                >
+                  Limpar filtros
+                </Button>
+              )}
+              
+              {/* Legenda das posições */}
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-xs text-muted-foreground">Posições:</span>
+                <Badge className={POSITION_COLORS.FRONT}>FRONT</Badge>
+                <Badge className={POSITION_COLORS.OB}>OB</Badge>
+                <Badge className={POSITION_COLORS.US}>US</Badge>
+                <Badge className={POSITION_COLORS.DS}>DS</Badge>
+              </div>
             </div>
+            
+            {/* Contador de resultados */}
+            {(searchTerm || selectedFunnel !== 'all') && (
+              <p className="text-sm text-muted-foreground">
+                {filteredMappings.length} resultado{filteredMappings.length !== 1 ? 's' : ''} encontrado{filteredMappings.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
         </Card>
 

@@ -67,8 +67,9 @@ const Index = () => {
         max_results: 500, // Maximum allowed by API
       };
 
-      if (filters.transactionStatus) {
-        params.transaction_status = filters.transactionStatus.toUpperCase();
+      // Note: API only supports one status at a time, we'll filter multiple statuses locally
+      if (filters.transactionStatus && filters.transactionStatus.length === 1) {
+        params.transaction_status = filters.transactionStatus[0].toUpperCase();
       }
 
       console.log('Requesting with params:', params);
@@ -234,10 +235,19 @@ const Index = () => {
 
     console.log('Após mapeamento:', filteredItems.length, 'itens');
 
-    // Apply funnel filter first (if specified)
-    if (currentFilters.idFunil) {
+    // Apply status filter (if multiple statuses selected)
+    if (currentFilters.transactionStatus && currentFilters.transactionStatus.length > 1) {
+      filteredItems = filteredItems.filter(item => 
+        currentFilters.transactionStatus!.some(status => 
+          item.status?.toLowerCase() === status.toLowerCase()
+        )
+      );
+    }
+
+    // Apply funnel filter (if specified)
+    if (currentFilters.idFunil && currentFilters.idFunil.length > 0) {
       const offerCodesForFunnel = offerMappings
-        .filter(mapping => mapping.id_funil === currentFilters.idFunil)
+        .filter(mapping => currentFilters.idFunil!.includes(mapping.id_funil))
         .map(mapping => mapping.codigo_oferta)
         .filter(Boolean);
       
@@ -251,17 +261,17 @@ const Index = () => {
       console.log('Após filtro de funil:', filteredItems.length, 'de', beforeFilter);
     }
 
-    // Apply product filter
-    if (currentFilters.productName) {
+    // Apply product filter (multiple selection)
+    if (currentFilters.productName && currentFilters.productName.length > 0) {
       filteredItems = filteredItems.filter(item => 
-        item.product === currentFilters.productName
+        currentFilters.productName!.includes(item.product)
       );
     }
 
-    // Apply offer filter
-    if (currentFilters.offerCode) {
+    // Apply offer filter (multiple selection)
+    if (currentFilters.offerCode && currentFilters.offerCode.length > 0) {
       filteredItems = filteredItems.filter(item => 
-        item.offerCode === currentFilters.offerCode
+        item.offerCode && currentFilters.offerCode!.includes(item.offerCode)
       );
     }
 

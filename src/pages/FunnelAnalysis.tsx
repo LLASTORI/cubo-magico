@@ -132,8 +132,15 @@ const FunnelAnalysis = () => {
     try {
       setLoading(true);
       
-      const startTimestamp = startDate.getTime();
-      const endTimestamp = endDate.getTime();
+      // Start of start date (00:00:00)
+      const startOfDay = new Date(startDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const startTimestamp = startOfDay.getTime();
+      
+      // End of end date (23:59:59.999)
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      const endTimestamp = endOfDay.getTime();
 
       const params: any = {
         start_date: startTimestamp,

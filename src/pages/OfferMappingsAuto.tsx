@@ -445,16 +445,18 @@ export default function OfferMappingsAuto() {
       setSyncingOffers(true);
       
       // Get unique product IDs from existing mappings (clean "ID " prefix if present)
-      const productIds = [...new Set(mappings.filter(m => m.id_produto).map(m => {
-        const id = m.id_produto!;
-        // Remove "ID " prefix if present (some products were stored with this format)
-        return id.startsWith('ID ') ? id.substring(3) : id;
-      }))];
+      // Get unique product IDs - only valid UUIDs (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const productIds = [...new Set(mappings
+        .filter(m => m.id_produto && uuidRegex.test(m.id_produto))
+        .map(m => m.id_produto!)
+      )];
       
       if (productIds.length === 0) {
         toast({
           title: 'Nada para sincronizar',
-          description: 'Não há ofertas importadas com ID de produto',
+          description: 'Não há ofertas com IDs válidos. Clique em "Corrigir IDs" primeiro.',
+          variant: 'destructive',
         });
         return;
       }

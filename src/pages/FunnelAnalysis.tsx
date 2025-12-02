@@ -4,6 +4,7 @@ import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, Users } 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -310,50 +311,81 @@ const FunnelAnalysis = () => {
               <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <Card className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">Total de Vendas</p>
-                        <p className="text-3xl font-bold text-foreground">{summaryMetrics.totalVendas}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
-                        <BarChart3 className="w-6 h-6 text-primary-foreground" />
-                      </div>
-                    </div>
-                  </Card>
-                  <Card className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
-                        <p className="text-3xl font-bold text-foreground">{summaryMetrics.uniqueCustomers}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
-                        <Users className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
-                  <Card className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
-                        <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalReceita)}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
-                        <DollarSign className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
-                  <Card className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
-                        <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryMetrics.ticketMedio)}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
-                        <Target className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Card className="p-6 cursor-help">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Total de Vendas</p>
+                            <p className="text-3xl font-bold text-foreground">{summaryMetrics.totalVendas}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
+                            <BarChart3 className="w-6 h-6 text-primary-foreground" />
+                          </div>
+                        </div>
+                      </Card>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>Quantidade total de produtos vendidos no funil selecionado, considerando todas as posições (FRONT, OB, US, DS).</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Card className="p-6 cursor-help">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
+                            <p className="text-3xl font-bold text-foreground">{summaryMetrics.uniqueCustomers}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                            <Users className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      </Card>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>Número de compradores únicos identificados pelo e-mail/nome. Um cliente que compra múltiplos produtos conta apenas uma vez.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Card className="p-6 cursor-help">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
+                            <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalReceita)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
+                            <DollarSign className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      </Card>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>Soma de todos os valores de vendas realizadas no funil selecionado.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Card className="p-6 cursor-help">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
+                            <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryMetrics.ticketMedio)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+                            <Target className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      </Card>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>Receita Total ÷ Clientes Únicos. Representa o valor médio gasto por cada cliente no funil.</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
 
                 {/* Funnel Flow Visualization */}

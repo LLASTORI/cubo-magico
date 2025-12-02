@@ -75,7 +75,7 @@ const PAYMENT_ICONS: Record<string, any> = {
 };
 
 const chartConfig = {
-  sales: { label: "Vendas", color: "hsl(var(--primary))" },
+  sales: { label: "Produtos Vendidos", color: "hsl(var(--primary))" },
   revenue: { label: "Receita", color: "hsl(142, 76%, 36%)" },
 };
 
@@ -276,9 +276,9 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
               <TableHeader>
                 <TableRow>
                   <TableHead>Método</TableHead>
-                  <TableHead className="text-right">Vendas</TableHead>
+                  <TableHead className="text-right">Produtos Vendidos</TableHead>
                   <TableHead className="text-right">Receita</TableHead>
-                  <TableHead className="text-right">Ticket</TableHead>
+                  <TableHead className="text-right">Ticket Médio</TableHead>
                   <TableHead className="w-[100px]">%</TableHead>
                 </TableRow>
               </TableHeader>
@@ -373,7 +373,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
                     return (
                       <div className="bg-popover p-3 rounded-lg border shadow-md">
                         <p className="font-semibold">{PAYMENT_LABELS[data.method] || data.method}</p>
-                        <p className="text-sm text-muted-foreground">Vendas: {data.sales}</p>
+                        <p className="text-sm text-muted-foreground">Produtos Vendidos: {data.sales}</p>
                         <p className="text-sm text-muted-foreground">Receita: {formatCurrency(data.revenue)}</p>
                       </div>
                     );

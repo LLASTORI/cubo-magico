@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight } from "lucide-react";
+import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -309,7 +309,7 @@ const FunnelAnalysis = () => {
             {selectedFunnel ? (
               <>
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <Card className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
@@ -318,6 +318,17 @@ const FunnelAnalysis = () => {
                       </div>
                       <div className="p-3 rounded-lg bg-gradient-to-br from-primary to-accent">
                         <BarChart3 className="w-6 h-6 text-primary-foreground" />
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
+                        <p className="text-3xl font-bold text-foreground">{summaryMetrics.uniqueCustomers}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                        <Users className="w-6 h-6 text-white" />
                       </div>
                     </div>
                   </Card>

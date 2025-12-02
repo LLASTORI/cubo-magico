@@ -30,6 +30,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+const POSITION_TYPES = [
+  { value: 'FRONT', label: 'FRONT - Produto Principal' },
+  { value: 'OB', label: 'OB - Order Bump' },
+  { value: 'US', label: 'US - Upsell' },
+  { value: 'DS', label: 'DS - Downsell' },
+];
+
 const formSchema = z.object({
   id_produto: z.string().optional(),
   nome_produto: z.string().min(1, 'Nome do produto é obrigatório').max(200),
@@ -41,6 +48,8 @@ const formSchema = z.object({
   data_desativacao: z.string().optional(),
   id_funil: z.string().min(1, 'ID do funil é obrigatório').max(100),
   anotacoes: z.string().optional(),
+  tipo_posicao: z.string().optional(),
+  ordem_posicao: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -57,6 +66,9 @@ interface OfferMapping {
   data_desativacao: string | null;
   id_funil: string;
   anotacoes: string | null;
+  tipo_posicao: string | null;
+  ordem_posicao: number | null;
+  nome_posicao: string | null;
 }
 
 interface OfferMappingDialogProps {
@@ -65,6 +77,14 @@ interface OfferMappingDialogProps {
   mapping: OfferMapping | null;
   onSuccess: () => void;
 }
+
+// Generate position display name from type and order
+const generatePositionName = (type: string | null, order: number | null): string | null => {
+  if (!type) return null;
+  if (type === 'FRONT') return 'FRONT';
+  if (!order || order === 1) return `${type}1`;
+  return `${type}${order}`;
+};
 
 export function OfferMappingDialog({
   open,
@@ -86,6 +106,8 @@ export function OfferMappingDialog({
       data_desativacao: '',
       id_funil: '',
       anotacoes: '',
+      tipo_posicao: '',
+      ordem_posicao: '1',
     },
   });
 
@@ -102,6 +124,8 @@ export function OfferMappingDialog({
         data_desativacao: mapping.data_desativacao || '',
         id_funil: mapping.id_funil || '',
         anotacoes: mapping.anotacoes || '',
+        tipo_posicao: mapping.tipo_posicao || '',
+        ordem_posicao: mapping.ordem_posicao?.toString() || '1',
       });
     } else {
       form.reset({
@@ -115,12 +139,20 @@ export function OfferMappingDialog({
         data_desativacao: '',
         id_funil: '',
         anotacoes: '',
+        tipo_posicao: '',
+        ordem_posicao: '1',
       });
     }
   }, [mapping, form]);
 
+  const tipoPosicao = form.watch('tipo_posicao');
+  const showOrdemField = tipoPosicao && tipoPosicao !== 'FRONT';
+
   const onSubmit = async (values: FormValues) => {
     try {
+      const ordemPosicao = values.ordem_posicao ? parseInt(values.ordem_posicao) : 1;
+      const nomePosicao = generatePositionName(values.tipo_posicao || null, ordemPosicao);
+
       const data = {
         id_produto: values.id_produto || null,
         nome_produto: values.nome_produto,
@@ -132,6 +164,9 @@ export function OfferMappingDialog({
         data_desativacao: values.data_desativacao || null,
         id_funil: values.id_funil,
         anotacoes: values.anotacoes || null,
+        tipo_posicao: values.tipo_posicao || null,
+        ordem_posicao: ordemPosicao,
+        nome_posicao: nomePosicao,
       };
 
       if (mapping) {
@@ -246,6 +281,64 @@ export function OfferMappingDialog({
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* Posição no Funil - NOVO CAMPO */}
+            <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
+              <h4 className="font-medium text-sm">Posição no Funil</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="tipo_posicao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Posição</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {POSITION_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {showOrdemField && (
+                  <FormField
+                    control={form.control}
+                    name="ordem_posicao"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ordem (1, 2, 3...)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="10"
+                            placeholder="1"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+              {tipoPosicao && (
+                <p className="text-xs text-muted-foreground">
+                  Posição: <span className="font-semibold">{generatePositionName(tipoPosicao, parseInt(form.watch('ordem_posicao') || '1'))}</span>
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

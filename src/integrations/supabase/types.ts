@@ -211,8 +211,11 @@ export type Database = {
           id_funil: string
           id_produto: string | null
           nome_oferta: string | null
+          nome_posicao: string | null
           nome_produto: string
+          ordem_posicao: number | null
           status: string | null
+          tipo_posicao: string | null
           updated_at: string
           valor: number | null
         }
@@ -226,8 +229,11 @@ export type Database = {
           id_funil: string
           id_produto?: string | null
           nome_oferta?: string | null
+          nome_posicao?: string | null
           nome_produto: string
+          ordem_posicao?: number | null
           status?: string | null
+          tipo_posicao?: string | null
           updated_at?: string
           valor?: number | null
         }
@@ -241,8 +247,11 @@ export type Database = {
           id_funil?: string
           id_produto?: string | null
           nome_oferta?: string | null
+          nome_posicao?: string | null
           nome_produto?: string
+          ordem_posicao?: number | null
           status?: string | null
+          tipo_posicao?: string | null
           updated_at?: string
           valor?: number | null
         }

@@ -45,7 +45,22 @@ interface OfferMapping {
   data_desativacao: string | null;
   id_funil: string;
   anotacoes: string | null;
+  tipo_posicao: string | null;
+  ordem_posicao: number | null;
+  nome_posicao: string | null;
 }
+
+const POSITION_COLORS: Record<string, string> = {
+  FRONT: 'bg-blue-500 text-white',
+  OB: 'bg-amber-500 text-white',
+  US: 'bg-green-500 text-white',
+  DS: 'bg-purple-500 text-white',
+};
+
+const getPositionBadgeClass = (tipo: string | null) => {
+  if (!tipo) return 'bg-muted text-muted-foreground';
+  return POSITION_COLORS[tipo] || 'bg-muted text-muted-foreground';
+};
 
 export default function OfferMappings() {
   const [mappings, setMappings] = useState<OfferMapping[]>([]);
@@ -70,10 +85,25 @@ export default function OfferMappings() {
       .sort((a, b) => a.id.localeCompare(b.id));
   }, [mappings]);
 
-  // Filter mappings by selected funnel
+  // Filter mappings by selected funnel and sort by position
   const filteredMappings = useMemo(() => {
-    if (selectedFunnel === 'all') return mappings;
-    return mappings.filter(m => m.id_funil === selectedFunnel);
+    let filtered = selectedFunnel === 'all' ? mappings : mappings.filter(m => m.id_funil === selectedFunnel);
+    
+    // Sort by position: FRONT first, then OB by order, US by order, DS by order
+    const positionOrder = { FRONT: 0, OB: 1, US: 2, DS: 3 };
+    return filtered.sort((a, b) => {
+      // First sort by funnel
+      const funnelCompare = a.id_funil.localeCompare(b.id_funil);
+      if (funnelCompare !== 0) return funnelCompare;
+      
+      // Then by position type
+      const aOrder = a.tipo_posicao ? (positionOrder[a.tipo_posicao as keyof typeof positionOrder] ?? 99) : 99;
+      const bOrder = b.tipo_posicao ? (positionOrder[b.tipo_posicao as keyof typeof positionOrder] ?? 99) : 99;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      
+      // Finally by ordem_posicao
+      return (a.ordem_posicao || 0) - (b.ordem_posicao || 0);
+    });
   }, [mappings, selectedFunnel]);
 
   const fetchMappings = async () => {
@@ -227,6 +257,15 @@ export default function OfferMappings() {
                 Limpar filtro
               </Button>
             )}
+            
+            {/* Legenda das posições */}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-xs text-muted-foreground">Posições:</span>
+              <Badge className={POSITION_COLORS.FRONT}>FRONT</Badge>
+              <Badge className={POSITION_COLORS.OB}>OB</Badge>
+              <Badge className={POSITION_COLORS.US}>US</Badge>
+              <Badge className={POSITION_COLORS.DS}>DS</Badge>
+            </div>
           </div>
         </Card>
 
@@ -254,14 +293,13 @@ export default function OfferMappings() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[80px]">Posição</TableHead>
                     <TableHead>ID Produto</TableHead>
                     <TableHead>Nome Produto</TableHead>
                     <TableHead>Nome Oferta</TableHead>
-                    <TableHead>Código Oferta</TableHead>
+                    <TableHead>Código</TableHead>
                     <TableHead>Valor</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Ativação</TableHead>
-                    <TableHead>Desativação</TableHead>
                     <TableHead>ID Funil</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -269,13 +307,24 @@ export default function OfferMappings() {
                 <TableBody>
                   {filteredMappings.map((mapping) => (
                     <TableRow key={mapping.id}>
+                      <TableCell>
+                        {mapping.nome_posicao ? (
+                          <Badge className={getPositionBadgeClass(mapping.tipo_posicao)}>
+                            {mapping.nome_posicao}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {mapping.id_produto || '-'}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium max-w-[200px] truncate">
                         {mapping.nome_produto}
                       </TableCell>
-                      <TableCell>{mapping.nome_oferta || '-'}</TableCell>
+                      <TableCell className="max-w-[180px] truncate">
+                        {mapping.nome_oferta || '-'}
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {mapping.codigo_oferta || '-'}
                       </TableCell>
@@ -289,10 +338,8 @@ export default function OfferMappings() {
                           {mapping.status || '-'}
                         </span>
                       </TableCell>
-                      <TableCell>{formatDate(mapping.data_ativacao)}</TableCell>
-                      <TableCell>{formatDate(mapping.data_desativacao)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-semibold">
+                        <Badge variant="outline" className="font-semibold text-xs">
                           {mapping.id_funil}
                         </Badge>
                       </TableCell>

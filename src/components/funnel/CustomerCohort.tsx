@@ -595,7 +595,9 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                         </HoverCardContent>
                       </HoverCard>
                     </TableCell>
-                    <TableCell className="text-right">{customer.totalPurchases}</TableCell>
+                    <TableCell className="text-right">
+                      {1 + customer.otherFunnels.length}
+                    </TableCell>
                     <TableCell className="text-right">{customer.products.length}</TableCell>
                     <TableCell className="text-right">{formatCurrency(customer.totalSpent)}</TableCell>
                     <TableCell className="text-right">

@@ -30,11 +30,11 @@ interface HotmartSale {
     offer: { code: string };
     price: { value: number };
     status: string;
+    tracking?: {
+      source_sck?: string;
+    };
   };
   buyer: { email: string };
-  tracking?: {
-    source_sck?: string;
-  };
 }
 
 interface UTMMetrics {
@@ -110,7 +110,7 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
     const filtered = salesData.filter(sale => {
       const offerCode = sale.purchase?.offer?.code;
       const status = sale.purchase?.status;
-      return funnelOfferCodes.includes(offerCode) && status === 'COMPLETE';
+      return funnelOfferCodes.includes(offerCode) && (status === 'COMPLETE' || status === 'APPROVED');
     });
 
     const totalSales = filtered.length;
@@ -120,7 +120,7 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => 
       const groups: Record<string, { sales: number; revenue: number }> = {};
       
       filtered.forEach(sale => {
-        const sck = sale.tracking?.source_sck;
+        const sck = sale.purchase?.tracking?.source_sck;
         const utmParams = parseUTMFromSck(sck);
         let value = utmParams[field] || '(não definido)';
         

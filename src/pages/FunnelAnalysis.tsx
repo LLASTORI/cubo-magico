@@ -538,7 +538,6 @@ const FunnelAnalysis = () => {
 
                 <TabsContent value="comparison">
                   <PeriodComparison
-                    salesData={salesFromDashboard}
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
                   />

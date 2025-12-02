@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, TrendingUp, TrendingDown, Minus, ArrowLeftRight } from "lucide-react";
+import { Calendar, TrendingUp, TrendingDown, Minus, ArrowLeftRight, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,18 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
-interface DashboardSale {
-  transaction: string;
-  product: string;
-  buyer: string;
-  value: number;
-  status: string;
-  date: string;
-  offerCode?: string;
-}
-
 interface PeriodComparisonProps {
-  salesData: DashboardSale[];
   selectedFunnel: string;
   funnelOfferCodes: string[];
 }
@@ -32,7 +22,7 @@ interface PeriodMetrics {
   avgTicket: number;
 }
 
-const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: PeriodComparisonProps) => {
+const PeriodComparison = ({ selectedFunnel, funnelOfferCodes }: PeriodComparisonProps) => {
   const today = new Date();
   
   // Period A (anterior)
@@ -43,41 +33,58 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
   const [periodBStart, setPeriodBStart] = useState<Date>(subDays(today, 7));
   const [periodBEnd, setPeriodBEnd] = useState<Date>(today);
 
-  const filterSalesByPeriod = (start: Date, end: Date): DashboardSale[] => {
-    console.log('=== DEBUG PeriodComparison ===');
-    console.log('Total salesData:', salesData.length);
-    console.log('funnelOfferCodes:', funnelOfferCodes);
-    console.log('Período:', format(start, 'dd/MM/yyyy'), 'até', format(end, 'dd/MM/yyyy'));
-    
-    const filtered = salesData.filter(sale => {
-      const saleDate = new Date(sale.date);
-      const isInPeriod = saleDate >= startOfDay(start) && saleDate <= endOfDay(end);
-      // Se temos códigos do funil, filtra por eles. Se não, considera todas as vendas
-      const isInFunnel = funnelOfferCodes.length === 0 || funnelOfferCodes.includes(sale.offerCode || '');
-      return isInPeriod && isInFunnel;
-    });
-    
-    console.log('Vendas filtradas:', filtered.length);
-    return filtered;
-  };
+  const [periodAMetrics, setPeriodAMetrics] = useState<PeriodMetrics>({ totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 });
+  const [periodBMetrics, setPeriodBMetrics] = useState<PeriodMetrics>({ totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 });
+  const [loading, setLoading] = useState(false);
 
-  const calculateMetrics = (sales: DashboardSale[]): PeriodMetrics => {
+  const fetchPeriodData = async (startDate: Date, endDate: Date): Promise<PeriodMetrics> => {
+    if (funnelOfferCodes.length === 0) {
+      return { totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 };
+    }
+
+    const startStr = format(startOfDay(startDate), 'yyyy-MM-dd');
+    const endStr = format(endOfDay(endDate), 'yyyy-MM-dd 23:59:59');
+
+    const { data, error } = await supabase
+      .from('hotmart_sales')
+      .select('transaction_id, buyer_email, total_price, offer_code, sale_date')
+      .in('offer_code', funnelOfferCodes)
+      .gte('sale_date', startStr)
+      .lte('sale_date', endStr)
+      .eq('status', 'approved');
+
+    if (error) {
+      console.error('Erro ao buscar dados:', error);
+      return { totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 };
+    }
+
+    const sales = data || [];
     const totalSales = sales.length;
-    const totalRevenue = sales.reduce((sum, s) => sum + (s.value || 0), 0);
-    const uniqueCustomers = new Set(sales.map(s => s.buyer)).size;
+    const totalRevenue = sales.reduce((sum, s) => sum + (s.total_price || 0), 0);
+    const uniqueCustomers = new Set(sales.map(s => s.buyer_email)).size;
     const avgTicket = uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0;
+
     return { totalSales, totalRevenue, uniqueCustomers, avgTicket };
   };
 
-  const periodAMetrics = useMemo(() => {
-    const sales = filterSalesByPeriod(periodAStart, periodAEnd);
-    return calculateMetrics(sales);
-  }, [salesData, periodAStart, periodAEnd, funnelOfferCodes]);
+  const loadData = async () => {
+    setLoading(true);
+    
+    const [metricsA, metricsB] = await Promise.all([
+      fetchPeriodData(periodAStart, periodAEnd),
+      fetchPeriodData(periodBStart, periodBEnd)
+    ]);
+    
+    setPeriodAMetrics(metricsA);
+    setPeriodBMetrics(metricsB);
+    setLoading(false);
+  };
 
-  const periodBMetrics = useMemo(() => {
-    const sales = filterSalesByPeriod(periodBStart, periodBEnd);
-    return calculateMetrics(sales);
-  }, [salesData, periodBStart, periodBEnd, funnelOfferCodes]);
+  useEffect(() => {
+    if (selectedFunnel && funnelOfferCodes.length > 0) {
+      loadData();
+    }
+  }, [selectedFunnel, funnelOfferCodes, periodAStart, periodAEnd, periodBStart, periodBEnd]);
 
   const calculateVariation = (a: number, b: number): { value: number; type: 'up' | 'down' | 'neutral' } => {
     if (a === 0 && b === 0) return { value: 0, type: 'neutral' };
@@ -152,6 +159,10 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
           <h3 className="text-lg font-semibold">Comparação de Períodos</h3>
           <p className="text-sm text-muted-foreground">Compare o desempenho entre dois períodos diferentes</p>
         </div>
+        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+          <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
+          Atualizar
+        </Button>
       </div>
 
       {/* Period Selectors */}
@@ -167,13 +178,12 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
                   {format(periodAStart, "dd/MM", { locale: ptBR })}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <CalendarComponent
                   mode="single"
                   selected={periodAStart}
                   onSelect={(date) => date && setPeriodAStart(date)}
                   initialFocus
-                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
@@ -185,13 +195,12 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
                   {format(periodAEnd, "dd/MM", { locale: ptBR })}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <CalendarComponent
                   mode="single"
                   selected={periodAEnd}
                   onSelect={(date) => date && setPeriodAEnd(date)}
                   initialFocus
-                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
@@ -209,13 +218,12 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
                   {format(periodBStart, "dd/MM", { locale: ptBR })}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <CalendarComponent
                   mode="single"
                   selected={periodBStart}
                   onSelect={(date) => date && setPeriodBStart(date)}
                   initialFocus
-                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
@@ -227,13 +235,12 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
                   {format(periodBEnd, "dd/MM", { locale: ptBR })}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+              <PopoverContent className="w-auto p-0" align="start">
                 <CalendarComponent
                   mode="single"
                   selected={periodBEnd}
                   onSelect={(date) => date && setPeriodBEnd(date)}
                   initialFocus
-                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
@@ -241,31 +248,38 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
         </div>
       </div>
 
-      {/* Metrics Comparison Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricComparisonCard
-          label="Total de Vendas"
-          valueA={periodAMetrics.totalSales}
-          valueB={periodBMetrics.totalSales}
-        />
-        <MetricComparisonCard
-          label="Clientes Únicos"
-          valueA={periodAMetrics.uniqueCustomers}
-          valueB={periodBMetrics.uniqueCustomers}
-        />
-        <MetricComparisonCard
-          label="Receita Total"
-          valueA={periodAMetrics.totalRevenue}
-          valueB={periodBMetrics.totalRevenue}
-          format={formatCurrency}
-        />
-        <MetricComparisonCard
-          label="Ticket Médio"
-          valueA={periodAMetrics.avgTicket}
-          valueB={periodBMetrics.avgTicket}
-          format={formatCurrency}
-        />
-      </div>
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        /* Metrics Comparison Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricComparisonCard
+            label="Total de Vendas"
+            valueA={periodAMetrics.totalSales}
+            valueB={periodBMetrics.totalSales}
+          />
+          <MetricComparisonCard
+            label="Clientes Únicos"
+            valueA={periodAMetrics.uniqueCustomers}
+            valueB={periodBMetrics.uniqueCustomers}
+          />
+          <MetricComparisonCard
+            label="Receita Total"
+            valueA={periodAMetrics.totalRevenue}
+            valueB={periodBMetrics.totalRevenue}
+            format={formatCurrency}
+          />
+          <MetricComparisonCard
+            label="Ticket Médio"
+            valueA={periodAMetrics.avgTicket}
+            valueB={periodBMetrics.avgTicket}
+            format={formatCurrency}
+          />
+        </div>
+      )}
     </Card>
   );
 };

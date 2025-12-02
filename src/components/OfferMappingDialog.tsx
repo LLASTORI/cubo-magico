@@ -31,11 +31,13 @@ import {
 } from '@/components/ui/select';
 
 const POSITION_TYPES = [
-  { value: 'FRONT', label: 'FRONT - Produto Principal' },
-  { value: 'OB', label: 'OB - Order Bump' },
-  { value: 'US', label: 'US - Upsell' },
-  { value: 'DS', label: 'DS - Downsell' },
+  { value: 'FRONT', label: 'FRONT - Produto Principal', maxOrder: 1 },
+  { value: 'OB', label: 'OB - Order Bump (1-5)', maxOrder: 5 },
+  { value: 'US', label: 'US - Upsell (1-5)', maxOrder: 5 },
+  { value: 'DS', label: 'DS - Downsell', maxOrder: 1 },
 ];
+
+const ORDER_OPTIONS = [1, 2, 3, 4, 5];
 
 const formSchema = z.object({
   id_produto: z.string().optional(),
@@ -318,16 +320,21 @@ export function OfferMappingDialog({
                     name="ordem_posicao"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Ordem (1, 2, 3...)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="10"
-                            placeholder="1"
-                            {...field}
-                          />
-                        </FormControl>
+                        <FormLabel>Ordem (1-5)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ORDER_OPTIONS.map((num) => (
+                              <SelectItem key={num} value={num.toString()}>
+                                {tipoPosicao}{num}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

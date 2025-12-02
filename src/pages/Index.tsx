@@ -167,7 +167,7 @@ const Index = () => {
       totalSales: new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
-      }).format(total / 100), // Hotmart returns values in cents
+      }).format(total),
       transactions: filteredSales.length,
       customers: uniqueCustomers,
     };

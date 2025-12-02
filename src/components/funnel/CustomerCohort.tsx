@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, subDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, RefreshCw, Users, UserPlus, Repeat, ShoppingCart } from "lucide-react";
+import { Calendar, RefreshCw, Users, UserPlus, Repeat, ShoppingCart, Package, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Package } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -33,12 +32,17 @@ interface HotmartSale {
     status: string;
     order_date: number;
   };
-  buyer: { email: string; name?: string };
+  buyer: { 
+    email: string; 
+    name?: string;
+    checkout_phone?: string;
+  };
 }
 
 interface CustomerData {
   email: string;
   name: string;
+  phone: string | null;
   totalPurchases: number;
   totalSpent: number;
   firstPurchase: Date;
@@ -141,15 +145,22 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     const customerMap: Record<string, {
       email: string;
       name: string;
+      phone: string | null;
       purchases: { date: Date; value: number; offerCode: string }[];
     }> = {};
 
     filtered.forEach(sale => {
       const email = sale.buyer?.email || 'unknown';
       const name = sale.buyer?.name || email;
+      const phone = sale.buyer?.checkout_phone || null;
       
       if (!customerMap[email]) {
-        customerMap[email] = { email, name, purchases: [] };
+        customerMap[email] = { email, name, phone, purchases: [] };
+      }
+      
+      // Update phone if not set yet
+      if (!customerMap[email].phone && phone) {
+        customerMap[email].phone = phone;
       }
       
       customerMap[email].purchases.push({
@@ -176,6 +187,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
       return {
         email: c.email,
         name: c.name,
+        phone: c.phone,
         totalPurchases: c.purchases.length,
         totalSpent,
         firstPurchase,
@@ -441,10 +453,34 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                             <p className="text-xs text-muted-foreground truncate max-w-[200px]" title={customer.email}>
                               {customer.email}
                             </p>
+                            {customer.phone && (
+                              <a 
+                                href={`https://wa.me/${customer.phone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 mt-0.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                {customer.phone}
+                              </a>
+                            )}
                           </div>
                         </HoverCardTrigger>
                         <HoverCardContent className="w-80" align="start">
                           <div className="space-y-3">
+                            {customer.phone && (
+                              <a 
+                                href={`https://wa.me/${customer.phone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                              >
+                                <MessageCircle className="w-4 h-4 text-green-600" />
+                                <span className="text-sm font-medium text-green-700">{customer.phone}</span>
+                                <span className="text-xs text-muted-foreground ml-auto">Abrir WhatsApp</span>
+                              </a>
+                            )}
                             <div className="flex items-center gap-2">
                               <Package className="w-4 h-4 text-primary" />
                               <span className="font-semibold">Produtos Comprados</span>

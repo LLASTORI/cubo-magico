@@ -123,12 +123,13 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
               {format(startDate, "dd/MM", { locale: ptBR })}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
             <CalendarComponent
               mode="single"
               selected={startDate}
               onSelect={(date) => date && onStartChange(date)}
               initialFocus
+              className="pointer-events-auto"
             />
           </PopoverContent>
         </Popover>
@@ -140,12 +141,13 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
               {format(endDate, "dd/MM", { locale: ptBR })}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
             <CalendarComponent
               mode="single"
               selected={endDate}
               onSelect={(date) => date && onEndChange(date)}
               initialFocus
+              className="pointer-events-auto"
             />
           </PopoverContent>
         </Popover>

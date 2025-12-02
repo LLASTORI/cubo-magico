@@ -196,16 +196,16 @@ const FunnelChangelog = ({ selectedFunnel, offerOptions }: FunnelChangelogProps)
               <div className="space-y-2">
                 <Label>Oferta (opcional)</Label>
                 <Select 
-                  value={formData.codigo_oferta} 
-                  onValueChange={(v) => setFormData({ ...formData, codigo_oferta: v })}
+                  value={formData.codigo_oferta || "none"} 
+                  onValueChange={(v) => setFormData({ ...formData, codigo_oferta: v === "none" ? "" : v })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma oferta" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma (geral)</SelectItem>
+                    <SelectItem value="none">Nenhuma (geral)</SelectItem>
                     {offerOptions.map(opt => (
-                      <SelectItem key={opt.codigo_oferta} value={opt.codigo_oferta}>
+                      <SelectItem key={opt.codigo_oferta} value={opt.codigo_oferta || `offer-${opt.nome_oferta}`}>
                         {opt.nome_oferta || opt.codigo_oferta}
                       </SelectItem>
                     ))}

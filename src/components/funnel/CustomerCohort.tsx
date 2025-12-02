@@ -43,13 +43,14 @@ interface CustomerData {
   email: string;
   name: string;
   phone: string | null;
-  totalPurchases: number;
+  totalPurchases: number; // Total distinct sales (each offer = 1 sale)
   totalSpent: number;
   firstPurchase: Date;
   lastPurchase: Date;
   daysBetweenPurchases: number;
   products: string[];
   isRecurrent: boolean;
+  otherFunnels: string[]; // Names of other funnels where customer bought
 }
 
 interface CohortMetrics {
@@ -61,6 +62,8 @@ interface CohortMetrics {
   topCustomers: CustomerData[];
   purchaseDistribution: { purchases: string; count: number; percentage: number }[];
 }
+
+type CustomerFilter = 'all' | 'new' | 'recurrent';
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -79,6 +82,7 @@ const chartConfig = {
 interface OfferMapping {
   codigo_oferta: string;
   nome_produto: string;
+  id_funil: string;
 }
 
 const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProps) => {
@@ -88,6 +92,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<HotmartSale[]>([]);
   const [offerMappings, setOfferMappings] = useState<OfferMapping[]>([]);
+  const [customerFilter, setCustomerFilter] = useState<CustomerFilter>('all');
 
   // Create a map of offer code to product name
   const offerToProductName = useMemo(() => {
@@ -100,12 +105,23 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     return map;
   }, [offerMappings]);
 
+  // Create a map of offer code to funnel id
+  const offerToFunnelId = useMemo(() => {
+    const map: Record<string, string> = {};
+    offerMappings.forEach(m => {
+      if (m.codigo_oferta) {
+        map[m.codigo_oferta] = m.id_funil;
+      }
+    });
+    return map;
+  }, [offerMappings]);
+
   // Fetch offer mappings
   useEffect(() => {
     const fetchMappings = async () => {
       const { data } = await supabase
         .from('offer_mappings')
-        .select('codigo_oferta, nome_produto');
+        .select('codigo_oferta, nome_produto, id_funil');
       if (data) setOfferMappings(data);
     };
     fetchMappings();
@@ -134,96 +150,98 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     return allItems;
   };
 
-  // First, group ALL sales by customer and funnel to understand cross-funnel behavior
+  // First, group ALL sales by customer to understand cross-funnel behavior
   const cohortMetrics = useMemo((): CohortMetrics => {
     // Get all completed sales
     const allCompletedSales = salesData.filter(sale => sale.purchase?.status === 'COMPLETE');
     
-    // Build a map of all customers and which funnels they appear in
-    const customerFunnelMap: Record<string, Set<string>> = {};
-    allCompletedSales.forEach(sale => {
-      const email = sale.buyer?.email || 'unknown';
-      const offerCode = sale.purchase?.offer?.code;
-      if (!customerFunnelMap[email]) {
-        customerFunnelMap[email] = new Set();
-      }
-      // Track which funnel this offer belongs to
-      if (funnelOfferCodes.includes(offerCode)) {
-        customerFunnelMap[email].add('current');
-      } else {
-        customerFunnelMap[email].add('other');
-      }
-    });
-
-    // Now filter to only sales in the current funnel
-    const filtered = allCompletedSales.filter(sale => {
-      const offerCode = sale.purchase?.offer?.code;
-      return funnelOfferCodes.includes(offerCode);
-    });
-
-    // Group by customer - within this funnel, all products = 1 purchase
-    const customerMap: Record<string, {
+    // Build a map of ALL customer purchases (across all offers/funnels)
+    const customerAllPurchases: Record<string, {
       email: string;
       name: string;
       phone: string | null;
-      purchases: { date: Date; value: number; offerCode: string }[];
+      allSales: { date: Date; value: number; offerCode: string; funnelId: string | null }[];
     }> = {};
-
-    filtered.forEach(sale => {
+    
+    allCompletedSales.forEach(sale => {
       const email = sale.buyer?.email || 'unknown';
       const name = sale.buyer?.name || email;
       const phone = sale.buyer?.checkout_phone || null;
+      const offerCode = sale.purchase?.offer?.code || '';
+      const funnelId = offerToFunnelId[offerCode] || null;
       
-      if (!customerMap[email]) {
-        customerMap[email] = { email, name, phone, purchases: [] };
+      if (!customerAllPurchases[email]) {
+        customerAllPurchases[email] = { email, name, phone, allSales: [] };
       }
       
-      // Update phone if not set yet
-      if (!customerMap[email].phone && phone) {
-        customerMap[email].phone = phone;
+      if (!customerAllPurchases[email].phone && phone) {
+        customerAllPurchases[email].phone = phone;
       }
       
-      customerMap[email].purchases.push({
+      customerAllPurchases[email].allSales.push({
         date: new Date(sale.purchase?.order_date || Date.now()),
         value: sale.purchase?.price?.value || 0,
-        offerCode: sale.purchase?.offer?.code || '',
+        offerCode,
+        funnelId,
       });
     });
 
+    // Now filter to only customers who bought in the current funnel
+    const customersInCurrentFunnel = Object.values(customerAllPurchases).filter(c => 
+      c.allSales.some(s => funnelOfferCodes.includes(s.offerCode))
+    );
+
     // Calculate customer metrics
-    // IMPORTANT: Within this funnel, totalPurchases = number of funnels this customer bought from
-    // isRecurrent = customer also appears in OTHER funnels
-    const customers: CustomerData[] = Object.values(customerMap).map(c => {
-      const sortedPurchases = c.purchases.sort((a, b) => a.date.getTime() - b.date.getTime());
-      const firstPurchase = sortedPurchases[0]?.date || new Date();
-      const lastPurchase = sortedPurchases[sortedPurchases.length - 1]?.date || new Date();
-      const totalSpent = c.purchases.reduce((sum, p) => sum + p.value, 0);
-      const products = [...new Set(c.purchases.map(p => p.offerCode))];
+    const customers: CustomerData[] = customersInCurrentFunnel.map(c => {
+      // Sales in current funnel
+      const salesInFunnel = c.allSales.filter(s => funnelOfferCodes.includes(s.offerCode));
+      // Sales outside current funnel (other funnels or no funnel)
+      const salesOutsideFunnel = c.allSales.filter(s => !funnelOfferCodes.includes(s.offerCode));
       
-      // Check if customer appears in other funnels
-      const customerFunnels = customerFunnelMap[c.email] || new Set();
-      const hasOtherFunnels = customerFunnels.has('other');
+      const sortedSalesInFunnel = salesInFunnel.sort((a, b) => a.date.getTime() - b.date.getTime());
+      const firstPurchase = sortedSalesInFunnel[0]?.date || new Date();
+      const lastPurchase = sortedSalesInFunnel[sortedSalesInFunnel.length - 1]?.date || new Date();
+      const totalSpent = salesInFunnel.reduce((sum, s) => sum + s.value, 0);
+      const products = [...new Set(salesInFunnel.map(s => s.offerCode))];
       
-      // Count how many funnels this customer bought from (1 = just this funnel, 2+ = recurrent)
-      const funnelCount = customerFunnels.size;
+      // Total purchases = count all distinct sales (each product is a sale)
+      const totalPurchases = c.allSales.length;
+      
+      // Check if customer has purchases outside this funnel
+      const hasOtherSales = salesOutsideFunnel.length > 0;
+      
+      // Get unique other funnel IDs (excluding current funnel and null)
+      const otherFunnelIds = [...new Set(
+        salesOutsideFunnel
+          .map(s => s.funnelId)
+          .filter((id): id is string => id !== null && id !== selectedFunnel)
+      )];
+      
+      // Include "Sem funil" if there are sales without any funnel mapping
+      const hasSalesWithoutFunnel = salesOutsideFunnel.some(s => s.funnelId === null);
+      const otherFunnels = [...otherFunnelIds];
+      if (hasSalesWithoutFunnel) {
+        otherFunnels.push('Sem funil');
+      }
       
       let avgDaysBetween = 0;
-      if (sortedPurchases.length > 1) {
+      if (sortedSalesInFunnel.length > 1) {
         const totalDays = differenceInDays(lastPurchase, firstPurchase);
-        avgDaysBetween = totalDays / (sortedPurchases.length - 1);
+        avgDaysBetween = totalDays / (sortedSalesInFunnel.length - 1);
       }
 
       return {
         email: c.email,
         name: c.name,
         phone: c.phone,
-        totalPurchases: funnelCount, // Now represents number of funnels, not individual products
+        totalPurchases, // Total sales across ALL offers
         totalSpent,
         firstPurchase,
         lastPurchase,
         daysBetweenPurchases: avgDaysBetween,
         products,
-        isRecurrent: hasOtherFunnels, // True if customer bought from other funnels too
+        isRecurrent: hasOtherSales,
+        otherFunnels,
       };
     });
 
@@ -231,7 +249,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     const newCustomers = customers.filter(c => !c.isRecurrent).length;
     const recurrentCustomers = customers.filter(c => c.isRecurrent).length;
     
-    // For average, count total products bought, not funnels
+    // For average, count total products bought in this funnel
     const totalProducts = customers.reduce((sum, c) => sum + c.products.length, 0);
     const totalSpent = customers.reduce((sum, c) => sum + c.totalSpent, 0);
 
@@ -262,7 +280,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
       topCustomers,
       purchaseDistribution,
     };
-  }, [salesData, funnelOfferCodes]);
+  }, [salesData, funnelOfferCodes, offerToFunnelId, selectedFunnel]);
 
   const loadData = async () => {
     if (funnelOfferCodes.length === 0) {
@@ -291,6 +309,17 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
+
+  // Filter customers based on selected filter
+  const filteredCustomers = useMemo(() => {
+    let customers = cohortMetrics.topCustomers;
+    if (customerFilter === 'new') {
+      customers = cohortMetrics.topCustomers.filter(c => !c.isRecurrent);
+    } else if (customerFilter === 'recurrent') {
+      customers = cohortMetrics.topCustomers.filter(c => c.isRecurrent);
+    }
+    return customers;
+  }, [cohortMetrics.topCustomers, customerFilter]);
 
   if (!selectedFunnel) return null;
 
@@ -458,12 +487,38 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
 
           {/* Top Customers Table */}
           <div>
-            <h4 className="font-semibold mb-4">Top 10 Clientes (por valor gasto)</h4>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-semibold">Top 10 Clientes (por valor gasto)</h4>
+              <div className="flex gap-2">
+                <Button
+                  variant={customerFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCustomerFilter('all')}
+                >
+                  Todos ({cohortMetrics.uniqueCustomers})
+                </Button>
+                <Button
+                  variant={customerFilter === 'new' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCustomerFilter('new')}
+                >
+                  Novos ({cohortMetrics.newCustomers})
+                </Button>
+                <Button
+                  variant={customerFilter === 'recurrent' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCustomerFilter('recurrent')}
+                >
+                  Recorrentes ({cohortMetrics.recurrentCustomers})
+                </Button>
+              </div>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>#</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead className="text-right">Compras</TableHead>
                   <TableHead className="text-right">Produtos</TableHead>
                   <TableHead className="text-right">Total Gasto</TableHead>
                   <TableHead className="text-right">Ticket Médio</TableHead>
@@ -471,7 +526,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cohortMetrics.topCustomers.map((customer, index) => (
+                {filteredCustomers.map((customer, index) => (
                   <TableRow key={customer.email}>
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell>
@@ -540,15 +595,27 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                         </HoverCardContent>
                       </HoverCard>
                     </TableCell>
+                    <TableCell className="text-right">{customer.totalPurchases}</TableCell>
                     <TableCell className="text-right">{customer.products.length}</TableCell>
                     <TableCell className="text-right">{formatCurrency(customer.totalSpent)}</TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(customer.totalSpent / customer.products.length)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={customer.isRecurrent ? "default" : "secondary"}>
-                        {customer.isRecurrent ? 'Recorrente' : 'Novo'}
-                      </Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={customer.isRecurrent ? "default" : "secondary"}>
+                          {customer.isRecurrent ? 'Recorrente' : 'Novo'}
+                        </Badge>
+                        {customer.isRecurrent && customer.otherFunnels.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {customer.otherFunnels.map((funnel, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {funnel}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -132,19 +132,28 @@ const FunnelAnalysis = () => {
     try {
       setLoading(true);
       
-      // Start of start date (00:00:00)
-      const startOfDay = new Date(startDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const startTimestamp = startOfDay.getTime();
+      // Create date range in UTC to avoid timezone issues
+      // For start date: beginning of day in UTC
+      const startYear = startDate.getFullYear();
+      const startMonth = startDate.getMonth();
+      const startDay = startDate.getDate();
+      const startUTC = Date.UTC(startYear, startMonth, startDay, 0, 0, 0, 0);
       
-      // End of end date (23:59:59.999)
-      const endOfDay = new Date(endDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      const endTimestamp = endOfDay.getTime();
+      // For end date: end of day in UTC (23:59:59.999)
+      const endYear = endDate.getFullYear();
+      const endMonth = endDate.getMonth();
+      const endDay = endDate.getDate();
+      const endUTC = Date.UTC(endYear, endMonth, endDay, 23, 59, 59, 999);
+
+      console.log('=== DEBUG DATAS ===');
+      console.log('startDate selecionado:', startDate.toISOString());
+      console.log('endDate selecionado:', endDate.toISOString());
+      console.log('startUTC timestamp:', startUTC, '=', new Date(startUTC).toISOString());
+      console.log('endUTC timestamp:', endUTC, '=', new Date(endUTC).toISOString());
 
       const params: any = {
-        start_date: startTimestamp,
-        end_date: endTimestamp,
+        start_date: startUTC,
+        end_date: endUTC,
         max_results: 500,
         transaction_status: 'APPROVED',
       };
@@ -167,13 +176,21 @@ const FunnelAnalysis = () => {
 
         if (error) throw error;
         
+        console.log('=== API RESPONSE ===');
+        console.log('page_info:', data?.page_info);
+        console.log('items nesta página:', data?.items?.length || 0);
+        
         if (data?.items) {
           allItems = [...allItems, ...data.items];
         }
         
         nextPageToken = data?.page_info?.next_page_token || null;
+        console.log('nextPageToken:', nextPageToken);
         
       } while (nextPageToken);
+
+      console.log('=== TOTAL FINAL ===');
+      console.log('Total de itens buscados:', allItems.length);
 
       // Process and set sales data
       const processedSales: SaleData[] = allItems.map(item => ({

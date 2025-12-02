@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Package } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -402,14 +404,43 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                   <TableRow key={customer.email}>
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-medium truncate max-w-[200px]" title={customer.name}>
-                          {customer.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate max-w-[200px]" title={customer.email}>
-                          {customer.email}
-                        </p>
-                      </div>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <div className="cursor-pointer hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors">
+                            <p className="font-medium truncate max-w-[200px] text-primary underline-offset-2 hover:underline" title={customer.name}>
+                              {customer.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[200px]" title={customer.email}>
+                              {customer.email}
+                            </p>
+                          </div>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-80" align="start">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Package className="w-4 h-4 text-primary" />
+                              <span className="font-semibold">Produtos Comprados</span>
+                              <Badge variant="secondary" className="ml-auto">
+                                {customer.products.length} {customer.products.length === 1 ? 'produto' : 'produtos'}
+                              </Badge>
+                            </div>
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                              {customer.products.map((productCode, idx) => (
+                                <div key={idx} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
+                                  <span className="text-xs font-mono bg-primary/10 px-2 py-0.5 rounded">
+                                    {productCode}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="pt-2 border-t text-xs text-muted-foreground">
+                              <p>Total de compras: {customer.totalPurchases}</p>
+                              <p>Primeira compra: {format(customer.firstPurchase, "dd/MM/yyyy", { locale: ptBR })}</p>
+                              <p>Última compra: {format(customer.lastPurchase, "dd/MM/yyyy", { locale: ptBR })}</p>
+                            </div>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
                     </TableCell>
                     <TableCell className="text-right">{customer.totalPurchases}</TableCell>
                     <TableCell className="text-right">{formatCurrency(customer.totalSpent)}</TableCell>

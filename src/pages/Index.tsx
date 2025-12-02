@@ -269,6 +269,24 @@ const Index = () => {
   const metrics = calculateMetrics();
   const formattedSales = formatSalesData();
 
+  // Extract unique products and offers from sales data
+  const availableProducts = salesData?.items 
+    ? Array.from(new Set(salesData.items.map((item: any) => item.product?.name).filter(Boolean))) as string[]
+    : [];
+  
+  const availableOffers = salesData?.items 
+    ? Array.from(
+        new Map(
+          salesData.items
+            .filter((item: any) => item.purchase?.offer?.code)
+            .map((item: any) => [
+              item.purchase.offer.code,
+              { code: item.purchase.offer.code, name: item.purchase.offer.code }
+            ])
+        ).values()
+      ) as { code: string; name: string }[]
+    : [];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -321,7 +339,11 @@ const Index = () => {
       <main className="container mx-auto px-6 py-8">
         <div className="space-y-6">
           {/* Filters */}
-          <SalesFilters onFilter={fetchHotmartData} />
+          <SalesFilters 
+            onFilter={fetchHotmartData} 
+            availableProducts={availableProducts}
+            availableOffers={availableOffers}
+          />
 
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64 gap-4">

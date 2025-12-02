@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface SalesFiltersProps {
   onFilter: (filters: FilterParams) => void;
+  availableProducts?: string[];
+  availableOffers?: { code: string; name: string }[];
 }
 
 export interface FilterParams {
@@ -26,7 +28,13 @@ export interface FilterParams {
   offerCode?: string;
 }
 
-const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
+interface SalesFiltersProps {
+  onFilter: (filters: FilterParams) => void;
+  availableProducts?: string[];
+  availableOffers?: { code: string; name: string }[];
+}
+
+const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }: SalesFiltersProps) => {
   const today = new Date().toISOString().split('T')[0];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -38,8 +46,6 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [productName, setProductName] = useState<string>("all");
   const [offerCode, setOfferCode] = useState<string>("all");
   const [funis, setFunis] = useState<string[]>([]);
-  const [products, setProducts] = useState<string[]>([]);
-  const [offers, setOffers] = useState<{ code: string; name: string }[]>([]);
   
   // UTM Filters
   const [utmSource, setUtmSource] = useState("");
@@ -49,27 +55,19 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
   const [utmCreative, setUtmCreative] = useState("");
 
   useEffect(() => {
-    const fetchFilterOptions = async () => {
+    const fetchFunis = async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id_funil, nome_produto, codigo_oferta, nome_oferta')
+        .select('id_funil')
         .order('id_funil');
       
       if (data && !error) {
         const uniqueFunis = Array.from(new Set(data.map(item => item.id_funil)));
-        const uniqueProducts = Array.from(new Set(data.map(item => item.nome_produto)));
-        const uniqueOffers = data
-          .filter(item => item.codigo_oferta)
-          .map(item => ({ code: item.codigo_oferta!, name: item.nome_oferta || item.codigo_oferta! }))
-          .filter((offer, index, self) => self.findIndex(o => o.code === offer.code) === index);
-        
         setFunis(uniqueFunis);
-        setProducts(uniqueProducts);
-        setOffers(uniqueOffers);
       }
     };
     
-    fetchFilterOptions();
+    fetchFunis();
   }, []);
 
   const handleApplyFilters = () => {
@@ -185,7 +183,7 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Produtos</SelectItem>
-              {products.map((product) => (
+              {availableProducts.map((product) => (
                 <SelectItem key={product} value={product}>
                   {product}
                 </SelectItem>
@@ -202,7 +200,7 @@ const SalesFilters = ({ onFilter }: SalesFiltersProps) => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as Ofertas</SelectItem>
-              {offers.map((offer) => (
+              {availableOffers.map((offer) => (
                 <SelectItem key={offer.code} value={offer.code}>
                   {offer.name}
                 </SelectItem>

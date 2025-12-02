@@ -134,14 +134,34 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     return allItems;
   };
 
+  // First, group ALL sales by customer and funnel to understand cross-funnel behavior
   const cohortMetrics = useMemo((): CohortMetrics => {
-    const filtered = salesData.filter(sale => {
+    // Get all completed sales
+    const allCompletedSales = salesData.filter(sale => sale.purchase?.status === 'COMPLETE');
+    
+    // Build a map of all customers and which funnels they appear in
+    const customerFunnelMap: Record<string, Set<string>> = {};
+    allCompletedSales.forEach(sale => {
+      const email = sale.buyer?.email || 'unknown';
       const offerCode = sale.purchase?.offer?.code;
-      const status = sale.purchase?.status;
-      return funnelOfferCodes.includes(offerCode) && status === 'COMPLETE';
+      if (!customerFunnelMap[email]) {
+        customerFunnelMap[email] = new Set();
+      }
+      // Track which funnel this offer belongs to
+      if (funnelOfferCodes.includes(offerCode)) {
+        customerFunnelMap[email].add('current');
+      } else {
+        customerFunnelMap[email].add('other');
+      }
     });
 
-    // Group by customer email
+    // Now filter to only sales in the current funnel
+    const filtered = allCompletedSales.filter(sale => {
+      const offerCode = sale.purchase?.offer?.code;
+      return funnelOfferCodes.includes(offerCode);
+    });
+
+    // Group by customer - within this funnel, all products = 1 purchase
     const customerMap: Record<string, {
       email: string;
       name: string;
@@ -171,12 +191,21 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     });
 
     // Calculate customer metrics
+    // IMPORTANT: Within this funnel, totalPurchases = number of funnels this customer bought from
+    // isRecurrent = customer also appears in OTHER funnels
     const customers: CustomerData[] = Object.values(customerMap).map(c => {
       const sortedPurchases = c.purchases.sort((a, b) => a.date.getTime() - b.date.getTime());
       const firstPurchase = sortedPurchases[0]?.date || new Date();
       const lastPurchase = sortedPurchases[sortedPurchases.length - 1]?.date || new Date();
       const totalSpent = c.purchases.reduce((sum, p) => sum + p.value, 0);
       const products = [...new Set(c.purchases.map(p => p.offerCode))];
+      
+      // Check if customer appears in other funnels
+      const customerFunnels = customerFunnelMap[c.email] || new Set();
+      const hasOtherFunnels = customerFunnels.has('other');
+      
+      // Count how many funnels this customer bought from (1 = just this funnel, 2+ = recurrent)
+      const funnelCount = customerFunnels.size;
       
       let avgDaysBetween = 0;
       if (sortedPurchases.length > 1) {
@@ -188,33 +217,35 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
         email: c.email,
         name: c.name,
         phone: c.phone,
-        totalPurchases: c.purchases.length,
+        totalPurchases: funnelCount, // Now represents number of funnels, not individual products
         totalSpent,
         firstPurchase,
         lastPurchase,
         daysBetweenPurchases: avgDaysBetween,
         products,
-        isRecurrent: c.purchases.length > 1,
+        isRecurrent: hasOtherFunnels, // True if customer bought from other funnels too
       };
     });
 
     const uniqueCustomers = customers.length;
-    const newCustomers = customers.filter(c => c.totalPurchases === 1).length;
-    const recurrentCustomers = customers.filter(c => c.totalPurchases > 1).length;
-    const totalPurchases = customers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const newCustomers = customers.filter(c => !c.isRecurrent).length;
+    const recurrentCustomers = customers.filter(c => c.isRecurrent).length;
+    
+    // For average, count total products bought, not funnels
+    const totalProducts = customers.reduce((sum, c) => sum + c.products.length, 0);
     const totalSpent = customers.reduce((sum, c) => sum + c.totalSpent, 0);
 
-    // Purchase distribution
-    const purchaseCounts: Record<string, number> = {};
+    // Product count distribution (how many products per customer in this funnel)
+    const productCounts: Record<string, number> = {};
     customers.forEach(c => {
-      const key = c.totalPurchases >= 5 ? '5+' : c.totalPurchases.toString();
-      purchaseCounts[key] = (purchaseCounts[key] || 0) + 1;
+      const key = c.products.length >= 5 ? '5+' : c.products.length.toString();
+      productCounts[key] = (productCounts[key] || 0) + 1;
     });
 
     const purchaseDistribution = ['1', '2', '3', '4', '5+'].map(key => ({
-      purchases: key === '1' ? '1 compra' : key === '5+' ? '5+ compras' : `${key} compras`,
-      count: purchaseCounts[key] || 0,
-      percentage: uniqueCustomers > 0 ? ((purchaseCounts[key] || 0) / uniqueCustomers) * 100 : 0,
+      purchases: key === '1' ? '1 produto' : key === '5+' ? '5+ produtos' : `${key} produtos`,
+      count: productCounts[key] || 0,
+      percentage: uniqueCustomers > 0 ? ((productCounts[key] || 0) / uniqueCustomers) * 100 : 0,
     }));
 
     // Top customers by spending
@@ -226,7 +257,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
       uniqueCustomers,
       newCustomers,
       recurrentCustomers,
-      avgPurchasesPerCustomer: uniqueCustomers > 0 ? totalPurchases / uniqueCustomers : 0,
+      avgPurchasesPerCustomer: uniqueCustomers > 0 ? totalProducts / uniqueCustomers : 0,
       avgSpentPerCustomer: uniqueCustomers > 0 ? totalSpent / uniqueCustomers : 0,
       topCustomers,
       purchaseDistribution,
@@ -352,7 +383,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
             <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <UserPlus className="w-5 h-5 text-green-500" />
-                <span className="text-xs text-muted-foreground">Novos (1 compra)</span>
+                <span className="text-xs text-muted-foreground">Novos (só este funil)</span>
               </div>
               <p className="text-2xl font-bold">{cohortMetrics.newCustomers}</p>
               <p className="text-xs text-muted-foreground">
@@ -364,7 +395,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
             <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <Repeat className="w-5 h-5 text-purple-500" />
-                <span className="text-xs text-muted-foreground">Recorrentes</span>
+                <span className="text-xs text-muted-foreground">Recorrentes (outros funis)</span>
               </div>
               <p className="text-2xl font-bold">{cohortMetrics.recurrentCustomers}</p>
               <p className="text-xs text-muted-foreground">
@@ -376,7 +407,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
             <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <ShoppingCart className="w-5 h-5 text-orange-500" />
-                <span className="text-xs text-muted-foreground">Média Compras/Cliente</span>
+                <span className="text-xs text-muted-foreground">Média Produtos/Cliente</span>
               </div>
               <p className="text-2xl font-bold">{cohortMetrics.avgPurchasesPerCustomer.toFixed(2)}</p>
               <p className="text-xs text-muted-foreground">
@@ -388,7 +419,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
           {/* Purchase Distribution Chart */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <h4 className="font-semibold mb-4">Distribuição por Nº de Compras</h4>
+              <h4 className="font-semibold mb-4">Distribuição por Nº de Produtos</h4>
               <ChartContainer config={chartConfig} className="h-[250px]">
                 <BarChart data={cohortMetrics.purchaseDistribution}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -433,7 +464,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                 <TableRow>
                   <TableHead>#</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead className="text-right">Compras</TableHead>
+                  <TableHead className="text-right">Produtos</TableHead>
                   <TableHead className="text-right">Total Gasto</TableHead>
                   <TableHead className="text-right">Ticket Médio</TableHead>
                   <TableHead>Status</TableHead>
@@ -509,10 +540,10 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                         </HoverCardContent>
                       </HoverCard>
                     </TableCell>
-                    <TableCell className="text-right">{customer.totalPurchases}</TableCell>
+                    <TableCell className="text-right">{customer.products.length}</TableCell>
                     <TableCell className="text-right">{formatCurrency(customer.totalSpent)}</TableCell>
                     <TableCell className="text-right">
-                      {formatCurrency(customer.totalSpent / customer.totalPurchases)}
+                      {formatCurrency(customer.totalSpent / customer.products.length)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={customer.isRecurrent ? "default" : "secondary"}>

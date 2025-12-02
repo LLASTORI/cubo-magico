@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, RefreshCw, CreditCard, Banknote, QrCode, Wallet } from "lucide-react";
+import { Calendar, RefreshCw, CreditCard, Banknote, QrCode, Wallet, ShoppingBag, Users, DollarSign, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
+import MetricCard from "@/components/MetricCard";
 
 interface PaymentMethodAnalysisProps {
   selectedFunnel: string;
@@ -118,6 +119,11 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
 
     const totalSales = filtered.length;
     const totalRevenue = filtered.reduce((sum, s) => sum + (s.purchase?.price?.value || 0), 0);
+    
+    // Calculate unique customers
+    const uniqueEmails = new Set(filtered.map(sale => sale.buyer?.email).filter(Boolean));
+    const uniqueCustomers = uniqueEmails.size;
+    const avgTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
 
     const groups: Record<string, { 
       sales: number; 
@@ -160,7 +166,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
       }))
       .sort((a, b) => b.sales - a.sales);
 
-    return { metrics, totalSales, totalRevenue };
+    return { metrics, totalSales, totalRevenue, uniqueCustomers, avgTicket };
   }, [salesData, funnelOfferCodes]);
 
   const loadData = async () => {
@@ -269,7 +275,32 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
           <p className="text-sm text-muted-foreground">Carregando dados...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard
+              title="Produtos Vendidos"
+              value={paymentMetrics.totalSales}
+              icon={ShoppingBag}
+            />
+            <MetricCard
+              title="Clientes"
+              value={paymentMetrics.uniqueCustomers}
+              icon={Users}
+            />
+            <MetricCard
+              title="Receita"
+              value={formatCurrency(paymentMetrics.totalRevenue)}
+              icon={DollarSign}
+            />
+            <MetricCard
+              title="Ticket Médio"
+              value={formatCurrency(paymentMetrics.avgTicket)}
+              icon={TrendingUp}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Table */}
           <div>
             <Table>
@@ -383,6 +414,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
               />
             </PieChart>
           </ChartContainer>
+          </div>
         </div>
       )}
     </Card>

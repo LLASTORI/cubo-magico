@@ -100,61 +100,6 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
     );
   };
 
-  const DateRangePicker = ({ 
-    startDate, 
-    endDate, 
-    onStartChange, 
-    onEndChange, 
-    label 
-  }: { 
-    startDate: Date; 
-    endDate: Date; 
-    onStartChange: (date: Date) => void; 
-    onEndChange: (date: Date) => void;
-    label: string;
-  }) => (
-    <div className="space-y-2">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-      <div className="flex items-center gap-2">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="w-[120px] justify-start text-left font-normal">
-              <Calendar className="mr-2 h-3 w-3" />
-              {format(startDate, "dd/MM", { locale: ptBR })}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
-            <CalendarComponent
-              mode="single"
-              selected={startDate}
-              onSelect={(date) => date && onStartChange(date)}
-              initialFocus
-              className="pointer-events-auto"
-            />
-          </PopoverContent>
-        </Popover>
-        <span className="text-muted-foreground text-xs">até</span>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="w-[120px] justify-start text-left font-normal">
-              <Calendar className="mr-2 h-3 w-3" />
-              {format(endDate, "dd/MM", { locale: ptBR })}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
-            <CalendarComponent
-              mode="single"
-              selected={endDate}
-              onSelect={(date) => date && onEndChange(date)}
-              initialFocus
-              className="pointer-events-auto"
-            />
-          </PopoverContent>
-        </Popover>
-      </div>
-    </div>
-  );
-
   const MetricComparisonCard = ({ 
     label, 
     valueA, 
@@ -202,20 +147,89 @@ const PeriodComparison = ({ salesData, selectedFunnel, funnelOfferCodes }: Perio
 
       {/* Period Selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 bg-muted/20 rounded-lg">
-        <DateRangePicker
-          label="Período A (Anterior)"
-          startDate={periodAStart}
-          endDate={periodAEnd}
-          onStartChange={setPeriodAStart}
-          onEndChange={setPeriodAEnd}
-        />
-        <DateRangePicker
-          label="Período B (Recente)"
-          startDate={periodBStart}
-          endDate={periodBEnd}
-          onStartChange={setPeriodBStart}
-          onEndChange={setPeriodBEnd}
-        />
+        {/* Period A */}
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-muted-foreground">Período A (Anterior)</Label>
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-[120px] justify-start text-left font-normal">
+                  <Calendar className="mr-2 h-3 w-3" />
+                  {format(periodAStart, "dd/MM", { locale: ptBR })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={periodAStart}
+                  onSelect={(date) => date && setPeriodAStart(date)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-muted-foreground text-xs">até</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-[120px] justify-start text-left font-normal">
+                  <Calendar className="mr-2 h-3 w-3" />
+                  {format(periodAEnd, "dd/MM", { locale: ptBR })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={periodAEnd}
+                  onSelect={(date) => date && setPeriodAEnd(date)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Period B */}
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-muted-foreground">Período B (Recente)</Label>
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-[120px] justify-start text-left font-normal">
+                  <Calendar className="mr-2 h-3 w-3" />
+                  {format(periodBStart, "dd/MM", { locale: ptBR })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={periodBStart}
+                  onSelect={(date) => date && setPeriodBStart(date)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-muted-foreground text-xs">até</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="w-[120px] justify-start text-left font-normal">
+                  <Calendar className="mr-2 h-3 w-3" />
+                  {format(periodBEnd, "dd/MM", { locale: ptBR })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={periodBEnd}
+                  onSelect={(date) => date && setPeriodBEnd(date)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
       </div>
 
       {/* Metrics Comparison Grid */}

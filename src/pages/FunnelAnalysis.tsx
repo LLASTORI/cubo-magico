@@ -193,10 +193,13 @@ const FunnelAnalysis = () => {
   const summaryMetrics = useMemo(() => {
     const totalVendas = funnelMetrics.reduce((sum, m) => sum + m.total_vendas, 0);
     const totalReceita = funnelMetrics.reduce((sum, m) => sum + m.total_receita, 0);
-    const ticketMedio = totalVendas > 0 ? totalReceita / totalVendas : 0;
+    
+    // Count unique customers (buyers) from sales data
+    const uniqueCustomers = new Set(salesFromDashboard.map(sale => sale.buyer)).size;
+    const ticketMedio = uniqueCustomers > 0 ? totalReceita / uniqueCustomers : 0;
 
-    return { totalVendas, totalReceita, ticketMedio };
-  }, [funnelMetrics]);
+    return { totalVendas, totalReceita, ticketMedio, uniqueCustomers };
+  }, [funnelMetrics, salesFromDashboard]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

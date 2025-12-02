@@ -61,6 +61,7 @@ interface CohortMetrics {
   avgPurchasesPerCustomer: number;
   avgSpentPerCustomer: number;
   topCustomers: CustomerData[];
+  allCustomers: CustomerData[]; // Full list for filtering
   purchaseDistribution: { purchases: string; count: number; percentage: number }[];
 }
 
@@ -286,6 +287,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
       avgPurchasesPerCustomer: uniqueCustomers > 0 ? totalProducts / uniqueCustomers : 0,
       avgSpentPerCustomer: uniqueCustomers > 0 ? totalSpent / uniqueCustomers : 0,
       topCustomers,
+      allCustomers: customers.sort((a, b) => b.totalSpent - a.totalSpent), // Full sorted list
       purchaseDistribution,
     };
   }, [salesData, funnelOfferCodes, offerToFunnelId, selectedFunnel]);
@@ -320,14 +322,15 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
 
   // Filter customers based on selected filter
   const filteredCustomers = useMemo(() => {
-    let customers = cohortMetrics.topCustomers;
+    let customers = cohortMetrics.allCustomers;
     if (customerFilter === 'new') {
-      customers = cohortMetrics.topCustomers.filter(c => !c.isRecurrent);
+      customers = cohortMetrics.allCustomers.filter(c => !c.isRecurrent);
     } else if (customerFilter === 'recurrent') {
-      customers = cohortMetrics.topCustomers.filter(c => c.isRecurrent);
+      customers = cohortMetrics.allCustomers.filter(c => c.isRecurrent);
     }
-    return customers;
-  }, [cohortMetrics.topCustomers, customerFilter]);
+    // Limit to top 50 for performance
+    return customers.slice(0, 50);
+  }, [cohortMetrics.allCustomers, customerFilter]);
 
   if (!selectedFunnel) return null;
 
@@ -454,9 +457,9 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                     </Badge>
                   </div>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {cohortMetrics.topCustomers
+                    {cohortMetrics.allCustomers
                       .filter(c => c.isRecurrent)
-                      .slice(0, 10)
+                      .slice(0, 15)
                       .map((customer, idx) => (
                         <div key={idx} className="p-2 rounded-md bg-muted/50 space-y-2">
                           <div className="flex items-center justify-between">
@@ -479,9 +482,9 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                         </div>
                       ))}
                   </div>
-                  {cohortMetrics.recurrentCustomers > 10 && (
+                  {cohortMetrics.recurrentCustomers > 15 && (
                     <p className="text-xs text-muted-foreground text-center pt-2 border-t">
-                      Mostrando 10 de {cohortMetrics.recurrentCustomers} clientes recorrentes
+                      Mostrando 15 de {cohortMetrics.recurrentCustomers} clientes recorrentes
                     </p>
                   )}
                 </div>

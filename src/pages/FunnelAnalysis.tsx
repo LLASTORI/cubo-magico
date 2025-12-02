@@ -389,21 +389,97 @@ const FunnelAnalysis = () => {
                 </div>
 
                 {/* Funnel Flow Visualization */}
-                <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">Fluxo do Funil</h3>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {funnelMetrics.map((metric, index) => (
-                      <div key={metric.codigo_oferta} className="flex items-center gap-2">
-                        <div className={`px-4 py-3 rounded-lg border ${POSITION_COLORS[metric.tipo_posicao] || 'bg-muted'}`}>
-                          <div className="text-xs font-medium opacity-70">{metric.tipo_posicao}{metric.ordem_posicao || ''}</div>
-                          <div className="text-lg font-bold">{metric.total_vendas}</div>
-                          <div className="text-xs opacity-70">{formatPercent(metric.taxa_conversao)}</div>
-                        </div>
-                        {index < funnelMetrics.length - 1 && (
-                          <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    ))}
+                <Card className="p-6 overflow-hidden">
+                  <h3 className="text-lg font-semibold mb-6">Fluxo do Funil</h3>
+                  <div className="relative">
+                    {/* Background gradient line */}
+                    <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-20 rounded-full -translate-y-1/2 hidden md:block" />
+                    
+                    <div className="flex flex-wrap md:flex-nowrap items-stretch gap-3 md:gap-0">
+                      {funnelMetrics.map((metric, index) => {
+                        const maxSales = Math.max(...funnelMetrics.map(m => m.total_vendas));
+                        const heightPercent = maxSales > 0 ? (metric.total_vendas / maxSales) * 100 : 0;
+                        const gradients: Record<string, string> = {
+                          'FRONT': 'from-blue-500 to-cyan-400',
+                          'FE': 'from-blue-500 to-cyan-400',
+                          'OB': 'from-emerald-500 to-green-400',
+                          'US': 'from-purple-500 to-violet-400',
+                          'DS': 'from-orange-500 to-amber-400',
+                        };
+                        const gradient = gradients[metric.tipo_posicao] || 'from-gray-500 to-gray-400';
+                        
+                        return (
+                          <div key={metric.codigo_oferta} className="flex items-center flex-1 min-w-[120px]">
+                            {/* Funnel Step */}
+                            <div className="relative group flex-1">
+                              <div 
+                                className={`relative overflow-hidden rounded-xl p-4 bg-gradient-to-br ${gradient} shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl cursor-default`}
+                                style={{ 
+                                  minHeight: '120px',
+                                  opacity: 0.9 + (heightPercent / 1000)
+                                }}
+                              >
+                                {/* Glow effect */}
+                                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-30 blur-xl transition-opacity duration-300`} />
+                                
+                                {/* Content */}
+                                <div className="relative z-10 flex flex-col items-center justify-center h-full text-white">
+                                  <span className="text-xs font-bold uppercase tracking-wider opacity-80 mb-1">
+                                    {metric.tipo_posicao}{metric.ordem_posicao || ''}
+                                  </span>
+                                  <span className="text-3xl font-black mb-1">
+                                    {metric.total_vendas}
+                                  </span>
+                                  <div className="flex items-center gap-1 text-xs font-medium opacity-90">
+                                    <Percent className="w-3 h-3" />
+                                    {formatPercent(metric.taxa_conversao)}
+                                  </div>
+                                  
+                                  {/* Revenue bar */}
+                                  <div className="w-full mt-3 bg-white/20 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                      className="h-full bg-white/60 rounded-full transition-all duration-500"
+                                      style={{ width: `${metric.percentual_receita}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] mt-1 opacity-70">
+                                    {formatCurrency(metric.total_receita)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Connector Arrow */}
+                            {index < funnelMetrics.length - 1 && (
+                              <div className="hidden md:flex items-center justify-center w-8 relative z-10">
+                                <div className="w-full h-0.5 bg-gradient-to-r from-current to-current opacity-30" />
+                                <ArrowRight className="absolute w-5 h-5 text-muted-foreground/50" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Legend */}
+                  <div className="flex flex-wrap justify-center gap-4 mt-6 pt-4 border-t border-border/50">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="w-3 h-3 rounded bg-gradient-to-r from-blue-500 to-cyan-400" />
+                      <span>Frontend</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="w-3 h-3 rounded bg-gradient-to-r from-emerald-500 to-green-400" />
+                      <span>Order Bump</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-violet-400" />
+                      <span>Upsell</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-amber-400" />
+                      <span>Downsell</span>
+                    </div>
                   </div>
                 </Card>
 

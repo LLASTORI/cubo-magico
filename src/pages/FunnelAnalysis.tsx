@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, TrendingUp, Percent, DollarSign, BarChart3, Target, ArrowRight } from "lucide-react";
+import { ArrowLeft, TrendingUp, Percent, DollarSign, BarChart3, Target, ArrowRight, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface OfferMapping {
   id: string;
@@ -25,9 +30,14 @@ interface OfferMapping {
 
 interface SaleData {
   offer_code: string;
+  total_price: number;
+  sale_date: string | null;
+}
+
+interface AggregatedSaleData {
+  offer_code: string;
   total_sales: number;
   total_value: number;
-  status: string;
 }
 
 interface PositionMetrics {
@@ -66,16 +76,58 @@ const POSITION_COLORS: Record<string, string> = {
 const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const [mappings, setMappings] = useState<OfferMapping[]>([]);
-  const [salesData, setSalesData] = useState<SaleData[]>([]);
+  const [rawSalesData, setRawSalesData] = useState<SaleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string>("");
   const [investimento, setInvestimento] = useState<string>("");
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   // Get unique funnels
   const funnels = useMemo(() => {
     const uniqueFunnels = [...new Set(mappings.map(m => m.id_funil))];
     return uniqueFunnels.sort();
   }, [mappings]);
+
+  // Filter and aggregate sales by date range
+  const salesData = useMemo((): AggregatedSaleData[] => {
+    let filteredSales = rawSalesData;
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      filteredSales = filteredSales.filter(sale => {
+        if (!sale.sale_date) return false;
+        return new Date(sale.sale_date) >= start;
+      });
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filteredSales = filteredSales.filter(sale => {
+        if (!sale.sale_date) return false;
+        return new Date(sale.sale_date) <= end;
+      });
+    }
+
+    // Aggregate by offer_code
+    const aggregated: Record<string, AggregatedSaleData> = {};
+    filteredSales.forEach(sale => {
+      const code = sale.offer_code || 'unknown';
+      if (!aggregated[code]) {
+        aggregated[code] = {
+          offer_code: code,
+          total_sales: 0,
+          total_value: 0,
+        };
+      }
+      aggregated[code].total_sales += 1;
+      aggregated[code].total_value += sale.total_price || 0;
+    });
+
+    return Object.values(aggregated);
+  }, [rawSalesData, startDate, endDate]);
 
   // Fetch data
   useEffect(() => {
@@ -92,29 +144,18 @@ const FunnelAnalysis = () => {
         setMappings(mappingsData);
       }
 
-      // Fetch sales aggregated by offer code
-      const { data: salesAgg } = await supabase
+      // Fetch all completed sales with dates
+      const { data: salesRaw } = await supabase
         .from('hotmart_sales')
-        .select('offer_code, status, total_price')
+        .select('offer_code, total_price, sale_date')
         .eq('status', 'COMPLETE');
 
-      if (salesAgg) {
-        // Aggregate sales by offer code
-        const aggregated: Record<string, SaleData> = {};
-        salesAgg.forEach((sale: any) => {
-          const code = sale.offer_code || 'unknown';
-          if (!aggregated[code]) {
-            aggregated[code] = {
-              offer_code: code,
-              total_sales: 0,
-              total_value: 0,
-              status: sale.status,
-            };
-          }
-          aggregated[code].total_sales += 1;
-          aggregated[code].total_value += sale.total_price || 0;
-        });
-        setSalesData(Object.values(aggregated));
+      if (salesRaw) {
+        setRawSalesData(salesRaw.map(sale => ({
+          offer_code: sale.offer_code || 'unknown',
+          total_price: sale.total_price || 0,
+          sale_date: sale.sale_date,
+        })));
       }
 
       setLoading(false);
@@ -240,7 +281,7 @@ const FunnelAnalysis = () => {
           <div className="space-y-6">
             {/* Filters */}
             <Card className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Funil</Label>
                   <Select value={selectedFunnel} onValueChange={setSelectedFunnel}>
@@ -257,6 +298,58 @@ const FunnelAnalysis = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Data Início</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={setStartDate}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>Data Fim</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={setEndDate}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
                   <Label>Investimento (R$)</Label>
                   <Input
                     type="number"
@@ -266,6 +359,21 @@ const FunnelAnalysis = () => {
                   />
                 </div>
               </div>
+              {(startDate || endDate) && (
+                <div className="mt-4 flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    Período: {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Início"} até {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Fim"}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setStartDate(undefined); setEndDate(undefined); }}
+                    className="h-6 px-2 text-xs"
+                  >
+                    Limpar período
+                  </Button>
+                </div>
+              )}
             </Card>
 
             {selectedFunnel ? (

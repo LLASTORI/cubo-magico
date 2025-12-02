@@ -65,12 +65,17 @@ interface HotmartProduct {
 }
 
 interface HotmartOffer {
-  key: string;
+  code: string;
   name: string;
-  status: string;
-  price: number;
-  currency: string;
-  payment_mode?: string;
+  description: string;
+  is_main_offer: boolean;
+  price: {
+    value: number;
+    currency_code: string;
+  };
+  payment_mode: string;
+  is_smart_recovery_enabled: boolean;
+  is_currency_conversion_enabled: boolean;
 }
 
 interface ProductWithOffers extends HotmartProduct {
@@ -286,15 +291,15 @@ export default function OfferMappingsAuto() {
     });
   };
 
-  const toggleOfferSelection = (productUcode: string, offerKey: string) => {
+  const toggleOfferSelection = (productUcode: string, offerCode: string) => {
     setSelectedOffers(prev => {
       const next = new Map(prev);
       const productOffers = next.get(productUcode) || new Set();
       
-      if (productOffers.has(offerKey)) {
-        productOffers.delete(offerKey);
+      if (productOffers.has(offerCode)) {
+        productOffers.delete(offerCode);
       } else {
-        productOffers.add(offerKey);
+        productOffers.add(offerCode);
       }
       
       next.set(productUcode, productOffers);
@@ -320,21 +325,21 @@ export default function OfferMappingsAuto() {
       const offersToImport: OfferToImport[] = [];
       
       hotmartProducts.forEach(product => {
-        const productOfferKeys = selectedOffers.get(product.ucode);
+        const productOfferCodes = selectedOffers.get(product.ucode);
         
-        if (productOfferKeys && productOfferKeys.size > 0) {
+        if (productOfferCodes && productOfferCodes.size > 0) {
           product.offers.forEach(offer => {
-            if (productOfferKeys.has(offer.key)) {
+            if (productOfferCodes.has(offer.code)) {
               // Check if this offer already exists
-              const exists = mappings.some(m => m.codigo_oferta === offer.key);
+              const exists = mappings.some(m => m.codigo_oferta === offer.code);
               if (!exists) {
                 offersToImport.push({
-                  id_produto: `ID ${product.id}`,
+                  id_produto: product.ucode,
                   nome_produto: product.name,
-                  nome_oferta: offer.name,
-                  codigo_oferta: offer.key,
-                  valor: offer.price,
-                  status: offer.status === 'ACTIVE' ? 'Ativo' : 'Inativo',
+                  nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
+                  codigo_oferta: offer.code,
+                  valor: offer.price.value,
+                  status: 'Ativo',
                   id_funil: 'A Definir', // User will need to set this
                   data_ativacao: new Date().toISOString().split('T')[0],
                 });
@@ -795,12 +800,13 @@ export default function OfferMappingsAuto() {
                                 <div className="space-y-2">
                                   <p className="text-sm font-medium mb-2">Selecione as ofertas para importar:</p>
                                   {product.offers.map((offer) => {
-                                    const alreadyImported = existingOfferCodes.includes(offer.key);
-                                    const isOfferSelected = productOffers.has(offer.key);
+                                    const alreadyImported = existingOfferCodes.includes(offer.code);
+                                    const isOfferSelected = productOffers.has(offer.code);
+                                    const offerDisplayName = offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome');
                                     
                                     return (
                                       <div 
-                                        key={offer.key}
+                                        key={offer.code}
                                         className={`flex items-center justify-between p-2 rounded ${
                                           alreadyImported ? 'bg-muted opacity-60' : 'hover:bg-muted/50'
                                         }`}
@@ -811,14 +817,19 @@ export default function OfferMappingsAuto() {
                                             disabled={alreadyImported}
                                             onCheckedChange={() => {
                                               if (!alreadyImported) {
-                                                toggleOfferSelection(product.ucode, offer.key);
+                                                toggleOfferSelection(product.ucode, offer.code);
                                               }
                                             }}
                                           />
                                           <div>
-                                            <p className="text-sm font-medium">{offer.name}</p>
+                                            <p className="text-sm font-medium">
+                                              {offerDisplayName}
+                                              {offer.is_main_offer && (
+                                                <Badge variant="outline" className="ml-2 text-xs">Principal</Badge>
+                                              )}
+                                            </p>
                                             <p className="text-xs text-muted-foreground">
-                                              Código: {offer.key}
+                                              Código: {offer.code} | {offer.payment_mode}
                                             </p>
                                           </div>
                                         </div>
@@ -826,12 +837,9 @@ export default function OfferMappingsAuto() {
                                           <span className="font-medium">
                                             {new Intl.NumberFormat('pt-BR', {
                                               style: 'currency',
-                                              currency: offer.currency || 'BRL',
-                                            }).format(offer.price)}
+                                              currency: offer.price.currency_code || 'BRL',
+                                            }).format(offer.price.value)}
                                           </span>
-                                          <Badge variant={offer.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                                            {offer.status}
-                                          </Badge>
                                           {alreadyImported && (
                                             <Badge variant="outline" className="text-green-600">
                                               Já importada

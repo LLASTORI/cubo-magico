@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw, CheckSquare, XSquare, RotateCw } from 'lucide-react';
+import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RotateCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -35,7 +35,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { OfferMappingDialog } from '@/components/OfferMappingDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 
 interface OfferMapping {
   id: string;
@@ -80,11 +79,6 @@ interface HotmartOffer {
   is_currency_conversion_enabled: boolean;
 }
 
-interface ProductWithOffers extends HotmartProduct {
-  offers: HotmartOffer[];
-  loadingOffers: boolean;
-}
-
 const POSITION_COLORS: Record<string, string> = {
   FRONT: 'bg-blue-500 text-white',
   OB: 'bg-amber-500 text-white',
@@ -98,7 +92,6 @@ const getPositionBadgeClass = (tipo: string | null) => {
 };
 
 export default function OfferMappingsAuto() {
-  // Existing mappings state
   const [mappings, setMappings] = useState<OfferMapping[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -108,20 +101,14 @@ export default function OfferMappingsAuto() {
   const [selectedFunnel, setSelectedFunnel] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   
-  // Hotmart import state
-  const [hotmartProducts, setHotmartProducts] = useState<ProductWithOffers[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
-  const [selectedOffers, setSelectedOffers] = useState<Map<string, Set<string>>>(new Map());
   const [importingOffers, setImportingOffers] = useState(false);
-  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [importProgress, setImportProgress] = useState<string>('');
   const [syncingOffers, setSyncingOffers] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
   const { currentProject } = useProject();
 
-  // Redirect if no project selected
   useEffect(() => {
     if (!currentProject) {
       toast({
@@ -133,7 +120,6 @@ export default function OfferMappingsAuto() {
     }
   }, [currentProject, navigate, toast]);
 
-  // Get unique funnels and their counts
   const funnelData = useMemo(() => {
     const funnelMap = new Map<string, number>();
     mappings.forEach(mapping => {
@@ -145,7 +131,6 @@ export default function OfferMappingsAuto() {
       .sort((a, b) => a.id.localeCompare(b.id));
   }, [mappings]);
 
-  // Filter mappings
   const filteredMappings = useMemo(() => {
     let filtered = selectedFunnel === 'all' ? mappings : mappings.filter(m => m.id_funil === selectedFunnel);
     
@@ -172,17 +157,6 @@ export default function OfferMappingsAuto() {
     });
   }, [mappings, selectedFunnel, searchTerm]);
 
-  // Filter products by search
-  const filteredProducts = useMemo(() => {
-    if (!productSearchTerm.trim()) return hotmartProducts;
-    const search = productSearchTerm.toLowerCase();
-    return hotmartProducts.filter(p => 
-      p.name.toLowerCase().includes(search) ||
-      p.id.toString().includes(search) ||
-      p.ucode.toLowerCase().includes(search)
-    );
-  }, [hotmartProducts, productSearchTerm]);
-
   const fetchMappings = async () => {
     if (!currentProject) return;
     
@@ -208,14 +182,14 @@ export default function OfferMappingsAuto() {
     }
   };
 
-  const fetchHotmartProducts = async () => {
+  const importAllFromHotmart = async () => {
     if (!currentProject) return;
     
     try {
-      setLoadingProducts(true);
-      console.log('Fetching Hotmart products...');
+      setImportingOffers(true);
+      setImportProgress('Buscando produtos da Hotmart...');
       
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: '/products',
           apiType: 'products',
@@ -223,164 +197,20 @@ export default function OfferMappingsAuto() {
         }
       });
 
-      if (error) throw error;
+      if (productsError) throw productsError;
       
-      console.log('Products response:', data);
+      const products: HotmartProduct[] = productsData.items || productsData || [];
+      console.log(`Found ${products.length} products`);
       
-      const products: HotmartProduct[] = data.items || data || [];
-      const productsWithOffers: ProductWithOffers[] = products.map(p => ({
-        ...p,
-        offers: [],
-        loadingOffers: false
-      }));
-      
-      setHotmartProducts(productsWithOffers);
-      
-      toast({
-        title: 'Produtos carregados!',
-        description: `${productsWithOffers.length} produtos encontrados na Hotmart`,
-      });
-    } catch (error: any) {
-      console.error('Error fetching Hotmart products:', error);
-      toast({
-        title: 'Erro ao buscar produtos',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoadingProducts(false);
-    }
-  };
-
-  const fetchProductOffers = async (product: ProductWithOffers) => {
-    try {
-      // Update loading state for this product
-      setHotmartProducts(prev => 
-        prev.map(p => p.ucode === product.ucode ? { ...p, loadingOffers: true } : p)
-      );
-      
-      console.log('Fetching offers for product:', product.ucode);
-      
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: `/products/${product.ucode}/offers`,
-          apiType: 'products',
-          projectId: currentProject?.id
-        }
-      });
-
-      if (error) throw error;
-      
-      console.log('Offers response:', data);
-      
-      const offers: HotmartOffer[] = data.items || data || [];
-      
-      setHotmartProducts(prev => 
-        prev.map(p => p.ucode === product.ucode ? { ...p, offers, loadingOffers: false } : p)
-      );
-      
-      toast({
-        title: 'Ofertas carregadas!',
-        description: `${offers.length} ofertas encontradas para ${product.name}`,
-      });
-    } catch (error: any) {
-      console.error('Error fetching offers:', error);
-      setHotmartProducts(prev => 
-        prev.map(p => p.ucode === product.ucode ? { ...p, loadingOffers: false } : p)
-      );
-      toast({
-        title: 'Erro ao buscar ofertas',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const toggleProductSelection = (productUcode: string) => {
-    setSelectedProducts(prev => {
-      const next = new Set(prev);
-      if (next.has(productUcode)) {
-        next.delete(productUcode);
-        // Also remove offer selections for this product
-        setSelectedOffers(prevOffers => {
-          const nextOffers = new Map(prevOffers);
-          nextOffers.delete(productUcode);
-          return nextOffers;
+      if (products.length === 0) {
+        toast({
+          title: 'Nenhum produto encontrado',
+          description: 'Não foram encontrados produtos na sua conta Hotmart',
         });
-      } else {
-        next.add(productUcode);
+        return;
       }
-      return next;
-    });
-  };
 
-  const toggleOfferSelection = (productUcode: string, offerCode: string) => {
-    setSelectedOffers(prev => {
-      const next = new Map(prev);
-      const productOffers = next.get(productUcode) || new Set();
-      
-      if (productOffers.has(offerCode)) {
-        productOffers.delete(offerCode);
-      } else {
-        productOffers.add(offerCode);
-      }
-      
-      next.set(productUcode, productOffers);
-      return next;
-    });
-  };
-
-  const selectAllProductsAndOffers = async () => {
-    // First, load offers for all products that don't have offers loaded
-    const productsWithoutOffers = hotmartProducts.filter(p => p.offers.length === 0 && !p.loadingOffers);
-    
-    if (productsWithoutOffers.length > 0) {
-      toast({
-        title: 'Carregando ofertas...',
-        description: `Buscando ofertas de ${productsWithoutOffers.length} produtos`,
-      });
-      
-      // Load offers for all products
-      await Promise.all(productsWithoutOffers.map(p => fetchProductOffers(p)));
-    }
-    
-    // Wait a bit for state to update
-    setTimeout(() => {
-      // Select all products
-      const allProductUcodes = new Set(hotmartProducts.map(p => p.ucode));
-      setSelectedProducts(allProductUcodes);
-      
-      // Select all offers from all products
-      const allOffers = new Map<string, Set<string>>();
-      hotmartProducts.forEach(product => {
-        if (product.offers.length > 0) {
-          const offerCodes = new Set(product.offers.map(o => o.code));
-          allOffers.set(product.ucode, offerCodes);
-        }
-      });
-      setSelectedOffers(allOffers);
-      
-      toast({
-        title: 'Tudo selecionado!',
-        description: 'Todos os produtos e ofertas foram selecionados',
-      });
-    }, productsWithoutOffers.length > 0 ? 2000 : 0);
-  };
-
-  const deselectAll = () => {
-    setSelectedProducts(new Set());
-    setSelectedOffers(new Map());
-    toast({
-      title: 'Seleção limpa',
-      description: 'Todas as seleções foram removidas',
-    });
-  };
-
-  const importSelectedOffers = async () => {
-    if (!currentProject) return;
-    
-    try {
-      setImportingOffers(true);
+      const existingOfferCodes = new Set(mappings.map(m => m.codigo_oferta));
       
       interface OfferToImport {
         id_produto: string;
@@ -397,58 +227,69 @@ export default function OfferMappingsAuto() {
       
       const offersToImport: OfferToImport[] = [];
       
-      hotmartProducts.forEach(product => {
-        const productOfferCodes = selectedOffers.get(product.ucode);
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 30)}...`);
         
-        if (productOfferCodes && productOfferCodes.size > 0) {
-          product.offers.forEach(offer => {
-            if (productOfferCodes.has(offer.code)) {
-              // Check if this offer already exists
-              const exists = mappings.some(m => m.codigo_oferta === offer.code);
-              if (!exists) {
-                offersToImport.push({
-                  id_produto: product.ucode,
-                  id_produto_visual: `ID ${product.id}`,
-                  nome_produto: product.name,
-                  nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
-                  codigo_oferta: offer.code,
-                  valor: offer.price.value,
-                  status: 'Ativo',
-                  id_funil: 'A Definir',
-                  data_ativacao: new Date().toISOString().split('T')[0],
-                  project_id: currentProject.id,
-                });
-              }
+        try {
+          const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
+            body: {
+              endpoint: `/products/${product.ucode}/offers`,
+              apiType: 'products',
+              projectId: currentProject.id
             }
           });
+
+          if (offersError) {
+            console.error(`Error fetching offers for product ${product.ucode}:`, offersError);
+            continue;
+          }
+          
+          const offers: HotmartOffer[] = offersData.items || offersData || [];
+          
+          offers.forEach(offer => {
+            if (!existingOfferCodes.has(offer.code)) {
+              offersToImport.push({
+                id_produto: product.ucode,
+                id_produto_visual: `ID ${product.id}`,
+                nome_produto: product.name,
+                nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
+                codigo_oferta: offer.code,
+                valor: offer.price.value,
+                status: 'Ativo',
+                id_funil: 'A Definir',
+                data_ativacao: new Date().toISOString().split('T')[0],
+                project_id: currentProject.id,
+              });
+              existingOfferCodes.add(offer.code);
+            }
+          });
+        } catch (error) {
+          console.error(`Error processing product ${product.ucode}:`, error);
         }
-      });
+      }
       
       if (offersToImport.length === 0) {
         toast({
-          title: 'Nenhuma oferta para importar',
-          description: 'Selecione ofertas que ainda não foram importadas',
-          variant: 'destructive',
+          title: 'Importação concluída',
+          description: 'Todas as ofertas já estão importadas. Nenhuma nova oferta encontrada.',
         });
         return;
       }
       
-      console.log('Importing offers:', offersToImport);
+      setImportProgress(`Importando ${offersToImport.length} ofertas...`);
       
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('offer_mappings')
         .insert(offersToImport);
       
-      if (error) throw error;
+      if (insertError) throw insertError;
       
       toast({
         title: 'Importação concluída!',
         description: `${offersToImport.length} ofertas importadas com sucesso`,
       });
       
-      // Clear selections and refresh
-      setSelectedProducts(new Set());
-      setSelectedOffers(new Map());
       fetchMappings();
       
     } catch (error: any) {
@@ -460,16 +301,14 @@ export default function OfferMappingsAuto() {
       });
     } finally {
       setImportingOffers(false);
+      setImportProgress('');
     }
   };
 
-  // Sync existing offers with Hotmart data
   const syncOffersWithHotmart = async () => {
     try {
       setSyncingOffers(true);
       
-      // Get unique product IDs from existing mappings (clean "ID " prefix if present)
-      // Get unique product IDs - only valid UUIDs (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const productIds = [...new Set(mappings
         .filter(m => m.id_produto && uuidRegex.test(m.id_produto))
@@ -479,7 +318,7 @@ export default function OfferMappingsAuto() {
       if (productIds.length === 0) {
         toast({
           title: 'Nada para sincronizar',
-          description: 'Não há ofertas com IDs válidos. Clique em "Corrigir IDs" primeiro.',
+          description: 'Não há ofertas com IDs válidos para sincronizar.',
           variant: 'destructive',
         });
         return;
@@ -493,82 +332,72 @@ export default function OfferMappingsAuto() {
       let updatedCount = 0;
       const changes: string[] = [];
       
-      // For each product, fetch offers and compare
       for (const productId of productIds) {
         try {
           const { data, error } = await supabase.functions.invoke('hotmart-api', {
             body: {
-              endpoint: `products/${productId}/offers`,
-              params: {},
+              endpoint: `/products/${productId}/offers`,
               apiType: 'products',
               projectId: currentProject?.id
             }
           });
           
-          // Handle both error object and error in data
-          if (error || data?.error) {
-            console.error(`Error fetching offers for product ${productId}:`, error || data?.error);
-            continue;
-          }
+          if (error) continue;
           
-          const hotmartOffers: HotmartOffer[] = data?.items || (Array.isArray(data) ? data : []);
+          const offers: HotmartOffer[] = data.items || data || [];
           
-          // Compare with local mappings
-          for (const hotmartOffer of hotmartOffers) {
-            const localMapping = mappings.find(m => m.codigo_oferta === hotmartOffer.code);
+          for (const offer of offers) {
+            const existingMapping = mappings.find(m => m.codigo_oferta === offer.code);
             
-            if (localMapping) {
-              const changesForOffer: string[] = [];
-              const now = new Date().toLocaleDateString('pt-BR');
+            if (existingMapping) {
+              const updates: Record<string, any> = {};
+              const changeNotes: string[] = [];
               
-              // Check for price change
-              if (hotmartOffer.price?.value && localMapping.valor !== hotmartOffer.price.value) {
-                changesForOffer.push(`Valor: R$ ${localMapping.valor?.toFixed(2) || '0'} → R$ ${hotmartOffer.price.value.toFixed(2)}`);
+              const offerName = offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome');
+              if (existingMapping.nome_oferta !== offerName) {
+                updates.nome_oferta = offerName;
+                changeNotes.push(`Nome: ${existingMapping.nome_oferta} → ${offerName}`);
               }
               
-              // Check for name change
-              const hotmartOfferName = hotmartOffer.name || (hotmartOffer.is_main_offer ? 'Oferta Principal' : 'Sem Nome');
-              if (hotmartOfferName !== localMapping.nome_oferta) {
-                changesForOffer.push(`Nome: "${localMapping.nome_oferta}" → "${hotmartOfferName}"`);
+              if (existingMapping.valor !== offer.price.value) {
+                updates.valor = offer.price.value;
+                changeNotes.push(`Valor: ${existingMapping.valor} → ${offer.price.value}`);
               }
               
-              if (changesForOffer.length > 0) {
-                // Update the mapping with new data and add annotation
-                const existingNotes = localMapping.anotacoes || '';
-                const newNote = `[${now}] Alterações sincronizadas da Hotmart:\n${changesForOffer.join('\n')}`;
-                const updatedNotes = existingNotes ? `${newNote}\n\n${existingNotes}` : newNote;
+              if (Object.keys(updates).length > 0) {
+                const timestamp = new Date().toLocaleDateString('pt-BR');
+                const annotation = `[${timestamp}] Sincronizado com Hotmart:\n${changeNotes.join('\n')}`;
+                updates.anotacoes = existingMapping.anotacoes 
+                  ? `${existingMapping.anotacoes}\n\n${annotation}`
+                  : annotation;
                 
                 const { error: updateError } = await supabase
                   .from('offer_mappings')
-                  .update({
-                    valor: hotmartOffer.price?.value || localMapping.valor,
-                    nome_oferta: hotmartOfferName,
-                    anotacoes: updatedNotes,
-                  })
-                  .eq('id', localMapping.id);
+                  .update(updates)
+                  .eq('id', existingMapping.id);
                 
                 if (!updateError) {
                   updatedCount++;
-                  changes.push(`${localMapping.nome_produto} - ${hotmartOfferName}`);
+                  changes.push(`${existingMapping.nome_produto}: ${changeNotes.join(', ')}`);
                 }
               }
             }
           }
-        } catch (e) {
-          console.error(`Error processing product ${productId}:`, e);
+        } catch (error) {
+          console.error(`Error syncing product ${productId}:`, error);
         }
       }
       
       if (updatedCount > 0) {
         toast({
           title: 'Sincronização concluída!',
-          description: `${updatedCount} oferta(s) atualizada(s). Alterações anotadas automaticamente.`,
+          description: `${updatedCount} ofertas atualizadas`,
         });
         fetchMappings();
       } else {
         toast({
-          title: 'Tudo sincronizado!',
-          description: 'Nenhuma alteração detectada nas ofertas',
+          title: 'Sincronização concluída',
+          description: 'Todas as ofertas já estão atualizadas',
         });
       }
       
@@ -636,19 +465,6 @@ export default function OfferMappingsAuto() {
     }).format(value);
   };
 
-  const formatDate = (date: string | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('pt-BR');
-  };
-
-  const getSelectedOffersCount = () => {
-    let count = 0;
-    selectedOffers.forEach(offers => {
-      count += offers.size;
-    });
-    return count;
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -663,7 +479,7 @@ export default function OfferMappingsAuto() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">
-                Mapeamento de Ofertas (V2)
+                Mapeamento de Ofertas
               </h1>
               <p className="text-muted-foreground">
                 Importação via API e gerenciamento de ofertas
@@ -678,7 +494,6 @@ export default function OfferMappingsAuto() {
             <TabsTrigger value="import">Importar da Hotmart</TabsTrigger>
           </TabsList>
 
-          {/* Tab: Existing Mappings */}
           <TabsContent value="existing" className="space-y-4">
             <Card className="p-4">
               <div className="flex flex-col gap-4">
@@ -761,8 +576,9 @@ export default function OfferMappingsAuto() {
 
             <Card className="p-6">
               {loading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Carregando mapeamentos...
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                  <p className="text-muted-foreground">Carregando mapeamentos...</p>
                 </div>
               ) : filteredMappings.length === 0 ? (
                 <div className="text-center py-8">
@@ -855,231 +671,44 @@ export default function OfferMappingsAuto() {
             </Card>
           </TabsContent>
 
-          {/* Tab: Import from Hotmart */}
           <TabsContent value="import" className="space-y-4">
-            <Card className="p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold">Importar Produtos e Ofertas da Hotmart</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Busque produtos da sua conta Hotmart e importe as ofertas para o sistema
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {hotmartProducts.length > 0 && (
-                    <>
-                      <Button 
-                        onClick={selectAllProductsAndOffers}
-                        variant="outline"
-                        className="gap-2"
-                      >
-                        <CheckSquare className="h-4 w-4" />
-                        Selecionar Tudo
-                      </Button>
-                      {getSelectedOffersCount() > 0 && (
-                        <Button 
-                          onClick={deselectAll}
-                          variant="ghost"
-                          className="gap-2"
-                        >
-                          <XSquare className="h-4 w-4" />
-                          Limpar
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {getSelectedOffersCount() > 0 && (
-                    <Button 
-                      onClick={importSelectedOffers}
-                      disabled={importingOffers}
-                      className="gap-2"
-                    >
-                      {importingOffers ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4" />
-                      )}
-                      Importar {getSelectedOffersCount()} oferta(s)
-                    </Button>
-                  )}
-                  <Button 
-                    onClick={fetchHotmartProducts}
-                    disabled={loadingProducts}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    {loadingProducts ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4" />
-                    )}
-                    Buscar Produtos
-                  </Button>
-                </div>
-              </div>
-            </Card>
-
-            {hotmartProducts.length > 0 && (
-              <Card className="p-4">
-                <div className="relative max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar produtos..."
-                    value={productSearchTerm}
-                    onChange={(e) => setProductSearchTerm(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </Card>
-            )}
-
             <Card className="p-6">
-              {loadingProducts ? (
-                <div className="text-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-                  <p className="text-muted-foreground">Buscando produtos da Hotmart...</p>
-                </div>
-              ) : hotmartProducts.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">
-                    Clique em "Buscar Produtos" para carregar os produtos da sua conta Hotmart
+              <div className="text-center space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Importar Ofertas da Hotmart</h3>
+                  <p className="text-muted-foreground max-w-lg mx-auto">
+                    Clique no botão abaixo para buscar e importar automaticamente todos os produtos 
+                    e ofertas da sua conta Hotmart. Ofertas já importadas serão ignoradas.
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    {filteredProducts.length} produtos encontrados. Clique em um produto para carregar suas ofertas.
-                  </p>
-                  
-                  <div className="space-y-2">
-                    {filteredProducts.map((product) => {
-                      const isSelected = selectedProducts.has(product.ucode);
-                      const productOffers = selectedOffers.get(product.ucode) || new Set();
-                      const existingOfferCodes = mappings.map(m => m.codigo_oferta);
-                      
-                      return (
-                        <div key={product.ucode} className="border rounded-lg">
-                          <div 
-                            className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/50"
-                            onClick={() => {
-                              toggleProductSelection(product.ucode);
-                              if (!isSelected && product.offers.length === 0) {
-                                fetchProductOffers(product);
-                              }
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Checkbox 
-                                checked={isSelected}
-                                onCheckedChange={() => {}}
-                              />
-                              <div>
-                                <p className="font-medium">{product.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  ID: {product.id} | ucode: {product.ucode}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={product.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                                {product.status}
-                              </Badge>
-                              <Badge variant="outline">{product.format}</Badge>
-                              {product.offers.length > 0 && (
-                                <Badge variant="secondary">
-                                  {product.offers.length} ofertas
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Offers section */}
-                          {isSelected && (
-                            <div className="border-t bg-muted/30 p-4">
-                              {product.loadingOffers ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Carregando ofertas...
-                                </div>
-                              ) : product.offers.length === 0 ? (
-                                <div className="flex items-center justify-between">
-                                  <p className="text-sm text-muted-foreground">
-                                    Nenhuma oferta encontrada para este produto
-                                  </p>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      fetchProductOffers(product);
-                                    }}
-                                  >
-                                    Buscar Ofertas
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  <p className="text-sm font-medium mb-2">Selecione as ofertas para importar:</p>
-                                  {product.offers.map((offer) => {
-                                    const alreadyImported = existingOfferCodes.includes(offer.code);
-                                    const isOfferSelected = productOffers.has(offer.code);
-                                    const offerDisplayName = offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome');
-                                    
-                                    return (
-                                      <div 
-                                        key={offer.code}
-                                        className={`flex items-center justify-between p-2 rounded ${
-                                          alreadyImported ? 'bg-muted opacity-60' : 'hover:bg-muted/50'
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Checkbox 
-                                            checked={isOfferSelected}
-                                            disabled={alreadyImported}
-                                            onCheckedChange={() => {
-                                              if (!alreadyImported) {
-                                                toggleOfferSelection(product.ucode, offer.code);
-                                              }
-                                            }}
-                                          />
-                                          <div>
-                                            <p className="text-sm font-medium">
-                                              {offerDisplayName}
-                                              {offer.is_main_offer && (
-                                                <Badge variant="outline" className="ml-2 text-xs">Principal</Badge>
-                                              )}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                              Código: {offer.code} | {offer.payment_mode}
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium">
-                                            {new Intl.NumberFormat('pt-BR', {
-                                              style: 'currency',
-                                              currency: offer.price.currency_code || 'BRL',
-                                            }).format(offer.price.value)}
-                                          </span>
-                                          {alreadyImported && (
-                                            <Badge variant="outline" className="text-green-600">
-                                              Já importada
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                
+                {importProgress && (
+                  <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{importProgress}</span>
                   </div>
-                </div>
-              )}
+                )}
+                
+                <Button 
+                  onClick={importAllFromHotmart}
+                  disabled={importingOffers}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {importingOffers ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Download className="h-5 w-5" />
+                  )}
+                  {importingOffers ? 'Importando...' : 'Importar Todas as Ofertas'}
+                </Button>
+                
+                {mappings.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Você já tem {mappings.length} ofertas cadastradas
+                  </p>
+                )}
+              </div>
             </Card>
           </TabsContent>
         </Tabs>
@@ -1111,4 +740,3 @@ export default function OfferMappingsAuto() {
     </div>
   );
 }
-

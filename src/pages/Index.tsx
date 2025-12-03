@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
+import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -491,9 +492,8 @@ const Index = () => {
             />
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center h-64 gap-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                <p className="text-muted-foreground">Consultando API da Hotmart...</p>
+              <div className="flex flex-col items-center justify-center h-64">
+                <CubeLoader message="Consultando API da Hotmart..." size="lg" />
               </div>
             ) : salesData ? (
               <div className="space-y-6 animate-fade-in">

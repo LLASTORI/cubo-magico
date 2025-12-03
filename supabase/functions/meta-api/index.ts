@@ -387,60 +387,39 @@ async function syncInsightsOptimized(
     const adsetInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'adset')
     console.log(`Syncing ${adsetInsights.insights.length} daily adset insights...`)
     
-    // Prepare adset records
-    const adsetRecords = adsetInsights.insights
+    // DEDUPLICATE adset records using a Map (same adset can appear in multiple days)
+    const adsetMap = new Map<string, any>()
+    adsetInsights.insights
       .filter((i: any) => i.adset_id)
-      .map((insight: any) => ({
-        project_id: projectId,
-        ad_account_id: insight.ad_account_id,
-        campaign_id: insight.campaign_id,
-        adset_id: insight.adset_id,
-        adset_name: insight.adset_name,
-        updated_at: new Date().toISOString(),
-      }))
+      .forEach((insight: any) => {
+        const key = `${projectId}_${insight.adset_id}`
+        if (!adsetMap.has(key)) {
+          adsetMap.set(key, {
+            project_id: projectId,
+            ad_account_id: insight.ad_account_id,
+            campaign_id: insight.campaign_id,
+            adset_id: insight.adset_id,
+            adset_name: insight.adset_name,
+            updated_at: new Date().toISOString(),
+          })
+        }
+      })
+    
+    const uniqueAdsetRecords = Array.from(adsetMap.values())
+    console.log(`Upserting ${uniqueAdsetRecords.length} unique adsets...`)
 
-    if (adsetRecords.length > 0) {
+    if (uniqueAdsetRecords.length > 0) {
       const { error: adsetError } = await supabase
         .from('meta_adsets')
-        .upsert(adsetRecords, { onConflict: 'project_id,adset_id' })
+        .upsert(uniqueAdsetRecords, { onConflict: 'project_id,adset_id' })
       
       if (adsetError) {
         console.error('Error syncing adsets:', adsetError)
       }
     }
 
-    // Prepare adset insight records
-    const adsetInsightRecords = adsetInsights.insights.map((insight: any) => ({
-      project_id: projectId,
-      ad_account_id: insight.ad_account_id,
-      campaign_id: insight.campaign_id,
-      adset_id: insight.adset_id,
-      ad_id: null,
-      date_start: insight.date_start,
-      date_stop: insight.date_stop,
-      spend: parseFloat(insight.spend || 0),
-      impressions: parseInt(insight.impressions || 0),
-      clicks: parseInt(insight.clicks || 0),
-      reach: parseInt(insight.reach || 0),
-      cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-      cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-      ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-      frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-      actions: insight.actions || null,
-      cost_per_action_type: insight.cost_per_action_type || null,
-      updated_at: new Date().toISOString(),
-    }))
-
-    if (adsetInsightRecords.length > 0) {
-      // Insert instead of upsert
-      const { error: adsetInsightError } = await supabase
-        .from('meta_insights')
-        .insert(adsetInsightRecords)
-      
-      if (adsetInsightError) {
-        console.error('Error syncing adset insights:', adsetInsightError)
-      }
-    }
+    // NOTE: We only use campaign-level insights to avoid double-counting
+    // Adset-level insights would duplicate spend data since campaign totals already include adset data
 
     console.log('Background sync completed successfully!')
     

@@ -3,6 +3,7 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, RefreshCw, CreditCard, Banknote, QrCode, Wallet, ShoppingBag, Users, DollarSign, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -84,6 +85,7 @@ const chartConfig = {
 };
 
 const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: PaymentMethodAnalysisProps) => {
+  const { currentProject } = useProject();
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
@@ -102,7 +104,7 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartD
       if (nextPageToken) params.page_token = nextPageToken;
 
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: { endpoint: '/sales/history', params },
+        body: { endpoint: '/sales/history', params, projectId: currentProject?.id },
       });
 
       if (error) throw error;

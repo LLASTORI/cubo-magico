@@ -3,6 +3,7 @@ import { format, subDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, RefreshCw, Users, UserPlus, Repeat, ShoppingCart, Package, MessageCircle, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -90,6 +91,7 @@ interface OfferMapping {
 }
 
 const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: CustomerCohortProps) => {
+  const { currentProject } = useProject();
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
@@ -143,7 +145,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
       if (nextPageToken) params.page_token = nextPageToken;
 
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: { endpoint: '/sales/history', params },
+        body: { endpoint: '/sales/history', params, projectId: currentProject?.id },
       });
 
       if (error) throw error;

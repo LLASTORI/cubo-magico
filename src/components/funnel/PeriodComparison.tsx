@@ -3,6 +3,7 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, TrendingUp, TrendingDown, Minus, ArrowLeftRight, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,7 @@ interface HotmartSale {
 }
 
 const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: PeriodComparisonProps) => {
+  const { currentProject } = useProject();
   const today = new Date();
   
   // Calculate periods based on dashboard dates or default
@@ -88,6 +90,7 @@ const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, 
         body: {
           endpoint: '/sales/history',
           params,
+          projectId: currentProject?.id,
         },
       });
 

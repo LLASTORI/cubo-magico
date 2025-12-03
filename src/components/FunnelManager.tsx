@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft } from 'lucide-react';
+import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft, Link2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -40,6 +40,13 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { FunnelMetaAccountsSelector } from './FunnelMetaAccountsSelector';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface Funnel {
   id: string;
@@ -104,6 +111,9 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   
   const [legacyFunnels, setLegacyFunnels] = useState<string[]>([]);
   const [syncingLegacy, setSyncingLegacy] = useState(false);
+  
+  // Meta accounts linked to funnels
+  const [metaAccountsByFunnel, setMetaAccountsByFunnel] = useState<Record<string, number>>({});
   
   const { toast } = useToast();
 
@@ -229,9 +239,37 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     }
   };
 
+  const fetchMetaAccountsCounts = async () => {
+    if (!projectId) return;
+    
+    try {
+      const { data: funnelsList } = await supabase
+        .from('funnels')
+        .select('id')
+        .eq('project_id', projectId);
+
+      if (!funnelsList) return;
+
+      const { data: links } = await supabase
+        .from('funnel_meta_accounts')
+        .select('funnel_id')
+        .eq('project_id', projectId);
+
+      const counts: Record<string, number> = {};
+      funnelsList.forEach(f => {
+        counts[f.id] = (links || []).filter(l => l.funnel_id === f.id).length;
+      });
+      
+      setMetaAccountsByFunnel(counts);
+    } catch (error) {
+      console.error('Error fetching meta accounts counts:', error);
+    }
+  };
+
   useEffect(() => {
     fetchFunnels();
     fetchLegacyFunnels();
+    fetchMetaAccountsCounts();
   }, [projectId]);
 
   const toggleFunnel = async (funnelName: string) => {
@@ -562,9 +600,37 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                       )}
                     </div>
                     
-                    <Badge variant="secondary" className="mr-4">
+                    <Badge variant="secondary" className="mr-2">
                       {offersByFunnel[funnel.name]?.length ?? '?'} ofertas
                     </Badge>
+                    
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <FunnelMetaAccountsSelector
+                            projectId={projectId!}
+                            funnelId={funnel.id}
+                            funnelName={funnel.name}
+                            onAssociationsChange={fetchMetaAccountsCounts}
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 mr-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Link2 className="h-3 w-3" />
+                              <span className="text-xs">
+                                {metaAccountsByFunnel[funnel.id] || 0} contas
+                              </span>
+                            </Button>
+                          </FunnelMetaAccountsSelector>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Vincular contas Meta Ads</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     
                     {editingId !== funnel.id && (
                       <div className="flex gap-1">

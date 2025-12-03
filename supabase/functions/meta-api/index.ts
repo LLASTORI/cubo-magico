@@ -230,6 +230,7 @@ async function getCampaigns(accessToken: string, accountIds: string[]) {
   return { campaigns: allCampaigns }
 }
 
+// Get insights with DAILY granularity to avoid duplicates
 async function getInsightsForAccount(
   accessToken: string, 
   accountId: string,
@@ -242,6 +243,7 @@ async function getInsightsForAccount(
   const params = new URLSearchParams({
     fields,
     time_range: JSON.stringify({ since: dateStart, until: dateStop }),
+    time_increment: '1', // DAILY granularity - one record per day
     level,
     access_token: accessToken,
   })
@@ -259,8 +261,7 @@ async function getInsightsForAccount(
   return (data.data || []).map((i: any) => ({
     ...i,
     ad_account_id: accountId,
-    date_start: dateStart,
-    date_stop: dateStop,
+    // date_start and date_stop come from the API when using time_increment=1
   }))
 }
 
@@ -300,6 +301,22 @@ async function syncInsightsOptimized(
   console.log('Background sync started:', { projectId, accountIds: accountIds.length, dateStart, dateStop })
 
   try {
+    // FIRST: Delete existing insights for this date range and accounts to avoid duplicates
+    console.log('Cleaning old insights for date range...')
+    const { error: deleteError } = await supabase
+      .from('meta_insights')
+      .delete()
+      .eq('project_id', projectId)
+      .in('ad_account_id', accountIds)
+      .gte('date_start', dateStart)
+      .lte('date_stop', dateStop)
+
+    if (deleteError) {
+      console.error('Error deleting old insights:', deleteError)
+    } else {
+      console.log('Old insights cleaned successfully')
+    }
+
     // Sync campaigns first (in parallel batches)
     const { campaigns } = await getCampaigns(accessToken, accountIds)
     console.log(`Syncing ${campaigns.length} campaigns...`)
@@ -330,9 +347,9 @@ async function syncInsightsOptimized(
       }
     }
 
-    // Sync insights at campaign level (in parallel)
+    // Sync insights at campaign level with DAILY granularity
     const campaignInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'campaign')
-    console.log(`Syncing ${campaignInsights.insights.length} campaign insights...`)
+    console.log(`Syncing ${campaignInsights.insights.length} daily campaign insights...`)
     
     const insightRecords = campaignInsights.insights.map((insight: any) => ({
       project_id: projectId,
@@ -356,20 +373,19 @@ async function syncInsightsOptimized(
     }))
 
     if (insightRecords.length > 0) {
+      // Insert instead of upsert since we deleted first
       const { error: insightError } = await supabase
         .from('meta_insights')
-        .upsert(insightRecords, { 
-          onConflict: 'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop' 
-        })
+        .insert(insightRecords)
       
       if (insightError) {
         console.error('Error syncing campaign insights:', insightError)
       }
     }
 
-    // Sync adset level insights
+    // Sync adset level insights with DAILY granularity
     const adsetInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'adset')
-    console.log(`Syncing ${adsetInsights.insights.length} adset insights...`)
+    console.log(`Syncing ${adsetInsights.insights.length} daily adset insights...`)
     
     // Prepare adset records
     const adsetRecords = adsetInsights.insights
@@ -416,11 +432,10 @@ async function syncInsightsOptimized(
     }))
 
     if (adsetInsightRecords.length > 0) {
+      // Insert instead of upsert
       const { error: adsetInsightError } = await supabase
         .from('meta_insights')
-        .upsert(adsetInsightRecords, { 
-          onConflict: 'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop' 
-        })
+        .insert(adsetInsightRecords)
       
       if (adsetInsightError) {
         console.error('Error syncing adset insights:', adsetInsightError)

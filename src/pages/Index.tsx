@@ -372,38 +372,42 @@ const Index = () => {
               <ProjectSelector />
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={() => navigate('/funnel-analysis', { 
-                  state: { 
-                    salesData: formattedSales,
-                    filters: currentFilters 
-                  } 
-                })}
-                variant="outline"
-                className="gap-2"
-                disabled={!salesData}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Análise de Funil
-              </Button>
-              <Button
-                onClick={() => navigate('/offer-mappings')}
-                variant="outline"
-                className="gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Mapeamento de Ofertas
-              </Button>
-              <Button
-                onClick={testConnection}
-                disabled={testingConnection || loading}
-                variant="outline"
-                className="gap-2"
-              >
-                <Zap className={`w-4 h-4 ${testingConnection ? 'animate-pulse' : ''}`} />
-                Testar Conexão
-              </Button>
-              {salesData && (
+              {currentProject && (
+                <>
+                  <Button
+                    onClick={() => navigate('/funnel-analysis', { 
+                      state: { 
+                        salesData: formattedSales,
+                        filters: currentFilters 
+                      } 
+                    })}
+                    variant="outline"
+                    className="gap-2"
+                    disabled={!salesData}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Análise de Funil
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/offer-mappings')}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Mapeamento de Ofertas
+                  </Button>
+                  <Button
+                    onClick={testConnection}
+                    disabled={testingConnection || loading}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Zap className={`w-4 h-4 ${testingConnection ? 'animate-pulse' : ''}`} />
+                    Testar Conexão
+                  </Button>
+                </>
+              )}
+              {salesData && currentProject && (
                 <Button
                   onClick={handleRefresh}
                   disabled={loading}

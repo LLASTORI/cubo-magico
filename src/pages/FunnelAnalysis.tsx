@@ -399,6 +399,25 @@ const FunnelAnalysis = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <Tooltip>
                       <TooltipTrigger asChild>
+                        <Card className="p-6 cursor-help">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-muted-foreground">Total de Clientes</p>
+                              <p className="text-3xl font-bold text-foreground">{summaryMetrics.uniqueCustomers}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                              <Users className="w-6 h-6 text-white" />
+                            </div>
+                          </div>
+                        </Card>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <p>Número de compradores únicos identificados pelo e-mail/nome. Um cliente que compra múltiplos produtos conta apenas uma vez.</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                       <Card className="p-6 cursor-help">
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
@@ -413,25 +432,6 @@ const FunnelAnalysis = () => {
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs">
                       <p>Quantidade total de produtos vendidos no funil selecionado, considerando todas as posições (FRONT, OB, US, DS).</p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Card className="p-6 cursor-help">
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
-                            <p className="text-3xl font-bold text-foreground">{summaryMetrics.uniqueCustomers}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
-                            <Users className="w-6 h-6 text-white" />
-                          </div>
-                        </div>
-                      </Card>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs">
-                      <p>Número de compradores únicos identificados pelo e-mail/nome. Um cliente que compra múltiplos produtos conta apenas uma vez.</p>
                     </TooltipContent>
                   </Tooltip>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -9,22 +10,53 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+
+const META_APP_ID = '845927421602166';
 
 const Settings = () => {
   const { user } = useAuth();
+  const { currentProject } = useProject();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const [fullName, setFullName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Handle OAuth callback params
+  useEffect(() => {
+    const metaConnected = searchParams.get('meta_connected');
+    const metaError = searchParams.get('meta_error');
+
+    if (metaConnected === 'true') {
+      toast({
+        title: 'Meta conectado!',
+        description: 'Sua conta Meta foi conectada com sucesso.',
+      });
+      searchParams.delete('meta_connected');
+      setSearchParams(searchParams);
+      queryClient.invalidateQueries({ queryKey: ['meta_credentials'] });
+    }
+
+    if (metaError) {
+      toast({
+        title: 'Erro ao conectar Meta',
+        description: metaError,
+        variant: 'destructive',
+      });
+      searchParams.delete('meta_error');
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams, toast, queryClient]);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile', user?.id],
@@ -56,12 +88,76 @@ const Settings = () => {
     enabled: !!user?.id,
   });
 
+  const { data: metaCredentials, isLoading: metaLoading } = useQuery({
+    queryKey: ['meta_credentials', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return null;
+      const { data, error } = await supabase
+        .from('meta_credentials')
+        .select('*')
+        .eq('project_id', currentProject.id)
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!currentProject?.id,
+  });
+
   // Set initial values when profile loads
   useEffect(() => {
     if (profile?.full_name) {
       setFullName(profile.full_name);
     }
   }, [profile]);
+
+  const handleConnectMeta = () => {
+    if (!currentProject?.id || !user?.id) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione um projeto primeiro.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const state = btoa(JSON.stringify({
+      projectId: currentProject.id,
+      userId: user.id,
+      redirectUrl: window.location.href,
+    }));
+
+    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
+    const scope = 'ads_read,ads_management,business_management';
+    
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}`;
+    
+    window.location.href = authUrl;
+  };
+
+  const disconnectMetaMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentProject?.id) throw new Error('Projeto não selecionado');
+      const { error } = await supabase
+        .from('meta_credentials')
+        .delete()
+        .eq('project_id', currentProject.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meta_credentials'] });
+      toast({
+        title: 'Meta desconectado',
+        description: 'Sua conta Meta foi desconectada.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao desconectar',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -237,6 +333,10 @@ const Settings = () => {
     updatePreferencesMutation.mutate({ [key]: value });
   };
 
+  const isMetaExpired = metaCredentials?.expires_at 
+    ? new Date(metaCredentials.expires_at) < new Date()
+    : false;
+
   if (profileLoading || preferencesLoading) {
     return <CubeLoader />;
   }
@@ -265,18 +365,22 @@ const Settings = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
-              Perfil
+              <span className="hidden sm:inline">Perfil</span>
             </TabsTrigger>
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
-              Notificações
+              <span className="hidden sm:inline">Notificações</span>
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Integrações</span>
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              Segurança
+              <span className="hidden sm:inline">Segurança</span>
             </TabsTrigger>
           </TabsList>
 
@@ -420,6 +524,147 @@ const Settings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Integrations Tab */}
+          <TabsContent value="integrations">
+            <div className="space-y-6">
+              {/* Meta Ads Integration */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10">
+                        <Facebook className="h-6 w-6 text-blue-500" />
+                      </div>
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          Meta Ads
+                          {metaCredentials && !isMetaExpired && (
+                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Conectado
+                            </Badge>
+                          )}
+                          {metaCredentials && isMetaExpired && (
+                            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              Token Expirado
+                            </Badge>
+                          )}
+                        </CardTitle>
+                        <CardDescription>
+                          Conecte suas contas de anúncios do Facebook e Instagram.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!currentProject ? (
+                    <div className="p-4 rounded-lg bg-muted">
+                      <p className="text-sm text-muted-foreground">
+                        Selecione um projeto primeiro para conectar o Meta Ads.
+                      </p>
+                    </div>
+                  ) : metaCredentials && !isMetaExpired ? (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-lg bg-muted space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Usuário conectado:</span>
+                          <span className="text-sm font-medium">{metaCredentials.user_name || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Projeto:</span>
+                          <span className="text-sm font-medium">{currentProject.name}</span>
+                        </div>
+                        {metaCredentials.expires_at && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">Token expira em:</span>
+                            <span className="text-sm font-medium">
+                              {new Date(metaCredentials.expires_at).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={handleConnectMeta}
+                          className="flex-1"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Reconectar
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => disconnectMetaMutation.mutate()}
+                          disabled={disconnectMetaMutation.isPending}
+                        >
+                          {disconnectMetaMutation.isPending ? 'Desconectando...' : 'Desconectar'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-lg bg-muted">
+                        <p className="text-sm text-muted-foreground">
+                          {isMetaExpired 
+                            ? 'Seu token do Meta expirou. Reconecte para continuar importando dados.'
+                            : 'Conecte sua conta Meta para importar dados de gastos com anúncios e cruzar com seus dados de vendas.'
+                          }
+                        </p>
+                      </div>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Importe gastos por campanha, conjunto e anúncio</li>
+                        <li>• Analise ROI e ROAS por funil</li>
+                        <li>• Cruze dados de investimento x faturamento</li>
+                      </ul>
+                      <Button onClick={handleConnectMeta} className="w-full">
+                        <Facebook className="h-4 w-4 mr-2" />
+                        Conectar com Facebook
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Hotmart Integration Info */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-orange-500/10">
+                      <svg className="h-6 w-6 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                      </svg>
+                    </div>
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        Hotmart
+                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Configurado
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Integração de vendas da Hotmart.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    A configuração do Hotmart é feita por projeto, na página de gerenciamento de projetos.
+                  </p>
+                  <Link to="/projects">
+                    <Button variant="link" className="px-0 mt-2">
+                      Ir para projetos
+                      <ExternalLink className="h-4 w-4 ml-2" />
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Security Tab */}

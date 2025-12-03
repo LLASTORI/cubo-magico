@@ -413,26 +413,35 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          can_create_projects: boolean | null
           created_at: string
           email: string | null
           full_name: string | null
           id: string
+          is_active: boolean | null
+          max_projects: number | null
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
+          can_create_projects?: boolean | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
+          is_active?: boolean | null
+          max_projects?: number | null
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
+          can_create_projects?: boolean | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
+          is_active?: boolean | null
+          max_projects?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -650,7 +659,9 @@ export type Database = {
     }
     Functions: {
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
+      can_user_create_project: { Args: { _user_id: string }; Returns: boolean }
       count_project_members: { Args: { _project_id: string }; Returns: number }
+      count_user_projects: { Args: { _user_id: string }; Returns: number }
       get_user_email: { Args: { _user_id: string }; Returns: string }
       get_user_project_role: {
         Args: { _project_id: string; _user_id: string }

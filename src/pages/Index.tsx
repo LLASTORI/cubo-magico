@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
+import { CuboBrand } from "@/components/CuboLogo";
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
@@ -385,16 +386,18 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card shadow-sm">
+      <header className="border-b border-border bg-card shadow-cube">
         <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <CuboBrand size="md" />
+              <div className="h-8 w-px bg-border" />
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Dashboard Hotmart
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm font-medium text-foreground">
                   {currentProject ? currentProject.name : 'Selecione um projeto'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {currentProject ? 'Projeto ativo' : 'Nenhum projeto selecionado'}
                 </p>
               </div>
               <ProjectSelector />

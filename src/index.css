@@ -2,105 +2,135 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Cubo Mágico Design System
+   Inspired by the 6 faces of a Rubik's cube:
+   - Blue (primary) - Face principal
+   - Red - Energia e ação
+   - Green - Sucesso e crescimento
+   - Yellow - Atenção e destaque
+   - Orange - Criatividade e dinamismo
+   - White - Clareza e base
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 15%;
+    /* Cubo Mágico Color Palette */
+    --cube-blue: 220 90% 50%;
+    --cube-red: 0 80% 55%;
+    --cube-green: 145 70% 42%;
+    --cube-yellow: 48 100% 50%;
+    --cube-orange: 28 95% 55%;
+    --cube-white: 0 0% 98%;
+
+    --background: 220 25% 97%;
+    --foreground: 220 25% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 15%;
+    --card-foreground: 220 25% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 15%;
+    --popover-foreground: 220 25% 10%;
 
-    --primary: 12 88% 59%;
+    --primary: 220 90% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 100% 94%;
-    --secondary-foreground: 12 88% 40%;
+    --secondary: 220 20% 94%;
+    --secondary-foreground: 220 90% 45%;
 
-    --muted: 30 40% 96%;
-    --muted-foreground: 240 4% 46%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
 
-    --accent: 12 100% 50%;
+    --accent: 28 95% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 80% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 20% 90%;
-    --input: 30 20% 90%;
-    --ring: 12 88% 59%;
+    --success: 145 70% 42%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --warning: 48 100% 50%;
+    --warning-foreground: 220 25% 10%;
+
+    --border: 220 20% 88%;
+    --input: 220 20% 88%;
+    --ring: 220 90% 50%;
+
+    --radius: 0.625rem;
     
-    --gradient-primary: linear-gradient(135deg, hsl(12 88% 59%), hsl(25 95% 53%));
-    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(30 40% 98%));
-    --shadow-elegant: 0 4px 20px -4px hsl(12 88% 59% / 0.15);
-    --shadow-card: 0 2px 8px -2px hsl(240 10% 15% / 0.08);
+    /* Cubo Mágico Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(220 90% 50%), hsl(220 90% 60%));
+    --gradient-cube: linear-gradient(135deg, hsl(220 90% 50%) 0%, hsl(28 95% 55%) 50%, hsl(0 80% 55%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(145 70% 42%), hsl(145 70% 52%));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(220 25% 98%));
+    
+    /* Shadows */
+    --shadow-elegant: 0 4px 24px -6px hsl(220 90% 50% / 0.2);
+    --shadow-card: 0 2px 12px -3px hsl(220 25% 10% / 0.08);
+    --shadow-cube: 0 8px 32px -8px hsl(220 90% 50% / 0.25);
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 220 25% 98%;
+    --sidebar-foreground: 220 20% 25%;
+    --sidebar-primary: 220 90% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 94%;
+    --sidebar-accent-foreground: 220 90% 45%;
+    --sidebar-border: 220 20% 90%;
+    --sidebar-ring: 220 90% 50%;
   }
 
   .dark {
-    --background: 240 10% 7%;
-    --foreground: 0 0% 98%;
+    --background: 220 25% 8%;
+    --foreground: 0 0% 96%;
 
-    --card: 240 8% 10%;
-    --card-foreground: 0 0% 98%;
+    --card: 220 20% 12%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 240 8% 10%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 220 20% 12%;
+    --popover-foreground: 0 0% 96%;
 
-    --primary: 12 88% 59%;
+    --primary: 220 90% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 6% 15%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 220 90% 70%;
 
-    --muted: 240 6% 15%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 60%;
 
-    --accent: 12 88% 59%;
+    --accent: 28 95% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 50%;
+    --destructive: 0 75% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 6% 20%;
-    --input: 240 6% 20%;
-    --ring: 12 88% 59%;
+    --success: 145 65% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 48 95% 55%;
+    --warning-foreground: 220 25% 10%;
+
+    --border: 220 15% 22%;
+    --input: 220 15% 22%;
+    --ring: 220 90% 55%;
     
-    --gradient-primary: linear-gradient(135deg, hsl(12 88% 59%), hsl(25 95% 53%));
-    --gradient-card: linear-gradient(135deg, hsl(240 8% 12%), hsl(240 6% 15%));
-    --shadow-elegant: 0 4px 20px -4px hsl(12 88% 59% / 0.25);
-    --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --gradient-primary: linear-gradient(135deg, hsl(220 90% 55%), hsl(220 90% 65%));
+    --gradient-cube: linear-gradient(135deg, hsl(220 90% 55%) 0%, hsl(28 95% 60%) 50%, hsl(0 75% 55%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(145 65% 45%), hsl(145 65% 55%));
+    --gradient-card: linear-gradient(135deg, hsl(220 20% 14%), hsl(220 15% 18%));
+    
+    --shadow-elegant: 0 4px 24px -6px hsl(220 90% 55% / 0.3);
+    --shadow-card: 0 2px 12px -3px hsl(0 0% 0% / 0.4);
+    --shadow-cube: 0 8px 32px -8px hsl(220 90% 55% / 0.35);
+
+    --sidebar-background: 220 20% 10%;
+    --sidebar-foreground: 220 10% 90%;
+    --sidebar-primary: 220 90% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 15% 16%;
+    --sidebar-accent-foreground: 220 90% 70%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 220 90% 55%;
   }
 }
 
@@ -111,5 +141,34 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Cubo Mágico Custom Utilities */
+@layer utilities {
+  .cube-border {
+    border-width: 3px;
+    border-style: solid;
+    border-image: linear-gradient(135deg, hsl(220 90% 50%), hsl(28 95% 55%), hsl(0 80% 55%)) 1;
+  }
+  
+  .cube-glow {
+    box-shadow: 
+      0 0 20px hsl(220 90% 50% / 0.3),
+      0 0 40px hsl(28 95% 55% / 0.2),
+      0 0 60px hsl(0 80% 55% / 0.1);
+  }
+
+  .cube-pattern {
+    background-image: 
+      linear-gradient(90deg, hsl(220 20% 90% / 0.5) 1px, transparent 1px),
+      linear-gradient(hsl(220 20% 90% / 0.5) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .dark .cube-pattern {
+    background-image: 
+      linear-gradient(90deg, hsl(220 15% 20% / 0.5) 1px, transparent 1px),
+      linear-gradient(hsl(220 15% 20% / 0.5) 1px, transparent 1px);
   }
 }

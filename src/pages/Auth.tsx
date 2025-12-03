@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { CuboBrand } from '@/components/CuboLogo';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -130,14 +131,19 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Dashboard Hotmart
-          </CardTitle>
-          <CardDescription>
-            Gerencie suas vendas e análises
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 cube-pattern">
+      {/* Decorative cube elements */}
+      <div className="fixed top-10 left-10 w-20 h-20 bg-cube-blue/10 rounded-lg rotate-12 blur-sm" />
+      <div className="fixed bottom-20 right-20 w-16 h-16 bg-cube-orange/10 rounded-lg -rotate-12 blur-sm" />
+      <div className="fixed top-1/3 right-10 w-12 h-12 bg-cube-green/10 rounded-lg rotate-45 blur-sm" />
+      
+      <Card className="w-full max-w-md shadow-cube border-2 border-primary/20 relative z-10">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-4">
+            <CuboBrand size="lg" />
+          </div>
+          <CardDescription className="text-base">
+            Gestão Estratégica de Funis
           </CardDescription>
         </CardHeader>
         <CardContent>

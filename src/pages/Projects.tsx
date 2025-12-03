@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { CuboBrand } from '@/components/CuboLogo';
 
 interface ProjectCredentialStatus {
   is_configured: boolean;
@@ -272,16 +273,20 @@ const Projects = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card shadow-sm">
+      <header className="border-b border-border bg-card shadow-cube">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Meus Projetos
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {user?.email}
-              </p>
+            <div className="flex items-center gap-4">
+              <CuboBrand size="md" />
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <h1 className="text-xl font-bold text-foreground font-display">
+                  Meus Projetos
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  {user?.email}
+                </p>
+              </div>
             </div>
             <div className="flex gap-2">
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

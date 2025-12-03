@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CuboBrand } from "@/components/CuboLogo";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 import TemporalChart from "@/components/funnel/TemporalChart";
@@ -75,11 +76,11 @@ const getPositionSortOrder = (tipo: string, ordem: number): number => {
 };
 
 const POSITION_COLORS: Record<string, string> = {
-  'FRONT': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'FE': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'OB': 'bg-green-500/20 text-green-400 border-green-500/30',
-  'US': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  'DS': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  'FRONT': 'bg-cube-blue/20 text-cube-blue border-cube-blue/30',
+  'FE': 'bg-cube-blue/20 text-cube-blue border-cube-blue/30',
+  'OB': 'bg-cube-green/20 text-cube-green border-cube-green/30',
+  'US': 'bg-cube-orange/20 text-cube-orange border-cube-orange/30',
+  'DS': 'bg-cube-red/20 text-cube-red border-cube-red/30',
 };
 
 // Taxas de conversão ideais por posição
@@ -316,14 +317,16 @@ const FunnelAnalysis = () => {
   if (salesFromDashboard.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="border-b border-border bg-card shadow-sm">
+        <header className="border-b border-border bg-card shadow-cube">
           <div className="container mx-auto px-6 py-4">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
                 <ArrowLeft className="w-5 h-5" />
               </Button>
+              <CuboBrand size="sm" />
+              <div className="h-8 w-px bg-border" />
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold text-foreground font-display">
                   Análise de Funil
                 </h1>
               </div>
@@ -353,19 +356,21 @@ const FunnelAnalysis = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card shadow-sm">
+      <header className="border-b border-border bg-card shadow-cube">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
                 <ArrowLeft className="w-5 h-5" />
               </Button>
+              <CuboBrand size="sm" />
+              <div className="h-8 w-px bg-border" />
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold text-foreground font-display">
                   Análise de Funil
                 </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Taxas de conversão e métricas de vendas por posição
+                <p className="text-sm text-muted-foreground">
+                  Taxas de conversão e métricas por posição
                 </p>
               </div>
             </div>

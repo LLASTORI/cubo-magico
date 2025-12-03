@@ -472,6 +472,7 @@ const Index = () => {
               onFilter={fetchHotmartData} 
               availableProducts={availableProducts}
               availableOffers={availableOffers}
+              projectId={currentProject?.id}
             />
 
             {loading ? (

@@ -11,6 +11,7 @@ interface SalesFiltersProps {
   onFilter: (filters: FilterParams) => void;
   availableProducts?: string[];
   availableOffers?: { code: string; name: string }[];
+  projectId?: string;
 }
 
 export interface FilterParams {
@@ -28,7 +29,7 @@ export interface FilterParams {
   offerCode?: string[];
 }
 
-const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }: SalesFiltersProps) => {
+const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], projectId }: SalesFiltersProps) => {
   const today = new Date().toISOString().split('T')[0];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -52,9 +53,17 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
 
   useEffect(() => {
     const fetchFilterOptions = async () => {
+      if (!projectId) {
+        setFunis([]);
+        setMappedProducts([]);
+        setMappedOffers([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('offer_mappings')
         .select('id_funil, nome_produto, codigo_oferta, nome_oferta')
+        .eq('project_id', projectId)
         .order('id_funil');
       
       if (data && !error) {
@@ -72,7 +81,7 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
     };
     
     fetchFilterOptions();
-  }, []);
+  }, [projectId]);
 
   // Combine mapped data with API data, preferring API data when available
   const displayProducts = availableProducts.length > 0 ? availableProducts : mappedProducts;

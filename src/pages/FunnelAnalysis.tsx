@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CuboBrand } from "@/components/CuboLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 import TemporalChart from "@/components/funnel/TemporalChart";
@@ -319,17 +320,20 @@ const FunnelAnalysis = () => {
       <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-card shadow-cube">
           <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <CuboBrand size="sm" />
-              <div className="h-8 w-px bg-border" />
-              <div>
-                <h1 className="text-xl font-bold text-foreground font-display">
-                  Análise de Funil
-                </h1>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+                <CuboBrand size="sm" />
+                <div className="h-8 w-px bg-border" />
+                <div>
+                  <h1 className="text-xl font-bold text-foreground font-display">
+                    Análise de Funil
+                  </h1>
+                </div>
               </div>
+              <ThemeToggle />
             </div>
           </div>
         </header>
@@ -374,9 +378,12 @@ const FunnelAnalysis = () => {
                 </p>
               </div>
             </div>
-            <Badge variant="secondary" className="text-sm">
-              {salesFromDashboard.length} vendas do Dashboard
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="text-sm">
+                {salesFromDashboard.length} vendas do Dashboard
+              </Badge>
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>

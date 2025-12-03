@@ -139,6 +139,20 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
     setEndDate(end.toISOString().split('T')[0]);
   };
 
+  const handleTodayFilter = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setStartDate(today);
+    setEndDate(today);
+  };
+
+  const handleYesterdayFilter = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    setStartDate(yesterdayStr);
+    setEndDate(yesterdayStr);
+  };
+
   return (
     <Card className="p-6 border-border">
       <div className="flex items-center gap-2 mb-4">
@@ -224,6 +238,24 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleTodayFilter}
+          className="border-border"
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          Hoje
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleYesterdayFilter}
+          className="border-border"
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          Ontem
+        </Button>
         <Button
           variant="outline"
           size="sm"

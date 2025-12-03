@@ -651,6 +651,7 @@ export type Database = {
     Functions: {
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
       count_project_members: { Args: { _project_id: string }; Returns: number }
+      get_user_email: { Args: { _user_id: string }; Returns: string }
       get_user_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["project_role"]

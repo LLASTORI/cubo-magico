@@ -1,4 +1,5 @@
-import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Info, AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Info, AlertTriangle, AlertCircle, CheckCircle, History } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ const getNotificationIcon = (type: Notification['type']) => {
 };
 
 const NotificationsDropdown = () => {
+  const navigate = useNavigate();
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
 
   return (
@@ -132,6 +134,15 @@ const NotificationsDropdown = () => {
             ))}
           </ScrollArea>
         )}
+        
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="justify-center text-sm cursor-pointer"
+          onClick={() => navigate('/notifications')}
+        >
+          <History className="h-4 w-4 mr-2" />
+          Ver histórico completo
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

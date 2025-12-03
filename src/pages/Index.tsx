@@ -20,7 +20,19 @@ const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { currentProject, credentials } = useProject();
+  const { currentProject, credentials, markCredentialsValidated } = useProject();
+
+  // Redirect if no project or credentials not validated
+  useEffect(() => {
+    if (currentProject && credentials && !credentials.is_validated) {
+      toast({
+        title: "Credenciais não validadas",
+        description: "Configure e teste as credenciais do projeto antes de continuar",
+        variant: "destructive",
+      });
+      navigate('/projects');
+    }
+  }, [currentProject, credentials, navigate, toast]);
 
   const handleLogout = async () => {
     await signOut();
@@ -179,6 +191,9 @@ const Index = () => {
       });
 
       if (error) throw error;
+
+      // Mark credentials as validated on success
+      await markCredentialsValidated(currentProject.id);
 
       toast({
         title: "✓ Conexão bem-sucedida!",

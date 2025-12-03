@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject, Project } from '@/contexts/ProjectContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,12 +11,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, FolderOpen, Settings, Trash2, LogOut, ArrowRight, Loader2, Key } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+interface ProjectCredentialStatus {
+  is_configured: boolean;
+  is_validated: boolean;
+}
 
 const Projects = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { projects, currentProject, setCurrentProject, createProject, deleteProject, saveCredentials, loading } = useProject();
+  const { projects, currentProject, setCurrentProject, createProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials } = useProject();
   const { toast } = useToast();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -24,6 +31,33 @@ const Projects = () => {
   const [newProject, setNewProject] = useState({ name: '', description: '' });
   const [credentials, setCredentials] = useState({ client_id: '', client_secret: '', basic_auth: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [projectCredentials, setProjectCredentials] = useState<Record<string, ProjectCredentialStatus>>({});
+
+  // Fetch credentials status for all projects
+  useEffect(() => {
+    const fetchCredentialsStatus = async () => {
+      if (projects.length === 0) return;
+      
+      const { data } = await supabase
+        .from('project_credentials')
+        .select('project_id, is_configured, is_validated')
+        .in('project_id', projects.map(p => p.id));
+      
+      if (data) {
+        const statusMap: Record<string, ProjectCredentialStatus> = {};
+        data.forEach(cred => {
+          statusMap[cred.project_id] = {
+            is_configured: cred.is_configured || false,
+            is_validated: cred.is_validated || false,
+          };
+        });
+        setProjectCredentials(statusMap);
+      }
+    };
+    
+    fetchCredentialsStatus();
+  }, [projects]);
 
   const handleCreateProject = async () => {
     if (!newProject.name.trim()) {
@@ -32,15 +66,21 @@ const Projects = () => {
     }
 
     setSubmitting(true);
-    const { error } = await createProject(newProject.name, newProject.description || undefined);
+    const { data, error } = await createProject(newProject.name, newProject.description || undefined);
     setSubmitting(false);
 
     if (error) {
       toast({ title: 'Erro ao criar projeto', description: error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Projeto criado!' });
+      toast({ title: 'Projeto criado! Configure as credenciais para continuar.' });
       setIsCreateOpen(false);
       setNewProject({ name: '', description: '' });
+      // Open credentials dialog for new project
+      if (data) {
+        setSelectedProject(data);
+        setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
+        setIsCredentialsOpen(true);
+      }
     }
   };
 
@@ -56,6 +96,11 @@ const Projects = () => {
   const handleSaveCredentials = async () => {
     if (!selectedProject) return;
 
+    if (!credentials.client_id || !credentials.client_secret) {
+      toast({ title: 'Client ID e Client Secret são obrigatórios', variant: 'destructive' });
+      return;
+    }
+
     setSubmitting(true);
     const { error } = await saveCredentials(selectedProject.id, credentials);
     setSubmitting(false);
@@ -63,9 +108,54 @@ const Projects = () => {
     if (error) {
       toast({ title: 'Erro ao salvar credenciais', description: error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Credenciais salvas!' });
+      toast({ title: 'Credenciais salvas! Agora teste a conexão.' });
+      // Update local status
+      setProjectCredentials(prev => ({
+        ...prev,
+        [selectedProject.id]: { is_configured: true, is_validated: false }
+      }));
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!selectedProject) return;
+
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          endpoint: '/sales/summary',
+          params: {},
+          projectId: selectedProject.id,
+        },
+      });
+
+      if (error) throw error;
+
+      // Mark as validated
+      await markCredentialsValidated(selectedProject.id);
+      
+      // Update local status
+      setProjectCredentials(prev => ({
+        ...prev,
+        [selectedProject.id]: { is_configured: true, is_validated: true }
+      }));
+
+      toast({ 
+        title: '✓ Conexão bem-sucedida!', 
+        description: 'Credenciais validadas. Você pode acessar o Dashboard agora.' 
+      });
+      
       setIsCredentialsOpen(false);
       setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
+    } catch (error: any) {
+      toast({ 
+        title: '✗ Falha na conexão', 
+        description: error.message || 'Verifique suas credenciais',
+        variant: 'destructive' 
+      });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -76,6 +166,18 @@ const Projects = () => {
   };
 
   const selectAndGo = (project: Project) => {
+    const status = projectCredentials[project.id];
+    
+    if (!status?.is_validated) {
+      toast({ 
+        title: 'Credenciais não validadas', 
+        description: 'Configure e teste as credenciais antes de acessar o Dashboard',
+        variant: 'destructive' 
+      });
+      openCredentialsDialog(project);
+      return;
+    }
+    
     setCurrentProject(project);
     navigate('/');
   };
@@ -83,6 +185,35 @@ const Projects = () => {
   const handleLogout = async () => {
     await signOut();
     navigate('/auth');
+  };
+
+  const getStatusBadge = (projectId: string) => {
+    const status = projectCredentials[projectId];
+    
+    if (!status?.is_configured) {
+      return (
+        <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30">
+          <XCircle className="w-3 h-3 mr-1" />
+          Não configurado
+        </Badge>
+      );
+    }
+    
+    if (!status?.is_validated) {
+      return (
+        <Badge variant="outline" className="text-amber-500 border-amber-500/30">
+          <Zap className="w-3 h-3 mr-1" />
+          Não testado
+        </Badge>
+      );
+    }
+    
+    return (
+      <Badge variant="outline" className="text-green-500 border-green-500/30">
+        <CheckCircle2 className="w-3 h-3 mr-1" />
+        Validado
+      </Badge>
+    );
   };
 
   if (loading) {
@@ -118,7 +249,7 @@ const Projects = () => {
                   <DialogHeader>
                     <DialogTitle>Criar Novo Projeto</DialogTitle>
                     <DialogDescription>
-                      Cada projeto pode ter suas próprias credenciais da Hotmart
+                      Após criar, você precisará configurar e testar as credenciais da Hotmart
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -200,12 +331,15 @@ const Projects = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Criado em {new Date(project.created_at).toLocaleDateString('pt-BR')}
-                  </p>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs text-muted-foreground">
+                      Criado em {new Date(project.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                    {getStatusBadge(project.id)}
+                  </div>
                   <div className="flex gap-2">
                     <Button 
-                      variant="default" 
+                      variant={projectCredentials[project.id]?.is_validated ? "default" : "outline"}
                       size="sm" 
                       className="flex-1 gap-1"
                       onClick={() => selectAndGo(project)}
@@ -250,7 +384,7 @@ const Projects = () => {
 
         {/* Credentials Dialog */}
         <Dialog open={isCredentialsOpen} onOpenChange={setIsCredentialsOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Credenciais Hotmart</DialogTitle>
               <DialogDescription>
@@ -258,8 +392,13 @@ const Projects = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  ⚠️ Você precisa configurar e <strong>testar a conexão</strong> antes de acessar o Dashboard.
+                </p>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="client-id">Client ID</Label>
+                <Label htmlFor="client-id">Client ID *</Label>
                 <Input
                   id="client-id"
                   placeholder="Seu Client ID da Hotmart"
@@ -268,7 +407,7 @@ const Projects = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="client-secret">Client Secret</Label>
+                <Label htmlFor="client-secret">Client Secret *</Label>
                 <Input
                   id="client-secret"
                   type="password"
@@ -288,13 +427,25 @@ const Projects = () => {
                 />
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCredentialsOpen(false)}>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setIsCredentialsOpen(false)} className="sm:mr-auto">
                 Cancelar
               </Button>
-              <Button onClick={handleSaveCredentials} disabled={submitting}>
+              <Button 
+                variant="outline" 
+                onClick={handleSaveCredentials} 
+                disabled={submitting || !credentials.client_id || !credentials.client_secret}
+              >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Salvar Credenciais
+                Salvar
+              </Button>
+              <Button 
+                onClick={handleTestConnection} 
+                disabled={testing || !credentials.client_id || !credentials.client_secret}
+                className="gap-2"
+              >
+                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                Salvar e Testar Conexão
               </Button>
             </DialogFooter>
           </DialogContent>

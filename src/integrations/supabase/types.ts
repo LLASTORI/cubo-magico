@@ -487,6 +487,82 @@ export type Database = {
           },
         ]
       }
+      project_invites: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          project_id: string
+          responded_at: string | null
+          role: Database["public"]["Enums"]["project_role"]
+          status: Database["public"]["Enums"]["invite_status"]
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          project_id: string
+          responded_at?: string | null
+          role?: Database["public"]["Enums"]["project_role"]
+          status?: Database["public"]["Enums"]["invite_status"]
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          project_id?: string
+          responded_at?: string | null
+          role?: Database["public"]["Enums"]["project_role"]
+          status?: Database["public"]["Enums"]["invite_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_invites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_members: {
+        Row: {
+          id: string
+          joined_at: string
+          project_id: string
+          role: Database["public"]["Enums"]["project_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          project_id: string
+          role?: Database["public"]["Enums"]["project_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          project_id?: string
+          role?: Database["public"]["Enums"]["project_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
@@ -573,6 +649,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
+      count_project_members: { Args: { _project_id: string }; Returns: number }
+      get_user_project_role: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["project_role"]
+      }
+      has_project_access: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -583,6 +669,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      invite_status: "pending" | "accepted" | "rejected" | "expired"
+      project_role: "owner" | "manager" | "operator"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -711,6 +799,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      invite_status: ["pending", "accepted", "rejected", "expired"],
+      project_role: ["owner", "manager", "operator"],
     },
   },
 } as const

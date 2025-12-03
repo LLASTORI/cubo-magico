@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -192,6 +192,12 @@ const Auth = () => {
                     </button>
                   </div>
                   {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                </div>
+
+                <div className="text-right">
+                  <Link to="/forgot-password" className="text-sm text-primary hover:underline">
+                    Esqueceu a senha?
+                  </Link>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading}>

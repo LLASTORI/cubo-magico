@@ -11,8 +11,12 @@ import { CuboBrand } from '@/components/CuboLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { z } from 'zod';
 
+const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9]).{8,}$/;
+
 const passwordSchema = z.object({
-  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+  password: z.string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres')
+    .regex(passwordRegex, 'Senha deve conter letras e números'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As senhas não conferem',
@@ -186,7 +190,7 @@ const ResetPassword = () => {
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
+                    placeholder="Ex: Cubo2024"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10"
@@ -199,6 +203,7 @@ const ResetPassword = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">Mínimo 8 caracteres com letras e números</p>
                 {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
               </div>
 

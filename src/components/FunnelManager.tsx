@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Pencil, Trash2, Plus, Check, X, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -23,7 +23,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Funnel {
   id: string;
@@ -33,10 +49,41 @@ interface Funnel {
   updated_at: string;
 }
 
+interface OfferMapping {
+  id: string;
+  nome_produto: string;
+  nome_oferta: string | null;
+  codigo_oferta: string | null;
+  valor: number | null;
+  nome_posicao: string | null;
+  tipo_posicao: string | null;
+  id_funil: string;
+}
+
 interface FunnelManagerProps {
   projectId: string | null;
   onFunnelChange?: () => void;
 }
+
+const POSITION_COLORS: Record<string, string> = {
+  FRONT: 'bg-blue-500 text-white',
+  OB: 'bg-amber-500 text-white',
+  US: 'bg-green-500 text-white',
+  DS: 'bg-purple-500 text-white',
+};
+
+const getPositionBadgeClass = (tipo: string | null) => {
+  if (!tipo) return 'bg-muted text-muted-foreground';
+  return POSITION_COLORS[tipo] || 'bg-muted text-muted-foreground';
+};
+
+const formatCurrency = (value: number | null) => {
+  if (value === null) return '-';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
 
 export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps) {
   const [funnels, setFunnels] = useState<Funnel[]>([]);
@@ -46,7 +93,15 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   const [editingName, setEditingName] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [funnelToDelete, setFunnelToDelete] = useState<Funnel | null>(null);
-  const [offerCounts, setOfferCounts] = useState<Record<string, number>>({});
+  const [offersByFunnel, setOffersByFunnel] = useState<Record<string, OfferMapping[]>>({});
+  const [expandedFunnels, setExpandedFunnels] = useState<Set<string>>(new Set());
+  const [loadingOffers, setLoadingOffers] = useState<Set<string>>(new Set());
+  
+  // Move offer dialog state
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [offerToMove, setOfferToMove] = useState<OfferMapping | null>(null);
+  const [targetFunnelName, setTargetFunnelName] = useState('');
+  
   const { toast } = useToast();
 
   const fetchFunnels = async () => {
@@ -62,23 +117,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
 
       if (error) throw error;
       setFunnels(data || []);
-
-      // Fetch offer counts per funnel
-      const { data: mappings } = await supabase
-        .from('offer_mappings')
-        .select('funnel_id')
-        .eq('project_id', projectId)
-        .not('funnel_id', 'is', null);
-
-      if (mappings) {
-        const counts: Record<string, number> = {};
-        mappings.forEach(m => {
-          if (m.funnel_id) {
-            counts[m.funnel_id] = (counts[m.funnel_id] || 0) + 1;
-          }
-        });
-        setOfferCounts(counts);
-      }
     } catch (error: any) {
       console.error('Error fetching funnels:', error);
       toast({
@@ -91,9 +129,55 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     }
   };
 
+  const fetchOffersForFunnel = async (funnelName: string) => {
+    if (!projectId) return;
+    
+    setLoadingOffers(prev => new Set(prev).add(funnelName));
+    
+    try {
+      const { data, error } = await supabase
+        .from('offer_mappings')
+        .select('id, nome_produto, nome_oferta, codigo_oferta, valor, nome_posicao, tipo_posicao, id_funil')
+        .eq('project_id', projectId)
+        .eq('id_funil', funnelName)
+        .order('tipo_posicao')
+        .order('ordem_posicao');
+
+      if (error) throw error;
+      
+      setOffersByFunnel(prev => ({
+        ...prev,
+        [funnelName]: data || []
+      }));
+    } catch (error: any) {
+      console.error('Error fetching offers:', error);
+    } finally {
+      setLoadingOffers(prev => {
+        const next = new Set(prev);
+        next.delete(funnelName);
+        return next;
+      });
+    }
+  };
+
   useEffect(() => {
     fetchFunnels();
   }, [projectId]);
+
+  const toggleFunnel = async (funnelName: string) => {
+    const newExpanded = new Set(expandedFunnels);
+    
+    if (newExpanded.has(funnelName)) {
+      newExpanded.delete(funnelName);
+    } else {
+      newExpanded.add(funnelName);
+      if (!offersByFunnel[funnelName]) {
+        await fetchOffersForFunnel(funnelName);
+      }
+    }
+    
+    setExpandedFunnels(newExpanded);
+  };
 
   const handleCreate = async () => {
     if (!projectId || !newFunnelName.trim()) return;
@@ -141,10 +225,11 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     setEditingName(funnel.name);
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (oldName: string) => {
     if (!editingId || !editingName.trim()) return;
 
     try {
+      // Update funnel name
       const { error } = await supabase
         .from('funnels')
         .update({ name: editingName.trim() })
@@ -162,6 +247,17 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         throw error;
       }
 
+      // Update all offer mappings that reference this funnel
+      const { error: updateOffersError } = await supabase
+        .from('offer_mappings')
+        .update({ id_funil: editingName.trim() })
+        .eq('id_funil', oldName)
+        .eq('project_id', projectId);
+
+      if (updateOffersError) {
+        console.error('Error updating offers:', updateOffersError);
+      }
+
       toast({
         title: 'Sucesso!',
         description: 'Nome do funil atualizado',
@@ -169,6 +265,8 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
 
       setEditingId(null);
       setEditingName('');
+      setOffersByFunnel({});
+      setExpandedFunnels(new Set());
       fetchFunnels();
       onFunnelChange?.();
     } catch (error: any) {
@@ -222,6 +320,54 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     }
   };
 
+  const handleMoveOfferClick = (offer: OfferMapping) => {
+    setOfferToMove(offer);
+    setTargetFunnelName('');
+    setMoveDialogOpen(true);
+  };
+
+  const handleMoveOffer = async () => {
+    if (!offerToMove || !targetFunnelName) return;
+
+    try {
+      const { error } = await supabase
+        .from('offer_mappings')
+        .update({ id_funil: targetFunnelName })
+        .eq('id', offerToMove.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso!',
+        description: `Oferta movida para o funil "${targetFunnelName}"`,
+      });
+
+      // Refresh offers for both funnels
+      const oldFunnel = offerToMove.id_funil;
+      setOffersByFunnel({});
+      
+      if (expandedFunnels.has(oldFunnel)) {
+        fetchOffersForFunnel(oldFunnel);
+      }
+      if (expandedFunnels.has(targetFunnelName)) {
+        fetchOffersForFunnel(targetFunnelName);
+      }
+      
+      onFunnelChange?.();
+    } catch (error: any) {
+      console.error('Error moving offer:', error);
+      toast({
+        title: 'Erro ao mover oferta',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setMoveDialogOpen(false);
+      setOfferToMove(null);
+      setTargetFunnelName('');
+    }
+  };
+
   if (!projectId) {
     return (
       <Card className="p-6">
@@ -231,6 +377,10 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
       </Card>
     );
   }
+
+  const getOfferCount = (funnelName: string) => {
+    return offersByFunnel[funnelName]?.length ?? '...';
+  };
 
   return (
     <div className="space-y-4">
@@ -266,82 +416,162 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
             </p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome do Funil</TableHead>
-                <TableHead className="w-[120px]">Ofertas</TableHead>
-                <TableHead className="w-[100px] text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {funnels.map((funnel) => (
-                <TableRow key={funnel.id}>
-                  <TableCell>
-                    {editingId === funnel.id ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit();
-                            if (e.key === 'Escape') handleCancelEdit();
-                          }}
-                          className="h-8"
-                          autoFocus
-                        />
-                        <Button size="icon" variant="ghost" onClick={handleSaveEdit} className="h-8 w-8">
-                          <Check className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={handleCancelEdit} className="h-8 w-8">
-                          <X className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="font-medium">{funnel.name}</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {offerCounts[funnel.id] || 0} ofertas
+          <div className="space-y-2">
+            {funnels.map((funnel) => (
+              <Collapsible
+                key={funnel.id}
+                open={expandedFunnels.has(funnel.name)}
+                onOpenChange={() => toggleFunnel(funnel.name)}
+              >
+                <div className="border rounded-lg">
+                  <div className="flex items-center p-3 hover:bg-muted/50 transition-colors">
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+                        {expandedFunnels.has(funnel.name) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                    
+                    <div className="flex-1 ml-2">
+                      {editingId === funnel.id ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(funnel.name);
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                            className="h-8 max-w-md"
+                            autoFocus
+                          />
+                          <Button size="icon" variant="ghost" onClick={() => handleSaveEdit(funnel.name)} className="h-8 w-8">
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={handleCancelEdit} className="h-8 w-8">
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <CollapsibleTrigger asChild>
+                          <button className="text-left font-medium hover:underline cursor-pointer">
+                            {funnel.name}
+                          </button>
+                        </CollapsibleTrigger>
+                      )}
+                    </div>
+                    
+                    <Badge variant="secondary" className="mr-4">
+                      {offersByFunnel[funnel.name]?.length ?? '?'} ofertas
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
+                    
                     {editingId !== funnel.id && (
-                      <div className="flex justify-end gap-2">
+                      <div className="flex gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleEdit(funnel)}
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(funnel);
+                          }}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDeleteClick(funnel)}
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(funnel);
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </div>
+                  
+                  <CollapsibleContent>
+                    <div className="border-t px-4 py-3 bg-muted/30">
+                      {loadingOffers.has(funnel.name) ? (
+                        <div className="flex items-center justify-center py-4 gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm text-muted-foreground">Carregando ofertas...</span>
+                        </div>
+                      ) : offersByFunnel[funnel.name]?.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Nenhuma oferta neste funil
+                        </p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[80px]">Posição</TableHead>
+                              <TableHead>Produto</TableHead>
+                              <TableHead>Oferta</TableHead>
+                              <TableHead>Valor</TableHead>
+                              <TableHead className="w-[100px] text-right">Ação</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {offersByFunnel[funnel.name]?.map((offer) => (
+                              <TableRow key={offer.id}>
+                                <TableCell>
+                                  {offer.nome_posicao ? (
+                                    <Badge className={getPositionBadgeClass(offer.tipo_posicao)}>
+                                      {offer.nome_posicao}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="font-medium max-w-[200px] truncate">
+                                  {offer.nome_produto}
+                                </TableCell>
+                                <TableCell className="max-w-[150px] truncate">
+                                  {offer.nome_oferta || '-'}
+                                </TableCell>
+                                <TableCell>{formatCurrency(offer.valor)}</TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleMoveOfferClick(offer)}
+                                    className="gap-1"
+                                  >
+                                    <ArrowRightLeft className="h-4 w-4" />
+                                    Mover
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </div>
+              </Collapsible>
+            ))}
+          </div>
         )}
       </Card>
 
+      {/* Delete Funnel Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja excluir o funil "{funnelToDelete?.name}"?
-              {(offerCounts[funnelToDelete?.id || ''] || 0) > 0 && (
+              {(offersByFunnel[funnelToDelete?.name || '']?.length || 0) > 0 && (
                 <span className="block mt-2 text-destructive font-medium">
-                  Atenção: Este funil possui {offerCounts[funnelToDelete?.id || '']} ofertas vinculadas que ficarão sem funil.
+                  Atenção: Este funil possui {offersByFunnel[funnelToDelete?.name || '']?.length} ofertas vinculadas que ficarão sem funil.
                 </span>
               )}
             </AlertDialogDescription>
@@ -357,6 +587,44 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Move Offer Dialog */}
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mover Oferta para Outro Funil</DialogTitle>
+            <DialogDescription>
+              Selecione o funil de destino para a oferta "{offerToMove?.nome_oferta || offerToMove?.nome_produto}"
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <Select value={targetFunnelName} onValueChange={setTargetFunnelName}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o funil de destino" />
+              </SelectTrigger>
+              <SelectContent>
+                {funnels
+                  .filter(f => f.name !== offerToMove?.id_funil)
+                  .map((funnel) => (
+                    <SelectItem key={funnel.id} value={funnel.name}>
+                      {funnel.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleMoveOffer} disabled={!targetFunnelName}>
+              Mover Oferta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

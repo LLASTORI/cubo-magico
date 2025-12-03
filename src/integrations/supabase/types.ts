@@ -484,6 +484,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          created_at: string
+          email_notifications: boolean | null
+          id: string
+          sales_alerts: boolean | null
+          updated_at: string
+          user_id: string
+          weekly_report: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          email_notifications?: boolean | null
+          id?: string
+          sales_alerts?: boolean | null
+          updated_at?: string
+          user_id: string
+          weekly_report?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          email_notifications?: boolean | null
+          id?: string
+          sales_alerts?: boolean | null
+          updated_at?: string
+          user_id?: string
+          weekly_report?: boolean | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

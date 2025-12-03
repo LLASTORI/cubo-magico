@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RotateCw, ShieldAlert } from 'lucide-react';
+import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RotateCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -15,8 +15,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '@/contexts/ProjectContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { useProjectMembers } from '@/hooks/useProjectMembers';
 import {
   Table,
   TableBody,
@@ -123,10 +121,6 @@ export default function OfferMappingsAuto() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { currentProject } = useProject();
-  const { userRole, loading: roleLoading } = useProjectMembers(currentProject?.id || '');
-
-  // Check if user has permission (only owner and manager can access)
-  const hasPermission = userRole === 'owner' || userRole === 'manager';
 
   useEffect(() => {
     if (!currentProject) {
@@ -138,26 +132,6 @@ export default function OfferMappingsAuto() {
       navigate('/');
     }
   }, [currentProject, navigate, toast]);
-
-  // Show access denied if user is operator
-  if (!roleLoading && currentProject && !hasPermission) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="p-8 max-w-md text-center space-y-4">
-          <ShieldAlert className="h-16 w-16 mx-auto text-destructive" />
-          <h1 className="text-2xl font-bold">Acesso Restrito</h1>
-          <p className="text-muted-foreground">
-            Você não tem permissão para acessar o Mapeamento de Ofertas. 
-            Esta funcionalidade está disponível apenas para proprietários e gerentes do projeto.
-          </p>
-          <Button onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar ao Dashboard
-          </Button>
-        </Card>
-      </div>
-    );
-  }
 
   const funnelData = useMemo(() => {
     const funnelMap = new Map<string, number>();

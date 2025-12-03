@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -9,12 +9,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
+import { useProjectMembers } from "@/hooks/useProjectMembers";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
 import NotificationsDropdown from "@/components/NotificationsDropdown";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,10 @@ const Index = () => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { currentProject, credentials, markCredentialsValidated } = useProject();
+  const { userRole } = useProjectMembers(currentProject?.id || '');
+  
+  // Check if user can access offer mappings (only owner and manager)
+  const canAccessOfferMappings = userRole === 'owner' || userRole === 'manager';
 
   // Clear all data when project changes to avoid cross-project data leakage
   useEffect(() => {
@@ -423,14 +429,29 @@ const Index = () => {
                     <BarChart3 className="w-4 h-4" />
                     Análise de Funil
                   </Button>
-                  <Button
-                    onClick={() => navigate('/offer-mappings')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Mapeamento de Ofertas
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button
+                            onClick={() => canAccessOfferMappings && navigate('/offer-mappings')}
+                            variant="outline"
+                            className="gap-2"
+                            disabled={!canAccessOfferMappings}
+                          >
+                            {!canAccessOfferMappings && <Lock className="w-4 h-4" />}
+                            {canAccessOfferMappings && <Settings className="w-4 h-4" />}
+                            Mapeamento de Ofertas
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!canAccessOfferMappings && (
+                        <TooltipContent>
+                          <p>Disponível apenas para proprietários e gerentes</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                   <Button
                     onClick={testConnection}
                     disabled={testingConnection || loading}

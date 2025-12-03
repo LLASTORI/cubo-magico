@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter } from 'lucide-react';
+import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MetaAccountSelector } from '@/components/MetaAccountSelector';
+import { MetaAccountsManager } from '@/components/MetaAccountsManager';
 import MetaDateFilters from '@/components/MetaDateFilters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +31,7 @@ const MetaAds = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showFilters, setShowFilters] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
   
   // Date range state
   const today = new Date().toISOString().split('T')[0];
@@ -343,23 +345,34 @@ const MetaAds = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-6">
-        {/* Date Filters */}
-        <Collapsible open={showFilters} onOpenChange={setShowFilters}>
-          <CollapsibleContent>
-            <Card className="p-4 mb-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Filter className="w-5 h-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Filtros de Data</h2>
-              </div>
-              <MetaDateFilters
-                startDate={startDate}
-                endDate={endDate}
-                onStartDateChange={setStartDate}
-                onEndDateChange={setEndDate}
-              />
-            </Card>
-          </CollapsibleContent>
-        </Collapsible>
+        {/* Main Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="accounts">
+              <Building2 className="h-4 w-4 mr-1" />
+              Contas Meta
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dashboard" className="space-y-6">
+            {/* Date Filters */}
+            <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+              <CollapsibleContent>
+                <Card className="p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Filter className="w-5 h-5 text-primary" />
+                    <h2 className="text-lg font-semibold text-foreground">Filtros de Data</h2>
+                  </div>
+                  <MetaDateFilters
+                    startDate={startDate}
+                    endDate={endDate}
+                    onStartDateChange={setStartDate}
+                    onEndDateChange={setEndDate}
+                  />
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
 
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -525,36 +538,17 @@ const MetaAds = () => {
           </CardContent>
         </Card>
 
-        {/* Ad Accounts */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contas de Anúncio</CardTitle>
-            <CardDescription>Contas conectadas ao projeto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {adAccounts && adAccounts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {adAccounts.map((account) => (
-                  <div key={account.id} className="p-4 rounded-lg border border-border bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Facebook className="h-4 w-4 text-[#1877F2]" />
-                      <span className="font-medium truncate">{account.account_name || account.account_id}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <p>ID: {account.account_id}</p>
-                      {account.currency && <p>Moeda: {account.currency}</p>}
-                      {account.timezone_name && <p>Fuso: {account.timezone_name}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-8 text-center text-muted-foreground">
-                Nenhuma conta de anúncio sincronizada. Clique em "Sincronizar" para carregar.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          </TabsContent>
+
+          <TabsContent value="accounts" className="space-y-6">
+            <MetaAccountsManager 
+              projectId={currentProject?.id || ''} 
+              onAccountsChange={() => {
+                queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
+              }}
+            />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

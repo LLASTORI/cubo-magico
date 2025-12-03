@@ -11,28 +11,46 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil, Users, Mail, Crown, Shield, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAvatar } from '@/components/UserAvatar';
 import NotificationsDropdown from '@/components/NotificationsDropdown';
+import { TeamManagementDialog } from '@/components/TeamManagementDialog';
+import { PendingInvitesDialog } from '@/components/PendingInvitesDialog';
+import { useMyInvites, ProjectRole, getRoleLabel } from '@/hooks/useProjectMembers';
 
 interface ProjectCredentialStatus {
   is_configured: boolean;
   is_validated: boolean;
 }
 
+interface ProjectWithRole extends Project {
+  userRole?: ProjectRole;
+}
+
+const getRoleIcon = (role: ProjectRole) => {
+  switch (role) {
+    case 'owner': return <Crown className="w-3 h-3" />;
+    case 'manager': return <Shield className="w-3 h-3" />;
+    case 'operator': return <User className="w-3 h-3" />;
+  }
+};
+
 const Projects = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { projects, currentProject, setCurrentProject, createProject, updateProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials } = useProject();
+  const { projects, currentProject, setCurrentProject, createProject, updateProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials, refreshProjects } = useProject();
   const { toast } = useToast();
+  const { invites: myInvites } = useMyInvites();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isTeamOpen, setIsTeamOpen] = useState(false);
+  const [isInvitesOpen, setIsInvitesOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newProject, setNewProject] = useState({ name: '', description: '' });
   const [editProject, setEditProject] = useState({ name: '', description: '' });
@@ -40,20 +58,24 @@ const Projects = () => {
   const [submitting, setSubmitting] = useState(false);
   const [testing, setTesting] = useState(false);
   const [projectCredentials, setProjectCredentials] = useState<Record<string, ProjectCredentialStatus>>({});
+  const [projectRoles, setProjectRoles] = useState<Record<string, ProjectRole>>({});
 
-  // Fetch credentials status for all projects
+  // Fetch credentials status and user roles for all projects
   useEffect(() => {
-    const fetchCredentialsStatus = async () => {
-      if (projects.length === 0) return;
+    const fetchProjectData = async () => {
+      if (projects.length === 0 || !user) return;
       
-      const { data } = await supabase
+      const projectIds = projects.map(p => p.id);
+      
+      // Fetch credentials
+      const { data: credData } = await supabase
         .from('project_credentials')
         .select('project_id, is_configured, is_validated')
-        .in('project_id', projects.map(p => p.id));
+        .in('project_id', projectIds);
       
-      if (data) {
+      if (credData) {
         const statusMap: Record<string, ProjectCredentialStatus> = {};
-        data.forEach(cred => {
+        credData.forEach(cred => {
           statusMap[cred.project_id] = {
             is_configured: cred.is_configured || false,
             is_validated: cred.is_validated || false,
@@ -61,10 +83,25 @@ const Projects = () => {
         });
         setProjectCredentials(statusMap);
       }
+
+      // Fetch user roles
+      const { data: memberData } = await supabase
+        .from('project_members')
+        .select('project_id, role')
+        .eq('user_id', user.id)
+        .in('project_id', projectIds);
+
+      if (memberData) {
+        const rolesMap: Record<string, ProjectRole> = {};
+        memberData.forEach(m => {
+          rolesMap[m.project_id] = m.role as ProjectRole;
+        });
+        setProjectRoles(rolesMap);
+      }
     };
     
-    fetchCredentialsStatus();
-  }, [projects]);
+    fetchProjectData();
+  }, [projects, user]);
 
   const handleCreateProject = async () => {
     if (!newProject.name.trim()) {
@@ -216,6 +253,20 @@ const Projects = () => {
     setIsCredentialsOpen(true);
   };
 
+  const openTeamDialog = (project: Project) => {
+    setSelectedProject(project);
+    setIsTeamOpen(true);
+  };
+
+  const handleLeaveProject = async () => {
+    await refreshProjects();
+  };
+
+  const handleInviteAccepted = async () => {
+    await refreshProjects();
+    setIsInvitesOpen(false);
+  };
+
   const selectAndGo = (project: Project) => {
     const status = projectCredentials[project.id];
     
@@ -340,6 +391,19 @@ const Projects = () => {
               </Dialog>
 
               <NotificationsDropdown />
+              {myInvites.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="relative"
+                  onClick={() => setIsInvitesOpen(true)}
+                >
+                  <Mail className="w-4 h-4" />
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
+                    {myInvites.length}
+                  </span>
+                </Button>
+              )}
               <ThemeToggle />
               <UserAvatar size="sm" />
               <Button variant="outline" onClick={handleLogout} className="gap-2">
@@ -368,84 +432,115 @@ const Projects = () => {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
-              <Card 
-                key={project.id} 
-                className={`transition-all hover:shadow-md ${currentProject?.id === project.id ? 'ring-2 ring-primary' : ''}`}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{project.name}</CardTitle>
-                      {project.description && (
-                        <CardDescription className="mt-1">{project.description}</CardDescription>
+            {projects.map((project) => {
+              const userRole = projectRoles[project.id];
+              const canEdit = userRole === 'owner' || userRole === 'manager';
+              const canDelete = userRole === 'owner';
+              const canManageTeam = userRole === 'owner' || userRole === 'manager';
+
+              return (
+                <Card 
+                  key={project.id} 
+                  className={`transition-all hover:shadow-md ${currentProject?.id === project.id ? 'ring-2 ring-primary' : ''}`}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{project.name}</CardTitle>
+                        {project.description && (
+                          <CardDescription className="mt-1">{project.description}</CardDescription>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {userRole && (
+                          <Badge variant="outline" className="gap-1 text-xs">
+                            {getRoleIcon(userRole)}
+                            {getRoleLabel(userRole)}
+                          </Badge>
+                        )}
+                        {currentProject?.id === project.id && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                            Ativo
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs text-muted-foreground">
+                        Criado em {new Date(project.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                      {getStatusBadge(project.id)}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button 
+                        variant={projectCredentials[project.id]?.is_validated ? "default" : "outline"}
+                        size="sm" 
+                        className="flex-1 gap-1"
+                        onClick={() => selectAndGo(project)}
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                        Acessar
+                      </Button>
+                      {canManageTeam && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openTeamDialog(project)}
+                          title="Gerenciar equipe"
+                        >
+                          <Users className="w-3 h-3" />
+                        </Button>
+                      )}
+                      {canEdit && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openEditDialog(project)}
+                            title="Editar projeto"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openCredentialsDialog(project)}
+                            title="Credenciais"
+                          >
+                            <Key className="w-3 h-3" />
+                          </Button>
+                        </>
+                      )}
+                      {canDelete && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Trash2 className="w-3 h-3 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita. Todos os dados do projeto serão perdidos.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteProject(project)}>
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
                     </div>
-                    {currentProject?.id === project.id && (
-                      <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                        Ativo
-                      </span>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs text-muted-foreground">
-                      Criado em {new Date(project.created_at).toLocaleDateString('pt-BR')}
-                    </p>
-                    {getStatusBadge(project.id)}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant={projectCredentials[project.id]?.is_validated ? "default" : "outline"}
-                      size="sm" 
-                      className="flex-1 gap-1"
-                      onClick={() => selectAndGo(project)}
-                    >
-                      <ArrowRight className="w-3 h-3" />
-                      Acessar
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => openEditDialog(project)}
-                      title="Editar projeto"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => openCredentialsDialog(project)}
-                      title="Credenciais"
-                    >
-                      <Key className="w-3 h-3" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="w-3 h-3 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. Todos os dados do projeto serão perdidos.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteProject(project)}>
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -552,12 +647,30 @@ const Projects = () => {
                 disabled={testing || !credentials.client_id || !credentials.client_secret}
                 className="gap-2"
               >
-                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 Salvar e Testar Conexão
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Team Management Dialog */}
+        {selectedProject && (
+          <TeamManagementDialog
+            projectId={selectedProject.id}
+            projectName={selectedProject.name}
+            open={isTeamOpen}
+            onOpenChange={setIsTeamOpen}
+            onLeaveProject={handleLeaveProject}
+          />
+        )}
+
+        {/* Pending Invites Dialog */}
+        <PendingInvitesDialog
+          open={isInvitesOpen}
+          onOpenChange={setIsInvitesOpen}
+          onInviteAccepted={handleInviteAccepted}
+        />
       </main>
     </div>
   );

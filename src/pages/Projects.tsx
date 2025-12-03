@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { UserAvatar } from '@/components/UserAvatar';
 
 interface ProjectCredentialStatus {
   is_configured: boolean;
@@ -338,6 +339,7 @@ const Projects = () => {
               </Dialog>
 
               <ThemeToggle />
+              <UserAvatar size="sm" />
               <Button variant="outline" onClick={handleLogout} className="gap-2">
                 <LogOut className="w-4 h-4" />
                 Sair

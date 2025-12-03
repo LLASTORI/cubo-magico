@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserAvatar } from "@/components/UserAvatar";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 import TemporalChart from "@/components/funnel/TemporalChart";
@@ -334,7 +335,10 @@ const FunnelAnalysis = () => {
                   </h1>
                 </div>
               </div>
-              <ThemeToggle />
+              <div className="flex items-center gap-3">
+                <ThemeToggle />
+                <UserAvatar size="sm" />
+              </div>
             </div>
           </div>
         </header>
@@ -384,6 +388,7 @@ const FunnelAnalysis = () => {
                 {salesFromDashboard.length} vendas do Dashboard
               </Badge>
               <ThemeToggle />
+              <UserAvatar size="sm" />
             </div>
           </div>
         </div>

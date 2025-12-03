@@ -39,6 +39,7 @@ import { FunnelManager } from '@/components/FunnelManager';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { UserAvatar } from '@/components/UserAvatar';
 
 interface Funnel {
   id: string;
@@ -546,7 +547,10 @@ export default function OfferMappingsAuto() {
               </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <UserAvatar size="sm" />
+          </div>
         </div>
 
         <Tabs defaultValue="existing" className="w-full">

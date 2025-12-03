@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, User } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
@@ -452,14 +453,7 @@ const Index = () => {
                 </Button>
               )}
               <ThemeToggle />
-              <Button
-                onClick={() => navigate('/settings')}
-                variant="outline"
-                size="icon"
-                title="Configurações"
-              >
-                <User className="w-4 h-4" />
-              </Button>
+              <UserAvatar size="sm" />
               <Button
                 onClick={handleLogout}
                 variant="outline"

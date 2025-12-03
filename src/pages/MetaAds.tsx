@@ -132,15 +132,18 @@ const MetaAds = () => {
       console.log('Insights sync result:', insightsData);
       if (insightsError) throw insightsError;
 
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
-      queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-
       toast({
         title: 'Sincronização iniciada!',
-        description: 'Os dados serão atualizados em alguns segundos.',
+        description: 'Os dados serão atualizados em alguns segundos. Aguarde e atualize.',
       });
+
+      // Auto-refresh data after a delay
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
+        queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+      }, 5000);
+
     } catch (error: any) {
       console.error('Sync error:', error);
       toast({

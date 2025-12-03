@@ -12,6 +12,7 @@ import Auth from "./pages/Auth";
 import Projects from "./pages/Projects";
 import OfferMappings from "./pages/OfferMappings";
 import FunnelAnalysis from "./pages/FunnelAnalysis";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,11 @@ const App = () => (
                 <Route path="/funnel-analysis" element={
                   <ProtectedRoute>
                     <FunnelAnalysis />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute>
+                    <Settings />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

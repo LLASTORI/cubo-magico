@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,16 +20,10 @@ const Settings = () => {
   const queryClient = useQueryClient();
   
   const [fullName, setFullName] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
-  // Notification preferences (local state for now)
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [salesAlerts, setSalesAlerts] = useState(true);
-  const [weeklyReport, setWeeklyReport] = useState(false);
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
@@ -44,12 +38,27 @@ const Settings = () => {
     enabled: !!user?.id,
   });
 
+  const { data: preferences, isLoading: preferencesLoading } = useQuery({
+    queryKey: ['user_preferences', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   // Set initial values when profile loads
-  useState(() => {
+  useEffect(() => {
     if (profile?.full_name) {
       setFullName(profile.full_name);
     }
-  });
+  }, [profile]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (newName: string) => {
@@ -76,6 +85,41 @@ const Settings = () => {
     },
   });
 
+  const updatePreferencesMutation = useMutation({
+    mutationFn: async (prefs: { email_notifications?: boolean; sales_alerts?: boolean; weekly_report?: boolean }) => {
+      if (!user?.id) throw new Error('Usuário não autenticado');
+      
+      // Check if preferences exist
+      if (preferences) {
+        const { error } = await supabase
+          .from('user_preferences')
+          .update(prefs)
+          .eq('user_id', user.id);
+        if (error) throw error;
+      } else {
+        // Insert new preferences
+        const { error } = await supabase
+          .from('user_preferences')
+          .insert({ user_id: user.id, ...prefs });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user_preferences'] });
+      toast({
+        title: 'Preferências salvas',
+        description: 'Suas preferências de notificação foram atualizadas.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao salvar preferências',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const updatePasswordMutation = useMutation({
     mutationFn: async () => {
       if (newPassword !== confirmPassword) {
@@ -90,7 +134,6 @@ const Settings = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       toast({
@@ -117,7 +160,11 @@ const Settings = () => {
     updatePasswordMutation.mutate();
   };
 
-  if (isLoading) {
+  const handleTogglePreference = (key: 'email_notifications' | 'sales_alerts' | 'weekly_report', value: boolean) => {
+    updatePreferencesMutation.mutate({ [key]: value });
+  };
+
+  if (profileLoading || preferencesLoading) {
     return <CubeLoader />;
   }
 
@@ -226,8 +273,9 @@ const Settings = () => {
                   </div>
                   <Switch
                     id="emailNotifications"
-                    checked={emailNotifications}
-                    onCheckedChange={setEmailNotifications}
+                    checked={preferences?.email_notifications ?? true}
+                    onCheckedChange={(checked) => handleTogglePreference('email_notifications', checked)}
+                    disabled={updatePreferencesMutation.isPending}
                   />
                 </div>
 
@@ -240,8 +288,9 @@ const Settings = () => {
                   </div>
                   <Switch
                     id="salesAlerts"
-                    checked={salesAlerts}
-                    onCheckedChange={setSalesAlerts}
+                    checked={preferences?.sales_alerts ?? true}
+                    onCheckedChange={(checked) => handleTogglePreference('sales_alerts', checked)}
+                    disabled={updatePreferencesMutation.isPending}
                   />
                 </div>
 
@@ -254,14 +303,11 @@ const Settings = () => {
                   </div>
                   <Switch
                     id="weeklyReport"
-                    checked={weeklyReport}
-                    onCheckedChange={setWeeklyReport}
+                    checked={preferences?.weekly_report ?? false}
+                    onCheckedChange={(checked) => handleTogglePreference('weekly_report', checked)}
+                    disabled={updatePreferencesMutation.isPending}
                   />
                 </div>
-
-                <p className="text-sm text-muted-foreground pt-4 border-t border-border">
-                  As preferências de notificação serão implementadas em breve.
-                </p>
               </CardContent>
             </Card>
           </TabsContent>

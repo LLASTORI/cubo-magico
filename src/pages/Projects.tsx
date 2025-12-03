@@ -120,8 +120,23 @@ const Projects = () => {
   const handleTestConnection = async () => {
     if (!selectedProject) return;
 
+    if (!credentials.client_id || !credentials.client_secret) {
+      toast({ title: 'Client ID e Client Secret são obrigatórios', variant: 'destructive' });
+      return;
+    }
+
     setTesting(true);
     try {
+      // Save credentials first
+      const { error: saveError } = await saveCredentials(selectedProject.id, credentials);
+      if (saveError) {
+        throw new Error('Erro ao salvar credenciais: ' + saveError.message);
+      }
+
+      // Wait a moment for the database to sync
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Then test connection
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: '/sales/summary',

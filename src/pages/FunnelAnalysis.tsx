@@ -22,6 +22,7 @@ import TemporalChart from "@/components/funnel/TemporalChart";
 import UTMAnalysis from "@/components/funnel/UTMAnalysis";
 import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
 import CustomerCohort from "@/components/funnel/CustomerCohort";
+import LTVAnalysis from "@/components/funnel/LTVAnalysis";
 interface OfferMapping {
   id: string;
   id_funil: string;
@@ -435,6 +436,7 @@ const FunnelAnalysis = () => {
                   <TabsTrigger value="utm">UTM</TabsTrigger>
                   <TabsTrigger value="payment">Pagamentos</TabsTrigger>
                   <TabsTrigger value="cohort">Clientes</TabsTrigger>
+                  <TabsTrigger value="ltv">LTV</TabsTrigger>
                   <TabsTrigger value="changelog">Histórico</TabsTrigger>
                 </TabsList>
 
@@ -722,6 +724,14 @@ const FunnelAnalysis = () => {
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
                     initialStartDate={dashboardStartDate}
                     initialEndDate={dashboardEndDate}
+                  />
+                </TabsContent>
+
+                <TabsContent value="ltv">
+                  <LTVAnalysis
+                    salesData={salesFromDashboard}
+                    funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                    selectedFunnel={selectedFunnel}
                   />
                 </TabsContent>
 

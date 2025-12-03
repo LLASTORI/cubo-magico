@@ -32,23 +32,42 @@ const ResetPassword = () => {
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    // Check if user has a valid recovery session
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsValidSession(!!session);
-      setCheckingSession(false);
-    };
-    
-    checkSession();
+    let timeoutId: NodeJS.Timeout;
 
-    // Listen for auth state changes (recovery link clicked)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+    // Listen for auth state changes FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
         setIsValidSession(true);
+        setCheckingSession(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Check if there's a hash in the URL (recovery token)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const type = hashParams.get('type');
+
+    if (accessToken && type === 'recovery') {
+      // Token exists in URL, wait for Supabase to process it
+      timeoutId = setTimeout(() => {
+        // If still checking after 3 seconds, assume invalid
+        setCheckingSession(false);
+      }, 3000);
+    } else {
+      // No token in URL, check existing session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setIsValidSession(true);
+        }
+        setCheckingSession(false);
+      });
+    }
+
+    return () => {
+      subscription.unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

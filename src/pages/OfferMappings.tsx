@@ -116,7 +116,6 @@ export default function OfferMappingsAuto() {
   const [importingOffers, setImportingOffers] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [syncingOffers, setSyncingOffers] = useState(false);
-  const [fixingIds, setFixingIds] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -585,115 +584,6 @@ export default function OfferMappingsAuto() {
     }
   };
 
-  // Fix product IDs and populate visual IDs
-  const fixProductIds = async () => {
-    try {
-      setFixingIds(true);
-      
-      // Get mappings that need fixing:
-      // 1. Old format "ID XXXXX" -> convert to UUID
-      // 2. Has UUID but no visual ID -> populate visual ID
-      const mappingsWithOldFormat = mappings.filter(m => m.id_produto?.startsWith('ID '));
-      const mappingsNeedingVisualId = mappings.filter(m => 
-        m.id_produto && !m.id_produto.startsWith('ID ') && !m.id_produto_visual
-      );
-      
-      if (mappingsWithOldFormat.length === 0 && mappingsNeedingVisualId.length === 0) {
-        toast({
-          title: 'Nada para corrigir',
-          description: 'Todos os IDs já estão corretos',
-        });
-        return;
-      }
-      
-      toast({
-        title: 'Buscando produtos...',
-        description: 'Carregando dados da Hotmart para mapear IDs',
-      });
-      
-      // Fetch all products from Hotmart
-      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/products',
-          apiType: 'products'
-        }
-      });
-      
-      if (productsError) throw productsError;
-      
-      const products: HotmartProduct[] = productsData.items || productsData || [];
-      
-      // Create mappings: numeric ID -> UUID and UUID -> numeric ID
-      const idToUcode = new Map<string, string>();
-      const ucodeToId = new Map<string, string>();
-      products.forEach(p => {
-        idToUcode.set(String(p.id), p.ucode);
-        ucodeToId.set(p.ucode, `ID ${p.id}`);
-      });
-      
-      console.log('ID mappings created for', products.length, 'products');
-      
-      let fixedCount = 0;
-      
-      // Fix mappings with old "ID XXXXX" format
-      for (const mapping of mappingsWithOldFormat) {
-        const numericId = mapping.id_produto!.replace('ID ', '');
-        const correctUcode = idToUcode.get(numericId);
-        
-        if (correctUcode) {
-          const { error } = await supabase
-            .from('offer_mappings')
-            .update({ 
-              id_produto: correctUcode,
-              id_produto_visual: mapping.id_produto, // Keep the "ID XXXXX" format for display
-              anotacoes: `${mapping.anotacoes || ''}\n[${new Date().toLocaleDateString('pt-BR')}] ID corrigido: ${mapping.id_produto} → ${correctUcode}`.trim()
-            })
-            .eq('id', mapping.id);
-          
-          if (!error) fixedCount++;
-        }
-      }
-      
-      // Populate visual IDs for mappings that have UUID but no visual ID
-      for (const mapping of mappingsNeedingVisualId) {
-        const visualId = ucodeToId.get(mapping.id_produto!);
-        
-        if (visualId) {
-          const { error } = await supabase
-            .from('offer_mappings')
-            .update({ id_produto_visual: visualId })
-            .eq('id', mapping.id);
-          
-          if (!error) fixedCount++;
-        }
-      }
-      
-      if (fixedCount > 0) {
-        toast({
-          title: 'IDs atualizados!',
-          description: `${fixedCount} registros atualizados`,
-        });
-        fetchMappings();
-      } else {
-        toast({
-          title: 'Nenhum ID atualizado',
-          description: 'Não foi possível encontrar correspondências na Hotmart',
-          variant: 'destructive',
-        });
-      }
-      
-    } catch (error: any) {
-      console.error('Error fixing IDs:', error);
-      toast({
-        title: 'Erro ao corrigir IDs',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setFixingIds(false);
-    }
-  };
-
   useEffect(() => {
     fetchMappings();
   }, []);
@@ -812,37 +702,19 @@ export default function OfferMappingsAuto() {
                       </Button>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      onClick={fixProductIds}
-                      disabled={fixingIds || (
-                        mappings.filter(m => m.id_produto?.startsWith('ID ')).length === 0 &&
-                        mappings.filter(m => m.id_produto && !m.id_produto.startsWith('ID ') && !m.id_produto_visual).length === 0
-                      )}
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      {fixingIds ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      Corrigir IDs
-                    </Button>
-                    <Button 
-                      onClick={syncOffersWithHotmart}
-                      disabled={syncingOffers || mappings.length === 0}
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      {syncingOffers ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RotateCw className="h-4 w-4" />
-                      )}
-                      Sincronizar com Hotmart
-                    </Button>
-                  </div>
+                  <Button 
+                    onClick={syncOffersWithHotmart}
+                    disabled={syncingOffers || mappings.length === 0}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    {syncingOffers ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" />
+                    )}
+                    Sincronizar com Hotmart
+                  </Button>
                 </div>
                 
                 <div className="flex items-center gap-4 flex-wrap">

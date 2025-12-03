@@ -45,7 +45,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/projects');
     }
   }, [user, navigate]);
 
@@ -83,7 +83,7 @@ const Auth = () => {
         title: 'Login realizado!',
         description: 'Bem-vindo de volta!',
       });
-      navigate('/');
+      navigate('/projects');
     }
   };
 
@@ -127,7 +127,7 @@ const Auth = () => {
         title: 'Conta criada!',
         description: 'Você foi autenticado automaticamente.',
       });
-      navigate('/');
+      navigate('/projects');
     }
   };
 

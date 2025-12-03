@@ -54,6 +54,14 @@ const Projects = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isTeamOpen, setIsTeamOpen] = useState(false);
   const [isInvitesOpen, setIsInvitesOpen] = useState(false);
+  const [isNoPermissionOpen, setIsNoPermissionOpen] = useState(false);
+
+  // Auto-open invites dialog when user has pending invites
+  useEffect(() => {
+    if (myInvites.length > 0 && !loading) {
+      setIsInvitesOpen(true);
+    }
+  }, [myInvites.length, loading]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newProject, setNewProject] = useState({ name: '', description: '' });
   const [editProject, setEditProject] = useState({ name: '', description: '' });
@@ -418,18 +426,14 @@ const Projects = () => {
                   </DialogContent>
                 </Dialog>
               ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button className="gap-2" variant="secondary" disabled>
-                      <Plus className="w-4 h-4" />
-                      Novo Projeto
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Você não tem permissão para criar projetos.</p>
-                    <p className="text-xs text-muted-foreground">Entre em contato com o administrador.</p>
-                  </TooltipContent>
-                </Tooltip>
+                <Button 
+                  className="gap-2" 
+                  variant="secondary" 
+                  onClick={() => setIsNoPermissionOpen(true)}
+                >
+                  <Plus className="w-4 h-4" />
+                  Novo Projeto
+                </Button>
               )}
 
               {isAdmin && (
@@ -442,6 +446,31 @@ const Projects = () => {
                   <TooltipContent>Administração de Usuários</TooltipContent>
                 </Tooltip>
               )}
+
+              {/* Dialog for no permission to create projects */}
+              <Dialog open={isNoPermissionOpen} onOpenChange={setIsNoPermissionOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Criação de Projetos Não Disponível</DialogTitle>
+                    <DialogDescription>
+                      Seu plano atual não permite criar novos projetos.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4 space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Para criar projetos, você precisa de autorização do administrador.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Entre em contato com o suporte ou aguarde um convite para participar de um projeto existente.
+                    </p>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={() => setIsNoPermissionOpen(false)}>
+                      Entendi
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <NotificationsDropdown />
               {myInvites.length > 0 && (

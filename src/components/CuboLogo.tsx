@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface CuboLogoProps {
   className?: string;
@@ -61,6 +62,8 @@ export const CuboBrand: React.FC<CuboBrandProps> = ({
   showText = true,
   size = 'md' 
 }) => {
+  const navigate = useNavigate();
+  
   const textSizeMap = {
     sm: 'text-lg',
     md: 'text-xl',
@@ -68,7 +71,10 @@ export const CuboBrand: React.FC<CuboBrandProps> = ({
   };
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
+    <div 
+      className={`flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity ${className}`}
+      onClick={() => navigate('/')}
+    >
       <CuboLogo size={size} />
       {showText && (
         <span className={`font-display font-bold ${textSizeMap[size]} text-foreground`}>

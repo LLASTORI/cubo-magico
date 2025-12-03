@@ -23,6 +23,7 @@ export type Database = {
           descricao: string
           id: string
           id_funil: string
+          project_id: string | null
           tipo_alteracao: string
           updated_at: string
           valor_anterior: number | null
@@ -36,6 +37,7 @@ export type Database = {
           descricao: string
           id?: string
           id_funil: string
+          project_id?: string | null
           tipo_alteracao: string
           updated_at?: string
           valor_anterior?: number | null
@@ -49,12 +51,21 @@ export type Database = {
           descricao?: string
           id?: string
           id_funil?: string
+          project_id?: string | null
           tipo_alteracao?: string
           updated_at?: string
           valor_anterior?: number | null
           valor_novo?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "funnel_changes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       hotmart_sales: {
         Row: {
@@ -101,6 +112,7 @@ export type Database = {
           product_currency: string | null
           product_name: string
           product_price: number | null
+          project_id: string | null
           received_value: number | null
           recurrence: number | null
           sale_date: string | null
@@ -162,6 +174,7 @@ export type Database = {
           product_currency?: string | null
           product_name: string
           product_price?: number | null
+          project_id?: string | null
           received_value?: number | null
           recurrence?: number | null
           sale_date?: string | null
@@ -223,6 +236,7 @@ export type Database = {
           product_currency?: string | null
           product_name?: string
           product_price?: number | null
+          project_id?: string | null
           received_value?: number | null
           recurrence?: number | null
           sale_date?: string | null
@@ -240,7 +254,15 @@ export type Database = {
           utm_placement?: string | null
           utm_source?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_sales_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       offer_mappings: {
         Row: {
@@ -257,6 +279,7 @@ export type Database = {
           nome_posicao: string | null
           nome_produto: string
           ordem_posicao: number | null
+          project_id: string | null
           status: string | null
           tipo_posicao: string | null
           updated_at: string
@@ -276,6 +299,7 @@ export type Database = {
           nome_posicao?: string | null
           nome_produto: string
           ordem_posicao?: number | null
+          project_id?: string | null
           status?: string | null
           tipo_posicao?: string | null
           updated_at?: string
@@ -295,10 +319,141 @@ export type Database = {
           nome_posicao?: string | null
           nome_produto?: string
           ordem_posicao?: number | null
+          project_id?: string | null
           status?: string | null
           tipo_posicao?: string | null
           updated_at?: string
           valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_mappings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_credentials: {
+        Row: {
+          basic_auth: string | null
+          client_id: string | null
+          client_secret: string | null
+          created_at: string
+          id: string
+          is_configured: boolean | null
+          project_id: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          basic_auth?: string | null
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string
+          id?: string
+          is_configured?: boolean | null
+          project_id: string
+          provider?: string
+          updated_at?: string
+        }
+        Update: {
+          basic_auth?: string | null
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string
+          id?: string
+          is_configured?: boolean | null
+          project_id?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_credentials_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -307,10 +462,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -437,6 +598,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const

@@ -719,6 +719,7 @@ export default function OfferMappingsAuto() {
         onOpenChange={setDialogOpen}
         mapping={selectedMapping}
         onSuccess={fetchMappings}
+        projectId={currentProject?.id || null}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

@@ -69,34 +69,46 @@ const MetaAds = () => {
     enabled: !!currentProject?.id && !!metaCredentials,
   });
 
-  // Fetch campaigns
+  // Fetch campaigns - only from active accounts
   const { data: campaigns, isLoading: campaignsLoading } = useQuery({
-    queryKey: ['meta_campaigns', currentProject?.id],
+    queryKey: ['meta_campaigns', currentProject?.id, adAccounts],
     queryFn: async () => {
       if (!currentProject?.id) return [];
+      if (!adAccounts || adAccounts.length === 0) return [];
+      
+      const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
+      if (activeAccountIds.length === 0) return [];
+      
       const { data, error } = await supabase
         .from('meta_campaigns')
         .select('*')
         .eq('project_id', currentProject.id)
+        .in('ad_account_id', activeAccountIds)
         .order('campaign_name');
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentProject?.id && !!metaCredentials,
+    enabled: !!currentProject?.id && !!metaCredentials && !!adAccounts,
   });
 
-  // Fetch insights
+  // Fetch insights - only from active accounts
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    queryKey: ['meta_insights', currentProject?.id, dateRange],
+    queryKey: ['meta_insights', currentProject?.id, dateRange, adAccounts],
     queryFn: async () => {
       if (!currentProject?.id) return [];
+      if (!adAccounts || adAccounts.length === 0) return [];
+      
       const startDate = format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd');
       const endDate = format(new Date(), 'yyyy-MM-dd');
+      const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
+      
+      if (activeAccountIds.length === 0) return [];
       
       const { data, error } = await supabase
         .from('meta_insights')
         .select('*')
         .eq('project_id', currentProject.id)
+        .in('ad_account_id', activeAccountIds)
         .gte('date_start', startDate)
         .lte('date_stop', endDate);
       if (error) throw error;

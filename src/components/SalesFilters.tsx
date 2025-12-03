@@ -272,7 +272,7 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
             <Label htmlFor="utmCampaign" className="text-foreground">Campanha</Label>
             <Input
               id="utmCampaign"
-              placeholder="Ex: 00_ADVANTAGE_..."
+              placeholder="Ex: PERPETUO_MAKEPRATICA..."
               value={utmCampaign}
               onChange={(e) => setUtmCampaign(e.target.value)}
               className="border-border"
@@ -283,7 +283,7 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
             <Label htmlFor="utmAdset" className="text-foreground">Conjunto de Anúncios</Label>
             <Input
               id="utmAdset"
-              placeholder="Ex: PERPETUO_MAKEPRATICA..."
+              placeholder="Ex: 00_ADVANTAGE_..."
               value={utmAdset}
               onChange={(e) => setUtmAdset(e.target.value)}
               className="border-border"

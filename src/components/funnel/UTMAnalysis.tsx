@@ -24,6 +24,8 @@ import { PieChart, Pie, Cell } from "recharts";
 interface UTMAnalysisProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
+  initialStartDate?: Date;
+  initialEndDate?: Date;
 }
 
 interface HotmartSale {
@@ -80,10 +82,10 @@ const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
   creative: { label: 'Creative', icon: Sparkles },
 };
 
-const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes }: UTMAnalysisProps) => {
+const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: UTMAnalysisProps) => {
   const today = new Date();
-  const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
-  const [endDate, setEndDate] = useState<Date>(today);
+  const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
+  const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<HotmartSale[]>([]);
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});

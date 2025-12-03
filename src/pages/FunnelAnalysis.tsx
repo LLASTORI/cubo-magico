@@ -158,8 +158,12 @@ const FunnelAnalysis = () => {
   const [selectedFunnel, setSelectedFunnel] = useState<string>("");
 
   // Get sales data from Dashboard navigation state
-  const dashboardData = location.state as { salesData?: DashboardSale[]; filters?: any } | null;
+  const dashboardData = location.state as { salesData?: DashboardSale[]; filters?: { startDate?: string; endDate?: string } } | null;
   const salesFromDashboard = dashboardData?.salesData || [];
+  
+  // Parse dashboard dates for tab components
+  const dashboardStartDate = dashboardData?.filters?.startDate ? new Date(dashboardData.filters.startDate) : undefined;
+  const dashboardEndDate = dashboardData?.filters?.endDate ? new Date(dashboardData.filters.endDate) : undefined;
 
   // Get unique funnels
   const funnels = useMemo(() => {
@@ -640,6 +644,8 @@ const FunnelAnalysis = () => {
                   <TemporalChart
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                    initialStartDate={dashboardStartDate}
+                    initialEndDate={dashboardEndDate}
                   />
                 </TabsContent>
 
@@ -647,6 +653,8 @@ const FunnelAnalysis = () => {
                   <PeriodComparison
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                    initialStartDate={dashboardStartDate}
+                    initialEndDate={dashboardEndDate}
                   />
                 </TabsContent>
 
@@ -654,6 +662,8 @@ const FunnelAnalysis = () => {
                   <UTMAnalysis
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                    initialStartDate={dashboardStartDate}
+                    initialEndDate={dashboardEndDate}
                   />
                 </TabsContent>
 
@@ -661,6 +671,8 @@ const FunnelAnalysis = () => {
                   <PaymentMethodAnalysis
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                    initialStartDate={dashboardStartDate}
+                    initialEndDate={dashboardEndDate}
                   />
                 </TabsContent>
 
@@ -668,6 +680,8 @@ const FunnelAnalysis = () => {
                   <CustomerCohort
                     selectedFunnel={selectedFunnel}
                     funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                    initialStartDate={dashboardStartDate}
+                    initialEndDate={dashboardEndDate}
                   />
                 </TabsContent>
 

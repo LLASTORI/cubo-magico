@@ -23,6 +23,8 @@ import MetricCard from "@/components/MetricCard";
 interface PaymentMethodAnalysisProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
+  initialStartDate?: Date;
+  initialEndDate?: Date;
 }
 
 interface HotmartSale {
@@ -81,10 +83,10 @@ const chartConfig = {
   revenue: { label: "Receita", color: "hsl(142, 76%, 36%)" },
 };
 
-const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMethodAnalysisProps) => {
+const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: PaymentMethodAnalysisProps) => {
   const today = new Date();
-  const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
-  const [endDate, setEndDate] = useState<Date>(today);
+  const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
+  const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<HotmartSale[]>([]);
 

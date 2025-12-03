@@ -23,6 +23,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, PieChart, Pie, Cell
 interface CustomerCohortProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
+  initialStartDate?: Date;
+  initialEndDate?: Date;
 }
 
 interface HotmartSale {
@@ -87,10 +89,10 @@ interface OfferMapping {
   id_funil: string;
 }
 
-const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProps) => {
+const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: CustomerCohortProps) => {
   const today = new Date();
-  const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
-  const [endDate, setEndDate] = useState<Date>(today);
+  const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
+  const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<HotmartSale[]>([]);
   const [offerMappings, setOfferMappings] = useState<OfferMapping[]>([]);

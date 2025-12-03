@@ -306,39 +306,55 @@ export default function OfferMappingsAuto() {
   };
 
   const syncOffersWithHotmart = async () => {
+    if (!currentProject) {
+      toast({
+        title: 'Erro',
+        description: 'Nenhum projeto selecionado',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setSyncingOffers(true);
       
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      const productIds = [...new Set(mappings
-        .filter(m => m.id_produto && uuidRegex.test(m.id_produto))
-        .map(m => m.id_produto!)
-      )];
+      toast({
+        title: 'Sincronizando...',
+        description: 'Buscando todos os produtos da Hotmart',
+      });
       
-      if (productIds.length === 0) {
+      // Buscar todos os produtos da Hotmart
+      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          endpoint: '/products',
+          apiType: 'products',
+          projectId: currentProject.id
+        }
+      });
+
+      if (productsError) throw productsError;
+      
+      const products: HotmartProduct[] = productsData.items || productsData || [];
+      
+      if (products.length === 0) {
         toast({
-          title: 'Nada para sincronizar',
-          description: 'Não há ofertas com IDs válidos para sincronizar.',
-          variant: 'destructive',
+          title: 'Nenhum produto encontrado',
+          description: 'Não foram encontrados produtos na sua conta Hotmart',
         });
         return;
       }
       
-      toast({
-        title: 'Sincronizando...',
-        description: `Buscando dados de ${productIds.length} produtos na Hotmart`,
-      });
-      
       let updatedCount = 0;
       const changes: string[] = [];
       
-      for (const productId of productIds) {
+      // Para cada produto, buscar suas ofertas
+      for (const product of products) {
         try {
           const { data, error } = await supabase.functions.invoke('hotmart-api', {
             body: {
-              endpoint: `/products/${productId}/offers`,
+              endpoint: `/products/${product.ucode}/offers`,
               apiType: 'products',
-              projectId: currentProject?.id
+              projectId: currentProject.id
             }
           });
           
@@ -346,6 +362,7 @@ export default function OfferMappingsAuto() {
           
           const offers: HotmartOffer[] = data.items || data || [];
           
+          // Para cada oferta, verificar se existe no banco e atualizar
           for (const offer of offers) {
             const existingMapping = mappings.find(m => m.codigo_oferta === offer.code);
             
@@ -361,22 +378,41 @@ export default function OfferMappingsAuto() {
               
               if (existingMapping.valor !== offer.price.value) {
                 updates.valor = offer.price.value;
-                changeNotes.push(`Valor: ${existingMapping.valor} → ${offer.price.value}`);
+                changeNotes.push(`Valor: R$ ${existingMapping.valor || 0} → R$ ${offer.price.value}`);
+              }
+              
+              // Atualizar nome do produto se diferente
+              if (existingMapping.nome_produto !== product.name) {
+                updates.nome_produto = product.name;
+                changeNotes.push(`Produto: ${existingMapping.nome_produto} → ${product.name}`);
+              }
+              
+              // Atualizar id_produto para o ucode correto
+              if (existingMapping.id_produto !== product.ucode) {
+                updates.id_produto = product.ucode;
+              }
+              
+              // Atualizar id_produto_visual
+              const visualId = `ID ${product.id}`;
+              if (existingMapping.id_produto_visual !== visualId) {
+                updates.id_produto_visual = visualId;
               }
               
               if (Object.keys(updates).length > 0) {
-                const timestamp = new Date().toLocaleDateString('pt-BR');
-                const annotation = `[${timestamp}] Sincronizado com Hotmart:\n${changeNotes.join('\n')}`;
-                updates.anotacoes = existingMapping.anotacoes 
-                  ? `${existingMapping.anotacoes}\n\n${annotation}`
-                  : annotation;
+                if (changeNotes.length > 0) {
+                  const timestamp = new Date().toLocaleDateString('pt-BR');
+                  const annotation = `[${timestamp}] Sincronizado com Hotmart:\n${changeNotes.join('\n')}`;
+                  updates.anotacoes = existingMapping.anotacoes 
+                    ? `${existingMapping.anotacoes}\n\n${annotation}`
+                    : annotation;
+                }
                 
                 const { error: updateError } = await supabase
                   .from('offer_mappings')
                   .update(updates)
                   .eq('id', existingMapping.id);
                 
-                if (!updateError) {
+                if (!updateError && changeNotes.length > 0) {
                   updatedCount++;
                   changes.push(`${existingMapping.nome_produto}: ${changeNotes.join(', ')}`);
                 }
@@ -384,7 +420,7 @@ export default function OfferMappingsAuto() {
             }
           }
         } catch (error) {
-          console.error(`Error syncing product ${productId}:`, error);
+          console.error(`Error syncing product ${product.ucode}:`, error);
         }
       }
       

@@ -148,12 +148,13 @@ export function OfferMappingDialog({
 
   useEffect(() => {
     if (mapping) {
+      console.log('Mapping being edited:', mapping);
       form.reset({
         id_produto_visual: mapping.id_produto_visual || mapping.id_produto || '',
         nome_produto: mapping.nome_produto || '',
         nome_oferta: mapping.nome_oferta || '',
         codigo_oferta: mapping.codigo_oferta || '',
-        valor: mapping.valor?.toString() || '',
+        valor: mapping.valor !== null && mapping.valor !== undefined ? mapping.valor.toString() : '',
         status: mapping.status || 'Ativo',
         data_ativacao: mapping.data_ativacao || '',
         data_desativacao: mapping.data_desativacao || '',

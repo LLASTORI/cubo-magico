@@ -94,8 +94,17 @@ Deno.serve(async (req) => {
         // Use service role for background sync
         const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
         
-        // Run sync directly but with parallel processing for speed
-        result = await syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
+        // Start sync in background (don't await) and return immediately
+        syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
+          .then(() => console.log('Sync completed in background'))
+          .catch(err => console.error('Background sync error:', err))
+        
+        // Return immediately
+        result = { 
+          success: true, 
+          message: 'Sincronização iniciada. Atualize a página em alguns segundos.',
+          background: true 
+        }
         break
 
       default:

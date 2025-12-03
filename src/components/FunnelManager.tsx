@@ -102,6 +102,9 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   const [offerToMove, setOfferToMove] = useState<OfferMapping | null>(null);
   const [targetFunnelName, setTargetFunnelName] = useState('');
   
+  const [legacyFunnels, setLegacyFunnels] = useState<string[]>([]);
+  const [syncingLegacy, setSyncingLegacy] = useState(false);
+  
   const { toast } = useToast();
 
   const fetchFunnels = async () => {
@@ -160,8 +163,75 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     }
   };
 
+  const fetchLegacyFunnels = async () => {
+    if (!projectId) return;
+    
+    try {
+      // Get distinct funnel names from offer_mappings that don't exist in funnels table
+      const { data: mappingFunnels, error: mappingError } = await supabase
+        .from('offer_mappings')
+        .select('id_funil')
+        .eq('project_id', projectId)
+        .not('id_funil', 'is', null);
+
+      if (mappingError) throw mappingError;
+
+      const { data: existingFunnels, error: funnelError } = await supabase
+        .from('funnels')
+        .select('name')
+        .eq('project_id', projectId);
+
+      if (funnelError) throw funnelError;
+
+      const existingNames = new Set(existingFunnels?.map(f => f.name) || []);
+      const uniqueMappingFunnels = [...new Set(mappingFunnels?.map(m => m.id_funil) || [])];
+      const legacy = uniqueMappingFunnels.filter(name => name && !existingNames.has(name));
+      
+      setLegacyFunnels(legacy);
+    } catch (error) {
+      console.error('Error fetching legacy funnels:', error);
+    }
+  };
+
+  const syncLegacyFunnels = async () => {
+    if (!projectId || legacyFunnels.length === 0) return;
+    
+    setSyncingLegacy(true);
+    try {
+      const funnelsToInsert = legacyFunnels.map(name => ({
+        name,
+        project_id: projectId,
+      }));
+
+      const { error } = await supabase
+        .from('funnels')
+        .insert(funnelsToInsert);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso!',
+        description: `${legacyFunnels.length} funis importados com sucesso`,
+      });
+
+      setLegacyFunnels([]);
+      fetchFunnels();
+      onFunnelChange?.();
+    } catch (error: any) {
+      console.error('Error syncing legacy funnels:', error);
+      toast({
+        title: 'Erro ao importar funis',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncingLegacy(false);
+    }
+  };
+
   useEffect(() => {
     fetchFunnels();
+    fetchLegacyFunnels();
   }, [projectId]);
 
   const toggleFunnel = async (funnelName: string) => {
@@ -402,6 +472,34 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
           Sugestão: ORIGEM | NOME DO FUNIL (ex: FACE | SKINCARE 35+, GOOGLE | EBOOK GRÁTIS)
         </p>
       </Card>
+
+      {legacyFunnels.length > 0 && (
+        <Card className="p-4 border-amber-500/50 bg-amber-500/10">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-medium text-amber-700 dark:text-amber-400">
+                {legacyFunnels.length} funis encontrados nas ofertas cadastradas
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Funis: {legacyFunnels.slice(0, 3).join(', ')}{legacyFunnels.length > 3 ? ` e mais ${legacyFunnels.length - 3}...` : ''}
+              </p>
+            </div>
+            <Button 
+              onClick={syncLegacyFunnels} 
+              disabled={syncingLegacy}
+              variant="outline"
+              className="border-amber-500/50 hover:bg-amber-500/20"
+            >
+              {syncingLegacy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
+              Importar Funis
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-6">
         {loading ? (

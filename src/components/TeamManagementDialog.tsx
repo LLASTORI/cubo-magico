@@ -73,13 +73,13 @@ export const TeamManagementDialog = ({
     }
 
     setSubmitting(true);
-    const { error } = await inviteMember(inviteEmail, inviteRole);
+    const { error } = await inviteMember(inviteEmail, inviteRole, projectName);
     setSubmitting(false);
 
     if (error) {
       toast({ title: 'Erro ao convidar', description: error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Convite enviado!' });
+      toast({ title: 'Convite enviado!', description: 'Um email foi enviado para o convidado.' });
       setInviteEmail('');
       setInviteRole('operator');
     }

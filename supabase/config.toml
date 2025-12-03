@@ -1,1 +1,7 @@
 project_id = "jcbzwxgayxrnxlgmmlni"
+
+[functions.hotmart-api]
+verify_jwt = true
+
+[functions.send-invite-email]
+verify_jwt = true

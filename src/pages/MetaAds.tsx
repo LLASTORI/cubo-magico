@@ -110,6 +110,8 @@ const MetaAds = () => {
       const startDate = format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd');
       const endDate = format(new Date(), 'yyyy-MM-dd');
 
+      let accountIdsToSync: string[] = [];
+
       // First, get ad accounts if not synced
       if (!adAccounts || adAccounts.length === 0) {
         const { data: accountsData, error: accountsError } = await supabase.functions.invoke('meta-api', {
@@ -124,33 +126,39 @@ const MetaAds = () => {
         console.log('Ad accounts response:', accountsData);
 
         if (accountsData?.accounts && accountsData.accounts.length > 0) {
+          accountIdsToSync = accountsData.accounts.map((a: any) => a.id);
+          
           // Sync all ad accounts (use 'id' from Meta API response)
           const { data: syncData, error: syncError } = await supabase.functions.invoke('meta-api', {
             body: {
               action: 'sync_ad_accounts',
               projectId: currentProject.id,
-              accountIds: accountsData.accounts.map((a: any) => a.id),
+              accountIds: accountIdsToSync,
             },
           });
 
           console.log('Sync result:', syncData);
           if (syncError) throw syncError;
         }
+      } else {
+        // Use existing accounts
+        accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
       }
 
-      // Sync insights
-      const activeAccounts = adAccounts?.filter(a => a.is_active) || [];
-      if (activeAccounts.length > 0) {
-        const { error: insightsError } = await supabase.functions.invoke('meta-api', {
+      // Sync insights using the account IDs we have
+      if (accountIdsToSync.length > 0) {
+        console.log('Syncing insights for accounts:', accountIdsToSync);
+        const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
           body: {
             action: 'sync_insights',
             projectId: currentProject.id,
-            accountIds: activeAccounts.map(a => a.account_id),
+            accountIds: accountIdsToSync,
             startDate,
             endDate,
           },
         });
 
+        console.log('Insights sync result:', insightsData);
         if (insightsError) throw insightsError;
       }
 

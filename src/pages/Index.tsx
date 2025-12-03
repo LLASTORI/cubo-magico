@@ -22,6 +22,13 @@ const Index = () => {
   const { signOut } = useAuth();
   const { currentProject, credentials, markCredentialsValidated } = useProject();
 
+  // Clear all data when project changes to avoid cross-project data leakage
+  useEffect(() => {
+    setSalesData(null);
+    setCurrentFilters(null);
+    setOfferMappings([]);
+  }, [currentProject?.id]);
+
   // Redirect if no project or credentials not validated
   useEffect(() => {
     if (currentProject && credentials && !credentials.is_validated) {
@@ -39,10 +46,13 @@ const Index = () => {
     navigate('/auth');
   };
 
-  // Load offer mappings on mount
+  // Load offer mappings when project changes
   useEffect(() => {
     const fetchOfferMappings = async () => {
-      if (!currentProject) return;
+      if (!currentProject) {
+        setOfferMappings([]);
+        return;
+      }
       
       const { data } = await supabase
         .from('offer_mappings')
@@ -55,7 +65,7 @@ const Index = () => {
     };
     
     fetchOfferMappings();
-  }, [currentProject]);
+  }, [currentProject?.id]);
 
   const fetchHotmartData = async (filters: FilterParams) => {
     if (!currentProject) {

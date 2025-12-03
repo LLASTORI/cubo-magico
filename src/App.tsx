@@ -13,6 +13,7 @@ import Projects from "./pages/Projects";
 import OfferMappings from "./pages/OfferMappings";
 import FunnelAnalysis from "./pages/FunnelAnalysis";
 import Settings from "./pages/Settings";
+import NotificationsHistory from "./pages/NotificationsHistory";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,11 @@ const App = () => (
                 <Route path="/settings" element={
                   <ProtectedRoute>
                     <Settings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/notifications" element={
+                  <ProtectedRoute>
+                    <NotificationsHistory />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

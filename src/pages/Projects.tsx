@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ProjectCredentialStatus {
@@ -22,13 +22,15 @@ interface ProjectCredentialStatus {
 const Projects = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { projects, currentProject, setCurrentProject, createProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials } = useProject();
+  const { projects, currentProject, setCurrentProject, createProject, updateProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials } = useProject();
   const { toast } = useToast();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newProject, setNewProject] = useState({ name: '', description: '' });
+  const [editProject, setEditProject] = useState({ name: '', description: '' });
   const [credentials, setCredentials] = useState({ client_id: '', client_secret: '', basic_auth: '' });
   const [submitting, setSubmitting] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -90,6 +92,35 @@ const Projects = () => {
       toast({ title: 'Erro ao excluir projeto', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Projeto excluído' });
+    }
+  };
+
+  const openEditDialog = (project: Project) => {
+    setSelectedProject(project);
+    setEditProject({ name: project.name, description: project.description || '' });
+    setIsEditOpen(true);
+  };
+
+  const handleEditProject = async () => {
+    if (!selectedProject) return;
+
+    if (!editProject.name.trim()) {
+      toast({ title: 'Nome obrigatório', variant: 'destructive' });
+      return;
+    }
+
+    setSubmitting(true);
+    const { error } = await updateProject(selectedProject.id, { 
+      name: editProject.name.trim(), 
+      description: editProject.description.trim() || null 
+    });
+    setSubmitting(false);
+
+    if (error) {
+      toast({ title: 'Erro ao atualizar projeto', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Projeto atualizado!' });
+      setIsEditOpen(false);
     }
   };
 
@@ -365,7 +396,16 @@ const Projects = () => {
                     <Button 
                       variant="outline" 
                       size="sm"
+                      onClick={() => openEditDialog(project)}
+                      title="Editar projeto"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
                       onClick={() => openCredentialsDialog(project)}
+                      title="Credenciais"
                     >
                       <Key className="w-3 h-3" />
                     </Button>
@@ -396,6 +436,47 @@ const Projects = () => {
             ))}
           </div>
         )}
+
+        {/* Edit Project Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Projeto</DialogTitle>
+              <DialogDescription>
+                Altere as informações do projeto
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nome do Projeto</Label>
+                <Input
+                  id="edit-name"
+                  placeholder="Nome do projeto"
+                  value={editProject.name}
+                  onChange={(e) => setEditProject({ ...editProject, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-desc">Descrição (opcional)</Label>
+                <Textarea
+                  id="edit-desc"
+                  placeholder="Descrição do projeto..."
+                  value={editProject.description}
+                  onChange={(e) => setEditProject({ ...editProject, description: e.target.value })}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleEditProject} disabled={submitting}>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Credentials Dialog */}
         <Dialog open={isCredentialsOpen} onOpenChange={setIsCredentialsOpen}>

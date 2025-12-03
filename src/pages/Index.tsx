@@ -14,6 +14,7 @@ import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
+import NotificationsDropdown from "@/components/NotificationsDropdown";
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
@@ -452,6 +453,7 @@ const Index = () => {
                   Atualizar
                 </Button>
               )}
+              <NotificationsDropdown />
               <ThemeToggle />
               <UserAvatar size="sm" />
               <Button

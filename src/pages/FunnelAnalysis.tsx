@@ -15,6 +15,7 @@ import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
+import NotificationsDropdown from "@/components/NotificationsDropdown";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 import TemporalChart from "@/components/funnel/TemporalChart";
@@ -336,6 +337,7 @@ const FunnelAnalysis = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <NotificationsDropdown />
                 <ThemeToggle />
                 <UserAvatar size="sm" />
               </div>
@@ -387,6 +389,7 @@ const FunnelAnalysis = () => {
               <Badge variant="secondary" className="text-sm">
                 {salesFromDashboard.length} vendas do Dashboard
               </Badge>
+              <NotificationsDropdown />
               <ThemeToggle />
               <UserAvatar size="sm" />
             </div>

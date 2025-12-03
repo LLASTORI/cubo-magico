@@ -324,14 +324,14 @@ const PeriodComparison = ({ selectedFunnel, funnelOfferCodes }: PeriodComparison
         /* Metrics Comparison Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricComparisonCard
+            label="Total de Clientes"
+            valueA={periodAMetrics.uniqueCustomers}
+            valueB={periodBMetrics.uniqueCustomers}
+          />
+          <MetricComparisonCard
             label="Total de Vendas"
             valueA={periodAMetrics.totalSales}
             valueB={periodBMetrics.totalSales}
-          />
-          <MetricComparisonCard
-            label="Clientes Únicos"
-            valueA={periodAMetrics.uniqueCustomers}
-            valueB={periodBMetrics.uniqueCustomers}
           />
           <MetricComparisonCard
             label="Receita Total"

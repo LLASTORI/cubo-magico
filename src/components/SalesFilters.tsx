@@ -34,7 +34,7 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [] }
 
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
-  const [transactionStatus, setTransactionStatus] = useState<string[]>([]);
+  const [transactionStatus, setTransactionStatus] = useState<string[]>(["approved", "complete"]);
   const [maxResults, setMaxResults] = useState("50");
   const [idFunil, setIdFunil] = useState<string[]>([]);
   const [productName, setProductName] = useState<string[]>([]);

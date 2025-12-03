@@ -153,8 +153,8 @@ const MetaAds = () => {
             action: 'sync_insights',
             projectId: currentProject.id,
             accountIds: accountIdsToSync,
-            startDate,
-            endDate,
+            dateStart: startDate,
+            dateStop: endDate,
           },
         });
 

@@ -150,16 +150,30 @@ const MetaAds = () => {
       if (insightsError) throw insightsError;
 
       toast({
-        title: 'Sincronização iniciada!',
-        description: 'Os dados serão atualizados em alguns segundos. Aguarde e atualize.',
+        title: 'Sincronização em andamento...',
+        description: 'Aguarde até 15 segundos para os dados aparecerem.',
       });
 
-      // Auto-refresh data after a delay
+      // Poll for data multiple times to catch when background sync completes
+      const pollIntervals = [3000, 6000, 10000, 15000];
+      pollIntervals.forEach((delay) => {
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
+          queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
+          queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+        }, delay);
+      });
+
+      // Keep syncing state for longer
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
-        queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
-        queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-      }, 5000);
+        setSyncing(false);
+        toast({
+          title: 'Sincronização concluída!',
+          description: 'Os dados foram atualizados.',
+        });
+      }, 15000);
+
+      return; // Don't set syncing false immediately
 
     } catch (error: any) {
       console.error('Sync error:', error);
@@ -168,7 +182,6 @@ const MetaAds = () => {
         description: error.message || 'Não foi possível sincronizar os dados do Meta.',
         variant: 'destructive',
       });
-    } finally {
       setSyncing(false);
     }
   };
@@ -373,6 +386,19 @@ const MetaAds = () => {
                 </Card>
               </CollapsibleContent>
             </Collapsible>
+
+        {/* Syncing Indicator */}
+        {syncing && (
+          <Card className="border-primary/50 bg-primary/5">
+            <CardContent className="flex items-center gap-3 py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div>
+                <p className="font-medium text-foreground">Sincronizando dados...</p>
+                <p className="text-sm text-muted-foreground">Buscando dados do Meta Ads. Aguarde até 15 segundos.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

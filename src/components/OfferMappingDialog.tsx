@@ -80,6 +80,7 @@ interface OfferMappingDialogProps {
   onOpenChange: (open: boolean) => void;
   mapping: OfferMapping | null;
   onSuccess: () => void;
+  projectId: string | null;
 }
 
 // Generate position display name from type and order
@@ -95,6 +96,7 @@ export function OfferMappingDialog({
   onOpenChange,
   mapping,
   onSuccess,
+  projectId,
 }: OfferMappingDialogProps) {
   const { toast } = useToast();
   const [existingFunnels, setExistingFunnels] = useState<string[]>([]);
@@ -119,12 +121,18 @@ export function OfferMappingDialog({
     },
   });
 
-  // Fetch existing funnels
+  // Fetch existing funnels for this project only
   useEffect(() => {
     const fetchFunnels = async () => {
+      if (!projectId) {
+        setExistingFunnels([]);
+        return;
+      }
+      
       const { data } = await supabase
         .from('offer_mappings')
         .select('id_funil')
+        .eq('project_id', projectId)
         .not('id_funil', 'is', null);
       
       if (data) {
@@ -136,7 +144,7 @@ export function OfferMappingDialog({
     if (open) {
       fetchFunnels();
     }
-  }, [open]);
+  }, [open, projectId]);
 
   useEffect(() => {
     if (mapping) {
@@ -468,27 +476,32 @@ export function OfferMappingDialog({
                   )}
                 </div>
               ) : (
-                <div className="flex gap-2">
+              <div className="space-y-2">
                   <Input
                     value={newFunnelName}
                     onChange={(e) => setNewFunnelName(e.target.value)}
-                    placeholder="Ex: FACE | NCM CHECKOUT DIRETO"
+                    placeholder="Ex: FACE | PRODUTO CHECKOUT"
                     className="flex-1"
                   />
-                  <Button type="button" onClick={handleNewFunnelConfirm} size="sm">
-                    Confirmar
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setShowNewFunnelInput(false);
-                      setNewFunnelName('');
-                    }}
-                  >
-                    Cancelar
-                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Sugestão: ORIGEM | NOME DO FUNIL (ex: FACE | SKINCARE 35+, GOOGLE | EBOOK GRÁTIS)
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={handleNewFunnelConfirm} size="sm">
+                      Confirmar
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setShowNewFunnelInput(false);
+                        setNewFunnelName('');
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
               )}
               {form.formState.errors.id_funil && (

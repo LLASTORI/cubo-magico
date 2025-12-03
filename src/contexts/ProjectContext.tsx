@@ -67,13 +67,46 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const { data, error } = await supabase
+      // Fetch projects the user owns OR is a member of
+      const { data: ownedProjects, error: ownedError } = await supabase
         .from('projects')
         .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (ownedError) throw ownedError;
+
+      // Fetch projects where user is a member (but not owner)
+      const { data: memberProjects, error: memberError } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', user.id);
+
+      if (memberError) throw memberError;
+
+      // Get full project data for member projects
+      let allProjects = ownedProjects || [];
+      
+      if (memberProjects && memberProjects.length > 0) {
+        const memberProjectIds = memberProjects.map(m => m.project_id);
+        const { data: memberProjectsData } = await supabase
+          .from('projects')
+          .select('*')
+          .in('id', memberProjectIds);
+        
+        if (memberProjectsData) {
+          // Merge and deduplicate
+          const existingIds = new Set(allProjects.map(p => p.id));
+          memberProjectsData.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              allProjects.push(p);
+            }
+          });
+        }
+      }
+
+      // Sort by created_at descending
+      allProjects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const data = allProjects;
 
       setProjects(data || []);
       

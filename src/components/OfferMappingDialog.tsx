@@ -443,7 +443,7 @@ export function OfferMappingDialog({
             {/* ID Funil - Select com opção de criar novo */}
             <div className="space-y-2">
               <FormLabel>ID Funil *</FormLabel>
-              {!showNewFunnelInput ? (
+            {!showNewFunnelInput ? (
                 <div className="space-y-2">
                   <Select 
                     onValueChange={handleFunnelChange} 
@@ -466,8 +466,9 @@ export function OfferMappingDialog({
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  {currentFunnel && !existingFunnels.includes(currentFunnel) && (
-                    <div className="flex items-center gap-2">
+                  {currentFunnel && (
+                    <div className="space-y-1">
+                      <FormLabel className="text-xs text-muted-foreground">Editar nome do funil</FormLabel>
                       <Input 
                         value={currentFunnel} 
                         onChange={(e) => form.setValue('id_funil', e.target.value)}

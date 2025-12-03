@@ -21,6 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 interface TemporalChartProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
+  initialStartDate?: Date;
+  initialEndDate?: Date;
 }
 
 interface HotmartSale {
@@ -56,10 +58,10 @@ const chartConfig = {
   },
 };
 
-const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps) => {
+const TemporalChart = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: TemporalChartProps) => {
   const today = new Date();
-  const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
-  const [endDate, setEndDate] = useState<Date>(today);
+  const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
+  const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
   const [loading, setLoading] = useState(false);
   const [dailyData, setDailyData] = useState<DailyData[]>([]);
 

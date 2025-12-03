@@ -14,6 +14,8 @@ import { toast } from "sonner";
 interface PeriodComparisonProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
+  initialStartDate?: Date;
+  initialEndDate?: Date;
 }
 
 interface PeriodMetrics {
@@ -32,16 +34,21 @@ interface HotmartSale {
   buyer: { email: string };
 }
 
-const PeriodComparison = ({ selectedFunnel, funnelOfferCodes }: PeriodComparisonProps) => {
+const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: PeriodComparisonProps) => {
   const today = new Date();
   
-  // Period A (anterior)
-  const [periodAStart, setPeriodAStart] = useState<Date>(subDays(today, 14));
-  const [periodAEnd, setPeriodAEnd] = useState<Date>(subDays(today, 8));
+  // Calculate periods based on dashboard dates or default
+  const endRef = initialEndDate || today;
+  const startRef = initialStartDate || subDays(today, 14);
+  const periodDays = Math.floor((endRef.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24) / 2);
   
-  // Period B (atual/recente)
-  const [periodBStart, setPeriodBStart] = useState<Date>(subDays(today, 7));
-  const [periodBEnd, setPeriodBEnd] = useState<Date>(today);
+  // Period A (anterior - primeira metade)
+  const [periodAStart, setPeriodAStart] = useState<Date>(startRef);
+  const [periodAEnd, setPeriodAEnd] = useState<Date>(subDays(startRef, -periodDays));
+  
+  // Period B (atual/recente - segunda metade)
+  const [periodBStart, setPeriodBStart] = useState<Date>(subDays(endRef, periodDays));
+  const [periodBEnd, setPeriodBEnd] = useState<Date>(endRef);
 
   const [periodAMetrics, setPeriodAMetrics] = useState<PeriodMetrics>({ totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 });
   const [periodBMetrics, setPeriodBMetrics] = useState<PeriodMetrics>({ totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 });

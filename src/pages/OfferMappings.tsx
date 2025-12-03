@@ -36,6 +36,7 @@ import {
 import { OfferMappingDialog } from '@/components/OfferMappingDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FunnelManager } from '@/components/FunnelManager';
+import { CuboBrand } from '@/components/CuboLogo';
 
 interface Funnel {
   id: string;
@@ -87,10 +88,10 @@ interface HotmartOffer {
 }
 
 const POSITION_COLORS: Record<string, string> = {
-  FRONT: 'bg-blue-500 text-white',
-  OB: 'bg-amber-500 text-white',
-  US: 'bg-green-500 text-white',
-  DS: 'bg-purple-500 text-white',
+  FRONT: 'bg-cube-blue text-white',
+  OB: 'bg-cube-green text-white',
+  US: 'bg-cube-orange text-white',
+  DS: 'bg-cube-red text-white',
 };
 
 const getPositionBadgeClass = (tipo: string | null) => {
@@ -521,7 +522,7 @@ export default function OfferMappingsAuto() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 p-6">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -532,11 +533,13 @@ export default function OfferMappingsAuto() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <CuboBrand size="sm" />
+            <div className="h-8 w-px bg-border" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight font-display">
                 Mapeamento de Ofertas
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 Importação via API e gerenciamento de ofertas
               </p>
             </div>

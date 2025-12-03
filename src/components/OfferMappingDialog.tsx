@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Plus } from 'lucide-react';
 
 const POSITION_TYPES = [
   { value: 'FRONT', label: 'FRONT - Produto Principal', maxOrder: 1 },
@@ -40,7 +41,7 @@ const POSITION_TYPES = [
 const ORDER_OPTIONS = [1, 2, 3, 4, 5];
 
 const formSchema = z.object({
-  id_produto: z.string().optional(),
+  id_produto_visual: z.string().optional(),
   nome_produto: z.string().min(1, 'Nome do produto é obrigatório').max(200),
   nome_oferta: z.string().optional(),
   codigo_oferta: z.string().optional(),
@@ -59,6 +60,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface OfferMapping {
   id: string;
   id_produto: string | null;
+  id_produto_visual: string | null;
   nome_produto: string;
   nome_oferta: string | null;
   codigo_oferta: string | null;
@@ -95,10 +97,14 @@ export function OfferMappingDialog({
   onSuccess,
 }: OfferMappingDialogProps) {
   const { toast } = useToast();
+  const [existingFunnels, setExistingFunnels] = useState<string[]>([]);
+  const [showNewFunnelInput, setShowNewFunnelInput] = useState(false);
+  const [newFunnelName, setNewFunnelName] = useState('');
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      id_produto: '',
+      id_produto_visual: '',
       nome_produto: '',
       nome_oferta: '',
       codigo_oferta: '',
@@ -113,10 +119,29 @@ export function OfferMappingDialog({
     },
   });
 
+  // Fetch existing funnels
+  useEffect(() => {
+    const fetchFunnels = async () => {
+      const { data } = await supabase
+        .from('offer_mappings')
+        .select('id_funil')
+        .not('id_funil', 'is', null);
+      
+      if (data) {
+        const uniqueFunnels = [...new Set(data.map(d => d.id_funil))].filter(Boolean).sort();
+        setExistingFunnels(uniqueFunnels);
+      }
+    };
+    
+    if (open) {
+      fetchFunnels();
+    }
+  }, [open]);
+
   useEffect(() => {
     if (mapping) {
       form.reset({
-        id_produto: mapping.id_produto || '',
+        id_produto_visual: mapping.id_produto_visual || mapping.id_produto || '',
         nome_produto: mapping.nome_produto || '',
         nome_oferta: mapping.nome_oferta || '',
         codigo_oferta: mapping.codigo_oferta || '',
@@ -129,9 +154,11 @@ export function OfferMappingDialog({
         tipo_posicao: mapping.tipo_posicao || '',
         ordem_posicao: mapping.ordem_posicao?.toString() || '1',
       });
+      setShowNewFunnelInput(false);
+      setNewFunnelName('');
     } else {
       form.reset({
-        id_produto: '',
+        id_produto_visual: '',
         nome_produto: '',
         nome_oferta: '',
         codigo_oferta: '',
@@ -144,11 +171,31 @@ export function OfferMappingDialog({
         tipo_posicao: '',
         ordem_posicao: '1',
       });
+      setShowNewFunnelInput(false);
+      setNewFunnelName('');
     }
   }, [mapping, form]);
 
   const tipoPosicao = form.watch('tipo_posicao');
   const showOrdemField = tipoPosicao && tipoPosicao !== 'FRONT';
+
+  const handleFunnelChange = (value: string) => {
+    if (value === '__new__') {
+      setShowNewFunnelInput(true);
+      form.setValue('id_funil', '');
+    } else {
+      setShowNewFunnelInput(false);
+      setNewFunnelName('');
+      form.setValue('id_funil', value);
+    }
+  };
+
+  const handleNewFunnelConfirm = () => {
+    if (newFunnelName.trim()) {
+      form.setValue('id_funil', newFunnelName.trim());
+      setShowNewFunnelInput(false);
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -156,7 +203,6 @@ export function OfferMappingDialog({
       const nomePosicao = generatePositionName(values.tipo_posicao || null, ordemPosicao);
 
       const data = {
-        id_produto: values.id_produto || null,
         nome_produto: values.nome_produto,
         nome_oferta: values.nome_oferta || null,
         codigo_oferta: values.codigo_oferta || null,
@@ -209,6 +255,8 @@ export function OfferMappingDialog({
     }
   };
 
+  const currentFunnel = form.watch('id_funil');
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -228,12 +276,17 @@ export function OfferMappingDialog({
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="id_produto"
+                name="id_produto_visual"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>ID Produto</FormLabel>
                     <FormControl>
-                      <Input placeholder="ID do produto" {...field} />
+                      <Input 
+                        placeholder="ID do produto" 
+                        {...field} 
+                        disabled 
+                        className="bg-muted"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -247,7 +300,12 @@ export function OfferMappingDialog({
                   <FormItem>
                     <FormLabel>Nome Produto *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nome do produto" {...field} />
+                      <Input 
+                        placeholder="Nome do produto" 
+                        {...field} 
+                        disabled 
+                        className="bg-muted"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -263,7 +321,12 @@ export function OfferMappingDialog({
                   <FormItem>
                     <FormLabel>Nome Oferta</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nome da oferta" {...field} />
+                      <Input 
+                        placeholder="Nome da oferta" 
+                        {...field} 
+                        disabled 
+                        className="bg-muted"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -277,7 +340,12 @@ export function OfferMappingDialog({
                   <FormItem>
                     <FormLabel>Código Oferta</FormLabel>
                     <FormControl>
-                      <Input placeholder="Código da oferta" {...field} />
+                      <Input 
+                        placeholder="Código da oferta" 
+                        {...field} 
+                        disabled 
+                        className="bg-muted"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -285,7 +353,150 @@ export function OfferMappingDialog({
               />
             </div>
 
-            {/* Posição no Funil - NOVO CAMPO */}
+            {/* Valor da Oferta - readonly, vem da Hotmart */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="valor"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor (R$)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        disabled
+                        className="bg-muted"
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">Valor importado da Hotmart</p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Ativo">Ativo</SelectItem>
+                        <SelectItem value="Inativo">Inativo</SelectItem>
+                        <SelectItem value="Pausado">Pausado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="data_ativacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data Ativação</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="data_desativacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data Desativação</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* ID Funil - Select com opção de criar novo */}
+            <div className="space-y-2">
+              <FormLabel>ID Funil *</FormLabel>
+              {!showNewFunnelInput ? (
+                <div className="space-y-2">
+                  <Select 
+                    onValueChange={handleFunnelChange} 
+                    value={existingFunnels.includes(currentFunnel) ? currentFunnel : (currentFunnel ? '__custom__' : '')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um funil" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {existingFunnels.map((funnel) => (
+                        <SelectItem key={funnel} value={funnel}>
+                          {funnel}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__new__">
+                        <span className="flex items-center gap-2">
+                          <Plus className="h-4 w-4" />
+                          Criar novo funil
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {currentFunnel && !existingFunnels.includes(currentFunnel) && (
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        value={currentFunnel} 
+                        onChange={(e) => form.setValue('id_funil', e.target.value)}
+                        placeholder="Nome do funil"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={newFunnelName}
+                    onChange={(e) => setNewFunnelName(e.target.value)}
+                    placeholder="Ex: FACE | NCM CHECKOUT DIRETO"
+                    className="flex-1"
+                  />
+                  <Button type="button" onClick={handleNewFunnelConfirm} size="sm">
+                    Confirmar
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setShowNewFunnelInput(false);
+                      setNewFunnelName('');
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              )}
+              {form.formState.errors.id_funil && (
+                <p className="text-sm text-destructive">{form.formState.errors.id_funil.message}</p>
+              )}
+            </div>
+
+            {/* Posição no Funil */}
             <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
               <h4 className="font-medium text-sm">Posição no Funil</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -347,97 +558,6 @@ export function OfferMappingDialog({
                 </p>
               )}
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="valor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor (R$)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Ativo">Ativo</SelectItem>
-                        <SelectItem value="Inativo">Inativo</SelectItem>
-                        <SelectItem value="Pausado">Pausado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="data_ativacao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Data Ativação</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="data_desativacao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Data Desativação</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="id_funil"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ID Funil *</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Ex: Face | Maquiagem 35+"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil, Users, Mail, Crown, Shield, User } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil, Users, Mail, Crown, Shield, User, Settings } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -21,6 +21,8 @@ import NotificationsDropdown from '@/components/NotificationsDropdown';
 import { TeamManagementDialog } from '@/components/TeamManagementDialog';
 import { PendingInvitesDialog } from '@/components/PendingInvitesDialog';
 import { useMyInvites, ProjectRole, getRoleLabel } from '@/hooks/useProjectMembers';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ProjectCredentialStatus {
   is_configured: boolean;
@@ -45,6 +47,7 @@ const Projects = () => {
   const { projects, currentProject, setCurrentProject, createProject, updateProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials, refreshProjects } = useProject();
   const { toast } = useToast();
   const { invites: myInvites } = useMyInvites();
+  const { canCreateProjects, maxProjects, currentProjectCount, isAdmin, refreshPermissions } = useUserPermissions();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
@@ -104,6 +107,15 @@ const Projects = () => {
   }, [projects, user]);
 
   const handleCreateProject = async () => {
+    if (!canCreateProjects) {
+      toast({ 
+        title: 'Sem permissão', 
+        description: 'Você não tem autorização para criar projetos. Entre em contato com o administrador.',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     if (!newProject.name.trim()) {
       toast({ title: 'Nome obrigatório', variant: 'destructive' });
       return;
@@ -114,11 +126,21 @@ const Projects = () => {
     setSubmitting(false);
 
     if (error) {
-      toast({ title: 'Erro ao criar projeto', description: error.message, variant: 'destructive' });
+      // Check if it's a RLS policy error
+      if (error.message?.includes('row-level security') || error.code === '42501') {
+        toast({ 
+          title: 'Sem permissão', 
+          description: 'Você atingiu o limite de projetos ou não tem autorização. Entre em contato com o administrador.',
+          variant: 'destructive' 
+        });
+      } else {
+        toast({ title: 'Erro ao criar projeto', description: error.message, variant: 'destructive' });
+      }
     } else {
       toast({ title: 'Projeto criado! Configure as credenciais para continuar.' });
       setIsCreateOpen(false);
       setNewProject({ name: '', description: '' });
+      refreshPermissions();
       // Open credentials dialog for new project
       if (data) {
         setSelectedProject(data);
@@ -344,51 +366,82 @@ const Projects = () => {
               </div>
             </div>
             <div className="flex gap-2 items-center">
-              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Novo Projeto
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Criar Novo Projeto</DialogTitle>
-                    <DialogDescription>
-                      Após criar, você precisará configurar e testar as credenciais da Hotmart
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="project-name">Nome do Projeto</Label>
-                      <Input
-                        id="project-name"
-                        placeholder="Minha Loja Principal"
-                        value={newProject.name}
-                        onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="project-desc">Descrição (opcional)</Label>
-                      <Textarea
-                        id="project-desc"
-                        placeholder="Descrição do projeto..."
-                        value={newProject.description}
-                        onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                      Cancelar
+              {canCreateProjects ? (
+                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Novo Projeto
+                      {maxProjects > 0 && (
+                        <span className="text-xs opacity-70">
+                          ({currentProjectCount}/{maxProjects})
+                        </span>
+                      )}
                     </Button>
-                    <Button onClick={handleCreateProject} disabled={submitting}>
-                      {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Criar Projeto
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Criar Novo Projeto</DialogTitle>
+                      <DialogDescription>
+                        Após criar, você precisará configurar e testar as credenciais da Hotmart
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="project-name">Nome do Projeto</Label>
+                        <Input
+                          id="project-name"
+                          placeholder="Minha Loja Principal"
+                          value={newProject.name}
+                          onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="project-desc">Descrição (opcional)</Label>
+                        <Textarea
+                          id="project-desc"
+                          placeholder="Descrição do projeto..."
+                          value={newProject.description}
+                          onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button onClick={handleCreateProject} disabled={submitting}>
+                        {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Criar Projeto
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="gap-2" variant="secondary" disabled>
+                      <Plus className="w-4 h-4" />
+                      Novo Projeto
                     </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Você não tem permissão para criar projetos.</p>
+                    <p className="text-xs text-muted-foreground">Entre em contato com o administrador.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {isAdmin && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={() => navigate('/admin')}>
+                      <Settings className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Administração de Usuários</TooltipContent>
+                </Tooltip>
+              )}
 
               <NotificationsDropdown />
               {myInvites.length > 0 && (
@@ -420,14 +473,31 @@ const Projects = () => {
           <Card className="max-w-md mx-auto text-center">
             <CardContent className="pt-6">
               <FolderOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Nenhum projeto ainda</h3>
-              <p className="text-muted-foreground mb-4">
-                Crie seu primeiro projeto para começar a usar o Dashboard
-              </p>
-              <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Criar Primeiro Projeto
-              </Button>
+              {canCreateProjects ? (
+                <>
+                  <h3 className="text-lg font-semibold mb-2">Nenhum projeto ainda</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Crie seu primeiro projeto para começar a usar o Dashboard
+                  </p>
+                  <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Criar Primeiro Projeto
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold mb-2">Aguardando autorização</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Você ainda não tem permissão para criar projetos. Entre em contato com o administrador para solicitar acesso.
+                  </p>
+                  {myInvites.length > 0 && (
+                    <Button onClick={() => setIsInvitesOpen(true)} variant="outline" className="gap-2">
+                      <Mail className="w-4 h-4" />
+                      Ver Convites Pendentes ({myInvites.length})
+                    </Button>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         ) : (

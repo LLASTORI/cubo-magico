@@ -16,6 +16,7 @@ import OfferMappings from "./pages/OfferMappings";
 import FunnelAnalysis from "./pages/FunnelAnalysis";
 import Settings from "./pages/Settings";
 import NotificationsHistory from "./pages/NotificationsHistory";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,11 @@ const App = () => (
                 <Route path="/notifications" element={
                   <ProtectedRoute>
                     <NotificationsHistory />
+                  </ProtectedRoute>
+                } />
+                <Route path="/admin" element={
+                  <ProtectedRoute>
+                    <Admin />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

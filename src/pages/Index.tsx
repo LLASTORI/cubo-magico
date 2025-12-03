@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3 } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
+import ProjectSelector from "@/components/ProjectSelector";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
@@ -16,6 +19,13 @@ const Index = () => {
   const [offerMappings, setOfferMappings] = useState<any[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
+  const { currentProject, credentials } = useProject();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
 
   // Load offer mappings on mount
   useEffect(() => {
@@ -334,14 +344,17 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border bg-card shadow-sm">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Dashboard Hotmart
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Consulte suas vendas e transações da API
-              </p>
+            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  Dashboard Hotmart
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {currentProject ? currentProject.name : 'Selecione um projeto'}
+                </p>
+              </div>
+              <ProjectSelector />
             </div>
             <div className="flex gap-2">
               <Button
@@ -386,6 +399,14 @@ const Index = () => {
                   Atualizar
                 </Button>
               )}
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Sair
+              </Button>
             </div>
           </div>
         </div>
@@ -393,66 +414,82 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        <div className="space-y-6">
-          {/* Filters */}
-          <SalesFilters 
-            onFilter={fetchHotmartData} 
-            availableProducts={availableProducts}
-            availableOffers={availableOffers}
-          />
+        {!currentProject ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <FolderOpen className="w-16 h-16 text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              Nenhum Projeto Selecionado
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Selecione um projeto existente ou crie um novo para começar
+            </p>
+            <Button onClick={() => navigate('/projects')} className="gap-2">
+              <Settings className="w-4 h-4" />
+              Gerenciar Projetos
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Filters */}
+            <SalesFilters 
+              onFilter={fetchHotmartData} 
+              availableProducts={availableProducts}
+              availableOffers={availableOffers}
+            />
 
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              <p className="text-muted-foreground">Consultando API da Hotmart...</p>
-            </div>
-          ) : salesData ? (
-            <div className="space-y-6 animate-fade-in">
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <MetricCard
-                  title="Vendas Totais"
-                  value={metrics.totalSales}
-                  icon={DollarSign}
-                />
-                <MetricCard
-                  title="Transações"
-                  value={metrics.transactions}
-                  icon={ShoppingCart}
-                />
-                <MetricCard
-                  title="Clientes Únicos"
-                  value={metrics.customers}
-                  icon={Users}
-                />
-                <MetricCard
-                  title="Total de Registros"
-                  value={formattedSales.length}
-                  icon={TrendingUp}
-                />
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-64 gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p className="text-muted-foreground">Consultando API da Hotmart...</p>
               </div>
-
-              {/* Sales Table */}
-              {formattedSales.length > 0 ? (
-                <SalesTable sales={formattedSales} />
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  Nenhuma transação encontrada para os filtros selecionados
+            ) : salesData ? (
+              <div className="space-y-6 animate-fade-in">
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <MetricCard
+                    title="Vendas Totais"
+                    value={metrics.totalSales}
+                    icon={DollarSign}
+                  />
+                  <MetricCard
+                    title="Transações"
+                    value={metrics.transactions}
+                    icon={ShoppingCart}
+                  />
+                  <MetricCard
+                    title="Clientes Únicos"
+                    value={metrics.customers}
+                    icon={Users}
+                  />
+                  <MetricCard
+                    title="Total de Registros"
+                    value={formattedSales.length}
+                    icon={TrendingUp}
+                  />
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <Filter className="w-16 h-16 text-muted-foreground mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">
-                Configure os Filtros
-              </h3>
-              <p className="text-muted-foreground">
-                Selecione as datas e filtros desejados para buscar as transações da Hotmart
-              </p>
-            </div>
-          )}
-        </div>
+
+                {/* Sales Table */}
+                {formattedSales.length > 0 ? (
+                  <SalesTable sales={formattedSales} />
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    Nenhuma transação encontrada para os filtros selecionados
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <Filter className="w-16 h-16 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Configure os Filtros
+                </h3>
+                <p className="text-muted-foreground">
+                  Selecione as datas e filtros desejados para buscar as transações da Hotmart
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

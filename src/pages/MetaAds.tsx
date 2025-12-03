@@ -121,16 +121,19 @@ const MetaAds = () => {
 
         if (accountsError) throw accountsError;
 
-        if (accountsData?.adAccounts && accountsData.adAccounts.length > 0) {
-          // Sync all ad accounts
-          const { error: syncError } = await supabase.functions.invoke('meta-api', {
+        console.log('Ad accounts response:', accountsData);
+
+        if (accountsData?.accounts && accountsData.accounts.length > 0) {
+          // Sync all ad accounts (use 'id' from Meta API response)
+          const { data: syncData, error: syncError } = await supabase.functions.invoke('meta-api', {
             body: {
               action: 'sync_ad_accounts',
               projectId: currentProject.id,
-              selectedAccountIds: accountsData.adAccounts.map((a: any) => a.account_id),
+              accountIds: accountsData.accounts.map((a: any) => a.id),
             },
           });
 
+          console.log('Sync result:', syncData);
           if (syncError) throw syncError;
         }
       }

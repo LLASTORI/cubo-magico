@@ -43,6 +43,15 @@ const Index = () => {
   }, []);
 
   const fetchHotmartData = async (filters: FilterParams) => {
+    if (!currentProject) {
+      toast({
+        title: "Projeto não selecionado",
+        description: "Selecione um projeto antes de buscar dados",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       setCurrentFilters(filters);
@@ -99,6 +108,7 @@ const Index = () => {
           body: {
             endpoint: '/sales/history',
             params: requestParams,
+            projectId: currentProject?.id,
           },
         });
 
@@ -152,11 +162,16 @@ const Index = () => {
     try {
       setTestingConnection(true);
       
+      if (!currentProject) {
+        throw new Error('Selecione um projeto primeiro');
+      }
+      
       // Make a minimal request to test authentication
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: '/sales/summary',
           params: {},
+          projectId: currentProject.id,
         },
       });
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -11,6 +11,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { MetaAccountSelector } from '@/components/MetaAccountSelector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,13 @@ const MetaAds = () => {
   const queryClient = useQueryClient();
   const [dateRange, setDateRange] = useState('7');
   const [syncing, setSyncing] = useState(false);
+
+  // Handle accounts selection callback
+  const handleAccountsSelected = (accountIds: string[]) => {
+    queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
+    // Auto-sync after selection
+    handleSyncWithAccounts(accountIds);
+  };
 
   // Fetch Meta credentials
   const { data: metaCredentials, isLoading: credentialsLoading } = useQuery({
@@ -101,66 +109,28 @@ const MetaAds = () => {
     ? new Date(metaCredentials.expires_at) < new Date()
     : false;
 
-  // Sync data from Meta API
-  const handleSyncData = async () => {
-    if (!currentProject?.id || !metaCredentials) return;
+  // Sync data with specific accounts
+  const handleSyncWithAccounts = async (accountIds: string[]) => {
+    if (!currentProject?.id || !metaCredentials || accountIds.length === 0) return;
 
     setSyncing(true);
     try {
       const startDate = format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd');
       const endDate = format(new Date(), 'yyyy-MM-dd');
 
-      let accountIdsToSync: string[] = [];
+      console.log('Syncing insights for accounts:', accountIds);
+      const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
+        body: {
+          action: 'sync_insights',
+          projectId: currentProject.id,
+          accountIds: accountIds,
+          dateStart: startDate,
+          dateStop: endDate,
+        },
+      });
 
-      // First, get ad accounts if not synced
-      if (!adAccounts || adAccounts.length === 0) {
-        const { data: accountsData, error: accountsError } = await supabase.functions.invoke('meta-api', {
-          body: {
-            action: 'get_ad_accounts',
-            projectId: currentProject.id,
-          },
-        });
-
-        if (accountsError) throw accountsError;
-
-        console.log('Ad accounts response:', accountsData);
-
-        if (accountsData?.accounts && accountsData.accounts.length > 0) {
-          accountIdsToSync = accountsData.accounts.map((a: any) => a.id);
-          
-          // Sync all ad accounts (use 'id' from Meta API response)
-          const { data: syncData, error: syncError } = await supabase.functions.invoke('meta-api', {
-            body: {
-              action: 'sync_ad_accounts',
-              projectId: currentProject.id,
-              accountIds: accountIdsToSync,
-            },
-          });
-
-          console.log('Sync result:', syncData);
-          if (syncError) throw syncError;
-        }
-      } else {
-        // Use existing accounts
-        accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
-      }
-
-      // Sync insights using the account IDs we have
-      if (accountIdsToSync.length > 0) {
-        console.log('Syncing insights for accounts:', accountIdsToSync);
-        const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
-          body: {
-            action: 'sync_insights',
-            projectId: currentProject.id,
-            accountIds: accountIdsToSync,
-            dateStart: startDate,
-            dateStop: endDate,
-          },
-        });
-
-        console.log('Insights sync result:', insightsData);
-        if (insightsError) throw insightsError;
-      }
+      console.log('Insights sync result:', insightsData);
+      if (insightsError) throw insightsError;
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
@@ -168,8 +138,8 @@ const MetaAds = () => {
       queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
 
       toast({
-        title: 'Dados sincronizados!',
-        description: 'As métricas do Meta Ads foram atualizadas.',
+        title: 'Sincronização iniciada!',
+        description: 'Os dados serão atualizados em alguns segundos.',
       });
     } catch (error: any) {
       console.error('Sync error:', error);
@@ -181,6 +151,23 @@ const MetaAds = () => {
     } finally {
       setSyncing(false);
     }
+  };
+
+  // Sync data from Meta API (uses existing active accounts)
+  const handleSyncData = async () => {
+    if (!currentProject?.id || !metaCredentials) return;
+
+    // If no accounts configured, show selector message
+    if (!adAccounts || adAccounts.length === 0) {
+      toast({
+        title: 'Configure suas contas',
+        description: 'Clique em "Contas" para selecionar as contas de anúncios.',
+      });
+      return;
+    }
+
+    const accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
+    await handleSyncWithAccounts(accountIdsToSync);
   };
 
   // Calculate totals from insights
@@ -316,6 +303,17 @@ const MetaAds = () => {
                   <SelectItem value="60">Últimos 60 dias</SelectItem>
                 </SelectContent>
               </Select>
+              <MetaAccountSelector 
+                projectId={currentProject?.id || ''} 
+                onAccountsSelected={handleAccountsSelected}
+              >
+                <Button variant="outline" className="gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Contas {adAccounts && adAccounts.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">{adAccounts.length}</Badge>
+                  )}
+                </Button>
+              </MetaAccountSelector>
               <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" className="gap-2">
                 {syncing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

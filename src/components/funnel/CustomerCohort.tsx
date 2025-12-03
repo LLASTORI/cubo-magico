@@ -263,17 +263,52 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
     const totalSpent = customers.reduce((sum, c) => sum + c.totalSpent, 0);
 
     // Product count distribution (how many products per customer in this funnel)
-    const productCounts: Record<string, number> = {};
+    // Enhanced with revenue insights
+    const productGroups: Record<string, CustomerData[]> = {};
     customers.forEach(c => {
       const key = c.products.length >= 5 ? '5+' : c.products.length.toString();
-      productCounts[key] = (productCounts[key] || 0) + 1;
+      if (!productGroups[key]) productGroups[key] = [];
+      productGroups[key].push(c);
     });
 
-    const purchaseDistribution = ['1', '2', '3', '4', '5+'].map(key => ({
-      purchases: key === '1' ? '1 produto' : key === '5+' ? '5+ produtos' : `${key} produtos`,
-      count: productCounts[key] || 0,
-      percentage: uniqueCustomers > 0 ? ((productCounts[key] || 0) / uniqueCustomers) * 100 : 0,
-    }));
+    const avgTicketGlobal = uniqueCustomers > 0 ? totalSpent / uniqueCustomers : 0;
+    const avgProductsPerCustomer = uniqueCustomers > 0 ? totalProducts / uniqueCustomers : 0;
+
+    const purchaseDistribution = ['1', '2', '3', '4', '5+'].map(key => {
+      const groupCustomers = productGroups[key] || [];
+      const groupCount = groupCustomers.length;
+      const groupRevenue = groupCustomers.reduce((sum, c) => sum + c.totalSpent, 0);
+      const groupAvgTicket = groupCount > 0 ? groupRevenue / groupCount : 0;
+      const groupNewCount = groupCustomers.filter(c => !c.isRecurrent).length;
+      const groupRecurrentCount = groupCustomers.filter(c => c.isRecurrent).length;
+      
+      // Calculate potential revenue if they bought one more product
+      const avgProductPrice = groupCount > 0 && groupCustomers[0]?.products.length > 0
+        ? groupRevenue / groupCustomers.reduce((sum, c) => sum + c.products.length, 0)
+        : 0;
+      const potentialRevenue = groupCount * avgProductPrice;
+      
+      // Top 5 customer names for tooltip
+      const topCustomerNames = groupCustomers
+        .sort((a, b) => b.totalSpent - a.totalSpent)
+        .slice(0, 5)
+        .map(c => c.name);
+
+      return {
+        purchases: key === '1' ? '1 produto' : key === '5+' ? '5+ produtos' : `${key} produtos`,
+        key,
+        count: groupCount,
+        percentage: uniqueCustomers > 0 ? (groupCount / uniqueCustomers) * 100 : 0,
+        revenue: groupRevenue,
+        avgTicket: groupAvgTicket,
+        newCount: groupNewCount,
+        recurrentCount: groupRecurrentCount,
+        potentialRevenue,
+        avgProductPrice,
+        topCustomerNames,
+        revenuePercentage: totalSpent > 0 ? (groupRevenue / totalSpent) * 100 : 0,
+      };
+    });
 
     // Top customers by spending
     const topCustomers = customers
@@ -556,7 +591,59 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="purchases" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartTooltip 
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-popover border rounded-lg shadow-lg p-4 max-w-xs">
+                          <div className="font-semibold text-sm mb-2">{data.purchases}</div>
+                          
+                          {/* Métricas principais */}
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-3">
+                            <span className="text-muted-foreground">Clientes:</span>
+                            <span className="font-medium">{data.count} ({data.percentage.toFixed(1)}%)</span>
+                            
+                            <span className="text-muted-foreground">Receita:</span>
+                            <span className="font-medium">{formatCurrency(data.revenue)}</span>
+                            
+                            <span className="text-muted-foreground">% da Receita:</span>
+                            <span className="font-medium">{data.revenuePercentage.toFixed(1)}%</span>
+                            
+                            <span className="text-muted-foreground">Ticket Médio:</span>
+                            <span className="font-medium">{formatCurrency(data.avgTicket)}</span>
+                          </div>
+                          
+                          {/* Composição */}
+                          <div className="text-xs border-t pt-2 mb-2">
+                            <span className="text-muted-foreground">Composição: </span>
+                            <span className="text-green-600">{data.newCount} novos</span>
+                            <span className="text-muted-foreground"> | </span>
+                            <span className="text-purple-600">{data.recurrentCount} recorrentes</span>
+                          </div>
+                          
+                          {/* Insight de oportunidade */}
+                          {data.key !== '5+' && data.count > 0 && (
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded p-2 text-xs">
+                              <div className="font-medium text-amber-700 mb-1">💡 Oportunidade de Upsell</div>
+                              <p className="text-muted-foreground">
+                                Se cada cliente comprasse +1 produto, potencial de <span className="font-semibold text-amber-700">{formatCurrency(data.potentialRevenue)}</span> adicional
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Top clientes */}
+                          {data.topCustomerNames.length > 0 && (
+                            <div className="mt-2 pt-2 border-t text-xs">
+                              <span className="text-muted-foreground">Top clientes: </span>
+                              <span className="text-foreground">{data.topCustomerNames.slice(0, 3).join(', ')}</span>
+                              {data.topCustomerNames.length > 3 && <span className="text-muted-foreground"> +{data.topCustomerNames.length - 3}</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
                   <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>

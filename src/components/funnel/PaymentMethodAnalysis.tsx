@@ -284,17 +284,17 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes }: PaymentMeth
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
-              title="Produtos Vendidos"
-              value={paymentMetrics.totalSales}
-              icon={ShoppingBag}
-            />
-            <MetricCard
-              title="Clientes"
+              title="Total de Clientes"
               value={paymentMetrics.uniqueCustomers}
               icon={Users}
             />
             <MetricCard
-              title="Receita"
+              title="Total de Produtos Vendidos"
+              value={paymentMetrics.totalSales}
+              icon={ShoppingBag}
+            />
+            <MetricCard
+              title="Receita Total"
               value={formatCurrency(paymentMetrics.totalRevenue)}
               icon={DollarSign}
             />

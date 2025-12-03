@@ -67,6 +67,38 @@ export type Database = {
           },
         ]
       }
+      funnels: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          project_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnels_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hotmart_sales: {
         Row: {
           affiliate_code: string | null
@@ -271,6 +303,7 @@ export type Database = {
           created_at: string
           data_ativacao: string | null
           data_desativacao: string | null
+          funnel_id: string | null
           id: string
           id_funil: string
           id_produto: string | null
@@ -291,6 +324,7 @@ export type Database = {
           created_at?: string
           data_ativacao?: string | null
           data_desativacao?: string | null
+          funnel_id?: string | null
           id?: string
           id_funil: string
           id_produto?: string | null
@@ -311,6 +345,7 @@ export type Database = {
           created_at?: string
           data_ativacao?: string | null
           data_desativacao?: string | null
+          funnel_id?: string | null
           id?: string
           id_funil?: string
           id_produto?: string | null
@@ -326,6 +361,13 @@ export type Database = {
           valor?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "offer_mappings_project_id_fkey"
             columns: ["project_id"]

@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
 
 const POSITION_TYPES = [
   { value: 'FRONT', label: 'FRONT - Produto Principal', maxOrder: 1 },
@@ -99,9 +98,7 @@ export function OfferMappingDialog({
   projectId,
 }: OfferMappingDialogProps) {
   const { toast } = useToast();
-  const [existingFunnels, setExistingFunnels] = useState<string[]>([]);
-  const [showNewFunnelInput, setShowNewFunnelInput] = useState(false);
-  const [newFunnelName, setNewFunnelName] = useState('');
+  const [existingFunnels, setExistingFunnels] = useState<{id: string; name: string}[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -121,7 +118,7 @@ export function OfferMappingDialog({
     },
   });
 
-  // Fetch existing funnels for this project only
+// Fetch existing funnels from funnels table for this project only
   useEffect(() => {
     const fetchFunnels = async () => {
       if (!projectId) {
@@ -130,14 +127,13 @@ export function OfferMappingDialog({
       }
       
       const { data } = await supabase
-        .from('offer_mappings')
-        .select('id_funil')
+        .from('funnels')
+        .select('id, name')
         .eq('project_id', projectId)
-        .not('id_funil', 'is', null);
+        .order('name');
       
       if (data) {
-        const uniqueFunnels = [...new Set(data.map(d => d.id_funil))].filter(Boolean).sort();
-        setExistingFunnels(uniqueFunnels);
+        setExistingFunnels(data.map(f => ({ id: f.id, name: f.name })));
       }
     };
     
@@ -163,8 +159,6 @@ export function OfferMappingDialog({
         tipo_posicao: mapping.tipo_posicao || '',
         ordem_posicao: mapping.ordem_posicao?.toString() || '1',
       });
-      setShowNewFunnelInput(false);
-      setNewFunnelName('');
     } else {
       form.reset({
         id_produto_visual: '',
@@ -180,31 +174,11 @@ export function OfferMappingDialog({
         tipo_posicao: '',
         ordem_posicao: '1',
       });
-      setShowNewFunnelInput(false);
-      setNewFunnelName('');
     }
   }, [mapping, form]);
 
   const tipoPosicao = form.watch('tipo_posicao');
   const showOrdemField = tipoPosicao && tipoPosicao !== 'FRONT';
-
-  const handleFunnelChange = (value: string) => {
-    if (value === '__new__') {
-      setShowNewFunnelInput(true);
-      form.setValue('id_funil', '');
-    } else {
-      setShowNewFunnelInput(false);
-      setNewFunnelName('');
-      form.setValue('id_funil', value);
-    }
-  };
-
-  const handleNewFunnelConfirm = () => {
-    if (newFunnelName.trim()) {
-      form.setValue('id_funil', newFunnelName.trim());
-      setShowNewFunnelInput(false);
-    }
-  };
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -263,8 +237,6 @@ export function OfferMappingDialog({
       });
     }
   };
-
-  const currentFunnel = form.watch('id_funil');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -440,76 +412,39 @@ export function OfferMappingDialog({
               />
             </div>
 
-            {/* ID Funil - Select com opção de criar novo */}
-            <div className="space-y-2">
-              <FormLabel>ID Funil *</FormLabel>
-            {!showNewFunnelInput ? (
-                <div className="space-y-2">
-                  <Select 
-                    onValueChange={handleFunnelChange} 
-                    value={existingFunnels.includes(currentFunnel) ? currentFunnel : (currentFunnel ? '__custom__' : '')}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um funil" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {existingFunnels.map((funnel) => (
-                        <SelectItem key={funnel} value={funnel}>
-                          {funnel}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="__new__">
-                        <span className="flex items-center gap-2">
-                          <Plus className="h-4 w-4" />
-                          Criar novo funil
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {currentFunnel && (
-                    <div className="space-y-1">
-                      <FormLabel className="text-xs text-muted-foreground">Editar nome do funil</FormLabel>
-                      <Input 
-                        value={currentFunnel} 
-                        onChange={(e) => form.setValue('id_funil', e.target.value)}
-                        placeholder="Nome do funil"
-                      />
+            {/* ID Funil - Select dos funis cadastrados */}
+            <FormField
+              control={form.control}
+              name="id_funil"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Funil *</FormLabel>
+                  {existingFunnels.length === 0 ? (
+                    <div className="p-3 border rounded-md bg-muted/50">
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum funil cadastrado. Acesse a aba "Funis" para criar um novo funil antes de continuar.
+                      </p>
                     </div>
+                  ) : (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um funil" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {existingFunnels.map((funnel) => (
+                          <SelectItem key={funnel.id} value={funnel.name}>
+                            {funnel.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
-                </div>
-              ) : (
-              <div className="space-y-2">
-                  <Input
-                    value={newFunnelName}
-                    onChange={(e) => setNewFunnelName(e.target.value)}
-                    placeholder="Ex: FACE | PRODUTO CHECKOUT"
-                    className="flex-1"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Sugestão: ORIGEM | NOME DO FUNIL (ex: FACE | SKINCARE 35+, GOOGLE | EBOOK GRÁTIS)
-                  </p>
-                  <div className="flex gap-2">
-                    <Button type="button" onClick={handleNewFunnelConfirm} size="sm">
-                      Confirmar
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        setShowNewFunnelInput(false);
-                        setNewFunnelName('');
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
+                  <FormMessage />
+                </FormItem>
               )}
-              {form.formState.errors.id_funil && (
-                <p className="text-sm text-destructive">{form.formState.errors.id_funil.message}</p>
-              )}
-            </div>
+            />
 
             {/* Posição no Funil */}
             <div className="p-4 border rounded-lg bg-muted/30 space-y-4">

@@ -35,6 +35,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { OfferMappingDialog } from '@/components/OfferMappingDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FunnelManager } from '@/components/FunnelManager';
+
+interface Funnel {
+  id: string;
+  name: string;
+  project_id: string;
+}
 
 interface OfferMapping {
   id: string;
@@ -104,6 +111,7 @@ export default function OfferMappingsAuto() {
   const [importingOffers, setImportingOffers] = useState(false);
   const [importProgress, setImportProgress] = useState<string>('');
   const [syncingOffers, setSyncingOffers] = useState(false);
+  const [funnels, setFunnels] = useState<Funnel[]>([]);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -449,9 +457,20 @@ export default function OfferMappingsAuto() {
     }
   };
 
+  const fetchFunnels = async () => {
+    if (!currentProject) return;
+    const { data } = await supabase
+      .from('funnels')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .order('name');
+    setFunnels(data || []);
+  };
+
   useEffect(() => {
     fetchMappings();
-  }, []);
+    fetchFunnels();
+  }, [currentProject]);
 
   const handleEdit = (mapping: OfferMapping) => {
     setSelectedMapping(mapping);
@@ -525,8 +544,9 @@ export default function OfferMappingsAuto() {
         </div>
 
         <Tabs defaultValue="existing" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsList className="grid w-full grid-cols-3 max-w-lg">
             <TabsTrigger value="existing">Ofertas Cadastradas</TabsTrigger>
+            <TabsTrigger value="funnels">Funis</TabsTrigger>
             <TabsTrigger value="import">Importar da Hotmart</TabsTrigger>
           </TabsList>
 
@@ -705,6 +725,16 @@ export default function OfferMappingsAuto() {
                 </div>
               )}
             </Card>
+          </TabsContent>
+
+          <TabsContent value="funnels" className="space-y-4">
+            <FunnelManager 
+              projectId={currentProject?.id || null} 
+              onFunnelChange={() => {
+                fetchFunnels();
+                fetchMappings();
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="import" className="space-y-4">

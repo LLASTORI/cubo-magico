@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,12 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MetaAccountSelector } from '@/components/MetaAccountSelector';
+import MetaDateFilters from '@/components/MetaDateFilters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
@@ -27,7 +29,13 @@ const MetaAds = () => {
   const { currentProject } = useProject();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [dateRange, setDateRange] = useState('7');
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Date range state
+  const today = new Date().toISOString().split('T')[0];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(sevenDaysAgo);
+  const [endDate, setEndDate] = useState(today);
   const [syncing, setSyncing] = useState(false);
 
   // Handle accounts selection callback
@@ -93,13 +101,11 @@ const MetaAds = () => {
 
   // Fetch insights - only from active accounts
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    queryKey: ['meta_insights', currentProject?.id, dateRange, adAccounts],
+    queryKey: ['meta_insights', currentProject?.id, startDate, endDate, adAccounts],
     queryFn: async () => {
       if (!currentProject?.id) return [];
       if (!adAccounts || adAccounts.length === 0) return [];
       
-      const startDate = format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd');
-      const endDate = format(new Date(), 'yyyy-MM-dd');
       const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
       
       if (activeAccountIds.length === 0) return [];
@@ -127,10 +133,7 @@ const MetaAds = () => {
 
     setSyncing(true);
     try {
-      const startDate = format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd');
-      const endDate = format(new Date(), 'yyyy-MM-dd');
-
-      console.log('Syncing insights for accounts:', accountIds);
+      console.log('Syncing insights for accounts:', accountIds, 'from', startDate, 'to', endDate);
       const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
         body: {
           action: 'sync_insights',
@@ -306,18 +309,14 @@ const MetaAds = () => {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="w-[140px]">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">Últimos 7 dias</SelectItem>
-                  <SelectItem value="14">Últimos 14 dias</SelectItem>
-                  <SelectItem value="30">Últimos 30 dias</SelectItem>
-                  <SelectItem value="60">Últimos 60 dias</SelectItem>
-                </SelectContent>
-              </Select>
+              <Button 
+                variant="outline" 
+                className="gap-2"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Filter className="h-4 w-4" />
+                {startDate} - {endDate}
+              </Button>
               <MetaAccountSelector 
                 projectId={currentProject?.id || ''} 
                 onAccountsSelected={handleAccountsSelected}
@@ -344,6 +343,24 @@ const MetaAds = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-6">
+        {/* Date Filters */}
+        <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+          <CollapsibleContent>
+            <Card className="p-4 mb-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Filter className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Filtros de Data</h2>
+              </div>
+              <MetaDateFilters
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+              />
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
+
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>

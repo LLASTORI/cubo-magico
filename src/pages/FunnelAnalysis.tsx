@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -153,9 +154,17 @@ const generateFunnelInsight = (
 const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { currentProject } = useProject();
   const [mappings, setMappings] = useState<OfferMapping[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string>("");
+
+  // Redirect if no project
+  useEffect(() => {
+    if (!currentProject) {
+      navigate('/');
+    }
+  }, [currentProject, navigate]);
 
   // Get sales data from Dashboard navigation state
   const dashboardData = location.state as { salesData?: DashboardSale[]; filters?: { startDate?: string; endDate?: string } } | null;
@@ -202,10 +211,13 @@ const FunnelAnalysis = () => {
   // Fetch offer mappings on mount
   useEffect(() => {
     const fetchMappings = async () => {
+      if (!currentProject) return;
+      
       setLoadingMappings(true);
       const { data: mappingsData } = await supabase
         .from('offer_mappings')
         .select('*')
+        .eq('project_id', currentProject.id)
         .eq('status', 'Ativo');
       
       if (mappingsData) {
@@ -215,7 +227,7 @@ const FunnelAnalysis = () => {
     };
 
     fetchMappings();
-  }, []);
+  }, [currentProject]);
 
   // Calculate metrics for selected funnel
   const funnelMetrics = useMemo(() => {

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
+import { useProject } from '@/contexts/ProjectContext';
 import {
   Table,
   TableBody,
@@ -119,6 +120,19 @@ export default function OfferMappingsAuto() {
   
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { currentProject } = useProject();
+
+  // Redirect if no project selected
+  useEffect(() => {
+    if (!currentProject) {
+      toast({
+        title: 'Projeto não selecionado',
+        description: 'Selecione um projeto para acessar os mapeamentos',
+        variant: 'destructive',
+      });
+      navigate('/');
+    }
+  }, [currentProject, navigate, toast]);
 
   // Get unique funnels and their counts
   const funnelData = useMemo(() => {
@@ -171,11 +185,14 @@ export default function OfferMappingsAuto() {
   }, [hotmartProducts, productSearchTerm]);
 
   const fetchMappings = async () => {
+    if (!currentProject) return;
+    
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('offer_mappings')
         .select('*')
+        .eq('project_id', currentProject.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -193,6 +210,8 @@ export default function OfferMappingsAuto() {
   };
 
   const fetchHotmartProducts = async () => {
+    if (!currentProject) return;
+    
     try {
       setLoadingProducts(true);
       console.log('Fetching Hotmart products...');
@@ -200,7 +219,8 @@ export default function OfferMappingsAuto() {
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: '/products',
-          apiType: 'products'
+          apiType: 'products',
+          projectId: currentProject.id
         }
       });
 
@@ -245,7 +265,8 @@ export default function OfferMappingsAuto() {
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: `/products/${product.ucode}/offers`,
-          apiType: 'products'
+          apiType: 'products',
+          projectId: currentProject?.id
         }
       });
 
@@ -357,6 +378,8 @@ export default function OfferMappingsAuto() {
   };
 
   const importSelectedOffers = async () => {
+    if (!currentProject) return;
+    
     try {
       setImportingOffers(true);
       
@@ -370,6 +393,7 @@ export default function OfferMappingsAuto() {
         status: string;
         id_funil: string;
         data_ativacao: string;
+        project_id: string;
       }
       
       const offersToImport: OfferToImport[] = [];
@@ -384,15 +408,16 @@ export default function OfferMappingsAuto() {
               const exists = mappings.some(m => m.codigo_oferta === offer.code);
               if (!exists) {
                 offersToImport.push({
-                  id_produto: product.ucode, // UUID for API calls
-                  id_produto_visual: `ID ${product.id}`, // Numeric ID for display
+                  id_produto: product.ucode,
+                  id_produto_visual: `ID ${product.id}`,
                   nome_produto: product.name,
                   nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
                   codigo_oferta: offer.code,
                   valor: offer.price.value,
                   status: 'Ativo',
-                  id_funil: 'A Definir', // User will need to set this
+                  id_funil: 'A Definir',
                   data_ativacao: new Date().toISOString().split('T')[0],
+                  project_id: currentProject.id,
                 });
               }
             }
@@ -476,7 +501,8 @@ export default function OfferMappingsAuto() {
             body: {
               endpoint: `products/${productId}/offers`,
               params: {},
-              apiType: 'products'
+              apiType: 'products',
+              projectId: currentProject?.id
             }
           });
           

@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Plus, History, DollarSign, Tag, FileText, Trash2, Edit2, X, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ const TIPO_ALTERACAO_OPTIONS = [
 ];
 
 const FunnelChangelog = ({ selectedFunnel, offerOptions }: FunnelChangelogProps) => {
+  const { currentProject } = useProject();
   const [changes, setChanges] = useState<FunnelChange[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -62,13 +64,14 @@ const FunnelChangelog = ({ selectedFunnel, offerOptions }: FunnelChangelogProps)
   });
 
   const fetchChanges = async () => {
-    if (!selectedFunnel) return;
+    if (!selectedFunnel || !currentProject) return;
     
     setLoading(true);
     const { data, error } = await supabase
       .from('funnel_changes')
       .select('*')
       .eq('id_funil', selectedFunnel)
+      .eq('project_id', currentProject.id)
       .order('data_alteracao', { ascending: false });
     
     if (error) {
@@ -82,12 +85,12 @@ const FunnelChangelog = ({ selectedFunnel, offerOptions }: FunnelChangelogProps)
 
   useEffect(() => {
     fetchChanges();
-  }, [selectedFunnel]);
+  }, [selectedFunnel, currentProject]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.descricao.trim()) {
+    if (!formData.descricao.trim() || !currentProject) {
       toast.error('Descrição é obrigatória');
       return;
     }
@@ -101,6 +104,7 @@ const FunnelChangelog = ({ selectedFunnel, offerOptions }: FunnelChangelogProps)
       valor_novo: formData.valor_novo ? parseFloat(formData.valor_novo) : null,
       data_alteracao: formData.data_alteracao,
       anotacoes: formData.anotacoes || null,
+      project_id: currentProject.id,
     });
 
     if (error) {

@@ -30,9 +30,12 @@ const Index = () => {
   // Load offer mappings on mount
   useEffect(() => {
     const fetchOfferMappings = async () => {
+      if (!currentProject) return;
+      
       const { data } = await supabase
         .from('offer_mappings')
-        .select('codigo_oferta, id_funil');
+        .select('codigo_oferta, id_funil')
+        .eq('project_id', currentProject.id);
       
       if (data) {
         setOfferMappings(data);
@@ -40,7 +43,7 @@ const Index = () => {
     };
     
     fetchOfferMappings();
-  }, []);
+  }, [currentProject]);
 
   const fetchHotmartData = async (filters: FilterParams) => {
     if (!currentProject) {

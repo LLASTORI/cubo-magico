@@ -17,6 +17,7 @@ import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAvatar } from '@/components/UserAvatar';
+import NotificationsDropdown from '@/components/NotificationsDropdown';
 
 interface ProjectCredentialStatus {
   is_configured: boolean;
@@ -338,6 +339,7 @@ const Projects = () => {
                 </DialogContent>
               </Dialog>
 
+              <NotificationsDropdown />
               <ThemeToggle />
               <UserAvatar size="sm" />
               <Button variant="outline" onClick={handleLogout} className="gap-2">

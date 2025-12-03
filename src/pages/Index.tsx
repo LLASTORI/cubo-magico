@@ -92,25 +92,16 @@ const Index = () => {
       setLoading(true);
       setCurrentFilters(filters);
       
-      // Convert dates to timestamps using UTC to avoid timezone issues
-      const startDateObj = new Date(filters.startDate);
-      const endDateObj = new Date(filters.endDate);
+      // Parse date strings directly to avoid timezone issues
+      // Date strings from input are in format "YYYY-MM-DD"
+      const [startYear, startMonth, startDay] = filters.startDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = filters.endDate.split('-').map(Number);
       
       // Start of start date (00:00:00 UTC)
-      const startUTC = Date.UTC(
-        startDateObj.getFullYear(),
-        startDateObj.getMonth(),
-        startDateObj.getDate(),
-        0, 0, 0, 0
-      );
+      const startUTC = Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
       
       // End of end date (23:59:59.999 UTC)
-      const endUTC = Date.UTC(
-        endDateObj.getFullYear(),
-        endDateObj.getMonth(),
-        endDateObj.getDate(),
-        23, 59, 59, 999
-      );
+      const endUTC = Date.UTC(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
 
       console.log('=== DEBUG DATAS ===');
       console.log('startDate:', filters.startDate, '-> UTC:', new Date(startUTC).toISOString());

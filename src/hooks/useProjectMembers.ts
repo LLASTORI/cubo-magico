@@ -135,7 +135,7 @@ export const useProjectMembers = (projectId: string | null) => {
     fetchMembers();
   }, [fetchMembers]);
 
-  const inviteMember = async (email: string, role: ProjectRole): Promise<{ error: any }> => {
+  const inviteMember = async (email: string, role: ProjectRole, projectName?: string): Promise<{ error: any }> => {
     if (!projectId || !user) return { error: new Error('Projeto não selecionado') };
 
     // Check limit
@@ -155,16 +155,44 @@ export const useProjectMembers = (projectId: string | null) => {
       return { error: new Error('Já existe um convite pendente para este email') };
     }
 
-    const { error } = await supabase
+    const { data: insertedInvite, error } = await supabase
       .from('project_invites')
       .insert({
         project_id: projectId,
         email: email.toLowerCase().trim(),
         invited_by: user.id,
         role,
-      });
+      })
+      .select()
+      .single();
 
-    if (!error) {
+    if (!error && insertedInvite) {
+      // Get inviter profile name
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .single();
+
+      const inviterName = inviterProfile?.full_name || inviterProfile?.email || 'Um usuário';
+
+      // Send email notification
+      try {
+        await supabase.functions.invoke('send-invite-email', {
+          body: {
+            inviteId: insertedInvite.id,
+            email: email.toLowerCase().trim(),
+            projectName: projectName || 'Projeto',
+            inviterName,
+            role,
+            expiresAt: insertedInvite.expires_at,
+          },
+        });
+      } catch (emailError) {
+        console.error('Error sending invite email:', emailError);
+        // Don't fail the invite if email fails
+      }
+
       await fetchMembers();
     }
 

@@ -81,6 +81,75 @@ const POSITION_COLORS: Record<string, string> = {
   'DS': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
 };
 
+// Taxas de conversão ideais por posição
+const OPTIMAL_CONVERSION_RATES: Record<string, { min: number; max: number }> = {
+  'OB1': { min: 30, max: 40 },
+  'OB2': { min: 20, max: 30 },
+  'OB3': { min: 10, max: 20 },
+  'US1': { min: 8, max: 10 },
+  'US2': { min: 3, max: 5 },
+  'DS1': { min: 1, max: 3 },
+  'DS2': { min: 1, max: 3 },
+};
+
+// Gera insight para o card do funil
+const generateFunnelInsight = (
+  tipo: string,
+  ordem: number,
+  taxaConversao: number,
+  totalReceita: number,
+  totalVendas: number,
+  valorOferta: number
+): { message: string; status: 'exceptional' | 'optimal' | 'improving' | 'neutral' } => {
+  const positionKey = `${tipo}${ordem || ''}`;
+  const optimalRange = OPTIMAL_CONVERSION_RATES[positionKey];
+  
+  // FRONT não tem benchmark de conversão (é a base)
+  if (tipo === 'FRONT' || tipo === 'FE') {
+    const potentialIncrease10 = totalReceita * 0.1;
+    return {
+      message: `🎯 Base do funil! Se aumentar 10% nas vendas front-end, potencial de +${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(potentialIncrease10)} em receita direta. Continue otimizando suas campanhas!`,
+      status: 'neutral'
+    };
+  }
+  
+  if (!optimalRange) {
+    return {
+      message: `📊 Posição ${positionKey}: ${taxaConversao.toFixed(1)}% de conversão. Continue monitorando os resultados!`,
+      status: 'neutral'
+    };
+  }
+  
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  
+  // Calcula o impacto de 10% de melhoria
+  const currentSales = totalVendas;
+  const improvedSales = Math.ceil(currentSales * 1.1);
+  const additionalSales = improvedSales - currentSales;
+  const additionalRevenue = additionalSales * valorOferta;
+  
+  if (taxaConversao > optimalRange.max) {
+    // EXCEPCIONAL - acima do ponto ótimo
+    return {
+      message: `🏆 Excepcional! Taxa de ${taxaConversao.toFixed(1)}% está acima do ideal (${optimalRange.min}-${optimalRange.max}%)! Parabéns pela excelente performance! 💡 Oportunidade: considere testar um aumento de preço nesta oferta para maximizar o faturamento.`,
+      status: 'exceptional'
+    };
+  } else if (taxaConversao >= optimalRange.min && taxaConversao <= optimalRange.max) {
+    // NO PONTO ÓTIMO
+    return {
+      message: `✅ Ótimo trabalho! Taxa de ${taxaConversao.toFixed(1)}% está no ponto ideal (${optimalRange.min}-${optimalRange.max}%)! Continue assim! +10% de conversão = +${formatCurrency(additionalRevenue)} potencial.`,
+      status: 'optimal'
+    };
+  } else {
+    // ABAIXO DO IDEAL - espaço para melhorar
+    const gap = optimalRange.min - taxaConversao;
+    return {
+      message: `📈 Espaço para crescer! Taxa atual: ${taxaConversao.toFixed(1)}% | Meta: ${optimalRange.min}-${optimalRange.max}%. Se melhorar 10%, você pode ganhar +${formatCurrency(additionalRevenue)}! Você está a ${gap.toFixed(1)}pp do ponto ideal. Vamos lá! 💪`,
+      status: 'improving'
+    };
+  }
+};
+
 const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -425,46 +494,69 @@ const FunnelAnalysis = () => {
                         };
                         const gradient = gradients[metric.tipo_posicao] || 'from-gray-500 to-gray-400';
                         
+                        const insight = generateFunnelInsight(
+                          metric.tipo_posicao,
+                          metric.ordem_posicao,
+                          metric.taxa_conversao,
+                          metric.total_receita,
+                          metric.total_vendas,
+                          metric.valor_oferta
+                        );
+                        
+                        const statusBorderColors = {
+                          exceptional: 'border-yellow-400',
+                          optimal: 'border-green-400',
+                          improving: 'border-blue-400',
+                          neutral: 'border-white/20',
+                        };
+                        
                         return (
                           <div key={metric.codigo_oferta} className="flex items-center flex-1 min-w-[120px]">
                             {/* Funnel Step */}
-                            <div className="relative group flex-1">
-                              <div 
-                                className={`relative overflow-hidden rounded-xl p-4 bg-gradient-to-br ${gradient} shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl cursor-default`}
-                                style={{ 
-                                  minHeight: '120px',
-                                  opacity: 0.9 + (heightPercent / 1000)
-                                }}
-                              >
-                                {/* Glow effect */}
-                                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-30 blur-xl transition-opacity duration-300`} />
-                                
-                                {/* Content */}
-                                <div className="relative z-10 flex flex-col items-center justify-center h-full text-white">
-                                  <span className="text-xs font-bold uppercase tracking-wider opacity-80 mb-1">
-                                    {metric.tipo_posicao}{metric.ordem_posicao || ''}
-                                  </span>
-                                  <span className="text-3xl font-black mb-1">
-                                    {metric.total_vendas}
-                                  </span>
-                                  <div className="flex items-center gap-1 text-xs font-medium opacity-90">
-                                    <Percent className="w-3 h-3" />
-                                    {formatPercent(metric.taxa_conversao)}
+                            <Tooltip delayDuration={200}>
+                              <TooltipTrigger asChild>
+                                <div className="relative group flex-1 cursor-help">
+                                  <div 
+                                    className={`relative overflow-hidden rounded-xl p-4 bg-gradient-to-br ${gradient} shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl border-2 ${statusBorderColors[insight.status]}`}
+                                    style={{ 
+                                      minHeight: '120px',
+                                      opacity: 0.9 + (heightPercent / 1000)
+                                    }}
+                                  >
+                                    {/* Glow effect */}
+                                    <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-30 blur-xl transition-opacity duration-300`} />
+                                    
+                                    {/* Content */}
+                                    <div className="relative z-10 flex flex-col items-center justify-center h-full text-white">
+                                      <span className="text-xs font-bold uppercase tracking-wider opacity-80 mb-1">
+                                        {metric.tipo_posicao}{metric.ordem_posicao || ''}
+                                      </span>
+                                      <span className="text-3xl font-black mb-1">
+                                        {metric.total_vendas}
+                                      </span>
+                                      <div className="flex items-center gap-1 text-xs font-medium opacity-90">
+                                        <Percent className="w-3 h-3" />
+                                        {formatPercent(metric.taxa_conversao)}
+                                      </div>
+                                      
+                                      {/* Revenue bar */}
+                                      <div className="w-full mt-3 bg-white/20 rounded-full h-1.5 overflow-hidden">
+                                        <div 
+                                          className="h-full bg-white/60 rounded-full transition-all duration-500"
+                                          style={{ width: `${metric.percentual_receita}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-[10px] mt-1 opacity-70">
+                                        {formatCurrency(metric.total_receita)}
+                                      </span>
+                                    </div>
                                   </div>
-                                  
-                                  {/* Revenue bar */}
-                                  <div className="w-full mt-3 bg-white/20 rounded-full h-1.5 overflow-hidden">
-                                    <div 
-                                      className="h-full bg-white/60 rounded-full transition-all duration-500"
-                                      style={{ width: `${metric.percentual_receita}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-[10px] mt-1 opacity-70">
-                                    {formatCurrency(metric.total_receita)}
-                                  </span>
                                 </div>
-                              </div>
-                            </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-sm p-3">
+                                <p className="text-sm leading-relaxed">{insight.message}</p>
+                              </TooltipContent>
+                            </Tooltip>
                             
                             {/* Connector Arrow */}
                             {index < funnelMetrics.length - 1 && (

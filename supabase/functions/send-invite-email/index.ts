@@ -17,13 +17,25 @@ interface InviteEmailRequest {
   expiresAt: string;
 }
 
+// HTML escape function to prevent XSS/HTML injection
+const escapeHtml = (text: string): string => {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, (char) => map[char]);
+};
+
 const getRoleLabel = (role: string): string => {
   const labels: Record<string, string> = {
     owner: 'Proprietário',
     manager: 'Gerente',
     operator: 'Operador',
   };
-  return labels[role] || role;
+  return labels[role] || escapeHtml(role);
 };
 
 const handler = async (req: Request): Promise<Response> => {
@@ -37,6 +49,11 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Sending invite email to ${email} for project ${projectName}`);
 
+    // Escape user-controlled values to prevent HTML injection
+    const safeInviterName = escapeHtml(inviterName);
+    const safeProjectName = escapeHtml(projectName);
+    const safeRoleLabel = getRoleLabel(role);
+
     const appUrl = Deno.env.get("APP_URL") || "https://cubomagico.leandrolastori.com.br";
     const expirationDate = new Date(expiresAt).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -49,7 +66,7 @@ const handler = async (req: Request): Promise<Response> => {
     const emailResponse = await resend.emails.send({
       from: "Cubo Mágico <noreply@cubomagico.leandrolastori.com.br>",
       to: [email],
-      subject: `Você foi convidado para o projeto "${projectName}"`,
+      subject: `Você foi convidado para o projeto "${safeProjectName}"`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -76,18 +93,18 @@ const handler = async (req: Request): Promise<Response> => {
                       <h2 style="margin: 0 0 20px; color: #18181b; font-size: 24px; font-weight: 600;">Você foi convidado!</h2>
                       
                       <p style="margin: 0 0 20px; color: #52525b; font-size: 16px; line-height: 1.6;">
-                        <strong>${inviterName}</strong> convidou você para participar do projeto <strong>"${projectName}"</strong> como <strong>${getRoleLabel(role)}</strong>.
+                        <strong>${safeInviterName}</strong> convidou você para participar do projeto <strong>"${safeProjectName}"</strong> como <strong>${safeRoleLabel}</strong>.
                       </p>
                       
                       <div style="background-color: #f4f4f5; border-radius: 8px; padding: 20px; margin: 20px 0;">
                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                           <tr>
                             <td style="padding: 8px 0; color: #71717a; font-size: 14px;">Projeto:</td>
-                            <td style="padding: 8px 0; color: #18181b; font-size: 14px; font-weight: 500; text-align: right;">${projectName}</td>
+                            <td style="padding: 8px 0; color: #18181b; font-size: 14px; font-weight: 500; text-align: right;">${safeProjectName}</td>
                           </tr>
                           <tr>
                             <td style="padding: 8px 0; color: #71717a; font-size: 14px;">Função:</td>
-                            <td style="padding: 8px 0; color: #18181b; font-size: 14px; font-weight: 500; text-align: right;">${getRoleLabel(role)}</td>
+                            <td style="padding: 8px 0; color: #18181b; font-size: 14px; font-weight: 500; text-align: right;">${safeRoleLabel}</td>
                           </tr>
                           <tr>
                             <td style="padding: 8px 0; color: #71717a; font-size: 14px;">Expira em:</td>

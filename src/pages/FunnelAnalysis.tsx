@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CuboBrand } from "@/components/CuboLogo";
+import { CubeLoader } from "@/components/CubeLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
@@ -391,9 +392,8 @@ const FunnelAnalysis = () => {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
         {loadingMappings ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            <p className="text-muted-foreground">Carregando configurações...</p>
+          <div className="flex flex-col items-center justify-center h-64">
+            <CubeLoader message="Carregando configurações..." size="lg" />
           </div>
         ) : (
           <div className="space-y-6">

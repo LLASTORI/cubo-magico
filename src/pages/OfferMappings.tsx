@@ -37,6 +37,7 @@ import { OfferMappingDialog } from '@/components/OfferMappingDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FunnelManager } from '@/components/FunnelManager';
 import { CuboBrand } from '@/components/CuboLogo';
+import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface Funnel {
@@ -637,9 +638,8 @@ export default function OfferMappingsAuto() {
 
             <Card className="p-6">
               {loading ? (
-                <div className="text-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-                  <p className="text-muted-foreground">Carregando mapeamentos...</p>
+                <div className="py-8">
+                  <CubeLoader message="Carregando mapeamentos..." size="md" />
                 </div>
               ) : filteredMappings.length === 0 ? (
                 <div className="text-center py-8">

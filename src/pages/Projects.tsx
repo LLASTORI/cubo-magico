@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CuboBrand } from '@/components/CuboLogo';
+import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface ProjectCredentialStatus {
@@ -267,7 +268,7 @@ const Projects = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <CubeLoader message="Carregando projetos..." size="lg" />
       </div>
     );
   }

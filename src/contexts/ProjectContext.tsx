@@ -24,10 +24,17 @@ export interface ProjectCredential {
   validated_at: string | null;
 }
 
+interface ProjectCredentialStatus {
+  project_id: string;
+  is_configured: boolean;
+  is_validated: boolean;
+}
+
 interface ProjectContextType {
   projects: Project[];
   currentProject: Project | null;
   credentials: ProjectCredential | null;
+  projectCredentialStatuses: ProjectCredentialStatus[];
   loading: boolean;
   setCurrentProject: (project: Project | null) => void;
   createProject: (name: string, description?: string) => Promise<{ data: Project | null; error: any }>;
@@ -37,6 +44,7 @@ interface ProjectContextType {
   markCredentialsValidated: (projectId: string) => Promise<{ error: any }>;
   refreshProjects: () => Promise<void>;
   refreshCredentials: () => Promise<void>;
+  isProjectReady: (projectId: string) => boolean;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -46,12 +54,14 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [credentials, setCredentials] = useState<ProjectCredential | null>(null);
+  const [projectCredentialStatuses, setProjectCredentialStatuses] = useState<ProjectCredentialStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshProjects = async () => {
     if (!user) {
       setProjects([]);
       setCurrentProject(null);
+      setProjectCredentialStatuses([]);
       setLoading(false);
       return;
     }
@@ -67,15 +77,34 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
       setProjects(data || []);
       
-      // Auto-select first project if none selected
-      if (data && data.length > 0 && !currentProject) {
-        setCurrentProject(data[0]);
+      // Fetch credential statuses for all projects
+      if (data && data.length > 0) {
+        const projectIds = data.map(p => p.id);
+        const { data: credData } = await supabase
+          .from('project_credentials')
+          .select('project_id, is_configured, is_validated')
+          .in('project_id', projectIds);
+        
+        setProjectCredentialStatuses(credData || []);
+        
+        // Auto-select first VALIDATED project if none selected
+        if (!currentProject) {
+          const validatedProject = data.find(p => 
+            credData?.some(c => c.project_id === p.id && c.is_validated)
+          );
+          setCurrentProject(validatedProject || data[0]);
+        }
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const isProjectReady = (projectId: string): boolean => {
+    const status = projectCredentialStatuses.find(s => s.project_id === projectId);
+    return status?.is_configured === true && status?.is_validated === true;
   };
 
   // Fetch credentials when project changes
@@ -170,6 +199,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
     if (!error) {
       await refreshCredentials();
+      await refreshCredentialStatuses();
     }
 
     return { error };
@@ -187,6 +217,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
     if (!error) {
       await refreshCredentials();
+      await refreshCredentialStatuses();
     }
 
     return { error };
@@ -209,11 +240,24 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     else setCredentials(null);
   };
 
+  const refreshCredentialStatuses = async () => {
+    if (projects.length === 0) return;
+    
+    const projectIds = projects.map(p => p.id);
+    const { data: credData } = await supabase
+      .from('project_credentials')
+      .select('project_id, is_configured, is_validated')
+      .in('project_id', projectIds);
+    
+    setProjectCredentialStatuses(credData || []);
+  };
+
   return (
     <ProjectContext.Provider value={{
       projects,
       currentProject,
       credentials,
+      projectCredentialStatuses,
       loading,
       setCurrentProject,
       createProject,
@@ -223,6 +267,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
       markCredentialsValidated,
       refreshProjects,
       refreshCredentials,
+      isProjectReady,
     }}>
       {children}
     </ProjectContext.Provider>

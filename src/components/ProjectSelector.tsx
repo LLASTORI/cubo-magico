@@ -9,13 +9,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, FolderOpen, Plus, Settings } from 'lucide-react';
+import { ChevronDown, FolderOpen, Settings, CheckCircle, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 const ProjectSelector = () => {
   const navigate = useNavigate();
-  const { projects, currentProject, setCurrentProject } = useProject();
+  const { projects, currentProject, setCurrentProject, isProjectReady } = useProject();
 
   const handleSelectProject = (project: Project) => {
+    if (!isProjectReady(project.id)) {
+      toast.error('Este projeto ainda não está configurado. Configure as credenciais primeiro.');
+      navigate('/projects');
+      return;
+    }
     setCurrentProject(project);
   };
 
@@ -32,7 +38,7 @@ const ProjectSelector = () => {
           <ChevronDown className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[200px]">
+      <DropdownMenuContent align="start" className="w-[240px]">
         <DropdownMenuLabel>Seus Projetos</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {projects.length === 0 ? (
@@ -40,15 +46,23 @@ const ProjectSelector = () => {
             Nenhum projeto
           </DropdownMenuItem>
         ) : (
-          projects.map((project) => (
-            <DropdownMenuItem
-              key={project.id}
-              onClick={() => handleSelectProject(project)}
-              className={currentProject?.id === project.id ? 'bg-accent' : ''}
-            >
-              {project.name}
-            </DropdownMenuItem>
-          ))
+          projects.map((project) => {
+            const ready = isProjectReady(project.id);
+            return (
+              <DropdownMenuItem
+                key={project.id}
+                onClick={() => handleSelectProject(project)}
+                className={`flex items-center justify-between ${currentProject?.id === project.id ? 'bg-accent' : ''} ${!ready ? 'opacity-60' : ''}`}
+              >
+                <span className="truncate">{project.name}</span>
+                {ready ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 ml-2" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 ml-2" />
+                )}
+              </DropdownMenuItem>
+            );
+          })
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate('/projects')}>

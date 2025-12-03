@@ -67,6 +67,52 @@ export type Database = {
           },
         ]
       }
+      funnel_meta_accounts: {
+        Row: {
+          created_at: string
+          funnel_id: string
+          id: string
+          meta_account_id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          funnel_id: string
+          id?: string
+          meta_account_id: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          funnel_id?: string
+          id?: string
+          meta_account_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_meta_accounts_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_meta_accounts_meta_account_id_fkey"
+            columns: ["meta_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_meta_accounts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnels: {
         Row: {
           created_at: string

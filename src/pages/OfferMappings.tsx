@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectMembers } from '@/hooks/useProjectMembers';
 import {
   Table,
   TableBody,
@@ -121,6 +122,21 @@ export default function OfferMappingsAuto() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { currentProject } = useProject();
+  const { userRole, loading: loadingRole } = useProjectMembers(currentProject?.id || '');
+  
+  // Permission check - redirect operators
+  const canAccessPage = userRole === 'owner' || userRole === 'manager';
+  
+  useEffect(() => {
+    if (!loadingRole && userRole && !canAccessPage) {
+      toast({
+        title: 'Acesso restrito',
+        description: 'Apenas proprietários e gerentes podem acessar esta página',
+        variant: 'destructive',
+      });
+      navigate('/');
+    }
+  }, [userRole, loadingRole, canAccessPage, navigate, toast]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -524,6 +540,15 @@ export default function OfferMappingsAuto() {
       currency: 'BRL',
     }).format(value);
   };
+
+  // Show loader while checking permissions
+  if (loadingRole || (!canAccessPage && userRole)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <CubeLoader message="Verificando permissões..." size="md" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

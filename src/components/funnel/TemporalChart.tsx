@@ -267,6 +267,7 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps)
             { days: 15, label: '15d' },
             { days: 30, label: '30d' },
             { days: 60, label: '60d' },
+            { days: 90, label: '90d' },
             { days: 365, label: '1 ano' },
             { days: 730, label: '2 anos' },
           ].map(({ days, label }) => (

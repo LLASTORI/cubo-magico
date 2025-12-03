@@ -370,9 +370,11 @@ export type Database = {
           created_at: string
           id: string
           is_configured: boolean | null
+          is_validated: boolean | null
           project_id: string
           provider: string
           updated_at: string
+          validated_at: string | null
         }
         Insert: {
           basic_auth?: string | null
@@ -381,9 +383,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_configured?: boolean | null
+          is_validated?: boolean | null
           project_id: string
           provider?: string
           updated_at?: string
+          validated_at?: string | null
         }
         Update: {
           basic_auth?: string | null
@@ -392,9 +396,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_configured?: boolean | null
+          is_validated?: boolean | null
           project_id?: string
           provider?: string
           updated_at?: string
+          validated_at?: string | null
         }
         Relationships: [
           {

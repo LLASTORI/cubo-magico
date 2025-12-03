@@ -20,6 +20,8 @@ export interface ProjectCredential {
   client_secret: string | null;
   basic_auth: string | null;
   is_configured: boolean;
+  is_validated: boolean;
+  validated_at: string | null;
 }
 
 interface ProjectContextType {
@@ -32,7 +34,9 @@ interface ProjectContextType {
   updateProject: (id: string, updates: Partial<Project>) => Promise<{ error: any }>;
   deleteProject: (id: string) => Promise<{ error: any }>;
   saveCredentials: (projectId: string, credentials: Partial<ProjectCredential>) => Promise<{ error: any }>;
+  markCredentialsValidated: (projectId: string) => Promise<{ error: any }>;
   refreshProjects: () => Promise<void>;
+  refreshCredentials: () => Promise<void>;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -159,23 +163,50 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         client_secret: creds.client_secret,
         basic_auth: creds.basic_auth,
         is_configured: !!(creds.client_id && creds.client_secret),
+        is_validated: false, // Reset validation when credentials change
       }, {
         onConflict: 'project_id,provider',
       });
 
     if (!error) {
-      // Refresh credentials
-      const { data } = await supabase
-        .from('project_credentials')
-        .select('*')
-        .eq('project_id', projectId)
-        .eq('provider', 'hotmart')
-        .maybeSingle();
-      
-      if (data) setCredentials(data);
+      await refreshCredentials();
     }
 
     return { error };
+  };
+
+  const markCredentialsValidated = async (projectId: string) => {
+    const { error } = await supabase
+      .from('project_credentials')
+      .update({
+        is_validated: true,
+        validated_at: new Date().toISOString(),
+      })
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart');
+
+    if (!error) {
+      await refreshCredentials();
+    }
+
+    return { error };
+  };
+
+  const refreshCredentials = async () => {
+    if (!currentProject) {
+      setCredentials(null);
+      return;
+    }
+
+    const { data } = await supabase
+      .from('project_credentials')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .eq('provider', 'hotmart')
+      .maybeSingle();
+    
+    if (data) setCredentials(data);
+    else setCredentials(null);
   };
 
   return (
@@ -189,7 +220,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
       updateProject,
       deleteProject,
       saveCredentials,
+      markCredentialsValidated,
       refreshProjects,
+      refreshCredentials,
     }}>
       {children}
     </ProjectContext.Provider>

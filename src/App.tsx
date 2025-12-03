@@ -17,6 +17,7 @@ import FunnelAnalysis from "./pages/FunnelAnalysis";
 import Settings from "./pages/Settings";
 import NotificationsHistory from "./pages/NotificationsHistory";
 import Admin from "./pages/Admin";
+import MetaAds from "./pages/MetaAds";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +68,11 @@ const App = () => (
                 <Route path="/admin" element={
                   <ProtectedRoute>
                     <Admin />
+                  </ProtectedRoute>
+                } />
+                <Route path="/meta-ads" element={
+                  <ProtectedRoute>
+                    <MetaAds />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

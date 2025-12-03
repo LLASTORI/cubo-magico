@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, Lock } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -419,6 +419,14 @@ const Index = () => {
                   >
                     <BarChart3 className="w-4 h-4" />
                     Análise de Funil
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/meta-ads')}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Facebook className="w-4 h-4" />
+                    Meta Ads
                   </Button>
                   <TooltipProvider>
                     <Tooltip>

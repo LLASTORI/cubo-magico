@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderOpen, Trash2, LogOut, ArrowRight, Loader2, Key, CheckCircle2, XCircle, Zap, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CuboBrand } from '@/components/CuboLogo';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface ProjectCredentialStatus {
   is_configured: boolean;
@@ -288,7 +289,7 @@ const Projects = () => {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">
@@ -335,6 +336,7 @@ const Projects = () => {
                 </DialogContent>
               </Dialog>
 
+              <ThemeToggle />
               <Button variant="outline" onClick={handleLogout} className="gap-2">
                 <LogOut className="w-4 h-4" />
                 Sair

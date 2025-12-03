@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -131,7 +132,12 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 cube-pattern">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 cube-pattern relative">
+      {/* Theme Toggle */}
+      <div className="fixed top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+      
       {/* Decorative cube elements */}
       <div className="fixed top-10 left-10 w-20 h-20 bg-cube-blue/10 rounded-lg rotate-12 blur-sm" />
       <div className="fixed bottom-20 right-20 w-16 h-16 bg-cube-orange/10 rounded-lg -rotate-12 blur-sm" />

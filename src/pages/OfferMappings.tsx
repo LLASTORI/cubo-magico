@@ -37,6 +37,7 @@ import { OfferMappingDialog } from '@/components/OfferMappingDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FunnelManager } from '@/components/FunnelManager';
 import { CuboBrand } from '@/components/CuboLogo';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface Funnel {
   id: string;
@@ -544,6 +545,7 @@ export default function OfferMappingsAuto() {
               </p>
             </div>
           </div>
+          <ThemeToggle />
         </div>
 
         <Tabs defaultValue="existing" className="w-full">

@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
@@ -402,7 +403,7 @@ const Index = () => {
               </div>
               <ProjectSelector />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               {currentProject && (
                 <>
                   <Button
@@ -449,6 +450,7 @@ const Index = () => {
                   Atualizar
                 </Button>
               )}
+              <ThemeToggle />
               <Button
                 onClick={handleLogout}
                 variant="outline"

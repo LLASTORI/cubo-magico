@@ -6,10 +6,14 @@ const corsHeaders = {
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 
 const GRAPH_API_VERSION = 'v19.0'
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
+
+// Process accounts in batches to avoid rate limiting
+const BATCH_SIZE = 5
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -41,7 +45,7 @@ Deno.serve(async (req) => {
       .from('meta_credentials')
       .select('*')
       .eq('project_id', projectId)
-      .single()
+      .maybeSingle()
 
     if (credError || !credentials) {
       console.error('Credentials error:', credError)
@@ -87,7 +91,11 @@ Deno.serve(async (req) => {
         break
 
       case 'sync_insights':
-        result = await syncInsights(supabase, projectId, accessToken, accountIds, dateStart, dateStop)
+        // Use service role for background sync
+        const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        
+        // Run sync directly but with parallel processing for speed
+        result = await syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
         break
 
       default:
@@ -178,31 +186,73 @@ async function syncAdAccounts(
   return { success: true, synced: selectedAccounts.length }
 }
 
+async function getCampaignsForAccount(accessToken: string, accountId: string) {
+  const response = await fetch(
+    `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&access_token=${accessToken}`
+  )
+  const data = await response.json()
+
+  if (data.error) {
+    console.error(`Campaigns error for ${accountId}:`, data.error)
+    return []
+  }
+
+  return (data.data || []).map((c: any) => ({
+    ...c,
+    ad_account_id: accountId,
+  }))
+}
+
 async function getCampaigns(accessToken: string, accountIds: string[]) {
   console.log('Fetching campaigns for accounts:', accountIds)
   
   const allCampaigns: any[] = []
-
-  for (const accountId of accountIds) {
-    const response = await fetch(
-      `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&access_token=${accessToken}`
+  
+  // Process in parallel batches
+  for (let i = 0; i < accountIds.length; i += BATCH_SIZE) {
+    const batch = accountIds.slice(i, i + BATCH_SIZE)
+    const results = await Promise.all(
+      batch.map(accountId => getCampaignsForAccount(accessToken, accountId))
     )
-    const data = await response.json()
-
-    if (data.error) {
-      console.error(`Campaigns error for ${accountId}:`, data.error)
-      continue
-    }
-
-    const campaigns = (data.data || []).map((c: any) => ({
-      ...c,
-      ad_account_id: accountId,
-    }))
-    allCampaigns.push(...campaigns)
+    allCampaigns.push(...results.flat())
   }
 
   console.log(`Found ${allCampaigns.length} campaigns total`)
   return { campaigns: allCampaigns }
+}
+
+async function getInsightsForAccount(
+  accessToken: string, 
+  accountId: string,
+  dateStart: string, 
+  dateStop: string,
+  level: string
+) {
+  const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type'
+  
+  const params = new URLSearchParams({
+    fields,
+    time_range: JSON.stringify({ since: dateStart, until: dateStop }),
+    level,
+    access_token: accessToken,
+  })
+
+  const response = await fetch(
+    `${GRAPH_API_BASE}/${accountId}/insights?${params}`
+  )
+  const data = await response.json()
+
+  if (data.error) {
+    console.error(`Insights error for ${accountId}:`, data.error)
+    return []
+  }
+
+  return (data.data || []).map((i: any) => ({
+    ...i,
+    ad_account_id: accountId,
+    date_start: dateStart,
+    date_stop: dateStop,
+  }))
 }
 
 async function getInsights(
@@ -212,43 +262,25 @@ async function getInsights(
   dateStop: string,
   level: string = 'campaign'
 ) {
-  console.log('Fetching insights:', { accountIds, dateStart, dateStop, level })
+  console.log('Fetching insights:', { accountIds: accountIds.length, dateStart, dateStop, level })
   
   const allInsights: any[] = []
-  const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type'
 
-  for (const accountId of accountIds) {
-    const params = new URLSearchParams({
-      fields,
-      time_range: JSON.stringify({ since: dateStart, until: dateStop }),
-      level,
-      access_token: accessToken,
-    })
-
-    const response = await fetch(
-      `${GRAPH_API_BASE}/${accountId}/insights?${params}`
+  // Process in parallel batches
+  for (let i = 0; i < accountIds.length; i += BATCH_SIZE) {
+    const batch = accountIds.slice(i, i + BATCH_SIZE)
+    const results = await Promise.all(
+      batch.map(accountId => getInsightsForAccount(accessToken, accountId, dateStart, dateStop, level))
     )
-    const data = await response.json()
-
-    if (data.error) {
-      console.error(`Insights error for ${accountId}:`, data.error)
-      continue
-    }
-
-    const insights = (data.data || []).map((i: any) => ({
-      ...i,
-      ad_account_id: accountId,
-      date_start: dateStart,
-      date_stop: dateStop,
-    }))
-    allInsights.push(...insights)
+    allInsights.push(...results.flat())
   }
 
   console.log(`Found ${allInsights.length} insight records`)
   return { insights: allInsights }
 }
 
-async function syncInsights(
+// Optimized sync function with parallel processing
+async function syncInsightsOptimized(
   supabase: any,
   projectId: string,
   accessToken: string,
@@ -256,117 +288,139 @@ async function syncInsights(
   dateStart: string,
   dateStop: string
 ) {
-  console.log('Syncing insights:', { projectId, dateStart, dateStop })
+  console.log('Background sync started:', { projectId, accountIds: accountIds.length, dateStart, dateStop })
 
-  // Sync campaigns first
-  const { campaigns } = await getCampaigns(accessToken, accountIds)
-  
-  for (const campaign of campaigns) {
-    await supabase
-      .from('meta_campaigns')
-      .upsert({
-        project_id: projectId,
-        ad_account_id: campaign.ad_account_id,
-        campaign_id: campaign.id,
-        campaign_name: campaign.name,
-        objective: campaign.objective,
-        status: campaign.status,
-        daily_budget: campaign.daily_budget ? parseFloat(campaign.daily_budget) / 100 : null,
-        lifetime_budget: campaign.lifetime_budget ? parseFloat(campaign.lifetime_budget) / 100 : null,
-        created_time: campaign.created_time,
-        start_time: campaign.start_time,
-        stop_time: campaign.stop_time,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'project_id,campaign_id',
-      })
-  }
+  try {
+    // Sync campaigns first (in parallel batches)
+    const { campaigns } = await getCampaigns(accessToken, accountIds)
+    console.log(`Syncing ${campaigns.length} campaigns...`)
+    
+    // Batch upsert campaigns
+    const campaignRecords = campaigns.map(campaign => ({
+      project_id: projectId,
+      ad_account_id: campaign.ad_account_id,
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      objective: campaign.objective,
+      status: campaign.status,
+      daily_budget: campaign.daily_budget ? parseFloat(campaign.daily_budget) / 100 : null,
+      lifetime_budget: campaign.lifetime_budget ? parseFloat(campaign.lifetime_budget) / 100 : null,
+      created_time: campaign.created_time,
+      start_time: campaign.start_time,
+      stop_time: campaign.stop_time,
+      updated_at: new Date().toISOString(),
+    }))
 
-  // Sync insights at campaign level
-  const campaignInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'campaign')
-  
-  let insightsSynced = 0
-  for (const insight of campaignInsights.insights) {
-    const { error } = await supabase
-      .from('meta_insights')
-      .upsert({
-        project_id: projectId,
-        ad_account_id: insight.ad_account_id,
-        campaign_id: insight.campaign_id,
-        adset_id: insight.adset_id || null,
-        ad_id: insight.ad_id || null,
-        date_start: insight.date_start,
-        date_stop: insight.date_stop,
-        spend: parseFloat(insight.spend || 0),
-        impressions: parseInt(insight.impressions || 0),
-        clicks: parseInt(insight.clicks || 0),
-        reach: parseInt(insight.reach || 0),
-        cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-        cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-        ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-        frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-        actions: insight.actions || null,
-        cost_per_action_type: insight.cost_per_action_type || null,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop',
-      })
-
-    if (!error) insightsSynced++
-  }
-
-  // Also sync adset level
-  const adsetInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'adset')
-  
-  for (const insight of adsetInsights.insights) {
-    // First sync the adset
-    if (insight.adset_id) {
-      await supabase
-        .from('meta_adsets')
-        .upsert({
-          project_id: projectId,
-          ad_account_id: insight.ad_account_id,
-          campaign_id: insight.campaign_id,
-          adset_id: insight.adset_id,
-          adset_name: insight.adset_name,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'project_id,adset_id',
-        })
+    if (campaignRecords.length > 0) {
+      const { error: campaignError } = await supabase
+        .from('meta_campaigns')
+        .upsert(campaignRecords, { onConflict: 'project_id,campaign_id' })
+      
+      if (campaignError) {
+        console.error('Error syncing campaigns:', campaignError)
+      }
     }
 
-    // Then sync the insight
-    const { error } = await supabase
-      .from('meta_insights')
-      .upsert({
+    // Sync insights at campaign level (in parallel)
+    const campaignInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'campaign')
+    console.log(`Syncing ${campaignInsights.insights.length} campaign insights...`)
+    
+    const insightRecords = campaignInsights.insights.map((insight: any) => ({
+      project_id: projectId,
+      ad_account_id: insight.ad_account_id,
+      campaign_id: insight.campaign_id,
+      adset_id: insight.adset_id || null,
+      ad_id: insight.ad_id || null,
+      date_start: insight.date_start,
+      date_stop: insight.date_stop,
+      spend: parseFloat(insight.spend || 0),
+      impressions: parseInt(insight.impressions || 0),
+      clicks: parseInt(insight.clicks || 0),
+      reach: parseInt(insight.reach || 0),
+      cpc: insight.cpc ? parseFloat(insight.cpc) : null,
+      cpm: insight.cpm ? parseFloat(insight.cpm) : null,
+      ctr: insight.ctr ? parseFloat(insight.ctr) : null,
+      frequency: insight.frequency ? parseFloat(insight.frequency) : null,
+      actions: insight.actions || null,
+      cost_per_action_type: insight.cost_per_action_type || null,
+      updated_at: new Date().toISOString(),
+    }))
+
+    if (insightRecords.length > 0) {
+      const { error: insightError } = await supabase
+        .from('meta_insights')
+        .upsert(insightRecords, { 
+          onConflict: 'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop' 
+        })
+      
+      if (insightError) {
+        console.error('Error syncing campaign insights:', insightError)
+      }
+    }
+
+    // Sync adset level insights
+    const adsetInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'adset')
+    console.log(`Syncing ${adsetInsights.insights.length} adset insights...`)
+    
+    // Prepare adset records
+    const adsetRecords = adsetInsights.insights
+      .filter((i: any) => i.adset_id)
+      .map((insight: any) => ({
         project_id: projectId,
         ad_account_id: insight.ad_account_id,
         campaign_id: insight.campaign_id,
         adset_id: insight.adset_id,
-        ad_id: null,
-        date_start: insight.date_start,
-        date_stop: insight.date_stop,
-        spend: parseFloat(insight.spend || 0),
-        impressions: parseInt(insight.impressions || 0),
-        clicks: parseInt(insight.clicks || 0),
-        reach: parseInt(insight.reach || 0),
-        cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-        cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-        ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-        frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-        actions: insight.actions || null,
-        cost_per_action_type: insight.cost_per_action_type || null,
+        adset_name: insight.adset_name,
         updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop',
-      })
+      }))
 
-    if (!error) insightsSynced++
-  }
+    if (adsetRecords.length > 0) {
+      const { error: adsetError } = await supabase
+        .from('meta_adsets')
+        .upsert(adsetRecords, { onConflict: 'project_id,adset_id' })
+      
+      if (adsetError) {
+        console.error('Error syncing adsets:', adsetError)
+      }
+    }
 
-  return { 
-    success: true, 
-    campaignsSynced: campaigns.length,
-    insightsSynced 
+    // Prepare adset insight records
+    const adsetInsightRecords = adsetInsights.insights.map((insight: any) => ({
+      project_id: projectId,
+      ad_account_id: insight.ad_account_id,
+      campaign_id: insight.campaign_id,
+      adset_id: insight.adset_id,
+      ad_id: null,
+      date_start: insight.date_start,
+      date_stop: insight.date_stop,
+      spend: parseFloat(insight.spend || 0),
+      impressions: parseInt(insight.impressions || 0),
+      clicks: parseInt(insight.clicks || 0),
+      reach: parseInt(insight.reach || 0),
+      cpc: insight.cpc ? parseFloat(insight.cpc) : null,
+      cpm: insight.cpm ? parseFloat(insight.cpm) : null,
+      ctr: insight.ctr ? parseFloat(insight.ctr) : null,
+      frequency: insight.frequency ? parseFloat(insight.frequency) : null,
+      actions: insight.actions || null,
+      cost_per_action_type: insight.cost_per_action_type || null,
+      updated_at: new Date().toISOString(),
+    }))
+
+    if (adsetInsightRecords.length > 0) {
+      const { error: adsetInsightError } = await supabase
+        .from('meta_insights')
+        .upsert(adsetInsightRecords, { 
+          onConflict: 'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop' 
+        })
+      
+      if (adsetInsightError) {
+        console.error('Error syncing adset insights:', adsetInsightError)
+      }
+    }
+
+    console.log('Background sync completed successfully!')
+    
+  } catch (error) {
+    console.error('Background sync error:', error)
   }
 }

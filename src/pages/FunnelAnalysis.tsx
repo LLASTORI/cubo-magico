@@ -161,9 +161,17 @@ const FunnelAnalysis = () => {
   const dashboardData = location.state as { salesData?: DashboardSale[]; filters?: { startDate?: string; endDate?: string } } | null;
   const salesFromDashboard = dashboardData?.salesData || [];
   
-  // Parse dashboard dates for tab components
-  const dashboardStartDate = dashboardData?.filters?.startDate ? new Date(dashboardData.filters.startDate) : undefined;
-  const dashboardEndDate = dashboardData?.filters?.endDate ? new Date(dashboardData.filters.endDate) : undefined;
+  // Parse dashboard dates for tab components (handle timezone correctly)
+  const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+  
+  const dashboardStartDate = dashboardData?.filters?.startDate ? parseLocalDate(dashboardData.filters.startDate) : undefined;
+  const dashboardEndDate = dashboardData?.filters?.endDate ? parseLocalDate(dashboardData.filters.endDate) : undefined;
+  
+  console.log('Dashboard filters received:', dashboardData?.filters);
+  console.log('Parsed dates:', { dashboardStartDate, dashboardEndDate });
 
   // Get unique funnels
   const funnels = useMemo(() => {

@@ -467,18 +467,26 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes }: CustomerCohortProp
             </PopoverContent>
           </Popover>
         </div>
-        <div className="flex gap-2 ml-auto">
-          {[7, 15, 30, 60].map(days => (
+        <div className="flex gap-1 ml-auto flex-wrap">
+          {[
+            { days: 7, label: '7d' },
+            { days: 15, label: '15d' },
+            { days: 30, label: '30d' },
+            { days: 60, label: '60d' },
+            { days: 365, label: '1 ano' },
+            { days: 730, label: '2 anos' },
+          ].map(({ days, label }) => (
             <Button
               key={days}
               variant="ghost"
               size="sm"
+              className="px-2 text-xs"
               onClick={() => {
                 setStartDate(subDays(today, days));
                 setEndDate(today);
               }}
             >
-              {days}d
+              {label}
             </Button>
           ))}
         </div>

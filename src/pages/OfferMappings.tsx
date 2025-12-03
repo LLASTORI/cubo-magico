@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw, CheckSquare, XSquare, RotateCw } from 'lucide-react';
+import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RefreshCw, CheckSquare, XSquare, RotateCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -698,11 +698,6 @@ export default function OfferMappingsAuto() {
     fetchMappings();
   }, []);
 
-  const handleAdd = () => {
-    setSelectedMapping(null);
-    setDialogOpen(true);
-  };
-
   const handleEdit = (mapping: OfferMapping) => {
     setSelectedMapping(mapping);
     setDialogOpen(true);
@@ -781,7 +776,7 @@ export default function OfferMappingsAuto() {
                 Mapeamento de Ofertas (V2)
               </h1>
               <p className="text-muted-foreground">
-                Importação automática + cadastro manual de ofertas
+                Importação via API e gerenciamento de ofertas
               </p>
             </div>
           </div>
@@ -847,10 +842,6 @@ export default function OfferMappingsAuto() {
                       )}
                       Sincronizar com Hotmart
                     </Button>
-                    <Button onClick={handleAdd} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Nova Oferta
-                    </Button>
                   </div>
                 </div>
                 
@@ -906,10 +897,9 @@ export default function OfferMappingsAuto() {
                   <p className="text-muted-foreground mb-4">
                     Nenhum mapeamento encontrado
                   </p>
-                  <Button onClick={handleAdd} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Adicionar primeiro mapeamento
-                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    Use a aba "Importar da Hotmart" para adicionar ofertas
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, subDays, eachDayOfInterval, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, RefreshCw, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
+import { Calendar, RefreshCw, TrendingUp, DollarSign, BarChart3, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -295,7 +295,18 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps)
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Total de Clientes</p>
+                  <p className="text-3xl font-bold text-foreground">{totals.customers}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </Card>
             <Card className="p-6">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
@@ -314,7 +325,7 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps)
                   <p className="text-3xl font-bold text-foreground">{formatCurrency(totals.revenue)}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
-                  <DollarSign className="w-6 h-6 text-primary-foreground" />
+                  <DollarSign className="w-6 h-6 text-white" />
                 </div>
               </div>
             </Card>
@@ -323,11 +334,11 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes }: TemporalChartProps)
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
                   <p className="text-3xl font-bold text-foreground">
-                    {formatCurrency(totals.sales > 0 ? totals.revenue / totals.sales : 0)}
+                    {formatCurrency(totals.customers > 0 ? totals.revenue / totals.customers : 0)}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
-                  <TrendingUp className="w-6 h-6 text-primary-foreground" />
+                  <TrendingUp className="w-6 h-6 text-white" />
                 </div>
               </div>
             </Card>

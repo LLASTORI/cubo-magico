@@ -40,6 +40,17 @@ const MetaAds = () => {
   const [endDate, setEndDate] = useState(today);
   const [syncing, setSyncing] = useState(false);
 
+  // Reset data when project changes
+  useEffect(() => {
+    if (currentProject?.id) {
+      // Invalidate all Meta-related queries when project changes
+      queryClient.invalidateQueries({ queryKey: ['meta_credentials'] });
+      queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+    }
+  }, [currentProject?.id, queryClient]);
+
   // Handle accounts selection callback
   const handleAccountsSelected = (accountIds: string[]) => {
     queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });

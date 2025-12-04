@@ -15,6 +15,41 @@ const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 // Process accounts in batches to avoid rate limiting
 const BATCH_SIZE = 5
 
+// Retry configuration for rate limits
+const MAX_RETRIES = 5
+const INITIAL_DELAY_MS = 5000 // 5 seconds
+const MAX_DELAY_MS = 120000 // 2 minutes
+
+// Helper function to delay execution
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// Fetch with exponential backoff retry for rate limits
+async function fetchWithRetry(
+  url: string, 
+  context: string,
+  retryCount = 0
+): Promise<any> {
+  const response = await fetch(url)
+  const data = await response.json()
+
+  // Check for rate limit error (code 4)
+  if (data.error && data.error.code === 4) {
+    if (retryCount >= MAX_RETRIES) {
+      console.error(`${context}: Max retries (${MAX_RETRIES}) reached for rate limit`)
+      throw new Error(`Rate limit exceeded after ${MAX_RETRIES} retries. Tente novamente em alguns minutos.`)
+    }
+
+    // Calculate exponential backoff delay
+    const delayMs = Math.min(INITIAL_DELAY_MS * Math.pow(2, retryCount), MAX_DELAY_MS)
+    console.warn(`${context}: Rate limited (code 4). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delayMs}ms`)
+    
+    await delay(delayMs)
+    return fetchWithRetry(url, context, retryCount + 1)
+  }
+
+  return data
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -140,8 +175,7 @@ async function getAdAccounts(accessToken: string) {
     pageCount++
     console.log(`Fetching ad accounts page ${pageCount}...`)
     
-    const resp: Response = await fetch(nextUrl)
-    const json: any = await resp.json()
+    const json = await fetchWithRetry(nextUrl, `Ad accounts page ${pageCount}`)
 
     if (json.error) {
       console.error('Ad accounts error:', json.error)
@@ -212,10 +246,9 @@ async function syncAdAccounts(
 }
 
 async function getCampaignsForAccount(accessToken: string, accountId: string) {
-  const response = await fetch(
-    `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&access_token=${accessToken}`
-  )
-  const data = await response.json()
+  const url = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&access_token=${accessToken}`
+  
+  const data = await fetchWithRetry(url, `Campaigns for ${accountId}`)
 
   if (data.error) {
     console.error(`Campaigns error for ${accountId}:`, data.error)
@@ -240,6 +273,11 @@ async function getCampaigns(accessToken: string, accountIds: string[]) {
       batch.map(accountId => getCampaignsForAccount(accessToken, accountId))
     )
     allCampaigns.push(...results.flat())
+    
+    // Add small delay between batches to avoid rate limiting
+    if (i + BATCH_SIZE < accountIds.length) {
+      await delay(1000)
+    }
   }
 
   console.log(`Found ${allCampaigns.length} campaigns total`)
@@ -257,7 +295,6 @@ async function getInsightsForAccount(
   const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type'
   
   const allInsights: any[] = []
-  let nextUrl: string | null = null
   
   // Initial request
   const params = new URLSearchParams({
@@ -269,7 +306,7 @@ async function getInsightsForAccount(
     access_token: accessToken,
   })
 
-  let url = `${GRAPH_API_BASE}/${accountId}/insights?${params}`
+  let url: string | null = `${GRAPH_API_BASE}/${accountId}/insights?${params}`
   let pageCount = 0
   const maxPages = 50 // Safety limit
 
@@ -277,8 +314,7 @@ async function getInsightsForAccount(
     pageCount++
     console.log(`Fetching insights page ${pageCount} for ${accountId}...`)
     
-    const response = await fetch(url)
-    const data = await response.json()
+    const data = await fetchWithRetry(url, `Insights page ${pageCount} for ${accountId}`)
 
     if (data.error) {
       console.error(`Insights error for ${accountId}:`, data.error)
@@ -296,6 +332,11 @@ async function getInsightsForAccount(
 
     // Check for next page
     url = data.paging?.next || null
+    
+    // Add small delay between pages to avoid rate limiting
+    if (url) {
+      await delay(500)
+    }
   }
 
   console.log(`Account ${accountId}: Total ${allInsights.length} insights across ${pageCount} pages`)
@@ -314,9 +355,15 @@ async function getInsights(
   const allInsights: any[] = []
 
   // Process accounts sequentially to avoid rate limiting
-  for (const accountId of accountIds) {
+  for (let i = 0; i < accountIds.length; i++) {
+    const accountId = accountIds[i]
     const insights = await getInsightsForAccount(accessToken, accountId, dateStart, dateStop, level)
     allInsights.push(...insights)
+    
+    // Add delay between accounts to avoid rate limiting
+    if (i < accountIds.length - 1) {
+      await delay(2000)
+    }
   }
 
   console.log(`Found ${allInsights.length} total insight records for ${level} level`)

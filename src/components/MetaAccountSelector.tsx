@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Check, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -29,7 +30,18 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
   const [availableAccounts, setAvailableAccounts] = useState<any[]>([]);
   const [savedAccounts, setSavedAccounts] = useState<MetaAccount[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
+
+  // Filter accounts based on search query
+  const filteredAccounts = useMemo(() => {
+    if (!searchQuery.trim()) return availableAccounts;
+    const query = searchQuery.toLowerCase();
+    return availableAccounts.filter(account => 
+      account.name?.toLowerCase().includes(query) || 
+      account.id?.toLowerCase().includes(query)
+    );
+  }, [availableAccounts, searchQuery]);
 
   // Fetch all available accounts from Meta API when dialog opens
   const fetchAvailableAccounts = async () => {
@@ -168,9 +180,21 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
           </div>
         ) : (
           <>
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar conta por nome ou ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-muted-foreground">
                 {selectedIds.length} de {availableAccounts.length} selecionada(s)
+                {searchQuery && ` (${filteredAccounts.length} encontrada(s))`}
               </span>
               <Button variant="ghost" size="sm" onClick={handleSelectAll}>
                 {selectedIds.length === availableAccounts.length ? 'Desmarcar todas' : 'Selecionar todas'}
@@ -179,41 +203,47 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
 
             <ScrollArea className="h-[300px] pr-4">
               <div className="space-y-2">
-                {availableAccounts.map((account) => (
-                  <div
-                    key={account.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                      selectedIds.includes(account.id) 
-                        ? 'bg-primary/10 border-primary' 
-                        : 'bg-card border-border hover:bg-accent'
-                    }`}
-                    onClick={() => handleToggle(account.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Checkbox 
-                        checked={selectedIds.includes(account.id)}
-                        onCheckedChange={() => handleToggle(account.id)}
-                      />
-                      <div>
-                        <p className="font-medium text-sm">{account.name || 'Sem nome'}</p>
-                        <p className="text-xs text-muted-foreground">{account.id}</p>
+                {filteredAccounts.length === 0 ? (
+                  <div className="py-4 text-center text-muted-foreground text-sm">
+                    Nenhuma conta encontrada para "{searchQuery}"
+                  </div>
+                ) : (
+                  filteredAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedIds.includes(account.id) 
+                          ? 'bg-primary/10 border-primary' 
+                          : 'bg-card border-border hover:bg-accent'
+                      }`}
+                      onClick={() => handleToggle(account.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Checkbox 
+                          checked={selectedIds.includes(account.id)}
+                          onCheckedChange={() => handleToggle(account.id)}
+                        />
+                        <div>
+                          <p className="font-medium text-sm">{account.name || 'Sem nome'}</p>
+                          <p className="text-xs text-muted-foreground">{account.id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {account.currency && (
+                          <Badge variant="outline" className="text-xs">
+                            {account.currency}
+                          </Badge>
+                        )}
+                        {isSaved(account.id) && (
+                          <Badge variant="secondary" className="text-xs gap-1">
+                            <Check className="h-3 w-3" />
+                            Ativa
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {account.currency && (
-                        <Badge variant="outline" className="text-xs">
-                          {account.currency}
-                        </Badge>
-                      )}
-                      {isSaved(account.id) && (
-                        <Badge variant="secondary" className="text-xs gap-1">
-                          <Check className="h-3 w-3" />
-                          Ativa
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </ScrollArea>
           </>

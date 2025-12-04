@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -205,6 +206,46 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     if (!adAccounts || adAccounts.length === 0) return [];
     return adAccounts.filter(a => a.is_active).map(a => a.account_id).sort();
   }, [adAccounts]);
+
+  // Fetch adsets - only from active accounts
+  const { data: adsets, isLoading: adsetsLoading } = useQuery({
+    queryKey: ['meta_adsets', projectId, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('meta_adsets')
+        .select('*')
+        .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
+        .order('adset_name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  // Fetch ads - only from active accounts
+  const { data: metaAds, isLoading: adsLoading } = useQuery({
+    queryKey: ['meta_ads', projectId, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('meta_ads')
+        .select('*')
+        .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
+        .order('ad_name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,
+    staleTime: 0,
+    gcTime: 0,
+  });
 
   // Fetch insights - only from active accounts (with pagination to get ALL data)
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
@@ -481,23 +522,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     }
     return acc;
   }, []).sort((a, b) => a.date.localeCompare(b.date)) || [];
-
-  // Campaign performance data
-  const campaignData = campaigns?.map(campaign => {
-    const campaignInsights = insights?.filter(i => i.campaign_id === campaign.campaign_id) || [];
-    const totalSpend = campaignInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
-    const totalClicks = campaignInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
-    const totalImpressions = campaignInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
-    
-    return {
-      name: campaign.campaign_name || 'Sem nome',
-      status: campaign.status,
-      spend: totalSpend,
-      clicks: totalClicks,
-      impressions: totalImpressions,
-      ctr: totalImpressions > 0 ? (totalClicks / totalImpressions * 100).toFixed(2) : '0.00',
-    };
-  }).sort((a, b) => b.spend - a.spend) || [];
 
   // Show loading while checking credentials or resetting project
   if (credentialsLoading) {
@@ -842,57 +866,15 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                   </Card>
                 </div>
 
-                {/* Campaigns Table */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Campanhas</CardTitle>
-                    <CardDescription>Performance por campanha no período selecionado</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {campaignData.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Campanha</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Gasto</TableHead>
-                            <TableHead className="text-right">Impressões</TableHead>
-                            <TableHead className="text-right">Cliques</TableHead>
-                            <TableHead className="text-right">CTR</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {campaignData.slice(0, 10).map((campaign, index) => (
-                            <TableRow key={index}>
-                              <TableCell className="font-medium max-w-[300px] truncate">
-                                {campaign.name}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={campaign.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                                  {campaign.status === 'ACTIVE' ? 'Ativo' : campaign.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(campaign.spend)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {new Intl.NumberFormat('pt-BR').format(campaign.impressions)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {new Intl.NumberFormat('pt-BR').format(campaign.clicks)}
-                              </TableCell>
-                              <TableCell className="text-right">{campaign.ctr}%</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <div className="py-8 text-center text-muted-foreground">
-                        Nenhuma campanha encontrada. Clique em "Sincronizar" para carregar os dados.
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                {/* Hierarchy Analysis */}
+                <MetaHierarchyAnalysis
+                  insights={insights || []}
+                  campaigns={campaigns || []}
+                  adsets={adsets || []}
+                  ads={metaAds || []}
+                  loading={insightsLoading || campaignsLoading || adsetsLoading || adsLoading}
+                  onRefresh={handleSyncData}
+                />
               </>
             )}
 

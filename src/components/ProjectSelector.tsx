@@ -19,19 +19,27 @@ const ProjectSelector = () => {
   const { projects, currentProject, setCurrentProject, isProjectReady } = useProject();
 
   const handleSelectProject = (project: Project) => {
+    // Skip if same project
+    if (currentProject?.id === project.id) {
+      console.log('[ProjectSelector] Same project selected, skipping');
+      return;
+    }
+
     if (!isProjectReady(project.id)) {
       toast.error('Este projeto ainda não está configurado. Configure as credenciais primeiro.');
       navigate('/projects');
       return;
     }
     
-    // Skip if same project
-    if (currentProject?.id === project.id) return;
+    console.log('[ProjectSelector] Switching to project:', project.name, project.id);
     
-    // Remove all cached queries to force fresh data fetch
-    queryClient.removeQueries();
+    // CRITICAL: Clear ALL cached queries before switching project
+    // This ensures no stale data from previous project is shown
+    queryClient.clear();
     
+    // Update the current project (this also saves to localStorage)
     setCurrentProject(project);
+    
     toast.success(`Projeto alterado para: ${project.name}`);
   };
 
@@ -58,11 +66,12 @@ const ProjectSelector = () => {
         ) : (
           projects.map((project) => {
             const ready = isProjectReady(project.id);
+            const isSelected = currentProject?.id === project.id;
             return (
               <DropdownMenuItem
                 key={project.id}
                 onClick={() => handleSelectProject(project)}
-                className={`flex items-center justify-between ${currentProject?.id === project.id ? 'bg-accent' : ''} ${!ready ? 'opacity-60' : ''}`}
+                className={`flex items-center justify-between ${isSelected ? 'bg-accent' : ''} ${!ready ? 'opacity-60' : ''}`}
               >
                 <span className="truncate">{project.name}</span>
                 {ready ? (

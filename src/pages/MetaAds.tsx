@@ -480,219 +480,245 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
-            {/* Date Filters */}
-            <Collapsible open={showFilters} onOpenChange={setShowFilters}>
-              <CollapsibleContent>
-                <Card className="p-4 mb-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Filter className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-semibold text-foreground">Filtros de Data</h2>
-                  </div>
-                  <MetaDateFilters
-                    startDate={startDate}
-                    endDate={endDate}
-                    onStartDateChange={handleStartDateChange}
-                    onEndDateChange={handleEndDateChange}
-                  />
-                </Card>
-              </CollapsibleContent>
-            </Collapsible>
-
-        {/* Needs Sync Indicator - when date changed */}
-        {needsSync && !syncing && (
-          <Card className="border-yellow-500/50 bg-yellow-500/5">
-            <CardContent className="flex items-center justify-between py-4">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-yellow-500" />
-                <div>
-                  <p className="font-medium text-foreground">Período alterado</p>
-                  <p className="text-sm text-muted-foreground">Clique em Sincronizar para buscar dados do novo período.</p>
-                </div>
-              </div>
-              <Button onClick={handleSyncData} disabled={syncing} className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Sincronizar
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Syncing Indicator */}
-        {syncing && (
-          <Card className="border-primary/50 bg-primary/5">
-            <CardContent className="flex items-center gap-3 py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <div>
-                <p className="font-medium text-foreground">Sincronizando dados...</p>
-                <p className="text-sm text-muted-foreground">Buscando dados do Meta Ads. Aguarde até 15 segundos.</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Gasto Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.spend)}
-              </div>
-              <p className="text-xs text-muted-foreground">CPM: R$ {avgCPM}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Impressões</CardTitle>
-              <Eye className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {new Intl.NumberFormat('pt-BR').format(totals.impressions)}
-              </div>
-              <p className="text-xs text-muted-foreground">Alcance: {new Intl.NumberFormat('pt-BR').format(totals.reach)}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cliques</CardTitle>
-              <MousePointer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {new Intl.NumberFormat('pt-BR').format(totals.clicks)}
-              </div>
-              <p className="text-xs text-muted-foreground">CPC: R$ {avgCPC}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">CTR</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{avgCTR}%</div>
-              <p className="text-xs text-muted-foreground">Taxa de cliques</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gasto Diário</CardTitle>
-              <CardDescription>Evolução do investimento por dia</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {dailySpendData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={dailySpendData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="dateFormatted" className="text-xs" />
-                    <YAxis tickFormatter={(v) => `R$${v}`} className="text-xs" />
-                    <Tooltip 
-                      formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Gasto']}
-                      labelFormatter={(label) => `Data: ${label}`}
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                    />
-                    <Bar dataKey="spend" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  Nenhum dado disponível. Clique em "Sincronizar" para carregar.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Cliques por Dia</CardTitle>
-              <CardDescription>Evolução de cliques no período</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {dailySpendData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dailySpendData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="dateFormatted" className="text-xs" />
-                    <YAxis className="text-xs" />
-                    <Tooltip 
-                      formatter={(value: number) => [value, 'Cliques']}
-                      labelFormatter={(label) => `Data: ${label}`}
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                    />
-                    <Line type="monotone" dataKey="clicks" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: 'hsl(var(--chart-2))' }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  Nenhum dado disponível.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Campaigns Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Campanhas</CardTitle>
-            <CardDescription>Performance por campanha no período selecionado</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {campaignData.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Campanha</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Gasto</TableHead>
-                    <TableHead className="text-right">Impressões</TableHead>
-                    <TableHead className="text-right">Cliques</TableHead>
-                    <TableHead className="text-right">CTR</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {campaignData.slice(0, 10).map((campaign, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium max-w-[300px] truncate">
-                        {campaign.name}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={campaign.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                          {campaign.status === 'ACTIVE' ? 'Ativo' : campaign.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(campaign.spend)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {new Intl.NumberFormat('pt-BR').format(campaign.impressions)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {new Intl.NumberFormat('pt-BR').format(campaign.clicks)}
-                      </TableCell>
-                      <TableCell className="text-right">{campaign.ctr}%</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="py-8 text-center text-muted-foreground">
-                Nenhuma campanha encontrada. Clique em "Sincronizar" para carregar os dados.
-              </div>
+            {/* Empty State - No accounts configured */}
+            {(!adAccounts || adAccounts.length === 0) && !accountsLoading && (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Nenhuma conta configurada</h3>
+                  <p className="text-muted-foreground text-center mb-4 max-w-md">
+                    Selecione as contas de anúncio do Meta que deseja acompanhar neste projeto.
+                  </p>
+                  <MetaAccountSelector 
+                    projectId={projectId} 
+                    onAccountsSelected={handleAccountsSelected}
+                  >
+                    <Button className="gap-2">
+                      <Settings2 className="h-4 w-4" />
+                      Selecionar Contas
+                    </Button>
+                  </MetaAccountSelector>
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
+
+            {/* Date Filters - only show when accounts exist */}
+            {adAccounts && adAccounts.length > 0 && (
+              <>
+                <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+                  <CollapsibleContent>
+                    <Card className="p-4 mb-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Filter className="w-5 h-5 text-primary" />
+                        <h2 className="text-lg font-semibold text-foreground">Filtros de Data</h2>
+                      </div>
+                      <MetaDateFilters
+                        startDate={startDate}
+                        endDate={endDate}
+                        onStartDateChange={handleStartDateChange}
+                        onEndDateChange={handleEndDateChange}
+                      />
+                    </Card>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                {/* Needs Sync Indicator - when date changed */}
+                {needsSync && !syncing && (
+                  <Card className="border-yellow-500/50 bg-yellow-500/5">
+                    <CardContent className="flex items-center justify-between py-4">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="h-5 w-5 text-yellow-500" />
+                        <div>
+                          <p className="font-medium text-foreground">Período alterado</p>
+                          <p className="text-sm text-muted-foreground">Clique em Sincronizar para buscar dados do novo período.</p>
+                        </div>
+                      </div>
+                      <Button onClick={handleSyncData} disabled={syncing} className="gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        Sincronizar
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Syncing Indicator */}
+                {syncing && (
+                  <Card className="border-primary/50 bg-primary/5">
+                    <CardContent className="flex items-center gap-3 py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground">Sincronizando dados...</p>
+                        <p className="text-sm text-muted-foreground">Buscando dados do Meta Ads. Aguarde até 15 segundos.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Metric Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Gasto Total</CardTitle>
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.spend)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">CPM: R$ {avgCPM}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Impressões</CardTitle>
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {new Intl.NumberFormat('pt-BR').format(totals.impressions)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Alcance: {new Intl.NumberFormat('pt-BR').format(totals.reach)}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Cliques</CardTitle>
+                      <MousePointer className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {new Intl.NumberFormat('pt-BR').format(totals.clicks)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">CPC: R$ {avgCPC}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">CTR</CardTitle>
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{avgCTR}%</div>
+                      <p className="text-xs text-muted-foreground">Taxa de cliques</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Gasto Diário</CardTitle>
+                      <CardDescription>Evolução do investimento por dia</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {dailySpendData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={dailySpendData}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                            <XAxis dataKey="dateFormatted" className="text-xs" />
+                            <YAxis tickFormatter={(v) => `R$${v}`} className="text-xs" />
+                            <Tooltip 
+                              formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Gasto']}
+                              labelFormatter={(label) => `Data: ${label}`}
+                              contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                            />
+                            <Bar dataKey="spend" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                          Nenhum dado disponível. Clique em "Sincronizar" para carregar.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Cliques por Dia</CardTitle>
+                      <CardDescription>Evolução de cliques no período</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {dailySpendData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                          <LineChart data={dailySpendData}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                            <XAxis dataKey="dateFormatted" className="text-xs" />
+                            <YAxis className="text-xs" />
+                            <Tooltip 
+                              formatter={(value: number) => [value, 'Cliques']}
+                              labelFormatter={(label) => `Data: ${label}`}
+                              contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                            />
+                            <Line type="monotone" dataKey="clicks" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: 'hsl(var(--chart-2))' }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                          Nenhum dado disponível.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Campaigns Table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Campanhas</CardTitle>
+                    <CardDescription>Performance por campanha no período selecionado</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {campaignData.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Campanha</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Gasto</TableHead>
+                            <TableHead className="text-right">Impressões</TableHead>
+                            <TableHead className="text-right">Cliques</TableHead>
+                            <TableHead className="text-right">CTR</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {campaignData.slice(0, 10).map((campaign, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium max-w-[300px] truncate">
+                                {campaign.name}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={campaign.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                                  {campaign.status === 'ACTIVE' ? 'Ativo' : campaign.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(campaign.spend)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {new Intl.NumberFormat('pt-BR').format(campaign.impressions)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {new Intl.NumberFormat('pt-BR').format(campaign.clicks)}
+                              </TableCell>
+                              <TableCell className="text-right">{campaign.ctr}%</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="py-8 text-center text-muted-foreground">
+                        Nenhuma campanha encontrada. Clique em "Sincronizar" para carregar os dados.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
           </TabsContent>
 

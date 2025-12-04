@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
+import { SyncLoader } from '@/components/SyncLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MetaAccountSelector } from '@/components/MetaAccountSelector';
 import { MetaAccountsManager } from '@/components/MetaAccountsManager';
@@ -568,12 +569,8 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 {/* Syncing Indicator */}
                 {syncing && (
                   <Card className="border-primary/50 bg-primary/5">
-                    <CardContent className="flex items-center gap-3 py-4">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Sincronizando dados...</p>
-                        <p className="text-sm text-muted-foreground">Buscando dados do Meta Ads. Aguarde até 15 segundos.</p>
-                      </div>
+                    <CardContent className="py-4">
+                      <SyncLoader />
                     </CardContent>
                   </Card>
                 )}

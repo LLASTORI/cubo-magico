@@ -20,8 +20,51 @@ const MAX_RETRIES = 5
 const INITIAL_DELAY_MS = 5000 // 5 seconds
 const MAX_DELAY_MS = 120000 // 2 minutes
 
+// Max days per request to avoid "reduce data" error from Meta API
+const MAX_DAYS_PER_CHUNK = 31
+
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// Helper function to split date range into monthly chunks
+function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{start: string, stop: string}> {
+  const chunks: Array<{start: string, stop: string}> = []
+  const startDate = new Date(dateStart)
+  const endDate = new Date(dateStop)
+  
+  // Calculate total days
+  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  
+  // If period is short enough, return single chunk
+  if (totalDays <= MAX_DAYS_PER_CHUNK) {
+    return [{ start: dateStart, stop: dateStop }]
+  }
+  
+  console.log(`Splitting ${totalDays} days into monthly chunks...`)
+  
+  let currentStart = new Date(startDate)
+  
+  while (currentStart < endDate) {
+    // Calculate chunk end (end of current month or end date, whichever is earlier)
+    const chunkEnd = new Date(currentStart)
+    chunkEnd.setMonth(chunkEnd.getMonth() + 1)
+    chunkEnd.setDate(0) // Last day of current month
+    
+    const actualEnd = chunkEnd > endDate ? endDate : chunkEnd
+    
+    chunks.push({
+      start: currentStart.toISOString().split('T')[0],
+      stop: actualEnd.toISOString().split('T')[0]
+    })
+    
+    // Move to first day of next month
+    currentStart = new Date(actualEnd)
+    currentStart.setDate(currentStart.getDate() + 1)
+  }
+  
+  console.log(`Created ${chunks.length} chunks:`, chunks.map(c => `${c.start} to ${c.stop}`))
+  return chunks
+}
 
 // Fetch with exponential backoff retry for rate limits
 async function fetchWithRetry(
@@ -45,6 +88,13 @@ async function fetchWithRetry(
     
     await delay(delayMs)
     return fetchWithRetry(url, context, retryCount + 1)
+  }
+  
+  // Check for "reduce data" error (code 1) - this means we need smaller chunks
+  if (data.error && data.error.code === 1) {
+    console.warn(`${context}: Data volume too large (code 1). Need smaller date chunks.`)
+    // Return the error to be handled by the caller
+    return data
   }
 
   return data
@@ -350,19 +400,34 @@ async function getInsights(
   dateStop: string,
   level: string = 'campaign'
 ) {
-  console.log('Fetching insights:', { accountIds: accountIds.length, dateStart, dateStop, level })
+  // Split date range into monthly chunks to avoid "reduce data" error
+  const dateChunks = splitDateRangeIntoChunks(dateStart, dateStop)
+  
+  console.log('Fetching insights:', { accountIds: accountIds.length, dateStart, dateStop, level, chunks: dateChunks.length })
   
   const allInsights: any[] = []
 
-  // Process accounts sequentially to avoid rate limiting
-  for (let i = 0; i < accountIds.length; i++) {
-    const accountId = accountIds[i]
-    const insights = await getInsightsForAccount(accessToken, accountId, dateStart, dateStop, level)
-    allInsights.push(...insights)
+  // Process each chunk
+  for (let chunkIndex = 0; chunkIndex < dateChunks.length; chunkIndex++) {
+    const chunk = dateChunks[chunkIndex]
+    console.log(`Processing chunk ${chunkIndex + 1}/${dateChunks.length}: ${chunk.start} to ${chunk.stop}`)
     
-    // Add delay between accounts to avoid rate limiting
-    if (i < accountIds.length - 1) {
-      await delay(2000)
+    // Process accounts sequentially to avoid rate limiting
+    for (let i = 0; i < accountIds.length; i++) {
+      const accountId = accountIds[i]
+      const insights = await getInsightsForAccount(accessToken, accountId, chunk.start, chunk.stop, level)
+      allInsights.push(...insights)
+      
+      // Add delay between accounts to avoid rate limiting
+      if (i < accountIds.length - 1) {
+        await delay(2000)
+      }
+    }
+    
+    // Add delay between chunks
+    if (chunkIndex < dateChunks.length - 1) {
+      console.log('Waiting before next chunk...')
+      await delay(3000)
     }
   }
 

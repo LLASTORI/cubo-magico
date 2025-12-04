@@ -25,7 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -255,6 +256,33 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     gcTime: 0,
   });
 
+  // VERIFICATION: Query to get the exact SUM from database for comparison
+  const { data: dbVerification } = useQuery({
+    queryKey: ['meta_insights_verification', projectId, startDate, endDate, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) return null;
+      
+      // Get count and we'll calculate sum from fetched data
+      const { count, error } = await supabase
+        .from('meta_insights')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
+        .gte('date_start', startDate)
+        .lte('date_start', endDate);
+      
+      if (error) {
+        console.error('[Verification] Error:', error);
+        return null;
+      }
+      
+      console.log(`[Verification] DB record count: ${count}`);
+      return { recordCount: count || 0 };
+    },
+    enabled: !!metaCredentials && activeAccountIds.length > 0,
+    staleTime: 30000, // Cache for 30 seconds
+  });
+
   const isMetaExpired = metaCredentials?.expires_at 
     ? new Date(metaCredentials.expires_at) < new Date()
     : false;
@@ -410,6 +438,25 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     clicks: acc.clicks + (insight.clicks || 0),
     reach: acc.reach + (insight.reach || 0),
   }), { spend: 0, impressions: 0, clicks: 0, reach: 0 }) || { spend: 0, impressions: 0, clicks: 0, reach: 0 };
+
+  // Data integrity verification
+  const dataIntegrity = useMemo(() => {
+    const loadedCount = insights?.length || 0;
+    const expectedCount = dbVerification?.recordCount || 0;
+    const isComplete = expectedCount > 0 && loadedCount === expectedCount;
+    const hasDiscrepancy = expectedCount > 0 && loadedCount !== expectedCount;
+    const missingRecords = expectedCount - loadedCount;
+    
+    console.log(`[Integrity] Loaded: ${loadedCount}, Expected: ${expectedCount}, Complete: ${isComplete}`);
+    
+    return {
+      loadedCount,
+      expectedCount,
+      isComplete,
+      hasDiscrepancy,
+      missingRecords,
+    };
+  }, [insights, dbVerification]);
 
   const avgCTR = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00';
   const avgCPC = totals.clicks > 0 ? (totals.spend / totals.clicks).toFixed(2) : '0.00';
@@ -657,16 +704,44 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
 
                 {/* Metric Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card>
+                  <Card className={dataIntegrity.hasDiscrepancy ? 'border-yellow-500/50' : dataIntegrity.isComplete ? 'border-green-500/30' : ''}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Gasto Total</CardTitle>
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-center gap-2">
+                        {dataIntegrity.isComplete && (
+                          <UITooltip>
+                            <TooltipTrigger>
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            </TooltipTrigger>
+                            <TooltipContent>Dados verificados ({dataIntegrity.loadedCount} registros)</TooltipContent>
+                          </UITooltip>
+                        )}
+                        {dataIntegrity.hasDiscrepancy && (
+                          <UITooltip>
+                            <TooltipTrigger>
+                              <AlertCircle className="h-4 w-4 text-yellow-500" />
+                            </TooltipTrigger>
+                            <TooltipContent>Faltam {dataIntegrity.missingRecords} registros</TooltipContent>
+                          </UITooltip>
+                        )}
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.spend)}
                       </div>
-                      <p className="text-xs text-muted-foreground">CPM: R$ {avgCPM}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">CPM: R$ {avgCPM}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {dataIntegrity.loadedCount}/{dataIntegrity.expectedCount} registros
+                        </p>
+                      </div>
+                      {dataIntegrity.hasDiscrepancy && (
+                        <p className="text-xs text-yellow-600 mt-1">
+                          ⚠️ Dados incompletos - recarregue a página
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -722,7 +797,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                             <XAxis dataKey="dateFormatted" className="text-xs" />
                             <YAxis tickFormatter={(v) => `R$${v}`} className="text-xs" />
-                            <Tooltip 
+                            <RechartsTooltip 
                               formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Gasto']}
                               labelFormatter={(label) => `Data: ${label}`}
                               contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
@@ -750,7 +825,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                             <XAxis dataKey="dateFormatted" className="text-xs" />
                             <YAxis className="text-xs" />
-                            <Tooltip 
+                            <RechartsTooltip 
                               formatter={(value: number) => [value, 'Cliques']}
                               labelFormatter={(label) => `Data: ${label}`}
                               contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}

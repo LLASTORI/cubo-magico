@@ -199,7 +199,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     gcTime: 0,
   });
 
-  // Fetch insights - only from active accounts
+  // Fetch insights - only from active accounts (with pagination to get ALL data)
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
     queryKey: ['meta_insights', projectId, startDate, endDate, adAccounts?.map(a => a.id).join(',')],
     queryFn: async () => {
@@ -209,15 +209,35 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       
       if (activeAccountIds.length === 0) return [];
       
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('*')
-        .eq('project_id', projectId)
-        .in('ad_account_id', activeAccountIds)
-        .gte('date_start', startDate)
-        .lte('date_stop', endDate);
-      if (error) throw error;
-      return data || [];
+      // Fetch ALL insights using pagination (Supabase default limit is 1000)
+      const PAGE_SIZE = 1000;
+      let allInsights: any[] = [];
+      let page = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_insights')
+          .select('*')
+          .eq('project_id', projectId)
+          .in('ad_account_id', activeAccountIds)
+          .gte('date_start', startDate)
+          .lte('date_stop', endDate)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allInsights = [...allInsights, ...data];
+          hasMore = data.length === PAGE_SIZE; // If we got full page, there might be more
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[Insights] Fetched ${allInsights.length} total records across ${page} pages`);
+      return allInsights;
     },
     enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,
     staleTime: 0,

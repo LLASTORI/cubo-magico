@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter, Building2 } from 'lucide-react';
@@ -199,14 +199,17 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     gcTime: 0,
   });
 
+  // Get active account IDs for consistent filtering
+  const activeAccountIds = useMemo(() => {
+    if (!adAccounts || adAccounts.length === 0) return [];
+    return adAccounts.filter(a => a.is_active).map(a => a.account_id).sort();
+  }, [adAccounts]);
+
   // Fetch insights - only from active accounts (with pagination to get ALL data)
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    queryKey: ['meta_insights', projectId, startDate, endDate, adAccounts?.map(a => a.id).join(',')],
+    // CRITICAL: queryKey must match EXACTLY what we filter by
+    queryKey: ['meta_insights', projectId, startDate, endDate, activeAccountIds.join(',')],
     queryFn: async () => {
-      if (!adAccounts || adAccounts.length === 0) return [];
-      
-      const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
-      
       if (activeAccountIds.length === 0) return [];
       
       // Fetch ALL insights using pagination (Supabase default limit is 1000)

@@ -21,7 +21,7 @@ const INITIAL_DELAY_MS = 5000 // 5 seconds
 const MAX_DELAY_MS = 120000 // 2 minutes
 
 // Max days per request to avoid "reduce data" error from Meta API
-const MAX_DAYS_PER_CHUNK = 31
+const MAX_DAYS_PER_CHUNK = 15
 
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -176,19 +176,45 @@ Deno.serve(async (req) => {
         break
 
       case 'sync_insights':
-        // Use service role for background sync
+        // Use service role for sync
         const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
         
-        // Start sync in background (don't await) and return immediately
-        syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
-          .then(() => console.log('Sync completed in background'))
-          .catch(err => console.error('Background sync error:', err))
+        // Calculate period length
+        const startDate = new Date(dateStart)
+        const endDate = new Date(dateStop)
+        const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
         
-        // Return immediately
-        result = { 
-          success: true, 
-          message: 'Sincronização iniciada. Atualize a página em alguns segundos.',
-          background: true 
+        // For longer periods, process synchronously to avoid edge function shutdown
+        // For shorter periods, use background processing for better UX
+        if (periodDays > MAX_DAYS_PER_CHUNK) {
+          console.log(`Long period detected (${periodDays} days). Processing synchronously...`)
+          
+          try {
+            await syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
+            result = { 
+              success: true, 
+              message: 'Sincronização concluída com sucesso!',
+              background: false 
+            }
+          } catch (syncError) {
+            console.error('Sync error:', syncError)
+            result = { 
+              success: false, 
+              error: syncError instanceof Error ? syncError.message : 'Erro na sincronização',
+              background: false 
+            }
+          }
+        } else {
+          // Short period - use background processing
+          syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
+            .then(() => console.log('Sync completed in background'))
+            .catch(err => console.error('Background sync error:', err))
+          
+          result = { 
+            success: true, 
+            message: 'Sincronização iniciada. Atualize a página em alguns segundos.',
+            background: true 
+          }
         }
         break
 

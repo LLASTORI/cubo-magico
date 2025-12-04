@@ -28,6 +28,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
+import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -865,6 +866,12 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* ROI Dashboard */}
+                <MetaROIDashboard 
+                  projectId={projectId}
+                  activeAccountIds={activeAccountIds}
+                />
 
                 {/* Hierarchy Analysis */}
                 <MetaHierarchyAnalysis

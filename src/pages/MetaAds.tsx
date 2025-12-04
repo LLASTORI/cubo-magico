@@ -86,6 +86,23 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   const [startDate, setStartDate] = useState(sevenDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [syncing, setSyncing] = useState(false);
+  const [needsSync, setNeedsSync] = useState(false); // Track if date changed and needs sync
+
+  // CRITICAL: Clear ALL meta queries on mount to ensure fresh data for this project
+  useEffect(() => {
+    console.log('[MetaAdsContent] Mounting with projectId:', projectId, '- clearing all meta caches');
+    
+    // Remove all meta queries to force completely fresh fetch
+    queryClient.removeQueries({ queryKey: ['meta_credentials'] });
+    queryClient.removeQueries({ queryKey: ['meta_ad_accounts'] });
+    queryClient.removeQueries({ queryKey: ['meta_campaigns'] });
+    queryClient.removeQueries({ queryKey: ['meta_insights'] });
+    
+    // Small delay to ensure queries are cleared before they start
+    return () => {
+      console.log('[MetaAdsContent] Unmounting projectId:', projectId);
+    };
+  }, [projectId, queryClient]);
 
   // Connect to Meta
   const handleConnectMeta = () => {
@@ -267,6 +284,17 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     }
   };
 
+  // Handle date changes - mark as needing sync
+  const handleStartDateChange = (date: string) => {
+    setStartDate(date);
+    setNeedsSync(true);
+  };
+
+  const handleEndDateChange = (date: string) => {
+    setEndDate(date);
+    setNeedsSync(true);
+  };
+
   // Sync data from Meta API (uses existing active accounts)
   const handleSyncData = async () => {
     if (!projectId || !metaCredentials) return;
@@ -280,6 +308,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       return;
     }
 
+    setNeedsSync(false); // Clear the needs sync flag
     const accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
     await handleSyncWithAccounts(accountIdsToSync);
   };
@@ -462,12 +491,31 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                   <MetaDateFilters
                     startDate={startDate}
                     endDate={endDate}
-                    onStartDateChange={setStartDate}
-                    onEndDateChange={setEndDate}
+                    onStartDateChange={handleStartDateChange}
+                    onEndDateChange={handleEndDateChange}
                   />
                 </Card>
               </CollapsibleContent>
             </Collapsible>
+
+        {/* Needs Sync Indicator - when date changed */}
+        {needsSync && !syncing && (
+          <Card className="border-yellow-500/50 bg-yellow-500/5">
+            <CardContent className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-yellow-500" />
+                <div>
+                  <p className="font-medium text-foreground">Período alterado</p>
+                  <p className="text-sm text-muted-foreground">Clique em Sincronizar para buscar dados do novo período.</p>
+                </div>
+              </div>
+              <Button onClick={handleSyncData} disabled={syncing} className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Sincronizar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Syncing Indicator */}
         {syncing && (

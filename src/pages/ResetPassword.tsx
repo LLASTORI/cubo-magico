@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Eye, EyeOff, Lock, CheckCircle } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
+import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { z } from 'zod';
 
@@ -120,7 +121,7 @@ const ResetPassword = () => {
   if (checkingSession) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <CubeLoader message="Verificando sessão..." />
       </div>
     );
   }

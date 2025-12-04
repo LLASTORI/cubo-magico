@@ -58,43 +58,51 @@ const MetaAds = () => {
     handleSyncWithAccounts(accountIds);
   };
 
-  // Fetch Meta credentials
+  // Fetch Meta credentials - refetch whenever project changes
   const { data: metaCredentials, isLoading: credentialsLoading, isError: credentialsError } = useQuery({
     queryKey: ['meta_credentials', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return null;
+      console.log('Fetching meta credentials for project:', currentProject.id);
       const { data, error } = await supabase
         .from('meta_credentials')
         .select('*')
         .eq('project_id', currentProject.id)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
+      console.log('Meta credentials result:', data);
       return data;
     },
     enabled: !!currentProject?.id,
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
-    refetchOnWindowFocus: true,
+    staleTime: 0, // Always refetch on project change
+    gcTime: 0, // Don't cache between project switches
+    refetchOnMount: 'always',
   });
 
-  // Fetch ad accounts
+  // Fetch ad accounts - refetch whenever project changes
   const { data: adAccounts, isLoading: accountsLoading } = useQuery({
     queryKey: ['meta_ad_accounts', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return [];
+      console.log('Fetching ad accounts for project:', currentProject.id);
       const { data, error } = await supabase
         .from('meta_ad_accounts')
         .select('*')
         .eq('project_id', currentProject.id)
         .eq('is_active', true);
       if (error) throw error;
+      console.log('Ad accounts result:', data);
       return data || [];
     },
     enabled: !!currentProject?.id && !!metaCredentials,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch campaigns - only from active accounts
   const { data: campaigns, isLoading: campaignsLoading } = useQuery({
-    queryKey: ['meta_campaigns', currentProject?.id, adAccounts],
+    queryKey: ['meta_campaigns', currentProject?.id, adAccounts?.map(a => a.id).join(',')],
     queryFn: async () => {
       if (!currentProject?.id) return [];
       if (!adAccounts || adAccounts.length === 0) return [];
@@ -111,12 +119,14 @@ const MetaAds = () => {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentProject?.id && !!metaCredentials && !!adAccounts,
+    enabled: !!currentProject?.id && !!metaCredentials && !!adAccounts && adAccounts.length > 0,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Fetch insights - only from active accounts
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    queryKey: ['meta_insights', currentProject?.id, startDate, endDate, adAccounts],
+    queryKey: ['meta_insights', currentProject?.id, startDate, endDate, adAccounts?.map(a => a.id).join(',')],
     queryFn: async () => {
       if (!currentProject?.id) return [];
       if (!adAccounts || adAccounts.length === 0) return [];
@@ -135,7 +145,9 @@ const MetaAds = () => {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentProject?.id && !!metaCredentials,
+    enabled: !!currentProject?.id && !!metaCredentials && !!adAccounts && adAccounts.length > 0,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const isMetaExpired = metaCredentials?.expires_at 

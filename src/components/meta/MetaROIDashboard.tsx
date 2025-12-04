@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, subDays, parseISO, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -14,6 +14,7 @@ import {
   AlertCircle,
   BarChart3
 } from "lucide-react";
+import { HotmartSyncManager } from "@/components/HotmartSyncManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -296,19 +297,15 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
         </div>
       ) : !hasRevenueData && hasSpendData ? (
         <div className="space-y-6">
-          {/* Warning about missing revenue data */}
-          <Card className="border-yellow-500/50 bg-yellow-500/5">
-            <CardContent className="flex items-center gap-4 py-4">
-              <AlertCircle className="h-8 w-8 text-yellow-500 flex-shrink-0" />
-              <div>
-                <p className="font-medium text-foreground">Dados de vendas não encontrados</p>
-                <p className="text-sm text-muted-foreground">
-                  Para calcular o ROI, é necessário sincronizar as vendas da Hotmart. 
-                  Vá em <strong>Análise de Funil</strong> e sincronize os dados de vendas para o período desejado.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Hotmart Sync Manager */}
+          <HotmartSyncManager 
+            projectId={projectId}
+            startDate={startDate}
+            endDate={endDate}
+            onSyncComplete={() => {
+              refetchSales();
+            }}
+          />
 
           {/* Show only spend summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -352,6 +349,16 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Hotmart Sync Manager */}
+          <HotmartSyncManager 
+            projectId={projectId}
+            startDate={startDate}
+            endDate={endDate}
+            onSyncComplete={() => {
+              refetchSales();
+            }}
+          />
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
             {/* Investimento */}

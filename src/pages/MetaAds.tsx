@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter, Building2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter, Building2, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const META_APP_ID = '845927421602166';
@@ -646,7 +646,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="dashboard">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              Investimentos
+            </TabsTrigger>
+            <TabsTrigger value="roi">
+              <BarChart3 className="h-4 w-4 mr-1" />
+              Análise ROI
+            </TabsTrigger>
             <TabsTrigger value="accounts">
               <Building2 className="h-4 w-4 mr-1" />
               Contas Meta
@@ -867,12 +874,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                   </Card>
                 </div>
 
-                {/* ROI Dashboard */}
-                <MetaROIDashboard 
-                  projectId={projectId}
-                  activeAccountIds={activeAccountIds}
-                />
-
                 {/* Hierarchy Analysis */}
                 <MetaHierarchyAnalysis
                   insights={insights || []}
@@ -885,6 +886,30 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
               </>
             )}
 
+          </TabsContent>
+
+          {/* ROI Analysis Tab */}
+          <TabsContent value="roi" className="space-y-6">
+            {(!adAccounts || adAccounts.length === 0) && !accountsLoading ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Configure suas contas primeiro</h3>
+                  <p className="text-muted-foreground text-center mb-4 max-w-md">
+                    Selecione as contas de anúncio do Meta para visualizar a análise de ROI.
+                  </p>
+                  <Button onClick={() => setActiveTab('accounts')} variant="outline" className="gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Ir para Contas
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <MetaROIDashboard 
+                projectId={projectId}
+                activeAccountIds={activeAccountIds}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="accounts" className="space-y-6">

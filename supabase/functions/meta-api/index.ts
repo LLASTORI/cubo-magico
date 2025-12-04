@@ -179,42 +179,46 @@ Deno.serve(async (req) => {
         // Use service role for sync
         const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
         
-        // Calculate period length
+        // Calculate period length for logging
         const startDate = new Date(dateStart)
         const endDate = new Date(dateStop)
         const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
         
-        // For longer periods, process synchronously to avoid edge function shutdown
-        // For shorter periods, use background processing for better UX
-        if (periodDays > MAX_DAYS_PER_CHUNK) {
-          console.log(`Long period detected (${periodDays} days). Processing synchronously...`)
-          
+        console.log(`Background sync started: {
+  projectId: "${projectId}",
+  accountIds: ${accountIds.length},
+  dateStart: "${dateStart}",
+  dateStop: "${dateStop}"
+}`)
+        
+        // ALWAYS use background processing to avoid HTTP timeout
+        const backgroundTask = async () => {
           try {
             await syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
-            result = { 
-              success: true, 
-              message: 'Sincronização concluída com sucesso!',
-              background: false 
-            }
-          } catch (syncError) {
-            console.error('Sync error:', syncError)
-            result = { 
-              success: false, 
-              error: syncError instanceof Error ? syncError.message : 'Erro na sincronização',
-              background: false 
-            }
+            console.log('Background sync completed successfully!')
+          } catch (err) {
+            console.error('Background sync error:', err)
           }
+        }
+        
+        // Use EdgeRuntime.waitUntil to keep the function running after response
+        // deno-lint-ignore no-explicit-any
+        const runtime = (globalThis as any).EdgeRuntime
+        if (runtime && typeof runtime.waitUntil === 'function') {
+          runtime.waitUntil(backgroundTask())
         } else {
-          // Short period - use background processing
-          syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
-            .then(() => console.log('Sync completed in background'))
-            .catch(err => console.error('Background sync error:', err))
-          
-          result = { 
-            success: true, 
-            message: 'Sincronização iniciada. Atualize a página em alguns segundos.',
-            background: true 
-          }
+          // Fallback: just start the task without waiting
+          backgroundTask()
+        }
+        
+        // Calculate estimated time based on period length
+        const estimatedMinutes = Math.max(1, Math.ceil(periodDays / 30))
+        
+        result = { 
+          success: true, 
+          message: `Sincronização iniciada para ${periodDays} dias. Atualize a página em ${estimatedMinutes > 1 ? `${estimatedMinutes} minutos` : 'alguns segundos'}.`,
+          background: true,
+          periodDays
         }
         break
 

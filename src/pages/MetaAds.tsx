@@ -247,40 +247,64 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       console.log('Insights sync result:', insightsData);
       if (insightsError) throw insightsError;
 
+      // Calculate polling duration based on period
+      const periodDays = insightsData?.periodDays || 30;
+      const pollDurationMs = Math.max(20000, Math.min(180000, periodDays * 1000)); // 20s to 3min
+      
       toast({
         title: 'Sincronização em andamento...',
-        description: 'Aguarde até 15 segundos para os dados aparecerem.',
+        description: insightsData?.message || `Aguarde até ${Math.ceil(pollDurationMs / 60000)} minuto(s) para os dados aparecerem.`,
       });
 
-      // Poll for data multiple times to catch when background sync completes
-      const pollIntervals = [3000, 6000, 10000, 15000];
-      pollIntervals.forEach((delay) => {
+      // Poll for data multiple times based on period length
+      const pollCount = Math.ceil(pollDurationMs / 10000); // Poll every 10 seconds
+      for (let i = 1; i <= pollCount; i++) {
         setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
           queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
           queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-        }, delay);
-      });
+        }, i * 10000);
+      }
 
-      // Keep syncing state for longer
+      // Keep syncing state for the duration
       setTimeout(() => {
         setSyncing(false);
+        queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
         toast({
           title: 'Sincronização concluída!',
           description: 'Os dados foram atualizados.',
         });
-      }, 15000);
+      }, pollDurationMs);
 
       return; // Don't set syncing false immediately
 
     } catch (error: any) {
       console.error('Sync error:', error);
-      toast({
-        title: 'Erro ao sincronizar',
-        description: error.message || 'Não foi possível sincronizar os dados do Meta.',
-        variant: 'destructive',
-      });
-      setSyncing(false);
+      
+      // Check if it's a timeout error - the sync might still be running in the background
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('timeout')) {
+        toast({
+          title: 'Sincronização pode estar em andamento',
+          description: 'A conexão foi interrompida, mas os dados podem estar sendo processados. Atualize a página em alguns minutos.',
+        });
+        
+        // Still poll for data in case it completes
+        const pollIntervals = [30000, 60000, 120000];
+        pollIntervals.forEach((delay) => {
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+          }, delay);
+        });
+        
+        setTimeout(() => setSyncing(false), 30000);
+      } else {
+        toast({
+          title: 'Erro ao sincronizar',
+          description: error.message || 'Não foi possível sincronizar os dados do Meta.',
+          variant: 'destructive',
+        });
+        setSyncing(false);
+      }
     }
   };
 

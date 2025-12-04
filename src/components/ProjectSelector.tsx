@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProject, Project } from '@/contexts/ProjectContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +15,7 @@ import { toast } from 'sonner';
 
 const ProjectSelector = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { projects, currentProject, setCurrentProject, isProjectReady } = useProject();
 
   const handleSelectProject = (project: Project) => {
@@ -22,7 +24,15 @@ const ProjectSelector = () => {
       navigate('/projects');
       return;
     }
+    
+    // Skip if same project
+    if (currentProject?.id === project.id) return;
+    
+    // Invalidate all queries to force reload with new project data
+    queryClient.invalidateQueries();
+    
     setCurrentProject(project);
+    toast.success(`Projeto alterado para: ${project.name}`);
   };
 
   return (

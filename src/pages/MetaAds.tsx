@@ -228,11 +228,25 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     ? new Date(metaCredentials.expires_at) < new Date()
     : false;
 
+  // Calculate estimated sync duration based on date range
+  const getEstimatedSyncDuration = () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    // Estimate: ~1 second per day, minimum 30s, maximum 180s
+    return Math.max(30, Math.min(180, days));
+  };
+
+  const [estimatedDuration, setEstimatedDuration] = useState(30);
+
   // Sync data with specific accounts
   const handleSyncWithAccounts = async (accountIds: string[]) => {
     if (!projectId || !metaCredentials || accountIds.length === 0) return;
 
     setSyncing(true);
+    const syncDuration = getEstimatedSyncDuration();
+    setEstimatedDuration(syncDuration);
+    
     try {
       console.log('Syncing insights for accounts:', accountIds, 'from', startDate, 'to', endDate);
       const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
@@ -250,30 +264,36 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
 
       // Calculate polling duration based on period
       const periodDays = insightsData?.periodDays || 30;
-      const pollDurationMs = Math.max(20000, Math.min(180000, periodDays * 1000)); // 20s to 3min
+      const pollDurationMs = Math.max(30000, Math.min(180000, periodDays * 1000)); // 30s to 3min
       
       toast({
         title: 'Sincronização em andamento...',
         description: insightsData?.message || `Aguarde até ${Math.ceil(pollDurationMs / 60000)} minuto(s) para os dados aparecerem.`,
       });
 
-      // Poll for data multiple times based on period length
-      const pollCount = Math.ceil(pollDurationMs / 10000); // Poll every 10 seconds
+      // Poll for data every 15 seconds
+      const pollCount = Math.ceil(pollDurationMs / 15000);
       for (let i = 1; i <= pollCount; i++) {
         setTimeout(() => {
+          console.log(`[Poll ${i}/${pollCount}] Refreshing data...`);
           queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
           queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
           queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-        }, i * 10000);
+        }, i * 15000);
       }
 
-      // Keep syncing state for the duration
-      setTimeout(() => {
+      // Keep syncing state for the duration, then do final refresh
+      setTimeout(async () => {
         setSyncing(false);
-        queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+        
+        // Force refetch all data
+        console.log('[Final refresh] Forcing data reload...');
+        await queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+        await refetchInsights();
+        
         toast({
           title: 'Sincronização concluída!',
-          description: 'Os dados foram atualizados.',
+          description: 'Os dados foram atualizados. Se necessário, clique em Sincronizar novamente.',
         });
       }, pollDurationMs);
 
@@ -290,14 +310,17 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         });
         
         // Still poll for data in case it completes
-        const pollIntervals = [30000, 60000, 120000];
+        const pollIntervals = [30000, 60000, 90000, 120000, 150000, 180000];
         pollIntervals.forEach((delay) => {
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
           }, delay);
         });
         
-        setTimeout(() => setSyncing(false), 30000);
+        setTimeout(() => {
+          setSyncing(false);
+          refetchInsights();
+        }, 60000);
       } else {
         toast({
           title: 'Erro ao sincronizar',
@@ -570,7 +593,10 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 {syncing && (
                   <Card className="border-primary/50 bg-primary/5">
                     <CardContent className="py-4">
-                      <SyncLoader />
+                      <SyncLoader 
+                        showProgress={true} 
+                        estimatedDuration={estimatedDuration}
+                      />
                     </CardContent>
                   </Card>
                 )}

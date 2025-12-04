@@ -28,8 +28,8 @@ const ProjectSelector = () => {
     // Skip if same project
     if (currentProject?.id === project.id) return;
     
-    // Invalidate all queries to force reload with new project data
-    queryClient.invalidateQueries();
+    // Remove all cached queries to force fresh data fetch
+    queryClient.removeQueries();
     
     setCurrentProject(project);
     toast.success(`Projeto alterado para: ${project.name}`);

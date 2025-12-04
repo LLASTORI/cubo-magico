@@ -129,20 +129,36 @@ Deno.serve(async (req) => {
 })
 
 async function getAdAccounts(accessToken: string) {
-  console.log('Fetching ad accounts...')
+  console.log('Fetching ad accounts with pagination...')
   
-  const response = await fetch(
-    `${GRAPH_API_BASE}/me/adaccounts?fields=id,name,currency,timezone_name,account_status&access_token=${accessToken}`
-  )
-  const data = await response.json()
+  const allAccounts: any[] = []
+  let nextUrl: string | null = `${GRAPH_API_BASE}/me/adaccounts?fields=id,name,currency,timezone_name,account_status&limit=100&access_token=${accessToken}`
+  let pageCount = 0
+  const maxPages = 20 // Safety limit
+  
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++
+    console.log(`Fetching ad accounts page ${pageCount}...`)
+    
+    const resp: Response = await fetch(nextUrl)
+    const json: any = await resp.json()
 
-  if (data.error) {
-    console.error('Ad accounts error:', data.error)
-    throw new Error(data.error.message)
+    if (json.error) {
+      console.error('Ad accounts error:', json.error)
+      throw new Error(json.error.message)
+    }
+
+    if (json.data && json.data.length > 0) {
+      allAccounts.push(...json.data)
+      console.log(`Got ${json.data.length} accounts from page ${pageCount}, total: ${allAccounts.length}`)
+    }
+
+    // Check for next page
+    nextUrl = json.paging?.next || null
   }
 
-  console.log(`Found ${data.data?.length || 0} ad accounts`)
-  return { accounts: data.data || [] }
+  console.log(`Found ${allAccounts.length} ad accounts total across ${pageCount} pages`)
+  return { accounts: allAccounts }
 }
 
 async function syncAdAccounts(

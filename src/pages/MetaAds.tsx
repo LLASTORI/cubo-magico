@@ -216,13 +216,15 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       let hasMore = true;
       
       while (hasMore) {
+        // Filter insights that OVERLAP with the selected period
+        // An insight overlaps if: insight.date_start <= endDate AND insight.date_stop >= startDate
         const { data, error } = await supabase
           .from('meta_insights')
           .select('*')
           .eq('project_id', projectId)
           .in('ad_account_id', activeAccountIds)
-          .gte('date_start', startDate)
-          .lte('date_stop', endDate)
+          .lte('date_start', endDate)
+          .gte('date_stop', startDate)
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
         if (error) throw error;

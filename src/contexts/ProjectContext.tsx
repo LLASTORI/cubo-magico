@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -51,6 +51,28 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 const CURRENT_PROJECT_KEY = 'lovable_current_project_id';
 
+// Helper to get saved project ID from localStorage
+const getSavedProjectId = (): string | null => {
+  try {
+    return localStorage.getItem(CURRENT_PROJECT_KEY);
+  } catch {
+    return null;
+  }
+};
+
+// Helper to save project ID to localStorage
+const saveProjectId = (projectId: string | null) => {
+  try {
+    if (projectId) {
+      localStorage.setItem(CURRENT_PROJECT_KEY, projectId);
+    } else {
+      localStorage.removeItem(CURRENT_PROJECT_KEY);
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -58,23 +80,28 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const [credentials, setCredentials] = useState<ProjectCredential | null>(null);
   const [projectCredentialStatuses, setProjectCredentialStatuses] = useState<ProjectCredentialStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Track if we've done initial project selection
+  const hasInitializedRef = useRef(false);
+  // Track the saved project ID to restore
+  const savedProjectIdRef = useRef<string | null>(getSavedProjectId());
 
   // Wrapper to persist currentProject to localStorage
   const setCurrentProject = (project: Project | null) => {
+    console.log('[ProjectContext] setCurrentProject called:', project?.name, project?.id);
     setCurrentProjectState(project);
-    if (project) {
-      localStorage.setItem(CURRENT_PROJECT_KEY, project.id);
-    } else {
-      localStorage.removeItem(CURRENT_PROJECT_KEY);
-    }
+    saveProjectId(project?.id || null);
+    // Update the ref as well for consistency
+    savedProjectIdRef.current = project?.id || null;
   };
 
   const refreshProjects = async () => {
     if (!user) {
       setProjects([]);
-      setCurrentProject(null);
+      setCurrentProjectState(null);
       setProjectCredentialStatuses([]);
       setLoading(false);
+      hasInitializedRef.current = false;
       return;
     }
 
@@ -132,23 +159,46 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         
         setProjectCredentialStatuses(credData || []);
         
-        // Auto-select project: first try to restore from localStorage, then pick first validated
-        if (!currentProject) {
-          const savedProjectId = localStorage.getItem(CURRENT_PROJECT_KEY);
-          const savedProject = savedProjectId ? data.find(p => p.id === savedProjectId) : null;
+        // ONLY do initial project selection if we haven't initialized yet
+        if (!hasInitializedRef.current) {
+          hasInitializedRef.current = true;
           
-          if (savedProject) {
-            setCurrentProject(savedProject);
-          } else {
+          // First priority: restore from localStorage
+          const savedId = savedProjectIdRef.current;
+          console.log('[ProjectContext] Initial selection - savedId:', savedId);
+          
+          if (savedId) {
+            const savedProject = data.find(p => p.id === savedId);
+            if (savedProject) {
+              console.log('[ProjectContext] Restoring saved project:', savedProject.name);
+              setCurrentProjectState(savedProject);
+              return; // Don't override with auto-selection
+            }
+          }
+          
+          // Fallback: select first validated project or first project
+          const validatedProject = data.find(p => 
+            credData?.some(c => c.project_id === p.id && c.is_validated)
+          );
+          const projectToSelect = validatedProject || data[0];
+          console.log('[ProjectContext] Auto-selecting project:', projectToSelect?.name);
+          setCurrentProject(projectToSelect);
+        } else {
+          // If already initialized, verify current project still exists
+          if (currentProject && !data.find(p => p.id === currentProject.id)) {
+            console.log('[ProjectContext] Current project no longer exists, resetting');
             const validatedProject = data.find(p => 
               credData?.some(c => c.project_id === p.id && c.is_validated)
             );
-            setCurrentProject(validatedProject || data[0]);
+            setCurrentProject(validatedProject || data[0] || null);
           }
         }
+      } else {
+        hasInitializedRef.current = true;
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
+      hasInitializedRef.current = true;
     } finally {
       setLoading(false);
     }
@@ -185,6 +235,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   }, [currentProject]);
 
   useEffect(() => {
+    // Reset initialization when user changes
+    hasInitializedRef.current = false;
+    // Re-read from localStorage for new user
+    savedProjectIdRef.current = getSavedProjectId();
     refreshProjects();
   }, [user]);
 

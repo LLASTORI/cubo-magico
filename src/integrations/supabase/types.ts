@@ -176,6 +176,10 @@ export type Database = {
           invoice_number: string | null
           is_upgrade: boolean | null
           items_quantity: number | null
+          last_synced_at: string | null
+          meta_ad_id_extracted: string | null
+          meta_adset_id_extracted: string | null
+          meta_campaign_id_extracted: string | null
           net_revenue: number | null
           offer_code: string | null
           offer_currency: string | null
@@ -193,6 +197,7 @@ export type Database = {
           project_id: string | null
           received_value: number | null
           recurrence: number | null
+          sale_attribution_type: string | null
           sale_date: string | null
           sale_origin: string | null
           shipping_value: number | null
@@ -238,6 +243,10 @@ export type Database = {
           invoice_number?: string | null
           is_upgrade?: boolean | null
           items_quantity?: number | null
+          last_synced_at?: string | null
+          meta_ad_id_extracted?: string | null
+          meta_adset_id_extracted?: string | null
+          meta_campaign_id_extracted?: string | null
           net_revenue?: number | null
           offer_code?: string | null
           offer_currency?: string | null
@@ -255,6 +264,7 @@ export type Database = {
           project_id?: string | null
           received_value?: number | null
           recurrence?: number | null
+          sale_attribution_type?: string | null
           sale_date?: string | null
           sale_origin?: string | null
           shipping_value?: number | null
@@ -300,6 +310,10 @@ export type Database = {
           invoice_number?: string | null
           is_upgrade?: boolean | null
           items_quantity?: number | null
+          last_synced_at?: string | null
+          meta_ad_id_extracted?: string | null
+          meta_adset_id_extracted?: string | null
+          meta_campaign_id_extracted?: string | null
           net_revenue?: number | null
           offer_code?: string | null
           offer_currency?: string | null
@@ -317,6 +331,7 @@ export type Database = {
           project_id?: string | null
           received_value?: number | null
           recurrence?: number | null
+          sale_attribution_type?: string | null
           sale_date?: string | null
           sale_origin?: string | null
           shipping_value?: number | null

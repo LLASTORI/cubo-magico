@@ -230,7 +230,7 @@ async function getCampaigns(accessToken: string, accountIds: string[]) {
   return { campaigns: allCampaigns }
 }
 
-// Get insights with DAILY granularity to avoid duplicates
+// Get insights with DAILY granularity and PAGINATION support
 async function getInsightsForAccount(
   accessToken: string, 
   accountId: string,
@@ -240,29 +240,50 @@ async function getInsightsForAccount(
 ) {
   const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type'
   
+  const allInsights: any[] = []
+  let nextUrl: string | null = null
+  
+  // Initial request
   const params = new URLSearchParams({
     fields,
     time_range: JSON.stringify({ since: dateStart, until: dateStop }),
     time_increment: '1', // DAILY granularity - one record per day
     level,
+    limit: '500', // Max limit per page
     access_token: accessToken,
   })
 
-  const response = await fetch(
-    `${GRAPH_API_BASE}/${accountId}/insights?${params}`
-  )
-  const data = await response.json()
+  let url = `${GRAPH_API_BASE}/${accountId}/insights?${params}`
+  let pageCount = 0
+  const maxPages = 50 // Safety limit
 
-  if (data.error) {
-    console.error(`Insights error for ${accountId}:`, data.error)
-    return []
+  while (url && pageCount < maxPages) {
+    pageCount++
+    console.log(`Fetching insights page ${pageCount} for ${accountId}...`)
+    
+    const response = await fetch(url)
+    const data = await response.json()
+
+    if (data.error) {
+      console.error(`Insights error for ${accountId}:`, data.error)
+      break
+    }
+
+    if (data.data && data.data.length > 0) {
+      const pageInsights = data.data.map((i: any) => ({
+        ...i,
+        ad_account_id: accountId,
+      }))
+      allInsights.push(...pageInsights)
+      console.log(`Got ${data.data.length} insights from page ${pageCount}, total: ${allInsights.length}`)
+    }
+
+    // Check for next page
+    url = data.paging?.next || null
   }
 
-  return (data.data || []).map((i: any) => ({
-    ...i,
-    ad_account_id: accountId,
-    // date_start and date_stop come from the API when using time_increment=1
-  }))
+  console.log(`Account ${accountId}: Total ${allInsights.length} insights across ${pageCount} pages`)
+  return allInsights
 }
 
 async function getInsights(
@@ -276,16 +297,13 @@ async function getInsights(
   
   const allInsights: any[] = []
 
-  // Process in parallel batches
-  for (let i = 0; i < accountIds.length; i += BATCH_SIZE) {
-    const batch = accountIds.slice(i, i + BATCH_SIZE)
-    const results = await Promise.all(
-      batch.map(accountId => getInsightsForAccount(accessToken, accountId, dateStart, dateStop, level))
-    )
-    allInsights.push(...results.flat())
+  // Process accounts sequentially to avoid rate limiting
+  for (const accountId of accountIds) {
+    const insights = await getInsightsForAccount(accessToken, accountId, dateStart, dateStop, level)
+    allInsights.push(...insights)
   }
 
-  console.log(`Found ${allInsights.length} insight records`)
+  console.log(`Found ${allInsights.length} total insight records for ${level} level`)
   return { insights: allInsights }
 }
 

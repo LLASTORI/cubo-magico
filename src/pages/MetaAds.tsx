@@ -43,11 +43,11 @@ const MetaAds = () => {
   // Reset data when project changes
   useEffect(() => {
     if (currentProject?.id) {
-      // Invalidate all Meta-related queries when project changes
-      queryClient.invalidateQueries({ queryKey: ['meta_credentials'] });
-      queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
-      queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+      // Remove cached data and force refetch with new project
+      queryClient.removeQueries({ queryKey: ['meta_credentials'] });
+      queryClient.removeQueries({ queryKey: ['meta_ad_accounts'] });
+      queryClient.removeQueries({ queryKey: ['meta_campaigns'] });
+      queryClient.removeQueries({ queryKey: ['meta_insights'] });
     }
   }, [currentProject?.id, queryClient]);
 
@@ -582,6 +582,7 @@ const MetaAds = () => {
 
           <TabsContent value="accounts" className="space-y-6">
             <MetaAccountsManager 
+              key={currentProject?.id}
               projectId={currentProject?.id || ''} 
               onAccountsChange={() => {
                 queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });

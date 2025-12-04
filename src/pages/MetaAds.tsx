@@ -211,34 +211,40 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       
       // Fetch ALL insights using pagination (Supabase default limit is 1000)
       const PAGE_SIZE = 1000;
+      const MAX_PAGES = 20; // Safety limit to prevent infinite loops
       let allInsights: any[] = [];
       let page = 0;
-      let hasMore = true;
       
-      while (hasMore) {
+      while (page < MAX_PAGES) {
         // Filter insights that OVERLAP with the selected period
-        // An insight overlaps if: insight.date_start <= endDate AND insight.date_stop >= startDate
-        const { data, error } = await supabase
+        // date_start >= startDate AND date_start <= endDate (simpler and more accurate)
+        const { data, error, count } = await supabase
           .from('meta_insights')
-          .select('*')
+          .select('*', { count: 'exact' })
           .eq('project_id', projectId)
           .in('ad_account_id', activeAccountIds)
+          .gte('date_start', startDate)
           .lte('date_start', endDate)
-          .gte('date_stop', startDate)
+          .order('date_start', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
         if (error) throw error;
         
         if (data && data.length > 0) {
           allInsights = [...allInsights, ...data];
-          hasMore = data.length === PAGE_SIZE; // If we got full page, there might be more
+          console.log(`[Insights] Page ${page + 1}: fetched ${data.length} records (total so far: ${allInsights.length}${count ? `, expected: ${count}` : ''})`);
+          
+          // Stop if we got less than PAGE_SIZE (no more data) or reached expected count
+          if (data.length < PAGE_SIZE || (count && allInsights.length >= count)) {
+            break;
+          }
           page++;
         } else {
-          hasMore = false;
+          break;
         }
       }
       
-      console.log(`[Insights] Fetched ${allInsights.length} total records across ${page} pages`);
+      console.log(`[Insights] TOTAL: ${allInsights.length} records across ${page + 1} pages`);
       return allInsights;
     },
     enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,

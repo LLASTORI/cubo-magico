@@ -23,6 +23,12 @@ const MAX_DELAY_MS = 120000 // 2 minutes
 // Max days per request to avoid "reduce data" error from Meta API
 const MAX_DAYS_PER_CHUNK = 15
 
+// SMART SYNC: Days threshold for considering data as "immutable"
+const IMMUTABLE_DAYS_THRESHOLD = 30
+
+// Batch size for database inserts to avoid memory issues
+const DB_INSERT_BATCH_SIZE = 100
+
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -100,6 +106,165 @@ async function fetchWithRetry(
   return data
 }
 
+// SMART SYNC: Check which dates we already have in the database
+async function getExistingDatesInCache(
+  supabase: any,
+  projectId: string,
+  accountIds: string[],
+  dateStart: string,
+  dateStop: string
+): Promise<Set<string>> {
+  console.log('Checking existing cache for dates...')
+  
+  const existingDates = new Set<string>()
+  
+  // Fetch distinct dates from our cache
+  const { data, error } = await supabase
+    .from('meta_insights')
+    .select('date_start')
+    .eq('project_id', projectId)
+    .in('ad_account_id', accountIds)
+    .gte('date_start', dateStart)
+    .lte('date_start', dateStop)
+  
+  if (error) {
+    console.error('Error checking cache:', error)
+    return existingDates
+  }
+  
+  if (data) {
+    data.forEach((row: any) => {
+      existingDates.add(row.date_start)
+    })
+  }
+  
+  console.log(`Found ${existingDates.size} dates in local cache`)
+  return existingDates
+}
+
+// SMART SYNC: Determine which dates need to be fetched from Meta
+function determineDatesToFetch(
+  dateStart: string,
+  dateStop: string,
+  cachedDates: Set<string>,
+  forceRefresh: boolean = false
+): { toFetch: string[], toSkip: string[], fromCache: string[] } {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  const toFetch: string[] = []
+  const toSkip: string[] = []
+  const fromCache: string[] = []
+  
+  const start = new Date(dateStart)
+  const end = new Date(dateStop)
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0]
+    const daysAgo = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+    
+    // Skip future dates
+    if (d > today) {
+      toSkip.push(dateStr)
+      continue
+    }
+    
+    const isInCache = cachedDates.has(dateStr)
+    const isImmutable = daysAgo >= IMMUTABLE_DAYS_THRESHOLD
+    
+    if (forceRefresh) {
+      // Force refresh: always fetch
+      toFetch.push(dateStr)
+    } else if (isInCache && isImmutable) {
+      // Data is old and in cache - use cache (data won't change)
+      fromCache.push(dateStr)
+    } else if (isInCache && !isImmutable) {
+      // Data is recent and in cache - refetch (data might have changed)
+      toFetch.push(dateStr)
+    } else {
+      // Data not in cache - need to fetch
+      toFetch.push(dateStr)
+    }
+  }
+  
+  console.log(`Smart sync analysis:
+  - Dates to fetch from Meta: ${toFetch.length}
+  - Dates using cache (>30 days): ${fromCache.length}
+  - Dates skipped (future): ${toSkip.length}`)
+  
+  return { toFetch, toSkip, fromCache }
+}
+
+// Group consecutive dates into ranges for efficient API calls
+function groupConsecutiveDates(dates: string[]): Array<{start: string, stop: string}> {
+  if (dates.length === 0) return []
+  
+  const sorted = [...dates].sort()
+  const ranges: Array<{start: string, stop: string}> = []
+  
+  let rangeStart = sorted[0]
+  let rangeEnd = sorted[0]
+  
+  for (let i = 1; i < sorted.length; i++) {
+    const prevDate = new Date(sorted[i - 1])
+    const currDate = new Date(sorted[i])
+    const diffDays = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 1) {
+      // Consecutive - extend range
+      rangeEnd = sorted[i]
+    } else {
+      // Gap - save current range and start new one
+      ranges.push({ start: rangeStart, stop: rangeEnd })
+      rangeStart = sorted[i]
+      rangeEnd = sorted[i]
+    }
+  }
+  
+  // Add final range
+  ranges.push({ start: rangeStart, stop: rangeEnd })
+  
+  return ranges
+}
+
+// Insert records in batches to avoid memory issues
+async function batchInsert(
+  supabase: any,
+  tableName: string,
+  records: any[],
+  batchSize: number = DB_INSERT_BATCH_SIZE
+): Promise<{ success: number, failed: number }> {
+  let success = 0
+  let failed = 0
+  
+  for (let i = 0; i < records.length; i += batchSize) {
+    const batch = records.slice(i, i + batchSize)
+    const batchNum = Math.floor(i / batchSize) + 1
+    const totalBatches = Math.ceil(records.length / batchSize)
+    
+    console.log(`Inserting batch ${batchNum}/${totalBatches} (${batch.length} records)...`)
+    
+    const { error } = await supabase
+      .from(tableName)
+      .insert(batch)
+    
+    if (error) {
+      console.error(`Batch ${batchNum} error:`, error)
+      failed += batch.length
+    } else {
+      success += batch.length
+    }
+    
+    // Small delay between batches to avoid overwhelming the DB
+    if (i + batchSize < records.length) {
+      await delay(100)
+    }
+  }
+  
+  console.log(`Batch insert complete: ${success} success, ${failed} failed`)
+  return { success, failed }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -121,9 +286,9 @@ Deno.serve(async (req) => {
     })
 
     const body = await req.json()
-    const { action, projectId, dateStart, dateStop, accountIds, level } = body
+    const { action, projectId, dateStart, dateStop, accountIds, level, forceRefresh } = body
 
-    console.log('Meta API request:', { action, projectId, dateStart, dateStop })
+    console.log('Meta API request:', { action, projectId, dateStart, dateStop, forceRefresh })
 
     // Get Meta credentials for this project
     const { data: credentials, error: credError } = await supabase
@@ -188,13 +353,22 @@ Deno.serve(async (req) => {
   projectId: "${projectId}",
   accountIds: ${accountIds.length},
   dateStart: "${dateStart}",
-  dateStop: "${dateStop}"
+  dateStop: "${dateStop}",
+  forceRefresh: ${forceRefresh || false}
 }`)
         
         // ALWAYS use background processing to avoid HTTP timeout
         const backgroundTask = async () => {
           try {
-            await syncInsightsOptimized(serviceSupabase, projectId, accessToken, accountIds, dateStart, dateStop)
+            await syncInsightsSmartOptimized(
+              serviceSupabase, 
+              projectId, 
+              accessToken, 
+              accountIds, 
+              dateStart, 
+              dateStop,
+              forceRefresh || false
+            )
             console.log('Background sync completed successfully!')
           } catch (err) {
             console.error('Background sync error:', err)
@@ -216,7 +390,7 @@ Deno.serve(async (req) => {
         
         result = { 
           success: true, 
-          message: `Sincronização iniciada para ${periodDays} dias. Atualize a página em ${estimatedMinutes > 1 ? `${estimatedMinutes} minutos` : 'alguns segundos'}.`,
+          message: `Sincronização inteligente iniciada para ${periodDays} dias. Dados antigos (>30 dias) serão usados do cache local.`,
           background: true,
           periodDays
         }
@@ -465,39 +639,51 @@ async function getInsights(
   return { insights: allInsights }
 }
 
-// Optimized sync function with parallel processing
-async function syncInsightsOptimized(
+// SMART SYNC: Optimized sync function with intelligent caching
+async function syncInsightsSmartOptimized(
   supabase: any,
   projectId: string,
   accessToken: string,
   accountIds: string[],
   dateStart: string,
-  dateStop: string
+  dateStop: string,
+  forceRefresh: boolean = false
 ) {
-  console.log('Background sync started:', { projectId, accountIds: accountIds.length, dateStart, dateStop })
+  console.log('=== SMART SYNC STARTED ===')
+  console.log({ projectId, accountIds: accountIds.length, dateStart, dateStop, forceRefresh })
 
   try {
-    // FIRST: Delete existing insights for this date range and accounts to avoid duplicates
-    console.log('Cleaning old insights for date range...')
-    const { error: deleteError } = await supabase
-      .from('meta_insights')
-      .delete()
-      .eq('project_id', projectId)
-      .in('ad_account_id', accountIds)
-      .gte('date_start', dateStart)
-      .lte('date_stop', dateStop)
-
-    if (deleteError) {
-      console.error('Error deleting old insights:', deleteError)
-    } else {
-      console.log('Old insights cleaned successfully')
+    // STEP 1: Check what we already have in cache
+    const cachedDates = await getExistingDatesInCache(supabase, projectId, accountIds, dateStart, dateStop)
+    
+    // STEP 2: Determine which dates need to be fetched
+    const { toFetch, fromCache } = determineDatesToFetch(dateStart, dateStop, cachedDates, forceRefresh)
+    
+    if (toFetch.length === 0) {
+      console.log('All data is already in cache! No need to fetch from Meta.')
+      return
     }
+    
+    // STEP 3: Group consecutive dates into ranges for efficient API calls
+    const dateRanges = groupConsecutiveDates(toFetch)
+    console.log(`Grouped into ${dateRanges.length} date ranges to fetch`)
+    
+    // STEP 4: Delete ONLY the dates we're going to refetch
+    console.log(`Cleaning ${toFetch.length} dates from cache before refetch...`)
+    for (const dateStr of toFetch) {
+      await supabase
+        .from('meta_insights')
+        .delete()
+        .eq('project_id', projectId)
+        .in('ad_account_id', accountIds)
+        .eq('date_start', dateStr)
+    }
+    console.log('Old insights for fetch dates cleaned')
 
-    // Sync campaigns first (in parallel batches)
+    // STEP 5: Sync campaigns first (only once)
     const { campaigns } = await getCampaigns(accessToken, accountIds)
     console.log(`Syncing ${campaigns.length} campaigns...`)
     
-    // Batch upsert campaigns
     const campaignRecords = campaigns.map(campaign => ({
       project_id: projectId,
       ad_account_id: campaign.ad_account_id,
@@ -523,83 +709,90 @@ async function syncInsightsOptimized(
       }
     }
 
-    // Sync insights at campaign level with DAILY granularity
-    const campaignInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'campaign')
-    console.log(`Syncing ${campaignInsights.insights.length} daily campaign insights...`)
+    // STEP 6: Fetch and insert insights for each date range
+    let totalInsightsInserted = 0
     
-    const insightRecords = campaignInsights.insights.map((insight: any) => ({
-      project_id: projectId,
-      ad_account_id: insight.ad_account_id,
-      campaign_id: insight.campaign_id,
-      adset_id: insight.adset_id || null,
-      ad_id: insight.ad_id || null,
-      date_start: insight.date_start,
-      date_stop: insight.date_stop,
-      spend: parseFloat(insight.spend || 0),
-      impressions: parseInt(insight.impressions || 0),
-      clicks: parseInt(insight.clicks || 0),
-      reach: parseInt(insight.reach || 0),
-      cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-      cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-      ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-      frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-      actions: insight.actions || null,
-      cost_per_action_type: insight.cost_per_action_type || null,
-      updated_at: new Date().toISOString(),
-    }))
-
-    if (insightRecords.length > 0) {
-      // Insert instead of upsert since we deleted first
-      const { error: insightError } = await supabase
-        .from('meta_insights')
-        .insert(insightRecords)
+    for (let rangeIdx = 0; rangeIdx < dateRanges.length; rangeIdx++) {
+      const range = dateRanges[rangeIdx]
+      console.log(`\n=== Processing range ${rangeIdx + 1}/${dateRanges.length}: ${range.start} to ${range.stop} ===`)
       
-      if (insightError) {
-        console.error('Error syncing campaign insights:', insightError)
+      // Get campaign-level insights for this range
+      const campaignInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'campaign')
+      console.log(`Got ${campaignInsights.insights.length} campaign insights for range`)
+      
+      if (campaignInsights.insights.length > 0) {
+        const insightRecords = campaignInsights.insights.map((insight: any) => ({
+          project_id: projectId,
+          ad_account_id: insight.ad_account_id,
+          campaign_id: insight.campaign_id,
+          adset_id: insight.adset_id || null,
+          ad_id: insight.ad_id || null,
+          date_start: insight.date_start,
+          date_stop: insight.date_stop,
+          spend: parseFloat(insight.spend || 0),
+          impressions: parseInt(insight.impressions || 0),
+          clicks: parseInt(insight.clicks || 0),
+          reach: parseInt(insight.reach || 0),
+          cpc: insight.cpc ? parseFloat(insight.cpc) : null,
+          cpm: insight.cpm ? parseFloat(insight.cpm) : null,
+          ctr: insight.ctr ? parseFloat(insight.ctr) : null,
+          frequency: insight.frequency ? parseFloat(insight.frequency) : null,
+          actions: insight.actions || null,
+          cost_per_action_type: insight.cost_per_action_type || null,
+          updated_at: new Date().toISOString(),
+        }))
+        
+        // BATCH INSERT to avoid memory issues
+        const { success } = await batchInsert(supabase, 'meta_insights', insightRecords)
+        totalInsightsInserted += success
       }
-    }
-
-    // Sync adset level insights with DAILY granularity
-    const adsetInsights = await getInsights(accessToken, accountIds, dateStart, dateStop, 'adset')
-    console.log(`Syncing ${adsetInsights.insights.length} daily adset insights...`)
-    
-    // DEDUPLICATE adset records using a Map (same adset can appear in multiple days)
-    const adsetMap = new Map<string, any>()
-    adsetInsights.insights
-      .filter((i: any) => i.adset_id)
-      .forEach((insight: any) => {
-        const key = `${projectId}_${insight.adset_id}`
-        if (!adsetMap.has(key)) {
-          adsetMap.set(key, {
-            project_id: projectId,
-            ad_account_id: insight.ad_account_id,
-            campaign_id: insight.campaign_id,
-            adset_id: insight.adset_id,
-            adset_name: insight.adset_name,
-            updated_at: new Date().toISOString(),
-          })
+      
+      // Get adset-level data for metadata (not for spend, to avoid double counting)
+      const adsetInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'adset')
+      
+      // DEDUPLICATE adset records
+      const adsetMap = new Map<string, any>()
+      adsetInsights.insights
+        .filter((i: any) => i.adset_id)
+        .forEach((insight: any) => {
+          const key = `${projectId}_${insight.adset_id}`
+          if (!adsetMap.has(key)) {
+            adsetMap.set(key, {
+              project_id: projectId,
+              ad_account_id: insight.ad_account_id,
+              campaign_id: insight.campaign_id,
+              adset_id: insight.adset_id,
+              adset_name: insight.adset_name,
+              updated_at: new Date().toISOString(),
+            })
+          }
+        })
+      
+      const uniqueAdsetRecords = Array.from(adsetMap.values())
+      if (uniqueAdsetRecords.length > 0) {
+        console.log(`Upserting ${uniqueAdsetRecords.length} unique adsets...`)
+        const { error: adsetError } = await supabase
+          .from('meta_adsets')
+          .upsert(uniqueAdsetRecords, { onConflict: 'project_id,adset_id' })
+        
+        if (adsetError) {
+          console.error('Error syncing adsets:', adsetError)
         }
-      })
-    
-    const uniqueAdsetRecords = Array.from(adsetMap.values())
-    console.log(`Upserting ${uniqueAdsetRecords.length} unique adsets...`)
-
-    if (uniqueAdsetRecords.length > 0) {
-      const { error: adsetError } = await supabase
-        .from('meta_adsets')
-        .upsert(uniqueAdsetRecords, { onConflict: 'project_id,adset_id' })
+      }
       
-      if (adsetError) {
-        console.error('Error syncing adsets:', adsetError)
+      // Delay between ranges
+      if (rangeIdx < dateRanges.length - 1) {
+        console.log('Waiting before next range...')
+        await delay(2000)
       }
     }
 
-    // NOTE: We only use campaign-level insights to avoid double-counting
-    // Adset-level insights would duplicate spend data since campaign totals already include adset data
-
-    console.log('Background sync completed successfully!')
+    console.log(`\n=== SMART SYNC COMPLETED ===`)
+    console.log(`Total insights inserted: ${totalInsightsInserted}`)
+    console.log(`Dates from cache (not refetched): ${fromCache.length}`)
     
   } catch (error) {
-    console.error('Background sync error:', error)
+    console.error('Smart sync error:', error)
+    throw error
   }
 }

@@ -49,13 +49,25 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
+const CURRENT_PROJECT_KEY = 'lovable_current_project_id';
+
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
   const [credentials, setCredentials] = useState<ProjectCredential | null>(null);
   const [projectCredentialStatuses, setProjectCredentialStatuses] = useState<ProjectCredentialStatus[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Wrapper to persist currentProject to localStorage
+  const setCurrentProject = (project: Project | null) => {
+    setCurrentProjectState(project);
+    if (project) {
+      localStorage.setItem(CURRENT_PROJECT_KEY, project.id);
+    } else {
+      localStorage.removeItem(CURRENT_PROJECT_KEY);
+    }
+  };
 
   const refreshProjects = async () => {
     if (!user) {
@@ -120,12 +132,19 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         
         setProjectCredentialStatuses(credData || []);
         
-        // Auto-select first VALIDATED project if none selected
+        // Auto-select project: first try to restore from localStorage, then pick first validated
         if (!currentProject) {
-          const validatedProject = data.find(p => 
-            credData?.some(c => c.project_id === p.id && c.is_validated)
-          );
-          setCurrentProject(validatedProject || data[0]);
+          const savedProjectId = localStorage.getItem(CURRENT_PROJECT_KEY);
+          const savedProject = savedProjectId ? data.find(p => p.id === savedProjectId) : null;
+          
+          if (savedProject) {
+            setCurrentProject(savedProject);
+          } else {
+            const validatedProject = data.find(p => 
+              credData?.some(c => c.project_id === p.id && c.is_validated)
+            );
+            setCurrentProject(validatedProject || data[0]);
+          }
         }
       }
     } catch (error) {

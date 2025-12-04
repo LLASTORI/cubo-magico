@@ -287,17 +287,21 @@ async function fetchAllSales(
   status?: string
 ): Promise<HotmartSale[]> {
   const allSales: HotmartSale[] = [];
-  let page = 0;
+  let nextPageToken: string | null = null;
   const pageSize = 100;
-  let hasMore = true;
+  let pageCount = 0;
   
-  while (hasMore) {
+  do {
     const params: Record<string, string> = {
       start_date: startDate.toString(),
       end_date: endDate.toString(),
       max_results: pageSize.toString(),
-      page_token: page.toString(),
     };
+    
+    // Only add page_token if we have one from previous response
+    if (nextPageToken) {
+      params.page_token = nextPageToken;
+    }
     
     if (status) {
       params.transaction_status = status;
@@ -306,7 +310,7 @@ async function fetchAllSales(
     const queryString = new URLSearchParams(params).toString();
     const url = `https://developers.hotmart.com/payments/api/v1/sales/history?${queryString}`;
     
-    console.log(`Fetching page ${page}...`);
+    console.log(`Fetching page ${pageCount + 1}...`);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -325,23 +329,20 @@ async function fetchAllSales(
     const data = await response.json();
     const items = data.items || [];
     
-    console.log(`Page ${page}: ${items.length} sales`);
+    console.log(`Page ${pageCount + 1}: ${items.length} sales`);
     
     allSales.push(...items);
+    pageCount++;
     
-    // Check if there are more pages
-    if (items.length < pageSize || !data.page_info?.next_page_token) {
-      hasMore = false;
-    } else {
-      page++;
-    }
+    // Get next page token from response
+    nextPageToken = data.page_info?.next_page_token || null;
     
     // Safety limit
-    if (page > 100) {
+    if (pageCount >= 100) {
       console.warn('Reached page limit (100), stopping pagination');
-      hasMore = false;
+      break;
     }
-  }
+  } while (nextPageToken);
   
   return allSales;
 }

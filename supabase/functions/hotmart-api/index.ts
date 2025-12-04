@@ -347,7 +347,7 @@ async function fetchAllSales(
   return allSales;
 }
 
-// Sync sales to database
+// Sync sales to database - OPTIMIZED with batch upsert
 async function syncSales(
   projectId: string,
   startDate: number,
@@ -367,13 +367,28 @@ async function syncSales(
   const sales = await fetchAllSales(token, startDate, endDate, status);
   console.log(`Total sales fetched: ${sales.length}`);
   
-  // Get funnels with Meta ads for attribution
-  const funnelsWithAds = await getFunnelsWithMetaAds(projectId, supabase);
+  if (sales.length === 0) {
+    return { synced: 0, updated: 0, errors: 0, attributionStats: {} };
+  }
+  
+  // Get offer mappings for attribution (one query)
+  const { data: offerMappings } = await supabase
+    .from('offer_mappings')
+    .select('codigo_oferta, id_funil, funnel_id')
+    .eq('project_id', projectId);
+  
+  // Get funnels with Meta ads (one query)
+  const { data: funnelMetaAccounts } = await supabase
+    .from('funnel_meta_accounts')
+    .select('funnel_id')
+    .eq('project_id', projectId);
+  
+  const funnelsWithAds = new Set(funnelMetaAccounts?.map(f => f.funnel_id) || []);
+  const offerToFunnel = new Map(offerMappings?.map(o => [o.codigo_oferta, o.funnel_id || o.id_funil]) || []);
+  
+  console.log(`Offer mappings loaded: ${offerMappings?.length || 0}`);
   console.log(`Funnels with Meta ads: ${funnelsWithAds.size}`);
   
-  let synced = 0;
-  let updated = 0;
-  let errors = 0;
   const attributionStats: Record<string, number> = {
     paid_tracked: 0,
     paid_untracked: 0,
@@ -382,107 +397,110 @@ async function syncSales(
     unknown: 0,
   };
   
-  for (const sale of sales) {
-    try {
-      const tracking = sale.purchase.tracking;
-      const { campaignId, adsetId, adId } = extractMetaIds(tracking);
-      
-      // Determine attribution type
-      const attributionType = await determineAttributionType(sale, projectId, supabase, funnelsWithAds);
-      attributionStats[attributionType]++;
-      
-      // Prepare sale data
-      const saleData = {
-        project_id: projectId,
-        transaction_id: sale.purchase.transaction,
-        status: sale.purchase.status,
-        sale_date: sale.purchase.order_date ? new Date(sale.purchase.order_date).toISOString() : null,
-        confirmation_date: sale.purchase.approved_date ? new Date(sale.purchase.approved_date).toISOString() : null,
-        product_name: sale.product?.name || 'Unknown Product',
-        product_code: sale.product?.id?.toString() || null,
-        offer_code: sale.purchase.offer?.code || null,
-        offer_price: sale.purchase.price?.value || null,
-        offer_currency: sale.purchase.price?.currency_code || null,
-        original_price: sale.purchase.original_offer_price?.value || null,
-        payment_method: sale.purchase.payment?.method || null,
-        payment_type: sale.purchase.payment?.type || null,
-        installment_number: sale.purchase.payment?.installments_number || null,
-        recurrence: sale.purchase.recurrency_number || null,
-        buyer_name: sale.buyer?.name || null,
-        buyer_email: sale.buyer?.email || null,
-        buyer_document: sale.buyer?.document || null,
-        buyer_phone_ddd: sale.buyer?.phone?.local_code || null,
-        buyer_phone: sale.buyer?.phone?.number || null,
-        buyer_country: sale.buyer?.address?.country || null,
-        buyer_state: sale.buyer?.address?.state || null,
-        buyer_city: sale.buyer?.address?.city || null,
-        buyer_neighborhood: sale.buyer?.address?.neighborhood || null,
-        buyer_cep: sale.buyer?.address?.zip_code || null,
-        buyer_address: sale.buyer?.address?.address || null,
-        buyer_address_number: sale.buyer?.address?.number || null,
-        buyer_address_complement: sale.buyer?.address?.complement || null,
-        producer_name: sale.producer?.name || null,
-        producer_document: sale.producer?.document || null,
-        affiliate_name: sale.affiliate?.name || null,
-        affiliate_code: sale.affiliate?.affiliate_code || null,
-        utm_source: tracking?.utm_source || null,
-        utm_campaign_id: tracking?.utm_campaign || null,
-        utm_creative: tracking?.utm_content || null,
-        checkout_origin: tracking?.source || null,
-        // New attribution fields
-        sale_attribution_type: attributionType,
-        meta_campaign_id_extracted: campaignId,
-        meta_adset_id_extracted: adsetId,
-        meta_ad_id_extracted: adId,
-        last_synced_at: new Date().toISOString(),
-        total_price: sale.purchase.price?.value || null,
-        net_revenue: sale.commissions?.[0]?.value || null,
-      };
-      
-      // Upsert by transaction_id
-      const { data: existing } = await supabase
-        .from('hotmart_sales')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('transaction_id', sale.purchase.transaction)
-        .maybeSingle();
-      
-      if (existing) {
-        // Update existing
-        const { error: updateError } = await supabase
-          .from('hotmart_sales')
-          .update(saleData)
-          .eq('id', existing.id);
-        
-        if (updateError) {
-          console.error(`Error updating sale ${sale.purchase.transaction}:`, updateError);
-          errors++;
-        } else {
-          updated++;
-        }
+  // Prepare all sales data
+  const salesData = sales.map(sale => {
+    const tracking = sale.purchase.tracking;
+    const { campaignId, adsetId, adId } = extractMetaIds(tracking);
+    const offerCode = sale.purchase.offer?.code;
+    
+    // Determine attribution type (fast, no queries)
+    let attributionType = 'unknown';
+    const hasMetaIds = !!(campaignId || adsetId || adId);
+    const utmSource = tracking?.utm_source?.toLowerCase() || '';
+    const isFromMeta = ['fb', 'facebook', 'ig', 'instagram', 'meta'].some(s => utmSource.includes(s));
+    
+    if (hasMetaIds || (isFromMeta && tracking?.utm_campaign)) {
+      attributionType = 'paid_tracked';
+    } else if (offerCode) {
+      const funnelId = offerToFunnel.get(offerCode);
+      if (funnelId && funnelsWithAds.has(funnelId)) {
+        attributionType = 'paid_untracked';
       } else {
-        // Insert new
-        const { error: insertError } = await supabase
-          .from('hotmart_sales')
-          .insert(saleData);
-        
-        if (insertError) {
-          console.error(`Error inserting sale ${sale.purchase.transaction}:`, insertError);
-          errors++;
-        } else {
-          synced++;
-        }
+        attributionType = 'organic_pure';
       }
-    } catch (err) {
-      console.error(`Error processing sale:`, err);
-      errors++;
+    } else {
+      attributionType = 'organic_pure';
+    }
+    
+    attributionStats[attributionType]++;
+    
+    return {
+      project_id: projectId,
+      transaction_id: sale.purchase.transaction,
+      status: sale.purchase.status,
+      sale_date: sale.purchase.order_date ? new Date(sale.purchase.order_date).toISOString() : null,
+      confirmation_date: sale.purchase.approved_date ? new Date(sale.purchase.approved_date).toISOString() : null,
+      product_name: sale.product?.name || 'Unknown Product',
+      product_code: sale.product?.id?.toString() || null,
+      offer_code: sale.purchase.offer?.code || null,
+      offer_price: sale.purchase.price?.value || null,
+      offer_currency: sale.purchase.price?.currency_code || null,
+      original_price: sale.purchase.original_offer_price?.value || null,
+      payment_method: sale.purchase.payment?.method || null,
+      payment_type: sale.purchase.payment?.type || null,
+      installment_number: sale.purchase.payment?.installments_number || null,
+      recurrence: sale.purchase.recurrency_number || null,
+      buyer_name: sale.buyer?.name || null,
+      buyer_email: sale.buyer?.email || null,
+      buyer_document: sale.buyer?.document || null,
+      buyer_phone_ddd: sale.buyer?.phone?.local_code || null,
+      buyer_phone: sale.buyer?.phone?.number || null,
+      buyer_country: sale.buyer?.address?.country || null,
+      buyer_state: sale.buyer?.address?.state || null,
+      buyer_city: sale.buyer?.address?.city || null,
+      buyer_neighborhood: sale.buyer?.address?.neighborhood || null,
+      buyer_cep: sale.buyer?.address?.zip_code || null,
+      buyer_address: sale.buyer?.address?.address || null,
+      buyer_address_number: sale.buyer?.address?.number || null,
+      buyer_address_complement: sale.buyer?.address?.complement || null,
+      producer_name: sale.producer?.name || null,
+      producer_document: sale.producer?.document || null,
+      affiliate_name: sale.affiliate?.name || null,
+      affiliate_code: sale.affiliate?.affiliate_code || null,
+      utm_source: tracking?.utm_source || null,
+      utm_campaign_id: tracking?.utm_campaign || null,
+      utm_creative: tracking?.utm_content || null,
+      checkout_origin: tracking?.source || null,
+      sale_attribution_type: attributionType,
+      meta_campaign_id_extracted: campaignId,
+      meta_adset_id_extracted: adsetId,
+      meta_ad_id_extracted: adId,
+      last_synced_at: new Date().toISOString(),
+      total_price: sale.purchase.price?.value || null,
+      net_revenue: sale.commissions?.[0]?.value || null,
+    };
+  });
+  
+  console.log(`Prepared ${salesData.length} sales for upsert`);
+  
+  // Batch upsert in chunks of 100
+  const BATCH_SIZE = 100;
+  let synced = 0;
+  let errors = 0;
+  
+  for (let i = 0; i < salesData.length; i += BATCH_SIZE) {
+    const batch = salesData.slice(i, i + BATCH_SIZE);
+    console.log(`Upserting batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(salesData.length / BATCH_SIZE)}...`);
+    
+    const { error } = await supabase
+      .from('hotmart_sales')
+      .upsert(batch, { 
+        onConflict: 'project_id,transaction_id',
+        ignoreDuplicates: false 
+      });
+    
+    if (error) {
+      console.error(`Batch upsert error:`, error);
+      errors += batch.length;
+    } else {
+      synced += batch.length;
     }
   }
   
-  console.log(`Sync complete: ${synced} new, ${updated} updated, ${errors} errors`);
+  console.log(`Sync complete: ${synced} processed, ${errors} errors`);
   console.log('Attribution stats:', attributionStats);
   
-  return { synced, updated, errors, attributionStats };
+  return { synced, updated: 0, errors, attributionStats };
 }
 
 serve(async (req) => {

@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter, Building2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+
+const META_APP_ID = '845927421602166';
 import { Link } from 'react-router-dom';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,7 +30,9 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3
 
 const MetaAds = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentProject } = useProject();
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showFilters, setShowFilters] = useState(false);
@@ -43,6 +48,57 @@ const MetaAds = () => {
   // Track project changes to force complete reset
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+
+  // Handle OAuth callback params
+  useEffect(() => {
+    const metaConnected = searchParams.get('meta_connected');
+    const metaError = searchParams.get('meta_error');
+
+    if (metaConnected === 'true') {
+      toast({
+        title: 'Meta conectado!',
+        description: 'Sua conta Meta foi conectada com sucesso.',
+      });
+      searchParams.delete('meta_connected');
+      setSearchParams(searchParams);
+      queryClient.invalidateQueries({ queryKey: ['meta_credentials'] });
+    }
+
+    if (metaError) {
+      toast({
+        title: 'Erro ao conectar Meta',
+        description: metaError,
+        variant: 'destructive',
+      });
+      searchParams.delete('meta_error');
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams, toast, queryClient]);
+
+  // Connect to Meta
+  const handleConnectMeta = () => {
+    if (!currentProject?.id || !user?.id) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione um projeto primeiro.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const state = btoa(JSON.stringify({
+      projectId: currentProject.id,
+      userId: user.id,
+      redirectUrl: window.location.href.split('?')[0], // Remove any existing params
+    }));
+
+    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
+    const scope = 'ads_read,ads_management,business_management';
+    
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}`;
+    
+    window.location.href = authUrl;
+  };
 
   // Reset everything when project changes
   useEffect(() => {
@@ -332,7 +388,7 @@ const MetaAds = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
-              <Button onClick={() => navigate('/settings')} className="gap-2">
+              <Button onClick={handleConnectMeta} className="gap-2">
                 <Facebook className="h-4 w-4" />
                 Conectar Meta Ads
               </Button>

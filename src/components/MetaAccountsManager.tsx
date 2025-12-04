@@ -107,6 +107,10 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: MetaAccount
   };
 
   useEffect(() => {
+    // Reset state when project changes
+    setSavedAccounts([]);
+    setAvailableAccounts([]);
+    setLoading(true);
     fetchSavedAccounts();
   }, [projectId]);
 

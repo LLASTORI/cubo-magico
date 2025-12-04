@@ -205,6 +205,7 @@ export type Database = {
           status: string
           subscriber_code: string | null
           total_price: number | null
+          total_price_brl: number | null
           transaction_id: string
           updated_at: string
           utm_adset_name: string | null
@@ -272,6 +273,7 @@ export type Database = {
           status: string
           subscriber_code?: string | null
           total_price?: number | null
+          total_price_brl?: number | null
           transaction_id: string
           updated_at?: string
           utm_adset_name?: string | null
@@ -339,6 +341,7 @@ export type Database = {
           status?: string
           subscriber_code?: string | null
           total_price?: number | null
+          total_price_brl?: number | null
           transaction_id?: string
           updated_at?: string
           utm_adset_name?: string | null

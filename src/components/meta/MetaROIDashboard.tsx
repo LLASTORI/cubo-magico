@@ -103,7 +103,7 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
     queryFn: async () => {
       const { data, error } = await supabase
         .from('hotmart_sales')
-        .select('sale_date, total_price, net_revenue, status')
+        .select('sale_date, total_price, total_price_brl, net_revenue, status')
         .eq('project_id', projectId)
         .gte('sale_date', `${startDateStr}T00:00:00`)
         .lte('sale_date', `${endDateStr}T23:59:59`)
@@ -133,7 +133,8 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
       if (!revenueByDate[date]) {
         revenueByDate[date] = { revenue: 0, sales: 0 };
       }
-      revenueByDate[date].revenue += sale.total_price || sale.net_revenue || 0;
+      // Use total_price_brl (converted) or fallback to total_price
+      revenueByDate[date].revenue += sale.total_price_brl || sale.total_price || sale.net_revenue || 0;
       revenueByDate[date].sales += 1;
     });
 

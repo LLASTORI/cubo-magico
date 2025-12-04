@@ -424,6 +424,28 @@ async function syncSales(
     
     attributionStats[attributionType]++;
     
+    // Calculate BRL conversion with fixed rates
+    const currencyCode = sale.purchase.price?.currency_code || 'BRL';
+    const totalPrice = sale.purchase.price?.value || 0;
+    const exchangeRates: Record<string, number> = {
+      'BRL': 1,
+      'USD': 6.00,
+      'EUR': 6.40,
+      'GBP': 7.60,
+      'PYG': 0.0008,
+      'UYU': 0.14,
+      'AUD': 3.90,
+      'CHF': 6.80,
+      'CAD': 4.40,
+      'MXN': 0.30,
+      'ARS': 0.006,
+      'CLP': 0.006,
+      'COP': 0.0014,
+      'PEN': 1.60,
+    };
+    const rate = exchangeRates[currencyCode] || 1;
+    const totalPriceBrl = totalPrice * rate;
+
     return {
       project_id: projectId,
       transaction_id: sale.purchase.transaction,
@@ -434,7 +456,7 @@ async function syncSales(
       product_code: sale.product?.id?.toString() || null,
       offer_code: sale.purchase.offer?.code || null,
       offer_price: sale.purchase.price?.value || null,
-      offer_currency: sale.purchase.price?.currency_code || null,
+      offer_currency: currencyCode,
       original_price: sale.purchase.original_offer_price?.value || null,
       payment_method: sale.purchase.payment?.method || null,
       payment_type: sale.purchase.payment?.type || null,
@@ -466,7 +488,8 @@ async function syncSales(
       meta_adset_id_extracted: adsetId,
       meta_ad_id_extracted: adId,
       last_synced_at: new Date().toISOString(),
-      total_price: sale.purchase.price?.value || null,
+      total_price: totalPrice || null,
+      total_price_brl: totalPriceBrl || null,
       net_revenue: sale.commissions?.[0]?.value || null,
     };
   });

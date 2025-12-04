@@ -201,7 +201,9 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
   };
 
   const loading = insightsLoading || salesLoading;
-  const hasData = roiData.totals && (roiData.totals.spend > 0 || roiData.totals.revenue > 0);
+  const hasSpendData = roiData.totals && roiData.totals.spend > 0;
+  const hasRevenueData = roiData.totals && roiData.totals.revenue > 0;
+  const hasData = hasSpendData || hasRevenueData;
   const isProfitable = roiData.totals && roiData.totals.profit > 0;
 
   return (
@@ -290,6 +292,62 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
             <p className="text-sm text-muted-foreground">
               Verifique se há dados de Meta Ads e vendas do Hotmart no período selecionado.
             </p>
+          </div>
+        </div>
+      ) : !hasRevenueData && hasSpendData ? (
+        <div className="space-y-6">
+          {/* Warning about missing revenue data */}
+          <Card className="border-yellow-500/50 bg-yellow-500/5">
+            <CardContent className="flex items-center gap-4 py-4">
+              <AlertCircle className="h-8 w-8 text-yellow-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-foreground">Dados de vendas não encontrados</p>
+                <p className="text-sm text-muted-foreground">
+                  Para calcular o ROI, é necessário sincronizar as vendas da Hotmart. 
+                  Vá em <strong>Análise de Funil</strong> e sincronize os dados de vendas para o período desejado.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Show only spend summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-destructive/5 border-destructive/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className="w-4 h-4 text-destructive" />
+                  <span className="text-xs text-muted-foreground">Investimento Meta</span>
+                </div>
+                <p className="text-lg font-bold text-destructive">{formatCurrency(roiData.totals!.spend)}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-muted/30 border-dashed">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Receita Hotmart</span>
+                </div>
+                <p className="text-lg font-bold text-muted-foreground">Sem dados</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-muted/30 border-dashed">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Calculator className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">ROAS</span>
+                </div>
+                <p className="text-lg font-bold text-muted-foreground">--</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-muted/30 border-dashed">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">ROI</span>
+                </div>
+                <p className="text-lg font-bold text-muted-foreground">--</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       ) : (

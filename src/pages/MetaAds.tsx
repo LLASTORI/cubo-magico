@@ -31,12 +31,9 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3
 // Wrapper component to handle OAuth callback and project switching
 const MetaAds = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentProject } = useProject();
+  const { currentProject, loading: projectLoading } = useProject();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // Log current project for debugging
-  console.log('[MetaAds Wrapper] currentProject:', currentProject?.name, currentProject?.id);
 
   // Handle OAuth callback params - only once on mount
   useEffect(() => {
@@ -64,24 +61,12 @@ const MetaAds = () => {
     }
   }, []);
 
-  // Clear Meta-related queries when project changes
-  useEffect(() => {
-    if (currentProject?.id) {
-      console.log('[MetaAds Wrapper] Project changed, clearing meta queries for fresh fetch');
-      // Remove all meta-related queries to force fresh data
-      queryClient.removeQueries({ queryKey: ['meta_credentials'] });
-      queryClient.removeQueries({ queryKey: ['meta_ad_accounts'] });
-      queryClient.removeQueries({ queryKey: ['meta_campaigns'] });
-      queryClient.removeQueries({ queryKey: ['meta_insights'] });
-    }
-  }, [currentProject?.id, queryClient]);
-
-  // Show loading if no project
-  if (!currentProject?.id) {
+  // Show loading while project context is loading
+  if (projectLoading || !currentProject?.id) {
     return <CubeLoader />;
   }
 
-  // Key forces complete remount when project changes - this is the cleanest solution
+  // Key forces complete remount when project changes
   return <MetaAdsContent key={currentProject.id} projectId={currentProject.id} />;
 };
 
@@ -101,9 +86,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   const [startDate, setStartDate] = useState(sevenDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [syncing, setSyncing] = useState(false);
-
-  // Log for debugging - which project is this component using?
-  console.log('[MetaAdsContent] Mounted/Updated with projectId:', projectId, 'currentProject:', currentProject?.name);
 
   // Connect to Meta
   const handleConnectMeta = () => {

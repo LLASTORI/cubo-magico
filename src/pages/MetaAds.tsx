@@ -28,28 +28,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
+// Wrapper component to handle OAuth callback and project switching
 const MetaAds = () => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentProject } = useProject();
-  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [showFilters, setShowFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  
-  // Date range state
-  const today = new Date().toISOString().split('T')[0];
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState(sevenDaysAgo);
-  const [endDate, setEndDate] = useState(today);
-  const [syncing, setSyncing] = useState(false);
-  
-  // Track project changes to force complete reset
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [isResetting, setIsResetting] = useState(false);
 
-  // Handle OAuth callback params
+  // Handle OAuth callback params - only once on mount
   useEffect(() => {
     const metaConnected = searchParams.get('meta_connected');
     const metaError = searchParams.get('meta_error');
@@ -73,11 +59,37 @@ const MetaAds = () => {
       searchParams.delete('meta_error');
       setSearchParams(searchParams);
     }
-  }, [searchParams, setSearchParams, toast, queryClient]);
+  }, []);
+
+  // Show loading if no project
+  if (!currentProject?.id) {
+    return <CubeLoader />;
+  }
+
+  // Key forces complete remount when project changes - this is the cleanest solution
+  return <MetaAdsContent key={currentProject.id} projectId={currentProject.id} />;
+};
+
+// Main content component - completely remounts on project change
+const MetaAdsContent = ({ projectId }: { projectId: string }) => {
+  const navigate = useNavigate();
+  const { currentProject } = useProject();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Date range state
+  const today = new Date().toISOString().split('T')[0];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(sevenDaysAgo);
+  const [endDate, setEndDate] = useState(today);
+  const [syncing, setSyncing] = useState(false);
 
   // Connect to Meta
   const handleConnectMeta = () => {
-    if (!currentProject?.id || !user?.id) {
+    if (!projectId || !user?.id) {
       toast({
         title: 'Erro',
         description: 'Selecione um projeto primeiro.',
@@ -87,9 +99,9 @@ const MetaAds = () => {
     }
 
     const state = btoa(JSON.stringify({
-      projectId: currentProject.id,
+      projectId: projectId,
       userId: user.id,
-      redirectUrl: window.location.href.split('?')[0], // Remove any existing params
+      redirectUrl: window.location.href.split('?')[0],
     }));
 
     const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
@@ -100,32 +112,6 @@ const MetaAds = () => {
     window.location.href = authUrl;
   };
 
-  // Reset everything when project changes
-  useEffect(() => {
-    const newProjectId = currentProject?.id || null;
-    
-    if (activeProjectId !== newProjectId) {
-      console.log('Project changed from', activeProjectId, 'to', newProjectId);
-      
-      // Set resetting state to show loading
-      setIsResetting(true);
-      
-      // Clear ALL meta-related caches immediately
-      queryClient.removeQueries({ queryKey: ['meta_credentials'] });
-      queryClient.removeQueries({ queryKey: ['meta_ad_accounts'] });
-      queryClient.removeQueries({ queryKey: ['meta_campaigns'] });
-      queryClient.removeQueries({ queryKey: ['meta_insights'] });
-      
-      // Update active project
-      setActiveProjectId(newProjectId);
-      
-      // Small delay to ensure queries are cleared before re-enabling
-      setTimeout(() => {
-        setIsResetting(false);
-      }, 100);
-    }
-  }, [currentProject?.id, activeProjectId, queryClient]);
-
   // Handle accounts selection callback
   const handleAccountsSelected = (accountIds: string[]) => {
     queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
@@ -133,43 +119,40 @@ const MetaAds = () => {
     handleSyncWithAccounts(accountIds);
   };
 
-  // Fetch Meta credentials - uses activeProjectId to ensure sync
+  // Fetch Meta credentials
   const { data: metaCredentials, isLoading: credentialsLoading, isError: credentialsError } = useQuery({
-    queryKey: ['meta_credentials', activeProjectId],
+    queryKey: ['meta_credentials', projectId],
     queryFn: async () => {
-      if (!activeProjectId) return null;
-      console.log('Fetching meta credentials for project:', activeProjectId);
+      console.log('Fetching meta credentials for project:', projectId);
       const { data, error } = await supabase
         .from('meta_credentials')
         .select('*')
-        .eq('project_id', activeProjectId)
+        .eq('project_id', projectId)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
       console.log('Meta credentials result:', data);
       return data;
     },
-    enabled: !!activeProjectId && !isResetting,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always',
   });
 
-  // Fetch ad accounts - uses activeProjectId to ensure sync
+  // Fetch ad accounts
   const { data: adAccounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['meta_ad_accounts', activeProjectId],
+    queryKey: ['meta_ad_accounts', projectId],
     queryFn: async () => {
-      if (!activeProjectId) return [];
-      console.log('Fetching ad accounts for project:', activeProjectId);
+      console.log('Fetching ad accounts for project:', projectId);
       const { data, error } = await supabase
         .from('meta_ad_accounts')
         .select('*')
-        .eq('project_id', activeProjectId)
+        .eq('project_id', projectId)
         .eq('is_active', true);
       if (error) throw error;
       console.log('Ad accounts result:', data);
       return data || [];
     },
-    enabled: !!activeProjectId && !!metaCredentials && !isResetting,
+    enabled: !!metaCredentials,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always',
@@ -177,9 +160,8 @@ const MetaAds = () => {
 
   // Fetch campaigns - only from active accounts
   const { data: campaigns, isLoading: campaignsLoading } = useQuery({
-    queryKey: ['meta_campaigns', activeProjectId, adAccounts?.map(a => a.id).join(',')],
+    queryKey: ['meta_campaigns', projectId, adAccounts?.map(a => a.id).join(',')],
     queryFn: async () => {
-      if (!activeProjectId) return [];
       if (!adAccounts || adAccounts.length === 0) return [];
       
       const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
@@ -188,22 +170,21 @@ const MetaAds = () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
         .select('*')
-        .eq('project_id', activeProjectId)
+        .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
         .order('campaign_name');
       if (error) throw error;
       return data || [];
     },
-    enabled: !!activeProjectId && !!metaCredentials && !!adAccounts && adAccounts.length > 0 && !isResetting,
+    enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,
     staleTime: 0,
     gcTime: 0,
   });
 
   // Fetch insights - only from active accounts
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    queryKey: ['meta_insights', activeProjectId, startDate, endDate, adAccounts?.map(a => a.id).join(',')],
+    queryKey: ['meta_insights', projectId, startDate, endDate, adAccounts?.map(a => a.id).join(',')],
     queryFn: async () => {
-      if (!activeProjectId) return [];
       if (!adAccounts || adAccounts.length === 0) return [];
       
       const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
@@ -213,14 +194,14 @@ const MetaAds = () => {
       const { data, error } = await supabase
         .from('meta_insights')
         .select('*')
-        .eq('project_id', activeProjectId)
+        .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
         .gte('date_start', startDate)
         .lte('date_stop', endDate);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!activeProjectId && !!metaCredentials && !!adAccounts && adAccounts.length > 0 && !isResetting,
+    enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,
     staleTime: 0,
     gcTime: 0,
   });
@@ -231,7 +212,7 @@ const MetaAds = () => {
 
   // Sync data with specific accounts
   const handleSyncWithAccounts = async (accountIds: string[]) => {
-    if (!activeProjectId || !metaCredentials || accountIds.length === 0) return;
+    if (!projectId || !metaCredentials || accountIds.length === 0) return;
 
     setSyncing(true);
     try {
@@ -239,7 +220,7 @@ const MetaAds = () => {
       const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
         body: {
           action: 'sync_insights',
-          projectId: activeProjectId,
+          projectId: projectId,
           accountIds: accountIds,
           dateStart: startDate,
           dateStop: endDate,
@@ -288,7 +269,7 @@ const MetaAds = () => {
 
   // Sync data from Meta API (uses existing active accounts)
   const handleSyncData = async () => {
-    if (!activeProjectId || !metaCredentials) return;
+    if (!projectId || !metaCredentials) return;
 
     // If no accounts configured, show selector message
     if (!adAccounts || adAccounts.length === 0) {
@@ -353,7 +334,7 @@ const MetaAds = () => {
   }).sort((a, b) => b.spend - a.spend) || [];
 
   // Show loading while checking credentials or resetting project
-  if (credentialsLoading || isResetting || !activeProjectId) {
+  if (credentialsLoading) {
     return <CubeLoader />;
   }
 
@@ -434,7 +415,7 @@ const MetaAds = () => {
                 {startDate} - {endDate}
               </Button>
               <MetaAccountSelector 
-                projectId={activeProjectId || ''} 
+                projectId={projectId} 
                 onAccountsSelected={handleAccountsSelected}
               >
                 <Button variant="outline" className="gap-2">
@@ -669,8 +650,8 @@ const MetaAds = () => {
 
           <TabsContent value="accounts" className="space-y-6">
             <MetaAccountsManager 
-              key={activeProjectId}
-              projectId={activeProjectId || ''} 
+              key={projectId}
+              projectId={projectId} 
               onAccountsChange={() => {
                 queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
               }}

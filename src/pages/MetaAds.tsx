@@ -48,7 +48,7 @@ const MetaAds = () => {
   };
 
   // Fetch Meta credentials
-  const { data: metaCredentials, isLoading: credentialsLoading } = useQuery({
+  const { data: metaCredentials, isLoading: credentialsLoading, isError: credentialsError } = useQuery({
     queryKey: ['meta_credentials', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return null;
@@ -61,6 +61,8 @@ const MetaAds = () => {
       return data;
     },
     enabled: !!currentProject?.id,
+    staleTime: 1000 * 60 * 5, // 5 minutes cache
+    refetchOnWindowFocus: true,
   });
 
   // Fetch ad accounts
@@ -252,7 +254,8 @@ const MetaAds = () => {
     };
   }).sort((a, b) => b.spend - a.spend) || [];
 
-  if (credentialsLoading) {
+  // Show loading while checking credentials
+  if (credentialsLoading || !currentProject?.id) {
     return <CubeLoader />;
   }
 

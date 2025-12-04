@@ -25,23 +25,25 @@ Deno.serve(async (req) => {
 
     console.log('OAuth callback received:', { code: !!code, state, error })
 
+    // Parse state first to get redirect URL
+    let stateData: { projectId: string; userId: string; redirectUrl: string } | null = null
+    if (state) {
+      try {
+        stateData = JSON.parse(atob(state))
+      } catch (e) {
+        console.error('Invalid state:', e)
+      }
+    }
+    const baseRedirectUrl = stateData?.redirectUrl || `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
+
     if (error) {
       console.error('OAuth error:', error, errorDescription)
-      return redirectWithError(`Erro no login: ${errorDescription || error}`)
+      return redirectWithError(`Erro no login: ${errorDescription || error}`, baseRedirectUrl)
     }
 
-    if (!code || !state) {
+    if (!code || !stateData) {
       console.error('Missing code or state')
-      return redirectWithError('Parâmetros inválidos')
-    }
-
-    // Parse state
-    let stateData: { projectId: string; userId: string; redirectUrl: string }
-    try {
-      stateData = JSON.parse(atob(state))
-    } catch (e) {
-      console.error('Invalid state:', e)
-      return redirectWithError('Estado inválido')
+      return redirectWithError('Parâmetros inválidos', baseRedirectUrl)
     }
 
     const { projectId, userId, redirectUrl } = stateData
@@ -62,7 +64,7 @@ Deno.serve(async (req) => {
 
     if (tokenData.error) {
       console.error('Token exchange error:', tokenData.error)
-      return redirectWithError(`Erro ao obter token: ${tokenData.error.message}`)
+      return redirectWithError(`Erro ao obter token: ${tokenData.error.message}`, redirectUrl)
     }
 
     const { access_token, expires_in } = tokenData
@@ -116,7 +118,7 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       console.error('Database error:', upsertError)
-      return redirectWithError('Erro ao salvar credenciais')
+      return redirectWithError('Erro ao salvar credenciais', redirectUrl)
     }
 
     console.log('Credentials saved successfully')
@@ -135,13 +137,15 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Unexpected error:', error)
-    return redirectWithError('Erro inesperado')
+    // Use a fallback URL for unexpected errors
+    const fallbackUrl = `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
+    return redirectWithError('Erro inesperado', fallbackUrl)
   }
 })
 
-function redirectWithError(message: string): Response {
+function redirectWithError(message: string, redirectUrl: string): Response {
   // Redirect to app with error
-  const errorUrl = new URL('https://jcbzwxgayxrnxlgmmlni.lovableproject.com/settings')
+  const errorUrl = new URL(redirectUrl)
   errorUrl.searchParams.set('meta_error', message)
   
   return new Response(null, {

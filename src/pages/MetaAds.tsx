@@ -262,7 +262,8 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   const [estimatedDuration, setEstimatedDuration] = useState(30);
 
   // Sync data with specific accounts
-  const handleSyncWithAccounts = async (accountIds: string[]) => {
+  // Sync with forceRefresh option
+  const handleSyncWithAccounts = async (accountIds: string[], forceRefresh: boolean = false) => {
     if (!projectId || !metaCredentials || accountIds.length === 0) return;
 
     setSyncing(true);
@@ -270,7 +271,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     setEstimatedDuration(syncDuration);
     
     try {
-      console.log('Syncing insights for accounts:', accountIds, 'from', startDate, 'to', endDate);
+      console.log('Syncing insights for accounts:', accountIds, 'from', startDate, 'to', endDate, 'forceRefresh:', forceRefresh);
       const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
         body: {
           action: 'sync_insights',
@@ -278,6 +279,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
           accountIds: accountIds,
           dateStart: startDate,
           dateStop: endDate,
+          forceRefresh: forceRefresh, // Pass force refresh flag
         },
       });
 
@@ -289,7 +291,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       const pollDurationMs = Math.max(30000, Math.min(180000, periodDays * 1000)); // 30s to 3min
       
       toast({
-        title: 'Sincronização em andamento...',
+        title: forceRefresh ? 'Sincronização forçada em andamento...' : 'Sincronização em andamento...',
         description: insightsData?.message || `Aguarde até ${Math.ceil(pollDurationMs / 60000)} minuto(s) para os dados aparecerem.`,
       });
 
@@ -315,7 +317,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         
         toast({
           title: 'Sincronização concluída!',
-          description: 'Os dados foram atualizados. Se necessário, clique em Sincronizar novamente.',
+          description: 'Os dados foram atualizados.',
         });
       }, pollDurationMs);
 
@@ -333,10 +335,10 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         
         // Still poll for data in case it completes
         const pollIntervals = [30000, 60000, 90000, 120000, 150000, 180000];
-        pollIntervals.forEach((delay) => {
+        pollIntervals.forEach((delayMs) => {
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-          }, delay);
+          }, delayMs);
         });
         
         setTimeout(() => {
@@ -352,6 +354,15 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         setSyncing(false);
       }
     }
+  };
+
+  // Force refresh - ignores cache
+  const handleForceRefresh = async () => {
+    if (!projectId || !metaCredentials || !adAccounts || adAccounts.length === 0) return;
+    
+    const accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
+    setNeedsSync(false);
+    await handleSyncWithAccounts(accountIdsToSync, true);
   };
 
   // Handle date changes - mark as needing sync
@@ -524,14 +535,26 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                   )}
                 </Button>
               </MetaAccountSelector>
-              <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" className="gap-2">
-                {syncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Sincronizar
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" className="gap-2">
+                  {syncing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Sincronizar
+                </Button>
+                <Button 
+                  onClick={handleForceRefresh} 
+                  disabled={syncing || isMetaExpired || !adAccounts || adAccounts.length === 0} 
+                  variant="ghost" 
+                  size="icon"
+                  title="Forçar refresh completo (ignora cache)"
+                  className="h-9 w-9"
+                >
+                  <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
               <ThemeToggle />
             </div>
           </div>

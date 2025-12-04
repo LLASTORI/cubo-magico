@@ -668,15 +668,23 @@ async function syncInsightsSmartOptimized(
     const dateRanges = groupConsecutiveDates(toFetch)
     console.log(`Grouped into ${dateRanges.length} date ranges to fetch`)
     
-    // STEP 4: Delete ONLY the dates we're going to refetch
+    // STEP 4: Delete ONLY the dates we're going to refetch (in batches for efficiency)
     console.log(`Cleaning ${toFetch.length} dates from cache before refetch...`)
-    for (const dateStr of toFetch) {
-      await supabase
+    
+    // Delete in batches of 50 dates to avoid query issues
+    const DELETE_BATCH_SIZE = 50
+    for (let i = 0; i < toFetch.length; i += DELETE_BATCH_SIZE) {
+      const batchDates = toFetch.slice(i, i + DELETE_BATCH_SIZE)
+      const { error: deleteError } = await supabase
         .from('meta_insights')
         .delete()
         .eq('project_id', projectId)
         .in('ad_account_id', accountIds)
-        .eq('date_start', dateStr)
+        .in('date_start', batchDates)
+      
+      if (deleteError) {
+        console.error(`Error deleting batch ${Math.floor(i/DELETE_BATCH_SIZE) + 1}:`, deleteError)
+      }
     }
     console.log('Old insights for fetch dates cleaned')
 

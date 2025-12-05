@@ -465,15 +465,9 @@ const Index = () => {
               {currentProject && (
                 <>
                   <Button
-                    onClick={() => navigate('/funnel-analysis', { 
-                      state: { 
-                        salesData: formattedSales,
-                        filters: currentFilters 
-                      } 
-                    })}
+                    onClick={() => navigate('/funnel-analysis')}
                     variant="outline"
                     className="gap-2"
-                    disabled={!salesData}
                   >
                     <BarChart3 className="w-4 h-4" />
                     Análise de Funil

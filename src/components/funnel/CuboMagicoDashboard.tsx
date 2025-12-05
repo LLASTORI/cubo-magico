@@ -93,37 +93,6 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
     },
     enabled: !!projectId,
   });
-
-  // Fetch funnel meta accounts (campanhas vinculadas aos funis)
-  const { data: funnelMetaAccounts } = useQuery({
-    queryKey: ['funnel-meta-accounts-cubo', projectId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('funnel_meta_accounts')
-        .select('funnel_id, meta_account_id')
-        .eq('project_id', projectId);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!projectId,
-  });
-
-  // Fetch meta ad accounts to get account_id
-  const { data: metaAdAccounts } = useQuery({
-    queryKey: ['meta-ad-accounts-cubo', projectId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_ad_accounts')
-        .select('id, account_id')
-        .eq('project_id', projectId);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!projectId,
-  });
-
   // Fetch Meta campaigns and insights
   const { data: campaignsData } = useQuery({
     queryKey: ['meta-campaigns-cubo', projectId],
@@ -157,27 +126,23 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
 
   // Calculate metrics for each funnel
   const funnelMetrics = useMemo((): FunnelMetrics[] => {
-    if (!funnels || !offerMappings || !salesData || !insightsData || !funnelMetaAccounts || !metaAdAccounts) {
+    if (!funnels || !offerMappings || !salesData || !campaignsData || !insightsData) {
       return [];
     }
 
-    // Create map: meta_ad_accounts.id -> account_id (string usado no insights)
-    const accountIdMap = new Map(metaAdAccounts.map(a => [a.id, a.account_id]));
-
     return funnels.map(funnel => {
+      const pattern = funnel.campaign_name_pattern?.toLowerCase() || '';
       const roasTarget = funnel.roas_target || 2;
 
-      // Get Meta account IDs vinculadas a este funil
-      const funnelAccountIds = funnelMetaAccounts
-        .filter(fma => fma.funnel_id === funnel.id)
-        .map(fma => accountIdMap.get(fma.meta_account_id))
-        .filter(Boolean) as string[];
-      
-      const funnelAccountIdsSet = new Set(funnelAccountIds);
+      // Find campaigns matching the pattern (Padrão do Nome da Campanha)
+      const matchingCampaigns = campaignsData.filter(c => 
+        pattern && c.campaign_name?.toLowerCase().includes(pattern)
+      );
+      const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
 
-      // Calculate total spend from insights of linked accounts
+      // Calculate total spend for campaigns matching the pattern
       const investimento = insightsData
-        .filter(i => funnelAccountIdsSet.has(i.ad_account_id || ''))
+        .filter(i => matchingCampaignIds.has(i.campaign_id || ''))
         .reduce((sum, i) => sum + (i.spend || 0), 0);
 
       // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
@@ -245,7 +210,7 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
         productsByPosition,
       };
     });
-  }, [funnels, offerMappings, salesData, insightsData, funnelMetaAccounts, metaAdAccounts]);
+  }, [funnels, offerMappings, salesData, campaignsData, insightsData]);
 
   // Totals
   const totals = useMemo(() => {

@@ -203,11 +203,13 @@ export default function OfferMappingsAuto() {
       setImportingOffers(true);
       setImportProgress('Buscando ofertas das vendas no banco de dados...');
       
-      // First, import offers from sales data (most reliable source)
+      // First, import offers from sales data with intelligent pricing
+      // Get all sales with their pricing info to determine the real offer value
       const { data: salesOffers, error: salesError } = await supabase
         .from('hotmart_sales')
-        .select('offer_code, product_name, offer_price, offer_currency')
+        .select('offer_code, product_name, offer_price, total_price, offer_currency, payment_type, installment_number, recurrence')
         .eq('project_id', currentProject.id)
+        .eq('offer_currency', 'BRL') // Only BRL to avoid currency conversion issues
         .not('offer_code', 'is', null);
       
       if (salesError) throw salesError;
@@ -230,23 +232,54 @@ export default function OfferMappingsAuto() {
       const offersToImport: OfferToImport[] = [];
       const seenOfferCodes = new Set<string>();
       
-      // Process offers from sales data
+      // Group sales by offer_code to find the best price
+      const offerPriceMap = new Map<string, { productName: string; bestPrice: number | null; }>();
+      
       if (salesOffers && salesOffers.length > 0) {
         for (const sale of salesOffers) {
-          if (sale.offer_code && !existingOfferCodes.has(sale.offer_code) && !seenOfferCodes.has(sale.offer_code)) {
+          if (!sale.offer_code) continue;
+          
+          const existing = offerPriceMap.get(sale.offer_code);
+          let currentBestPrice = existing?.bestPrice || null;
+          
+          // Priority for pricing:
+          // 1. PIX payment (always full value, no installments)
+          // 2. Single installment payments (full value)
+          // 3. Max total_price for single payments without recurrence
+          const isFullPayment = sale.payment_type === 'PIX' || 
+                               sale.payment_type === 'PAYPAL' ||
+                               (sale.installment_number === 1 && !sale.recurrence);
+          
+          if (isFullPayment && sale.total_price) {
+            // Only update if this is a better (higher) full payment price
+            // and it's reasonable (not currency conversion errors like 215714)
+            if (sale.total_price < 10000 && (!currentBestPrice || sale.total_price > currentBestPrice)) {
+              currentBestPrice = sale.total_price;
+            }
+          }
+          
+          offerPriceMap.set(sale.offer_code, {
+            productName: sale.product_name || 'Produto Desconhecido',
+            bestPrice: currentBestPrice,
+          });
+        }
+        
+        // Create import entries from the grouped data
+        for (const [offerCode, data] of offerPriceMap.entries()) {
+          if (!existingOfferCodes.has(offerCode) && !seenOfferCodes.has(offerCode)) {
             offersToImport.push({
               id_produto: null,
               id_produto_visual: null,
-              nome_produto: sale.product_name || 'Produto Desconhecido',
+              nome_produto: data.productName,
               nome_oferta: 'Importado das vendas',
-              codigo_oferta: sale.offer_code,
-              valor: sale.offer_price || null,
+              codigo_oferta: offerCode,
+              valor: data.bestPrice,
               status: 'Ativo',
               id_funil: 'A Definir',
               data_ativacao: new Date().toISOString().split('T')[0],
               project_id: currentProject.id,
             });
-            seenOfferCodes.add(sale.offer_code);
+            seenOfferCodes.add(offerCode);
           }
         }
       }

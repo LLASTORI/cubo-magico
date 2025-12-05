@@ -30,7 +30,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
 import { MetaCampaignSync } from '@/components/meta/MetaCampaignSync';
-import { CuboMagicoDashboard } from '@/components/funnel/CuboMagicoDashboard';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -652,10 +651,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
               <TrendingUp className="h-4 w-4 mr-1" />
               Investimentos
             </TabsTrigger>
-            <TabsTrigger value="cubo-magico">
-              <Target className="h-4 w-4 mr-1" />
-              Cubo Mágico
-            </TabsTrigger>
             <TabsTrigger value="roi">
               <BarChart3 className="h-4 w-4 mr-1" />
               Análise ROI
@@ -922,10 +917,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 />
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="cubo-magico" className="space-y-6">
-            <CuboMagicoDashboard projectId={projectId} />
           </TabsContent>
 
           <TabsContent value="accounts" className="space-y-6">

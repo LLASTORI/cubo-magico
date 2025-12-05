@@ -28,10 +28,7 @@ import { CuboMagicoDashboard } from "@/components/funnel/CuboMagicoDashboard";
 import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatInTimeZone } from 'date-fns-tz';
 import { cn } from "@/lib/utils";
-
-const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 
 interface OfferMapping {
   id: string;
@@ -195,8 +192,20 @@ const FunnelAnalysis = () => {
   const { data: salesData, isLoading: loadingSales, refetch: refetchSales, isRefetching } = useQuery({
     queryKey: ['hotmart-sales-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
-      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
-      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      // Calculate UTC timestamps for Brazil timezone (UTC-3)
+      // Start of day in Brazil = 03:00 UTC of the same day
+      const startYear = startDate.getFullYear();
+      const startMonth = startDate.getMonth();
+      const startDay = startDate.getDate();
+      const startUTC = new Date(Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0)).toISOString();
+      
+      // End of day in Brazil = 02:59:59.999 UTC of the next day
+      const endYear = endDate.getFullYear();
+      const endMonth = endDate.getMonth();
+      const endDay = endDate.getDate();
+      const endUTC = new Date(Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999)).toISOString();
+      
+      console.log('Query dates:', { startUTC, endUTC });
       
       const { data, error } = await supabase
         .from('hotmart_sales')
@@ -436,13 +445,33 @@ const FunnelAnalysis = () => {
     setSyncStatus('Sincronizando Hotmart...');
     
     try {
+      // Calculate dates in Brazil timezone for sync
+      // startDate at 00:00:00 BRT and endDate at 23:59:59 BRT
+      const startYear = startDate.getFullYear();
+      const startMonth = startDate.getMonth();
+      const startDay = startDate.getDate();
+      const endYear = endDate.getFullYear();
+      const endMonth = endDate.getMonth();
+      const endDay = endDate.getDate();
+      
+      // Create UTC timestamps for Brazil timezone (UTC-3)
+      // Start of day in Brazil = 03:00 UTC
+      const syncStartDate = Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0);
+      // End of day in Brazil = 02:59:59.999 UTC next day
+      const syncEndDate = Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999);
+      
+      console.log('Sync dates:', {
+        startDate: new Date(syncStartDate).toISOString(),
+        endDate: new Date(syncEndDate).toISOString(),
+      });
+
       // 1. Sync Hotmart sales for the selected period
       const hotmartResponse = await supabase.functions.invoke('hotmart-api', {
         body: {
           projectId: currentProject!.id,
           action: 'sync_sales',
-          startDate: startDate.getTime(),
-          endDate: endDate.getTime(),
+          startDate: syncStartDate,
+          endDate: syncEndDate,
         },
       });
 

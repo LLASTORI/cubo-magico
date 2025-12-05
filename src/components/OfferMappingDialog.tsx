@@ -217,7 +217,7 @@ export function OfferMappingDialog({
       } else {
         const { error } = await supabase
           .from('offer_mappings')
-          .insert(data);
+          .insert({ ...data, project_id: projectId });
 
         if (error) throw error;
 

@@ -336,6 +336,12 @@ Deno.serve(async (req) => {
         result = await getCampaigns(accessToken, accountIds)
         break
 
+      case 'sync_campaigns':
+        // Use service role for sync
+        const campaignServiceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        result = await syncCampaigns(campaignServiceSupabase, projectId, accessToken, accountIds)
+        break
+
       case 'get_insights':
         result = await getInsights(accessToken, accountIds, dateStart, dateStop, level)
         break
@@ -536,6 +542,124 @@ async function getCampaigns(accessToken: string, accountIds: string[]) {
 
   console.log(`Found ${allCampaigns.length} campaigns total`)
   return { campaigns: allCampaigns }
+}
+
+// Sync campaigns to database with pagination
+async function getCampaignsForAccountWithPagination(accessToken: string, accountId: string) {
+  const allCampaigns: any[] = []
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&limit=500&access_token=${accessToken}`
+  let pageCount = 0
+  const maxPages = 50 // Safety limit
+  
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++
+    console.log(`Fetching campaigns page ${pageCount} for ${accountId}...`)
+    
+    const data = await fetchWithRetry(nextUrl, `Campaigns page ${pageCount} for ${accountId}`)
+
+    if (data.error) {
+      console.error(`Campaigns error for ${accountId}:`, data.error)
+      break
+    }
+
+    if (data.data && data.data.length > 0) {
+      const campaigns = data.data.map((c: any) => ({
+        ...c,
+        ad_account_id: accountId,
+      }))
+      allCampaigns.push(...campaigns)
+      console.log(`Got ${data.data.length} campaigns from page ${pageCount}, total: ${allCampaigns.length}`)
+    }
+
+    // Check for next page
+    nextUrl = data.paging?.next || null
+    
+    if (nextUrl) {
+      await delay(500)
+    }
+  }
+
+  console.log(`Account ${accountId}: Total ${allCampaigns.length} campaigns across ${pageCount} pages`)
+  return allCampaigns
+}
+
+async function syncCampaigns(
+  supabase: any,
+  projectId: string,
+  accessToken: string,
+  accountIds: string[]
+) {
+  console.log('Syncing campaigns for accounts:', accountIds)
+  
+  const allCampaigns: any[] = []
+  let synced = 0
+  let errors = 0
+  
+  // Fetch campaigns with pagination for each account
+  for (let i = 0; i < accountIds.length; i += BATCH_SIZE) {
+    const batch = accountIds.slice(i, i + BATCH_SIZE)
+    const results = await Promise.all(
+      batch.map(accountId => getCampaignsForAccountWithPagination(accessToken, accountId))
+    )
+    allCampaigns.push(...results.flat())
+    
+    if (i + BATCH_SIZE < accountIds.length) {
+      await delay(1000)
+    }
+  }
+  
+  console.log(`Total campaigns fetched: ${allCampaigns.length}`)
+  
+  // Prepare campaign records for upsert
+  const campaignRecords = allCampaigns.map(campaign => ({
+    project_id: projectId,
+    ad_account_id: campaign.ad_account_id,
+    campaign_id: campaign.id,
+    campaign_name: campaign.name || null,
+    objective: campaign.objective || null,
+    status: campaign.status || null,
+    daily_budget: campaign.daily_budget ? parseFloat(campaign.daily_budget) / 100 : null,
+    lifetime_budget: campaign.lifetime_budget ? parseFloat(campaign.lifetime_budget) / 100 : null,
+    created_time: campaign.created_time || null,
+    start_time: campaign.start_time || null,
+    stop_time: campaign.stop_time || null,
+    updated_at: new Date().toISOString(),
+  }))
+  
+  // Batch upsert campaigns
+  for (let i = 0; i < campaignRecords.length; i += DB_INSERT_BATCH_SIZE) {
+    const batch = campaignRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
+    const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
+    const totalBatches = Math.ceil(campaignRecords.length / DB_INSERT_BATCH_SIZE)
+    
+    console.log(`Upserting campaigns batch ${batchNum}/${totalBatches}...`)
+    
+    const { error } = await supabase
+      .from('meta_campaigns')
+      .upsert(batch, {
+        onConflict: 'project_id,campaign_id',
+      })
+    
+    if (error) {
+      console.error(`Campaigns batch ${batchNum} error:`, error)
+      errors += batch.length
+    } else {
+      synced += batch.length
+    }
+    
+    if (i + DB_INSERT_BATCH_SIZE < campaignRecords.length) {
+      await delay(100)
+    }
+  }
+  
+  console.log(`Campaigns sync complete: ${synced} synced, ${errors} errors`)
+  
+  return { 
+    success: true, 
+    synced, 
+    errors,
+    total: allCampaigns.length 
+  }
 }
 
 // Get insights with DAILY granularity and PAGINATION support

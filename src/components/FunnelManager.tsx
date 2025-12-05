@@ -68,6 +68,7 @@ interface OfferMapping {
   nome_posicao: string | null;
   tipo_posicao: string | null;
   id_funil: string;
+  status: string | null;
 }
 
 interface FunnelManagerProps {
@@ -159,7 +160,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     try {
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id, nome_produto, nome_oferta, codigo_oferta, valor, nome_posicao, tipo_posicao, id_funil')
+        .select('id, nome_produto, nome_oferta, codigo_oferta, valor, nome_posicao, tipo_posicao, id_funil, status')
         .eq('project_id', projectId)
         .eq('id_funil', funnelName)
         .order('tipo_posicao')
@@ -811,7 +812,9 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                               <TableHead className="w-[80px]">Posição</TableHead>
                               <TableHead>Produto</TableHead>
                               <TableHead>Oferta</TableHead>
+                              <TableHead>Código</TableHead>
                               <TableHead>Valor</TableHead>
+                              <TableHead>Status</TableHead>
                               <TableHead className="w-[100px] text-right">Ação</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -833,7 +836,21 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                                 <TableCell className="max-w-[150px] truncate">
                                   {offer.nome_oferta || '-'}
                                 </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {offer.codigo_oferta || '-'}
+                                </TableCell>
                                 <TableCell>{formatCurrency(offer.valor)}</TableCell>
+                                <TableCell>
+                                  {offer.status ? (
+                                    <Badge variant={
+                                      offer.status === 'ativo' ? 'default' :
+                                      offer.status === 'inativo' ? 'secondary' :
+                                      'outline'
+                                    }>
+                                      {offer.status}
+                                    </Badge>
+                                  ) : '-'}
+                                </TableCell>
                                 <TableCell className="text-right">
                                   <Button
                                     variant="ghost"

@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ArrowLeft, RefreshCw, CalendarIcon, Megaphone
+  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText
 } from "lucide-react";
+import { toast } from "sonner";
+import { generateExecutiveReport } from "@/components/funnel/ExecutiveReport";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -648,6 +650,41 @@ const FunnelAnalysis = () => {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Sincroniza vendas do Hotmart e atualiza dados</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    onClick={async () => {
+                      try {
+                        toast.info('Gerando relatório executivo...');
+                        await generateExecutiveReport({
+                          startDate,
+                          endDate,
+                          summaryMetrics,
+                          metaMetrics,
+                          funnelMetrics: aggregatedMetrics,
+                          salesData: salesData || [],
+                          projectName: currentProject.name,
+                        });
+                        toast.success('Relatório PDF gerado com sucesso!');
+                      } catch (error) {
+                        console.error('Error generating report:', error);
+                        toast.error('Erro ao gerar relatório');
+                      }
+                    }}
+                    disabled={loadingSales || !salesData}
+                    className="gap-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Relatório
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Gera relatório executivo em PDF com todas as métricas</p>
                 </TooltipContent>
               </Tooltip>
             </div>

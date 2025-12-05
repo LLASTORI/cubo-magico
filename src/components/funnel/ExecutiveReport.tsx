@@ -1,24 +1,17 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { format, subDays, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-// Extend jsPDF with autoTable
-declare module 'jspdf' {
-  interface jsPDF {
-    lastAutoTable: { finalY: number };
-  }
-}
 
 // Brand colors (Cubo Mágico)
 const COLORS = {
-  primary: [59, 130, 246] as [number, number, number], // Blue
-  secondary: [16, 185, 129] as [number, number, number], // Green
-  accent: [249, 115, 22] as [number, number, number], // Orange
-  danger: [239, 68, 68] as [number, number, number], // Red
-  text: [30, 41, 59] as [number, number, number], // Dark text
-  muted: [100, 116, 139] as [number, number, number], // Muted text
-  lightBg: [248, 250, 252] as [number, number, number], // Light background
+  primary: [59, 130, 246] as [number, number, number],
+  secondary: [16, 185, 129] as [number, number, number],
+  accent: [249, 115, 22] as [number, number, number],
+  danger: [239, 68, 68] as [number, number, number],
+  text: [30, 41, 59] as [number, number, number],
+  muted: [100, 116, 139] as [number, number, number],
+  lightBg: [245, 247, 250] as [number, number, number],
+  white: [255, 255, 255] as [number, number, number],
 };
 
 interface PositionMetrics {
@@ -58,20 +51,9 @@ interface MetaMetrics {
 
 interface SaleData {
   buyer_email: string | null;
-  buyer_name: string | null;
   total_price_brl: number | null;
-  offer_code: string | null;
-  sale_date: string | null;
   utm_source: string | null;
-  utm_campaign_id: string | null;
   payment_method: string | null;
-}
-
-interface CustomerData {
-  email: string;
-  totalPurchases: number;
-  totalSpent: number;
-  isRecurrent: boolean;
 }
 
 interface ReportData {
@@ -92,174 +74,42 @@ const formatNumber = (value: number): string => {
   return new Intl.NumberFormat('pt-BR').format(value);
 };
 
-const formatPercent = (value: number): string => {
-  return `${value.toFixed(2)}%`;
+const formatCompact = (value: number): string => {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return formatNumber(value);
 };
 
-// Calculate customer metrics from sales data
+// Calculate customer metrics
 const calculateCustomerMetrics = (salesData: SaleData[]) => {
-  const customerMap = new Map<string, CustomerData>();
-  
+  const customerMap = new Map<string, number>();
   salesData.forEach(sale => {
     if (!sale.buyer_email) return;
     const email = sale.buyer_email.toLowerCase();
-    
-    if (customerMap.has(email)) {
-      const customer = customerMap.get(email)!;
-      customer.totalPurchases += 1;
-      customer.totalSpent += sale.total_price_brl || 0;
-    } else {
-      customerMap.set(email, {
-        email,
-        totalPurchases: 1,
-        totalSpent: sale.total_price_brl || 0,
-        isRecurrent: false,
-      });
-    }
-  });
-  
-  // Mark recurrent customers
-  customerMap.forEach(customer => {
-    customer.isRecurrent = customer.totalPurchases > 1;
+    customerMap.set(email, (customerMap.get(email) || 0) + 1);
   });
   
   const customers = Array.from(customerMap.values());
-  const newCustomers = customers.filter(c => !c.isRecurrent).length;
-  const recurrentCustomers = customers.filter(c => c.isRecurrent).length;
-  const avgSpent = customers.length > 0 
-    ? customers.reduce((sum, c) => sum + c.totalSpent, 0) / customers.length 
-    : 0;
-  const ltv = customers.length > 0 
-    ? customers.reduce((sum, c) => sum + c.totalSpent, 0) / customers.length
-    : 0;
+  const newCustomers = customers.filter(c => c === 1).length;
+  const recurrentCustomers = customers.filter(c => c > 1).length;
   
-  return {
-    total: customers.length,
-    newCustomers,
-    recurrentCustomers,
-    avgSpent,
-    ltv,
-    topCustomers: customers.sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 5),
-  };
+  return { total: customers.length, newCustomers, recurrentCustomers };
 };
 
-// Calculate UTM metrics from sales data
-const calculateUTMMetrics = (salesData: SaleData[]) => {
+// Calculate top UTMs
+const calculateTopUTMs = (salesData: SaleData[]) => {
   const utmMap = new Map<string, { sales: number; revenue: number }>();
-  
   salesData.forEach(sale => {
-    const source = sale.utm_source || 'Direto/Orgânico';
-    if (utmMap.has(source)) {
-      const data = utmMap.get(source)!;
-      data.sales += 1;
-      data.revenue += sale.total_price_brl || 0;
-    } else {
-      utmMap.set(source, { sales: 1, revenue: sale.total_price_brl || 0 });
-    }
+    const source = sale.utm_source || 'Direto';
+    const current = utmMap.get(source) || { sales: 0, revenue: 0 };
+    utmMap.set(source, { 
+      sales: current.sales + 1, 
+      revenue: current.revenue + (sale.total_price_brl || 0) 
+    });
   });
-  
   return Array.from(utmMap.entries())
-    .map(([name, data]) => ({ name, ...data }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 10);
-};
-
-// Calculate payment method metrics
-const calculatePaymentMetrics = (salesData: SaleData[]) => {
-  const paymentMap = new Map<string, { sales: number; revenue: number }>();
-  
-  salesData.forEach(sale => {
-    const method = sale.payment_method || 'Não informado';
-    if (paymentMap.has(method)) {
-      const data = paymentMap.get(method)!;
-      data.sales += 1;
-      data.revenue += sale.total_price_brl || 0;
-    } else {
-      paymentMap.set(method, { sales: 1, revenue: sale.total_price_brl || 0 });
-    }
-  });
-  
-  return Array.from(paymentMap.entries())
-    .map(([name, data]) => ({ name, ...data }))
-    .sort((a, b) => b.revenue - a.revenue);
-};
-
-// Generate attention points based on metrics
-const generateAttentionPoints = (data: ReportData, customerMetrics: ReturnType<typeof calculateCustomerMetrics>) => {
-  const points: string[] = [];
-  const { summaryMetrics, metaMetrics, funnelMetrics } = data;
-  
-  // ROAS analysis
-  if (summaryMetrics.roas < summaryMetrics.roasTarget) {
-    const gap = ((summaryMetrics.roasTarget - summaryMetrics.roas) / summaryMetrics.roasTarget * 100).toFixed(1);
-    points.push(`⚠️ ROAS atual (${summaryMetrics.roas.toFixed(2)}x) está ${gap}% abaixo da meta (${summaryMetrics.roasTarget}x). Revise campanhas de baixo desempenho.`);
-  }
-  
-  // CPA analysis
-  if (summaryMetrics.cpaReal > summaryMetrics.cpaMaximo) {
-    points.push(`⚠️ CPA Real (${formatCurrency(summaryMetrics.cpaReal)}) está acima do CPA Máximo (${formatCurrency(summaryMetrics.cpaMaximo)}). Otimize segmentação ou criativos.`);
-  }
-  
-  // Low conversion rates in funnel positions
-  funnelMetrics.forEach(metric => {
-    if (metric.tipo_posicao !== 'FRONT' && metric.tipo_posicao !== 'FE') {
-      if (metric.tipo_posicao === 'OB' && metric.taxa_conversao < 20) {
-        points.push(`📉 Order Bump "${metric.nome_oferta}" com conversão baixa (${metric.taxa_conversao.toFixed(1)}%). Meta: 20-40%.`);
-      }
-      if (metric.tipo_posicao === 'US' && metric.taxa_conversao < 5) {
-        points.push(`📉 Upsell "${metric.nome_oferta}" com conversão baixa (${metric.taxa_conversao.toFixed(1)}%). Meta: 5-10%.`);
-      }
-    }
-  });
-  
-  // Customer recurrence
-  const recurrenceRate = customerMetrics.total > 0 ? (customerMetrics.recurrentCustomers / customerMetrics.total * 100) : 0;
-  if (recurrenceRate < 10) {
-    points.push(`👥 Taxa de recompra baixa (${recurrenceRate.toFixed(1)}%). Considere estratégias de retenção e cross-sell.`);
-  }
-  
-  // High CTR but low conversion
-  if (metaMetrics.ctr > 2 && summaryMetrics.vendasFront < metaMetrics.clicks * 0.01) {
-    points.push(`🎯 CTR alto (${metaMetrics.ctr.toFixed(2)}%) mas conversão baixa. Verifique alinhamento entre anúncio e página de vendas.`);
-  }
-  
-  return points.length > 0 ? points : ['✅ Nenhum ponto crítico identificado. Continue monitorando as métricas.'];
-};
-
-// Generate improvement suggestions
-const generateImprovements = (data: ReportData, customerMetrics: ReturnType<typeof calculateCustomerMetrics>) => {
-  const improvements: string[] = [];
-  const { summaryMetrics, funnelMetrics } = data;
-  
-  // Funnel optimization opportunities
-  const frontMetric = funnelMetrics.find(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE');
-  if (frontMetric) {
-    const potential10Percent = frontMetric.total_receita * 0.1;
-    improvements.push(`💰 Aumentar vendas front em 10% pode gerar +${formatCurrency(potential10Percent)} em receita direta.`);
-  }
-  
-  // OB optimization
-  const obMetrics = funnelMetrics.filter(m => m.tipo_posicao === 'OB');
-  obMetrics.forEach(ob => {
-    if (ob.taxa_conversao < 30) {
-      const potentialSales = Math.ceil(summaryMetrics.vendasFront * 0.3 - ob.total_vendas);
-      if (potentialSales > 0) {
-        improvements.push(`🎯 Otimizar "${ob.nome_oferta}" para 30% de conversão: +${potentialSales} vendas potenciais (+${formatCurrency(potentialSales * ob.valor_oferta)}).`);
-      }
-    }
-  });
-  
-  // Customer value optimization
-  if (customerMetrics.avgSpent < summaryMetrics.ticketMedio * 1.5) {
-    improvements.push(`👤 Trabalhe estratégias de cross-sell para aumentar o valor médio por cliente de ${formatCurrency(customerMetrics.avgSpent)} para ${formatCurrency(summaryMetrics.ticketMedio * 1.5)}.`);
-  }
-  
-  // Scale opportunities
-  if (summaryMetrics.roas > summaryMetrics.roasTarget * 1.2) {
-    improvements.push(`🚀 ROAS acima da meta! Oportunidade de escalar investimento mantendo a rentabilidade.`);
-  }
-  
-  return improvements.length > 0 ? improvements : ['📊 Continue monitorando para identificar novas oportunidades.'];
+    .sort((a, b) => b[1].revenue - a[1].revenue)
+    .slice(0, 5);
 };
 
 export const generateExecutiveReport = async (data: ReportData): Promise<void> => {
@@ -270,260 +120,299 @@ export const generateExecutiveReport = async (data: ReportData): Promise<void> =
   let yPos = margin;
   
   const customerMetrics = calculateCustomerMetrics(data.salesData);
-  const utmMetrics = calculateUTMMetrics(data.salesData);
-  const paymentMetrics = calculatePaymentMetrics(data.salesData);
-  const attentionPoints = generateAttentionPoints(data, customerMetrics);
-  const improvements = generateImprovements(data, customerMetrics);
+  const topUTMs = calculateTopUTMs(data.salesData);
   
-  // Helper function to add new page if needed
-  const checkNewPage = (requiredSpace: number) => {
-    if (yPos + requiredSpace > pageHeight - margin) {
+  // Helper: check for new page
+  const checkPage = (space: number) => {
+    if (yPos + space > pageHeight - 20) {
       doc.addPage();
       yPos = margin;
-      return true;
     }
-    return false;
   };
   
-  // Helper to draw section header
-  const drawSectionHeader = (title: string) => {
-    checkNewPage(20);
-    doc.setFillColor(...COLORS.primary);
-    doc.rect(margin, yPos, pageWidth - margin * 2, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, margin + 3, yPos + 5.5);
+  // Helper: draw metric card
+  const drawMetricCard = (x: number, y: number, w: number, h: number, label: string, value: string, color: [number, number, number]) => {
+    // Card background
+    doc.setFillColor(...COLORS.white);
+    doc.roundedRect(x, y, w, h, 3, 3, 'F');
+    // Left accent bar
+    doc.setFillColor(...color);
+    doc.rect(x, y, 3, h, 'F');
+    // Label
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.muted);
+    doc.setFont('helvetica', 'normal');
+    doc.text(label, x + 7, y + 8);
+    // Value
+    doc.setFontSize(14);
     doc.setTextColor(...COLORS.text);
-    yPos += 12;
+    doc.setFont('helvetica', 'bold');
+    doc.text(value, x + 7, y + 18);
+  };
+  
+  // Helper: draw progress bar
+  const drawProgressBar = (x: number, y: number, w: number, percentage: number, color: [number, number, number]) => {
+    doc.setFillColor(...COLORS.lightBg);
+    doc.roundedRect(x, y, w, 4, 2, 2, 'F');
+    const fillWidth = Math.min(percentage / 100 * w, w);
+    if (fillWidth > 0) {
+      doc.setFillColor(...color);
+      doc.roundedRect(x, y, fillWidth, 4, 2, 2, 'F');
+    }
   };
   
   // ===== HEADER =====
   doc.setFillColor(...COLORS.primary);
-  doc.rect(0, 0, pageWidth, 35, 'F');
+  doc.rect(0, 0, pageWidth, 40, 'F');
   
-  // Logo text (Cubo Mágico)
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
+  // Logo
+  doc.setTextColor(...COLORS.white);
+  doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  doc.text('CUBO MÁGICO', margin, 18);
+  doc.text('CUBO', margin, 22);
+  doc.setFontSize(28);
+  doc.setTextColor(249, 115, 22); // Orange accent
+  doc.text('MÁGICO', margin + 42, 22);
+  
+  // Subtitle
+  doc.setTextColor(...COLORS.white);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Relatório Executivo de Performance', margin, 26);
+  doc.text('Relatório Executivo', margin, 32);
   
-  // Date range
-  const dateRange = `${format(data.startDate, 'dd/MM/yyyy', { locale: ptBR })} a ${format(data.endDate, 'dd/MM/yyyy', { locale: ptBR })}`;
-  doc.setFontSize(10);
-  doc.text(dateRange, pageWidth - margin, 18, { align: 'right' });
-  doc.text(data.projectName, pageWidth - margin, 26, { align: 'right' });
-  
-  // Generation date
-  doc.setFontSize(8);
-  doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth - margin, 32, { align: 'right' });
-  
-  yPos = 45;
-  
-  // ===== RESUMO EXECUTIVO =====
-  drawSectionHeader('📊 RESUMO EXECUTIVO');
-  
-  const summaryData = [
-    ['Investimento Total', formatCurrency(data.summaryMetrics.investimento)],
-    ['Receita Total', formatCurrency(data.summaryMetrics.totalReceita)],
-    ['ROAS', `${data.summaryMetrics.roas.toFixed(2)}x (Meta: ${data.summaryMetrics.roasTarget}x)`],
-    ['Lucro Bruto', formatCurrency(data.summaryMetrics.totalReceita - data.summaryMetrics.investimento)],
-    ['Vendas Front-End', formatNumber(data.summaryMetrics.vendasFront)],
-    ['Total de Produtos Vendidos', formatNumber(data.summaryMetrics.totalVendas)],
-    ['Ticket Médio', formatCurrency(data.summaryMetrics.ticketMedio)],
-    ['CPA Real', formatCurrency(data.summaryMetrics.cpaReal)],
-    ['CPA Máximo', formatCurrency(data.summaryMetrics.cpaMaximo)],
-  ];
-  
-  autoTable(doc, {
-    startY: yPos,
-    head: [],
-    body: summaryData,
-    theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 3 },
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 60 },
-      1: { halign: 'left' },
-    },
-    margin: { left: margin, right: margin },
-  });
-  
-  yPos = doc.lastAutoTable.finalY + 10;
-  
-  // ===== MÉTRICAS DE TRÁFEGO =====
-  drawSectionHeader('📈 MÉTRICAS DE TRÁFEGO PAGO (META ADS)');
-  
-  const trafficData = [
-    ['Impressões', formatNumber(data.metaMetrics.impressions)],
-    ['Alcance', formatNumber(data.metaMetrics.reach)],
-    ['Cliques', formatNumber(data.metaMetrics.clicks)],
-    ['CTR', formatPercent(data.metaMetrics.ctr)],
-    ['CPC Médio', formatCurrency(data.metaMetrics.cpc)],
-    ['Custo Total', formatCurrency(data.metaMetrics.spend)],
-  ];
-  
-  autoTable(doc, {
-    startY: yPos,
-    head: [],
-    body: trafficData,
-    theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 3 },
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 60 },
-      1: { halign: 'left' },
-    },
-    margin: { left: margin, right: margin },
-  });
-  
-  yPos = doc.lastAutoTable.finalY + 10;
-  
-  // ===== ANÁLISE DO FUNIL =====
-  checkNewPage(60);
-  drawSectionHeader('🎯 ANÁLISE DO FUNIL DE VENDAS');
-  
-  // Funnel description
+  // Date and project
+  const dateRange = `${format(data.startDate, 'dd MMM', { locale: ptBR })} - ${format(data.endDate, 'dd MMM yyyy', { locale: ptBR })}`;
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(dateRange, pageWidth - margin, 20, { align: 'right' });
   doc.setFontSize(9);
-  doc.setTextColor(...COLORS.muted);
-  doc.text(`No período analisado, foram realizadas ${formatNumber(data.summaryMetrics.vendasFront)} vendas front-end, gerando ${formatNumber(data.summaryMetrics.totalVendas)} produtos vendidos no total através do funil.`, margin, yPos);
-  yPos += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.projectName, pageWidth - margin, 28, { align: 'right' });
+  
+  yPos = 50;
+  
+  // ===== MAIN METRICS ROW =====
+  const cardWidth = (pageWidth - margin * 2 - 12) / 4;
+  const cardHeight = 24;
+  
+  drawMetricCard(margin, yPos, cardWidth, cardHeight, 'INVESTIMENTO', formatCurrency(data.summaryMetrics.investimento), COLORS.primary);
+  drawMetricCard(margin + cardWidth + 4, yPos, cardWidth, cardHeight, 'RECEITA', formatCurrency(data.summaryMetrics.totalReceita), COLORS.secondary);
+  drawMetricCard(margin + (cardWidth + 4) * 2, yPos, cardWidth, cardHeight, 'LUCRO', formatCurrency(data.summaryMetrics.totalReceita - data.summaryMetrics.investimento), 
+    data.summaryMetrics.totalReceita - data.summaryMetrics.investimento > 0 ? COLORS.secondary : COLORS.danger);
+  drawMetricCard(margin + (cardWidth + 4) * 3, yPos, cardWidth, cardHeight, 'ROAS', `${data.summaryMetrics.roas.toFixed(2)}x`, 
+    data.summaryMetrics.roas >= data.summaryMetrics.roasTarget ? COLORS.secondary : COLORS.danger);
+  
+  yPos += cardHeight + 8;
+  
+  // ===== SECONDARY METRICS =====
+  const smallCardW = (pageWidth - margin * 2 - 16) / 5;
+  const smallCardH = 20;
+  
+  drawMetricCard(margin, yPos, smallCardW, smallCardH, 'Vendas Front', formatNumber(data.summaryMetrics.vendasFront), COLORS.primary);
+  drawMetricCard(margin + smallCardW + 4, yPos, smallCardW, smallCardH, 'Total Produtos', formatNumber(data.summaryMetrics.totalVendas), COLORS.accent);
+  drawMetricCard(margin + (smallCardW + 4) * 2, yPos, smallCardW, smallCardH, 'Ticket Médio', formatCurrency(data.summaryMetrics.ticketMedio), COLORS.secondary);
+  drawMetricCard(margin + (smallCardW + 4) * 3, yPos, smallCardW, smallCardH, 'CPA Real', formatCurrency(data.summaryMetrics.cpaReal), 
+    data.summaryMetrics.cpaReal <= data.summaryMetrics.cpaMaximo ? COLORS.secondary : COLORS.danger);
+  drawMetricCard(margin + (smallCardW + 4) * 4, yPos, smallCardW, smallCardH, 'CPA Máximo', formatCurrency(data.summaryMetrics.cpaMaximo), COLORS.muted);
+  
+  yPos += smallCardH + 15;
+  
+  // ===== FUNNEL VISUALIZATION =====
+  doc.setFontSize(12);
   doc.setTextColor(...COLORS.text);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Funil de Vendas', margin, yPos);
+  yPos += 8;
   
-  const funnelTableData = data.funnelMetrics.map(m => [
-    `${m.tipo_posicao}${m.ordem_posicao || ''} - ${m.nome_posicao || m.nome_oferta}`,
-    formatNumber(m.total_vendas),
-    formatCurrency(m.total_receita),
-    formatPercent(m.taxa_conversao),
-    formatPercent(m.percentual_receita),
-  ]);
+  const maxRevenue = Math.max(...data.funnelMetrics.map(m => m.total_receita), 1);
+  const funnelBarHeight = 16;
+  const maxBarWidth = pageWidth - margin * 2 - 80;
   
-  autoTable(doc, {
-    startY: yPos,
-    head: [['Posição', 'Vendas', 'Receita', 'Conversão', '% Receita']],
-    body: funnelTableData,
-    theme: 'striped',
-    headStyles: { fillColor: COLORS.primary, fontSize: 9 },
-    styles: { fontSize: 9, cellPadding: 2 },
-    columnStyles: {
-      0: { cellWidth: 60 },
-      1: { halign: 'center', cellWidth: 25 },
-      2: { halign: 'right', cellWidth: 35 },
-      3: { halign: 'center', cellWidth: 25 },
-      4: { halign: 'center', cellWidth: 25 },
-    },
-    margin: { left: margin, right: margin },
+  data.funnelMetrics.forEach((metric, index) => {
+    checkPage(funnelBarHeight + 6);
+    
+    const barWidth = Math.max((metric.total_receita / maxRevenue) * maxBarWidth, 20);
+    const posColor = metric.tipo_posicao === 'FRONT' || metric.tipo_posicao === 'FE' ? COLORS.primary :
+                     metric.tipo_posicao === 'OB' ? COLORS.secondary :
+                     metric.tipo_posicao === 'US' ? COLORS.accent : COLORS.danger;
+    
+    // Position label
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.muted);
+    doc.setFont('helvetica', 'normal');
+    const posLabel = `${metric.tipo_posicao}${metric.ordem_posicao || ''}`;
+    doc.text(posLabel, margin, yPos + 5);
+    
+    // Bar
+    doc.setFillColor(...posColor);
+    doc.roundedRect(margin + 20, yPos, barWidth, funnelBarHeight - 4, 2, 2, 'F');
+    
+    // Inside bar text
+    doc.setTextColor(...COLORS.white);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const inBarText = `${metric.nome_posicao || metric.nome_oferta}  •  ${formatNumber(metric.total_vendas)} vendas  •  ${formatCurrency(metric.total_receita)}`;
+    doc.text(inBarText, margin + 25, yPos + 8, { maxWidth: barWidth - 10 });
+    
+    // Conversion rate on right
+    doc.setTextColor(...COLORS.text);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${metric.taxa_conversao.toFixed(1)}%`, pageWidth - margin, yPos + 8, { align: 'right' });
+    
+    yPos += funnelBarHeight + 2;
   });
   
-  yPos = doc.lastAutoTable.finalY + 10;
+  yPos += 10;
   
-  // ===== ANÁLISE DE CLIENTES =====
-  checkNewPage(50);
-  drawSectionHeader('👥 ANÁLISE DE CLIENTES');
+  // ===== TRAFFIC METRICS =====
+  checkPage(50);
+  doc.setFontSize(12);
+  doc.setTextColor(...COLORS.text);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Tráfego Pago (Meta Ads)', margin, yPos);
+  yPos += 10;
   
-  const customerData = [
-    ['Total de Clientes Únicos', formatNumber(customerMetrics.total)],
-    ['Novos Clientes', formatNumber(customerMetrics.newCustomers)],
-    ['Clientes Recorrentes', formatNumber(customerMetrics.recurrentCustomers)],
-    ['Taxa de Recompra', formatPercent(customerMetrics.total > 0 ? (customerMetrics.recurrentCustomers / customerMetrics.total * 100) : 0)],
-    ['Gasto Médio por Cliente', formatCurrency(customerMetrics.avgSpent)],
-    ['LTV Estimado', formatCurrency(customerMetrics.ltv)],
-  ];
+  // Traffic metrics in a visual row
+  const trafficCardW = (pageWidth - margin * 2 - 8) / 3;
+  const trafficCardH = 28;
   
-  autoTable(doc, {
-    startY: yPos,
-    head: [],
-    body: customerData,
-    theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 3 },
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 60 },
-      1: { halign: 'left' },
-    },
-    margin: { left: margin, right: margin },
-  });
+  // Card with icon simulation using emoji/text
+  const drawTrafficCard = (x: number, label: string, value: string, subValue?: string) => {
+    doc.setFillColor(...COLORS.lightBg);
+    doc.roundedRect(x, yPos, trafficCardW, trafficCardH, 3, 3, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.muted);
+    doc.text(label, x + 8, yPos + 8);
+    doc.setFontSize(16);
+    doc.setTextColor(...COLORS.text);
+    doc.setFont('helvetica', 'bold');
+    doc.text(value, x + 8, yPos + 20);
+    if (subValue) {
+      doc.setFontSize(8);
+      doc.setTextColor(...COLORS.muted);
+      doc.setFont('helvetica', 'normal');
+      doc.text(subValue, x + trafficCardW - 8, yPos + 20, { align: 'right' });
+    }
+  };
   
-  yPos = doc.lastAutoTable.finalY + 10;
+  drawTrafficCard(margin, 'Impressões', formatCompact(data.metaMetrics.impressions));
+  drawTrafficCard(margin + trafficCardW + 4, 'Cliques', formatCompact(data.metaMetrics.clicks), `CTR: ${data.metaMetrics.ctr.toFixed(2)}%`);
+  drawTrafficCard(margin + (trafficCardW + 4) * 2, 'Alcance', formatCompact(data.metaMetrics.reach), `CPC: ${formatCurrency(data.metaMetrics.cpc)}`);
   
-  // ===== TOP UTMs =====
-  if (utmMetrics.length > 0) {
-    checkNewPage(50);
-    drawSectionHeader('🎯 PRINCIPAIS FONTES DE TRÁFEGO (UTM)');
-    
-    const utmTableData = utmMetrics.slice(0, 8).map((u, i) => [
-      `${i + 1}. ${u.name}`,
-      formatNumber(u.sales),
-      formatCurrency(u.revenue),
-    ]);
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Fonte', 'Vendas', 'Receita']],
-      body: utmTableData,
-      theme: 'striped',
-      headStyles: { fillColor: COLORS.secondary, fontSize: 9 },
-      styles: { fontSize: 9, cellPadding: 2 },
-      columnStyles: {
-        0: { cellWidth: 80 },
-        1: { halign: 'center', cellWidth: 30 },
-        2: { halign: 'right', cellWidth: 40 },
-      },
-      margin: { left: margin, right: margin },
-    });
-    
-    yPos = doc.lastAutoTable.finalY + 10;
-  }
+  yPos += trafficCardH + 15;
   
-  // ===== MÉTODOS DE PAGAMENTO =====
-  if (paymentMetrics.length > 0) {
-    checkNewPage(40);
-    drawSectionHeader('💳 MÉTODOS DE PAGAMENTO');
-    
-    const paymentTableData = paymentMetrics.map(p => [
-      p.name,
-      formatNumber(p.sales),
-      formatCurrency(p.revenue),
-      formatPercent(data.summaryMetrics.totalReceita > 0 ? (p.revenue / data.summaryMetrics.totalReceita * 100) : 0),
-    ]);
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Método', 'Vendas', 'Receita', '% Total']],
-      body: paymentTableData,
-      theme: 'striped',
-      headStyles: { fillColor: COLORS.accent, fontSize: 9 },
-      styles: { fontSize: 9, cellPadding: 2 },
-      margin: { left: margin, right: margin },
-    });
-    
-    yPos = doc.lastAutoTable.finalY + 10;
-  }
+  // ===== CUSTOMERS =====
+  checkPage(50);
+  doc.setFontSize(12);
+  doc.setTextColor(...COLORS.text);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Clientes', margin, yPos);
+  yPos += 10;
   
-  // ===== PONTOS DE ATENÇÃO =====
-  checkNewPage(50);
-  drawSectionHeader('⚠️ PONTOS DE ATENÇÃO');
+  // Visual customer breakdown
+  const custTotal = customerMetrics.total;
+  const custNew = customerMetrics.newCustomers;
+  const custRec = customerMetrics.recurrentCustomers;
+  const newPct = custTotal > 0 ? (custNew / custTotal * 100) : 0;
+  const recPct = custTotal > 0 ? (custRec / custTotal * 100) : 0;
+  
+  // Big number
+  doc.setFontSize(32);
+  doc.setTextColor(...COLORS.primary);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatNumber(custTotal), margin, yPos + 12);
+  doc.setFontSize(10);
+  doc.setTextColor(...COLORS.muted);
+  doc.setFont('helvetica', 'normal');
+  doc.text('clientes únicos', margin + 35, yPos + 12);
+  
+  // Breakdown bars
+  const barStartX = margin + 80;
+  const barW = pageWidth - margin - barStartX - 10;
   
   doc.setFontSize(9);
-  attentionPoints.forEach((point, i) => {
-    checkNewPage(10);
-    const lines = doc.splitTextToSize(point, pageWidth - margin * 2 - 5);
-    doc.text(lines, margin + 2, yPos);
-    yPos += lines.length * 5 + 3;
-  });
+  doc.setTextColor(...COLORS.text);
+  doc.text(`Novos: ${formatNumber(custNew)} (${newPct.toFixed(0)}%)`, barStartX, yPos + 4);
+  drawProgressBar(barStartX, yPos + 6, barW, newPct, COLORS.secondary);
   
-  yPos += 5;
+  doc.text(`Recorrentes: ${formatNumber(custRec)} (${recPct.toFixed(0)}%)`, barStartX, yPos + 18);
+  drawProgressBar(barStartX, yPos + 20, barW, recPct, COLORS.accent);
   
-  // ===== OPORTUNIDADES DE MELHORIA =====
-  checkNewPage(50);
-  drawSectionHeader('💡 OPORTUNIDADES DE MELHORIA');
+  yPos += 35;
+  
+  // ===== TOP UTMS =====
+  if (topUTMs.length > 0) {
+    checkPage(60);
+    doc.setFontSize(12);
+    doc.setTextColor(...COLORS.text);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Top Fontes de Tráfego', margin, yPos);
+    yPos += 10;
+    
+    const maxUtmRev = Math.max(...topUTMs.map(u => u[1].revenue), 1);
+    const utmBarMaxW = pageWidth - margin * 2 - 60;
+    
+    topUTMs.forEach(([name, data], i) => {
+      const barW = (data.revenue / maxUtmRev) * utmBarMaxW;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(...COLORS.text);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${i + 1}. ${name.substring(0, 20)}`, margin, yPos + 6);
+      
+      doc.setFillColor(...COLORS.primary);
+      doc.roundedRect(margin + 50, yPos + 2, barW, 6, 1, 1, 'F');
+      
+      doc.setFontSize(8);
+      doc.setTextColor(...COLORS.muted);
+      doc.text(`${data.sales} vendas • ${formatCurrency(data.revenue)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+      
+      yPos += 12;
+    });
+  }
+  
+  yPos += 10;
+  
+  // ===== INSIGHTS BOX =====
+  checkPage(50);
+  
+  // Insights background
+  doc.setFillColor(254, 243, 199); // Warm yellow bg
+  doc.roundedRect(margin, yPos, pageWidth - margin * 2, 45, 4, 4, 'F');
+  doc.setFillColor(249, 115, 22);
+  doc.rect(margin, yPos, 4, 45, 'F');
+  
+  doc.setFontSize(11);
+  doc.setTextColor(...COLORS.text);
+  doc.setFont('helvetica', 'bold');
+  doc.text('💡 Insights Principais', margin + 10, yPos + 10);
   
   doc.setFontSize(9);
-  improvements.forEach((improvement, i) => {
-    checkNewPage(10);
-    const lines = doc.splitTextToSize(improvement, pageWidth - margin * 2 - 5);
-    doc.text(lines, margin + 2, yPos);
-    yPos += lines.length * 5 + 3;
+  doc.setFont('helvetica', 'normal');
+  
+  const insights: string[] = [];
+  
+  // Generate dynamic insights
+  if (data.summaryMetrics.roas >= data.summaryMetrics.roasTarget) {
+    insights.push(`✅ ROAS de ${data.summaryMetrics.roas.toFixed(2)}x está acima da meta (${data.summaryMetrics.roasTarget}x) - operação lucrativa!`);
+  } else {
+    insights.push(`⚠️ ROAS de ${data.summaryMetrics.roas.toFixed(2)}x está abaixo da meta (${data.summaryMetrics.roasTarget}x) - otimize campanhas`);
+  }
+  
+  if (recPct > 15) {
+    insights.push(`🔄 ${recPct.toFixed(0)}% dos clientes são recorrentes - boa retenção!`);
+  } else if (custTotal > 10) {
+    insights.push(`📈 Apenas ${recPct.toFixed(0)}% de recompra - trabalhe estratégias de fidelização`);
+  }
+  
+  const bestOB = data.funnelMetrics.find(m => m.tipo_posicao === 'OB' && m.taxa_conversao > 25);
+  if (bestOB) {
+    insights.push(`🎯 Order Bump "${bestOB.nome_posicao}" com ótima conversão: ${bestOB.taxa_conversao.toFixed(1)}%`);
+  }
+  
+  insights.slice(0, 3).forEach((insight, i) => {
+    doc.text(insight, margin + 10, yPos + 20 + (i * 10), { maxWidth: pageWidth - margin * 2 - 20 });
   });
   
   // ===== FOOTER =====
@@ -533,18 +422,15 @@ export const generateExecutiveReport = async (data: ReportData): Promise<void> =
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.muted);
     doc.text(
-      `Página ${i} de ${totalPages} | Cubo Mágico - Relatório Executivo | ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
+      `Cubo Mágico • ${format(new Date(), "dd/MM/yyyy HH:mm")} • Página ${i}/${totalPages}`,
       pageWidth / 2,
       pageHeight - 8,
       { align: 'center' }
     );
-    // Draw line above footer
-    doc.setDrawColor(...COLORS.muted);
-    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
   }
   
-  // Save the PDF
-  const fileName = `Relatorio_Executivo_${format(data.startDate, 'dd-MM-yyyy')}_a_${format(data.endDate, 'dd-MM-yyyy')}.pdf`;
+  // Save
+  const fileName = `Relatorio_${format(data.startDate, 'dd-MM')}_a_${format(data.endDate, 'dd-MM-yyyy')}.pdf`;
   doc.save(fileName);
 };
 

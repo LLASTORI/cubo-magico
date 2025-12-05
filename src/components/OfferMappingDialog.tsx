@@ -334,7 +334,6 @@ export function OfferMappingDialog({
               />
             </div>
 
-            {/* Valor da Oferta - readonly, vem da Hotmart */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -348,11 +347,9 @@ export function OfferMappingDialog({
                         step="0.01"
                         placeholder="0.00"
                         {...field}
-                        disabled
-                        className="bg-muted"
                       />
                     </FormControl>
-                    <p className="text-xs text-muted-foreground">Valor importado da Hotmart</p>
+                    <p className="text-xs text-muted-foreground">Valor à vista da oferta (editável)</p>
                     <FormMessage />
                   </FormItem>
                 )}

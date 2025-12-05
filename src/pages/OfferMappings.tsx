@@ -117,7 +117,6 @@ export default function OfferMappingsAuto() {
   const [importingOffers, setImportingOffers] = useState(false);
   const [importProgress, setImportProgress] = useState<string>('');
   const [syncingOffers, setSyncingOffers] = useState(false);
-  const [recalculatingPrices, setRecalculatingPrices] = useState(false);
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   
   const { toast } = useToast();
@@ -390,87 +389,6 @@ export default function OfferMappingsAuto() {
       });
     } finally {
       setImportingOffers(false);
-      setImportProgress('');
-    }
-  };
-
-  const recalculateOfferPrices = async () => {
-    if (!currentProject) return;
-    
-    try {
-      setRecalculatingPrices(true);
-      setImportProgress('Buscando valores à vista das vendas...');
-      
-      // Get all sales with pricing info to determine the real offer value
-      const { data: salesData, error: salesError } = await supabase
-        .from('hotmart_sales')
-        .select('offer_code, total_price, payment_type, installment_number, recurrence')
-        .eq('project_id', currentProject.id)
-        .eq('offer_currency', 'BRL')
-        .not('offer_code', 'is', null);
-      
-      if (salesError) throw salesError;
-      
-      // Group sales by offer_code to find the best price (cash payment)
-      const offerPriceMap = new Map<string, number>();
-      
-      if (salesData && salesData.length > 0) {
-        for (const sale of salesData) {
-          if (!sale.offer_code) continue;
-          
-          const currentBestPrice = offerPriceMap.get(sale.offer_code) || 0;
-          
-          // Priority for pricing: PIX, PayPal, or single installment without recurrence
-          const isFullPayment = sale.payment_type === 'PIX' || 
-                               sale.payment_type === 'PAYPAL' ||
-                               (sale.installment_number === 1 && !sale.recurrence);
-          
-          if (isFullPayment && sale.total_price) {
-            // Only update if reasonable price and better than current
-            if (sale.total_price < 10000 && sale.total_price > currentBestPrice) {
-              offerPriceMap.set(sale.offer_code, sale.total_price);
-            }
-          }
-        }
-      }
-      
-      setImportProgress(`Atualizando ${offerPriceMap.size} ofertas com valores à vista...`);
-      
-      // Update existing offer_mappings with the correct prices
-      let updatedCount = 0;
-      const offerCodes = Array.from(offerPriceMap.keys());
-      
-      for (const offerCode of offerCodes) {
-        const newPrice = offerPriceMap.get(offerCode);
-        if (!newPrice) continue;
-        
-        const { error: updateError } = await supabase
-          .from('offer_mappings')
-          .update({ valor: newPrice })
-          .eq('project_id', currentProject.id)
-          .eq('codigo_oferta', offerCode);
-        
-        if (!updateError) {
-          updatedCount++;
-        }
-      }
-      
-      toast({
-        title: 'Recálculo concluído!',
-        description: `${updatedCount} ofertas atualizadas com valores à vista`,
-      });
-      
-      fetchMappings();
-      
-    } catch (error: any) {
-      console.error('Error recalculating prices:', error);
-      toast({
-        title: 'Erro no recálculo',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setRecalculatingPrices(false);
       setImportProgress('');
     }
   };
@@ -926,7 +844,7 @@ export default function OfferMappingsAuto() {
                 
                 <Button 
                   onClick={importAllFromHotmart}
-                  disabled={importingOffers || recalculatingPrices}
+                  disabled={importingOffers}
                   size="lg"
                   className="gap-2"
                 >
@@ -939,38 +857,9 @@ export default function OfferMappingsAuto() {
                 </Button>
                 
                 {mappings.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-4 justify-center">
-                      <div className="h-px bg-border flex-1 max-w-[100px]" />
-                      <span className="text-xs text-muted-foreground">ou</span>
-                      <div className="h-px bg-border flex-1 max-w-[100px]" />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Button 
-                        onClick={recalculateOfferPrices}
-                        disabled={importingOffers || recalculatingPrices}
-                        variant="outline"
-                        size="lg"
-                        className="gap-2"
-                      >
-                        {recalculatingPrices ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <RotateCw className="h-5 w-5" />
-                        )}
-                        {recalculatingPrices ? 'Recalculando...' : 'Recalcular Valores'}
-                      </Button>
-                      <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                        Atualiza os valores das ofertas usando pagamentos à vista (PIX) como referência, 
-                        corrigindo valores de parcela que foram importados incorretamente.
-                      </p>
-                    </div>
-                    
-                    <p className="text-sm text-muted-foreground">
-                      Você já tem {mappings.length} ofertas cadastradas
-                    </p>
-                  </>
+                  <p className="text-sm text-muted-foreground">
+                    Você já tem {mappings.length} ofertas cadastradas
+                  </p>
                 )}
               </div>
             </Card>

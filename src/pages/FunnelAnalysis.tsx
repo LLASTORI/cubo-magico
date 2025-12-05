@@ -659,10 +659,6 @@ const FunnelAnalysis = () => {
             <Tabs defaultValue="overview" className="space-y-6">
               <TabsList className="flex flex-wrap w-full max-w-5xl gap-1">
                 <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-                <TabsTrigger value="cubo-magico" className="gap-1">
-                  <Target className="w-3 h-3" />
-                  Cubo Mágico
-                </TabsTrigger>
                 <TabsTrigger value="meta-hierarchy" className="gap-1">
                   <Megaphone className="w-3 h-3" />
                   Meta Ads
@@ -677,20 +673,32 @@ const FunnelAnalysis = () => {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
-                {/* KPIs consolidados - Meta + Vendas */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {/* Investimento */}
-                  <Card className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-red-500/10">
-                        <TrendingDown className="w-5 h-5 text-red-500" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Investimento</p>
-                        <p className="text-lg font-bold">{formatCurrency(summaryMetrics.investimento)}</p>
-                      </div>
-                    </div>
-                  </Card>
+                {/* Dashboard Cubo Mágico - Comparativo de todos os funis */}
+                <CuboMagicoDashboard 
+                  projectId={currentProject.id}
+                  externalStartDate={startDate}
+                  externalEndDate={endDate}
+                  embedded={true}
+                  onFunnelSelect={(funnelId) => setSelectedFunnelId(funnelId)}
+                />
+
+                {/* Detalhes do funil selecionado */}
+                {selectedFunnelId && (
+                  <>
+                    {/* KPIs consolidados - Meta + Vendas */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {/* Investimento */}
+                      <Card className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-red-500/10">
+                            <TrendingDown className="w-5 h-5 text-red-500" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Investimento</p>
+                            <p className="text-lg font-bold">{formatCurrency(summaryMetrics.investimento)}</p>
+                          </div>
+                        </div>
+                      </Card>
 
                   {/* Faturamento */}
                   <Card className="p-4">
@@ -963,10 +971,8 @@ const FunnelAnalysis = () => {
                     </div>
                   </Card>
                 )}
-              </TabsContent>
-
-              <TabsContent value="cubo-magico">
-                <CuboMagicoDashboard projectId={currentProject.id} />
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="temporal">

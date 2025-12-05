@@ -150,9 +150,22 @@ const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const { currentProject } = useProject();
   
-  // Date filters
+  // Date filters - use debouncing to avoid queries firing while user selects dates
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
   const [endDate, setEndDate] = useState<Date>(new Date());
+  
+  // Debounced dates for queries - only update after 500ms of no changes
+  const [debouncedStartDate, setDebouncedStartDate] = useState<Date>(startDate);
+  const [debouncedEndDate, setDebouncedEndDate] = useState<Date>(endDate);
+  
+  // Debounce effect for dates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedStartDate(startDate);
+      setDebouncedEndDate(endDate);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [startDate, endDate]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -189,24 +202,24 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch sales data with timezone handling - use unified query key with date strings for consistent cache
-  const startDateStr = format(startDate, 'yyyy-MM-dd');
-  const endDateStr = format(endDate, 'yyyy-MM-dd');
+  // Fetch sales data with timezone handling - use DEBOUNCED dates for queries
+  const startDateStr = format(debouncedStartDate, 'yyyy-MM-dd');
+  const endDateStr = format(debouncedEndDate, 'yyyy-MM-dd');
   
   const { data: salesData, isLoading: loadingSales, refetch: refetchSales, isRefetching } = useQuery({
     queryKey: ['hotmart-sales-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
       // Calculate UTC timestamps for Brazil timezone (UTC-3)
       // Start of day in Brazil = 03:00 UTC of the same day
-      const startYear = startDate.getFullYear();
-      const startMonth = startDate.getMonth();
-      const startDay = startDate.getDate();
+      const startYear = debouncedStartDate.getFullYear();
+      const startMonth = debouncedStartDate.getMonth();
+      const startDay = debouncedStartDate.getDate();
       const startUTC = new Date(Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0)).toISOString();
       
       // End of day in Brazil = 02:59:59.999 UTC of the next day
-      const endYear = endDate.getFullYear();
-      const endMonth = endDate.getMonth();
-      const endDay = endDate.getDate();
+      const endYear = debouncedEndDate.getFullYear();
+      const endMonth = debouncedEndDate.getMonth();
+      const endDay = debouncedEndDate.getDate();
       const endUTC = new Date(Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999)).toISOString();
       
       console.log('Query dates:', { startUTC, endUTC });
@@ -372,15 +385,12 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id && activeAccountIds.length > 0,
   });
 
-  // Get available funnels (those with mappings) - include A Definir
+  // Get ALL funnels - show all funnels regardless of mappings
   const availableFunnels = useMemo(() => {
-    if (!mappings || !funnelsConfig) return [];
-    const funnelIds = new Set(mappings.map(m => m.funnel_id).filter(Boolean));
-    const funnelNames = new Set(mappings.map(m => m.id_funil));
-    
-    // Include all funnels that have mappings by id or name
-    return funnelsConfig.filter(f => funnelIds.has(f.id) || funnelNames.has(f.name));
-  }, [mappings, funnelsConfig]);
+    if (!funnelsConfig) return [];
+    // Return ALL funnels - those without mappings will simply show 0 sales/revenue
+    return funnelsConfig;
+  }, [funnelsConfig]);
 
   // All offer codes from all active mappings
   const allOfferCodes = useMemo(() => {
@@ -554,6 +564,10 @@ const FunnelAnalysis = () => {
     setIsSyncing(true);
     setSyncStatus('Sincronizando Hotmart...');
     
+    // Use the currently selected dates (not debounced) for sync
+    const syncStartDateStr = format(startDate, 'yyyy-MM-dd');
+    const syncEndDateStr = format(endDate, 'yyyy-MM-dd');
+    
     try {
       // Calculate dates in Brazil timezone for sync
       const startYear = startDate.getFullYear();
@@ -599,8 +613,8 @@ const FunnelAnalysis = () => {
             projectId: currentProject!.id,
             action: 'sync_insights',
             accountIds,
-            dateStart: startDateStr,
-            dateStop: endDateStr,
+            dateStart: syncStartDateStr,
+            dateStop: syncEndDateStr,
           },
         });
 
@@ -643,6 +657,11 @@ const FunnelAnalysis = () => {
 
       // 3. Refresh data from database (immediate refresh for Hotmart)
       setSyncStatus('Atualizando dados...');
+      
+      // Force update debounced dates to ensure queries use the sync dates
+      setDebouncedStartDate(startDate);
+      setDebouncedEndDate(endDate);
+      
       await Promise.all([
         refetchSales(),
         refetchMetaInsights(),

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -7,9 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { 
   CalendarIcon, RefreshCw, TrendingUp, TrendingDown, Target, 
-  DollarSign, ShoppingCart, Users, AlertTriangle, CheckCircle2, XCircle
+  DollarSign, ShoppingCart, Users, AlertTriangle, CheckCircle2, XCircle,
+  ChevronDown, ChevronRight, Percent, ArrowRight
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,7 +24,7 @@ interface CuboMagicoDashboardProps {
   projectId: string;
   externalStartDate?: Date;
   externalEndDate?: Date;
-  embedded?: boolean; // When true, hides header and date filters
+  embedded?: boolean;
   onFunnelSelect?: (funnelId: string) => void;
 }
 
@@ -45,6 +47,14 @@ interface FunnelMetrics {
   roas: number;
   status: 'excellent' | 'good' | 'warning' | 'danger';
   productsByPosition: Record<string, number>;
+  // Detailed breakdown by position
+  positionBreakdown: Array<{
+    tipo: string;
+    ordem: number;
+    vendas: number;
+    receita: number;
+    taxaConversao: number;
+  }>;
 }
 
 export function CuboMagicoDashboard({ 
@@ -56,6 +66,7 @@ export function CuboMagicoDashboard({
 }: CuboMagicoDashboardProps) {
   const [internalStartDate, setInternalStartDate] = useState<Date>(subDays(new Date(), 7));
   const [internalEndDate, setInternalEndDate] = useState<Date>(new Date());
+  const [expandedFunnelId, setExpandedFunnelId] = useState<string | null>(null);
   
   // Use external dates if provided, otherwise use internal state
   const startDate = externalStartDate || internalStartDate;
@@ -85,7 +96,7 @@ export function CuboMagicoDashboard({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id_funil, funnel_id, codigo_oferta, tipo_posicao, nome_posicao, valor')
+        .select('id_funil, funnel_id, codigo_oferta, tipo_posicao, nome_posicao, valor, ordem_posicao')
         .eq('project_id', projectId)
         .eq('status', 'Ativo');
       
@@ -185,10 +196,23 @@ export function CuboMagicoDashboard({
       
       // Count products by position
       const productsByPosition: Record<string, number> = {};
+      const positionDetails: Record<string, { vendas: number; receita: number; ordem: number }> = {};
+      
       funnelOffers.forEach(offer => {
         const pos = offer.tipo_posicao || 'OTHER';
-        const salesCount = funnelSales.filter(s => s.offer_code === offer.codigo_oferta).length;
+        const ordem = offer.ordem_posicao || 0;
+        const posKey = `${pos}${ordem || ''}`;
+        const offerSales = funnelSales.filter(s => s.offer_code === offer.codigo_oferta);
+        const salesCount = offerSales.length;
+        const salesRevenue = offerSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+        
         productsByPosition[pos] = (productsByPosition[pos] || 0) + salesCount;
+        
+        if (!positionDetails[posKey]) {
+          positionDetails[posKey] = { vendas: 0, receita: 0, ordem };
+        }
+        positionDetails[posKey].vendas += salesCount;
+        positionDetails[posKey].receita += salesRevenue;
       });
 
       // FRONT sales count
@@ -221,6 +245,27 @@ export function CuboMagicoDashboard({
         status = 'danger';
       }
 
+      // Build position breakdown for drill-down
+      const positionBreakdown = Object.entries(positionDetails)
+        .map(([key, details]) => {
+          const tipo = key.replace(/[0-9]/g, '');
+          const taxaConversao = vendasFront > 0 ? (details.vendas / vendasFront) * 100 : 0;
+          return {
+            tipo,
+            ordem: details.ordem,
+            vendas: details.vendas,
+            receita: details.receita,
+            taxaConversao,
+          };
+        })
+        .sort((a, b) => {
+          const order = ['FRONT', 'FE', 'OB', 'US', 'DS'];
+          const aIdx = order.indexOf(a.tipo);
+          const bIdx = order.indexOf(b.tipo);
+          if (aIdx !== bIdx) return aIdx - bIdx;
+          return a.ordem - b.ordem;
+        });
+
       return {
         funnel,
         investimento,
@@ -233,6 +278,7 @@ export function CuboMagicoDashboard({
         roas,
         status,
         productsByPosition,
+        positionBreakdown,
       };
     });
   }, [funnels, offerMappings, salesData, campaignsData, insightsData]);
@@ -438,11 +484,12 @@ export function CuboMagicoDashboard({
         </Card>
       </div>
 
-      {/* Funnel Table */}
+      {/* Funnel Table with Drill-down */}
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8"></TableHead>
               <TableHead>Funil</TableHead>
               <TableHead>Padrão</TableHead>
               <TableHead className="text-right">Investimento</TableHead>
@@ -456,51 +503,156 @@ export function CuboMagicoDashboard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {funnelMetrics.map(metrics => (
-              <TableRow 
-                key={metrics.funnel.id}
-                className={onFunnelSelect ? "cursor-pointer hover:bg-muted/50" : ""}
-                onClick={() => onFunnelSelect?.(metrics.funnel.id)}
-              >
-                <TableCell className="font-medium">{metrics.funnel.name}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {metrics.funnel.campaign_name_pattern}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono">
-                  {formatCurrency(metrics.investimento)}
-                </TableCell>
-                <TableCell className="text-right font-mono text-green-600">
-                  {formatCurrency(metrics.faturamento)}
-                </TableCell>
-                <TableCell className="text-right">{metrics.vendasFront}</TableCell>
-                <TableCell className="text-right font-mono">
-                  {formatCurrency(metrics.ticketMedio)}
-                </TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {formatCurrency(metrics.cpaMaximo)}
-                </TableCell>
-                <TableCell className={cn(
-                  "text-right font-mono font-bold",
-                  metrics.status === 'excellent' && "text-green-600",
-                  metrics.status === 'good' && "text-blue-600",
-                  metrics.status === 'warning' && "text-yellow-600",
-                  metrics.status === 'danger' && "text-red-600"
-                )}>
-                  {formatCurrency(metrics.cpaReal)}
-                </TableCell>
-                <TableCell className="text-right font-mono">
-                  {metrics.roas.toFixed(2)}x
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(metrics.status)}
-                    {getStatusBadge(metrics.status)}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+            {funnelMetrics.map(metrics => {
+              const isExpanded = expandedFunnelId === metrics.funnel.id;
+              const gradients: Record<string, string> = {
+                'FRONT': 'from-blue-500 to-cyan-400',
+                'FE': 'from-blue-500 to-cyan-400',
+                'OB': 'from-emerald-500 to-green-400',
+                'US': 'from-purple-500 to-violet-400',
+                'DS': 'from-orange-500 to-amber-400',
+              };
+              
+              return (
+                <Fragment key={metrics.funnel.id}>
+                  <TableRow 
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => {
+                      setExpandedFunnelId(isExpanded ? null : metrics.funnel.id);
+                      onFunnelSelect?.(metrics.funnel.id);
+                    }}
+                  >
+                    <TableCell className="w-8">
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">{metrics.funnel.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono text-xs">
+                        {metrics.funnel.campaign_name_pattern}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatCurrency(metrics.investimento)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-green-600">
+                      {formatCurrency(metrics.faturamento)}
+                    </TableCell>
+                    <TableCell className="text-right">{metrics.vendasFront}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatCurrency(metrics.ticketMedio)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {formatCurrency(metrics.cpaMaximo)}
+                    </TableCell>
+                    <TableCell className={cn(
+                      "text-right font-mono font-bold",
+                      metrics.status === 'excellent' && "text-green-600",
+                      metrics.status === 'good' && "text-blue-600",
+                      metrics.status === 'warning' && "text-yellow-600",
+                      metrics.status === 'danger' && "text-red-600"
+                    )}>
+                      {formatCurrency(metrics.cpaReal)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {metrics.roas.toFixed(2)}x
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(metrics.status)}
+                        {getStatusBadge(metrics.status)}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  
+                  {/* Expanded Details Row */}
+                  {isExpanded && (
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableCell colSpan={11} className="p-0">
+                        <div className="p-6 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                          {/* Funnel Flow */}
+                          <div>
+                            <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil</h4>
+                            <div className="flex flex-wrap items-stretch gap-2">
+                              {metrics.positionBreakdown.map((pos, index) => {
+                                const maxSales = Math.max(...metrics.positionBreakdown.map(p => p.vendas));
+                                const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
+                                
+                                return (
+                                  <Fragment key={`${pos.tipo}${pos.ordem}`}>
+                                    <div 
+                                      className={cn(
+                                        "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px]",
+                                        gradient
+                                      )}
+                                    >
+                                      <div className="relative z-10 flex flex-col items-center justify-center text-white">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                                          {pos.tipo}{pos.ordem || ''}
+                                        </span>
+                                        <span className="text-2xl font-black">
+                                          {pos.vendas}
+                                        </span>
+                                        <div className="flex items-center gap-1 text-[10px] font-medium opacity-90">
+                                          <Percent className="w-2.5 h-2.5" />
+                                          {pos.taxaConversao.toFixed(1)}%
+                                        </div>
+                                        <span className="text-[10px] mt-1 opacity-70">
+                                          {formatCurrency(pos.receita)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    {index < metrics.positionBreakdown.length - 1 && (
+                                      <div className="flex items-center justify-center w-6">
+                                        <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
+                                      </div>
+                                    )}
+                                  </Fragment>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          
+                          {/* Key Metrics */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border/50">
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground">Lucro (Fat - Inv)</p>
+                              <p className={cn(
+                                "text-lg font-bold",
+                                metrics.faturamento - metrics.investimento > 0 ? "text-green-600" : "text-red-600"
+                              )}>
+                                {formatCurrency(metrics.faturamento - metrics.investimento)}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground">Total Produtos</p>
+                              <p className="text-lg font-bold">{metrics.totalProdutos}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground">ROAS Alvo</p>
+                              <p className="text-lg font-bold">{metrics.funnel.roas_target || 2}x</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground">Diferença CPA</p>
+                              <p className={cn(
+                                "text-lg font-bold",
+                                metrics.cpaReal <= metrics.cpaMaximo ? "text-green-600" : "text-red-600"
+                              )}>
+                                {formatCurrency(metrics.cpaMaximo - metrics.cpaReal)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>

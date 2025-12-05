@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatInTimeZone } from 'date-fns-tz';
+
+const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 import { cn } from '@/lib/utils';
 
 interface CuboMagicoDashboardProps {
@@ -76,17 +79,23 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
     enabled: !!projectId,
   });
 
-  // Fetch hotmart sales - APPROVED + COMPLETE
+  // Fetch hotmart sales - APPROVED + COMPLETE (considerando fuso horário Brasil)
   const { data: salesData } = useQuery({
     queryKey: ['hotmart-sales-cubo', projectId, startDate, endDate],
     queryFn: async () => {
+      // Converter datas selecionadas para UTC considerando fuso Brasil
+      // Ex: 04/12 00:00 BRT = 04/12 03:00 UTC
+      // Ex: 04/12 23:59 BRT = 05/12 02:59 UTC
+      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      
       const { data, error } = await supabase
         .from('hotmart_sales')
         .select('offer_code, total_price_brl, buyer_email, sale_date')
         .eq('project_id', projectId)
         .in('status', ['APPROVED', 'COMPLETE'])
-        .gte('sale_date', format(startDate, 'yyyy-MM-dd'))
-        .lte('sale_date', format(endDate, 'yyyy-MM-dd') + 'T23:59:59');
+        .gte('sale_date', startUTC)
+        .lte('sale_date', endUTC);
       
       if (error) throw error;
       return data || [];

@@ -265,6 +265,24 @@ const Index = () => {
     };
   };
 
+  // Fixed exchange rates (same as used in hotmart-api sync)
+  const exchangeRates: Record<string, number> = {
+    'BRL': 1,
+    'USD': 6.00,
+    'EUR': 6.40,
+    'GBP': 7.60,
+    'PYG': 0.0008,
+    'UYU': 0.14,
+    'AUD': 3.90,
+    'CHF': 6.80,
+    'CAD': 4.40,
+    'MXN': 0.30,
+    'ARS': 0.006,
+    'CLP': 0.006,
+    'COP': 0.0014,
+    'PEN': 1.60,
+  };
+
   const formatSalesData = () => {
     if (!salesData?.items || !currentFilters) return [];
 
@@ -276,14 +294,14 @@ const Index = () => {
     let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
-      // Use total_price_brl if available (from database), otherwise fallback to price.value with conversion
+      // Use fixed exchange rates (same as sync function)
       const originalValue = item.purchase?.price?.value || 0;
       const currency = item.purchase?.price?.currency_code || 'BRL';
-      const exchangeRate = item.purchase?.price?.exchange_rate_currency_payout || 1;
+      const rate = exchangeRates[currency] || 1;
       
       // If currency is not BRL, apply exchange rate
-      const wasConverted = currency !== 'BRL' && exchangeRate > 0;
-      const valueInBRL = wasConverted ? originalValue * exchangeRate : originalValue;
+      const wasConverted = currency !== 'BRL';
+      const valueInBRL = originalValue * rate;
       
       return {
         transaction: item.purchase?.transaction || 'N/A',

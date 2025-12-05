@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { format, subDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
 import { Calendar, RefreshCw, Users, UserPlus, Repeat, ShoppingCart, Package, MessageCircle, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -21,6 +23,8 @@ import {
 } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
 
+const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
+
 interface CustomerCohortProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
@@ -28,37 +32,28 @@ interface CustomerCohortProps {
   initialEndDate?: Date;
 }
 
-interface HotmartSale {
-  purchase: {
-    offer: { code: string };
-    price: { 
-      value: number;
-      currency_code?: string;
-      exchange_rate_currency_payout?: number;
-    };
-    status: string;
-    order_date: number;
-  };
-  buyer: { 
-    email: string; 
-    name?: string;
-    checkout_phone?: string;
-  };
+interface SaleData {
+  buyer_email: string | null;
+  buyer_name: string | null;
+  buyer_phone: string | null;
+  total_price_brl: number | null;
+  offer_code: string | null;
+  sale_date: string | null;
 }
 
 interface CustomerData {
   email: string;
   name: string;
   phone: string | null;
-  totalPurchases: number; // Total distinct sales (each offer = 1 sale)
+  totalPurchases: number;
   totalSpent: number;
   firstPurchase: Date;
   lastPurchase: Date;
   daysBetweenPurchases: number;
   products: string[];
   isRecurrent: boolean;
-  otherFunnels: string[]; // Names of other funnels where customer bought
-  otherFunnelProducts: { funnel: string; products: string[] }[]; // Products grouped by other funnels
+  otherFunnels: string[];
+  otherFunnelProducts: { funnel: string; products: string[] }[];
 }
 
 interface CohortMetrics {
@@ -68,7 +63,7 @@ interface CohortMetrics {
   avgPurchasesPerCustomer: number;
   avgSpentPerCustomer: number;
   topCustomers: CustomerData[];
-  allCustomers: CustomerData[]; // Full list for filtering
+  allCustomers: CustomerData[];
   purchaseDistribution: { purchases: string; count: number; percentage: number }[];
 }
 
@@ -99,10 +94,21 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
-  const [loading, setLoading] = useState(false);
-  const [salesData, setSalesData] = useState<HotmartSale[]>([]);
-  const [offerMappings, setOfferMappings] = useState<OfferMapping[]>([]);
   const [customerFilter, setCustomerFilter] = useState<CustomerFilter>('all');
+
+  // Fetch offer mappings
+  const { data: offerMappings = [] } = useQuery({
+    queryKey: ['offer-mappings-cohort', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return [];
+      const { data } = await supabase
+        .from('offer_mappings')
+        .select('codigo_oferta, nome_produto, id_funil')
+        .eq('project_id', currentProject.id);
+      return (data || []) as OfferMapping[];
+    },
+    enabled: !!currentProject?.id,
+  });
 
   // Create a map of offer code to product name
   const offerToProductName = useMemo(() => {
@@ -126,45 +132,44 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
     return map;
   }, [offerMappings]);
 
-  // Fetch offer mappings
-  useEffect(() => {
-    const fetchMappings = async () => {
-      const { data } = await supabase
-        .from('offer_mappings')
-        .select('codigo_oferta, nome_produto, id_funil');
-      if (data) setOfferMappings(data);
-    };
-    fetchMappings();
-  }, []);
-
-  const fetchDataFromAPI = async (): Promise<HotmartSale[]> => {
-    const startUTC = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0);
-    const endUTC = Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
-
-    let allItems: HotmartSale[] = [];
-    let nextPageToken: string | null = null;
-    
-    do {
-      const params: any = { start_date: startUTC, end_date: endUTC, max_results: 500 };
-      if (nextPageToken) params.page_token = nextPageToken;
-
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: { endpoint: '/sales/history', params, projectId: currentProject?.id },
-      });
-
+  // Fetch sales data from database
+  const { data: salesData, isLoading: loading, refetch } = useQuery({
+    queryKey: ['customer-cohort-sales', currentProject?.id, startDate, endDate],
+    queryFn: async () => {
+      if (!currentProject?.id) return [];
+      
+      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      
+      const { data, error } = await supabase
+        .from('hotmart_sales')
+        .select('buyer_email, buyer_name, buyer_phone, total_price_brl, offer_code, sale_date')
+        .eq('project_id', currentProject.id)
+        .in('status', ['APPROVED', 'COMPLETE'])
+        .gte('sale_date', startUTC)
+        .lte('sale_date', endUTC);
+      
       if (error) throw error;
-      if (data?.items) allItems = [...allItems, ...data.items];
-      nextPageToken = data?.page_info?.next_page_token || null;
-    } while (nextPageToken);
-
-    return allItems;
-  };
+      return (data || []) as SaleData[];
+    },
+    enabled: !!currentProject?.id,
+  });
 
   // First, group ALL sales by customer to understand cross-funnel behavior
   const cohortMetrics = useMemo((): CohortMetrics => {
-    // Get all completed sales
-    const allCompletedSales = salesData.filter(sale => sale.purchase?.status === 'COMPLETE');
-    
+    if (!salesData || salesData.length === 0) {
+      return {
+        uniqueCustomers: 0,
+        newCustomers: 0,
+        recurrentCustomers: 0,
+        avgPurchasesPerCustomer: 0,
+        avgSpentPerCustomer: 0,
+        topCustomers: [],
+        allCustomers: [],
+        purchaseDistribution: [],
+      };
+    }
+
     // Build a map of ALL customer purchases (across all offers/funnels)
     const customerAllPurchases: Record<string, {
       email: string;
@@ -173,11 +178,11 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
       allSales: { date: Date; value: number; offerCode: string; funnelId: string | null }[];
     }> = {};
     
-    allCompletedSales.forEach(sale => {
-      const email = sale.buyer?.email || 'unknown';
-      const name = sale.buyer?.name || email;
-      const phone = sale.buyer?.checkout_phone || null;
-      const offerCode = sale.purchase?.offer?.code || '';
+    salesData.forEach(sale => {
+      const email = sale.buyer_email || 'unknown';
+      const name = sale.buyer_name || email;
+      const phone = sale.buyer_phone || null;
+      const offerCode = sale.offer_code || '';
       const funnelId = offerToFunnelId[offerCode] || null;
       
       if (!customerAllPurchases[email]) {
@@ -188,14 +193,10 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
         customerAllPurchases[email].phone = phone;
       }
       
-      // Use exchange rate to convert to BRL if available
-      const originalValue = sale.purchase?.price?.value || 0;
-      const currency = sale.purchase?.price?.currency_code || 'BRL';
-      const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
-      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+      const valueInBRL = sale.total_price_brl || 0;
 
       customerAllPurchases[email].allSales.push({
-        date: new Date(sale.purchase?.order_date || Date.now()),
+        date: new Date(sale.sale_date || Date.now()),
         value: valueInBRL,
         offerCode,
         funnelId,
@@ -220,10 +221,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
       const totalSpent = salesInFunnel.reduce((sum, s) => sum + s.value, 0);
       const products = [...new Set(salesInFunnel.map(s => s.offerCode))];
       
-      // Total purchases = count all distinct sales (each product is a sale)
       const totalPurchases = c.allSales.length;
-      
-      // Check if customer has purchases outside this funnel
       const hasOtherSales = salesOutsideFunnel.length > 0;
       
       // Group products by funnel for other funnels
@@ -238,7 +236,6 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
         }
       });
       
-      // Convert to array format
       const otherFunnelProducts = Object.entries(funnelProductsMap).map(([funnel, productsSet]) => ({
         funnel,
         products: [...productsSet],
@@ -256,7 +253,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
         email: c.email,
         name: c.name,
         phone: c.phone,
-        totalPurchases, // Total sales across ALL offers
+        totalPurchases,
         totalSpent,
         firstPurchase,
         lastPurchase,
@@ -272,21 +269,15 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
     const newCustomers = customers.filter(c => !c.isRecurrent).length;
     const recurrentCustomers = customers.filter(c => c.isRecurrent).length;
     
-    // For average, count total products bought in this funnel
     const totalProducts = customers.reduce((sum, c) => sum + c.products.length, 0);
     const totalSpent = customers.reduce((sum, c) => sum + c.totalSpent, 0);
 
-    // Product count distribution (how many products per customer in this funnel)
-    // Enhanced with revenue insights
     const productGroups: Record<string, CustomerData[]> = {};
     customers.forEach(c => {
       const key = c.products.length >= 5 ? '5+' : c.products.length.toString();
       if (!productGroups[key]) productGroups[key] = [];
       productGroups[key].push(c);
     });
-
-    const avgTicketGlobal = uniqueCustomers > 0 ? totalSpent / uniqueCustomers : 0;
-    const avgProductsPerCustomer = uniqueCustomers > 0 ? totalProducts / uniqueCustomers : 0;
 
     const purchaseDistribution = ['1', '2', '3', '4', '5+'].map(key => {
       const groupCustomers = productGroups[key] || [];
@@ -296,13 +287,11 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
       const groupNewCount = groupCustomers.filter(c => !c.isRecurrent).length;
       const groupRecurrentCount = groupCustomers.filter(c => c.isRecurrent).length;
       
-      // Calculate potential revenue if they bought one more product
       const avgProductPrice = groupCount > 0 && groupCustomers[0]?.products.length > 0
         ? groupRevenue / groupCustomers.reduce((sum, c) => sum + c.products.length, 0)
         : 0;
       const potentialRevenue = groupCount * avgProductPrice;
       
-      // Top 5 customer names for tooltip
       const topCustomerNames = groupCustomers
         .sort((a, b) => b.totalSpent - a.totalSpent)
         .slice(0, 5)
@@ -324,7 +313,6 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
       };
     });
 
-    // Top customers by spending
     const topCustomers = customers
       .sort((a, b) => b.totalSpent - a.totalSpent)
       .slice(0, 10);
@@ -336,34 +324,10 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
       avgPurchasesPerCustomer: uniqueCustomers > 0 ? totalProducts / uniqueCustomers : 0,
       avgSpentPerCustomer: uniqueCustomers > 0 ? totalSpent / uniqueCustomers : 0,
       topCustomers,
-      allCustomers: customers.sort((a, b) => b.totalSpent - a.totalSpent), // Full sorted list
+      allCustomers: customers.sort((a, b) => b.totalSpent - a.totalSpent),
       purchaseDistribution,
     };
   }, [salesData, funnelOfferCodes, offerToFunnelId, selectedFunnel]);
-
-  const loadData = async () => {
-    if (funnelOfferCodes.length === 0) {
-      toast.error('Nenhuma oferta configurada para este funil');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const sales = await fetchDataFromAPI();
-      setSalesData(sales);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados da API');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedFunnel && funnelOfferCodes.length > 0) {
-      loadData();
-    }
-  }, [selectedFunnel, funnelOfferCodes.join(',')]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -435,7 +399,7 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
           <h3 className="text-lg font-semibold">Análise de Clientes</h3>
           <p className="text-sm text-muted-foreground">Comportamento de compra e recorrência</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
           Atualizar
         </Button>

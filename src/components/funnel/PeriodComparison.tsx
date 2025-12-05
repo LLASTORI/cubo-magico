@@ -29,7 +29,11 @@ interface PeriodMetrics {
 interface HotmartSale {
   purchase: {
     offer: { code: string };
-    price: { value: number };
+    price: { 
+      value: number;
+      currency_code?: string;
+      exchange_rate_currency_payout?: number;
+    };
     status: string;
   };
   buyer: { email: string };
@@ -118,7 +122,14 @@ const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, 
     });
 
     const totalSales = filteredSales.length;
-    const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.purchase?.price?.value || 0), 0);
+    const totalRevenue = filteredSales.reduce((sum, s) => {
+      // Use exchange rate to convert to BRL if available
+      const originalValue = s.purchase?.price?.value || 0;
+      const currency = s.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
+      
+      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
+    }, 0);
     const uniqueCustomers = new Set(filteredSales.map(s => s.buyer?.email)).size;
     const avgTicket = uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0;
 

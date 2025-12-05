@@ -32,7 +32,11 @@ interface UTMAnalysisProps {
 interface HotmartSale {
   purchase: {
     offer: { code: string };
-    price: { value: number };
+    price: { 
+      value: number;
+      currency_code?: string;
+      exchange_rate_currency_payout?: number;
+    };
     status: string;
     tracking?: {
       source_sck?: string;
@@ -147,7 +151,12 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
     });
 
     const totalSales = filtered.length;
-    const totalRevenue = filtered.reduce((sum, s) => sum + (s.purchase?.price?.value || 0), 0);
+    const totalRevenue = filtered.reduce((sum, s) => {
+      const originalValue = s.purchase?.price?.value || 0;
+      const currency = s.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
+      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
+    }, 0);
 
     const analyzeByField = (field: string): UTMMetrics[] => {
       const groups: Record<string, { sales: number; revenue: number }> = {};
@@ -157,11 +166,17 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
         const utmParams = parseUTMFromSck(sck);
         let value = utmParams[field] || '(não definido)';
         
+        // Convert to BRL if needed
+        const originalValue = sale.purchase?.price?.value || 0;
+        const currency = sale.purchase?.price?.currency_code || 'BRL';
+        const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
+        const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+        
         if (!groups[value]) {
           groups[value] = { sales: 0, revenue: 0 };
         }
         groups[value].sales += 1;
-        groups[value].revenue += sale.purchase?.price?.value || 0;
+        groups[value].revenue += valueInBRL;
       });
 
       return Object.entries(groups)
@@ -208,7 +223,12 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
     });
 
     const totalSales = filtered.length;
-    const totalRevenue = filtered.reduce((sum, s) => sum + (s.purchase?.price?.value || 0), 0);
+    const totalRevenue = filtered.reduce((sum, s) => {
+      const originalValue = s.purchase?.price?.value || 0;
+      const currency = s.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
+      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
+    }, 0);
 
     const groups: Record<string, { sales: number; revenue: number }> = {};
     
@@ -217,11 +237,17 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
       const utmParams = parseUTMFromSck(sck);
       let value = utmParams[currentField] || '(não definido)';
       
+      // Convert to BRL if needed
+      const originalValue = sale.purchase?.price?.value || 0;
+      const currency = sale.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
+      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+      
       if (!groups[value]) {
         groups[value] = { sales: 0, revenue: 0 };
       }
       groups[value].sales += 1;
-      groups[value].revenue += sale.purchase?.price?.value || 0;
+      groups[value].revenue += valueInBRL;
     });
 
     const data: UTMMetrics[] = Object.entries(groups)

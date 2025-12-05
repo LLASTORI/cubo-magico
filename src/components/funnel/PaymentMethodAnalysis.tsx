@@ -31,7 +31,11 @@ interface PaymentMethodAnalysisProps {
 interface HotmartSale {
   purchase: {
     offer: { code: string };
-    price: { value: number };
+    price: { 
+      value: number;
+      currency_code?: string;
+      exchange_rate_currency_payout?: number;
+    };
     status: string;
     payment: { 
       type: string;
@@ -123,7 +127,12 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartD
     });
 
     const totalSales = filtered.length;
-    const totalRevenue = filtered.reduce((sum, s) => sum + (s.purchase?.price?.value || 0), 0);
+    const totalRevenue = filtered.reduce((sum, s) => {
+      const originalValue = s.purchase?.price?.value || 0;
+      const currency = s.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
+      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
+    }, 0);
     
     // Calculate unique customers
     const uniqueEmails = new Set(filtered.map(sale => sale.buyer?.email).filter(Boolean));
@@ -142,18 +151,24 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartD
       const installments = sale.purchase?.payment?.installments_number || 1;
       const email = sale.buyer?.email || '';
       
+      // Convert to BRL if needed
+      const originalValue = sale.purchase?.price?.value || 0;
+      const currency = sale.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
+      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+      
       if (!groups[method]) {
         groups[method] = { sales: 0, revenue: 0, customers: new Set(), installments: {} };
       }
       groups[method].sales += 1;
-      groups[method].revenue += sale.purchase?.price?.value || 0;
+      groups[method].revenue += valueInBRL;
       if (email) groups[method].customers.add(email);
 
       if (!groups[method].installments[installments]) {
         groups[method].installments[installments] = { count: 0, revenue: 0 };
       }
       groups[method].installments[installments].count += 1;
-      groups[method].installments[installments].revenue += sale.purchase?.price?.value || 0;
+      groups[method].installments[installments].revenue += valueInBRL;
     });
 
     const metrics: PaymentMetrics[] = Object.entries(groups)

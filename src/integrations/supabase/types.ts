@@ -115,24 +115,30 @@ export type Database = {
       }
       funnels: {
         Row: {
+          campaign_name_pattern: string | null
           created_at: string
           id: string
           name: string
           project_id: string | null
+          roas_target: number | null
           updated_at: string
         }
         Insert: {
+          campaign_name_pattern?: string | null
           created_at?: string
           id?: string
           name: string
           project_id?: string | null
+          roas_target?: number | null
           updated_at?: string
         }
         Update: {
+          campaign_name_pattern?: string | null
           created_at?: string
           id?: string
           name?: string
           project_id?: string | null
+          roas_target?: number | null
           updated_at?: string
         }
         Relationships: [

@@ -4,7 +4,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft, Link2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft, Link2, Target, Save } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -54,6 +55,8 @@ interface Funnel {
   project_id: string;
   created_at: string;
   updated_at: string;
+  roas_target: number | null;
+  campaign_name_pattern: string | null;
 }
 
 interface OfferMapping {
@@ -114,6 +117,12 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   
   // Meta accounts linked to funnels
   const [metaAccountsByFunnel, setMetaAccountsByFunnel] = useState<Record<string, number>>({});
+  
+  // Cubo Mágico config state
+  const [editingConfig, setEditingConfig] = useState<string | null>(null);
+  const [configRoasTarget, setConfigRoasTarget] = useState('');
+  const [configCampaignPattern, setConfigCampaignPattern] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
   
   const { toast } = useToast();
 
@@ -476,6 +485,44 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     }
   };
 
+  const handleEditConfig = (funnel: Funnel) => {
+    setEditingConfig(funnel.id);
+    setConfigRoasTarget(funnel.roas_target?.toString() || '2');
+    setConfigCampaignPattern(funnel.campaign_name_pattern || '');
+  };
+
+  const handleSaveConfig = async (funnelId: string) => {
+    setSavingConfig(true);
+    try {
+      const { error } = await supabase
+        .from('funnels')
+        .update({
+          roas_target: parseFloat(configRoasTarget) || 2,
+          campaign_name_pattern: configCampaignPattern.trim() || null,
+        })
+        .eq('id', funnelId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso!',
+        description: 'Configuração do Cubo Mágico salva',
+      });
+
+      setEditingConfig(null);
+      fetchFunnels();
+    } catch (error: any) {
+      console.error('Error saving config:', error);
+      toast({
+        title: 'Erro ao salvar configuração',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   if (!projectId) {
     return (
       <Card className="p-6">
@@ -661,7 +708,93 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                   </div>
                   
                   <CollapsibleContent>
-                    <div className="border-t px-4 py-3 bg-muted/30">
+                    <div className="border-t px-4 py-3 bg-muted/30 space-y-4">
+                      {/* Cubo Mágico Config Section */}
+                      <div className="border rounded-lg p-4 bg-background">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Target className="h-4 w-4 text-primary" />
+                            <span className="font-medium text-sm">Configuração Cubo Mágico</span>
+                          </div>
+                          {editingConfig === funnel.id ? (
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleSaveConfig(funnel.id)}
+                                disabled={savingConfig}
+                              >
+                                {savingConfig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                                Salvar
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => setEditingConfig(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleEditConfig(funnel)}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Configurar
+                            </Button>
+                          )}
+                        </div>
+                        
+                        {editingConfig === funnel.id ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor={`pattern-${funnel.id}`}>Padrão do Nome da Campanha</Label>
+                              <Input
+                                id={`pattern-${funnel.id}`}
+                                placeholder="Ex: PERPETUO_MAQUIAGEM35+"
+                                value={configCampaignPattern}
+                                onChange={(e) => setConfigCampaignPattern(e.target.value)}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Campanhas que contêm este texto serão consideradas deste funil
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`roas-${funnel.id}`}>ROAS Alvo</Label>
+                              <Input
+                                id={`roas-${funnel.id}`}
+                                type="number"
+                                step="0.1"
+                                min="0.1"
+                                placeholder="Ex: 2.0"
+                                value={configRoasTarget}
+                                onChange={(e) => setConfigRoasTarget(e.target.value)}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                CPA Máximo = Ticket Médio ÷ ROAS Alvo
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Padrão: </span>
+                              {funnel.campaign_name_pattern ? (
+                                <Badge variant="outline" className="font-mono">{funnel.campaign_name_pattern}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground italic">Não configurado</span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">ROAS Alvo: </span>
+                              <Badge variant="secondary">{funnel.roas_target || 2}x</Badge>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Offers Section */}
                       {loadingOffers.has(funnel.name) ? (
                         <div className="flex items-center justify-center py-4 gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />

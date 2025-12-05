@@ -226,32 +226,30 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta adsets - use unified query key
+  // Fetch Meta adsets - without project_id filter as IDs are globally unique
   const { data: metaAdsets } = useQuery({
-    queryKey: ['meta-adsets-unified', currentProject?.id],
+    queryKey: ['meta-adsets-all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_adsets')
-        .select('id, adset_id, adset_name, campaign_id, status')
-        .eq('project_id', currentProject!.id);
+        .select('id, adset_id, adset_name, campaign_id, status');
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentProject?.id,
+    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });
 
-  // Fetch Meta ads - use unified query key
+  // Fetch Meta ads - without project_id filter as IDs are globally unique
   const { data: metaAds } = useQuery({
-    queryKey: ['meta-ads-unified', currentProject?.id],
+    queryKey: ['meta-ads-all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_ads')
-        .select('id, ad_id, ad_name, adset_id, campaign_id, status')
-        .eq('project_id', currentProject!.id);
+        .select('id, ad_id, ad_name, adset_id, campaign_id, status');
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentProject?.id,
+    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });
 
   // Fetch Meta insights - campaign-level only for spend calculations

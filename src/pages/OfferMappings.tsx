@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RotateCw, Tag } from 'lucide-react';
+import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RotateCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -117,7 +117,6 @@ export default function OfferMappingsAuto() {
   const [importingOffers, setImportingOffers] = useState(false);
   const [importProgress, setImportProgress] = useState<string>('');
   const [syncingOffers, setSyncingOffers] = useState(false);
-  const [updatingOfferNames, setUpdatingOfferNames] = useState(false);
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   
   const { toast } = useToast();
@@ -390,117 +389,6 @@ export default function OfferMappingsAuto() {
       });
     } finally {
       setImportingOffers(false);
-      setImportProgress('');
-    }
-  };
-
-  const updateOfferNamesFromHotmart = async () => {
-    if (!currentProject) return;
-    
-    try {
-      setUpdatingOfferNames(true);
-      setImportProgress('Buscando nomes das ofertas na API Hotmart...');
-      
-      // Get all offers that need name update (imported from sales)
-      const autoOffers = mappings.filter(m => m.nome_oferta === 'Importado das vendas');
-      
-      if (autoOffers.length === 0) {
-        toast({
-          title: 'Nenhuma oferta para atualizar',
-          description: 'Todas as ofertas já possuem nomes definidos',
-        });
-        return;
-      }
-      
-      const autoOfferCodes = new Set(autoOffers.map(o => o.codigo_oferta).filter(Boolean));
-      
-      // Fetch all products from Hotmart API
-      setImportProgress('Buscando produtos da API Hotmart...');
-      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/products',
-          apiType: 'products',
-          projectId: currentProject.id
-        }
-      });
-      
-      if (productsError) throw productsError;
-      
-      const products: HotmartProduct[] = productsData.items || productsData || [];
-      
-      // Build a map of offer_code -> offer details
-      const offerMap = new Map<string, { name: string; productName: string; productId: string }>();
-      
-      for (let i = 0; i < products.length; i++) {
-        const product = products[i];
-        setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 25)}...`);
-        
-        try {
-          const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
-            body: {
-              endpoint: `/products/${product.ucode}/offers`,
-              apiType: 'products',
-              projectId: currentProject.id
-            }
-          });
-          
-          if (!offersError && offersData) {
-            const offers: HotmartOffer[] = offersData.items || offersData || [];
-            
-            offers.forEach(offer => {
-              if (autoOfferCodes.has(offer.code)) {
-                offerMap.set(offer.code, {
-                  name: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
-                  productName: product.name,
-                  productId: product.ucode
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Error fetching offers for product ${product.ucode}:`, error);
-        }
-      }
-      
-      // Update offers in database
-      setImportProgress(`Atualizando ${offerMap.size} ofertas encontradas...`);
-      let updatedCount = 0;
-      
-      for (const [offerCode, details] of offerMap.entries()) {
-        const { error: updateError } = await supabase
-          .from('offer_mappings')
-          .update({ 
-            nome_oferta: details.name || 'Oferta Principal',
-            id_produto: details.productId
-          })
-          .eq('project_id', currentProject.id)
-          .eq('codigo_oferta', offerCode)
-          .eq('nome_oferta', 'Importado das vendas');
-        
-        if (!updateError) {
-          updatedCount++;
-        }
-      }
-      
-      const notFoundCount = autoOfferCodes.size - offerMap.size;
-      
-      toast({
-        title: 'Atualização concluída!',
-        description: `${updatedCount} ofertas atualizadas` + 
-          (notFoundCount > 0 ? `. ${notFoundCount} ofertas não encontradas na API.` : ''),
-      });
-      
-      fetchMappings();
-      
-    } catch (error: any) {
-      console.error('Error updating offer names:', error);
-      toast({
-        title: 'Erro na atualização',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setUpdatingOfferNames(false);
       setImportProgress('');
     }
   };
@@ -965,7 +853,7 @@ export default function OfferMappingsAuto() {
                 
                 <Button 
                   onClick={importAllFromHotmart}
-                  disabled={importingOffers || updatingOfferNames}
+                  disabled={importingOffers}
                   size="lg"
                   className="gap-2"
                 >
@@ -976,36 +864,6 @@ export default function OfferMappingsAuto() {
                   )}
                   {importingOffers ? 'Importando...' : 'Importar Todas as Ofertas'}
                 </Button>
-                
-                {mappings.some(m => m.nome_oferta === 'Importado das vendas') && (
-                  <>
-                    <div className="flex items-center gap-4 justify-center">
-                      <div className="h-px bg-border flex-1 max-w-[100px]" />
-                      <span className="text-xs text-muted-foreground">ou</span>
-                      <div className="h-px bg-border flex-1 max-w-[100px]" />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Button 
-                        onClick={updateOfferNamesFromHotmart}
-                        disabled={importingOffers || updatingOfferNames}
-                        variant="outline"
-                        size="lg"
-                        className="gap-2"
-                      >
-                        {updatingOfferNames ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <Tag className="h-5 w-5" />
-                        )}
-                        {updatingOfferNames ? 'Buscando nomes...' : 'Buscar Nomes das Ofertas'}
-                      </Button>
-                      <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                        Busca os nomes reais das ofertas marcadas como "Auto" na API Hotmart
-                      </p>
-                    </div>
-                  </>
-                )}
                 
                 {mappings.length > 0 && (
                   <p className="text-sm text-muted-foreground">

@@ -305,8 +305,6 @@ export function OfferMappingDialog({
                       <Input 
                         placeholder="Nome da oferta" 
                         {...field} 
-                        disabled 
-                        className="bg-muted"
                       />
                     </FormControl>
                     <FormMessage />

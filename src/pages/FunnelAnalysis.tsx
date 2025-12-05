@@ -161,7 +161,7 @@ const FunnelAnalysis = () => {
   }, [currentProject, navigate]);
 
   // Fetch funnels config - use unified query key
-  const { data: funnelsConfig } = useQuery({
+  const { data: funnelsConfig, isLoading: loadingFunnels } = useQuery({
     queryKey: ['funnels-with-config', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -175,7 +175,7 @@ const FunnelAnalysis = () => {
   });
 
   // Fetch offer mappings - use unified query key
-  const { data: mappings } = useQuery({
+  const { data: mappings, isLoading: loadingMappings } = useQuery({
     queryKey: ['offer-mappings-unified', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -707,8 +707,8 @@ const FunnelAnalysis = () => {
     neutral: 'text-muted-foreground',
   };
 
-  // Combined loading state - wait for all critical data
-  const isInitialLoading = loadingSales || loadingMetaAccounts;
+  // Combined loading state - wait for all critical data (including funnels and mappings)
+  const isInitialLoading = loadingSales || loadingMetaAccounts || loadingFunnels || loadingMappings;
   const isMetaDataLoading = loadingMetaInsights || loadingAllInsights;
   
   // Show full page loader only on initial load

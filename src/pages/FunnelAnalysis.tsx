@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
+import { SyncLoader } from "@/components/SyncLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
 import NotificationsDropdown from "@/components/NotificationsDropdown";
@@ -467,6 +468,14 @@ const FunnelAnalysis = () => {
   // Sync and refresh all data
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
+  const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
+  const [estimatedDuration, setEstimatedDuration] = useState(60);
+
+  // Calculate estimated sync duration based on date range
+  const getEstimatedSyncDuration = () => {
+    const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(30, Math.min(180, days * 2));
+  };
 
   // Fetch active Meta ad accounts for sync
   const { data: metaAdAccounts } = useQuery({
@@ -542,11 +551,39 @@ const FunnelAnalysis = () => {
           toast.error('Erro ao sincronizar Meta Ads');
         } else {
           console.log('Meta sync initiated:', metaResponse.data);
-          toast.success('Sincronização Meta Ads iniciada em background');
+          
+          // Show SyncLoader while Meta sync runs in background
+          setMetaSyncInProgress(true);
+          setEstimatedDuration(getEstimatedSyncDuration());
+          
+          // Calculate polling duration based on period
+          const periodDays = metaResponse.data?.periodDays || 30;
+          const pollDurationMs = Math.max(30000, Math.min(180000, periodDays * 1000));
+          
+          // Poll for data every 15 seconds
+          const pollCount = Math.ceil(pollDurationMs / 15000);
+          for (let i = 1; i <= pollCount; i++) {
+            setTimeout(() => {
+              console.log(`[FunnelAnalysis Poll ${i}/${pollCount}] Refreshing data...`);
+              refetchMetaInsights();
+              refetchAllInsights();
+            }, i * 15000);
+          }
+          
+          // Final refresh and end sync state
+          setTimeout(async () => {
+            setMetaSyncInProgress(false);
+            await Promise.all([
+              refetchSales(),
+              refetchMetaInsights(),
+              refetchAllInsights(),
+            ]);
+            toast.success('Sincronização Meta Ads concluída!');
+          }, pollDurationMs);
         }
       }
 
-      // 3. Refresh data from database
+      // 3. Refresh data from database (immediate refresh for Hotmart)
       setSyncStatus('Atualizando dados...');
       await Promise.all([
         refetchSales(),
@@ -555,7 +592,7 @@ const FunnelAnalysis = () => {
       ]);
 
       setSyncStatus('');
-      toast.success('Dados atualizados');
+      toast.success('Dados Hotmart atualizados');
     } catch (error) {
       console.error('Sync error:', error);
       toast.error('Erro ao sincronizar dados');
@@ -754,8 +791,18 @@ const FunnelAnalysis = () => {
             </div>
           </Card>
 
+          {/* Meta sync in progress */}
+          {metaSyncInProgress && (
+            <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
+              <SyncLoader 
+                showProgress={true} 
+                estimatedDuration={estimatedDuration}
+              />
+            </Card>
+          )}
+
           {/* Warning when no Meta investment data */}
-          {!loadingSales && summaryMetrics.investimento === 0 && metaAdAccounts && metaAdAccounts.length > 0 && (
+          {!loadingSales && !metaSyncInProgress && summaryMetrics.investimento === 0 && metaAdAccounts && metaAdAccounts.length > 0 && (
             <Alert variant="destructive" className="border-yellow-500/50 bg-yellow-500/10">
               <AlertTriangle className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">

@@ -157,6 +157,7 @@ export function CuboMagicoDashboard({
   });
 
   // Fetch Meta insights - use unified query key
+  // Filter for campaign-level data only (adset_id IS NULL AND ad_id IS NULL) to avoid duplicates
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
     queryKey: ['meta-insights-unified', projectId, startDateStr, endDateStr],
     queryFn: async () => {
@@ -164,6 +165,8 @@ export function CuboMagicoDashboard({
         .from('meta_insights')
         .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
         .eq('project_id', projectId)
+        .is('adset_id', null)
+        .is('ad_id', null)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       

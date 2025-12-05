@@ -264,12 +264,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       
       while (page < MAX_PAGES) {
         // Filter insights that OVERLAP with the selected period
-        // date_start >= startDate AND date_start <= endDate (simpler and more accurate)
+        // Campaign-level only (adset_id IS NULL AND ad_id IS NULL) to avoid duplicates
         const { data, error, count } = await supabase
           .from('meta_insights')
           .select('*', { count: 'exact' })
           .eq('project_id', projectId)
           .in('ad_account_id', activeAccountIds)
+          .is('adset_id', null)
+          .is('ad_id', null)
           .gte('date_start', startDate)
           .lte('date_start', endDate)
           .order('date_start', { ascending: true })
@@ -305,12 +307,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     queryFn: async () => {
       if (activeAccountIds.length === 0) return null;
       
-      // Get count and we'll calculate sum from fetched data
+      // Get count - campaign-level only to avoid duplicates
       const { count, error } = await supabase
         .from('meta_insights')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
+        .is('adset_id', null)
+        .is('ad_id', null)
         .gte('date_start', startDate)
         .lte('date_start', endDate);
       

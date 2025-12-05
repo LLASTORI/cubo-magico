@@ -427,14 +427,50 @@ const FunnelAnalysis = () => {
     };
   }, [aggregatedMetrics, salesData, allMappingsSorted, totalMetaInvestment, availableFunnels]);
 
-  // Refresh all data
-  const handleRefreshAll = () => {
-    refetchSales();
-    refetchMetaInsights();
-    refetchAllInsights();
+  // Sync and refresh all data
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string>('');
+
+  const handleRefreshAll = async () => {
+    setIsSyncing(true);
+    setSyncStatus('Sincronizando Hotmart...');
+    
+    try {
+      // 1. Sync Hotmart sales for the selected period
+      const hotmartResponse = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          projectId: currentProject!.id,
+          action: 'sync_sales',
+          startDate: startDate.getTime(),
+          endDate: endDate.getTime(),
+        },
+      });
+
+      if (hotmartResponse.error) {
+        console.error('Hotmart sync error:', hotmartResponse.error);
+      } else {
+        const total = (hotmartResponse.data?.synced || 0) + (hotmartResponse.data?.updated || 0);
+        console.log(`Hotmart synced: ${total} sales`);
+      }
+
+      // 2. Refresh data from database
+      setSyncStatus('Atualizando dados...');
+      await Promise.all([
+        refetchSales(),
+        refetchMetaInsights(),
+        refetchAllInsights(),
+      ]);
+
+      setSyncStatus('');
+    } catch (error) {
+      console.error('Sync error:', error);
+      setSyncStatus('');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const isRefreshingAll = isRefetching || isRefetchingMeta;
+  const isRefreshingAll = isRefetching || isRefetchingMeta || isSyncing;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -571,11 +607,11 @@ const FunnelAnalysis = () => {
                     className="gap-2"
                   >
                     <RefreshCw className={cn("w-4 h-4", isRefreshingAll && "animate-spin")} />
-                    Atualizar
+                    {syncStatus || 'Atualizar'}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Atualiza vendas e dados do Meta Ads</p>
+                  <p>Sincroniza vendas do Hotmart e atualiza dados</p>
                 </TooltipContent>
               </Tooltip>
             </div>

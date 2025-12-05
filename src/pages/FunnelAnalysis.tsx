@@ -265,38 +265,111 @@ const FunnelAnalysis = () => {
     staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });
 
-  // Fetch Meta insights - campaign-level only for spend calculations
-  const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta } = useQuery({
-    queryKey: ['meta-insights-unified', currentProject?.id, startDateStr, endDateStr],
+  // Fetch active Meta ad accounts FIRST (needed for insights queries)
+  const { data: metaAdAccounts, isLoading: loadingMetaAccounts } = useQuery({
+    queryKey: ['meta-ad-accounts-funnel', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('meta_insights')
-        .select('id, campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
+        .from('meta_ad_accounts')
+        .select('account_id')
         .eq('project_id', currentProject!.id)
-        .is('adset_id', null)
-        .is('ad_id', null)
-        .gte('date_start', startDateStr)
-        .lte('date_start', endDateStr);
+        .eq('is_active', true);
       if (error) throw error;
       return data || [];
     },
     enabled: !!currentProject?.id,
   });
 
-  // Fetch ALL Meta insights (all levels) for hierarchy analysis
-  const { data: allLevelInsights, refetch: refetchAllInsights } = useQuery({
-    queryKey: ['meta-insights-all-levels', currentProject?.id, startDateStr, endDateStr],
+  // Get active account IDs for consistent filtering (like MetaAds page)
+  const activeAccountIds = useMemo(() => {
+    if (!metaAdAccounts || metaAdAccounts.length === 0) return [];
+    return metaAdAccounts.map(a => a.account_id).sort();
+  }, [metaAdAccounts]);
+
+  // Fetch Meta insights - campaign-level only for spend calculations (WITH PAGINATION like MetaAds)
+  const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta, isLoading: loadingMetaInsights } = useQuery({
+    queryKey: ['meta-insights-funnel', currentProject?.id, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('id, campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
-        .eq('project_id', currentProject!.id)
-        .gte('date_start', startDateStr)
-        .lte('date_start', endDateStr);
-      if (error) throw error;
-      return data || [];
+      if (activeAccountIds.length === 0) return [];
+      
+      // Fetch ALL insights using pagination (Supabase default limit is 1000)
+      const PAGE_SIZE = 1000;
+      const MAX_PAGES = 20;
+      let allInsights: any[] = [];
+      let page = 0;
+      
+      while (page < MAX_PAGES) {
+        const { data, error, count } = await supabase
+          .from('meta_insights')
+          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop', { count: 'exact' })
+          .eq('project_id', currentProject!.id)
+          .in('ad_account_id', activeAccountIds)
+          .is('adset_id', null)
+          .is('ad_id', null)
+          .gte('date_start', startDateStr)
+          .lte('date_start', endDateStr)
+          .order('date_start', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allInsights = [...allInsights, ...data];
+          console.log(`[FunnelAnalysis Insights] Page ${page + 1}: ${data.length} records (total: ${allInsights.length})`);
+          
+          if (data.length < PAGE_SIZE || (count && allInsights.length >= count)) {
+            break;
+          }
+          page++;
+        } else {
+          break;
+        }
+      }
+      
+      console.log(`[FunnelAnalysis Insights] TOTAL: ${allInsights.length} records`);
+      return allInsights;
     },
-    enabled: !!currentProject?.id,
+    enabled: !!currentProject?.id && activeAccountIds.length > 0,
+  });
+
+  // Fetch ALL Meta insights (all levels) for hierarchy analysis (WITH PAGINATION)
+  const { data: allLevelInsights, refetch: refetchAllInsights, isLoading: loadingAllInsights } = useQuery({
+    queryKey: ['meta-insights-all-levels-funnel', currentProject?.id, startDateStr, endDateStr, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) return [];
+      
+      const PAGE_SIZE = 1000;
+      const MAX_PAGES = 20;
+      let allInsights: any[] = [];
+      let page = 0;
+      
+      while (page < MAX_PAGES) {
+        const { data, error, count } = await supabase
+          .from('meta_insights')
+          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop', { count: 'exact' })
+          .eq('project_id', currentProject!.id)
+          .in('ad_account_id', activeAccountIds)
+          .gte('date_start', startDateStr)
+          .lte('date_start', endDateStr)
+          .order('date_start', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allInsights = [...allInsights, ...data];
+          if (data.length < PAGE_SIZE || (count && allInsights.length >= count)) {
+            break;
+          }
+          page++;
+        } else {
+          break;
+        }
+      }
+      
+      return allInsights;
+    },
+    enabled: !!currentProject?.id && activeAccountIds.length > 0,
   });
 
   // Get available funnels (those with mappings) - include A Definir
@@ -477,21 +550,6 @@ const FunnelAnalysis = () => {
     return Math.max(30, Math.min(180, days * 2));
   };
 
-  // Fetch active Meta ad accounts for sync
-  const { data: metaAdAccounts } = useQuery({
-    queryKey: ['meta-ad-accounts', currentProject?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_ad_accounts')
-        .select('account_id')
-        .eq('project_id', currentProject!.id)
-        .eq('is_active', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentProject?.id,
-  });
-
   const handleRefreshAll = async () => {
     setIsSyncing(true);
     setSyncStatus('Sincronizando Hotmart...');
@@ -649,7 +707,13 @@ const FunnelAnalysis = () => {
     neutral: 'text-muted-foreground',
   };
 
+  // Combined loading state - wait for all critical data
+  const isInitialLoading = loadingSales || loadingMetaAccounts;
+  const isMetaDataLoading = loadingMetaInsights || loadingAllInsights;
+  
+  // Show full page loader only on initial load
   if (!currentProject) return null;
+  if (isInitialLoading) return <CubeLoader />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -801,8 +865,18 @@ const FunnelAnalysis = () => {
             </Card>
           )}
 
-          {/* Warning when no Meta investment data */}
-          {!loadingSales && !metaSyncInProgress && summaryMetrics.investimento === 0 && metaAdAccounts && metaAdAccounts.length > 0 && (
+          {/* Loading Meta data indicator */}
+          {!metaSyncInProgress && isMetaDataLoading && activeAccountIds.length > 0 && (
+            <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 animate-spin text-cube-blue" />
+                <span className="text-sm text-muted-foreground">Carregando dados do Meta Ads...</span>
+              </div>
+            </Card>
+          )}
+
+          {/* Warning when no Meta investment data - only show after Meta data loaded */}
+          {!loadingSales && !metaSyncInProgress && !isMetaDataLoading && summaryMetrics.investimento === 0 && metaAdAccounts && metaAdAccounts.length > 0 && (
             <Alert variant="destructive" className="border-yellow-500/50 bg-yellow-500/10">
               <AlertTriangle className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">

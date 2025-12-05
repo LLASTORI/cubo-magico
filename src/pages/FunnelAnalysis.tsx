@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText
+  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle
 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { generateExecutiveReport } from "@/components/funnel/ExecutiveReport";
 import { supabase } from "@/integrations/supabase/client";
@@ -752,6 +753,26 @@ const FunnelAnalysis = () => {
               </Tooltip>
             </div>
           </Card>
+
+          {/* Warning when no Meta investment data */}
+          {!loadingSales && summaryMetrics.investimento === 0 && metaAdAccounts && metaAdAccounts.length > 0 && (
+            <Alert variant="destructive" className="border-yellow-500/50 bg-yellow-500/10">
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                <strong>Sem dados de investimento Meta Ads para o período selecionado.</strong> Clique em "Atualizar" para sincronizar os dados do Meta. A sincronização pode levar alguns minutos para períodos longos.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Warning when unmapped offers exist */}
+          {!loadingSales && aggregatedMetrics.some(m => m.tipo_posicao === 'NC') && (
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <AlertTriangle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-400">
+                Existem vendas de ofertas não categorizadas. Acesse <strong>Mapeamento de Ofertas</strong> para vincular essas ofertas a um funil.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {loadingSales ? (
             <div className="flex flex-col items-center justify-center h-64">

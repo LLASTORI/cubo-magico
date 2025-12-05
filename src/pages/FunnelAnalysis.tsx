@@ -2,18 +2,13 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, Users, 
-  TrendingUp, TrendingDown, RefreshCw, CalendarIcon, Filter, Megaphone
+  ArrowLeft, RefreshCw, CalendarIcon, Megaphone
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -157,12 +152,6 @@ const FunnelAnalysis = () => {
   // Date filters
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
   const [endDate, setEndDate] = useState<Date>(new Date());
-  
-  // Funnel filter
-  const [selectedFunnelId, setSelectedFunnelId] = useState<string>("");
-  
-  // Traffic source filter
-  const [selectedSource, setSelectedSource] = useState<string>("all");
 
   useEffect(() => {
     if (!currentProject) {
@@ -278,13 +267,6 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Get unique sources for filter
-  const uniqueSources = useMemo(() => {
-    if (!salesData) return [];
-    const sources = new Set(salesData.map(s => s.utm_source).filter(Boolean));
-    return Array.from(sources).sort();
-  }, [salesData]);
-
   // Get available funnels (those with mappings)
   const availableFunnels = useMemo(() => {
     if (!mappings || !funnelsConfig) return [];
@@ -294,94 +276,48 @@ const FunnelAnalysis = () => {
     return funnelsConfig.filter(f => funnelIds.has(f.id) || funnelNames.has(f.name));
   }, [mappings, funnelsConfig]);
 
-  // Selected funnel config
-  const selectedFunnel = useMemo(() => {
-    return funnelsConfig?.find(f => f.id === selectedFunnelId);
-  }, [funnelsConfig, selectedFunnelId]);
+  // All offer codes from all active mappings
+  const allOfferCodes = useMemo(() => {
+    if (!mappings) return [];
+    return mappings.map(m => m.codigo_oferta).filter(Boolean) as string[];
+  }, [mappings]);
 
-  // Filter sales by source if selected
-  const filteredSales = useMemo(() => {
-    if (!salesData) return [];
-    if (selectedSource === 'all') return salesData;
-    return salesData.filter(s => s.utm_source === selectedSource);
-  }, [salesData, selectedSource]);
+  // All mappings sorted
+  const allMappingsSorted = useMemo(() => {
+    if (!mappings) return [];
+    return [...mappings].sort((a, b) => {
+      const orderA = getPositionSortOrder(a.tipo_posicao || '', a.ordem_posicao || 0);
+      const orderB = getPositionSortOrder(b.tipo_posicao || '', b.ordem_posicao || 0);
+      return orderA - orderB;
+    });
+  }, [mappings]);
 
-  // Get mappings for selected funnel
-  const funnelMappings = useMemo(() => {
-    if (!selectedFunnelId || !mappings) return [];
-    return mappings
-      .filter(m => m.funnel_id === selectedFunnelId || (selectedFunnel && m.id_funil === selectedFunnel.name))
-      .sort((a, b) => {
-        const orderA = getPositionSortOrder(a.tipo_posicao || '', a.ordem_posicao || 0);
-        const orderB = getPositionSortOrder(b.tipo_posicao || '', b.ordem_posicao || 0);
-        return orderA - orderB;
-      });
-  }, [selectedFunnelId, selectedFunnel, mappings]);
+  // Calculate total Meta investment (all campaigns)
+  const totalMetaInvestment = useMemo(() => {
+    if (!metaInsights) return 0;
+    return metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+  }, [metaInsights]);
 
-  // Calculate Meta investment for selected funnel
-  const metaInvestment = useMemo(() => {
-    if (!selectedFunnel?.campaign_name_pattern || !metaCampaigns || !metaInsights) return 0;
-    
-    const pattern = selectedFunnel.campaign_name_pattern.toLowerCase();
-    const matchingCampaignIds = new Set(
-      metaCampaigns
-        .filter(c => c.campaign_name?.toLowerCase().includes(pattern))
-        .map(c => c.campaign_id)
-    );
-    
-    return metaInsights
-      .filter(i => matchingCampaignIds.has(i.campaign_id || ''))
-      .reduce((sum, i) => sum + (i.spend || 0), 0);
-  }, [selectedFunnel, metaCampaigns, metaInsights]);
-
-  // Filtered Meta data for hierarchy analysis (based on funnel campaign pattern)
-  const filteredMetaData = useMemo(() => {
-    if (!selectedFunnel?.campaign_name_pattern || !metaCampaigns || !metaInsights) {
-      return { campaigns: [], adsets: [], ads: [], insights: [] };
-    }
-    
-    const pattern = selectedFunnel.campaign_name_pattern.toLowerCase();
-    const matchingCampaigns = metaCampaigns.filter(c => 
-      c.campaign_name?.toLowerCase().includes(pattern)
-    );
-    const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
-    
-    const filteredAdsets = (metaAdsets || []).filter(a => 
-      matchingCampaignIds.has(a.campaign_id)
-    );
-    const filteredAds = (metaAds || []).filter(a => 
-      matchingCampaignIds.has(a.campaign_id)
-    );
-    const filteredInsights = metaInsights.filter(i => 
-      matchingCampaignIds.has(i.campaign_id || '')
-    );
-    
+  // All Meta data for hierarchy analysis
+  const allMetaData = useMemo(() => {
     return {
-      campaigns: matchingCampaigns,
-      adsets: filteredAdsets,
-      ads: filteredAds,
-      insights: filteredInsights,
+      campaigns: metaCampaigns || [],
+      adsets: metaAdsets || [],
+      ads: metaAds || [],
+      insights: metaInsights || [],
     };
-  }, [selectedFunnel, metaCampaigns, metaAdsets, metaAds, metaInsights]);
+  }, [metaCampaigns, metaAdsets, metaAds, metaInsights]);
 
-  // Meta metrics aggregated
+  // Meta metrics aggregated (all campaigns)
   const metaMetrics = useMemo(() => {
-    if (!selectedFunnel?.campaign_name_pattern || !metaCampaigns || !metaInsights) {
+    if (!metaInsights) {
       return { spend: 0, impressions: 0, clicks: 0, reach: 0, ctr: 0, cpc: 0 };
     }
     
-    const pattern = selectedFunnel.campaign_name_pattern.toLowerCase();
-    const matchingCampaignIds = new Set(
-      metaCampaigns
-        .filter(c => c.campaign_name?.toLowerCase().includes(pattern))
-        .map(c => c.campaign_id)
-    );
-    
-    const insights = metaInsights.filter(i => matchingCampaignIds.has(i.campaign_id || ''));
-    const spend = insights.reduce((sum, i) => sum + (i.spend || 0), 0);
-    const impressions = insights.reduce((sum, i) => sum + (i.impressions || 0), 0);
-    const clicks = insights.reduce((sum, i) => sum + (i.clicks || 0), 0);
-    const reach = insights.reduce((sum, i) => sum + (i.reach || 0), 0);
+    const spend = metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+    const impressions = metaInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
+    const clicks = metaInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
+    const reach = metaInsights.reduce((sum, i) => sum + (i.reach || 0), 0);
     
     return {
       spend,
@@ -391,18 +327,18 @@ const FunnelAnalysis = () => {
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
     };
-  }, [selectedFunnel, metaCampaigns, metaInsights]);
+  }, [metaInsights]);
 
-  // Calculate funnel metrics
-  const funnelMetrics = useMemo((): PositionMetrics[] => {
-    if (!funnelMappings.length || !filteredSales) return [];
+  // Calculate aggregated metrics for all funnels
+  const aggregatedMetrics = useMemo((): PositionMetrics[] => {
+    if (!allMappingsSorted.length || !salesData) return [];
 
-    const offerCodes = new Set(funnelMappings.map(m => m.codigo_oferta));
-    const funnelSales = filteredSales.filter(s => offerCodes.has(s.offer_code));
+    const offerCodes = new Set(allMappingsSorted.map(m => m.codigo_oferta));
+    const allSales = salesData.filter(s => offerCodes.has(s.offer_code));
 
     // Count sales by offer
     const salesByOffer: Record<string, { count: number; revenue: number }> = {};
-    funnelSales.forEach(sale => {
+    allSales.forEach(sale => {
       const code = sale.offer_code || '';
       if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
       salesByOffer[code].count += 1;
@@ -410,13 +346,13 @@ const FunnelAnalysis = () => {
     });
 
     // FRONT sales as base
-    const feSales = funnelMappings
+    const feSales = allMappingsSorted
       .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => sum + (salesByOffer[m.codigo_oferta || '']?.count || 0), 0);
 
     const totalFunnelRevenue = Object.values(salesByOffer).reduce((sum, s) => sum + s.revenue, 0);
 
-    return funnelMappings.map(mapping => {
+    return allMappingsSorted.map(mapping => {
       const offerSales = salesByOffer[mapping.codigo_oferta || ''] || { count: 0, revenue: 0 };
       const taxaConversao = feSales > 0 ? (offerSales.count / feSales) * 100 : 0;
       const percentualReceita = totalFunnelRevenue > 0 ? (offerSales.revenue / totalFunnelRevenue) * 100 : 0;
@@ -434,27 +370,29 @@ const FunnelAnalysis = () => {
         percentual_receita: percentualReceita,
       };
     });
-  }, [funnelMappings, filteredSales]);
+  }, [allMappingsSorted, salesData]);
 
-  // Summary metrics
+  // Summary metrics for all funnels
   const summaryMetrics = useMemo(() => {
-    const totalVendas = funnelMetrics.reduce((sum, m) => sum + m.total_vendas, 0);
-    const totalReceita = funnelMetrics.reduce((sum, m) => sum + m.total_receita, 0);
-    const vendasFront = funnelMetrics
+    const totalVendas = aggregatedMetrics.reduce((sum, m) => sum + m.total_vendas, 0);
+    const totalReceita = aggregatedMetrics.reduce((sum, m) => sum + m.total_receita, 0);
+    const vendasFront = aggregatedMetrics
       .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => sum + m.total_vendas, 0);
     
     const uniqueCustomers = new Set(
-      filteredSales
-        .filter(s => funnelMappings.some(m => m.codigo_oferta === s.offer_code))
+      (salesData || [])
+        .filter(s => allMappingsSorted.some(m => m.codigo_oferta === s.offer_code))
         .map(s => s.buyer_email)
     ).size;
 
     const ticketMedio = vendasFront > 0 ? totalReceita / vendasFront : 0;
-    const roasTarget = selectedFunnel?.roas_target || 2;
-    const cpaMaximo = ticketMedio / roasTarget;
-    const cpaReal = vendasFront > 0 ? metaInvestment / vendasFront : 0;
-    const roas = metaInvestment > 0 ? totalReceita / metaInvestment : 0;
+    const avgRoasTarget = availableFunnels.length > 0 
+      ? availableFunnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / availableFunnels.length 
+      : 2;
+    const cpaMaximo = ticketMedio / avgRoasTarget;
+    const cpaReal = vendasFront > 0 ? totalMetaInvestment / vendasFront : 0;
+    const roas = totalMetaInvestment > 0 ? totalReceita / totalMetaInvestment : 0;
 
     return { 
       totalVendas, 
@@ -462,13 +400,21 @@ const FunnelAnalysis = () => {
       ticketMedio, 
       uniqueCustomers, 
       vendasFront,
-      investimento: metaInvestment,
+      investimento: totalMetaInvestment,
       cpaMaximo,
       cpaReal,
       roas,
-      roasTarget,
+      roasTarget: avgRoasTarget,
     };
-  }, [funnelMetrics, filteredSales, funnelMappings, metaInvestment, selectedFunnel]);
+  }, [aggregatedMetrics, salesData, allMappingsSorted, totalMetaInvestment, availableFunnels]);
+
+  // Refresh all data
+  const handleRefreshAll = () => {
+    refetchSales();
+    refetchMetaInsights();
+  };
+
+  const isRefreshingAll = isRefetching || isRefetchingMeta;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -595,49 +541,23 @@ const FunnelAnalysis = () => {
                 </div>
               </div>
 
-              {/* Funnel filter */}
-              <div className="space-y-1">
-                <Label className="text-xs">Funil</Label>
-                <Select value={selectedFunnelId} onValueChange={setSelectedFunnelId}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Selecione um funil" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableFunnels.map(funnel => (
-                      <SelectItem key={funnel.id} value={funnel.id}>
-                        {funnel.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Source filter */}
-              <div className="space-y-1">
-                <Label className="text-xs">Fonte de Tráfego</Label>
-                <Select value={selectedSource} onValueChange={setSelectedSource}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {uniqueSources.map(source => (
-                      <SelectItem key={source} value={source!}>
-                        {source}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => refetchSales()}
-                disabled={isRefetching}
-              >
-                <RefreshCw className={cn("w-4 h-4", isRefetching && "animate-spin")} />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRefreshAll}
+                    disabled={isRefreshingAll}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={cn("w-4 h-4", isRefreshingAll && "animate-spin")} />
+                    Atualizar
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Atualiza vendas e dados do Meta Ads</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </Card>
 
@@ -645,16 +565,6 @@ const FunnelAnalysis = () => {
             <div className="flex flex-col items-center justify-center h-64">
               <CubeLoader message="Carregando dados..." size="lg" />
             </div>
-          ) : !selectedFunnelId ? (
-            <Card className="p-12 text-center">
-              <Filter className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">
-                Selecione um funil
-              </h3>
-              <p className="text-muted-foreground">
-                Escolha um funil no filtro acima para ver a análise detalhada.
-              </p>
-            </Card>
           ) : (
             <Tabs defaultValue="overview" className="space-y-6">
               <TabsList className="flex flex-wrap w-full max-w-5xl gap-1">
@@ -679,23 +589,20 @@ const FunnelAnalysis = () => {
                   externalStartDate={startDate}
                   externalEndDate={endDate}
                   embedded={true}
-                  onFunnelSelect={(funnelId) => setSelectedFunnelId(funnelId)}
                 />
                 
                 {/* Hint para o usuário */}
-                {!selectedFunnelId && (
-                  <Card className="p-4 bg-muted/30 border-dashed">
-                    <p className="text-sm text-muted-foreground text-center">
-                      💡 Clique em um funil na tabela acima para expandir e ver os detalhes
-                    </p>
-                  </Card>
-                )}
+                <Card className="p-4 bg-muted/30 border-dashed">
+                  <p className="text-sm text-muted-foreground text-center">
+                    💡 Clique em um funil na tabela acima para expandir e ver os detalhes específicos
+                  </p>
+                </Card>
               </TabsContent>
 
               <TabsContent value="temporal">
                 <TemporalChart
-                  selectedFunnel={selectedFunnel?.name || ''}
-                  funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  selectedFunnel="Todos os Funis"
+                  funnelOfferCodes={allOfferCodes}
                   initialStartDate={startDate}
                   initialEndDate={endDate}
                 />
@@ -703,8 +610,8 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="comparison">
                 <PeriodComparison
-                  selectedFunnel={selectedFunnel?.name || ''}
-                  funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  selectedFunnel="Todos os Funis"
+                  funnelOfferCodes={allOfferCodes}
                   initialStartDate={startDate}
                   initialEndDate={endDate}
                 />
@@ -712,8 +619,8 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="utm">
                 <UTMAnalysis
-                  selectedFunnel={selectedFunnel?.name || ''}
-                  funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  selectedFunnel="Todos os Funis"
+                  funnelOfferCodes={allOfferCodes}
                   initialStartDate={startDate}
                   initialEndDate={endDate}
                 />
@@ -721,8 +628,8 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="payment">
                 <PaymentMethodAnalysis
-                  selectedFunnel={selectedFunnel?.name || ''}
-                  funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  selectedFunnel="Todos os Funis"
+                  funnelOfferCodes={allOfferCodes}
                   initialStartDate={startDate}
                   initialEndDate={endDate}
                 />
@@ -730,8 +637,8 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="cohort">
                 <CustomerCohort
-                  selectedFunnel={selectedFunnel?.name || ''}
-                  funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
+                  selectedFunnel="Todos os Funis"
+                  funnelOfferCodes={allOfferCodes}
                   initialStartDate={startDate}
                   initialEndDate={endDate}
                 />
@@ -739,7 +646,7 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="ltv">
                 <LTVAnalysis
-                  salesData={filteredSales.map(s => ({
+                  salesData={(salesData || []).map(s => ({
                     transaction: s.transaction_id,
                     product: s.product_name,
                     buyer: s.buyer_email || '',
@@ -748,15 +655,15 @@ const FunnelAnalysis = () => {
                     date: s.sale_date || '',
                     offerCode: s.offer_code || undefined,
                   }))}
-                  funnelOfferCodes={funnelMetrics.map(m => m.codigo_oferta)}
-                  selectedFunnel={selectedFunnel?.name || ''}
+                  funnelOfferCodes={allOfferCodes}
+                  selectedFunnel="Todos os Funis"
                 />
               </TabsContent>
 
               <TabsContent value="changelog">
                 <FunnelChangelog
-                  selectedFunnel={selectedFunnel?.name || ''}
-                  offerOptions={funnelMetrics.map(m => ({
+                  selectedFunnel="Todos os Funis"
+                  offerOptions={aggregatedMetrics.map(m => ({
                     codigo_oferta: m.codigo_oferta,
                     nome_oferta: m.nome_oferta
                   }))}
@@ -764,12 +671,12 @@ const FunnelAnalysis = () => {
               </TabsContent>
 
               <TabsContent value="meta-hierarchy">
-                {filteredMetaData.campaigns.length > 0 ? (
+                {allMetaData.campaigns.length > 0 ? (
                   <MetaHierarchyAnalysis
-                    insights={filteredMetaData.insights}
-                    campaigns={filteredMetaData.campaigns}
-                    adsets={filteredMetaData.adsets}
-                    ads={filteredMetaData.ads}
+                    insights={allMetaData.insights}
+                    campaigns={allMetaData.campaigns}
+                    adsets={allMetaData.adsets}
+                    ads={allMetaData.ads}
                     loading={isRefetchingMeta}
                     onRefresh={() => refetchMetaInsights()}
                   />
@@ -780,13 +687,8 @@ const FunnelAnalysis = () => {
                       Nenhuma campanha encontrada
                     </h3>
                     <p className="text-muted-foreground">
-                      Configure o padrão de campanha no funil "{selectedFunnel?.name}" para vincular campanhas do Meta Ads.
+                      Configure campanhas no Meta Ads e sincronize para ver os dados aqui.
                     </p>
-                    {selectedFunnel?.campaign_name_pattern && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Padrão atual: <Badge variant="outline">{selectedFunnel.campaign_name_pattern}</Badge>
-                      </p>
-                    )}
                   </Card>
                 )}
               </TabsContent>

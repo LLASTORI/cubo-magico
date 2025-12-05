@@ -147,7 +147,7 @@ export function CuboMagicoDashboard({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
-        .select('campaign_id, campaign_name')
+        .select('campaign_id, campaign_name, status')
         .eq('project_id', projectId);
       
       if (error) throw error;
@@ -156,8 +156,37 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch Meta insights - use unified query key
-  // Filter for campaign-level data only (adset_id IS NULL AND ad_id IS NULL) to avoid duplicates
+  // Fetch Meta adsets - for hierarchy analysis
+  const { data: adsetsData } = useQuery({
+    queryKey: ['meta-adsets-unified', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_adsets')
+        .select('adset_id, adset_name, campaign_id, status')
+        .eq('project_id', projectId);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch Meta ads - for hierarchy analysis
+  const { data: adsData } = useQuery({
+    queryKey: ['meta-ads-unified', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ads')
+        .select('ad_id, ad_name, adset_id, campaign_id, status')
+        .eq('project_id', projectId);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch Meta insights - campaign-level only for spend calculations
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
     queryKey: ['meta-insights-unified', projectId, startDateStr, endDateStr],
     queryFn: async () => {
@@ -167,6 +196,23 @@ export function CuboMagicoDashboard({
         .eq('project_id', projectId)
         .is('adset_id', null)
         .is('ad_id', null)
+        .gte('date_start', startDateStr)
+        .lte('date_start', endDateStr);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch ALL Meta insights (all levels) - for hierarchy analysis
+  const { data: allLevelInsightsData } = useQuery({
+    queryKey: ['meta-insights-all-levels', projectId, startDateStr, endDateStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_insights')
+        .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
+        .eq('project_id', projectId)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       
@@ -330,9 +376,9 @@ export function CuboMagicoDashboard({
       .filter(o => o.codigo_oferta);
   };
 
-  // Filtered Meta data for hierarchy analysis
+  // Filtered Meta data for hierarchy analysis - uses ALL level insights
   const getFilteredMetaData = (campaignPattern: string) => {
-    if (!campaignPattern || !campaignsData || !insightsData) {
+    if (!campaignPattern || !campaignsData || !allLevelInsightsData) {
       return { campaigns: [], adsets: [], ads: [], insights: [] };
     }
     
@@ -342,8 +388,20 @@ export function CuboMagicoDashboard({
     );
     const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
     
-    const filteredInsights = insightsData.filter(i => 
+    // Filter insights by matching campaigns
+    const filteredInsights = allLevelInsightsData.filter(i => 
       matchingCampaignIds.has(i.campaign_id || '')
+    );
+    
+    // Filter adsets by matching campaigns
+    const filteredAdsets = (adsetsData || []).filter(a => 
+      matchingCampaignIds.has(a.campaign_id)
+    );
+    const matchingAdsetIds = new Set(filteredAdsets.map(a => a.adset_id));
+    
+    // Filter ads by matching adsets
+    const filteredAds = (adsData || []).filter(a => 
+      matchingAdsetIds.has(a.adset_id)
     );
     
     return {
@@ -351,10 +409,23 @@ export function CuboMagicoDashboard({
         id: c.campaign_id,
         campaign_id: c.campaign_id,
         campaign_name: c.campaign_name,
-        status: null,
+        status: c.status,
       })),
-      adsets: [],
-      ads: [],
+      adsets: filteredAdsets.map(a => ({
+        id: a.adset_id,
+        adset_id: a.adset_id,
+        adset_name: a.adset_name,
+        campaign_id: a.campaign_id,
+        status: a.status,
+      })),
+      ads: filteredAds.map(a => ({
+        id: a.ad_id,
+        ad_id: a.ad_id,
+        ad_name: a.ad_name,
+        adset_id: a.adset_id,
+        campaign_id: a.campaign_id,
+        status: a.status,
+      })),
       insights: filteredInsights.map(i => ({
         id: i.campaign_id || '',
         campaign_id: i.campaign_id,

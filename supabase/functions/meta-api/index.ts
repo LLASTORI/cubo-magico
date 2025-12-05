@@ -738,7 +738,7 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
   return allAds
 }
 
-// Sync adsets to database
+// Sync adsets to database - use adset_id as primary key (globally unique in Meta)
 async function syncAdsets(
   supabase: any,
   projectId: string,
@@ -758,6 +758,22 @@ async function syncAdsets(
   }
   
   console.log(`Total adsets fetched: ${allAdsets.length}`)
+  
+  // First, delete existing adsets for these account IDs to ensure clean update
+  // This handles the case where adsets were synced with different project_ids
+  const adsetIds = allAdsets.map(a => a.id)
+  
+  if (adsetIds.length > 0) {
+    // Delete in batches
+    for (let i = 0; i < adsetIds.length; i += 500) {
+      const batch = adsetIds.slice(i, i + 500)
+      await supabase
+        .from('meta_adsets')
+        .delete()
+        .in('adset_id', batch)
+    }
+    console.log(`Cleaned ${adsetIds.length} existing adsets`)
+  }
   
   const adsetRecords = allAdsets.map(adset => ({
     project_id: projectId,
@@ -779,11 +795,11 @@ async function syncAdsets(
     const batch = adsetRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
     const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
     
-    console.log(`Upserting adsets batch ${batchNum}...`)
+    console.log(`Inserting adsets batch ${batchNum}...`)
     
     const { error } = await supabase
       .from('meta_adsets')
-      .upsert(batch, { onConflict: 'project_id,adset_id' })
+      .insert(batch)
     
     if (error) {
       console.error(`Adsets batch ${batchNum} error:`, error)
@@ -797,7 +813,7 @@ async function syncAdsets(
   return { success: true, synced, errors, total: allAdsets.length }
 }
 
-// Sync ads to database
+// Sync ads to database - use ad_id as primary key (globally unique in Meta)
 async function syncAds(
   supabase: any,
   projectId: string,
@@ -818,6 +834,21 @@ async function syncAds(
   
   console.log(`Total ads fetched: ${allAds.length}`)
   
+  // First, delete existing ads for these IDs to ensure clean update
+  const adIds = allAds.map(a => a.id)
+  
+  if (adIds.length > 0) {
+    // Delete in batches
+    for (let i = 0; i < adIds.length; i += 500) {
+      const batch = adIds.slice(i, i + 500)
+      await supabase
+        .from('meta_ads')
+        .delete()
+        .in('ad_id', batch)
+    }
+    console.log(`Cleaned ${adIds.length} existing ads`)
+  }
+  
   const adRecords = allAds.map(ad => ({
     project_id: projectId,
     ad_account_id: ad.ad_account_id,
@@ -835,11 +866,11 @@ async function syncAds(
     const batch = adRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
     const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
     
-    console.log(`Upserting ads batch ${batchNum}...`)
+    console.log(`Inserting ads batch ${batchNum}...`)
     
     const { error } = await supabase
       .from('meta_ads')
-      .upsert(batch, { onConflict: 'project_id,ad_id' })
+      .insert(batch)
     
     if (error) {
       console.error(`Ads batch ${batchNum} error:`, error)

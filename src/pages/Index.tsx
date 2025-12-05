@@ -265,8 +265,8 @@ const Index = () => {
     };
   };
 
-  // Fixed exchange rates (same as used in hotmart-api sync)
-  const exchangeRates: Record<string, number> = {
+  // Exchange rates state - will be updated with real-time rates
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
     'BRL': 1,
     'USD': 6.00,
     'EUR': 6.40,
@@ -281,7 +281,34 @@ const Index = () => {
     'CLP': 0.006,
     'COP': 0.0014,
     'PEN': 1.60,
-  };
+  });
+
+  // Fetch real-time exchange rates on mount
+  useEffect(() => {
+    const fetchExchangeRates = async () => {
+      try {
+        const currencies = ['USD', 'EUR', 'GBP', 'AUD', 'CHF', 'CAD', 'MXN'];
+        const newRates: Record<string, number> = { 'BRL': 1 };
+        
+        for (const currency of currencies) {
+          const response = await fetch(`https://api.frankfurter.app/latest?from=${currency}&to=BRL`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.rates?.BRL) {
+              newRates[currency] = data.rates.BRL;
+            }
+          }
+        }
+        
+        console.log('Real-time exchange rates loaded:', newRates);
+        setExchangeRates(prev => ({ ...prev, ...newRates }));
+      } catch (error) {
+        console.error('Error fetching exchange rates, using fallback:', error);
+      }
+    };
+
+    fetchExchangeRates();
+  }, []);
 
   const formatSalesData = () => {
     if (!salesData?.items || !currentFilters) return [];
@@ -294,7 +321,7 @@ const Index = () => {
     let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
-      // Use fixed exchange rates (same as sync function)
+      // Use real-time exchange rates
       const originalValue = item.purchase?.price?.value || 0;
       const currency = item.purchase?.price?.currency_code || 'BRL';
       const rate = exchangeRates[currency] || 1;
@@ -314,6 +341,7 @@ const Index = () => {
         originalCurrency: currency,
         originalValue: originalValue,
         wasConverted: wasConverted,
+        exchangeRate: rate,
         ...utmData,
       };
     });

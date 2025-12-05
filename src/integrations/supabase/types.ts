@@ -175,6 +175,7 @@ export type Database = {
           created_at: string
           due_date: string | null
           exchange_rate: number | null
+          exchange_rate_used: number | null
           free_period: string | null
           has_coproduction: boolean | null
           id: string
@@ -243,6 +244,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           exchange_rate?: number | null
+          exchange_rate_used?: number | null
           free_period?: string | null
           has_coproduction?: boolean | null
           id?: string
@@ -311,6 +313,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           exchange_rate?: number | null
+          exchange_rate_used?: number | null
           free_period?: string | null
           has_coproduction?: boolean | null
           id?: string

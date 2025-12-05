@@ -26,6 +26,7 @@ interface Sale {
   originalCurrency?: string;
   originalValue?: number;
   wasConverted?: boolean;
+  exchangeRate?: number;
 }
 
 interface SalesTableProps {
@@ -93,6 +94,9 @@ const SalesTable = ({ sales }: SalesTableProps) => {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>Convertido de {sale.originalCurrency} {sale.originalValue?.toFixed(2)}</p>
+                              {sale.exchangeRate && (
+                                <p className="text-xs text-muted-foreground">Taxa: 1 {sale.originalCurrency} = R$ {sale.exchangeRate.toFixed(2)}</p>
+                              )}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

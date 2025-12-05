@@ -254,8 +254,7 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta insights - use unified query key
-  // Filter for campaign-level data only (adset_id IS NULL AND ad_id IS NULL) to avoid duplicates
+  // Fetch Meta insights - campaign-level only for spend calculations
   const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta } = useQuery({
     queryKey: ['meta-insights-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
@@ -265,6 +264,22 @@ const FunnelAnalysis = () => {
         .eq('project_id', currentProject!.id)
         .is('adset_id', null)
         .is('ad_id', null)
+        .gte('date_start', startDateStr)
+        .lte('date_start', endDateStr);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id,
+  });
+
+  // Fetch ALL Meta insights (all levels) for hierarchy analysis
+  const { data: allLevelInsights, refetch: refetchAllInsights } = useQuery({
+    queryKey: ['meta-insights-all-levels', currentProject?.id, startDateStr, endDateStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_insights')
+        .select('id, campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
+        .eq('project_id', currentProject!.id)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       if (error) throw error;
@@ -304,15 +319,15 @@ const FunnelAnalysis = () => {
     return metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
   }, [metaInsights]);
 
-  // All Meta data for hierarchy analysis
+  // All Meta data for hierarchy analysis - use ALL level insights
   const allMetaData = useMemo(() => {
     return {
       campaigns: metaCampaigns || [],
       adsets: metaAdsets || [],
       ads: metaAds || [],
-      insights: metaInsights || [],
+      insights: allLevelInsights || [],
     };
-  }, [metaCampaigns, metaAdsets, metaAds, metaInsights]);
+  }, [metaCampaigns, metaAdsets, metaAds, allLevelInsights]);
 
   // Meta metrics aggregated (all campaigns)
   const metaMetrics = useMemo(() => {
@@ -418,6 +433,7 @@ const FunnelAnalysis = () => {
   const handleRefreshAll = () => {
     refetchSales();
     refetchMetaInsights();
+    refetchAllInsights();
   };
 
   const isRefreshingAll = isRefetching || isRefetchingMeta;
@@ -684,7 +700,10 @@ const FunnelAnalysis = () => {
                     adsets={allMetaData.adsets}
                     ads={allMetaData.ads}
                     loading={isRefetchingMeta}
-                    onRefresh={() => refetchMetaInsights()}
+                    onRefresh={() => {
+                      refetchMetaInsights();
+                      refetchAllInsights();
+                    }}
                   />
                 ) : (
                   <Card className="p-12 text-center">

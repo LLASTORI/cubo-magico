@@ -29,6 +29,7 @@ import UTMAnalysis from "@/components/funnel/UTMAnalysis";
 import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
 import CustomerCohort from "@/components/funnel/CustomerCohort";
 import LTVAnalysis from "@/components/funnel/LTVAnalysis";
+import { CuboMagicoDashboard } from "@/components/funnel/CuboMagicoDashboard";
 import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -658,6 +659,10 @@ const FunnelAnalysis = () => {
             <Tabs defaultValue="overview" className="space-y-6">
               <TabsList className="flex flex-wrap w-full max-w-5xl gap-1">
                 <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                <TabsTrigger value="cubo-magico" className="gap-1">
+                  <Target className="w-3 h-3" />
+                  Cubo Mágico
+                </TabsTrigger>
                 <TabsTrigger value="meta-hierarchy" className="gap-1">
                   <Megaphone className="w-3 h-3" />
                   Meta Ads
@@ -958,6 +963,10 @@ const FunnelAnalysis = () => {
                     </div>
                   </Card>
                 )}
+              </TabsContent>
+
+              <TabsContent value="cubo-magico">
+                <CuboMagicoDashboard projectId={currentProject.id} />
               </TabsContent>
 
               <TabsContent value="temporal">

@@ -255,6 +255,7 @@ const FunnelAnalysis = () => {
   });
 
   // Fetch Meta insights - use unified query key
+  // Filter for campaign-level data only (adset_id IS NULL AND ad_id IS NULL) to avoid duplicates
   const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta } = useQuery({
     queryKey: ['meta-insights-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
@@ -262,6 +263,8 @@ const FunnelAnalysis = () => {
         .from('meta_insights')
         .select('id, campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
         .eq('project_id', currentProject!.id)
+        .is('adset_id', null)
+        .is('ad_id', null)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       if (error) throw error;

@@ -80,7 +80,7 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-  // Fetch Meta insights (spend data)
+  // Fetch Meta insights (spend data) - campaign-level only to avoid duplicates
   const { data: metaInsights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
     queryKey: ['meta_roi_insights', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
@@ -91,6 +91,8 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
         .select('date_start, spend, clicks, impressions')
         .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
+        .is('adset_id', null)
+        .is('ad_id', null)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       

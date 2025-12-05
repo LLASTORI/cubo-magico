@@ -12,7 +12,8 @@ import {
   Calendar,
   RefreshCw,
   AlertCircle,
-  BarChart3
+  BarChart3,
+  Filter
 } from "lucide-react";
 import { HotmartSyncManager } from "@/components/HotmartSyncManager";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +26,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   ChartContainer,
@@ -73,6 +75,7 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(today);
+  const [paidTrafficOnly, setPaidTrafficOnly] = useState(true); // Default to paid traffic only
 
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
@@ -97,18 +100,24 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
     enabled: activeAccountIds.length > 0,
   });
 
-  // Fetch Hotmart sales (revenue data)
+  // Fetch Hotmart sales (revenue data) - optionally filter by paid traffic
   const { data: hotmartSales, isLoading: salesLoading, refetch: refetchSales } = useQuery({
-    queryKey: ['hotmart_roi_sales', projectId, startDateStr, endDateStr],
+    queryKey: ['hotmart_roi_sales', projectId, startDateStr, endDateStr, paidTrafficOnly],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('hotmart_sales')
-        .select('sale_date, total_price, total_price_brl, net_revenue, status')
+        .select('sale_date, total_price, total_price_brl, net_revenue, status, sale_attribution_type')
         .eq('project_id', projectId)
         .gte('sale_date', `${startDateStr}T00:00:00`)
         .lte('sale_date', `${endDateStr}T23:59:59`)
         .in('status', ['COMPLETE', 'APPROVED']);
       
+      // Filter by paid traffic if enabled
+      if (paidTrafficOnly) {
+        query = query.in('sale_attribution_type', ['paid_tracked', 'paid_untracked']);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -264,7 +273,18 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
             </PopoverContent>
           </Popover>
         </div>
-        <div className="flex gap-2 ml-auto">
+        <div className="flex gap-2 ml-auto items-center">
+          <div className="flex items-center gap-2 mr-4 px-3 py-1.5 bg-background rounded-md border">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            <Label htmlFor="paid-traffic-filter" className="text-xs cursor-pointer">
+              Apenas tráfego pago
+            </Label>
+            <Switch
+              id="paid-traffic-filter"
+              checked={paidTrafficOnly}
+              onCheckedChange={setPaidTrafficOnly}
+            />
+          </div>
           {[7, 15, 30, 60, 90].map(days => (
             <Button
               key={days}

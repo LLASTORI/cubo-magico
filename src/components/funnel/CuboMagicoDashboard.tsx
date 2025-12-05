@@ -76,7 +76,7 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
     enabled: !!projectId,
   });
 
-  // Fetch hotmart sales
+  // Fetch hotmart sales - APPROVED + COMPLETE
   const { data: salesData } = useQuery({
     queryKey: ['hotmart-sales-cubo', projectId, startDate, endDate],
     queryFn: async () => {
@@ -84,9 +84,39 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
         .from('hotmart_sales')
         .select('offer_code, total_price_brl, buyer_email, sale_date')
         .eq('project_id', projectId)
-        .eq('status', 'COMPLETE')
+        .in('status', ['APPROVED', 'COMPLETE'])
         .gte('sale_date', format(startDate, 'yyyy-MM-dd'))
         .lte('sale_date', format(endDate, 'yyyy-MM-dd') + 'T23:59:59');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch funnel meta accounts (campanhas vinculadas aos funis)
+  const { data: funnelMetaAccounts } = useQuery({
+    queryKey: ['funnel-meta-accounts-cubo', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funnel_meta_accounts')
+        .select('funnel_id, meta_account_id')
+        .eq('project_id', projectId);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch meta ad accounts to get account_id
+  const { data: metaAdAccounts } = useQuery({
+    queryKey: ['meta-ad-accounts-cubo', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ad_accounts')
+        .select('id, account_id')
+        .eq('project_id', projectId);
       
       if (error) throw error;
       return data || [];
@@ -114,7 +144,7 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_insights')
-        .select('campaign_id, spend, date_start')
+        .select('campaign_id, ad_account_id, spend, date_start')
         .eq('project_id', projectId)
         .gte('date_start', format(startDate, 'yyyy-MM-dd'))
         .lte('date_start', format(endDate, 'yyyy-MM-dd'));
@@ -127,23 +157,27 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
 
   // Calculate metrics for each funnel
   const funnelMetrics = useMemo((): FunnelMetrics[] => {
-    if (!funnels || !offerMappings || !salesData || !campaignsData || !insightsData) {
+    if (!funnels || !offerMappings || !salesData || !insightsData || !funnelMetaAccounts || !metaAdAccounts) {
       return [];
     }
 
+    // Create map: meta_ad_accounts.id -> account_id (string usado no insights)
+    const accountIdMap = new Map(metaAdAccounts.map(a => [a.id, a.account_id]));
+
     return funnels.map(funnel => {
-      const pattern = funnel.campaign_name_pattern?.toLowerCase() || '';
       const roasTarget = funnel.roas_target || 2;
 
-      // Find campaigns matching the pattern
-      const matchingCampaigns = campaignsData.filter(c => 
-        c.campaign_name?.toLowerCase().includes(pattern)
-      );
-      const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
+      // Get Meta account IDs vinculadas a este funil
+      const funnelAccountIds = funnelMetaAccounts
+        .filter(fma => fma.funnel_id === funnel.id)
+        .map(fma => accountIdMap.get(fma.meta_account_id))
+        .filter(Boolean) as string[];
+      
+      const funnelAccountIdsSet = new Set(funnelAccountIds);
 
-      // Calculate total spend for matching campaigns
+      // Calculate total spend from insights of linked accounts
       const investimento = insightsData
-        .filter(i => matchingCampaignIds.has(i.campaign_id || ''))
+        .filter(i => funnelAccountIdsSet.has(i.ad_account_id || ''))
         .reduce((sum, i) => sum + (i.spend || 0), 0);
 
       // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
@@ -171,8 +205,8 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
       const vendasFront = productsByPosition['FRONT'] || productsByPosition['FE'] || 0;
       const totalProdutos = Object.values(productsByPosition).reduce((sum, v) => sum + v, 0);
 
-      // Calculate ticket médio (per customer)
-      const ticketMedio = uniqueCustomers > 0 ? faturamento / uniqueCustomers : 0;
+      // Calculate ticket médio = Faturamento Total / Vendas FRONT
+      const ticketMedio = vendasFront > 0 ? faturamento / vendasFront : 0;
 
       // CPA máximo aceitável = Ticket médio / ROAS alvo
       const cpaMaximo = ticketMedio / roasTarget;
@@ -211,7 +245,7 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
         productsByPosition,
       };
     });
-  }, [funnels, offerMappings, salesData, campaignsData, insightsData]);
+  }, [funnels, offerMappings, salesData, insightsData, funnelMetaAccounts, metaAdAccounts]);
 
   // Totals
   const totals = useMemo(() => {

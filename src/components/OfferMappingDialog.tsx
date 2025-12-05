@@ -284,8 +284,6 @@ export function OfferMappingDialog({
                       <Input 
                         placeholder="Nome do produto" 
                         {...field} 
-                        disabled 
-                        className="bg-muted"
                       />
                     </FormControl>
                     <FormMessage />
@@ -322,8 +320,6 @@ export function OfferMappingDialog({
                       <Input 
                         placeholder="Código da oferta" 
                         {...field} 
-                        disabled 
-                        className="bg-muted"
                       />
                     </FormControl>
                     <FormMessage />

@@ -912,6 +912,40 @@ async function syncInsightsSmartOptimized(
         }
       }
       
+      // Get ad-level data for metadata
+      const adInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'ad')
+      
+      // DEDUPLICATE ad records
+      const adMap = new Map<string, any>()
+      adInsights.insights
+        .filter((i: any) => i.ad_id)
+        .forEach((insight: any) => {
+          const key = `${projectId}_${insight.ad_id}`
+          if (!adMap.has(key)) {
+            adMap.set(key, {
+              project_id: projectId,
+              ad_account_id: insight.ad_account_id,
+              campaign_id: insight.campaign_id,
+              adset_id: insight.adset_id,
+              ad_id: insight.ad_id,
+              ad_name: insight.ad_name,
+              updated_at: new Date().toISOString(),
+            })
+          }
+        })
+      
+      const uniqueAdRecords = Array.from(adMap.values())
+      if (uniqueAdRecords.length > 0) {
+        console.log(`Upserting ${uniqueAdRecords.length} unique ads...`)
+        const { error: adError } = await supabase
+          .from('meta_ads')
+          .upsert(uniqueAdRecords, { onConflict: 'project_id,ad_id' })
+        
+        if (adError) {
+          console.error('Error syncing ads:', adError)
+        }
+      }
+      
       // Delay between ranges
       if (rangeIdx < dateRanges.length - 1) {
         console.log('Waiting before next range...')

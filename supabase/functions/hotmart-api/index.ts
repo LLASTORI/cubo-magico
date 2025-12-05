@@ -397,6 +397,72 @@ async function syncSales(
     unknown: 0,
   };
   
+  // Fetch real-time exchange rates from Frankfurter API
+  let exchangeRates: Record<string, number> = {
+    'BRL': 1,
+    'USD': 6.00,
+    'EUR': 6.40,
+    'GBP': 7.60,
+    'PYG': 0.0008,
+    'UYU': 0.14,
+    'AUD': 3.90,
+    'CHF': 6.80,
+    'CAD': 4.40,
+    'MXN': 0.30,
+    'ARS': 0.006,
+    'CLP': 0.006,
+    'COP': 0.0014,
+    'PEN': 1.60,
+  };
+  
+  try {
+    console.log('Fetching real-time exchange rates from Frankfurter API...');
+    const ratesResponse = await fetch('https://api.frankfurter.app/latest?to=BRL');
+    if (ratesResponse.ok) {
+      const ratesData = await ratesResponse.json();
+      // Frankfurter returns rates FROM base currency TO BRL
+      // So USD -> BRL means 1 USD = X BRL
+      if (ratesData.rates?.BRL) {
+        const brlRate = ratesData.rates.BRL;
+        // We need rates TO BRL, so we need to calculate cross rates
+        // Frankfurter base is EUR by default
+        exchangeRates = {
+          'BRL': 1,
+          'EUR': brlRate, // 1 EUR = X BRL
+        };
+        
+        // Fetch USD and other currencies separately
+        const usdResponse = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
+        if (usdResponse.ok) {
+          const usdData = await usdResponse.json();
+          if (usdData.rates?.BRL) {
+            exchangeRates['USD'] = usdData.rates.BRL;
+          }
+        }
+        
+        // Fetch other common currencies
+        const currencies = ['GBP', 'AUD', 'CHF', 'CAD', 'MXN'];
+        for (const curr of currencies) {
+          try {
+            const resp = await fetch(`https://api.frankfurter.app/latest?from=${curr}&to=BRL`);
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.rates?.BRL) {
+                exchangeRates[curr] = data.rates.BRL;
+              }
+            }
+          } catch (e) {
+            console.log(`Could not fetch rate for ${curr}, using fallback`);
+          }
+        }
+        
+        console.log('Real-time exchange rates fetched:', exchangeRates);
+      }
+    }
+  } catch (rateError) {
+    console.error('Error fetching exchange rates, using fallback rates:', rateError);
+  }
+
   // Prepare all sales data
   const salesData = sales.map(sale => {
     const tracking = sale.purchase.tracking;
@@ -424,25 +490,9 @@ async function syncSales(
     
     attributionStats[attributionType]++;
     
-    // Calculate BRL conversion with fixed rates
+    // Calculate BRL conversion with real-time rates
     const currencyCode = sale.purchase.price?.currency_code || 'BRL';
     const totalPrice = sale.purchase.price?.value || 0;
-    const exchangeRates: Record<string, number> = {
-      'BRL': 1,
-      'USD': 6.00,
-      'EUR': 6.40,
-      'GBP': 7.60,
-      'PYG': 0.0008,
-      'UYU': 0.14,
-      'AUD': 3.90,
-      'CHF': 6.80,
-      'CAD': 4.40,
-      'MXN': 0.30,
-      'ARS': 0.006,
-      'CLP': 0.006,
-      'COP': 0.0014,
-      'PEN': 1.60,
-    };
     const rate = exchangeRates[currencyCode] || 1;
     const totalPriceBrl = totalPrice * rate;
 
@@ -490,6 +540,7 @@ async function syncSales(
       last_synced_at: new Date().toISOString(),
       total_price: totalPrice || null,
       total_price_brl: totalPriceBrl || null,
+      exchange_rate_used: currencyCode !== 'BRL' ? rate : null,
       net_revenue: sale.commissions?.[0]?.value || null,
     };
   });

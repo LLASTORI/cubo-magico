@@ -512,6 +512,12 @@ const FunnelAnalysis = () => {
     setStartDate(subDays(new Date(), days));
   };
 
+  const setYesterday = () => {
+    const yesterday = subDays(new Date(), 1);
+    setStartDate(yesterday);
+    setEndDate(yesterday);
+  };
+
   const setThisMonth = () => {
     setStartDate(startOfMonth(new Date()));
     setEndDate(new Date());
@@ -581,6 +587,7 @@ const FunnelAnalysis = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-1">
                   <Button variant="outline" size="sm" onClick={() => setQuickDate(0)}>Hoje</Button>
+                  <Button variant="outline" size="sm" onClick={setYesterday}>Ontem</Button>
                   <Button variant="outline" size="sm" onClick={() => setQuickDate(7)}>7 dias</Button>
                   <Button variant="outline" size="sm" onClick={() => setQuickDate(30)}>30 dias</Button>
                   <Button variant="outline" size="sm" onClick={setThisMonth}>Este mês</Button>

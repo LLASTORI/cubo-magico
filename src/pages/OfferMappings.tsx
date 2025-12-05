@@ -661,19 +661,30 @@ export default function OfferMappingsAuto() {
                       </Button>
                     )}
                   </div>
-                  <Button 
-                    onClick={syncOffersWithHotmart}
-                    disabled={syncingOffers || mappings.length === 0}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    {syncingOffers ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <RotateCw className="h-4 w-4" />
-                    )}
-                    Sincronizar com Hotmart
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={() => {
+                        setSelectedMapping(null);
+                        setDialogOpen(true);
+                      }}
+                      className="gap-2"
+                    >
+                      Criar Oferta
+                    </Button>
+                    <Button 
+                      onClick={syncOffersWithHotmart}
+                      disabled={syncingOffers || mappings.length === 0}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {syncingOffers ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCw className="h-4 w-4" />
+                      )}
+                      Sincronizar com Hotmart
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="flex items-center gap-4 flex-wrap">

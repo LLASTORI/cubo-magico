@@ -297,12 +297,13 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Get available funnels (those with mappings)
+  // Get available funnels (those with mappings) - include A Definir
   const availableFunnels = useMemo(() => {
     if (!mappings || !funnelsConfig) return [];
     const funnelIds = new Set(mappings.map(m => m.funnel_id).filter(Boolean));
     const funnelNames = new Set(mappings.map(m => m.id_funil));
     
+    // Include all funnels that have mappings by id or name
     return funnelsConfig.filter(f => funnelIds.has(f.id) || funnelNames.has(f.name));
   }, [mappings, funnelsConfig]);
 
@@ -359,33 +360,36 @@ const FunnelAnalysis = () => {
     };
   }, [metaInsights]);
 
-  // Calculate aggregated metrics for all funnels
+  // Calculate aggregated metrics for all funnels - USE TOTAL_PRICE_BRL ALWAYS
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
-    if (!allMappingsSorted.length || !salesData) return [];
+    if (!salesData) return [];
 
-    const offerCodes = new Set(allMappingsSorted.map(m => m.codigo_oferta));
-    const allSales = salesData.filter(s => offerCodes.has(s.offer_code));
-
-    // Count sales by offer
+    // Count ALL sales by offer code (including unmapped offers)
     const salesByOffer: Record<string, { count: number; revenue: number }> = {};
-    allSales.forEach(sale => {
-      const code = sale.offer_code || '';
+    salesData.forEach(sale => {
+      const code = sale.offer_code || 'SEM_CODIGO';
       if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
       salesByOffer[code].count += 1;
-      salesByOffer[code].revenue += sale.total_price_brl || 0;
+      // ALWAYS use total_price_brl for accurate currency conversion
+      salesByOffer[code].revenue += sale.total_price_brl || sale.total_price || 0;
     });
 
-    // FRONT sales as base
+    // Build metrics from mappings
+    const mappedOffers = new Set(allMappingsSorted.map(m => m.codigo_oferta));
+    
+    // FRONT sales as base (only from mapped offers)
     const feSales = allMappingsSorted
       .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => sum + (salesByOffer[m.codigo_oferta || '']?.count || 0), 0);
 
-    const totalFunnelRevenue = Object.values(salesByOffer).reduce((sum, s) => sum + s.revenue, 0);
+    // Calculate total revenue from ALL sales (mapped + unmapped)
+    const totalAllRevenue = Object.values(salesByOffer).reduce((sum, s) => sum + s.revenue, 0);
 
-    return allMappingsSorted.map(mapping => {
+    // Create metrics for mapped offers
+    const mappedMetrics = allMappingsSorted.map(mapping => {
       const offerSales = salesByOffer[mapping.codigo_oferta || ''] || { count: 0, revenue: 0 };
       const taxaConversao = feSales > 0 ? (offerSales.count / feSales) * 100 : 0;
-      const percentualReceita = totalFunnelRevenue > 0 ? (offerSales.revenue / totalFunnelRevenue) * 100 : 0;
+      const percentualReceita = totalAllRevenue > 0 ? (offerSales.revenue / totalAllRevenue) * 100 : 0;
 
       return {
         tipo_posicao: mapping.tipo_posicao || '',
@@ -400,28 +404,49 @@ const FunnelAnalysis = () => {
         percentual_receita: percentualReceita,
       };
     });
+
+    // Add unmapped offers as "Não Categorizado"
+    const unmappedOffers = Object.entries(salesByOffer)
+      .filter(([code]) => !mappedOffers.has(code) && code !== 'SEM_CODIGO')
+      .map(([code, data]) => ({
+        tipo_posicao: 'NC',
+        nome_posicao: 'Não Categorizado',
+        ordem_posicao: 999,
+        nome_oferta: `Oferta ${code}`,
+        codigo_oferta: code,
+        valor_oferta: data.count > 0 ? data.revenue / data.count : 0,
+        total_vendas: data.count,
+        total_receita: data.revenue,
+        taxa_conversao: feSales > 0 ? (data.count / feSales) * 100 : 0,
+        percentual_receita: totalAllRevenue > 0 ? (data.revenue / totalAllRevenue) * 100 : 0,
+      }));
+
+    return [...mappedMetrics, ...unmappedOffers];
   }, [allMappingsSorted, salesData]);
 
-  // Summary metrics for all funnels
+  // Summary metrics for all funnels - USE ALL SALES DATA
   const summaryMetrics = useMemo(() => {
+    // Use aggregatedMetrics which now includes ALL sales (mapped + unmapped)
     const totalVendas = aggregatedMetrics.reduce((sum, m) => sum + m.total_vendas, 0);
     const totalReceita = aggregatedMetrics.reduce((sum, m) => sum + m.total_receita, 0);
     const vendasFront = aggregatedMetrics
       .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => sum + m.total_vendas, 0);
     
+    // Count ALL unique customers from ALL sales
     const uniqueCustomers = new Set(
-      (salesData || [])
-        .filter(s => allMappingsSorted.some(m => m.codigo_oferta === s.offer_code))
-        .map(s => s.buyer_email)
+      (salesData || []).map(s => s.buyer_email).filter(Boolean)
     ).size;
 
-    const ticketMedio = vendasFront > 0 ? totalReceita / vendasFront : 0;
+    // If no FRONT sales, use total sales for ticket calculation
+    const baseVendas = vendasFront > 0 ? vendasFront : totalVendas;
+    const ticketMedio = baseVendas > 0 ? totalReceita / baseVendas : 0;
+    
     const avgRoasTarget = availableFunnels.length > 0 
       ? availableFunnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / availableFunnels.length 
       : 2;
     const cpaMaximo = ticketMedio / avgRoasTarget;
-    const cpaReal = vendasFront > 0 ? totalMetaInvestment / vendasFront : 0;
+    const cpaReal = baseVendas > 0 ? totalMetaInvestment / baseVendas : 0;
     const roas = totalMetaInvestment > 0 ? totalReceita / totalMetaInvestment : 0;
 
     return { 
@@ -436,11 +461,26 @@ const FunnelAnalysis = () => {
       roas,
       roasTarget: avgRoasTarget,
     };
-  }, [aggregatedMetrics, salesData, allMappingsSorted, totalMetaInvestment, availableFunnels]);
+  }, [aggregatedMetrics, salesData, totalMetaInvestment, availableFunnels]);
 
   // Sync and refresh all data
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
+
+  // Fetch active Meta ad accounts for sync
+  const { data: metaAdAccounts } = useQuery({
+    queryKey: ['meta-ad-accounts', currentProject?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ad_accounts')
+        .select('account_id')
+        .eq('project_id', currentProject!.id)
+        .eq('is_active', true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id,
+  });
 
   const handleRefreshAll = async () => {
     setIsSyncing(true);
@@ -448,7 +488,6 @@ const FunnelAnalysis = () => {
     
     try {
       // Calculate dates in Brazil timezone for sync
-      // startDate at 00:00:00 BRT and endDate at 23:59:59 BRT
       const startYear = startDate.getFullYear();
       const startMonth = startDate.getMonth();
       const startDay = startDate.getDate();
@@ -457,9 +496,7 @@ const FunnelAnalysis = () => {
       const endDay = endDate.getDate();
       
       // Create UTC timestamps for Brazil timezone (UTC-3)
-      // Start of day in Brazil = 03:00 UTC
       const syncStartDate = Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0);
-      // End of day in Brazil = 02:59:59.999 UTC next day
       const syncEndDate = Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999);
       
       console.log('Sync dates:', {
@@ -484,7 +521,31 @@ const FunnelAnalysis = () => {
         console.log(`Hotmart synced: ${total} sales`);
       }
 
-      // 2. Refresh data from database
+      // 2. Sync Meta Insights for the selected period (if accounts available)
+      if (metaAdAccounts && metaAdAccounts.length > 0) {
+        setSyncStatus('Sincronizando Meta Ads...');
+        const accountIds = metaAdAccounts.map(a => a.account_id);
+        
+        const metaResponse = await supabase.functions.invoke('meta-api', {
+          body: {
+            projectId: currentProject!.id,
+            action: 'sync_insights',
+            accountIds,
+            dateStart: startDateStr,
+            dateStop: endDateStr,
+          },
+        });
+
+        if (metaResponse.error) {
+          console.error('Meta sync error:', metaResponse.error);
+          toast.error('Erro ao sincronizar Meta Ads');
+        } else {
+          console.log('Meta sync initiated:', metaResponse.data);
+          toast.success('Sincronização Meta Ads iniciada em background');
+        }
+      }
+
+      // 3. Refresh data from database
       setSyncStatus('Atualizando dados...');
       await Promise.all([
         refetchSales(),
@@ -493,8 +554,10 @@ const FunnelAnalysis = () => {
       ]);
 
       setSyncStatus('');
+      toast.success('Dados atualizados');
     } catch (error) {
       console.error('Sync error:', error);
+      toast.error('Erro ao sincronizar dados');
       setSyncStatus('');
     } finally {
       setIsSyncing(false);

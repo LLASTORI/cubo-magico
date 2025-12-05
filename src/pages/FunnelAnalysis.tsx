@@ -496,7 +496,7 @@ const FunnelAnalysis = () => {
                       </Card>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs">
-                      <p>Soma de todos os valores de vendas realizadas no funil selecionado.</p>
+                      <p>Soma dos valores reais das vendas realizadas (conforme registrado no Hotmart). Este valor pode diferir do valor configurado da oferta devido a conversão de moeda, alterações de preço ou cupons.</p>
                     </TooltipContent>
                   </Tooltip>
 
@@ -650,7 +650,16 @@ const FunnelAnalysis = () => {
                           <TableHead>Código</TableHead>
                           <TableHead className="text-right">Valor</TableHead>
                           <TableHead className="text-right">Vendas</TableHead>
-                          <TableHead className="text-right">Receita</TableHead>
+                          <TableHead className="text-right">
+                            <Tooltip>
+                              <TooltipTrigger className="cursor-help underline decoration-dotted decoration-muted-foreground/50">
+                                Receita
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p>Valor real das vendas (do Hotmart). Pode diferir do "Valor" configurado devido a conversão de moeda, cupons ou alterações de preço.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
                           <TableHead className="text-right">Taxa Conv.</TableHead>
                           <TableHead className="text-right">% Receita</TableHead>
                         </TableRow>
@@ -667,7 +676,16 @@ const FunnelAnalysis = () => {
                             <TableCell className="text-xs text-muted-foreground font-mono">{metric.codigo_oferta}</TableCell>
                             <TableCell className="text-right">{formatCurrency(metric.valor_oferta)}</TableCell>
                             <TableCell className="text-right font-bold">{metric.total_vendas}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(metric.total_receita)}</TableCell>
+                            <TableCell className="text-right">
+                              <Tooltip>
+                                <TooltipTrigger className="cursor-help">
+                                  {formatCurrency(metric.total_receita)}
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p>Valor real registrado no Hotmart. Diferenças com o "Valor" podem ocorrer por conversão de moeda, cupons ou preços diferentes na data da venda.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TableCell>
                             <TableCell className="text-right">
                               <Badge variant={metric.taxa_conversao > 10 ? "default" : "secondary"}>
                                 {formatPercent(metric.taxa_conversao)}

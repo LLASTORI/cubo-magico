@@ -186,6 +186,8 @@ export function OfferMappingDialog({
       const nomePosicao = generatePositionName(values.tipo_posicao || null, ordemPosicao);
 
       const data = {
+        id_produto: values.id_produto_visual || null,
+        id_produto_visual: values.id_produto_visual || null,
         nome_produto: values.nome_produto,
         nome_oferta: values.nome_oferta || null,
         codigo_oferta: values.codigo_oferta || null,
@@ -265,8 +267,6 @@ export function OfferMappingDialog({
                       <Input 
                         placeholder="ID do produto" 
                         {...field} 
-                        disabled 
-                        className="bg-muted"
                       />
                     </FormControl>
                     <FormMessage />

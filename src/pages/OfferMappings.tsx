@@ -766,8 +766,17 @@ export default function OfferMappingsAuto() {
                           <TableCell className="font-medium max-w-[200px] truncate">
                             {mapping.nome_produto}
                           </TableCell>
-                          <TableCell className="max-w-[180px] truncate">
-                            {mapping.nome_oferta || '-'}
+                          <TableCell className="max-w-[180px]">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">
+                                {mapping.nome_oferta === 'Importado das vendas' ? '-' : (mapping.nome_oferta || '-')}
+                              </span>
+                              {mapping.nome_oferta === 'Importado das vendas' && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">
+                                  Auto
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="font-mono text-xs">
                             {mapping.codigo_oferta || '-'}

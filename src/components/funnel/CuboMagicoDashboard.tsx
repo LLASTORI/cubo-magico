@@ -156,34 +156,32 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch Meta adsets - for hierarchy analysis
+  // Fetch Meta adsets - for hierarchy analysis (without project_id filter as IDs are globally unique)
   const { data: adsetsData } = useQuery({
-    queryKey: ['meta-adsets-unified', projectId],
+    queryKey: ['meta-adsets-all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_adsets')
-        .select('adset_id, adset_name, campaign_id, status')
-        .eq('project_id', projectId);
+        .select('adset_id, adset_name, campaign_id, status');
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    staleTime: 1000 * 60 * 10, // Cache for 10 minutes as this doesn't change often
   });
 
-  // Fetch Meta ads - for hierarchy analysis
+  // Fetch Meta ads - for hierarchy analysis (without project_id filter as IDs are globally unique)
   const { data: adsData } = useQuery({
-    queryKey: ['meta-ads-unified', projectId],
+    queryKey: ['meta-ads-all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_ads')
-        .select('ad_id, ad_name, adset_id, campaign_id, status')
-        .eq('project_id', projectId);
+        .select('ad_id, ad_name, adset_id, campaign_id, status');
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });
 
   // Fetch Meta insights - campaign-level only for spend calculations

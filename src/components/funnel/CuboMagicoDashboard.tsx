@@ -66,7 +66,7 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id_funil, codigo_oferta, tipo_posicao, nome_posicao, valor')
+        .select('id_funil, funnel_id, codigo_oferta, tipo_posicao, nome_posicao, valor')
         .eq('project_id', projectId)
         .eq('status', 'Ativo');
       
@@ -146,8 +146,10 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
         .filter(i => matchingCampaignIds.has(i.campaign_id || ''))
         .reduce((sum, i) => sum + (i.spend || 0), 0);
 
-      // Get offer codes for this funnel
-      const funnelOffers = offerMappings.filter(o => o.id_funil === funnel.name);
+      // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
+      const funnelOffers = offerMappings.filter(o => 
+        o.funnel_id === funnel.id || o.id_funil === funnel.name
+      );
       const offerCodes = new Set(funnelOffers.map(o => o.codigo_oferta));
 
       // Calculate sales metrics

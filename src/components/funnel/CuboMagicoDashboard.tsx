@@ -7,11 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   CalendarIcon, RefreshCw, TrendingUp, TrendingDown, Target, 
   DollarSign, ShoppingCart, Users, AlertTriangle, CheckCircle2, XCircle,
-  ChevronDown, ChevronRight, Percent, ArrowRight
+  ChevronDown, ChevronRight, Percent, ArrowRight, Megaphone, LineChart, 
+  GitCompare, Tag, CreditCard, UsersRound, Coins, History
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,6 +20,16 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 import { cn } from '@/lib/utils';
+
+// Import analysis components
+import TemporalChart from '@/components/funnel/TemporalChart';
+import PeriodComparison from '@/components/funnel/PeriodComparison';
+import UTMAnalysis from '@/components/funnel/UTMAnalysis';
+import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
+import CustomerCohort from '@/components/funnel/CustomerCohort';
+import LTVAnalysis from '@/components/funnel/LTVAnalysis';
+import FunnelChangelog from '@/components/funnel/FunnelChangelog';
+import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 
 interface CuboMagicoDashboardProps {
   projectId: string;
@@ -110,15 +121,12 @@ export function CuboMagicoDashboard({
   const { data: salesData } = useQuery({
     queryKey: ['hotmart-sales-cubo', projectId, startDate, endDate],
     queryFn: async () => {
-      // Converter datas selecionadas para UTC considerando fuso Brasil
-      // Ex: 04/12 00:00 BRT = 04/12 03:00 UTC
-      // Ex: 04/12 23:59 BRT = 05/12 02:59 UTC
       const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
       const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
       
       const { data, error } = await supabase
         .from('hotmart_sales')
-        .select('offer_code, total_price_brl, buyer_email, sale_date')
+        .select('offer_code, total_price_brl, buyer_email, sale_date, transaction_id, product_name, status')
         .eq('project_id', projectId)
         .in('status', ['APPROVED', 'COMPLETE'])
         .gte('sale_date', startUTC)
@@ -149,7 +157,7 @@ export function CuboMagicoDashboard({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_insights')
-        .select('campaign_id, ad_account_id, spend, date_start')
+        .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
         .eq('project_id', projectId)
         .gte('date_start', format(startDate, 'yyyy-MM-dd'))
         .lte('date_start', format(endDate, 'yyyy-MM-dd'));
@@ -292,6 +300,87 @@ export function CuboMagicoDashboard({
       totalProdutos: acc.totalProdutos + m.totalProdutos,
     }), { investimento: 0, faturamento: 0, vendasFront: 0, totalProdutos: 0 });
   }, [funnelMetrics]);
+
+  // Helper to get offer codes for a specific funnel
+  const getOfferCodesForFunnel = (funnelId: string, funnelName: string): string[] => {
+    if (!offerMappings) return [];
+    return offerMappings
+      .filter(o => o.funnel_id === funnelId || o.id_funil === funnelName)
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
+  };
+
+  // Helper to get offer options for FunnelChangelog
+  const getOfferOptionsForFunnel = (funnelId: string, funnelName: string) => {
+    if (!offerMappings) return [];
+    return offerMappings
+      .filter(o => o.funnel_id === funnelId || o.id_funil === funnelName)
+      .map(o => ({
+        codigo_oferta: o.codigo_oferta || '',
+        nome_oferta: o.nome_posicao || o.codigo_oferta || '',
+      }))
+      .filter(o => o.codigo_oferta);
+  };
+
+  // Filtered Meta data for hierarchy analysis
+  const getFilteredMetaData = (campaignPattern: string) => {
+    if (!campaignPattern || !campaignsData || !insightsData) {
+      return { campaigns: [], adsets: [], ads: [], insights: [] };
+    }
+    
+    const pattern = campaignPattern.toLowerCase();
+    const matchingCampaigns = campaignsData.filter(c => 
+      c.campaign_name?.toLowerCase().includes(pattern)
+    );
+    const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
+    
+    const filteredInsights = insightsData.filter(i => 
+      matchingCampaignIds.has(i.campaign_id || '')
+    );
+    
+    return {
+      campaigns: matchingCampaigns.map(c => ({
+        id: c.campaign_id,
+        campaign_id: c.campaign_id,
+        campaign_name: c.campaign_name,
+        status: null,
+      })),
+      adsets: [],
+      ads: [],
+      insights: filteredInsights.map(i => ({
+        id: i.campaign_id || '',
+        campaign_id: i.campaign_id,
+        adset_id: i.adset_id,
+        ad_id: i.ad_id,
+        spend: i.spend,
+        impressions: i.impressions,
+        clicks: i.clicks,
+        reach: i.reach,
+        ctr: i.ctr,
+        cpc: i.cpc,
+        cpm: i.cpm,
+        date_start: i.date_start,
+        date_stop: i.date_stop,
+      })),
+    };
+  };
+
+  // Format sales data for LTVAnalysis
+  const getFormattedSalesData = (offerCodes: string[]) => {
+    if (!salesData) return [];
+    const offerCodesSet = new Set(offerCodes);
+    return salesData
+      .filter(s => offerCodesSet.has(s.offer_code || ''))
+      .map(s => ({
+        transaction: s.transaction_id,
+        product: s.product_name,
+        buyer: s.buyer_email || 'Desconhecido',
+        value: s.total_price_brl || 0,
+        status: s.status,
+        date: s.sale_date || '',
+        offerCode: s.offer_code || '',
+      }));
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -568,84 +657,202 @@ export function CuboMagicoDashboard({
                     </TableCell>
                   </TableRow>
                   
-                  {/* Expanded Details Row */}
+                  {/* Expanded Details Row with Nested Tabs */}
                   {isExpanded && (
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell colSpan={11} className="p-0">
-                        <div className="p-6 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                          {/* Funnel Flow */}
-                          <div>
-                            <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil</h4>
-                            <div className="flex flex-wrap items-stretch gap-2">
-                              {metrics.positionBreakdown.map((pos, index) => {
-                                const maxSales = Math.max(...metrics.positionBreakdown.map(p => p.vendas));
-                                const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
+                        <div className="p-4 animate-in slide-in-from-top-2 duration-200">
+                          <Tabs defaultValue="overview" className="w-full">
+                            <TabsList className="flex flex-wrap gap-1 h-auto p-1 mb-4">
+                              <TabsTrigger value="overview" className="text-xs gap-1">
+                                <Target className="w-3 h-3" />
+                                Visão Geral
+                              </TabsTrigger>
+                              <TabsTrigger value="meta" className="text-xs gap-1">
+                                <Megaphone className="w-3 h-3" />
+                                Meta Ads
+                              </TabsTrigger>
+                              <TabsTrigger value="temporal" className="text-xs gap-1">
+                                <LineChart className="w-3 h-3" />
+                                Evolução
+                              </TabsTrigger>
+                              <TabsTrigger value="comparison" className="text-xs gap-1">
+                                <GitCompare className="w-3 h-3" />
+                                Comparar
+                              </TabsTrigger>
+                              <TabsTrigger value="utm" className="text-xs gap-1">
+                                <Tag className="w-3 h-3" />
+                                UTM
+                              </TabsTrigger>
+                              <TabsTrigger value="payment" className="text-xs gap-1">
+                                <CreditCard className="w-3 h-3" />
+                                Pagamentos
+                              </TabsTrigger>
+                              <TabsTrigger value="cohort" className="text-xs gap-1">
+                                <UsersRound className="w-3 h-3" />
+                                Clientes
+                              </TabsTrigger>
+                              <TabsTrigger value="ltv" className="text-xs gap-1">
+                                <Coins className="w-3 h-3" />
+                                LTV
+                              </TabsTrigger>
+                              <TabsTrigger value="changelog" className="text-xs gap-1">
+                                <History className="w-3 h-3" />
+                                Histórico
+                              </TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="overview" className="mt-0">
+                              {/* Funnel Flow */}
+                              <div className="space-y-4">
+                                <div>
+                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil</h4>
+                                  <div className="flex flex-wrap items-stretch gap-2">
+                                    {metrics.positionBreakdown.map((pos, index) => {
+                                      const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
+                                      
+                                      return (
+                                        <Fragment key={`${pos.tipo}${pos.ordem}`}>
+                                          <div 
+                                            className={cn(
+                                              "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px]",
+                                              gradient
+                                            )}
+                                          >
+                                            <div className="relative z-10 flex flex-col items-center justify-center text-white">
+                                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                                                {pos.tipo}{pos.ordem || ''}
+                                              </span>
+                                              <span className="text-2xl font-black">
+                                                {pos.vendas}
+                                              </span>
+                                              <div className="flex items-center gap-1 text-[10px] font-medium opacity-90">
+                                                <Percent className="w-2.5 h-2.5" />
+                                                {pos.taxaConversao.toFixed(1)}%
+                                              </div>
+                                              <span className="text-[10px] mt-1 opacity-70">
+                                                {formatCurrency(pos.receita)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          
+                                          {index < metrics.positionBreakdown.length - 1 && (
+                                            <div className="flex items-center justify-center w-6">
+                                              <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
+                                            </div>
+                                          )}
+                                        </Fragment>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                                 
+                                {/* Key Metrics */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border/50">
+                                  <div className="text-center">
+                                    <p className="text-xs text-muted-foreground">Lucro (Fat - Inv)</p>
+                                    <p className={cn(
+                                      "text-lg font-bold",
+                                      metrics.faturamento - metrics.investimento > 0 ? "text-green-600" : "text-red-600"
+                                    )}>
+                                      {formatCurrency(metrics.faturamento - metrics.investimento)}
+                                    </p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-xs text-muted-foreground">Total Produtos</p>
+                                    <p className="text-lg font-bold">{metrics.totalProdutos}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-xs text-muted-foreground">ROAS Alvo</p>
+                                    <p className="text-lg font-bold">{metrics.funnel.roas_target || 2}x</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-xs text-muted-foreground">Diferença CPA</p>
+                                    <p className={cn(
+                                      "text-lg font-bold",
+                                      metrics.cpaReal <= metrics.cpaMaximo ? "text-green-600" : "text-red-600"
+                                    )}>
+                                      {formatCurrency(metrics.cpaMaximo - metrics.cpaReal)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="meta" className="mt-0">
+                              {(() => {
+                                const metaData = getFilteredMetaData(metrics.funnel.campaign_name_pattern || '');
                                 return (
-                                  <Fragment key={`${pos.tipo}${pos.ordem}`}>
-                                    <div 
-                                      className={cn(
-                                        "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px]",
-                                        gradient
-                                      )}
-                                    >
-                                      <div className="relative z-10 flex flex-col items-center justify-center text-white">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-                                          {pos.tipo}{pos.ordem || ''}
-                                        </span>
-                                        <span className="text-2xl font-black">
-                                          {pos.vendas}
-                                        </span>
-                                        <div className="flex items-center gap-1 text-[10px] font-medium opacity-90">
-                                          <Percent className="w-2.5 h-2.5" />
-                                          {pos.taxaConversao.toFixed(1)}%
-                                        </div>
-                                        <span className="text-[10px] mt-1 opacity-70">
-                                          {formatCurrency(pos.receita)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    
-                                    {index < metrics.positionBreakdown.length - 1 && (
-                                      <div className="flex items-center justify-center w-6">
-                                        <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
-                                      </div>
-                                    )}
-                                  </Fragment>
+                                  <MetaHierarchyAnalysis
+                                    insights={metaData.insights}
+                                    campaigns={metaData.campaigns}
+                                    adsets={metaData.adsets}
+                                    ads={metaData.ads}
+                                  />
                                 );
-                              })}
-                            </div>
-                          </div>
-                          
-                          {/* Key Metrics */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border/50">
-                            <div className="text-center">
-                              <p className="text-xs text-muted-foreground">Lucro (Fat - Inv)</p>
-                              <p className={cn(
-                                "text-lg font-bold",
-                                metrics.faturamento - metrics.investimento > 0 ? "text-green-600" : "text-red-600"
-                              )}>
-                                {formatCurrency(metrics.faturamento - metrics.investimento)}
-                              </p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-muted-foreground">Total Produtos</p>
-                              <p className="text-lg font-bold">{metrics.totalProdutos}</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-muted-foreground">ROAS Alvo</p>
-                              <p className="text-lg font-bold">{metrics.funnel.roas_target || 2}x</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-muted-foreground">Diferença CPA</p>
-                              <p className={cn(
-                                "text-lg font-bold",
-                                metrics.cpaReal <= metrics.cpaMaximo ? "text-green-600" : "text-red-600"
-                              )}>
-                                {formatCurrency(metrics.cpaMaximo - metrics.cpaReal)}
-                              </p>
-                            </div>
-                          </div>
+                              })()}
+                            </TabsContent>
+
+                            <TabsContent value="temporal" className="mt-0">
+                              <TemporalChart
+                                selectedFunnel={metrics.funnel.name}
+                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                initialStartDate={startDate}
+                                initialEndDate={endDate}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="comparison" className="mt-0">
+                              <PeriodComparison
+                                selectedFunnel={metrics.funnel.name}
+                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                initialStartDate={startDate}
+                                initialEndDate={endDate}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="utm" className="mt-0">
+                              <UTMAnalysis
+                                selectedFunnel={metrics.funnel.name}
+                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                initialStartDate={startDate}
+                                initialEndDate={endDate}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="payment" className="mt-0">
+                              <PaymentMethodAnalysis
+                                selectedFunnel={metrics.funnel.name}
+                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                initialStartDate={startDate}
+                                initialEndDate={endDate}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="cohort" className="mt-0">
+                              <CustomerCohort
+                                selectedFunnel={metrics.funnel.name}
+                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                initialStartDate={startDate}
+                                initialEndDate={endDate}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="ltv" className="mt-0">
+                              <LTVAnalysis
+                                salesData={getFormattedSalesData(getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name))}
+                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                selectedFunnel={metrics.funnel.name}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="changelog" className="mt-0">
+                              <FunnelChangelog
+                                selectedFunnel={metrics.funnel.name}
+                                offerOptions={getOfferOptionsForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                              />
+                            </TabsContent>
+                          </Tabs>
                         </div>
                       </TableCell>
                     </TableRow>

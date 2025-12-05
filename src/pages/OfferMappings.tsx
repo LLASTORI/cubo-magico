@@ -201,38 +201,26 @@ export default function OfferMappingsAuto() {
     
     try {
       setImportingOffers(true);
-      setImportProgress('Buscando produtos da Hotmart...');
+      setImportProgress('Buscando ofertas das vendas no banco de dados...');
       
-      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/products',
-          apiType: 'products',
-          projectId: currentProject.id
-        }
-      });
-
-      if (productsError) throw productsError;
+      // First, import offers from sales data (most reliable source)
+      const { data: salesOffers, error: salesError } = await supabase
+        .from('hotmart_sales')
+        .select('offer_code, product_name, offer_price, offer_currency')
+        .eq('project_id', currentProject.id)
+        .not('offer_code', 'is', null);
       
-      const products: HotmartProduct[] = productsData.items || productsData || [];
-      console.log(`Found ${products.length} products`);
+      if (salesError) throw salesError;
       
-      if (products.length === 0) {
-        toast({
-          title: 'Nenhum produto encontrado',
-          description: 'Não foram encontrados produtos na sua conta Hotmart',
-        });
-        return;
-      }
-
       const existingOfferCodes = new Set(mappings.map(m => m.codigo_oferta));
       
       interface OfferToImport {
-        id_produto: string;
-        id_produto_visual: string;
+        id_produto: string | null;
+        id_produto_visual: string | null;
         nome_produto: string;
         nome_oferta: string;
         codigo_oferta: string;
-        valor: number;
+        valor: number | null;
         status: string;
         id_funil: string;
         data_ativacao: string;
@@ -240,47 +228,87 @@ export default function OfferMappingsAuto() {
       }
       
       const offersToImport: OfferToImport[] = [];
+      const seenOfferCodes = new Set<string>();
       
-      for (let i = 0; i < products.length; i++) {
-        const product = products[i];
-        setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 30)}...`);
-        
-        try {
-          const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
-            body: {
-              endpoint: `/products/${product.ucode}/offers`,
-              apiType: 'products',
-              projectId: currentProject.id
-            }
-          });
-
-          if (offersError) {
-            console.error(`Error fetching offers for product ${product.ucode}:`, offersError);
-            continue;
+      // Process offers from sales data
+      if (salesOffers && salesOffers.length > 0) {
+        for (const sale of salesOffers) {
+          if (sale.offer_code && !existingOfferCodes.has(sale.offer_code) && !seenOfferCodes.has(sale.offer_code)) {
+            offersToImport.push({
+              id_produto: null,
+              id_produto_visual: null,
+              nome_produto: sale.product_name || 'Produto Desconhecido',
+              nome_oferta: 'Importado das vendas',
+              codigo_oferta: sale.offer_code,
+              valor: sale.offer_price || null,
+              status: 'Ativo',
+              id_funil: 'A Definir',
+              data_ativacao: new Date().toISOString().split('T')[0],
+              project_id: currentProject.id,
+            });
+            seenOfferCodes.add(sale.offer_code);
           }
-          
-          const offers: HotmartOffer[] = offersData.items || offersData || [];
-          
-          offers.forEach(offer => {
-            if (!existingOfferCodes.has(offer.code)) {
-              offersToImport.push({
-                id_produto: product.ucode,
-                id_produto_visual: `ID ${product.id}`,
-                nome_produto: product.name,
-                nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
-                codigo_oferta: offer.code,
-                valor: offer.price.value,
-                status: 'Ativo',
-                id_funil: 'A Definir',
-                data_ativacao: new Date().toISOString().split('T')[0],
-                project_id: currentProject.id,
-              });
-              existingOfferCodes.add(offer.code);
-            }
-          });
-        } catch (error) {
-          console.error(`Error processing product ${product.ucode}:`, error);
         }
+      }
+      
+      console.log(`Found ${offersToImport.length} offers from sales data`);
+      setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. Buscando produtos da API...`);
+      
+      // Now also check the Hotmart Products API for additional offers
+      try {
+        const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
+          body: {
+            endpoint: '/products',
+            apiType: 'products',
+            projectId: currentProject.id
+          }
+        });
+
+        if (!productsError && productsData) {
+          const products: HotmartProduct[] = productsData.items || productsData || [];
+          console.log(`Found ${products.length} products from API`);
+          
+          for (let i = 0; i < products.length; i++) {
+            const product = products[i];
+            setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 30)}...`);
+            
+            try {
+              const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
+                body: {
+                  endpoint: `/products/${product.ucode}/offers`,
+                  apiType: 'products',
+                  projectId: currentProject.id
+                }
+              });
+
+              if (!offersError && offersData) {
+                const offers: HotmartOffer[] = offersData.items || offersData || [];
+                
+                offers.forEach(offer => {
+                  if (!existingOfferCodes.has(offer.code) && !seenOfferCodes.has(offer.code)) {
+                    offersToImport.push({
+                      id_produto: product.ucode,
+                      id_produto_visual: `ID ${product.id}`,
+                      nome_produto: product.name,
+                      nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
+                      codigo_oferta: offer.code,
+                      valor: offer.price.value,
+                      status: 'Ativo',
+                      id_funil: 'A Definir',
+                      data_ativacao: new Date().toISOString().split('T')[0],
+                      project_id: currentProject.id,
+                    });
+                    seenOfferCodes.add(offer.code);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`Error processing product ${product.ucode}:`, error);
+            }
+          }
+        }
+      } catch (apiError) {
+        console.error('Error fetching from Hotmart API, continuing with sales data only:', apiError);
       }
       
       if (offersToImport.length === 0) {
@@ -293,15 +321,28 @@ export default function OfferMappingsAuto() {
       
       setImportProgress(`Importando ${offersToImport.length} ofertas...`);
       
-      const { error: insertError } = await supabase
-        .from('offer_mappings')
-        .insert(offersToImport);
+      // Insert in batches to avoid timeout
+      const BATCH_SIZE = 50;
+      let insertedCount = 0;
       
-      if (insertError) throw insertError;
+      for (let i = 0; i < offersToImport.length; i += BATCH_SIZE) {
+        const batch = offersToImport.slice(i, i + BATCH_SIZE);
+        const { error: insertError } = await supabase
+          .from('offer_mappings')
+          .insert(batch);
+        
+        if (insertError) {
+          console.error('Error inserting batch:', insertError);
+        } else {
+          insertedCount += batch.length;
+        }
+        
+        setImportProgress(`Importando ofertas... ${insertedCount}/${offersToImport.length}`);
+      }
       
       toast({
         title: 'Importação concluída!',
-        description: `${offersToImport.length} ofertas importadas com sucesso`,
+        description: `${insertedCount} ofertas importadas com sucesso`,
       });
       
       fetchMappings();

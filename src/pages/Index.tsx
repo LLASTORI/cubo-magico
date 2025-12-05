@@ -276,11 +276,21 @@ const Index = () => {
     let filteredItems = salesData.items.map((item: any) => {
       const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
       
+      // Use total_price_brl if available (from database), otherwise fallback to price.value with conversion
+      const originalValue = item.purchase?.price?.value || 0;
+      const currency = item.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = item.purchase?.price?.exchange_rate_currency_payout || 1;
+      
+      // If currency is not BRL, apply exchange rate
+      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 
+        ? originalValue * exchangeRate 
+        : originalValue;
+      
       return {
         transaction: item.purchase?.transaction || 'N/A',
         product: item.product?.name || 'N/A',
         buyer: item.buyer?.name || item.buyer?.email || 'N/A',
-        value: item.purchase?.price?.value || 0,
+        value: valueInBRL,
         status: item.purchase?.status || 'unknown',
         date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
         offerCode: item.purchase?.offer?.code || undefined,

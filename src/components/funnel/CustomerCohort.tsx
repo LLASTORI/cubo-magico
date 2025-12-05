@@ -31,7 +31,11 @@ interface CustomerCohortProps {
 interface HotmartSale {
   purchase: {
     offer: { code: string };
-    price: { value: number };
+    price: { 
+      value: number;
+      currency_code?: string;
+      exchange_rate_currency_payout?: number;
+    };
     status: string;
     order_date: number;
   };
@@ -184,9 +188,15 @@ const CustomerCohort = ({ selectedFunnel, funnelOfferCodes, initialStartDate, in
         customerAllPurchases[email].phone = phone;
       }
       
+      // Use exchange rate to convert to BRL if available
+      const originalValue = sale.purchase?.price?.value || 0;
+      const currency = sale.purchase?.price?.currency_code || 'BRL';
+      const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
+      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+
       customerAllPurchases[email].allSales.push({
         date: new Date(sale.purchase?.order_date || Date.now()),
-        value: sale.purchase?.price?.value || 0,
+        value: valueInBRL,
         offerCode,
         funnelId,
       });

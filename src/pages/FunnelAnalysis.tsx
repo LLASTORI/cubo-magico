@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
   ArrowLeft, Percent, DollarSign, BarChart3, Target, ArrowRight, Users, 
-  TrendingUp, TrendingDown, RefreshCw, CalendarIcon, Filter
+  TrendingUp, TrendingDown, RefreshCw, CalendarIcon, Filter, Megaphone
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
@@ -29,6 +29,7 @@ import UTMAnalysis from "@/components/funnel/UTMAnalysis";
 import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
 import CustomerCohort from "@/components/funnel/CustomerCohort";
 import LTVAnalysis from "@/components/funnel/LTVAnalysis";
+import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -224,7 +225,35 @@ const FunnelAnalysis = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
-        .select('campaign_id, campaign_name')
+        .select('id, campaign_id, campaign_name, status')
+        .eq('project_id', currentProject!.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id,
+  });
+
+  // Fetch Meta adsets
+  const { data: metaAdsets } = useQuery({
+    queryKey: ['meta-adsets-analysis', currentProject?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_adsets')
+        .select('id, adset_id, adset_name, campaign_id, status')
+        .eq('project_id', currentProject!.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id,
+  });
+
+  // Fetch Meta ads
+  const { data: metaAds } = useQuery({
+    queryKey: ['meta-ads-analysis', currentProject?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ads')
+        .select('id, ad_id, ad_name, adset_id, campaign_id, status')
         .eq('project_id', currentProject!.id);
       if (error) throw error;
       return data || [];
@@ -233,12 +262,12 @@ const FunnelAnalysis = () => {
   });
 
   // Fetch Meta insights
-  const { data: metaInsights } = useQuery({
+  const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta } = useQuery({
     queryKey: ['meta-insights-analysis', currentProject?.id, startDate, endDate],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_insights')
-        .select('campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm')
+        .select('id, campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
         .eq('project_id', currentProject!.id)
         .gte('date_start', format(startDate, 'yyyy-MM-dd'))
         .lte('date_start', format(endDate, 'yyyy-MM-dd'));
@@ -303,6 +332,36 @@ const FunnelAnalysis = () => {
       .filter(i => matchingCampaignIds.has(i.campaign_id || ''))
       .reduce((sum, i) => sum + (i.spend || 0), 0);
   }, [selectedFunnel, metaCampaigns, metaInsights]);
+
+  // Filtered Meta data for hierarchy analysis (based on funnel campaign pattern)
+  const filteredMetaData = useMemo(() => {
+    if (!selectedFunnel?.campaign_name_pattern || !metaCampaigns || !metaInsights) {
+      return { campaigns: [], adsets: [], ads: [], insights: [] };
+    }
+    
+    const pattern = selectedFunnel.campaign_name_pattern.toLowerCase();
+    const matchingCampaigns = metaCampaigns.filter(c => 
+      c.campaign_name?.toLowerCase().includes(pattern)
+    );
+    const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
+    
+    const filteredAdsets = (metaAdsets || []).filter(a => 
+      matchingCampaignIds.has(a.campaign_id)
+    );
+    const filteredAds = (metaAds || []).filter(a => 
+      matchingCampaignIds.has(a.campaign_id)
+    );
+    const filteredInsights = metaInsights.filter(i => 
+      matchingCampaignIds.has(i.campaign_id || '')
+    );
+    
+    return {
+      campaigns: matchingCampaigns,
+      adsets: filteredAdsets,
+      ads: filteredAds,
+      insights: filteredInsights,
+    };
+  }, [selectedFunnel, metaCampaigns, metaAdsets, metaAds, metaInsights]);
 
   // Meta metrics aggregated
   const metaMetrics = useMemo(() => {
@@ -597,8 +656,12 @@ const FunnelAnalysis = () => {
             </Card>
           ) : (
             <Tabs defaultValue="overview" className="space-y-6">
-              <TabsList className="flex flex-wrap w-full max-w-4xl gap-1">
+              <TabsList className="flex flex-wrap w-full max-w-5xl gap-1">
                 <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                <TabsTrigger value="meta-hierarchy" className="gap-1">
+                  <Megaphone className="w-3 h-3" />
+                  Meta Ads
+                </TabsTrigger>
                 <TabsTrigger value="temporal">Evolução</TabsTrigger>
                 <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
                 <TabsTrigger value="utm">UTM</TabsTrigger>
@@ -966,6 +1029,34 @@ const FunnelAnalysis = () => {
                     nome_oferta: m.nome_oferta
                   }))}
                 />
+              </TabsContent>
+
+              <TabsContent value="meta-hierarchy">
+                {filteredMetaData.campaigns.length > 0 ? (
+                  <MetaHierarchyAnalysis
+                    insights={filteredMetaData.insights}
+                    campaigns={filteredMetaData.campaigns}
+                    adsets={filteredMetaData.adsets}
+                    ads={filteredMetaData.ads}
+                    loading={isRefetchingMeta}
+                    onRefresh={() => refetchMetaInsights()}
+                  />
+                ) : (
+                  <Card className="p-12 text-center">
+                    <Megaphone className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground mb-2">
+                      Nenhuma campanha encontrada
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Configure o padrão de campanha no funil "{selectedFunnel?.name}" para vincular campanhas do Meta Ads.
+                    </p>
+                    {selectedFunnel?.campaign_name_pattern && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Padrão atual: <Badge variant="outline">{selectedFunnel.campaign_name_pattern}</Badge>
+                      </p>
+                    )}
+                  </Card>
+                )}
               </TabsContent>
             </Tabs>
           )}

@@ -20,6 +20,10 @@ import { cn } from '@/lib/utils';
 
 interface CuboMagicoDashboardProps {
   projectId: string;
+  externalStartDate?: Date;
+  externalEndDate?: Date;
+  embedded?: boolean; // When true, hides header and date filters
+  onFunnelSelect?: (funnelId: string) => void;
 }
 
 interface FunnelWithConfig {
@@ -43,9 +47,21 @@ interface FunnelMetrics {
   productsByPosition: Record<string, number>;
 }
 
-export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
-  const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
-  const [endDate, setEndDate] = useState<Date>(new Date());
+export function CuboMagicoDashboard({ 
+  projectId, 
+  externalStartDate, 
+  externalEndDate, 
+  embedded = false,
+  onFunnelSelect 
+}: CuboMagicoDashboardProps) {
+  const [internalStartDate, setInternalStartDate] = useState<Date>(subDays(new Date(), 7));
+  const [internalEndDate, setInternalEndDate] = useState<Date>(new Date());
+  
+  // Use external dates if provided, otherwise use internal state
+  const startDate = externalStartDate || internalStartDate;
+  const endDate = externalEndDate || internalEndDate;
+  const setStartDate = externalStartDate ? () => {} : setInternalStartDate;
+  const setEndDate = externalEndDate ? () => {} : setInternalEndDate;
 
   // Fetch funnels with config
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
@@ -298,76 +314,78 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Dashboard Cubo Mágico</h2>
-            <p className="text-sm text-muted-foreground">
-              Análise de ROI por funil • {funnels.length} funis configurados
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Quick date buttons */}
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" onClick={() => setQuickDate(0)}>Hoje</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickDate(7)}>7 dias</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickDate(30)}>30 dias</Button>
-              <Button variant="outline" size="sm" onClick={setThisMonth}>Este mês</Button>
-              <Button variant="outline" size="sm" onClick={setLastMonth}>Mês passado</Button>
+      {/* Header - only show when not embedded */}
+      {!embedded && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Dashboard Cubo Mágico</h2>
+              <p className="text-sm text-muted-foreground">
+                Análise de ROI por funil • {funnels.length} funis configurados
+              </p>
             </div>
 
-            {/* Date pickers */}
-            <div className="flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <CalendarIcon className="w-4 h-4" />
-                    {format(startDate, 'dd/MM/yyyy', { locale: ptBR })}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(d) => d && setStartDate(d)}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-              <span className="text-muted-foreground">até</span>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <CalendarIcon className="w-4 h-4" />
-                    {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(d) => d && setEndDate(d)}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Quick date buttons */}
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" onClick={() => setQuickDate(0)}>Hoje</Button>
+                <Button variant="outline" size="sm" onClick={() => setQuickDate(7)}>7 dias</Button>
+                <Button variant="outline" size="sm" onClick={() => setQuickDate(30)}>30 dias</Button>
+                <Button variant="outline" size="sm" onClick={setThisMonth}>Este mês</Button>
+                <Button variant="outline" size="sm" onClick={setLastMonth}>Mês passado</Button>
+              </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => refetchInsights()}
-              disabled={isRefetching}
-            >
+              {/* Date pickers */}
+              <div className="flex items-center gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <CalendarIcon className="w-4 h-4" />
+                      {format(startDate, 'dd/MM/yyyy', { locale: ptBR })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={(d) => d && setStartDate(d)}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <span className="text-muted-foreground">até</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <CalendarIcon className="w-4 h-4" />
+                      {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={(d) => d && setEndDate(d)}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => refetchInsights()}
+                disabled={isRefetching}
+              >
               <RefreshCw className={cn("w-4 h-4", isRefetching && "animate-spin")} />
             </Button>
           </div>
         </div>
       </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -439,7 +457,11 @@ export function CuboMagicoDashboard({ projectId }: CuboMagicoDashboardProps) {
           </TableHeader>
           <TableBody>
             {funnelMetrics.map(metrics => (
-              <TableRow key={metrics.funnel.id}>
+              <TableRow 
+                key={metrics.funnel.id}
+                className={onFunnelSelect ? "cursor-pointer hover:bg-muted/50" : ""}
+                onClick={() => onFunnelSelect?.(metrics.funnel.id)}
+              >
                 <TableCell className="font-medium">{metrics.funnel.name}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="font-mono text-xs">

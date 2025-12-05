@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo } from "react";
-import { format, subDays, eachDayOfInterval, startOfDay } from "date-fns";
+import { useState, useMemo } from "react";
+import { format, subDays, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
 import { Calendar, RefreshCw, TrendingUp, DollarSign, BarChart3, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import {
   ChartContainer,
   ChartTooltip,
@@ -19,25 +20,13 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
+
 interface TemporalChartProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
   initialStartDate?: Date;
   initialEndDate?: Date;
-}
-
-interface HotmartSale {
-  purchase: {
-    offer: { code: string };
-    price: { 
-      value: number;
-      currency_code?: string;
-      exchange_rate_currency_payout?: number;
-    };
-    status: string;
-    order_date: number;
-  };
-  buyer: { email: string };
 }
 
 interface DailyData {
@@ -68,68 +57,43 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes, initialStartDate, ini
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
-  const [loading, setLoading] = useState(false);
-  const [dailyData, setDailyData] = useState<DailyData[]>([]);
 
-  const fetchDataFromAPI = async (): Promise<HotmartSale[]> => {
-    const startUTC = Date.UTC(
-      startDate.getFullYear(),
-      startDate.getMonth(),
-      startDate.getDate(),
-      0, 0, 0, 0
-    );
-    
-    const endUTC = Date.UTC(
-      endDate.getFullYear(),
-      endDate.getMonth(),
-      endDate.getDate(),
-      23, 59, 59, 999
-    );
-
-    let allItems: HotmartSale[] = [];
-    let nextPageToken: string | null = null;
-    
-    do {
-      const params: any = {
-        start_date: startUTC,
-        end_date: endUTC,
-        max_results: 500,
-      };
+  // Fetch sales data from database
+  const { data: salesData, isLoading: loading, refetch } = useQuery({
+    queryKey: ['temporal-chart-sales', currentProject?.id, startDate, endDate, funnelOfferCodes],
+    queryFn: async () => {
+      if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
       
-      if (nextPageToken) {
-        params.page_token = nextPageToken;
-      }
-
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/sales/history',
-          params,
-          projectId: currentProject?.id,
-        },
-      });
-
-      if (error) {
-        console.error('Erro ao buscar dados da API:', error);
-        throw error;
-      }
-
-      if (data?.items) {
-        allItems = [...allItems, ...data.items];
-      }
+      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
       
-      nextPageToken = data?.page_info?.next_page_token || null;
-    } while (nextPageToken);
+      const { data, error } = await supabase
+        .from('hotmart_sales')
+        .select('sale_date, buyer_email, total_price_brl, offer_code')
+        .eq('project_id', currentProject.id)
+        .in('status', ['APPROVED', 'COMPLETE'])
+        .in('offer_code', funnelOfferCodes)
+        .gte('sale_date', startUTC)
+        .lte('sale_date', endUTC);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
+  });
 
-    return allItems;
-  };
-
-  const processData = (sales: HotmartSale[]) => {
-    // Filter by funnel offer codes and approved status
-    const filteredSales = sales.filter(sale => {
-      const offerCode = sale.purchase?.offer?.code;
-      const status = sale.purchase?.status;
-      return funnelOfferCodes.includes(offerCode) && status === 'COMPLETE';
-    });
+  const dailyData = useMemo(() => {
+    if (!salesData || salesData.length === 0) {
+      // Return empty days in range
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      return days.map(day => ({
+        date: format(day, 'yyyy-MM-dd'),
+        dateLabel: format(day, 'dd/MM', { locale: ptBR }),
+        sales: 0,
+        revenue: 0,
+        customers: 0,
+      }));
+    }
 
     // Create a map of dates in the range
     const days = eachDayOfInterval({ start: startDate, end: endDate });
@@ -149,28 +113,20 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes, initialStartDate, ini
     // Group sales by date
     const customersByDate: Record<string, Set<string>> = {};
     
-    filteredSales.forEach(sale => {
-      const orderDate = sale.purchase?.order_date;
-      if (!orderDate) return;
+    salesData.forEach(sale => {
+      if (!sale.sale_date) return;
       
-      const date = new Date(orderDate);
+      const date = new Date(sale.sale_date);
       const dateKey = format(date, 'yyyy-MM-dd');
       
       if (dataMap[dateKey]) {
         dataMap[dateKey].sales += 1;
-        
-        // Use exchange rate to convert to BRL if available
-        const originalValue = sale.purchase?.price?.value || 0;
-        const currency = sale.purchase?.price?.currency_code || 'BRL';
-        const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
-        const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
-        
-        dataMap[dateKey].revenue += valueInBRL;
+        dataMap[dateKey].revenue += sale.total_price_brl || 0;
         
         if (!customersByDate[dateKey]) {
           customersByDate[dateKey] = new Set();
         }
-        customersByDate[dateKey].add(sale.buyer?.email || '');
+        customersByDate[dateKey].add(sale.buyer_email || '');
       }
     });
 
@@ -182,33 +138,7 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes, initialStartDate, ini
     });
 
     return Object.values(dataMap).sort((a, b) => a.date.localeCompare(b.date));
-  };
-
-  const loadData = async () => {
-    if (funnelOfferCodes.length === 0) {
-      toast.error('Nenhuma oferta configurada para este funil');
-      return;
-    }
-
-    setLoading(true);
-    
-    try {
-      const sales = await fetchDataFromAPI();
-      const processed = processData(sales);
-      setDailyData(processed);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados da API');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedFunnel && funnelOfferCodes.length > 0) {
-      loadData();
-    }
-  }, [selectedFunnel, funnelOfferCodes.join(',')]);
+  }, [salesData, startDate, endDate]);
 
   const totals = useMemo(() => {
     return dailyData.reduce((acc, d) => ({
@@ -231,7 +161,7 @@ const TemporalChart = ({ selectedFunnel, funnelOfferCodes, initialStartDate, ini
           <h3 className="text-lg font-semibold">Evolução Temporal</h3>
           <p className="text-sm text-muted-foreground">Vendas e receita ao longo do tempo</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
           Atualizar
         </Button>

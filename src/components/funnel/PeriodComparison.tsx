@@ -1,16 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
 import { Calendar, TrendingUp, TrendingDown, Minus, ArrowLeftRight, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+
+const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 
 interface PeriodComparisonProps {
   selectedFunnel: string;
@@ -24,19 +27,6 @@ interface PeriodMetrics {
   totalRevenue: number;
   uniqueCustomers: number;
   avgTicket: number;
-}
-
-interface HotmartSale {
-  purchase: {
-    offer: { code: string };
-    price: { 
-      value: number;
-      currency_code?: string;
-      exchange_rate_currency_payout?: number;
-    };
-    status: string;
-  };
-  buyer: { email: string };
 }
 
 const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initialEndDate }: PeriodComparisonProps) => {
@@ -56,122 +46,72 @@ const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, 
   const [periodBStart, setPeriodBStart] = useState<Date>(subDays(endRef, periodDays));
   const [periodBEnd, setPeriodBEnd] = useState<Date>(endRef);
 
-  const [periodAMetrics, setPeriodAMetrics] = useState<PeriodMetrics>({ totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 });
-  const [periodBMetrics, setPeriodBMetrics] = useState<PeriodMetrics>({ totalSales: 0, totalRevenue: 0, uniqueCustomers: 0, avgTicket: 0 });
-  const [loading, setLoading] = useState(false);
-
-  const fetchPeriodDataFromAPI = async (startDate: Date, endDate: Date): Promise<HotmartSale[]> => {
-    // Convert dates to UTC timestamps
-    const startUTC = Date.UTC(
-      startDate.getFullYear(),
-      startDate.getMonth(),
-      startDate.getDate(),
-      0, 0, 0, 0
-    );
-    
-    const endUTC = Date.UTC(
-      endDate.getFullYear(),
-      endDate.getMonth(),
-      endDate.getDate(),
-      23, 59, 59, 999
-    );
-
-    let allItems: HotmartSale[] = [];
-    let nextPageToken: string | null = null;
-    
-    do {
-      const params: any = {
-        start_date: startUTC,
-        end_date: endUTC,
-        max_results: 500,
-      };
+  // Fetch Period A data from database
+  const { data: periodAData, isLoading: loadingA, refetch: refetchA } = useQuery({
+    queryKey: ['period-comparison-a', currentProject?.id, periodAStart, periodAEnd, funnelOfferCodes],
+    queryFn: async () => {
+      if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
       
-      if (nextPageToken) {
-        params.page_token = nextPageToken;
-      }
-
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/sales/history',
-          params,
-          projectId: currentProject?.id,
-        },
-      });
-
-      if (error) {
-        console.error('Erro ao buscar dados da API:', error);
-        throw error;
-      }
-
-      if (data?.items) {
-        allItems = [...allItems, ...data.items];
-      }
+      const startUTC = formatInTimeZone(periodAStart, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(periodAEnd, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
       
-      nextPageToken = data?.page_info?.next_page_token || null;
-    } while (nextPageToken);
-
-    return allItems;
-  };
-
-  const calculateMetrics = (sales: HotmartSale[]): PeriodMetrics => {
-    // Filter by funnel offer codes and approved status
-    const filteredSales = sales.filter(sale => {
-      const offerCode = sale.purchase?.offer?.code;
-      const status = sale.purchase?.status;
-      return funnelOfferCodes.includes(offerCode) && status === 'COMPLETE';
-    });
-
-    const totalSales = filteredSales.length;
-    const totalRevenue = filteredSales.reduce((sum, s) => {
-      // Use exchange rate to convert to BRL if available
-      const originalValue = s.purchase?.price?.value || 0;
-      const currency = s.purchase?.price?.currency_code || 'BRL';
-      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
+      const { data, error } = await supabase
+        .from('hotmart_sales')
+        .select('buyer_email, total_price_brl')
+        .eq('project_id', currentProject.id)
+        .in('status', ['APPROVED', 'COMPLETE'])
+        .in('offer_code', funnelOfferCodes)
+        .gte('sale_date', startUTC)
+        .lte('sale_date', endUTC);
       
-      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
-    }, 0);
-    const uniqueCustomers = new Set(filteredSales.map(s => s.buyer?.email)).size;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
+  });
+
+  // Fetch Period B data from database
+  const { data: periodBData, isLoading: loadingB, refetch: refetchB } = useQuery({
+    queryKey: ['period-comparison-b', currentProject?.id, periodBStart, periodBEnd, funnelOfferCodes],
+    queryFn: async () => {
+      if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
+      
+      const startUTC = formatInTimeZone(periodBStart, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(periodBEnd, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      
+      const { data, error } = await supabase
+        .from('hotmart_sales')
+        .select('buyer_email, total_price_brl')
+        .eq('project_id', currentProject.id)
+        .in('status', ['APPROVED', 'COMPLETE'])
+        .in('offer_code', funnelOfferCodes)
+        .gte('sale_date', startUTC)
+        .lte('sale_date', endUTC);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
+  });
+
+  const loading = loadingA || loadingB;
+
+  const calculateMetrics = (sales: { buyer_email: string | null; total_price_brl: number | null }[]): PeriodMetrics => {
+    const totalSales = sales.length;
+    const totalRevenue = sales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const uniqueCustomers = new Set(sales.map(s => s.buyer_email).filter(Boolean)).size;
     const avgTicket = uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0;
 
     return { totalSales, totalRevenue, uniqueCustomers, avgTicket };
   };
 
-  const loadData = async () => {
-    if (funnelOfferCodes.length === 0) {
-      toast.error('Nenhuma oferta configurada para este funil');
-      return;
-    }
+  const periodAMetrics = useMemo(() => calculateMetrics(periodAData || []), [periodAData]);
+  const periodBMetrics = useMemo(() => calculateMetrics(periodBData || []), [periodBData]);
 
-    setLoading(true);
-    
-    try {
-      const [salesA, salesB] = await Promise.all([
-        fetchPeriodDataFromAPI(periodAStart, periodAEnd),
-        fetchPeriodDataFromAPI(periodBStart, periodBEnd)
-      ]);
-      
-      const metricsA = calculateMetrics(salesA);
-      const metricsB = calculateMetrics(salesB);
-      
-      setPeriodAMetrics(metricsA);
-      setPeriodBMetrics(metricsB);
-      
-      console.log('Período A:', format(periodAStart, 'dd/MM'), '-', format(periodAEnd, 'dd/MM'), '| Vendas:', metricsA.totalSales);
-      console.log('Período B:', format(periodBStart, 'dd/MM'), '-', format(periodBEnd, 'dd/MM'), '| Vendas:', metricsB.totalSales);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados da API');
-    } finally {
-      setLoading(false);
-    }
+  const handleRefresh = () => {
+    refetchA();
+    refetchB();
   };
-
-  // Load data when component mounts or funnel changes
-  useEffect(() => {
-    if (selectedFunnel && funnelOfferCodes.length > 0) {
-      loadData();
-    }
-  }, [selectedFunnel, funnelOfferCodes.join(',')]);
 
   const calculateVariation = (a: number, b: number): { value: number; type: 'up' | 'down' | 'neutral' } => {
     if (a === 0 && b === 0) return { value: 0, type: 'neutral' };
@@ -246,7 +186,7 @@ const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, 
           <h3 className="text-lg font-semibold">Comparação de Períodos</h3>
           <p className="text-sm text-muted-foreground">Compare o desempenho entre dois períodos diferentes</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
           Comparar
         </Button>

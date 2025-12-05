@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
 import { Calendar, RefreshCw, Target, Megaphone, Layers, MousePointer, Sparkles, ChevronRight, Home, GitBranch } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
@@ -22,6 +23,8 @@ import {
 } from "@/components/ui/chart";
 import { PieChart, Pie, Cell } from "recharts";
 
+const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
+
 interface UTMAnalysisProps {
   selectedFunnel: string;
   funnelOfferCodes: string[];
@@ -29,20 +32,14 @@ interface UTMAnalysisProps {
   initialEndDate?: Date;
 }
 
-interface HotmartSale {
-  purchase: {
-    offer: { code: string };
-    price: { 
-      value: number;
-      currency_code?: string;
-      exchange_rate_currency_payout?: number;
-    };
-    status: string;
-    tracking?: {
-      source_sck?: string;
-    };
-  };
-  buyer: { email: string };
+interface SaleData {
+  buyer_email: string | null;
+  total_price_brl: number | null;
+  utm_source: string | null;
+  utm_campaign_id: string | null;
+  utm_adset_name: string | null;
+  utm_creative: string | null;
+  utm_placement: string | null;
 }
 
 interface UTMMetrics {
@@ -92,9 +89,31 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
   const today = new Date();
   const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
-  const [loading, setLoading] = useState(false);
-  const [salesData, setSalesData] = useState<HotmartSale[]>([]);
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});
+
+  // Fetch sales data from database
+  const { data: salesData, isLoading: loading, refetch } = useQuery({
+    queryKey: ['utm-analysis-sales', currentProject?.id, startDate, endDate, funnelOfferCodes],
+    queryFn: async () => {
+      if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
+      
+      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      
+      const { data, error } = await supabase
+        .from('hotmart_sales')
+        .select('buyer_email, total_price_brl, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement')
+        .eq('project_id', currentProject.id)
+        .in('status', ['APPROVED', 'COMPLETE'])
+        .in('offer_code', funnelOfferCodes)
+        .gte('sale_date', startUTC)
+        .lte('sale_date', endUTC);
+      
+      if (error) throw error;
+      return (data || []) as SaleData[];
+    },
+    enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
+  });
 
   const currentLevel = useMemo(() => {
     if (!drilldownPath.source) return 0;
@@ -106,71 +125,40 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
 
   const currentField = HIERARCHY[currentLevel];
 
-  const fetchDataFromAPI = async (): Promise<HotmartSale[]> => {
-    const startUTC = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0);
-    const endUTC = Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
-
-    let allItems: HotmartSale[] = [];
-    let nextPageToken: string | null = null;
-    
-    do {
-      const params: any = { start_date: startUTC, end_date: endUTC, max_results: 500 };
-      if (nextPageToken) params.page_token = nextPageToken;
-
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: { endpoint: '/sales/history', params, projectId: currentProject?.id },
-      });
-
-      if (error) throw error;
-      if (data?.items) allItems = [...allItems, ...data.items];
-      nextPageToken = data?.page_info?.next_page_token || null;
-    } while (nextPageToken);
-
-    return allItems;
-  };
-
-  const parseUTMFromSck = (sck: string | undefined): Record<string, string> => {
-    if (!sck) return {};
-    const parts = sck.split('|');
-    
-    return {
-      source: parts[0] || '',
-      adset: parts[1] || '',
-      campaign: parts[2] || '',
-      placement: parts[3] || '',
-      creative: parts[4] || '',
-    };
+  const getUtmField = (sale: SaleData, field: string): string => {
+    switch (field) {
+      case 'source': return sale.utm_source || '(não definido)';
+      case 'campaign': return sale.utm_campaign_id || '(não definido)';
+      case 'adset': return sale.utm_adset_name || '(não definido)';
+      case 'creative': return sale.utm_creative || '(não definido)';
+      case 'placement': return sale.utm_placement || '(não definido)';
+      default: return '(não definido)';
+    }
   };
 
   // Analysis for individual tabs (no drilldown filtering)
   const analyzeUTM = useMemo(() => {
-    const filtered = salesData.filter(sale => {
-      const offerCode = sale.purchase?.offer?.code;
-      const status = sale.purchase?.status;
-      return funnelOfferCodes.includes(offerCode) && (status === 'COMPLETE' || status === 'APPROVED');
-    });
+    if (!salesData || salesData.length === 0) {
+      return {
+        source: [],
+        campaign: [],
+        adset: [],
+        placement: [],
+        creative: [],
+        totalSales: 0,
+        totalRevenue: 0,
+      };
+    }
 
-    const totalSales = filtered.length;
-    const totalRevenue = filtered.reduce((sum, s) => {
-      const originalValue = s.purchase?.price?.value || 0;
-      const currency = s.purchase?.price?.currency_code || 'BRL';
-      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
-      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
-    }, 0);
+    const totalSales = salesData.length;
+    const totalRevenue = salesData.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
 
     const analyzeByField = (field: string): UTMMetrics[] => {
       const groups: Record<string, { sales: number; revenue: number }> = {};
       
-      filtered.forEach(sale => {
-        const sck = sale.purchase?.tracking?.source_sck;
-        const utmParams = parseUTMFromSck(sck);
-        let value = utmParams[field] || '(não definido)';
-        
-        // Convert to BRL if needed
-        const originalValue = sale.purchase?.price?.value || 0;
-        const currency = sale.purchase?.price?.currency_code || 'BRL';
-        const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
-        const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+      salesData.forEach(sale => {
+        const value = getUtmField(sale, field);
+        const valueInBRL = sale.total_price_brl || 0;
         
         if (!groups[value]) {
           groups[value] = { sales: 0, revenue: 0 };
@@ -199,49 +187,32 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
       totalSales,
       totalRevenue,
     };
-  }, [salesData, funnelOfferCodes]);
+  }, [salesData]);
 
   // Analysis for hierarchical drilldown
   const drilldownAnalysis = useMemo(() => {
-    let filtered = salesData.filter(sale => {
-      const offerCode = sale.purchase?.offer?.code;
-      const status = sale.purchase?.status;
-      return funnelOfferCodes.includes(offerCode) && (status === 'COMPLETE' || status === 'APPROVED');
-    });
+    if (!salesData || salesData.length === 0) {
+      return { data: [], totalSales: 0, totalRevenue: 0 };
+    }
 
     // Apply drilldown filters
-    filtered = filtered.filter(sale => {
-      const sck = sale.purchase?.tracking?.source_sck;
-      const utmParams = parseUTMFromSck(sck);
-      
-      if (drilldownPath.source && utmParams.source !== drilldownPath.source) return false;
-      if (drilldownPath.campaign && utmParams.campaign !== drilldownPath.campaign) return false;
-      if (drilldownPath.adset && utmParams.adset !== drilldownPath.adset) return false;
-      if (drilldownPath.creative && utmParams.creative !== drilldownPath.creative) return false;
+    let filtered = salesData.filter(sale => {
+      if (drilldownPath.source && getUtmField(sale, 'source') !== drilldownPath.source) return false;
+      if (drilldownPath.campaign && getUtmField(sale, 'campaign') !== drilldownPath.campaign) return false;
+      if (drilldownPath.adset && getUtmField(sale, 'adset') !== drilldownPath.adset) return false;
+      if (drilldownPath.creative && getUtmField(sale, 'creative') !== drilldownPath.creative) return false;
       
       return true;
     });
 
     const totalSales = filtered.length;
-    const totalRevenue = filtered.reduce((sum, s) => {
-      const originalValue = s.purchase?.price?.value || 0;
-      const currency = s.purchase?.price?.currency_code || 'BRL';
-      const exchangeRate = s.purchase?.price?.exchange_rate_currency_payout || 1;
-      return sum + (currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue);
-    }, 0);
+    const totalRevenue = filtered.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
 
     const groups: Record<string, { sales: number; revenue: number }> = {};
     
     filtered.forEach(sale => {
-      const sck = sale.purchase?.tracking?.source_sck;
-      const utmParams = parseUTMFromSck(sck);
-      let value = utmParams[currentField] || '(não definido)';
-      
-      // Convert to BRL if needed
-      const originalValue = sale.purchase?.price?.value || 0;
-      const currency = sale.purchase?.price?.currency_code || 'BRL';
-      const exchangeRate = sale.purchase?.price?.exchange_rate_currency_payout || 1;
-      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 ? originalValue * exchangeRate : originalValue;
+      const value = getUtmField(sale, currentField);
+      const valueInBRL = sale.total_price_brl || 0;
       
       if (!groups[value]) {
         groups[value] = { sales: 0, revenue: 0 };
@@ -261,31 +232,7 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
       .sort((a, b) => b.sales - a.sales);
 
     return { data, totalSales, totalRevenue };
-  }, [salesData, funnelOfferCodes, drilldownPath, currentField]);
-
-  const loadData = async () => {
-    if (funnelOfferCodes.length === 0) {
-      toast.error('Nenhuma oferta configurada para este funil');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const sales = await fetchDataFromAPI();
-      setSalesData(sales);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados da API');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedFunnel && funnelOfferCodes.length > 0) {
-      loadData();
-    }
-  }, [selectedFunnel, funnelOfferCodes.join(',')]);
+  }, [salesData, drilldownPath, currentField]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -374,7 +321,7 @@ const UTMAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartDate, initi
           <h3 className="text-lg font-semibold">Análise por UTM</h3>
           <p className="text-sm text-muted-foreground">Performance por source, campaign, adset, placement e creative</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
           Atualizar
         </Button>

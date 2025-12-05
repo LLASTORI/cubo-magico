@@ -662,6 +662,197 @@ async function syncCampaigns(
   }
 }
 
+// Fetch adsets directly from Meta API with pagination
+async function getAdsetsForAccountWithPagination(accessToken: string, accountId: string) {
+  const allAdsets: any[] = []
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/adsets?fields=id,name,campaign_id,status,daily_budget,lifetime_budget,created_time,start_time,end_time,targeting&limit=500&access_token=${accessToken}`
+  let pageCount = 0
+  const maxPages = 50
+  
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++
+    console.log(`Fetching adsets page ${pageCount} for ${accountId}...`)
+    
+    const data = await fetchWithRetry(nextUrl, `Adsets page ${pageCount} for ${accountId}`)
+
+    if (data.error) {
+      console.error(`Adsets error for ${accountId}:`, data.error)
+      break
+    }
+
+    if (data.data && data.data.length > 0) {
+      const adsets = data.data.map((a: any) => ({
+        ...a,
+        ad_account_id: accountId,
+      }))
+      allAdsets.push(...adsets)
+      console.log(`Got ${data.data.length} adsets from page ${pageCount}, total: ${allAdsets.length}`)
+    }
+
+    nextUrl = data.paging?.next || null
+    
+    if (nextUrl) {
+      await delay(500)
+    }
+  }
+
+  console.log(`Account ${accountId}: Total ${allAdsets.length} adsets across ${pageCount} pages`)
+  return allAdsets
+}
+
+// Fetch ads directly from Meta API with pagination
+async function getAdsForAccountWithPagination(accessToken: string, accountId: string) {
+  const allAds: any[] = []
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative,created_time&limit=500&access_token=${accessToken}`
+  let pageCount = 0
+  const maxPages = 50
+  
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++
+    console.log(`Fetching ads page ${pageCount} for ${accountId}...`)
+    
+    const data = await fetchWithRetry(nextUrl, `Ads page ${pageCount} for ${accountId}`)
+
+    if (data.error) {
+      console.error(`Ads error for ${accountId}:`, data.error)
+      break
+    }
+
+    if (data.data && data.data.length > 0) {
+      const ads = data.data.map((a: any) => ({
+        ...a,
+        ad_account_id: accountId,
+      }))
+      allAds.push(...ads)
+      console.log(`Got ${data.data.length} ads from page ${pageCount}, total: ${allAds.length}`)
+    }
+
+    nextUrl = data.paging?.next || null
+    
+    if (nextUrl) {
+      await delay(500)
+    }
+  }
+
+  console.log(`Account ${accountId}: Total ${allAds.length} ads across ${pageCount} pages`)
+  return allAds
+}
+
+// Sync adsets to database
+async function syncAdsets(
+  supabase: any,
+  projectId: string,
+  accessToken: string,
+  accountIds: string[]
+) {
+  console.log('Syncing adsets for accounts:', accountIds)
+  
+  const allAdsets: any[] = []
+  let synced = 0
+  let errors = 0
+  
+  for (const accountId of accountIds) {
+    const adsets = await getAdsetsForAccountWithPagination(accessToken, accountId)
+    allAdsets.push(...adsets)
+    await delay(1000)
+  }
+  
+  console.log(`Total adsets fetched: ${allAdsets.length}`)
+  
+  const adsetRecords = allAdsets.map(adset => ({
+    project_id: projectId,
+    ad_account_id: adset.ad_account_id,
+    campaign_id: adset.campaign_id,
+    adset_id: adset.id,
+    adset_name: adset.name || null,
+    status: adset.status || null,
+    daily_budget: adset.daily_budget ? parseFloat(adset.daily_budget) / 100 : null,
+    lifetime_budget: adset.lifetime_budget ? parseFloat(adset.lifetime_budget) / 100 : null,
+    created_time: adset.created_time || null,
+    start_time: adset.start_time || null,
+    end_time: adset.end_time || null,
+    targeting: adset.targeting || null,
+    updated_at: new Date().toISOString(),
+  }))
+  
+  for (let i = 0; i < adsetRecords.length; i += DB_INSERT_BATCH_SIZE) {
+    const batch = adsetRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
+    const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
+    
+    console.log(`Upserting adsets batch ${batchNum}...`)
+    
+    const { error } = await supabase
+      .from('meta_adsets')
+      .upsert(batch, { onConflict: 'project_id,adset_id' })
+    
+    if (error) {
+      console.error(`Adsets batch ${batchNum} error:`, error)
+      errors += batch.length
+    } else {
+      synced += batch.length
+    }
+  }
+  
+  console.log(`Adsets sync complete: ${synced} synced, ${errors} errors`)
+  return { success: true, synced, errors, total: allAdsets.length }
+}
+
+// Sync ads to database
+async function syncAds(
+  supabase: any,
+  projectId: string,
+  accessToken: string,
+  accountIds: string[]
+) {
+  console.log('Syncing ads for accounts:', accountIds)
+  
+  const allAds: any[] = []
+  let synced = 0
+  let errors = 0
+  
+  for (const accountId of accountIds) {
+    const ads = await getAdsForAccountWithPagination(accessToken, accountId)
+    allAds.push(...ads)
+    await delay(1000)
+  }
+  
+  console.log(`Total ads fetched: ${allAds.length}`)
+  
+  const adRecords = allAds.map(ad => ({
+    project_id: projectId,
+    ad_account_id: ad.ad_account_id,
+    campaign_id: ad.campaign_id,
+    adset_id: ad.adset_id,
+    ad_id: ad.id,
+    ad_name: ad.name || null,
+    status: ad.status || null,
+    creative_id: ad.creative?.id || null,
+    created_time: ad.created_time || null,
+    updated_at: new Date().toISOString(),
+  }))
+  
+  for (let i = 0; i < adRecords.length; i += DB_INSERT_BATCH_SIZE) {
+    const batch = adRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
+    const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
+    
+    console.log(`Upserting ads batch ${batchNum}...`)
+    
+    const { error } = await supabase
+      .from('meta_ads')
+      .upsert(batch, { onConflict: 'project_id,ad_id' })
+    
+    if (error) {
+      console.error(`Ads batch ${batchNum} error:`, error)
+      errors += batch.length
+    } else {
+      synced += batch.length
+    }
+  }
+  
+  console.log(`Ads sync complete: ${synced} synced, ${errors} errors`)
+  return { success: true, synced, errors, total: allAds.length }
+}
+
 // Get insights with DAILY granularity and PAGINATION support
 async function getInsightsForAccount(
   accessToken: string, 
@@ -840,6 +1031,14 @@ async function syncInsightsSmartOptimized(
         console.error('Error syncing campaigns:', campaignError)
       }
     }
+    
+    // STEP 5b: Sync adsets directly from API
+    console.log('Syncing adsets from Meta API...')
+    await syncAdsets(supabase, projectId, accessToken, accountIds)
+    
+    // STEP 5c: Sync ads directly from API
+    console.log('Syncing ads from Meta API...')
+    await syncAds(supabase, projectId, accessToken, accountIds)
 
     // STEP 6: Fetch and insert insights for each date range
     let totalInsightsInserted = 0
@@ -912,36 +1111,6 @@ async function syncInsightsSmartOptimized(
         console.log(`Inserted ${adsetSuccess} adset insights`)
       }
       
-      // DEDUPLICATE adset records for metadata table
-      const adsetMap = new Map<string, any>()
-      adsetInsights.insights
-        .filter((i: any) => i.adset_id)
-        .forEach((insight: any) => {
-          const key = `${projectId}_${insight.adset_id}`
-          if (!adsetMap.has(key)) {
-            adsetMap.set(key, {
-              project_id: projectId,
-              ad_account_id: insight.ad_account_id,
-              campaign_id: insight.campaign_id,
-              adset_id: insight.adset_id,
-              adset_name: insight.adset_name,
-              updated_at: new Date().toISOString(),
-            })
-          }
-        })
-      
-      const uniqueAdsetRecords = Array.from(adsetMap.values())
-      if (uniqueAdsetRecords.length > 0) {
-        console.log(`Upserting ${uniqueAdsetRecords.length} unique adsets...`)
-        const { error: adsetError } = await supabase
-          .from('meta_adsets')
-          .upsert(uniqueAdsetRecords, { onConflict: 'project_id,adset_id' })
-        
-        if (adsetError) {
-          console.error('Error syncing adsets:', adsetError)
-        }
-      }
-      
       // Get ad-level insights
       console.log('Fetching ad-level insights...')
       const adInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'ad')
@@ -973,37 +1142,6 @@ async function syncInsightsSmartOptimized(
         const { success: adSuccess } = await batchInsert(supabase, 'meta_insights', adInsightRecords)
         totalInsightsInserted += adSuccess
         console.log(`Inserted ${adSuccess} ad insights`)
-      }
-      
-      // DEDUPLICATE ad records for metadata table
-      const adMap = new Map<string, any>()
-      adInsights.insights
-        .filter((i: any) => i.ad_id)
-        .forEach((insight: any) => {
-          const key = `${projectId}_${insight.ad_id}`
-          if (!adMap.has(key)) {
-            adMap.set(key, {
-              project_id: projectId,
-              ad_account_id: insight.ad_account_id,
-              campaign_id: insight.campaign_id,
-              adset_id: insight.adset_id,
-              ad_id: insight.ad_id,
-              ad_name: insight.ad_name,
-              updated_at: new Date().toISOString(),
-            })
-          }
-        })
-      
-      const uniqueAdRecords = Array.from(adMap.values())
-      if (uniqueAdRecords.length > 0) {
-        console.log(`Upserting ${uniqueAdRecords.length} unique ads...`)
-        const { error: adError } = await supabase
-          .from('meta_ads')
-          .upsert(uniqueAdRecords, { onConflict: 'project_id,ad_id' })
-        
-        if (adError) {
-          console.error('Error syncing ads:', adError)
-        }
       }
       
       // Delay between ranges

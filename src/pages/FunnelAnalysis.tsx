@@ -496,7 +496,7 @@ const FunnelAnalysis = () => {
                       </Card>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs">
-                      <p>Soma dos valores reais das vendas realizadas (conforme registrado no Hotmart). Este valor pode diferir do valor configurado da oferta devido a conversão de moeda, alterações de preço ou cupons.</p>
+                      <p>Soma dos valores reais das vendas realizadas (conforme registrado no Hotmart). Este valor pode diferir do valor configurado da oferta devido a conversão de moeda, alterações de preço, cupons ou taxas de juros de parcelamento.</p>
                     </TooltipContent>
                   </Tooltip>
 
@@ -656,7 +656,7 @@ const FunnelAnalysis = () => {
                                 Receita
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs">
-                                <p>Valor real das vendas (do Hotmart). Pode diferir do "Valor" configurado devido a conversão de moeda, cupons ou alterações de preço.</p>
+                                <p>Valor real das vendas (do Hotmart). Pode diferir do "Valor" configurado devido a conversão de moeda, cupons, alterações de preço ou taxas de juros de parcelamento.</p>
                               </TooltipContent>
                             </Tooltip>
                           </TableHead>
@@ -682,7 +682,7 @@ const FunnelAnalysis = () => {
                                   {formatCurrency(metric.total_receita)}
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs">
-                                  <p>Valor real registrado no Hotmart. Diferenças com o "Valor" podem ocorrer por conversão de moeda, cupons ou preços diferentes na data da venda.</p>
+                                  <p>Valor real registrado no Hotmart. Diferenças com o "Valor" podem ocorrer por conversão de moeda, cupons, preços diferentes na data da venda ou taxas de juros de parcelamento.</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TableCell>

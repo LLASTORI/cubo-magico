@@ -159,9 +159,9 @@ const FunnelAnalysis = () => {
     }
   }, [currentProject, navigate]);
 
-  // Fetch funnels config
+  // Fetch funnels config - use unified query key
   const { data: funnelsConfig } = useQuery({
-    queryKey: ['funnels-config', currentProject?.id],
+    queryKey: ['funnels-with-config', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnels')
@@ -173,9 +173,9 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch offer mappings
+  // Fetch offer mappings - use unified query key
   const { data: mappings } = useQuery({
-    queryKey: ['offer-mappings-analysis', currentProject?.id],
+    queryKey: ['offer-mappings-unified', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
@@ -188,9 +188,12 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch sales data with timezone handling
+  // Fetch sales data with timezone handling - use unified query key with date strings for consistent cache
+  const startDateStr = format(startDate, 'yyyy-MM-dd');
+  const endDateStr = format(endDate, 'yyyy-MM-dd');
+  
   const { data: salesData, isLoading: loadingSales, refetch: refetchSales, isRefetching } = useQuery({
-    queryKey: ['hotmart-sales-analysis', currentProject?.id, startDate, endDate],
+    queryKey: ['hotmart-sales-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
       const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
       const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
@@ -209,9 +212,9 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta campaigns
+  // Fetch Meta campaigns - use unified query key
   const { data: metaCampaigns } = useQuery({
-    queryKey: ['meta-campaigns-analysis', currentProject?.id],
+    queryKey: ['meta-campaigns-unified', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
@@ -223,9 +226,9 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta adsets
+  // Fetch Meta adsets - use unified query key
   const { data: metaAdsets } = useQuery({
-    queryKey: ['meta-adsets-analysis', currentProject?.id],
+    queryKey: ['meta-adsets-unified', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_adsets')
@@ -237,9 +240,9 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta ads
+  // Fetch Meta ads - use unified query key
   const { data: metaAds } = useQuery({
-    queryKey: ['meta-ads-analysis', currentProject?.id],
+    queryKey: ['meta-ads-unified', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_ads')
@@ -251,16 +254,16 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta insights
+  // Fetch Meta insights - use unified query key
   const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta } = useQuery({
-    queryKey: ['meta-insights-analysis', currentProject?.id, startDate, endDate],
+    queryKey: ['meta-insights-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_insights')
         .select('id, campaign_id, adset_id, ad_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
         .eq('project_id', currentProject!.id)
-        .gte('date_start', format(startDate, 'yyyy-MM-dd'))
-        .lte('date_start', format(endDate, 'yyyy-MM-dd'));
+        .gte('date_start', startDateStr)
+        .lte('date_start', endDateStr);
       if (error) throw error;
       return data || [];
     },

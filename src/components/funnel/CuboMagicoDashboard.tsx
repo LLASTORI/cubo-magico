@@ -85,9 +85,13 @@ export function CuboMagicoDashboard({
   const setStartDate = externalStartDate ? () => {} : setInternalStartDate;
   const setEndDate = externalEndDate ? () => {} : setInternalEndDate;
 
-  // Fetch funnels with config
+  // Convert dates to strings for consistent query keys
+  const startDateStr = format(startDate, 'yyyy-MM-dd');
+  const endDateStr = format(endDate, 'yyyy-MM-dd');
+
+  // Fetch funnels with config - use unified query key
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
-    queryKey: ['funnels-cubo-magico', projectId],
+    queryKey: ['funnels-with-config', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnels')
@@ -101,9 +105,9 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch offer mappings
+  // Fetch offer mappings - use unified query key
   const { data: offerMappings } = useQuery({
-    queryKey: ['offer-mappings-cubo', projectId],
+    queryKey: ['offer-mappings-unified', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
@@ -117,9 +121,9 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch hotmart sales - APPROVED + COMPLETE (considerando fuso horário Brasil)
+  // Fetch hotmart sales - APPROVED + COMPLETE - use unified query key
   const { data: salesData } = useQuery({
-    queryKey: ['hotmart-sales-cubo', projectId, startDate, endDate],
+    queryKey: ['hotmart-sales-unified', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
       const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
@@ -137,9 +141,9 @@ export function CuboMagicoDashboard({
     },
     enabled: !!projectId,
   });
-  // Fetch Meta campaigns and insights
+  // Fetch Meta campaigns - use unified query key
   const { data: campaignsData } = useQuery({
-    queryKey: ['meta-campaigns-cubo', projectId],
+    queryKey: ['meta-campaigns-unified', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
@@ -152,15 +156,16 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
+  // Fetch Meta insights - use unified query key
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
-    queryKey: ['meta-insights-cubo', projectId, startDate, endDate],
+    queryKey: ['meta-insights-unified', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_insights')
         .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
         .eq('project_id', projectId)
-        .gte('date_start', format(startDate, 'yyyy-MM-dd'))
-        .lte('date_start', format(endDate, 'yyyy-MM-dd'));
+        .gte('date_start', startDateStr)
+        .lte('date_start', endDateStr);
       
       if (error) throw error;
       return data || [];

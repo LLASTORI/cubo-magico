@@ -3,9 +3,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { RefreshCw, CheckCircle, AlertCircle, TrendingUp, Users, Target, Leaf } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Users, Target, Leaf, History } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface HotmartSyncManagerProps {
   projectId: string;
@@ -30,18 +36,33 @@ interface SyncResult {
 export function HotmartSyncManager({ projectId, startDate, endDate, onSyncComplete }: HotmartSyncManagerProps) {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
+  const [syncType, setSyncType] = useState<'period' | 'full'>('period');
 
-  const handleSync = async () => {
+  const handleSync = async (useFullYear: boolean = false) => {
     setSyncing(true);
     setLastSyncResult(null);
+    setSyncType(useFullYear ? 'full' : 'period');
 
     try {
+      let syncStartDate = startDate.getTime();
+      let syncEndDate = endDate.getTime();
+
+      // If full year sync requested, use last 365 days
+      if (useFullYear) {
+        const now = new Date();
+        syncEndDate = now.getTime();
+        const oneYearAgo = new Date(now);
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        syncStartDate = oneYearAgo.getTime();
+        toast.info('Iniciando sincronização do último ano...');
+      }
+
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           projectId,
           action: 'sync_sales',
-          startDate: startDate.getTime(),
-          endDate: endDate.getTime(),
+          startDate: syncStartDate,
+          endDate: syncEndDate,
         },
       });
 
@@ -107,14 +128,34 @@ export function HotmartSyncManager({ projectId, startDate, endDate, onSyncComple
               Período: {formatDateRange()}
             </CardDescription>
           </div>
-          <Button 
-            onClick={handleSync} 
-            disabled={syncing}
-            size="sm"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline"
+                  disabled={syncing}
+                  size="sm"
+                >
+                  <History className="w-4 h-4 mr-2" />
+                  Histórico
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleSync(true)}>
+                  <History className="w-4 h-4 mr-2" />
+                  Sincronizar último ano
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button 
+              onClick={() => handleSync(false)} 
+              disabled={syncing}
+              size="sm"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Sincronizando...' : 'Sincronizar'}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

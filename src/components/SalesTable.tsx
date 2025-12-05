@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { RefreshCw } from "lucide-react";
 
 interface Sale {
   transaction: string;
@@ -21,6 +23,9 @@ interface Sale {
   utmAdset?: string;
   utmPlacement?: string;
   utmCreative?: string;
+  originalCurrency?: string;
+  originalValue?: number;
+  wasConverted?: boolean;
 }
 
 interface SalesTableProps {
@@ -74,7 +79,26 @@ const SalesTable = ({ sales }: SalesTableProps) => {
                   <TableCell className="font-mono text-sm text-foreground">{sale.transaction}</TableCell>
                   <TableCell className="font-medium text-foreground">{sale.product}</TableCell>
                   <TableCell className="text-foreground">{sale.buyer}</TableCell>
-                  <TableCell className="font-semibold text-primary">{formatCurrency(sale.value)}</TableCell>
+                  <TableCell className="font-semibold text-primary">
+                    <div className="flex items-center gap-1.5">
+                      {formatCurrency(sale.value)}
+                      {sale.wasConverted && sale.originalCurrency && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                <RefreshCw className="w-2.5 h-2.5" />
+                                {sale.originalCurrency}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Convertido de {sale.originalCurrency} {sale.originalValue?.toFixed(2)}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={getStatusColor(sale.status)}>
                       {sale.status}

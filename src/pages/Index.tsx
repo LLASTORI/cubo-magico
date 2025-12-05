@@ -282,9 +282,8 @@ const Index = () => {
       const exchangeRate = item.purchase?.price?.exchange_rate_currency_payout || 1;
       
       // If currency is not BRL, apply exchange rate
-      const valueInBRL = currency !== 'BRL' && exchangeRate > 0 
-        ? originalValue * exchangeRate 
-        : originalValue;
+      const wasConverted = currency !== 'BRL' && exchangeRate > 0;
+      const valueInBRL = wasConverted ? originalValue * exchangeRate : originalValue;
       
       return {
         transaction: item.purchase?.transaction || 'N/A',
@@ -294,6 +293,9 @@ const Index = () => {
         status: item.purchase?.status || 'unknown',
         date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
         offerCode: item.purchase?.offer?.code || undefined,
+        originalCurrency: currency,
+        originalValue: originalValue,
+        wasConverted: wasConverted,
         ...utmData,
       };
     });

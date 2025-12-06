@@ -28,12 +28,31 @@ import LTVAnalysis from '@/components/funnel/LTVAnalysis';
 import FunnelChangelog from '@/components/funnel/FunnelChangelog';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 
+// Define unified sales type that matches FunnelAnalysis query
+interface UnifiedSale {
+  transaction_id: string;
+  product_name: string;
+  offer_code: string | null;
+  total_price_brl: number | null;
+  buyer_email: string | null;
+  sale_date: string | null;
+  status: string;
+  meta_campaign_id_extracted?: string | null;
+  meta_adset_id_extracted?: string | null;
+  meta_ad_id_extracted?: string | null;
+  utm_source?: string | null;
+  payment_method?: string | null;
+  installment_number?: number | null;
+}
+
 interface CuboMagicoDashboardProps {
   projectId: string;
   externalStartDate?: Date;
   externalEndDate?: Date;
   embedded?: boolean;
   onFunnelSelect?: (funnelId: string) => void;
+  // Accept pre-fetched sales data from parent to avoid duplicate queries
+  salesData?: UnifiedSale[];
 }
 
 interface FunnelWithConfig {
@@ -70,7 +89,8 @@ export function CuboMagicoDashboard({
   externalStartDate, 
   externalEndDate, 
   embedded = false,
-  onFunnelSelect 
+  onFunnelSelect,
+  salesData: externalSalesData
 }: CuboMagicoDashboardProps) {
   const [internalStartDate, setInternalStartDate] = useState<Date>(subDays(new Date(), 7));
   const [internalEndDate, setInternalEndDate] = useState<Date>(new Date());
@@ -118,47 +138,10 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch hotmart sales - APPROVED + COMPLETE - use unified query key with PAGINATION
-  const { data: salesData } = useQuery({
-    queryKey: ['hotmart-sales-unified', projectId, startDateStr, endDateStr],
-    queryFn: async () => {
-      // Use simple date strings for PostgreSQL comparison
-      const startDate = `${startDateStr}T00:00:00`;
-      const endDate = `${endDateStr}T23:59:59`;
-      
-      // Fetch ALL sales records with pagination (Supabase default limit is 1000)
-      const allSales: any[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('offer_code, total_price_brl, buyer_email, sale_date, transaction_id, product_name, status, installment_number')
-          .eq('project_id', projectId)
-          .in('status', ['APPROVED', 'COMPLETE'])
-          .gte('sale_date', startDate)
-          .lte('sale_date', endDate)
-          .range(page * pageSize, (page + 1) * pageSize - 1)
-          .order('sale_date', { ascending: false });
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allSales.push(...data);
-          hasMore = data.length === pageSize;
-          page++;
-        } else {
-          hasMore = false;
-        }
-      }
-      
-      console.log(`[CuboMagico] Sales fetched: ${allSales.length} records (${page} pages)`);
-      return allSales;
-    },
-    enabled: !!projectId,
-  });
+  // Use external sales data if provided, otherwise fetch from cache
+  // This avoids duplicate queries - FunnelAnalysis.tsx fetches all sales with full fields
+  // and passes them down to this component
+  const salesData = externalSalesData || [];
   // Fetch Meta campaigns - use unified query key
   const { data: campaignsData } = useQuery({
     queryKey: ['meta-campaigns-unified', projectId],

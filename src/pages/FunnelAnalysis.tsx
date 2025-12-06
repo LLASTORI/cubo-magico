@@ -218,13 +218,16 @@ const FunnelAnalysis = () => {
       
       console.log('Query dates:', { startUTC, endUTC });
       
+      // Filter for first installment only to avoid counting each payment as separate sale
+      // installment_number = 1 means first payment, NULL means single payment (not installment)
       const { data, error } = await supabase
         .from('hotmart_sales')
-        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, payment_method')
+        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, payment_method, installment_number')
         .eq('project_id', currentProject!.id)
         .in('status', ['APPROVED', 'COMPLETE'])
         .gte('sale_date', startUTC)
-        .lte('sale_date', endUTC);
+        .lte('sale_date', endUTC)
+        .or('installment_number.eq.1,installment_number.is.null');
       
       if (error) throw error;
       return data || [];

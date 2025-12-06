@@ -89,17 +89,17 @@ export function CuboMagicoDashboard({
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-  // Fetch funnels with config - use unified query key
+  // Fetch funnels with config - show ALL funnels
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
     queryKey: ['funnels-with-config', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnels')
         .select('id, name, roas_target, campaign_name_pattern')
-        .eq('project_id', projectId)
-        .not('campaign_name_pattern', 'is', null);
+        .eq('project_id', projectId);
       
       if (error) throw error;
+      console.log(`[CuboMagico] Funnels loaded: ${data?.length || 0}`);
       return (data as FunnelWithConfig[]) || [];
     },
     enabled: !!projectId,
@@ -156,56 +156,41 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch Meta adsets - for hierarchy analysis (without project_id filter as IDs are globally unique)
+  // Fetch Meta adsets - filter by project_id
   const { data: adsetsData } = useQuery({
-    queryKey: ['meta-adsets-all'],
+    queryKey: ['meta-adsets-cubo', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_adsets')
-        .select('adset_id, adset_name, campaign_id, status');
+        .select('adset_id, adset_name, campaign_id, status')
+        .eq('project_id', projectId);
       
       if (error) throw error;
-      return data || [];
-    },
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes as this doesn't change often
-  });
-
-  // Fetch Meta ads - for hierarchy analysis (without project_id filter as IDs are globally unique)
-  const { data: adsData } = useQuery({
-    queryKey: ['meta-ads-all'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_ads')
-        .select('ad_id, ad_name, adset_id, campaign_id, status');
-      
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
-  });
-
-  // Fetch Meta insights - campaign-level only for spend calculations
-  const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
-    queryKey: ['meta-insights-unified', projectId, startDateStr, endDateStr],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
-        .eq('project_id', projectId)
-        .is('adset_id', null)
-        .is('ad_id', null)
-        .gte('date_start', startDateStr)
-        .lte('date_start', endDateStr);
-      
-      if (error) throw error;
+      console.log(`[CuboMagico] Adsets loaded: ${data?.length || 0}`);
       return data || [];
     },
     enabled: !!projectId,
   });
 
-  // Fetch ALL Meta insights (all levels) - for hierarchy analysis
-  const { data: allLevelInsightsData } = useQuery({
-    queryKey: ['meta-insights-all-levels', projectId, startDateStr, endDateStr],
+  // Fetch Meta ads - filter by project_id
+  const { data: adsData } = useQuery({
+    queryKey: ['meta-ads-cubo', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ads')
+        .select('ad_id, ad_name, adset_id, campaign_id, status')
+        .eq('project_id', projectId);
+      
+      if (error) throw error;
+      console.log(`[CuboMagico] Ads loaded: ${data?.length || 0}`);
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch Meta insights - ALL levels for accurate spend calculations
+  const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
+    queryKey: ['meta-insights-cubo', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_insights')
@@ -215,6 +200,7 @@ export function CuboMagicoDashboard({
         .lte('date_start', endDateStr);
       
       if (error) throw error;
+      console.log(`[CuboMagico] Insights loaded: ${data?.length || 0}`);
       return data || [];
     },
     enabled: !!projectId,
@@ -231,15 +217,23 @@ export function CuboMagicoDashboard({
       const roasTarget = funnel.roas_target || 2;
 
       // Find campaigns matching the pattern (Padrão do Nome da Campanha)
-      const matchingCampaigns = campaignsData.filter(c => 
-        pattern && c.campaign_name?.toLowerCase().includes(pattern)
-      );
+      const matchingCampaigns = pattern 
+        ? campaignsData.filter(c => c.campaign_name?.toLowerCase().includes(pattern))
+        : [];
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
 
-      // Calculate total spend for campaigns matching the pattern
-      const investimento = insightsData
-        .filter(i => matchingCampaignIds.has(i.campaign_id || ''))
-        .reduce((sum, i) => sum + (i.spend || 0), 0);
+      // Calculate total spend - deduplicate by ad_id + date to avoid counting same spend multiple times
+      const matchingInsights = insightsData.filter(i => matchingCampaignIds.has(i.campaign_id || ''));
+      const uniqueSpend = new Map<string, number>();
+      matchingInsights.forEach(i => {
+        if (i.ad_id && i.spend) {
+          const key = `${i.ad_id}_${i.date_start}`;
+          if (!uniqueSpend.has(key)) {
+            uniqueSpend.set(key, i.spend);
+          }
+        }
+      });
+      const investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
 
       // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
       const funnelOffers = offerMappings.filter(o => 
@@ -374,9 +368,9 @@ export function CuboMagicoDashboard({
       .filter(o => o.codigo_oferta);
   };
 
-  // Filtered Meta data for hierarchy analysis - uses ALL level insights
+  // Filtered Meta data for hierarchy analysis - uses insightsData
   const getFilteredMetaData = (campaignPattern: string) => {
-    if (!campaignPattern || !campaignsData || !allLevelInsightsData) {
+    if (!campaignPattern || !campaignsData || !insightsData) {
       return { campaigns: [], adsets: [], ads: [], insights: [] };
     }
     
@@ -387,7 +381,7 @@ export function CuboMagicoDashboard({
     const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
     
     // Filter insights by matching campaigns
-    const filteredInsights = allLevelInsightsData.filter(i => 
+    const filteredInsights = insightsData.filter(i => 
       matchingCampaignIds.has(i.campaign_id || '')
     );
     

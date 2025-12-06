@@ -238,44 +238,49 @@ const FunnelAnalysis = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta campaigns - use unified query key
+  // Fetch Meta campaigns - filter by project_id
   const { data: metaCampaigns } = useQuery({
-    queryKey: ['meta-campaigns-unified', currentProject?.id],
+    queryKey: ['meta-campaigns-funnel', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
         .select('id, campaign_id, campaign_name, status')
         .eq('project_id', currentProject!.id);
       if (error) throw error;
+      console.log(`[FunnelAnalysis] Meta campaigns: ${data?.length || 0}`);
       return data || [];
     },
     enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta adsets - without project_id filter as IDs are globally unique
+  // Fetch Meta adsets - filter by project_id
   const { data: metaAdsets } = useQuery({
-    queryKey: ['meta-adsets-all'],
+    queryKey: ['meta-adsets-funnel', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_adsets')
-        .select('id, adset_id, adset_name, campaign_id, status');
+        .select('id, adset_id, adset_name, campaign_id, status')
+        .eq('project_id', currentProject!.id);
       if (error) throw error;
+      console.log(`[FunnelAnalysis] Meta adsets: ${data?.length || 0}`);
       return data || [];
     },
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+    enabled: !!currentProject?.id,
   });
 
-  // Fetch Meta ads - without project_id filter as IDs are globally unique
+  // Fetch Meta ads - filter by project_id
   const { data: metaAds } = useQuery({
-    queryKey: ['meta-ads-all'],
+    queryKey: ['meta-ads-funnel', currentProject?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_ads')
-        .select('id, ad_id, ad_name, adset_id, campaign_id, status');
+        .select('id, ad_id, ad_name, adset_id, campaign_id, status')
+        .eq('project_id', currentProject!.id);
       if (error) throw error;
+      console.log(`[FunnelAnalysis] Meta ads: ${data?.length || 0}`);
       return data || [];
     },
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+    enabled: !!currentProject?.id,
   });
 
   // Fetch active Meta ad accounts FIRST (needed for insights queries)

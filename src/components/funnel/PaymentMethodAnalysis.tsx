@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { formatInTimeZone } from "date-fns-tz";
 import { Calendar, RefreshCw, CreditCard, Banknote, QrCode, Wallet, ShoppingBag, Users, DollarSign, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
@@ -21,8 +20,6 @@ import {
 } from "@/components/ui/chart";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import MetricCard from "@/components/MetricCard";
-
-const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 
 interface PaymentMethodAnalysisProps {
   selectedFunnel: string;
@@ -80,26 +77,44 @@ const PaymentMethodAnalysis = ({ selectedFunnel, funnelOfferCodes, initialStartD
   const [startDate, setStartDate] = useState<Date>(initialStartDate || subDays(today, 30));
   const [endDate, setEndDate] = useState<Date>(initialEndDate || today);
 
-  // Fetch sales data from database with converted currency
   const { data: salesData, isLoading: loading, refetch } = useQuery({
-    queryKey: ['payment-analysis-sales', currentProject?.id, startDate, endDate, funnelOfferCodes],
+    queryKey: ['payment-analysis-sales', currentProject?.id, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), funnelOfferCodes],
     queryFn: async () => {
       if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
       
-      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
-      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      const startStr = `${format(startDate, 'yyyy-MM-dd')}T00:00:00`;
+      const endStr = `${format(endDate, 'yyyy-MM-dd')}T23:59:59`;
       
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('buyer_email, payment_method, installment_number, total_price_brl, offer_code, status')
-        .eq('project_id', currentProject.id)
-        .in('status', ['APPROVED', 'COMPLETE'])
-        .in('offer_code', funnelOfferCodes)
-        .gte('sale_date', startUTC)
-        .lte('sale_date', endUTC);
+      // Fetch with pagination
+      const allSales: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('buyer_email, payment_method, installment_number, total_price_brl, offer_code, status')
+          .eq('project_id', currentProject.id)
+          .in('status', ['APPROVED', 'COMPLETE'])
+          .in('offer_code', funnelOfferCodes)
+          .gte('sale_date', startStr)
+          .lte('sale_date', endStr)
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+          .order('sale_date', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allSales.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allSales;
     },
     enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
   });

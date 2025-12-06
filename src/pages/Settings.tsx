@@ -16,6 +16,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { FullDataSync } from '@/components/FullDataSync';
 
 const META_APP_ID = '845927421602166';
 
@@ -529,6 +530,8 @@ const Settings = () => {
           {/* Integrations Tab */}
           <TabsContent value="integrations">
             <div className="space-y-6">
+              {/* Full Data Sync */}
+              <FullDataSync />
               {/* Meta Ads Integration */}
               <Card>
                 <CardHeader>

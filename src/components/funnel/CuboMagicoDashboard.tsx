@@ -16,9 +16,6 @@ import {
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatInTimeZone } from 'date-fns-tz';
-
-const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 import { cn } from '@/lib/utils';
 
 // Import analysis components
@@ -121,23 +118,44 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch hotmart sales - APPROVED + COMPLETE - use unified query key
+  // Fetch hotmart sales - APPROVED + COMPLETE - use unified query key with PAGINATION
   const { data: salesData } = useQuery({
     queryKey: ['hotmart-sales-unified', projectId, startDateStr, endDateStr],
     queryFn: async () => {
-      const startUTC = formatInTimeZone(startDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
-      const endUTC = formatInTimeZone(endDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      // Use simple date strings for PostgreSQL comparison
+      const startDate = `${startDateStr}T00:00:00`;
+      const endDate = `${endDateStr}T23:59:59`;
       
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('offer_code, total_price_brl, buyer_email, sale_date, transaction_id, product_name, status')
-        .eq('project_id', projectId)
-        .in('status', ['APPROVED', 'COMPLETE'])
-        .gte('sale_date', startUTC)
-        .lte('sale_date', endUTC);
+      // Fetch ALL sales records with pagination (Supabase default limit is 1000)
+      const allSales: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('offer_code, total_price_brl, buyer_email, sale_date, transaction_id, product_name, status, installment_number')
+          .eq('project_id', projectId)
+          .in('status', ['APPROVED', 'COMPLETE'])
+          .gte('sale_date', startDate)
+          .lte('sale_date', endDate)
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+          .order('sale_date', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allSales.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[CuboMagico] Sales fetched: ${allSales.length} records (${page} pages)`);
+      return allSales;
     },
     enabled: !!projectId,
   });

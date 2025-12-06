@@ -238,19 +238,18 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     gcTime: 0,
   });
 
-  // Fetch insights - only from active accounts (with pagination to get ALL data)
-  const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    // CRITICAL: queryKey must match EXACTLY what we filter by
+  // Fetch insights - only from active accounts
+  const { data: insights, isLoading: insightsLoading, refetch: refetchInsights, error: insightsError, isFetching } = useQuery({
     queryKey: ['meta_insights', projectId, startDate, endDate, activeAccountIds.join(',')],
     queryFn: async () => {
-      console.log('[Insights] Fetching for accounts:', activeAccountIds, 'dates:', startDate, 'to', endDate);
+      console.log('[Insights] Starting fetch for accounts:', activeAccountIds);
+      console.log('[Insights] Date range:', startDate, 'to', endDate);
       
       if (activeAccountIds.length === 0) {
-        console.log('[Insights] No active accounts, returning empty');
+        console.log('[Insights] No active accounts');
         return [];
       }
       
-      // Simple single query - campaign-level only
       const { data, error, count } = await supabase
         .from('meta_insights')
         .select('*', { count: 'exact' })
@@ -267,12 +266,28 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         throw error;
       }
       
-      console.log(`[Insights] Fetched ${data?.length || 0} records (count: ${count})`);
+      console.log(`[Insights] SUCCESS: Fetched ${data?.length || 0} records (count: ${count})`);
+      console.log('[Insights] First record:', data?.[0]);
+      console.log('[Insights] Total spend:', data?.reduce((sum, r) => sum + (r.spend || 0), 0));
       return data || [];
     },
     enabled: !!metaCredentials && activeAccountIds.length > 0,
-    staleTime: 30000, // 30 seconds cache
+    staleTime: 5000,
+    gcTime: 10000,
+    refetchOnWindowFocus: true,
   });
+
+  // Debug: Log insights state changes
+  useEffect(() => {
+    console.log('[Insights State] Current:', {
+      hasData: !!insights,
+      count: insights?.length || 0,
+      loading: insightsLoading,
+      fetching: isFetching,
+      error: insightsError?.message,
+      totalsSpend: insights?.reduce((sum, r) => sum + (r.spend || 0), 0) || 0,
+    });
+  }, [insights, insightsLoading, isFetching, insightsError]);
 
   // Query to get the available date range in the database
   const { data: availableDateRange } = useQuery({

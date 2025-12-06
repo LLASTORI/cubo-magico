@@ -23,7 +23,6 @@ import TemporalChart from '@/components/funnel/TemporalChart';
 import PeriodComparison from '@/components/funnel/PeriodComparison';
 import UTMAnalysis from '@/components/funnel/UTMAnalysis';
 import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
-import CustomerCohort from '@/components/funnel/CustomerCohort';
 import LTVAnalysis from '@/components/funnel/LTVAnalysis';
 import FunnelChangelog from '@/components/funnel/FunnelChangelog';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
@@ -819,10 +818,6 @@ export function CuboMagicoDashboard({
                                 <CreditCard className="w-3 h-3" />
                                 Pagamentos
                               </TabsTrigger>
-                              <TabsTrigger value="cohort" className="text-xs gap-1">
-                                <UsersRound className="w-3 h-3" />
-                                Clientes
-                              </TabsTrigger>
                               <TabsTrigger value="ltv" className="text-xs gap-1">
                                 <Coins className="w-3 h-3" />
                                 LTV
@@ -953,15 +948,6 @@ export function CuboMagicoDashboard({
                               <PaymentMethodAnalysis
                                 salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                              />
-                            </TabsContent>
-
-                            <TabsContent value="cohort" className="mt-0">
-                              <CustomerCohort
-                                selectedFunnel={metrics.funnel.name}
-                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                initialStartDate={startDate}
-                                initialEndDate={endDate}
                               />
                             </TabsContent>
 

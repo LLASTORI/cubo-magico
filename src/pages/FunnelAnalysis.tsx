@@ -26,7 +26,6 @@ import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 import TemporalChart from "@/components/funnel/TemporalChart";
 import UTMAnalysis from "@/components/funnel/UTMAnalysis";
 import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
-import CustomerCohort from "@/components/funnel/CustomerCohort";
 import LTVAnalysis from "@/components/funnel/LTVAnalysis";
 import { CuboMagicoDashboard } from "@/components/funnel/CuboMagicoDashboard";
 import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
@@ -1004,7 +1003,7 @@ const FunnelAnalysis = () => {
                 <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
                 <TabsTrigger value="utm">UTM</TabsTrigger>
                 <TabsTrigger value="payment">Pagamentos</TabsTrigger>
-                <TabsTrigger value="cohort">Clientes</TabsTrigger>
+                <TabsTrigger value="ltv">LTV</TabsTrigger>
                 <TabsTrigger value="ltv">LTV</TabsTrigger>
                 <TabsTrigger value="changelog">Histórico</TabsTrigger>
               </TabsList>
@@ -1056,15 +1055,6 @@ const FunnelAnalysis = () => {
                 <PaymentMethodAnalysis
                   salesData={salesData || []}
                   funnelOfferCodes={allOfferCodes}
-                />
-              </TabsContent>
-
-              <TabsContent value="cohort">
-                <CustomerCohort
-                  selectedFunnel="Todos os Funis"
-                  funnelOfferCodes={allOfferCodes}
-                  initialStartDate={startDate}
-                  initialEndDate={endDate}
                 />
               </TabsContent>
 

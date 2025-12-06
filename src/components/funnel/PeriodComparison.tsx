@@ -64,7 +64,7 @@ const PeriodComparison = ({ salesData, funnelOfferCodes, startDate, endDate }: P
     });
   }, [filteredSales, periodBStart, periodBEnd]);
 
-  const calculateMetrics = (sales: UnifiedSaleData[]): PeriodMetrics => {
+  const calculateMetrics = (sales: SaleData[]): PeriodMetrics => {
     const totalSales = sales.length;
     const totalRevenue = sales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
     const uniqueCustomers = new Set(sales.map(s => s.buyer_email).filter(Boolean)).size;

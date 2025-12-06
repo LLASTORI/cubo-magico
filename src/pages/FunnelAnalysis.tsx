@@ -299,13 +299,13 @@ const FunnelAnalysis = () => {
     return metaAdAccounts.map(a => a.account_id).sort();
   }, [metaAdAccounts]);
 
-  // Fetch Meta insights - campaign-level only for spend calculations (WITH PAGINATION like MetaAds)
+  // Fetch Meta insights - ALL levels for accurate spend calculations (WITH PAGINATION)
   const { data: metaInsights, refetch: refetchMetaInsights, isRefetching: isRefetchingMeta, isLoading: loadingMetaInsights } = useQuery({
     queryKey: ['meta-insights-funnel', currentProject?.id, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return [];
       
-      // Fetch ALL insights using pagination (Supabase default limit is 1000)
+      // Fetch ALL insights using pagination
       const PAGE_SIZE = 1000;
       const MAX_PAGES = 20;
       let allInsights: any[] = [];
@@ -317,8 +317,6 @@ const FunnelAnalysis = () => {
           .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop', { count: 'exact' })
           .eq('project_id', currentProject!.id)
           .in('ad_account_id', activeAccountIds)
-          .is('adset_id', null)
-          .is('ad_id', null)
           .gte('date_start', startDateStr)
           .lte('date_start', endDateStr)
           .order('date_start', { ascending: true })
@@ -340,46 +338,6 @@ const FunnelAnalysis = () => {
       }
       
       console.log(`[FunnelAnalysis Insights] TOTAL: ${allInsights.length} records`);
-      return allInsights;
-    },
-    enabled: !!currentProject?.id && activeAccountIds.length > 0,
-  });
-
-  // Fetch ALL Meta insights (all levels) for hierarchy analysis (WITH PAGINATION)
-  const { data: allLevelInsights, refetch: refetchAllInsights, isLoading: loadingAllInsights } = useQuery({
-    queryKey: ['meta-insights-all-levels-funnel', currentProject?.id, startDateStr, endDateStr, activeAccountIds.join(',')],
-    queryFn: async () => {
-      if (activeAccountIds.length === 0) return [];
-      
-      const PAGE_SIZE = 1000;
-      const MAX_PAGES = 20;
-      let allInsights: any[] = [];
-      let page = 0;
-      
-      while (page < MAX_PAGES) {
-        const { data, error, count } = await supabase
-          .from('meta_insights')
-          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop', { count: 'exact' })
-          .eq('project_id', currentProject!.id)
-          .in('ad_account_id', activeAccountIds)
-          .gte('date_start', startDateStr)
-          .lte('date_start', endDateStr)
-          .order('date_start', { ascending: true })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allInsights = [...allInsights, ...data];
-          if (data.length < PAGE_SIZE || (count && allInsights.length >= count)) {
-            break;
-          }
-          page++;
-        } else {
-          break;
-        }
-      }
-      
       return allInsights;
     },
     enabled: !!currentProject?.id && activeAccountIds.length > 0,
@@ -408,32 +366,66 @@ const FunnelAnalysis = () => {
     });
   }, [mappings]);
 
-  // Calculate total Meta investment (all campaigns)
+  // Calculate total Meta investment - aggregate by ad_id to avoid duplicates
+  // Since insights come at ad level, we sum all ad-level spend
   const totalMetaInvestment = useMemo(() => {
-    if (!metaInsights) return 0;
-    return metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+    if (!metaInsights || metaInsights.length === 0) return 0;
+    
+    // Group by ad_id + date to avoid duplicates
+    const uniqueSpend = new Map<string, number>();
+    metaInsights.forEach(i => {
+      if (i.ad_id && i.spend) {
+        const key = `${i.ad_id}_${i.date_start}`;
+        if (!uniqueSpend.has(key)) {
+          uniqueSpend.set(key, i.spend);
+        }
+      }
+    });
+    
+    const total = Array.from(uniqueSpend.values()).reduce((sum, spend) => sum + spend, 0);
+    console.log(`[FunnelAnalysis] Total Meta Investment: ${total} from ${uniqueSpend.size} unique ad-day combinations`);
+    return total;
   }, [metaInsights]);
 
-  // All Meta data for hierarchy analysis - use ALL level insights
+  // All Meta data for hierarchy analysis - use metaInsights directly
   const allMetaData = useMemo(() => {
     return {
       campaigns: metaCampaigns || [],
       adsets: metaAdsets || [],
       ads: metaAds || [],
-      insights: allLevelInsights || [],
+      insights: metaInsights || [],
     };
-  }, [metaCampaigns, metaAdsets, metaAds, allLevelInsights]);
+  }, [metaCampaigns, metaAdsets, metaAds, metaInsights]);
 
-  // Meta metrics aggregated (all campaigns)
+  // Meta metrics aggregated - deduplicated by ad_id + date
   const metaMetrics = useMemo(() => {
-    if (!metaInsights) {
+    if (!metaInsights || metaInsights.length === 0) {
       return { spend: 0, impressions: 0, clicks: 0, reach: 0, ctr: 0, cpc: 0 };
     }
     
-    const spend = metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
-    const impressions = metaInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
-    const clicks = metaInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
-    const reach = metaInsights.reduce((sum, i) => sum + (i.reach || 0), 0);
+    // Deduplicate by ad_id + date
+    const uniqueMetrics = new Map<string, { spend: number; impressions: number; clicks: number; reach: number }>();
+    metaInsights.forEach(i => {
+      if (i.ad_id) {
+        const key = `${i.ad_id}_${i.date_start}`;
+        if (!uniqueMetrics.has(key)) {
+          uniqueMetrics.set(key, {
+            spend: i.spend || 0,
+            impressions: i.impressions || 0,
+            clicks: i.clicks || 0,
+            reach: i.reach || 0,
+          });
+        }
+      }
+    });
+    
+    let spend = 0, impressions = 0, clicks = 0, reach = 0;
+    uniqueMetrics.forEach(m => {
+      spend += m.spend;
+      impressions += m.impressions;
+      clicks += m.clicks;
+      reach += m.reach;
+    });
     
     return {
       spend,
@@ -638,7 +630,6 @@ const FunnelAnalysis = () => {
             setTimeout(() => {
               console.log(`[FunnelAnalysis Poll ${i}/${pollCount}] Refreshing data...`);
               refetchMetaInsights();
-              refetchAllInsights();
             }, i * 15000);
           }
           
@@ -648,7 +639,6 @@ const FunnelAnalysis = () => {
             await Promise.all([
               refetchSales(),
               refetchMetaInsights(),
-              refetchAllInsights(),
             ]);
             toast.success('Sincronização Meta Ads concluída!');
           }, pollDurationMs);
@@ -665,7 +655,6 @@ const FunnelAnalysis = () => {
       await Promise.all([
         refetchSales(),
         refetchMetaInsights(),
-        refetchAllInsights(),
       ]);
 
       setSyncStatus('');
@@ -728,7 +717,7 @@ const FunnelAnalysis = () => {
 
   // Combined loading state - wait for all critical data (including funnels and mappings)
   const isInitialLoading = loadingSales || loadingMetaAccounts || loadingFunnels || loadingMappings;
-  const isMetaDataLoading = loadingMetaInsights || loadingAllInsights;
+  const isMetaDataLoading = loadingMetaInsights;
   
   // Show full page loader only on initial load
   if (!currentProject) return null;
@@ -1036,7 +1025,6 @@ const FunnelAnalysis = () => {
                     loading={isRefetchingMeta}
                     onRefresh={() => {
                       refetchMetaInsights();
-                      refetchAllInsights();
                     }}
                   />
                 ) : (

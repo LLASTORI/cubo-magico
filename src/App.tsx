@@ -14,6 +14,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Projects from "./pages/Projects";
 import OfferMappings from "./pages/OfferMappings";
 import FunnelAnalysis from "./pages/FunnelAnalysis";
+import DataDebug from "./pages/DataDebug";
 import Settings from "./pages/Settings";
 import NotificationsHistory from "./pages/NotificationsHistory";
 import Admin from "./pages/Admin";
@@ -53,6 +54,11 @@ const App = () => (
                 <Route path="/funnel-analysis" element={
                   <ProtectedRoute>
                     <FunnelAnalysis />
+                  </ProtectedRoute>
+                } />
+                <Route path="/data-debug" element={
+                  <ProtectedRoute>
+                    <DataDebug />
                   </ProtectedRoute>
                 } />
                 <Route path="/settings" element={

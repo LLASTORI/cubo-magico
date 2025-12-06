@@ -85,13 +85,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Date range state
+  // Date range state - will be adjusted based on available data
   const today = new Date().toISOString().split('T')[0];
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(sevenDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [syncing, setSyncing] = useState(false);
   const [needsSync, setNeedsSync] = useState(false); // Track if date changed and needs sync
+  const [dateRangeAutoAdjusted, setDateRangeAutoAdjusted] = useState(false);
 
   // CRITICAL: Clear ALL meta queries on mount to ensure fresh data for this project
   useEffect(() => {
@@ -300,6 +301,75 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     staleTime: 0,
     gcTime: 0,
   });
+
+  // Query to get the available date range in the database
+  const { data: availableDateRange } = useQuery({
+    queryKey: ['meta_insights_date_range', projectId, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) return null;
+      
+      // Get min and max dates from campaign-level insights
+      const { data, error } = await supabase
+        .from('meta_insights')
+        .select('date_start')
+        .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
+        .is('adset_id', null)
+        .is('ad_id', null)
+        .order('date_start', { ascending: true })
+        .limit(1);
+      
+      if (error) {
+        console.error('[DateRange] Error fetching min date:', error);
+        return null;
+      }
+      
+      const { data: maxData, error: maxError } = await supabase
+        .from('meta_insights')
+        .select('date_start')
+        .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
+        .is('adset_id', null)
+        .is('ad_id', null)
+        .order('date_start', { ascending: false })
+        .limit(1);
+      
+      if (maxError) {
+        console.error('[DateRange] Error fetching max date:', maxError);
+        return null;
+      }
+      
+      const minDate = data?.[0]?.date_start || null;
+      const maxDate = maxData?.[0]?.date_start || null;
+      
+      console.log(`[DateRange] Available data: ${minDate} to ${maxDate}`);
+      return { minDate, maxDate };
+    },
+    enabled: !!metaCredentials && activeAccountIds.length > 0,
+    staleTime: 60000,
+  });
+
+  // Auto-adjust date range if no data in current selection
+  useEffect(() => {
+    if (availableDateRange?.maxDate && !dateRangeAutoAdjusted && insights?.length === 0 && !insightsLoading) {
+      const currentStart = new Date(startDate);
+      const currentEnd = new Date(endDate);
+      const availableMax = new Date(availableDateRange.maxDate);
+      const availableMin = new Date(availableDateRange.minDate);
+      
+      // If current range doesn't overlap with available data, adjust
+      if (currentStart > availableMax || currentEnd < availableMin) {
+        console.log('[DateRange] Auto-adjusting to available data range');
+        setStartDate(availableDateRange.minDate);
+        setEndDate(availableDateRange.maxDate);
+        setDateRangeAutoAdjusted(true);
+        toast({
+          title: 'Período ajustado automaticamente',
+          description: `Os dados disponíveis são de ${format(availableMin, 'dd/MM/yyyy', { locale: ptBR })} a ${format(availableMax, 'dd/MM/yyyy', { locale: ptBR })}`,
+        });
+      }
+    }
+  }, [availableDateRange, insights, insightsLoading, startDate, endDate, dateRangeAutoAdjusted, toast]);
 
   // VERIFICATION: Query to get the exact SUM from database for comparison
   const { data: dbVerification } = useQuery({

@@ -105,7 +105,8 @@ async function fetchWithRetry(
   return data
 }
 
-// SMART SYNC: Check which dates we already have in the database
+// SMART SYNC: Check which dates we already have COMPLETE data in the database
+// Complete means we have campaign, adset AND ad level insights
 async function getExistingDatesInCache(
   supabase: any,
   projectId: string,
@@ -113,11 +114,12 @@ async function getExistingDatesInCache(
   dateStart: string,
   dateStop: string
 ): Promise<Set<string>> {
-  console.log('Checking existing cache for dates...')
+  console.log('Checking existing cache for COMPLETE dates (with ad-level data)...')
   
-  const existingDates = new Set<string>()
+  const completeDates = new Set<string>()
   
-  // Fetch distinct dates from our cache
+  // Fetch dates that have ad-level data (ad_id IS NOT NULL)
+  // Only consider a date "cached" if it has ad-level insights
   const { data, error } = await supabase
     .from('meta_insights')
     .select('date_start')
@@ -125,20 +127,21 @@ async function getExistingDatesInCache(
     .in('ad_account_id', accountIds)
     .gte('date_start', dateStart)
     .lte('date_start', dateStop)
+    .not('ad_id', 'is', null) // Only count dates with ad-level data
   
   if (error) {
     console.error('Error checking cache:', error)
-    return existingDates
+    return completeDates
   }
   
   if (data) {
     data.forEach((row: any) => {
-      existingDates.add(row.date_start)
+      completeDates.add(row.date_start as string)
     })
   }
   
-  console.log(`Found ${existingDates.size} dates in local cache`)
-  return existingDates
+  console.log(`Found ${completeDates.size} COMPLETE dates (with ad-level data) in cache`)
+  return completeDates
 }
 
 // SMART SYNC: Determine which dates need to be fetched from Meta

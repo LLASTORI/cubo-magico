@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { formatInTimeZone } from "date-fns-tz";
 import { Calendar, TrendingUp, TrendingDown, Minus, ArrowLeftRight, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
@@ -12,8 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-
-const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 
 interface PeriodComparisonProps {
   selectedFunnel: string;
@@ -46,50 +43,84 @@ const PeriodComparison = ({ selectedFunnel, funnelOfferCodes, initialStartDate, 
   const [periodBStart, setPeriodBStart] = useState<Date>(subDays(endRef, periodDays));
   const [periodBEnd, setPeriodBEnd] = useState<Date>(endRef);
 
-  // Fetch Period A data from database
+  // Fetch Period A data from database with pagination
   const { data: periodAData, isLoading: loadingA, refetch: refetchA } = useQuery({
-    queryKey: ['period-comparison-a', currentProject?.id, periodAStart, periodAEnd, funnelOfferCodes],
+    queryKey: ['period-comparison-a', currentProject?.id, format(periodAStart, 'yyyy-MM-dd'), format(periodAEnd, 'yyyy-MM-dd'), funnelOfferCodes],
     queryFn: async () => {
       if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
       
-      const startUTC = formatInTimeZone(periodAStart, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
-      const endUTC = formatInTimeZone(periodAEnd, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      const startStr = `${format(periodAStart, 'yyyy-MM-dd')}T00:00:00`;
+      const endStr = `${format(periodAEnd, 'yyyy-MM-dd')}T23:59:59`;
       
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('buyer_email, total_price_brl')
-        .eq('project_id', currentProject.id)
-        .in('status', ['APPROVED', 'COMPLETE'])
-        .in('offer_code', funnelOfferCodes)
-        .gte('sale_date', startUTC)
-        .lte('sale_date', endUTC);
+      const allSales: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('buyer_email, total_price_brl')
+          .eq('project_id', currentProject.id)
+          .in('status', ['APPROVED', 'COMPLETE'])
+          .in('offer_code', funnelOfferCodes)
+          .gte('sale_date', startStr)
+          .lte('sale_date', endStr)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allSales.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allSales;
     },
     enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
   });
 
-  // Fetch Period B data from database
+  // Fetch Period B data from database with pagination
   const { data: periodBData, isLoading: loadingB, refetch: refetchB } = useQuery({
-    queryKey: ['period-comparison-b', currentProject?.id, periodBStart, periodBEnd, funnelOfferCodes],
+    queryKey: ['period-comparison-b', currentProject?.id, format(periodBStart, 'yyyy-MM-dd'), format(periodBEnd, 'yyyy-MM-dd'), funnelOfferCodes],
     queryFn: async () => {
       if (!currentProject?.id || funnelOfferCodes.length === 0) return [];
       
-      const startUTC = formatInTimeZone(periodBStart, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
-      const endUTC = formatInTimeZone(periodBEnd, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
+      const startStr = `${format(periodBStart, 'yyyy-MM-dd')}T00:00:00`;
+      const endStr = `${format(periodBEnd, 'yyyy-MM-dd')}T23:59:59`;
       
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('buyer_email, total_price_brl')
-        .eq('project_id', currentProject.id)
-        .in('status', ['APPROVED', 'COMPLETE'])
-        .in('offer_code', funnelOfferCodes)
-        .gte('sale_date', startUTC)
-        .lte('sale_date', endUTC);
+      const allSales: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('buyer_email, total_price_brl')
+          .eq('project_id', currentProject.id)
+          .in('status', ['APPROVED', 'COMPLETE'])
+          .in('offer_code', funnelOfferCodes)
+          .gte('sale_date', startStr)
+          .lte('sale_date', endStr)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allSales.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allSales;
     },
     enabled: !!currentProject?.id && funnelOfferCodes.length > 0,
   });

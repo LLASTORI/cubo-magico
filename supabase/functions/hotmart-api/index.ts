@@ -582,12 +582,89 @@ serve(async (req) => {
       throw new Error('Project ID is required');
     }
 
-    // Handle sync_sales action
+    // Handle sync_sales action - now with monthly chunking for large periods
     if (action === 'sync_sales') {
       if (!startDate || !endDate) {
         throw new Error('startDate and endDate are required for sync_sales');
       }
       
+      // Calculate period length
+      const periodMs = endDate - startDate;
+      const periodDays = periodMs / (1000 * 60 * 60 * 24);
+      
+      // If period > 45 days, split into monthly chunks to avoid 10k limit
+      if (periodDays > 45) {
+        console.log(`Large period detected (${Math.round(periodDays)} days), splitting into monthly chunks...`);
+        
+        const chunks: { start: number; end: number }[] = [];
+        let chunkStart = new Date(startDate);
+        const finalEnd = new Date(endDate);
+        
+        while (chunkStart < finalEnd) {
+          // End of current month or final end date, whichever comes first
+          const chunkEnd = new Date(chunkStart);
+          chunkEnd.setMonth(chunkEnd.getMonth() + 1);
+          chunkEnd.setDate(0); // Last day of current month
+          chunkEnd.setHours(23, 59, 59, 999);
+          
+          const actualEnd = chunkEnd > finalEnd ? finalEnd : chunkEnd;
+          
+          chunks.push({
+            start: chunkStart.getTime(),
+            end: actualEnd.getTime()
+          });
+          
+          // Move to next month
+          chunkStart = new Date(actualEnd);
+          chunkStart.setDate(chunkStart.getDate() + 1);
+          chunkStart.setHours(0, 0, 0, 0);
+        }
+        
+        console.log(`Split into ${chunks.length} monthly chunks`);
+        
+        let totalSynced = 0;
+        let totalErrors = 0;
+        const combinedStats: Record<string, number> = {
+          paid_tracked: 0,
+          paid_untracked: 0,
+          organic_funnel: 0,
+          organic_pure: 0,
+          unknown: 0,
+        };
+        
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          console.log(`Processing chunk ${i + 1}/${chunks.length}: ${new Date(chunk.start).toISOString()} to ${new Date(chunk.end).toISOString()}`);
+          
+          const result = await syncSales(projectId, chunk.start, chunk.end, status);
+          totalSynced += result.synced;
+          totalErrors += result.errors;
+          
+          // Combine attribution stats
+          Object.keys(result.attributionStats).forEach(key => {
+            combinedStats[key] = (combinedStats[key] || 0) + result.attributionStats[key];
+          });
+          
+          // Small delay between chunks to avoid rate limiting
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        console.log(`Chunked sync complete: ${totalSynced} total synced, ${totalErrors} errors`);
+        
+        return new Response(JSON.stringify({
+          synced: totalSynced,
+          updated: 0,
+          errors: totalErrors,
+          attributionStats: combinedStats,
+          chunks: chunks.length
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Small period - sync directly
       const result = await syncSales(projectId, startDate, endDate, status);
       
       return new Response(JSON.stringify(result), {

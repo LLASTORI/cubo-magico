@@ -209,24 +209,18 @@ const FunnelAnalysis = () => {
   const { data: salesData, isLoading: loadingSales, refetch: refetchSales, isRefetching } = useQuery({
     queryKey: ['hotmart-sales-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
-      // Calculate UTC timestamps for Brazil timezone (UTC-3)
-      // Start of day in Brazil = 03:00 UTC of the same day
-      const startYear = debouncedStartDate.getFullYear();
-      const startMonth = debouncedStartDate.getMonth();
-      const startDay = debouncedStartDate.getDate();
-      const startUTC = new Date(Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0)).toISOString();
+      // Use formatInTimeZone for consistent Brazil timezone handling (same as CuboMagicoDashboard)
+      const { formatInTimeZone } = await import('date-fns-tz');
+      const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
       
-      // End of day in Brazil = 02:59:59.999 UTC of the next day
-      const endYear = debouncedEndDate.getFullYear();
-      const endMonth = debouncedEndDate.getMonth();
-      const endDay = debouncedEndDate.getDate();
-      const endUTC = new Date(Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999)).toISOString();
+      const startUTC = formatInTimeZone(debouncedStartDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
+      const endUTC = formatInTimeZone(debouncedEndDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
       
       console.log('Query dates:', { startUTC, endUTC });
       
       const { data, error } = await supabase
         .from('hotmart_sales')
-        .select('*')
+        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, payment_method')
         .eq('project_id', currentProject!.id)
         .in('status', ['APPROVED', 'COMPLETE'])
         .gte('sale_date', startUTC)
@@ -509,8 +503,8 @@ const FunnelAnalysis = () => {
       const code = sale.offer_code || 'SEM_CODIGO';
       if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
       salesByOffer[code].count += 1;
-      // ALWAYS use total_price_brl for accurate currency conversion
-      salesByOffer[code].revenue += sale.total_price_brl || sale.total_price || 0;
+      // ALWAYS use total_price_brl ONLY - never fallback to unconverted values
+      salesByOffer[code].revenue += sale.total_price_brl || 0;
     });
 
     // Build metrics from mappings

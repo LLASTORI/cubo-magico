@@ -397,70 +397,53 @@ async function syncSales(
     unknown: 0,
   };
   
-  // Fetch real-time exchange rates from Frankfurter API
-  let exchangeRates: Record<string, number> = {
+  // Fallback exchange rates (conservative estimates for BRL conversion)
+  // These are used when real-time rates cannot be fetched
+  const fallbackRates: Record<string, number> = {
     'BRL': 1,
-    'USD': 6.00,
-    'EUR': 6.40,
-    'GBP': 7.60,
-    'PYG': 0.0008,
-    'UYU': 0.14,
-    'AUD': 3.90,
-    'CHF': 6.80,
-    'CAD': 4.40,
-    'MXN': 0.30,
-    'ARS': 0.006,
-    'CLP': 0.006,
-    'COP': 0.0014,
-    'PEN': 1.60,
+    'USD': 5.50,
+    'EUR': 6.00,
+    'GBP': 7.00,
+    'PYG': 0.00075,    // Guarani Paraguaio ~7500 PYG = 1 BRL
+    'UYU': 0.14,       // Peso Uruguaio ~43 UYU = 1 BRL
+    'AUD': 3.60,
+    'CHF': 6.20,
+    'CAD': 4.00,
+    'MXN': 0.28,
+    'ARS': 0.005,      // Peso Argentino ~1200 ARS = 1 BRL
+    'CLP': 0.006,      // Peso Chileno ~950 CLP = 1 BRL
+    'COP': 0.0013,     // Peso Colombiano ~4200 COP = 1 BRL
+    'PEN': 1.45,
+    'JPY': 0.037,      // Iene Japonês ~154 JPY = 1 BRL
+    'BOB': 0.79,       // Boliviano
+    'VES': 0.15,       // Bolívar Venezuelano
   };
+  
+  let exchangeRates: Record<string, number> = { ...fallbackRates };
   
   try {
     console.log('Fetching real-time exchange rates from Frankfurter API...');
-    const ratesResponse = await fetch('https://api.frankfurter.app/latest?to=BRL');
-    if (ratesResponse.ok) {
-      const ratesData = await ratesResponse.json();
-      // Frankfurter returns rates FROM base currency TO BRL
-      // So USD -> BRL means 1 USD = X BRL
-      if (ratesData.rates?.BRL) {
-        const brlRate = ratesData.rates.BRL;
-        // We need rates TO BRL, so we need to calculate cross rates
-        // Frankfurter base is EUR by default
-        exchangeRates = {
-          'BRL': 1,
-          'EUR': brlRate, // 1 EUR = X BRL
-        };
-        
-        // Fetch USD and other currencies separately
-        const usdResponse = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
-        if (usdResponse.ok) {
-          const usdData = await usdResponse.json();
-          if (usdData.rates?.BRL) {
-            exchangeRates['USD'] = usdData.rates.BRL;
+    
+    // Fetch common currencies
+    const currencies = ['USD', 'EUR', 'GBP', 'AUD', 'CHF', 'CAD', 'MXN', 'JPY'];
+    for (const curr of currencies) {
+      try {
+        const resp = await fetch(`https://api.frankfurter.app/latest?from=${curr}&to=BRL`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.rates?.BRL) {
+            exchangeRates[curr] = data.rates.BRL;
           }
         }
-        
-        // Fetch other common currencies
-        const currencies = ['GBP', 'AUD', 'CHF', 'CAD', 'MXN'];
-        for (const curr of currencies) {
-          try {
-            const resp = await fetch(`https://api.frankfurter.app/latest?from=${curr}&to=BRL`);
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.rates?.BRL) {
-                exchangeRates[curr] = data.rates.BRL;
-              }
-            }
-          } catch (e) {
-            console.log(`Could not fetch rate for ${curr}, using fallback`);
-          }
-        }
-        
-        console.log('Real-time exchange rates fetched:', exchangeRates);
+      } catch (e) {
+        console.log(`Could not fetch rate for ${curr}, using fallback: ${fallbackRates[curr]}`);
       }
     }
+    
+    console.log('Exchange rates loaded:', exchangeRates);
   } catch (rateError) {
     console.error('Error fetching exchange rates, using fallback rates:', rateError);
+    exchangeRates = { ...fallbackRates };
   }
 
   // Prepare all sales data
@@ -490,10 +473,19 @@ async function syncSales(
     
     attributionStats[attributionType]++;
     
-    // Calculate BRL conversion with real-time rates
+    // Calculate BRL conversion with exchange rates
     const currencyCode = sale.purchase.price?.currency_code || 'BRL';
     const totalPrice = sale.purchase.price?.value || 0;
-    const rate = exchangeRates[currencyCode] || 1;
+    
+    // Get exchange rate - warn if unknown currency
+    let rate = exchangeRates[currencyCode];
+    if (rate === undefined) {
+      console.warn(`Unknown currency ${currencyCode} for transaction ${sale.purchase.transaction}, using conservative estimate`);
+      // For unknown currencies, assume it's a weak currency (value in hundreds/thousands)
+      // This prevents massive overestimation
+      rate = totalPrice > 1000 ? 0.001 : 1;
+    }
+    
     const totalPriceBrl = totalPrice * rate;
 
     return {

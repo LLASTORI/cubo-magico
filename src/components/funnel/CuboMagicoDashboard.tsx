@@ -172,30 +172,38 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch Meta ads - filter by project_id
-  const { data: adsData } = useQuery({
-    queryKey: ['meta-ads-cubo', projectId],
+  // Fetch active Meta ad accounts FIRST (needed for insights queries)
+  const { data: metaAdAccounts } = useQuery({
+    queryKey: ['meta-ad-accounts-cubo', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('meta_ads')
-        .select('ad_id, ad_name, adset_id, campaign_id, status')
-        .eq('project_id', projectId);
-      
+        .from('meta_ad_accounts')
+        .select('account_id')
+        .eq('project_id', projectId)
+        .eq('is_active', true);
       if (error) throw error;
-      console.log(`[CuboMagico] Ads loaded: ${data?.length || 0}`);
       return data || [];
     },
     enabled: !!projectId,
   });
 
-  // Fetch Meta insights - ALL levels for accurate spend calculations
+  // Get active account IDs for consistent filtering
+  const activeAccountIds = useMemo(() => {
+    if (!metaAdAccounts || metaAdAccounts.length === 0) return [];
+    return metaAdAccounts.map(a => a.account_id).sort();
+  }, [metaAdAccounts]);
+
+  // Fetch Meta insights - ALL levels for accurate spend calculations (filtered by active accounts)
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
-    queryKey: ['meta-insights-cubo', projectId, startDateStr, endDateStr],
+    queryKey: ['meta-insights-cubo', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
+      if (activeAccountIds.length === 0) return [];
+      
       const { data, error } = await supabase
         .from('meta_insights')
         .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
         .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       
@@ -203,7 +211,36 @@ export function CuboMagicoDashboard({
       console.log(`[CuboMagico] Insights loaded: ${data?.length || 0}`);
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: !!projectId && activeAccountIds.length > 0,
+  });
+
+  // Extract unique ad_ids from insights for efficient lookup
+  const insightAdIdsCubo = useMemo(() => {
+    if (!insightsData) return [];
+    return [...new Set(insightsData.filter(i => i.ad_id).map(i => i.ad_id))];
+  }, [insightsData]);
+
+  // Fetch Meta ads - only the ones that appear in insights
+  const { data: adsData } = useQuery({
+    queryKey: ['meta-ads-cubo', projectId, insightAdIdsCubo.length],
+    queryFn: async () => {
+      if (insightAdIdsCubo.length === 0) return [];
+      const allAds: any[] = [];
+      const batchSize = 100;
+      for (let i = 0; i < insightAdIdsCubo.length; i += batchSize) {
+        const batch = insightAdIdsCubo.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('meta_ads')
+          .select('ad_id, ad_name, adset_id, campaign_id, status')
+          .eq('project_id', projectId)
+          .in('ad_id', batch);
+        if (error) throw error;
+        if (data) allAds.push(...data);
+      }
+      console.log(`[CuboMagico] Ads loaded: ${allAds.length}`);
+      return allAds;
+    },
+    enabled: !!projectId && insightAdIdsCubo.length > 0,
   });
 
   // Calculate metrics for each funnel
@@ -222,18 +259,40 @@ export function CuboMagicoDashboard({
         : [];
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
 
-      // Calculate total spend - deduplicate by ad_id + date to avoid counting same spend multiple times
+      // Calculate total spend - prioritize ad-level, fallback to campaign-level
       const matchingInsights = insightsData.filter(i => matchingCampaignIds.has(i.campaign_id || ''));
-      const uniqueSpend = new Map<string, number>();
-      matchingInsights.forEach(i => {
-        if (i.ad_id && i.spend) {
-          const key = `${i.ad_id}_${i.date_start}`;
-          if (!uniqueSpend.has(key)) {
-            uniqueSpend.set(key, i.spend);
+      
+      // Separate ad-level and campaign-level insights
+      const adLevelInsights = matchingInsights.filter(i => i.ad_id);
+      const campaignLevelInsights = matchingInsights.filter(i => !i.ad_id && !i.adset_id);
+      
+      let investimento = 0;
+      
+      if (adLevelInsights.length > 0) {
+        // Use ad-level insights (deduplicated)
+        const uniqueSpend = new Map<string, number>();
+        adLevelInsights.forEach(i => {
+          if (i.spend) {
+            const key = `${i.ad_id}_${i.date_start}`;
+            if (!uniqueSpend.has(key)) {
+              uniqueSpend.set(key, i.spend);
+            }
           }
-        }
-      });
-      const investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+        });
+        investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+      } else if (campaignLevelInsights.length > 0) {
+        // Fallback to campaign-level insights (deduplicated)
+        const uniqueSpend = new Map<string, number>();
+        campaignLevelInsights.forEach(i => {
+          if (i.spend) {
+            const key = `${i.campaign_id}_${i.date_start}`;
+            if (!uniqueSpend.has(key)) {
+              uniqueSpend.set(key, i.spend);
+            }
+          }
+        });
+        investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+      }
 
       // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
       const funnelOffers = offerMappings.filter(o => 

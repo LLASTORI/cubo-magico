@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
@@ -118,201 +118,170 @@ const deduplicateInsights = (insights: MetaInsight[]) => {
 export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataProps) => {
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
-  
-  // Single unified query key base
-  const queryKeyBase = ['funnel-data', projectId, startDateStr, endDateStr];
 
-  // 1. Fetch static data (funnels and mappings) - no date filter needed
-  const { data: staticData, isLoading: loadingStatic } = useQuery({
-    queryKey: ['funnel-static', projectId],
-    queryFn: async () => {
-      const [funnelsResult, mappingsResult, accountsResult] = await Promise.all([
-        supabase
-          .from('funnels')
-          .select('id, name, campaign_name_pattern, roas_target')
-          .eq('project_id', projectId!),
-        supabase
-          .from('offer_mappings')
-          .select('*')
-          .eq('project_id', projectId!)
-          .eq('status', 'Ativo'),
-        supabase
-          .from('meta_ad_accounts')
-          .select('account_id')
-          .eq('project_id', projectId!)
-          .eq('is_active', true),
-      ]);
-      
-      if (funnelsResult.error) throw funnelsResult.error;
-      if (mappingsResult.error) throw mappingsResult.error;
-      if (accountsResult.error) throw accountsResult.error;
-      
-      return {
-        funnels: (funnelsResult.data as FunnelConfig[]) || [],
-        mappings: (mappingsResult.data as OfferMapping[]) || [],
-        activeAccountIds: (accountsResult.data || []).map(a => a.account_id).sort(),
-      };
-    },
-    enabled: !!projectId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  // 2. Fetch sales data with pagination
-  const { data: salesData, isLoading: loadingSales, refetch: refetchSales } = useQuery({
-    queryKey: [...queryKeyBase, 'sales'],
-    queryFn: async () => {
-      const allSales: SaleRecord[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      
-      const startTimestamp = `${startDateStr}T00:00:00`;
-      const endTimestamp = `${endDateStr}T23:59:59`;
-      
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
-          .eq('project_id', projectId!)
-          .in('status', ['APPROVED', 'COMPLETE'])
-          .gte('sale_date', startTimestamp)
-          .lte('sale_date', endTimestamp)
-          .range(page * pageSize, (page + 1) * pageSize - 1)
-          .order('sale_date', { ascending: false });
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allSales.push(...(data as SaleRecord[]));
-          hasMore = data.length === pageSize;
-          page++;
-        } else {
-          hasMore = false;
-        }
-      }
-      
-      console.log(`[useFunnelData] Sales: ${allSales.length} records`);
-      return allSales;
-    },
-    enabled: !!projectId,
-    staleTime: 30 * 1000, // 30 seconds
-  });
-
-  // 3. Fetch Meta insights with pagination
-  const { data: metaInsights, isLoading: loadingInsights, refetch: refetchInsights } = useQuery({
-    queryKey: [...queryKeyBase, 'insights', staticData?.activeAccountIds?.join(',') || ''],
-    queryFn: async () => {
-      if (!staticData?.activeAccountIds?.length) return [];
-      
-      const PAGE_SIZE = 1000;
-      const MAX_PAGES = 20;
-      const allInsights: MetaInsight[] = [];
-      let page = 0;
-      
-      while (page < MAX_PAGES) {
-        const { data, error, count } = await supabase
-          .from('meta_insights')
-          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop', { count: 'exact' })
-          .eq('project_id', projectId!)
-          .in('ad_account_id', staticData.activeAccountIds)
-          .gte('date_start', startDateStr)
-          .lte('date_start', endDateStr)
-          .order('date_start', { ascending: true })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allInsights.push(...(data as MetaInsight[]));
-          if (data.length < PAGE_SIZE || (count && allInsights.length >= count)) break;
-          page++;
-        } else {
-          break;
-        }
-      }
-      
-      console.log(`[useFunnelData] Insights: ${allInsights.length} records`);
-      return allInsights;
-    },
-    enabled: !!projectId && !!staticData?.activeAccountIds?.length,
-    staleTime: 30 * 1000,
-  });
-
-  // 4. Fetch Meta structure (campaigns, adsets, ads)
-  const insightAdIds = useMemo(() => {
-    if (!metaInsights) return [];
-    return [...new Set(metaInsights.filter(i => i.ad_id).map(i => i.ad_id!))];
-  }, [metaInsights]);
-
-  const { data: metaStructure, isLoading: loadingStructure } = useQuery({
-    queryKey: ['funnel-meta-structure', projectId, insightAdIds.length],
-    queryFn: async () => {
-      const [campaignsResult, adsetsResult] = await Promise.all([
-        supabase
-          .from('meta_campaigns')
-          .select('id, campaign_id, campaign_name, status')
-          .eq('project_id', projectId!),
-        supabase
-          .from('meta_adsets')
-          .select('id, adset_id, adset_name, campaign_id, status')
-          .eq('project_id', projectId!),
-      ]);
-      
-      if (campaignsResult.error) throw campaignsResult.error;
-      if (adsetsResult.error) throw adsetsResult.error;
-      
-      // Fetch ads in batches if we have ad IDs
-      let ads: any[] = [];
-      if (insightAdIds.length > 0) {
-        const batchSize = 100;
-        for (let i = 0; i < insightAdIds.length; i += batchSize) {
-          const batch = insightAdIds.slice(i, i + batchSize);
+  // ALL queries run in PARALLEL - no dependencies between them
+  const queries = useQueries({
+    queries: [
+      // 0: Funnels
+      {
+        queryKey: ['funnels', projectId],
+        queryFn: async () => {
           const { data, error } = await supabase
-            .from('meta_ads')
-            .select('id, ad_id, ad_name, adset_id, campaign_id, status')
-            .eq('project_id', projectId!)
-            .in('ad_id', batch);
+            .from('funnels')
+            .select('id, name, campaign_name_pattern, roas_target')
+            .eq('project_id', projectId!);
           if (error) throw error;
-          if (data) ads.push(...data);
-        }
-      }
-      
-      return {
-        campaigns: campaignsResult.data || [],
-        adsets: adsetsResult.data || [],
-        ads,
-      };
-    },
-    enabled: !!projectId,
-    staleTime: 5 * 60 * 1000,
+          return (data as FunnelConfig[]) || [];
+        },
+        enabled: !!projectId,
+        staleTime: 5 * 60 * 1000,
+      },
+      // 1: Mappings
+      {
+        queryKey: ['mappings', projectId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('offer_mappings')
+            .select('*')
+            .eq('project_id', projectId!)
+            .eq('status', 'Ativo');
+          if (error) throw error;
+          return (data as OfferMapping[]) || [];
+        },
+        enabled: !!projectId,
+        staleTime: 5 * 60 * 1000,
+      },
+      // 2: Active Account IDs
+      {
+        queryKey: ['meta-accounts', projectId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('meta_ad_accounts')
+            .select('account_id')
+            .eq('project_id', projectId!)
+            .eq('is_active', true);
+          if (error) throw error;
+          return (data || []).map(a => a.account_id).sort();
+        },
+        enabled: !!projectId,
+        staleTime: 5 * 60 * 1000,
+      },
+      // 3: Sales - simple single query (no pagination for faster load)
+      {
+        queryKey: ['sales', projectId, startDateStr, endDateStr],
+        queryFn: async () => {
+          const startTimestamp = `${startDateStr}T00:00:00`;
+          const endTimestamp = `${endDateStr}T23:59:59`;
+          
+          const { data, error } = await supabase
+            .from('hotmart_sales')
+            .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
+            .eq('project_id', projectId!)
+            .in('status', ['APPROVED', 'COMPLETE'])
+            .gte('sale_date', startTimestamp)
+            .lte('sale_date', endTimestamp)
+            .order('sale_date', { ascending: false })
+            .limit(5000); // Limit to avoid timeout
+          
+          if (error) throw error;
+          return (data as SaleRecord[]) || [];
+        },
+        enabled: !!projectId,
+        staleTime: 30 * 1000,
+      },
+      // 4: Meta Insights - simple single query
+      {
+        queryKey: ['insights', projectId, startDateStr, endDateStr],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('meta_insights')
+            .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
+            .eq('project_id', projectId!)
+            .gte('date_start', startDateStr)
+            .lte('date_start', endDateStr)
+            .limit(5000);
+          
+          if (error) throw error;
+          return (data as MetaInsight[]) || [];
+        },
+        enabled: !!projectId,
+        staleTime: 30 * 1000,
+      },
+      // 5: Campaigns
+      {
+        queryKey: ['campaigns', projectId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('meta_campaigns')
+            .select('id, campaign_id, campaign_name, status')
+            .eq('project_id', projectId!);
+          if (error) throw error;
+          return data || [];
+        },
+        enabled: !!projectId,
+        staleTime: 5 * 60 * 1000,
+      },
+      // 6: Adsets
+      {
+        queryKey: ['adsets', projectId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('meta_adsets')
+            .select('id, adset_id, adset_name, campaign_id, status')
+            .eq('project_id', projectId!);
+          if (error) throw error;
+          return data || [];
+        },
+        enabled: !!projectId,
+        staleTime: 5 * 60 * 1000,
+      },
+    ],
   });
 
-  // Computed values with stable memoization
+  // Extract data from parallel queries
+  const funnels = queries[0].data || [];
+  const mappings = queries[1].data || [];
+  const activeAccountIds = queries[2].data || [];
+  const salesData = queries[3].data || [];
+  const rawInsights = queries[4].data || [];
+  const campaigns = queries[5].data || [];
+  const adsets = queries[6].data || [];
+
+  // Loading states - separate for each data type
+  const loadingStatic = queries[0].isLoading || queries[1].isLoading || queries[2].isLoading;
+  const loadingSales = queries[3].isLoading;
+  const loadingInsights = queries[4].isLoading;
+  const loadingStructure = queries[5].isLoading || queries[6].isLoading;
+
+  // Primary loading - only block UI if sales are loading (main data)
+  const isLoading = loadingSales;
+
+  // Sorted mappings
   const sortedMappings = useMemo(() => {
-    if (!staticData?.mappings) return [];
-    return [...staticData.mappings].sort((a, b) => {
+    if (!mappings.length) return [];
+    return [...mappings].sort((a, b) => {
       const orderA = getPositionSortOrder(a.tipo_posicao || '', a.ordem_posicao || 0);
       const orderB = getPositionSortOrder(b.tipo_posicao || '', b.ordem_posicao || 0);
       return orderA - orderB;
     });
-  }, [staticData?.mappings]);
+  }, [mappings]);
 
   const offerCodes = useMemo(() => {
     return sortedMappings.map(m => m.codigo_oferta).filter(Boolean) as string[];
   }, [sortedMappings]);
 
-  // Deduplicated insights for calculations
+  // Deduplicated insights
   const deduplicatedInsights = useMemo(() => {
-    if (!metaInsights) return [];
-    return deduplicateInsights(metaInsights);
-  }, [metaInsights]);
+    if (!rawInsights.length) return [];
+    return deduplicateInsights(rawInsights);
+  }, [rawInsights]);
 
-  // Total Meta investment (deduplicated)
+  // Total Meta investment
   const totalMetaInvestment = useMemo(() => {
     return deduplicatedInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
   }, [deduplicatedInsights]);
 
-  // Meta metrics aggregated
+  // Meta metrics
   const metaMetrics = useMemo(() => {
     const spend = deduplicatedInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
     const impressions = deduplicatedInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
@@ -331,7 +300,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
 
   // Aggregated metrics by position
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
-    if (!salesData) return [];
+    if (!salesData.length) return [];
 
     const salesByOffer: Record<string, { count: number; revenue: number }> = {};
     salesData.forEach(sale => {
@@ -394,12 +363,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
       .reduce((sum, m) => sum + m.total_vendas, 0);
     
-    const uniqueCustomers = new Set((salesData || []).map(s => s.buyer_email).filter(Boolean)).size;
+    const uniqueCustomers = new Set(salesData.map(s => s.buyer_email).filter(Boolean)).size;
     const baseVendas = vendasFront > 0 ? vendasFront : totalVendas;
     const ticketMedio = baseVendas > 0 ? totalReceita / baseVendas : 0;
     
-    const avgRoasTarget = staticData?.funnels?.length 
-      ? staticData.funnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / staticData.funnels.length 
+    const avgRoasTarget = funnels.length 
+      ? funnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / funnels.length 
       : 2;
     const cpaMaximo = ticketMedio / avgRoasTarget;
     const cpaReal = baseVendas > 0 ? totalMetaInvestment / baseVendas : 0;
@@ -417,26 +386,26 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       roas,
       roasTarget: avgRoasTarget,
     };
-  }, [aggregatedMetrics, salesData, totalMetaInvestment, staticData?.funnels]);
+  }, [aggregatedMetrics, salesData, totalMetaInvestment, funnels]);
 
-  // Loading state
-  const isLoading = loadingStatic || loadingSales || loadingInsights || loadingStructure;
-
-  // Refetch all data
+  // Refetch functions
   const refetchAll = async () => {
-    await Promise.all([refetchSales(), refetchInsights()]);
+    await Promise.all([
+      queries[3].refetch(),
+      queries[4].refetch(),
+    ]);
   };
 
   return {
     // Raw data
-    funnels: staticData?.funnels || [],
-    mappings: staticData?.mappings || [],
+    funnels,
+    mappings,
     sortedMappings,
     offerCodes,
-    salesData: salesData || [],
+    salesData,
     metaInsights: deduplicatedInsights,
-    metaStructure: metaStructure || { campaigns: [], adsets: [], ads: [] },
-    activeAccountIds: staticData?.activeAccountIds || [],
+    metaStructure: { campaigns, adsets, ads: [] },
+    activeAccountIds,
     
     // Computed metrics
     aggregatedMetrics,
@@ -451,8 +420,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     
     // Actions
     refetchAll,
-    refetchSales,
-    refetchInsights,
+    refetchSales: queries[3].refetch,
+    refetchInsights: queries[4].refetch,
   };
 };
 

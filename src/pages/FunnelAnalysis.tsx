@@ -1016,6 +1016,7 @@ const FunnelAnalysis = () => {
                   externalStartDate={startDate}
                   externalEndDate={endDate}
                   embedded={true}
+                  salesData={salesData}
                 />
                 
                 {/* Hint para o usuário */}

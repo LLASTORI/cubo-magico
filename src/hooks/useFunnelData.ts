@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
@@ -80,7 +80,6 @@ interface PositionMetrics {
   percentual_receita: number;
 }
 
-// Função para calcular a ordem correta no funil
 const getPositionSortOrder = (tipo: string, ordem: number): number => {
   if (tipo === 'FRONT' || tipo === 'FE') return 0;
   if (tipo === 'OB') return ordem;
@@ -89,7 +88,6 @@ const getPositionSortOrder = (tipo: string, ordem: number): number => {
   return 999;
 };
 
-// Deduplicate insights by ad_id + date or campaign_id + date
 const deduplicateInsights = (insights: MetaInsight[]) => {
   const adLevelInsights = insights.filter(i => i.ad_id);
   const campaignLevelInsights = insights.filter(i => !i.ad_id && !i.adset_id);
@@ -118,142 +116,134 @@ const deduplicateInsights = (insights: MetaInsight[]) => {
 export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataProps) => {
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
+  const enabled = !!projectId;
 
-  // ALL queries run in PARALLEL - no dependencies between them
-  const queries = useQueries({
-    queries: [
-      // 0: Funnels
-      {
-        queryKey: ['funnels', projectId],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('funnels')
-            .select('id, name, campaign_name_pattern, roas_target')
-            .eq('project_id', projectId!);
-          if (error) throw error;
-          return (data as FunnelConfig[]) || [];
-        },
-        enabled: !!projectId,
-        staleTime: 5 * 60 * 1000,
-      },
-      // 1: Mappings
-      {
-        queryKey: ['mappings', projectId],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('offer_mappings')
-            .select('*')
-            .eq('project_id', projectId!)
-            .eq('status', 'Ativo');
-          if (error) throw error;
-          return (data as OfferMapping[]) || [];
-        },
-        enabled: !!projectId,
-        staleTime: 5 * 60 * 1000,
-      },
-      // 2: Active Account IDs
-      {
-        queryKey: ['meta-accounts', projectId],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('meta_ad_accounts')
-            .select('account_id')
-            .eq('project_id', projectId!)
-            .eq('is_active', true);
-          if (error) throw error;
-          return (data || []).map(a => a.account_id).sort();
-        },
-        enabled: !!projectId,
-        staleTime: 5 * 60 * 1000,
-      },
-      // 3: Sales - simple single query (no pagination for faster load)
-      {
-        queryKey: ['sales', projectId, startDateStr, endDateStr],
-        queryFn: async () => {
-          const startTimestamp = `${startDateStr}T00:00:00`;
-          const endTimestamp = `${endDateStr}T23:59:59`;
-          
-          const { data, error } = await supabase
-            .from('hotmart_sales')
-            .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
-            .eq('project_id', projectId!)
-            .in('status', ['APPROVED', 'COMPLETE'])
-            .gte('sale_date', startTimestamp)
-            .lte('sale_date', endTimestamp)
-            .order('sale_date', { ascending: false })
-            .limit(5000); // Limit to avoid timeout
-          
-          if (error) throw error;
-          return (data as SaleRecord[]) || [];
-        },
-        enabled: !!projectId,
-        staleTime: 30 * 1000,
-      },
-      // 4: Meta Insights - simple single query
-      {
-        queryKey: ['insights', projectId, startDateStr, endDateStr],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('meta_insights')
-            .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
-            .eq('project_id', projectId!)
-            .gte('date_start', startDateStr)
-            .lte('date_start', endDateStr)
-            .limit(5000);
-          
-          if (error) throw error;
-          return (data as MetaInsight[]) || [];
-        },
-        enabled: !!projectId,
-        staleTime: 30 * 1000,
-      },
-      // 5: Campaigns
-      {
-        queryKey: ['campaigns', projectId],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('meta_campaigns')
-            .select('id, campaign_id, campaign_name, status')
-            .eq('project_id', projectId!);
-          if (error) throw error;
-          return data || [];
-        },
-        enabled: !!projectId,
-        staleTime: 5 * 60 * 1000,
-      },
-      // 6: Adsets
-      {
-        queryKey: ['adsets', projectId],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('meta_adsets')
-            .select('id, adset_id, adset_name, campaign_id, status')
-            .eq('project_id', projectId!);
-          if (error) throw error;
-          return data || [];
-        },
-        enabled: !!projectId,
-        staleTime: 5 * 60 * 1000,
-      },
-    ],
+  // STABLE individual queries - no useQueries to avoid hooks order issues
+  const funnelsQuery = useQuery({
+    queryKey: ['funnels', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name, campaign_name_pattern, roas_target')
+        .eq('project_id', projectId!);
+      if (error) throw error;
+      return (data as FunnelConfig[]) || [];
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Extract data from parallel queries
-  const funnels = queries[0].data || [];
-  const mappings = queries[1].data || [];
-  const activeAccountIds = queries[2].data || [];
-  const salesData = queries[3].data || [];
-  const rawInsights = queries[4].data || [];
-  const campaigns = queries[5].data || [];
-  const adsets = queries[6].data || [];
+  const mappingsQuery = useQuery({
+    queryKey: ['mappings', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('offer_mappings')
+        .select('*')
+        .eq('project_id', projectId!)
+        .eq('status', 'Ativo');
+      if (error) throw error;
+      return (data as OfferMapping[]) || [];
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // Loading states - separate for each data type
-  const loadingStatic = queries[0].isLoading || queries[1].isLoading || queries[2].isLoading;
-  const loadingSales = queries[3].isLoading;
-  const loadingInsights = queries[4].isLoading;
-  const loadingStructure = queries[5].isLoading || queries[6].isLoading;
+  const accountsQuery = useQuery({
+    queryKey: ['meta-accounts', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ad_accounts')
+        .select('account_id')
+        .eq('project_id', projectId!)
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []).map(a => a.account_id).sort();
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // Primary loading - only block UI if sales are loading (main data)
+  const salesQuery = useQuery({
+    queryKey: ['sales', projectId, startDateStr, endDateStr],
+    queryFn: async () => {
+      const startTimestamp = `${startDateStr}T00:00:00`;
+      const endTimestamp = `${endDateStr}T23:59:59`;
+      
+      const { data, error } = await supabase
+        .from('hotmart_sales')
+        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
+        .eq('project_id', projectId!)
+        .in('status', ['APPROVED', 'COMPLETE'])
+        .gte('sale_date', startTimestamp)
+        .lte('sale_date', endTimestamp)
+        .order('sale_date', { ascending: false })
+        .limit(5000);
+      
+      if (error) throw error;
+      return (data as SaleRecord[]) || [];
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+
+  const insightsQuery = useQuery({
+    queryKey: ['insights', projectId, startDateStr, endDateStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_insights')
+        .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
+        .eq('project_id', projectId!)
+        .gte('date_start', startDateStr)
+        .lte('date_start', endDateStr)
+        .limit(5000);
+      
+      if (error) throw error;
+      return (data as MetaInsight[]) || [];
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+
+  const campaignsQuery = useQuery({
+    queryKey: ['campaigns', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_campaigns')
+        .select('id, campaign_id, campaign_name, status')
+        .eq('project_id', projectId!);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const adsetsQuery = useQuery({
+    queryKey: ['adsets', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_adsets')
+        .select('id, adset_id, adset_name, campaign_id, status')
+        .eq('project_id', projectId!);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Extract data
+  const funnels = funnelsQuery.data || [];
+  const mappings = mappingsQuery.data || [];
+  const activeAccountIds = accountsQuery.data || [];
+  const salesData = salesQuery.data || [];
+  const rawInsights = insightsQuery.data || [];
+  const campaigns = campaignsQuery.data || [];
+  const adsets = adsetsQuery.data || [];
+
+  // Loading states
+  const loadingSales = salesQuery.isLoading;
+  const loadingInsights = insightsQuery.isLoading;
   const isLoading = loadingSales;
 
   // Sorted mappings
@@ -391,13 +381,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // Refetch functions
   const refetchAll = async () => {
     await Promise.all([
-      queries[3].refetch(),
-      queries[4].refetch(),
+      salesQuery.refetch(),
+      insightsQuery.refetch(),
     ]);
   };
 
   return {
-    // Raw data
     funnels,
     mappings,
     sortedMappings,
@@ -406,22 +395,16 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     metaInsights: deduplicatedInsights,
     metaStructure: { campaigns, adsets, ads: [] },
     activeAccountIds,
-    
-    // Computed metrics
     aggregatedMetrics,
     summaryMetrics,
     metaMetrics,
     totalMetaInvestment,
-    
-    // Loading states
     isLoading,
     loadingSales,
     loadingInsights,
-    
-    // Actions
     refetchAll,
-    refetchSales: queries[3].refetch,
-    refetchInsights: queries[4].refetch,
+    refetchSales: salesQuery.refetch,
+    refetchInsights: insightsQuery.refetch,
   };
 };
 

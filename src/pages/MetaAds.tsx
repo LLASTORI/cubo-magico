@@ -85,30 +85,18 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Date range state - will be adjusted based on available data
+  // Date range state - defaults to last 30 days
   const today = new Date().toISOString().split('T')[0];
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState(sevenDaysAgo);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [syncing, setSyncing] = useState(false);
-  const [needsSync, setNeedsSync] = useState(false); // Track if date changed and needs sync
-  const [dateRangeAutoAdjusted, setDateRangeAutoAdjusted] = useState(false);
+  const [needsSync, setNeedsSync] = useState(false);
 
-  // CRITICAL: Clear ALL meta queries on mount to ensure fresh data for this project
+  // Log mount for debugging
   useEffect(() => {
-    console.log('[MetaAdsContent] Mounting with projectId:', projectId, '- clearing all meta caches');
-    
-    // Remove all meta queries to force completely fresh fetch
-    queryClient.removeQueries({ queryKey: ['meta_credentials'] });
-    queryClient.removeQueries({ queryKey: ['meta_ad_accounts'] });
-    queryClient.removeQueries({ queryKey: ['meta_campaigns'] });
-    queryClient.removeQueries({ queryKey: ['meta_insights'] });
-    
-    // Small delay to ensure queries are cleared before they start
-    return () => {
-      console.log('[MetaAdsContent] Unmounting projectId:', projectId);
-    };
-  }, [projectId, queryClient]);
+    console.log('[MetaAdsContent] Mounted with projectId:', projectId);
+  }, [projectId]);
 
   // Connect to Meta
   const handleConnectMeta = () => {
@@ -255,51 +243,35 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     // CRITICAL: queryKey must match EXACTLY what we filter by
     queryKey: ['meta_insights', projectId, startDate, endDate, activeAccountIds.join(',')],
     queryFn: async () => {
-      if (activeAccountIds.length === 0) return [];
+      console.log('[Insights] Fetching for accounts:', activeAccountIds, 'dates:', startDate, 'to', endDate);
       
-      // Fetch ALL insights using pagination (Supabase default limit is 1000)
-      const PAGE_SIZE = 1000;
-      const MAX_PAGES = 20; // Safety limit to prevent infinite loops
-      let allInsights: any[] = [];
-      let page = 0;
-      
-      while (page < MAX_PAGES) {
-        // Filter insights that OVERLAP with the selected period
-        // Campaign-level only (adset_id IS NULL AND ad_id IS NULL) to avoid duplicates
-        const { data, error, count } = await supabase
-          .from('meta_insights')
-          .select('*', { count: 'exact' })
-          .eq('project_id', projectId)
-          .in('ad_account_id', activeAccountIds)
-          .is('adset_id', null)
-          .is('ad_id', null)
-          .gte('date_start', startDate)
-          .lte('date_start', endDate)
-          .order('date_start', { ascending: true })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allInsights = [...allInsights, ...data];
-          console.log(`[Insights] Page ${page + 1}: fetched ${data.length} records (total so far: ${allInsights.length}${count ? `, expected: ${count}` : ''})`);
-          
-          // Stop if we got less than PAGE_SIZE (no more data) or reached expected count
-          if (data.length < PAGE_SIZE || (count && allInsights.length >= count)) {
-            break;
-          }
-          page++;
-        } else {
-          break;
-        }
+      if (activeAccountIds.length === 0) {
+        console.log('[Insights] No active accounts, returning empty');
+        return [];
       }
       
-      console.log(`[Insights] TOTAL: ${allInsights.length} records across ${page + 1} pages`);
-      return allInsights;
+      // Simple single query - campaign-level only
+      const { data, error, count } = await supabase
+        .from('meta_insights')
+        .select('*', { count: 'exact' })
+        .eq('project_id', projectId)
+        .in('ad_account_id', activeAccountIds)
+        .is('adset_id', null)
+        .is('ad_id', null)
+        .gte('date_start', startDate)
+        .lte('date_start', endDate)
+        .order('date_start', { ascending: true });
+      
+      if (error) {
+        console.error('[Insights] Query error:', error);
+        throw error;
+      }
+      
+      console.log(`[Insights] Fetched ${data?.length || 0} records (count: ${count})`);
+      return data || [];
     },
-    enabled: !!metaCredentials && !!adAccounts && adAccounts.length > 0,
-    staleTime: 0,
-    gcTime: 0,
+    enabled: !!metaCredentials && activeAccountIds.length > 0,
+    staleTime: 30000, // 30 seconds cache
   });
 
   // Query to get the available date range in the database
@@ -308,7 +280,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     queryFn: async () => {
       if (activeAccountIds.length === 0) return null;
       
-      // Get min and max dates from campaign-level insights
+      // Get min and max dates from campaign-level insights in a single query
       const { data, error } = await supabase
         .from('meta_insights')
         .select('date_start')
@@ -316,60 +288,22 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         .in('ad_account_id', activeAccountIds)
         .is('adset_id', null)
         .is('ad_id', null)
-        .order('date_start', { ascending: true })
-        .limit(1);
+        .order('date_start', { ascending: true });
       
-      if (error) {
-        console.error('[DateRange] Error fetching min date:', error);
+      if (error || !data || data.length === 0) {
+        console.log('[DateRange] No data available');
         return null;
       }
       
-      const { data: maxData, error: maxError } = await supabase
-        .from('meta_insights')
-        .select('date_start')
-        .eq('project_id', projectId)
-        .in('ad_account_id', activeAccountIds)
-        .is('adset_id', null)
-        .is('ad_id', null)
-        .order('date_start', { ascending: false })
-        .limit(1);
+      const minDate = data[0]?.date_start;
+      const maxDate = data[data.length - 1]?.date_start;
       
-      if (maxError) {
-        console.error('[DateRange] Error fetching max date:', maxError);
-        return null;
-      }
-      
-      const minDate = data?.[0]?.date_start || null;
-      const maxDate = maxData?.[0]?.date_start || null;
-      
-      console.log(`[DateRange] Available data: ${minDate} to ${maxDate}`);
-      return { minDate, maxDate };
+      console.log(`[DateRange] Available data: ${minDate} to ${maxDate} (${data.length} records)`);
+      return { minDate, maxDate, count: data.length };
     },
     enabled: !!metaCredentials && activeAccountIds.length > 0,
     staleTime: 60000,
   });
-
-  // Auto-adjust date range if no data in current selection
-  useEffect(() => {
-    if (availableDateRange?.maxDate && !dateRangeAutoAdjusted && insights?.length === 0 && !insightsLoading) {
-      const currentStart = new Date(startDate);
-      const currentEnd = new Date(endDate);
-      const availableMax = new Date(availableDateRange.maxDate);
-      const availableMin = new Date(availableDateRange.minDate);
-      
-      // If current range doesn't overlap with available data, adjust
-      if (currentStart > availableMax || currentEnd < availableMin) {
-        console.log('[DateRange] Auto-adjusting to available data range');
-        setStartDate(availableDateRange.minDate);
-        setEndDate(availableDateRange.maxDate);
-        setDateRangeAutoAdjusted(true);
-        toast({
-          title: 'Período ajustado automaticamente',
-          description: `Os dados disponíveis são de ${format(availableMin, 'dd/MM/yyyy', { locale: ptBR })} a ${format(availableMax, 'dd/MM/yyyy', { locale: ptBR })}`,
-        });
-      }
-    }
-  }, [availableDateRange, insights, insightsLoading, startDate, endDate, dateRangeAutoAdjusted, toast]);
 
   // VERIFICATION: Query to get the exact SUM from database for comparison
   const { data: dbVerification } = useQuery({

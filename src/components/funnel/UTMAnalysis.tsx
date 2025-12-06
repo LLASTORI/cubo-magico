@@ -90,7 +90,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
 
   const currentField = HIERARCHY[currentLevel];
 
-  const getUtmField = (sale: UnifiedSaleData, field: string): string => {
+  const getUtmField = (sale: SaleData, field: string): string => {
     switch (field) {
       case 'source': return sale.utm_source || '(não definido)';
       case 'campaign': return sale.utm_campaign_id || '(não definido)';

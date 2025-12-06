@@ -209,14 +209,12 @@ const FunnelAnalysis = () => {
   const { data: salesData, isLoading: loadingSales, refetch: refetchSales, isRefetching } = useQuery({
     queryKey: ['hotmart-sales-unified', currentProject?.id, startDateStr, endDateStr],
     queryFn: async () => {
-      // Use formatInTimeZone for consistent Brazil timezone handling (same as CuboMagicoDashboard)
-      const { formatInTimeZone } = await import('date-fns-tz');
-      const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
+      // Use simple date strings for PostgreSQL comparison - no timezone conversion needed
+      // PostgreSQL handles the comparison correctly with YYYY-MM-DD format
+      const startDate = `${startDateStr}T00:00:00`;
+      const endDate = `${endDateStr}T23:59:59`;
       
-      const startUTC = formatInTimeZone(debouncedStartDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'00:00:00XXX");
-      const endUTC = formatInTimeZone(debouncedEndDate, BRAZIL_TIMEZONE, "yyyy-MM-dd'T'23:59:59XXX");
-      
-      console.log('Query dates:', { startUTC, endUTC });
+      console.log('Query dates:', { startDate, endDate, projectId: currentProject!.id });
       
       // Fetch ALL sales records - installment_number is used for counting unique sales later
       // but for revenue we need all payments
@@ -225,10 +223,11 @@ const FunnelAnalysis = () => {
         .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, payment_method, installment_number')
         .eq('project_id', currentProject!.id)
         .in('status', ['APPROVED', 'COMPLETE'])
-        .gte('sale_date', startUTC)
-        .lte('sale_date', endUTC);
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate);
       
       if (error) throw error;
+      console.log(`Sales fetched: ${data?.length || 0} records`);
       return data || [];
     },
     enabled: !!currentProject?.id,

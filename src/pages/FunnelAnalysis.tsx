@@ -1029,37 +1029,33 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="temporal">
                 <TemporalChart
-                  selectedFunnel="Todos os Funis"
+                  salesData={salesData || []}
                   funnelOfferCodes={allOfferCodes}
-                  initialStartDate={startDate}
-                  initialEndDate={endDate}
+                  startDate={startDate}
+                  endDate={endDate}
                 />
               </TabsContent>
 
               <TabsContent value="comparison">
                 <PeriodComparison
-                  selectedFunnel="Todos os Funis"
+                  salesData={salesData || []}
                   funnelOfferCodes={allOfferCodes}
-                  initialStartDate={startDate}
-                  initialEndDate={endDate}
+                  startDate={startDate}
+                  endDate={endDate}
                 />
               </TabsContent>
 
               <TabsContent value="utm">
                 <UTMAnalysis
-                  selectedFunnel="Todos os Funis"
+                  salesData={salesData || []}
                   funnelOfferCodes={allOfferCodes}
-                  initialStartDate={startDate}
-                  initialEndDate={endDate}
                 />
               </TabsContent>
 
               <TabsContent value="payment">
                 <PaymentMethodAnalysis
-                  selectedFunnel="Todos os Funis"
+                  salesData={salesData || []}
                   funnelOfferCodes={allOfferCodes}
-                  initialStartDate={startDate}
-                  initialEndDate={endDate}
                 />
               </TabsContent>
 

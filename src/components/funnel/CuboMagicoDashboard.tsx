@@ -926,37 +926,33 @@ export function CuboMagicoDashboard({
 
                             <TabsContent value="temporal" className="mt-0">
                               <TemporalChart
-                                selectedFunnel={metrics.funnel.name}
+                                salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                initialStartDate={startDate}
-                                initialEndDate={endDate}
+                                startDate={startDate}
+                                endDate={endDate}
                               />
                             </TabsContent>
 
                             <TabsContent value="comparison" className="mt-0">
                               <PeriodComparison
-                                selectedFunnel={metrics.funnel.name}
+                                salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                initialStartDate={startDate}
-                                initialEndDate={endDate}
+                                startDate={startDate}
+                                endDate={endDate}
                               />
                             </TabsContent>
 
                             <TabsContent value="utm" className="mt-0">
                               <UTMAnalysis
-                                selectedFunnel={metrics.funnel.name}
+                                salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                initialStartDate={startDate}
-                                initialEndDate={endDate}
                               />
                             </TabsContent>
 
                             <TabsContent value="payment" className="mt-0">
                               <PaymentMethodAnalysis
-                                selectedFunnel={metrics.funnel.name}
+                                salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                initialStartDate={startDate}
-                                initialEndDate={endDate}
                               />
                             </TabsContent>
 

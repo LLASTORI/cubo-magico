@@ -849,10 +849,13 @@ const FunnelAnalysis = () => {
                           startDate,
                           endDate,
                           summaryMetrics,
-                          metaMetrics,
-                          funnelMetrics: aggregatedMetrics,
                           salesData: salesData || [],
                           projectName: currentProject.name,
+                          funnelsConfig: funnelsConfig || [],
+                          mappings: mappings || [],
+                          metaCampaigns: metaCampaigns || [],
+                          metaAds: metaAds || [],
+                          metaInsights: metaInsights || [],
                         });
                         toast.success('Relatório PDF gerado com sucesso!');
                       } catch (error) {

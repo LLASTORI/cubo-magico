@@ -32,7 +32,7 @@ const DB_INSERT_BATCH_SIZE = 100
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Helper function to split date range into monthly chunks
+// Helper function to split date range into fixed-size chunks (MAX_DAYS_PER_CHUNK days each)
 function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{start: string, stop: string}> {
   const chunks: Array<{start: string, stop: string}> = []
   const startDate = new Date(dateStart)
@@ -46,15 +46,14 @@ function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{s
     return [{ start: dateStart, stop: dateStop }]
   }
   
-  console.log(`Splitting ${totalDays} days into monthly chunks...`)
+  console.log(`Splitting ${totalDays} days into ${MAX_DAYS_PER_CHUNK}-day chunks...`)
   
   let currentStart = new Date(startDate)
   
-  while (currentStart < endDate) {
-    // Calculate chunk end (end of current month or end date, whichever is earlier)
+  while (currentStart <= endDate) {
+    // Calculate chunk end (MAX_DAYS_PER_CHUNK days from start, or end date, whichever is earlier)
     const chunkEnd = new Date(currentStart)
-    chunkEnd.setMonth(chunkEnd.getMonth() + 1)
-    chunkEnd.setDate(0) // Last day of current month
+    chunkEnd.setDate(chunkEnd.getDate() + MAX_DAYS_PER_CHUNK - 1)
     
     const actualEnd = chunkEnd > endDate ? endDate : chunkEnd
     
@@ -63,12 +62,12 @@ function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{s
       stop: actualEnd.toISOString().split('T')[0]
     })
     
-    // Move to first day of next month
+    // Move to next chunk start
     currentStart = new Date(actualEnd)
     currentStart.setDate(currentStart.getDate() + 1)
   }
   
-  console.log(`Created ${chunks.length} chunks:`, chunks.map(c => `${c.start} to ${c.stop}`))
+  console.log(`Created ${chunks.length} chunks of max ${MAX_DAYS_PER_CHUNK} days:`, chunks.map(c => `${c.start} to ${c.stop}`))
   return chunks
 }
 

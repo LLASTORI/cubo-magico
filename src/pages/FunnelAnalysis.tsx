@@ -618,9 +618,10 @@ const FunnelAnalysis = () => {
     };
   }, [aggregatedMetrics, salesData, totalMetaInvestment, availableFunnels]);
 
-  // Sync and refresh all data
+  // Sync and refresh all data - with individual progress tracking
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string>('');
+  const [hotmartSyncStatus, setHotmartSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
+  const [metaSyncStatus, setMetaSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
   const [estimatedDuration, setEstimatedDuration] = useState(60);
 
@@ -632,52 +633,69 @@ const FunnelAnalysis = () => {
 
   const handleRefreshAll = async () => {
     setIsSyncing(true);
-    setSyncStatus('Sincronizando Hotmart...');
+    setHotmartSyncStatus('syncing');
+    setMetaSyncStatus('idle');
     
     // Use the currently selected dates (not debounced) for sync
     const syncStartDateStr = format(startDate, 'yyyy-MM-dd');
     const syncEndDateStr = format(endDate, 'yyyy-MM-dd');
     
-    try {
-      // Calculate dates in Brazil timezone for sync
-      const startYear = startDate.getFullYear();
-      const startMonth = startDate.getMonth();
-      const startDay = startDate.getDate();
-      const endYear = endDate.getFullYear();
-      const endMonth = endDate.getMonth();
-      const endDay = endDate.getDate();
-      
-      // Create UTC timestamps for Brazil timezone (UTC-3)
-      const syncStartDate = Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0);
-      const syncEndDate = Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999);
-      
-      console.log('Sync dates:', {
-        startDate: new Date(syncStartDate).toISOString(),
-        endDate: new Date(syncEndDate).toISOString(),
-      });
+    // Calculate dates in Brazil timezone for sync
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const startDay = startDate.getDate();
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth();
+    const endDay = endDate.getDate();
+    
+    // Create UTC timestamps for Brazil timezone (UTC-3)
+    const syncStartDate = Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0);
+    const syncEndDate = Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999);
+    
+    console.log('Sync dates:', {
+      startDate: new Date(syncStartDate).toISOString(),
+      endDate: new Date(syncEndDate).toISOString(),
+    });
 
-      // 1. Sync Hotmart sales for the selected period
-      const hotmartResponse = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          projectId: currentProject!.id,
-          action: 'sync_sales',
-          startDate: syncStartDate,
-          endDate: syncEndDate,
-        },
-      });
+    // Run Hotmart and Meta syncs in PARALLEL
+    const hotmartSync = async () => {
+      try {
+        const hotmartResponse = await supabase.functions.invoke('hotmart-api', {
+          body: {
+            projectId: currentProject!.id,
+            action: 'sync_sales',
+            startDate: syncStartDate,
+            endDate: syncEndDate,
+          },
+        });
 
-      if (hotmartResponse.error) {
-        console.error('Hotmart sync error:', hotmartResponse.error);
-      } else {
-        const total = (hotmartResponse.data?.synced || 0) + (hotmartResponse.data?.updated || 0);
-        console.log(`Hotmart synced: ${total} sales`);
+        if (hotmartResponse.error) {
+          console.error('Hotmart sync error:', hotmartResponse.error);
+          setHotmartSyncStatus('error');
+          toast.error('Erro ao sincronizar Hotmart');
+        } else {
+          const total = (hotmartResponse.data?.synced || 0) + (hotmartResponse.data?.updated || 0);
+          console.log(`Hotmart synced: ${total} sales`);
+          setHotmartSyncStatus('done');
+          toast.success(`Hotmart: ${total} vendas sincronizadas`);
+        }
+      } catch (error) {
+        console.error('Hotmart sync exception:', error);
+        setHotmartSyncStatus('error');
+        toast.error('Erro ao sincronizar Hotmart');
+      }
+    };
+
+    const metaSync = async () => {
+      if (!metaAdAccounts || metaAdAccounts.length === 0) {
+        setMetaSyncStatus('done');
+        return;
       }
 
-      // 2. Sync Meta Insights for the selected period (if accounts available)
-      if (metaAdAccounts && metaAdAccounts.length > 0) {
-        setSyncStatus('Sincronizando Meta Ads...');
-        const accountIds = metaAdAccounts.map(a => a.account_id);
-        
+      setMetaSyncStatus('syncing');
+      const accountIds = metaAdAccounts.map(a => a.account_id);
+      
+      try {
         const metaResponse = await supabase.functions.invoke('meta-api', {
           body: {
             projectId: currentProject!.id,
@@ -690,6 +708,7 @@ const FunnelAnalysis = () => {
 
         if (metaResponse.error) {
           console.error('Meta sync error:', metaResponse.error);
+          setMetaSyncStatus('error');
           toast.error('Erro ao sincronizar Meta Ads');
         } else {
           console.log('Meta sync initiated:', metaResponse.data);
@@ -698,49 +717,51 @@ const FunnelAnalysis = () => {
           setMetaSyncInProgress(true);
           setEstimatedDuration(getEstimatedSyncDuration());
           
-          // Calculate polling duration based on period
+          // Calculate polling duration based on period (shorter now with better chunks)
           const periodDays = metaResponse.data?.periodDays || 30;
-          const pollDurationMs = Math.max(30000, Math.min(180000, periodDays * 1000));
+          const pollDurationMs = Math.max(20000, Math.min(120000, periodDays * 800));
           
-          // Poll for data every 15 seconds
-          const pollCount = Math.ceil(pollDurationMs / 15000);
+          // Poll for data every 10 seconds
+          const pollCount = Math.ceil(pollDurationMs / 10000);
           for (let i = 1; i <= pollCount; i++) {
             setTimeout(() => {
-              console.log(`[FunnelAnalysis Poll ${i}/${pollCount}] Refreshing data...`);
+              console.log(`[Meta Poll ${i}/${pollCount}] Refreshing data...`);
               refetchMetaInsights();
-            }, i * 15000);
+            }, i * 10000);
           }
           
           // Final refresh and end sync state
           setTimeout(async () => {
             setMetaSyncInProgress(false);
-            await Promise.all([
-              refetchSales(),
-              refetchMetaInsights(),
-            ]);
-            toast.success('Sincronização Meta Ads concluída!');
+            setMetaSyncStatus('done');
+            await refetchMetaInsights();
+            toast.success('Meta Ads sincronizado!');
           }, pollDurationMs);
         }
+      } catch (error) {
+        console.error('Meta sync exception:', error);
+        setMetaSyncStatus('error');
+        toast.error('Erro ao sincronizar Meta Ads');
       }
+    };
 
-      // 3. Refresh data from database (immediate refresh for Hotmart)
-      setSyncStatus('Atualizando dados...');
-      
-      // Apply the dates to ensure queries use the sync dates
+    try {
+      // Apply the dates immediately so UI shows correct range
       setAppliedStartDate(startDate);
       setAppliedEndDate(endDate);
       
+      // Run both syncs in parallel
+      await Promise.all([hotmartSync(), metaSync()]);
+      
+      // Refresh data after both complete
       await Promise.all([
         refetchSales(),
         refetchMetaInsights(),
       ]);
 
-      setSyncStatus('');
-      toast.success('Dados Hotmart atualizados');
     } catch (error) {
       console.error('Sync error:', error);
       toast.error('Erro ao sincronizar dados');
-      setSyncStatus('');
     } finally {
       setIsSyncing(false);
     }
@@ -897,23 +918,51 @@ const FunnelAnalysis = () => {
               </div>
 
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRefreshAll}
-                    disabled={isRefreshingAll}
-                    className="gap-2"
-                  >
-                    <RefreshCw className={cn("w-4 h-4", isRefreshingAll && "animate-spin")} />
-                    {syncStatus || 'Atualizar'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Sincroniza vendas do Hotmart e atualiza dados</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleRefreshAll}
+                      disabled={isRefreshingAll}
+                      className="gap-2"
+                    >
+                      <RefreshCw className={cn("w-4 h-4", isRefreshingAll && "animate-spin")} />
+                      Atualizar
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Sincroniza vendas do Hotmart e Meta Ads em paralelo</p>
+                  </TooltipContent>
+                </Tooltip>
+                
+                {/* Individual sync status indicators */}
+                {isSyncing && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-full",
+                      hotmartSyncStatus === 'syncing' && "bg-yellow-500/20 text-yellow-600",
+                      hotmartSyncStatus === 'done' && "bg-green-500/20 text-green-600",
+                      hotmartSyncStatus === 'error' && "bg-red-500/20 text-red-600",
+                      hotmartSyncStatus === 'idle' && "bg-muted text-muted-foreground"
+                    )}>
+                      {hotmartSyncStatus === 'syncing' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                      Hotmart
+                    </div>
+                    <div className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-full",
+                      metaSyncStatus === 'syncing' && "bg-yellow-500/20 text-yellow-600",
+                      metaSyncStatus === 'done' && "bg-green-500/20 text-green-600",
+                      metaSyncStatus === 'error' && "bg-red-500/20 text-red-600",
+                      metaSyncStatus === 'idle' && "bg-muted text-muted-foreground"
+                    )}>
+                      {metaSyncStatus === 'syncing' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                      Meta
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <Tooltip>
                 <TooltipTrigger asChild>

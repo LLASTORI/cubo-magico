@@ -218,7 +218,6 @@ const FunnelAnalysis = () => {
   const datesChanged = startDate.getTime() !== appliedStartDate.getTime() || endDate.getTime() !== appliedEndDate.getTime();
 
   if (!currentProject) return null;
-  if (isLoading && !salesData.length) return <CubeLoader />;
 
   return (
     <div className="min-h-screen bg-background">

@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// Brand colors (Cubo Mágico)
+// Brand colors
 const COLORS = {
   primary: [59, 130, 246] as [number, number, number],
   secondary: [16, 185, 129] as [number, number, number],
@@ -10,22 +10,9 @@ const COLORS = {
   danger: [239, 68, 68] as [number, number, number],
   text: [30, 41, 59] as [number, number, number],
   muted: [100, 116, 139] as [number, number, number],
-  lightBg: [245, 247, 250] as [number, number, number],
+  lightBg: [248, 250, 252] as [number, number, number],
   white: [255, 255, 255] as [number, number, number],
 };
-
-interface PositionMetrics {
-  tipo_posicao: string;
-  nome_posicao: string;
-  ordem_posicao: number;
-  nome_oferta: string;
-  codigo_oferta: string;
-  valor_oferta: number;
-  total_vendas: number;
-  total_receita: number;
-  taxa_conversao: number;
-  percentual_receita: number;
-}
 
 interface SummaryMetrics {
   totalVendas: number;
@@ -40,13 +27,21 @@ interface SummaryMetrics {
   roasTarget: number;
 }
 
-interface MetaMetrics {
+interface FunnelData {
+  id: string;
+  name: string;
+  investimento: number;
+  faturamento: number;
+  vendas: number;
+  roas: number;
+  topAds: AdData[];
+}
+
+interface AdData {
+  adName: string;
   spend: number;
-  impressions: number;
-  clicks: number;
-  reach: number;
-  ctr: number;
-  cpc: number;
+  vendas: number;
+  roas: number;
 }
 
 interface SaleData {
@@ -54,62 +49,153 @@ interface SaleData {
   total_price_brl: number | null;
   utm_source: string | null;
   payment_method: string | null;
+  offer_code: string | null;
+  meta_ad_id_extracted: string | null;
+  meta_campaign_id_extracted: string | null;
 }
 
-interface ReportData {
+interface MetaCampaign {
+  campaign_id: string;
+  campaign_name: string | null;
+}
+
+interface MetaAd {
+  ad_id: string;
+  ad_name: string | null;
+  campaign_id: string;
+}
+
+interface MetaInsight {
+  campaign_id: string | null;
+  ad_id: string | null;
+  spend: number | null;
+}
+
+interface FunnelConfig {
+  id: string;
+  name: string;
+  campaign_name_pattern: string | null;
+  roas_target: number | null;
+}
+
+interface OfferMapping {
+  funnel_id: string | null;
+  id_funil: string;
+  codigo_oferta: string | null;
+}
+
+export interface ReportData {
   startDate: Date;
   endDate: Date;
   summaryMetrics: SummaryMetrics;
-  metaMetrics: MetaMetrics;
-  funnelMetrics: PositionMetrics[];
   salesData: SaleData[];
   projectName: string;
+  funnelsConfig: FunnelConfig[];
+  mappings: OfferMapping[];
+  metaCampaigns: MetaCampaign[];
+  metaAds: MetaAd[];
+  metaInsights: MetaInsight[];
 }
 
 const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  return new Intl.NumberFormat('pt-BR', { 
+    style: 'currency', 
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 };
 
 const formatNumber = (value: number): string => {
   return new Intl.NumberFormat('pt-BR').format(value);
 };
 
-const formatCompact = (value: number): string => {
-  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return formatNumber(value);
+// Truncate text safely for PDF
+const truncateText = (text: string, maxLength: number): string => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
 };
 
-// Calculate customer metrics
-const calculateCustomerMetrics = (salesData: SaleData[]) => {
-  const customerMap = new Map<string, number>();
-  salesData.forEach(sale => {
-    if (!sale.buyer_email) return;
-    const email = sale.buyer_email.toLowerCase();
-    customerMap.set(email, (customerMap.get(email) || 0) + 1);
-  });
-  
-  const customers = Array.from(customerMap.values());
-  const newCustomers = customers.filter(c => c === 1).length;
-  const recurrentCustomers = customers.filter(c => c > 1).length;
-  
-  return { total: customers.length, newCustomers, recurrentCustomers };
-};
+// Calculate funnel data with top 3 ads
+const calculateFunnelData = (data: ReportData): FunnelData[] => {
+  const funnels: FunnelData[] = [];
 
-// Calculate top UTMs
-const calculateTopUTMs = (salesData: SaleData[]) => {
-  const utmMap = new Map<string, { sales: number; revenue: number }>();
-  salesData.forEach(sale => {
-    const source = sale.utm_source || 'Direto';
-    const current = utmMap.get(source) || { sales: 0, revenue: 0 };
-    utmMap.set(source, { 
-      sales: current.sales + 1, 
-      revenue: current.revenue + (sale.total_price_brl || 0) 
+  data.funnelsConfig.forEach(funnel => {
+    // Get offer codes for this funnel
+    const funnelMappings = data.mappings.filter(
+      m => m.funnel_id === funnel.id || m.id_funil === funnel.name
+    );
+    const offerCodes = new Set(funnelMappings.map(m => m.codigo_oferta).filter(Boolean));
+
+    // Get campaigns matching this funnel pattern
+    const pattern = funnel.campaign_name_pattern?.toLowerCase() || funnel.name.toLowerCase();
+    const matchingCampaigns = data.metaCampaigns.filter(c => 
+      c.campaign_name?.toLowerCase().includes(pattern)
+    );
+    const campaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
+
+    // Calculate investment from matching campaigns
+    const funnelInsights = data.metaInsights.filter(i => 
+      i.campaign_id && campaignIds.has(i.campaign_id)
+    );
+    const investimento = funnelInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+
+    // Calculate revenue from sales with matching offer codes
+    const funnelSales = data.salesData.filter(s => 
+      s.offer_code && offerCodes.has(s.offer_code)
+    );
+    const faturamento = funnelSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const vendas = funnelSales.length;
+
+    // Calculate ROAS
+    const roas = investimento > 0 ? faturamento / investimento : 0;
+
+    // Get top 3 ads by spend for this funnel
+    const adsInFunnel = data.metaAds.filter(ad => campaignIds.has(ad.campaign_id));
+    const adSpend: Record<string, { name: string; spend: number; vendas: number }> = {};
+
+    adsInFunnel.forEach(ad => {
+      const adInsights = data.metaInsights.filter(i => i.ad_id === ad.ad_id);
+      const spend = adInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+      
+      // Count sales attributed to this ad
+      const adVendas = funnelSales.filter(s => s.meta_ad_id_extracted === ad.ad_id).length;
+      
+      if (spend > 0) {
+        adSpend[ad.ad_id] = {
+          name: ad.ad_name || ad.ad_id,
+          spend,
+          vendas: adVendas,
+        };
+      }
+    });
+
+    const topAds = Object.values(adSpend)
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 3)
+      .map(ad => ({
+        adName: ad.name,
+        spend: ad.spend,
+        vendas: ad.vendas,
+        roas: ad.spend > 0 ? (funnelSales
+          .filter(s => s.meta_ad_id_extracted === Object.keys(adSpend).find(k => adSpend[k].name === ad.name))
+          .reduce((sum, s) => sum + (s.total_price_brl || 0), 0)) / ad.spend : 0,
+      }));
+
+    funnels.push({
+      id: funnel.id,
+      name: funnel.name,
+      investimento,
+      faturamento,
+      vendas,
+      roas,
+      topAds,
     });
   });
-  return Array.from(utmMap.entries())
-    .sort((a, b) => b[1].revenue - a[1].revenue)
-    .slice(0, 5);
+
+  // Sort by investment (highest first)
+  return funnels.sort((a, b) => b.investimento - a.investimento);
 };
 
 export const generateExecutiveReport = async (data: ReportData): Promise<void> => {
@@ -118,318 +204,258 @@ export const generateExecutiveReport = async (data: ReportData): Promise<void> =
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
   let yPos = margin;
-  
-  const customerMetrics = calculateCustomerMetrics(data.salesData);
-  const topUTMs = calculateTopUTMs(data.salesData);
-  
+
+  const funnelData = calculateFunnelData(data);
+
   // Helper: check for new page
   const checkPage = (space: number) => {
-    if (yPos + space > pageHeight - 20) {
+    if (yPos + space > pageHeight - 25) {
       doc.addPage();
       yPos = margin;
+      return true;
     }
+    return false;
   };
-  
-  // Helper: draw metric card
-  const drawMetricCard = (x: number, y: number, w: number, h: number, label: string, value: string, color: [number, number, number]) => {
-    // Card background
-    doc.setFillColor(...COLORS.white);
-    doc.roundedRect(x, y, w, h, 3, 3, 'F');
-    // Left accent bar
+
+  // Helper: draw big metric card
+  const drawBigCard = (
+    x: number, 
+    y: number, 
+    w: number, 
+    h: number, 
+    label: string, 
+    value: string, 
+    color: [number, number, number]
+  ) => {
+    // Background
+    doc.setFillColor(...COLORS.lightBg);
+    doc.roundedRect(x, y, w, h, 4, 4, 'F');
+    
+    // Left accent
     doc.setFillColor(...color);
-    doc.rect(x, y, 3, h, 'F');
+    doc.roundedRect(x, y, 4, h, 2, 2, 'F');
+    
     // Label
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setTextColor(...COLORS.muted);
     doc.setFont('helvetica', 'normal');
-    doc.text(label, x + 7, y + 8);
+    doc.text(label.toUpperCase(), x + 10, y + 12);
+    
     // Value
-    doc.setFontSize(14);
+    doc.setFontSize(18);
     doc.setTextColor(...COLORS.text);
     doc.setFont('helvetica', 'bold');
-    doc.text(value, x + 7, y + 18);
+    doc.text(value, x + 10, y + 28);
   };
-  
-  // Helper: draw progress bar
-  const drawProgressBar = (x: number, y: number, w: number, percentage: number, color: [number, number, number]) => {
-    doc.setFillColor(...COLORS.lightBg);
-    doc.roundedRect(x, y, w, 4, 2, 2, 'F');
-    const fillWidth = Math.min(percentage / 100 * w, w);
-    if (fillWidth > 0) {
-      doc.setFillColor(...color);
-      doc.roundedRect(x, y, fillWidth, 4, 2, 2, 'F');
-    }
-  };
-  
+
   // ===== HEADER =====
   doc.setFillColor(...COLORS.primary);
-  doc.rect(0, 0, pageWidth, 40, 'F');
-  
-  // Logo
+  doc.rect(0, 0, pageWidth, 35, 'F');
+
+  // Title
   doc.setTextColor(...COLORS.white);
-  doc.setFontSize(28);
+  doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('CUBO', margin, 22);
-  doc.setFontSize(28);
-  doc.setTextColor(249, 115, 22); // Orange accent
-  doc.text('MÁGICO', margin + 42, 22);
-  
+  doc.text('CUBO', margin, 18);
+  doc.setTextColor(249, 115, 22);
+  doc.text('MAGICO', margin + 32, 18);
+
   // Subtitle
   doc.setTextColor(...COLORS.white);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Relatório Executivo', margin, 32);
-  
-  // Date and project
-  const dateRange = `${format(data.startDate, 'dd MMM', { locale: ptBR })} - ${format(data.endDate, 'dd MMM yyyy', { locale: ptBR })}`;
-  doc.setFontSize(12);
+  doc.text('Relatorio Executivo', margin, 28);
+
+  // Date range and project name
+  const dateRange = `${format(data.startDate, "dd 'de' MMMM", { locale: ptBR })} a ${format(data.endDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`;
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text(dateRange, pageWidth - margin, 20, { align: 'right' });
+  doc.text(dateRange, pageWidth - margin, 16, { align: 'right' });
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(data.projectName, pageWidth - margin, 28, { align: 'right' });
-  
-  yPos = 50;
-  
-  // ===== MAIN METRICS ROW =====
-  const cardWidth = (pageWidth - margin * 2 - 12) / 4;
-  const cardHeight = 24;
-  
-  drawMetricCard(margin, yPos, cardWidth, cardHeight, 'INVESTIMENTO', formatCurrency(data.summaryMetrics.investimento), COLORS.primary);
-  drawMetricCard(margin + cardWidth + 4, yPos, cardWidth, cardHeight, 'RECEITA', formatCurrency(data.summaryMetrics.totalReceita), COLORS.secondary);
-  drawMetricCard(margin + (cardWidth + 4) * 2, yPos, cardWidth, cardHeight, 'LUCRO', formatCurrency(data.summaryMetrics.totalReceita - data.summaryMetrics.investimento), 
-    data.summaryMetrics.totalReceita - data.summaryMetrics.investimento > 0 ? COLORS.secondary : COLORS.danger);
-  drawMetricCard(margin + (cardWidth + 4) * 3, yPos, cardWidth, cardHeight, 'ROAS', `${data.summaryMetrics.roas.toFixed(2)}x`, 
-    data.summaryMetrics.roas >= data.summaryMetrics.roasTarget ? COLORS.secondary : COLORS.danger);
-  
-  yPos += cardHeight + 8;
-  
-  // ===== SECONDARY METRICS =====
-  const smallCardW = (pageWidth - margin * 2 - 16) / 5;
-  const smallCardH = 20;
-  
-  drawMetricCard(margin, yPos, smallCardW, smallCardH, 'Vendas Front', formatNumber(data.summaryMetrics.vendasFront), COLORS.primary);
-  drawMetricCard(margin + smallCardW + 4, yPos, smallCardW, smallCardH, 'Total Produtos', formatNumber(data.summaryMetrics.totalVendas), COLORS.accent);
-  drawMetricCard(margin + (smallCardW + 4) * 2, yPos, smallCardW, smallCardH, 'Ticket Médio', formatCurrency(data.summaryMetrics.ticketMedio), COLORS.secondary);
-  drawMetricCard(margin + (smallCardW + 4) * 3, yPos, smallCardW, smallCardH, 'CPA Real', formatCurrency(data.summaryMetrics.cpaReal), 
-    data.summaryMetrics.cpaReal <= data.summaryMetrics.cpaMaximo ? COLORS.secondary : COLORS.danger);
-  drawMetricCard(margin + (smallCardW + 4) * 4, yPos, smallCardW, smallCardH, 'CPA Máximo', formatCurrency(data.summaryMetrics.cpaMaximo), COLORS.muted);
-  
-  yPos += smallCardH + 15;
-  
-  // ===== FUNNEL VISUALIZATION =====
-  doc.setFontSize(12);
+  doc.text(truncateText(data.projectName, 30), pageWidth - margin, 25, { align: 'right' });
+
+  yPos = 45;
+
+  // ===== VISAO GERAL =====
+  doc.setFontSize(14);
   doc.setTextColor(...COLORS.text);
   doc.setFont('helvetica', 'bold');
-  doc.text('Funil de Vendas', margin, yPos);
-  yPos += 8;
-  
-  const maxRevenue = Math.max(...data.funnelMetrics.map(m => m.total_receita), 1);
-  const funnelBarHeight = 16;
-  const maxBarWidth = pageWidth - margin * 2 - 80;
-  
-  data.funnelMetrics.forEach((metric, index) => {
-    checkPage(funnelBarHeight + 6);
-    
-    const barWidth = Math.max((metric.total_receita / maxRevenue) * maxBarWidth, 20);
-    const posColor = metric.tipo_posicao === 'FRONT' || metric.tipo_posicao === 'FE' ? COLORS.primary :
-                     metric.tipo_posicao === 'OB' ? COLORS.secondary :
-                     metric.tipo_posicao === 'US' ? COLORS.accent : COLORS.danger;
-    
-    // Position label
-    doc.setFontSize(8);
+  doc.text('Visao Geral', margin, yPos);
+  yPos += 10;
+
+  // 4 main cards
+  const cardWidth = (pageWidth - margin * 2 - 12) / 4;
+  const cardHeight = 35;
+  const lucro = data.summaryMetrics.totalReceita - data.summaryMetrics.investimento;
+
+  drawBigCard(margin, yPos, cardWidth, cardHeight, 'Investimento', formatCurrency(data.summaryMetrics.investimento), COLORS.primary);
+  drawBigCard(margin + cardWidth + 4, yPos, cardWidth, cardHeight, 'Faturamento', formatCurrency(data.summaryMetrics.totalReceita), COLORS.secondary);
+  drawBigCard(margin + (cardWidth + 4) * 2, yPos, cardWidth, cardHeight, 'Lucro', formatCurrency(lucro), lucro >= 0 ? COLORS.secondary : COLORS.danger);
+  drawBigCard(margin + (cardWidth + 4) * 3, yPos, cardWidth, cardHeight, 'ROAS', `${data.summaryMetrics.roas.toFixed(2)}x`, data.summaryMetrics.roas >= data.summaryMetrics.roasTarget ? COLORS.secondary : COLORS.danger);
+
+  yPos += cardHeight + 12;
+
+  // Secondary metrics row
+  const smallCardW = (pageWidth - margin * 2 - 8) / 3;
+  const smallCardH = 28;
+
+  drawBigCard(margin, yPos, smallCardW, smallCardH, 'Vendas', formatNumber(data.summaryMetrics.totalVendas), COLORS.accent);
+  drawBigCard(margin + smallCardW + 4, yPos, smallCardW, smallCardH, 'Ticket Medio', formatCurrency(data.summaryMetrics.ticketMedio), COLORS.primary);
+  drawBigCard(margin + (smallCardW + 4) * 2, yPos, smallCardW, smallCardH, 'CPA Real', formatCurrency(data.summaryMetrics.cpaReal), data.summaryMetrics.cpaReal <= data.summaryMetrics.cpaMaximo ? COLORS.secondary : COLORS.danger);
+
+  yPos += smallCardH + 20;
+
+  // ===== DADOS POR FUNIL =====
+  doc.setFontSize(14);
+  doc.setTextColor(...COLORS.text);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Dados por Funil', margin, yPos);
+  yPos += 12;
+
+  funnelData.forEach((funnel, funnelIndex) => {
+    // Check if we need new page (need space for header + metrics + at least 1 ad)
+    if (checkPage(85)) {
+      yPos += 5;
+    }
+
+    // Funnel header
+    doc.setFillColor(...COLORS.primary);
+    doc.roundedRect(margin, yPos, pageWidth - margin * 2, 10, 2, 2, 'F');
+    doc.setTextColor(...COLORS.white);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(truncateText(funnel.name, 40), margin + 5, yPos + 7);
+
+    yPos += 14;
+
+    // Funnel metrics - 4 small boxes
+    const funnelCardW = (pageWidth - margin * 2 - 9) / 4;
+    const funnelCardH = 22;
+
+    // Investment
+    doc.setFillColor(...COLORS.lightBg);
+    doc.roundedRect(margin, yPos, funnelCardW, funnelCardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.muted);
+    doc.text('INVESTIMENTO', margin + 4, yPos + 7);
+    doc.setFontSize(11);
+    doc.setTextColor(...COLORS.text);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrency(funnel.investimento), margin + 4, yPos + 16);
+
+    // Revenue
+    doc.setFillColor(...COLORS.lightBg);
+    doc.roundedRect(margin + funnelCardW + 3, yPos, funnelCardW, funnelCardH, 2, 2, 'F');
+    doc.setFontSize(7);
     doc.setTextColor(...COLORS.muted);
     doc.setFont('helvetica', 'normal');
-    const posLabel = `${metric.tipo_posicao}${metric.ordem_posicao || ''}`;
-    doc.text(posLabel, margin, yPos + 5);
-    
-    // Bar
-    doc.setFillColor(...posColor);
-    doc.roundedRect(margin + 20, yPos, barWidth, funnelBarHeight - 4, 2, 2, 'F');
-    
-    // Inside bar text
-    doc.setTextColor(...COLORS.white);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    const inBarText = `${metric.nome_posicao || metric.nome_oferta}  •  ${formatNumber(metric.total_vendas)} vendas  •  ${formatCurrency(metric.total_receita)}`;
-    doc.text(inBarText, margin + 25, yPos + 8, { maxWidth: barWidth - 10 });
-    
-    // Conversion rate on right
+    doc.text('FATURAMENTO', margin + funnelCardW + 7, yPos + 7);
+    doc.setFontSize(11);
     doc.setTextColor(...COLORS.text);
-    doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${metric.taxa_conversao.toFixed(1)}%`, pageWidth - margin, yPos + 8, { align: 'right' });
-    
-    yPos += funnelBarHeight + 2;
-  });
-  
-  yPos += 10;
-  
-  // ===== TRAFFIC METRICS =====
-  checkPage(50);
-  doc.setFontSize(12);
-  doc.setTextColor(...COLORS.text);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Tráfego Pago (Meta Ads)', margin, yPos);
-  yPos += 10;
-  
-  // Traffic metrics in a visual row
-  const trafficCardW = (pageWidth - margin * 2 - 8) / 3;
-  const trafficCardH = 28;
-  
-  // Card with icon simulation using emoji/text
-  const drawTrafficCard = (x: number, label: string, value: string, subValue?: string) => {
+    doc.text(formatCurrency(funnel.faturamento), margin + funnelCardW + 7, yPos + 16);
+
+    // Vendas
     doc.setFillColor(...COLORS.lightBg);
-    doc.roundedRect(x, yPos, trafficCardW, trafficCardH, 3, 3, 'F');
-    doc.setFontSize(8);
+    doc.roundedRect(margin + (funnelCardW + 3) * 2, yPos, funnelCardW, funnelCardH, 2, 2, 'F');
+    doc.setFontSize(7);
     doc.setTextColor(...COLORS.muted);
-    doc.text(label, x + 8, yPos + 8);
-    doc.setFontSize(16);
+    doc.setFont('helvetica', 'normal');
+    doc.text('VENDAS', margin + (funnelCardW + 3) * 2 + 4, yPos + 7);
+    doc.setFontSize(11);
     doc.setTextColor(...COLORS.text);
     doc.setFont('helvetica', 'bold');
-    doc.text(value, x + 8, yPos + 20);
-    if (subValue) {
-      doc.setFontSize(8);
-      doc.setTextColor(...COLORS.muted);
-      doc.setFont('helvetica', 'normal');
-      doc.text(subValue, x + trafficCardW - 8, yPos + 20, { align: 'right' });
-    }
-  };
-  
-  drawTrafficCard(margin, 'Impressões', formatCompact(data.metaMetrics.impressions));
-  drawTrafficCard(margin + trafficCardW + 4, 'Cliques', formatCompact(data.metaMetrics.clicks), `CTR: ${data.metaMetrics.ctr.toFixed(2)}%`);
-  drawTrafficCard(margin + (trafficCardW + 4) * 2, 'Alcance', formatCompact(data.metaMetrics.reach), `CPC: ${formatCurrency(data.metaMetrics.cpc)}`);
-  
-  yPos += trafficCardH + 15;
-  
-  // ===== CUSTOMERS =====
-  checkPage(50);
-  doc.setFontSize(12);
-  doc.setTextColor(...COLORS.text);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Clientes', margin, yPos);
-  yPos += 10;
-  
-  // Visual customer breakdown
-  const custTotal = customerMetrics.total;
-  const custNew = customerMetrics.newCustomers;
-  const custRec = customerMetrics.recurrentCustomers;
-  const newPct = custTotal > 0 ? (custNew / custTotal * 100) : 0;
-  const recPct = custTotal > 0 ? (custRec / custTotal * 100) : 0;
-  
-  // Big number
-  doc.setFontSize(32);
-  doc.setTextColor(...COLORS.primary);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatNumber(custTotal), margin, yPos + 12);
-  doc.setFontSize(10);
-  doc.setTextColor(...COLORS.muted);
-  doc.setFont('helvetica', 'normal');
-  doc.text('clientes únicos', margin + 35, yPos + 12);
-  
-  // Breakdown bars
-  const barStartX = margin + 80;
-  const barW = pageWidth - margin - barStartX - 10;
-  
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.text);
-  doc.text(`Novos: ${formatNumber(custNew)} (${newPct.toFixed(0)}%)`, barStartX, yPos + 4);
-  drawProgressBar(barStartX, yPos + 6, barW, newPct, COLORS.secondary);
-  
-  doc.text(`Recorrentes: ${formatNumber(custRec)} (${recPct.toFixed(0)}%)`, barStartX, yPos + 18);
-  drawProgressBar(barStartX, yPos + 20, barW, recPct, COLORS.accent);
-  
-  yPos += 35;
-  
-  // ===== TOP UTMS =====
-  if (topUTMs.length > 0) {
-    checkPage(60);
-    doc.setFontSize(12);
-    doc.setTextColor(...COLORS.text);
+    doc.text(formatNumber(funnel.vendas), margin + (funnelCardW + 3) * 2 + 4, yPos + 16);
+
+    // ROAS
+    doc.setFillColor(...COLORS.lightBg);
+    doc.roundedRect(margin + (funnelCardW + 3) * 3, yPos, funnelCardW, funnelCardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.muted);
+    doc.setFont('helvetica', 'normal');
+    doc.text('ROAS', margin + (funnelCardW + 3) * 3 + 4, yPos + 7);
+    doc.setFontSize(11);
+    doc.setTextColor(funnel.roas >= 2 ? COLORS.secondary[0] : COLORS.danger[0], funnel.roas >= 2 ? COLORS.secondary[1] : COLORS.danger[1], funnel.roas >= 2 ? COLORS.secondary[2] : COLORS.danger[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text('Top Fontes de Tráfego', margin, yPos);
-    yPos += 10;
-    
-    const maxUtmRev = Math.max(...topUTMs.map(u => u[1].revenue), 1);
-    const utmBarMaxW = pageWidth - margin * 2 - 60;
-    
-    topUTMs.forEach(([name, data], i) => {
-      const barW = (data.revenue / maxUtmRev) * utmBarMaxW;
-      
+    doc.text(`${funnel.roas.toFixed(2)}x`, margin + (funnelCardW + 3) * 3 + 4, yPos + 16);
+
+    yPos += funnelCardH + 6;
+
+    // Top 3 Ads
+    if (funnel.topAds.length > 0) {
       doc.setFontSize(9);
       doc.setTextColor(...COLORS.text);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${i + 1}. ${name.substring(0, 20)}`, margin, yPos + 6);
-      
-      doc.setFillColor(...COLORS.primary);
-      doc.roundedRect(margin + 50, yPos + 2, barW, 6, 1, 1, 'F');
-      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Top 3 Anuncios:', margin, yPos + 4);
+      yPos += 8;
+
+      // Table header
+      doc.setFillColor(240, 240, 245);
+      doc.rect(margin, yPos, pageWidth - margin * 2, 7, 'F');
+      doc.setFontSize(7);
+      doc.setTextColor(...COLORS.muted);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ANUNCIO', margin + 4, yPos + 5);
+      doc.text('GASTO', margin + 95, yPos + 5);
+      doc.text('VENDAS', margin + 125, yPos + 5);
+      doc.text('ROAS', margin + 155, yPos + 5);
+      yPos += 8;
+
+      funnel.topAds.forEach((ad, adIndex) => {
+        doc.setFontSize(8);
+        doc.setTextColor(...COLORS.text);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${adIndex + 1}. ${truncateText(ad.adName, 45)}`, margin + 4, yPos + 4);
+        doc.text(formatCurrency(ad.spend), margin + 95, yPos + 4);
+        doc.text(formatNumber(ad.vendas), margin + 125, yPos + 4);
+        doc.setTextColor(ad.roas >= 2 ? COLORS.secondary[0] : COLORS.muted[0], ad.roas >= 2 ? COLORS.secondary[1] : COLORS.muted[1], ad.roas >= 2 ? COLORS.secondary[2] : COLORS.muted[2]);
+        doc.text(`${ad.roas.toFixed(2)}x`, margin + 155, yPos + 4);
+        yPos += 7;
+      });
+    } else {
       doc.setFontSize(8);
       doc.setTextColor(...COLORS.muted);
-      doc.text(`${data.sales} vendas • ${formatCurrency(data.revenue)}`, pageWidth - margin, yPos + 6, { align: 'right' });
-      
-      yPos += 12;
-    });
-  }
-  
-  yPos += 10;
-  
-  // ===== INSIGHTS BOX =====
-  checkPage(50);
-  
-  // Insights background
-  doc.setFillColor(254, 243, 199); // Warm yellow bg
-  doc.roundedRect(margin, yPos, pageWidth - margin * 2, 45, 4, 4, 'F');
-  doc.setFillColor(249, 115, 22);
-  doc.rect(margin, yPos, 4, 45, 'F');
-  
-  doc.setFontSize(11);
-  doc.setTextColor(...COLORS.text);
-  doc.setFont('helvetica', 'bold');
-  doc.text('💡 Insights Principais', margin + 10, yPos + 10);
-  
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  
-  const insights: string[] = [];
-  
-  // Generate dynamic insights
-  if (data.summaryMetrics.roas >= data.summaryMetrics.roasTarget) {
-    insights.push(`✅ ROAS de ${data.summaryMetrics.roas.toFixed(2)}x está acima da meta (${data.summaryMetrics.roasTarget}x) - operação lucrativa!`);
-  } else {
-    insights.push(`⚠️ ROAS de ${data.summaryMetrics.roas.toFixed(2)}x está abaixo da meta (${data.summaryMetrics.roasTarget}x) - otimize campanhas`);
-  }
-  
-  if (recPct > 15) {
-    insights.push(`🔄 ${recPct.toFixed(0)}% dos clientes são recorrentes - boa retenção!`);
-  } else if (custTotal > 10) {
-    insights.push(`📈 Apenas ${recPct.toFixed(0)}% de recompra - trabalhe estratégias de fidelização`);
-  }
-  
-  const bestOB = data.funnelMetrics.find(m => m.tipo_posicao === 'OB' && m.taxa_conversao > 25);
-  if (bestOB) {
-    insights.push(`🎯 Order Bump "${bestOB.nome_posicao}" com ótima conversão: ${bestOB.taxa_conversao.toFixed(1)}%`);
-  }
-  
-  insights.slice(0, 3).forEach((insight, i) => {
-    doc.text(insight, margin + 10, yPos + 20 + (i * 10), { maxWidth: pageWidth - margin * 2 - 20 });
+      doc.setFont('helvetica', 'italic');
+      doc.text('Sem anuncios para este funil no periodo', margin, yPos + 4);
+      yPos += 8;
+    }
+
+    yPos += 10;
+
+    // Separator line between funnels (except last)
+    if (funnelIndex < funnelData.length - 1) {
+      doc.setDrawColor(220, 220, 230);
+      doc.setLineWidth(0.3);
+      doc.line(margin, yPos - 5, pageWidth - margin, yPos - 5);
+    }
   });
-  
+
+  // Handle case with no funnels
+  if (funnelData.length === 0) {
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.muted);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Nenhum funil configurado para este projeto.', margin, yPos);
+    yPos += 15;
+  }
+
   // ===== FOOTER =====
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.muted);
+    doc.setFont('helvetica', 'normal');
     doc.text(
-      `Cubo Mágico • ${format(new Date(), "dd/MM/yyyy HH:mm")} • Página ${i}/${totalPages}`,
+      `Cubo Magico - Gerado em ${format(new Date(), "dd/MM/yyyy 'as' HH:mm")} - Pagina ${i}/${totalPages}`,
       pageWidth / 2,
       pageHeight - 8,
       { align: 'center' }
     );
   }
-  
-  // Save
+
+  // Save PDF
   const fileName = `Relatorio_${format(data.startDate, 'dd-MM')}_a_${format(data.endDate, 'dd-MM-yyyy')}.pdf`;
   doc.save(fileName);
 };

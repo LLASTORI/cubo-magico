@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle
+  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle, Search
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -149,22 +149,19 @@ const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const { currentProject } = useProject();
   
-  // Date filters - use debouncing to avoid queries firing while user selects dates
+  // Date filters - UI state (what user sees/selects)
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
   const [endDate, setEndDate] = useState<Date>(new Date());
   
-  // Debounced dates for queries - only update after 500ms of no changes
-  const [debouncedStartDate, setDebouncedStartDate] = useState<Date>(startDate);
-  const [debouncedEndDate, setDebouncedEndDate] = useState<Date>(endDate);
+  // Applied dates for queries - only updated when user clicks "Atualizar"
+  const [appliedStartDate, setAppliedStartDate] = useState<Date>(subDays(new Date(), 7));
+  const [appliedEndDate, setAppliedEndDate] = useState<Date>(new Date());
   
-  // Debounce effect for dates
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedStartDate(startDate);
-      setDebouncedEndDate(endDate);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [startDate, endDate]);
+  // Function to apply selected dates to queries
+  const applyDateFilters = () => {
+    setAppliedStartDate(startDate);
+    setAppliedEndDate(endDate);
+  };
 
   useEffect(() => {
     if (!currentProject) {
@@ -202,8 +199,8 @@ const FunnelAnalysis = () => {
   });
 
   // Fetch sales data with timezone handling - use DEBOUNCED dates for queries
-  const startDateStr = format(debouncedStartDate, 'yyyy-MM-dd');
-  const endDateStr = format(debouncedEndDate, 'yyyy-MM-dd');
+  const startDateStr = format(appliedStartDate, 'yyyy-MM-dd');
+  const endDateStr = format(appliedEndDate, 'yyyy-MM-dd');
   
   const { data: salesData, isLoading: loadingSales, refetch: refetchSales, isRefetching } = useQuery({
     queryKey: ['hotmart-sales-unified', currentProject?.id, startDateStr, endDateStr],
@@ -729,9 +726,9 @@ const FunnelAnalysis = () => {
       // 3. Refresh data from database (immediate refresh for Hotmart)
       setSyncStatus('Atualizando dados...');
       
-      // Force update debounced dates to ensure queries use the sync dates
-      setDebouncedStartDate(startDate);
-      setDebouncedEndDate(endDate);
+      // Apply the dates to ensure queries use the sync dates
+      setAppliedStartDate(startDate);
+      setAppliedEndDate(endDate);
       
       await Promise.all([
         refetchSales(),
@@ -886,8 +883,19 @@ const FunnelAnalysis = () => {
                       />
                     </PopoverContent>
                   </Popover>
+                  
+                  <Button 
+                    variant={startDate.getTime() !== appliedStartDate.getTime() || endDate.getTime() !== appliedEndDate.getTime() ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={applyDateFilters}
+                    className="gap-2"
+                  >
+                    <Search className="w-4 h-4" />
+                    Buscar
+                  </Button>
                 </div>
               </div>
+
 
               <Tooltip>
                 <TooltipTrigger asChild>

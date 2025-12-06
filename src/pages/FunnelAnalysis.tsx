@@ -216,19 +216,37 @@ const FunnelAnalysis = () => {
       
       console.log('Query dates:', { startDate, endDate, projectId: currentProject!.id });
       
-      // Fetch ALL sales records - installment_number is used for counting unique sales later
-      // but for revenue we need all payments
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, payment_method, installment_number')
-        .eq('project_id', currentProject!.id)
-        .in('status', ['APPROVED', 'COMPLETE'])
-        .gte('sale_date', startDate)
-        .lte('sale_date', endDate);
+      // Fetch ALL sales records with pagination (Supabase default limit is 1000)
+      // Need to fetch all pages to get complete data
+      const allSales: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      console.log(`Sales fetched: ${data?.length || 0} records`);
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, payment_method, installment_number')
+          .eq('project_id', currentProject!.id)
+          .in('status', ['APPROVED', 'COMPLETE'])
+          .gte('sale_date', startDate)
+          .lte('sale_date', endDate)
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+          .order('sale_date', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allSales.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`Sales fetched: ${allSales.length} records (${page} pages)`);
+      return allSales;
     },
     enabled: !!currentProject?.id,
   });

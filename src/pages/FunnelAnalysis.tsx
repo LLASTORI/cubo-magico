@@ -112,9 +112,13 @@ const FunnelAnalysis = () => {
       return;
     }
     
-    // Calculate sync timestamps for Brazil timezone (use milliseconds, not UTC offset calculation)
+    // Calculate sync timestamps for Brazil timezone
     const syncStartMs = new Date(syncStartDateStr + 'T00:00:00-03:00').getTime();
     const syncEndMs = new Date(syncEndDateStr + 'T23:59:59-03:00').getTime();
+
+    // Apply dates immediately so UI updates
+    setAppliedStartDate(startDate);
+    setAppliedEndDate(endDate);
 
     const hotmartSync = async () => {
       try {
@@ -141,10 +145,10 @@ const FunnelAnalysis = () => {
       }
     };
 
-    const metaSync = async () => {
+    const metaSync = async (): Promise<boolean> => {
       if (activeAccountIds.length === 0) {
         setMetaSyncStatus('done');
-        return;
+        return false; // No background sync needed
       }
 
       setMetaSyncStatus('syncing');
@@ -163,36 +167,49 @@ const FunnelAnalysis = () => {
         if (response.error) {
           setMetaSyncStatus('error');
           toast.error('Erro ao sincronizar Meta Ads');
+          return false;
         } else {
-          setMetaSyncInProgress(true);
-          
-          // Poll for data completion
+          // Meta sync runs in background - return info about poll duration
           const periodDays = response.data?.periodDays || 30;
           const pollDurationMs = Math.max(20000, Math.min(120000, periodDays * 800));
           
-          setTimeout(async () => {
-            setMetaSyncInProgress(false);
-            setMetaSyncStatus('done');
-            await refetchAll();
-            toast.success('Meta Ads sincronizado!');
-          }, pollDurationMs);
+          setMetaSyncInProgress(true);
+          
+          // Return a promise that resolves when background sync is likely done
+          return new Promise((resolve) => {
+            setTimeout(async () => {
+              setMetaSyncInProgress(false);
+              setMetaSyncStatus('done');
+              toast.success('Meta Ads sincronizado!');
+              resolve(true);
+            }, pollDurationMs);
+          });
         }
       } catch (error) {
         setMetaSyncStatus('error');
         toast.error('Erro ao sincronizar Meta Ads');
+        return false;
       }
     };
 
     try {
-      // Apply dates immediately
-      setAppliedStartDate(startDate);
-      setAppliedEndDate(endDate);
+      // Run Hotmart sync first (it's faster)
+      await hotmartSync();
       
-      // Run both syncs in parallel
-      await Promise.all([hotmartSync(), metaSync()]);
-      
-      // Refresh data
+      // Refresh sales data immediately
       await refetchAll();
+      
+      // Start Meta sync (runs in background)
+      const metaPromise = metaSync();
+      
+      // When Meta sync completes (after background processing), refetch again
+      metaPromise.then(async (hadBackgroundSync) => {
+        if (hadBackgroundSync) {
+          console.log('[FunnelAnalysis] Meta sync complete, refetching data...');
+          await refetchAll();
+        }
+      });
+      
     } catch (error) {
       toast.error('Erro ao sincronizar dados');
     } finally {

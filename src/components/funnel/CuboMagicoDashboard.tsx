@@ -275,6 +275,11 @@ export function CuboMagicoDashboard({
         }
       });
       const investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+      
+      // Debug log for funnel matching
+      if (pattern) {
+        console.log(`[CuboMagico] Funnel "${funnel.name}" pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${matchingInsights.length} insights, R$${investimento.toFixed(2)}`);
+      }
 
       // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
       const funnelOffers = offerMappings.filter(o => 

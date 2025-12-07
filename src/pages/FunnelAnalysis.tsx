@@ -72,12 +72,6 @@ const FunnelAnalysis = () => {
     endDate: appliedEndDate,
   });
 
-  // Apply date filters
-  const applyDateFilters = () => {
-    setAppliedStartDate(startDate);
-    setAppliedEndDate(endDate);
-  };
-
   // Quick date setters
   const setQuickDate = (days: number) => {
     setEndDate(new Date());
@@ -101,7 +95,7 @@ const FunnelAnalysis = () => {
     setEndDate(endOfMonth(lastMonth));
   };
 
-  // Sync handler
+  // Sync handler - syncs data from APIs
   const handleRefreshAll = async () => {
     setIsSyncing(true);
     setHotmartSyncStatus('syncing');
@@ -110,16 +104,17 @@ const FunnelAnalysis = () => {
     const syncStartDateStr = format(startDate, 'yyyy-MM-dd');
     const syncEndDateStr = format(endDate, 'yyyy-MM-dd');
     
-    // Calculate sync timestamps for Brazil timezone
-    const startYear = startDate.getFullYear();
-    const startMonth = startDate.getMonth();
-    const startDay = startDate.getDate();
-    const endYear = endDate.getFullYear();
-    const endMonth = endDate.getMonth();
-    const endDay = endDate.getDate();
+    // Validate date order before calling APIs
+    if (startDate > endDate) {
+      toast.error('Data inicial não pode ser maior que data final');
+      setIsSyncing(false);
+      setHotmartSyncStatus('error');
+      return;
+    }
     
-    const syncStartDate = Date.UTC(startYear, startMonth, startDay, 3, 0, 0, 0);
-    const syncEndDate = Date.UTC(endYear, endMonth, endDay + 1, 2, 59, 59, 999);
+    // Calculate sync timestamps for Brazil timezone (use milliseconds, not UTC offset calculation)
+    const syncStartMs = new Date(syncStartDateStr + 'T00:00:00-03:00').getTime();
+    const syncEndMs = new Date(syncEndDateStr + 'T23:59:59-03:00').getTime();
 
     const hotmartSync = async () => {
       try {
@@ -127,8 +122,8 @@ const FunnelAnalysis = () => {
           body: {
             projectId: currentProject!.id,
             action: 'sync_sales',
-            startDate: syncStartDate,
-            endDate: syncEndDate,
+            startDate: syncStartMs,
+            endDate: syncEndMs,
           },
         });
 
@@ -203,6 +198,12 @@ const FunnelAnalysis = () => {
     } finally {
       setIsSyncing(false);
     }
+  };
+  
+  // Simple search - just apply filters without API sync
+  const handleSearch = () => {
+    setAppliedStartDate(startDate);
+    setAppliedEndDate(endDate);
   };
 
   // ROAS status
@@ -304,7 +305,7 @@ const FunnelAnalysis = () => {
                   <Button 
                     variant={datesChanged ? "default" : "outline"} 
                     size="sm" 
-                    onClick={applyDateFilters}
+                    onClick={handleSearch}
                     className="gap-2"
                   >
                     <Search className="w-4 h-4" />

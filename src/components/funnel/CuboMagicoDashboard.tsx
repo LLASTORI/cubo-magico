@@ -378,15 +378,37 @@ export function CuboMagicoDashboard({
     });
   }, [funnels, offerMappings, salesData, campaignsData, insightsData]);
 
-  // Totals
+  // Total investment from ALL ad-level insights (the real total)
+  const totalInvestmentAll = useMemo(() => {
+    if (!insightsData) return 0;
+    // Deduplicate by ad_id + date to avoid double counting
+    const uniqueSpend = new Map<string, number>();
+    insightsData.forEach(i => {
+      if (i.spend && i.ad_id) {
+        const key = `${i.ad_id}_${i.date_start}`;
+        if (!uniqueSpend.has(key)) {
+          uniqueSpend.set(key, i.spend);
+        }
+      }
+    });
+    return Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+  }, [insightsData]);
+
+  // Totals from funnels with campaign patterns (attributed)
   const totals = useMemo(() => {
-    return funnelMetrics.reduce((acc, m) => ({
+    const attributed = funnelMetrics.reduce((acc, m) => ({
       investimento: acc.investimento + m.investimento,
       faturamento: acc.faturamento + m.faturamento,
       vendasFront: acc.vendasFront + m.vendasFront,
       totalProdutos: acc.totalProdutos + m.totalProdutos,
     }), { investimento: 0, faturamento: 0, vendasFront: 0, totalProdutos: 0 });
-  }, [funnelMetrics]);
+    
+    return {
+      ...attributed,
+      investimentoTotal: totalInvestmentAll,
+      investimentoNaoAtribuido: totalInvestmentAll - attributed.investimento,
+    };
+  }, [funnelMetrics, totalInvestmentAll]);
 
   // Helper to get offer codes for a specific funnel
   const getOfferCodesForFunnel = (funnelId: string, funnelName: string): string[] => {
@@ -635,14 +657,31 @@ export function CuboMagicoDashboard({
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-red-500/10">
-              <TrendingDown className="w-5 h-5 text-red-500" />
+              <Coins className="w-5 h-5 text-red-500" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Investimento</p>
+              <p className="text-sm text-muted-foreground">Investimento Total</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimentoTotal)}</p>
+              {totals.investimentoNaoAtribuido > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {formatCurrency(totals.investimentoNaoAtribuido)} não atribuído
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-orange-500/10">
+              <TrendingDown className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Invest. Atribuído</p>
               <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimento)}</p>
             </div>
           </div>

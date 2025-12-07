@@ -1074,82 +1074,20 @@ async function syncInsightsSmartOptimized(
     await syncAds(supabase, projectId, accessToken, accountIds)
 
     // STEP 6: Fetch and insert insights for each date range
+    // IMPORTANT: Only fetch AD-LEVEL insights (most granular)
+    // Campaign and adset metrics are calculated by aggregating ad data
     let totalInsightsInserted = 0
     
     for (let rangeIdx = 0; rangeIdx < dateRanges.length; rangeIdx++) {
       const range = dateRanges[rangeIdx]
       console.log(`\n=== Processing range ${rangeIdx + 1}/${dateRanges.length}: ${range.start} to ${range.stop} ===`)
       
-      // Get campaign-level insights for this range
-      const campaignInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'campaign')
-      console.log(`Got ${campaignInsights.insights.length} campaign insights for range`)
-      
-      if (campaignInsights.insights.length > 0) {
-        const insightRecords = campaignInsights.insights.map((insight: any) => ({
-          project_id: projectId,
-          ad_account_id: insight.ad_account_id,
-          campaign_id: insight.campaign_id,
-          adset_id: insight.adset_id || null,
-          ad_id: insight.ad_id || null,
-          date_start: insight.date_start,
-          date_stop: insight.date_stop,
-          spend: parseFloat(insight.spend || 0),
-          impressions: parseInt(insight.impressions || 0),
-          clicks: parseInt(insight.clicks || 0),
-          reach: parseInt(insight.reach || 0),
-          cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-          cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-          ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-          frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-          actions: insight.actions || null,
-          cost_per_action_type: insight.cost_per_action_type || null,
-          updated_at: new Date().toISOString(),
-        }))
-        
-        // BATCH INSERT to avoid memory issues
-        const { success } = await batchInsert(supabase, 'meta_insights', insightRecords)
-        totalInsightsInserted += success
-      }
-      
-      // Get adset-level insights
-      console.log('Fetching adset-level insights...')
-      const adsetInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'adset')
-      console.log(`Got ${adsetInsights.insights.length} adset insights`)
-      
-      // Insert adset insights into meta_insights
-      if (adsetInsights.insights.length > 0) {
-        const adsetInsightRecords = adsetInsights.insights.map((insight: any) => ({
-          project_id: projectId,
-          ad_account_id: insight.ad_account_id,
-          campaign_id: insight.campaign_id,
-          adset_id: insight.adset_id,
-          ad_id: null,
-          date_start: insight.date_start,
-          date_stop: insight.date_stop,
-          spend: parseFloat(insight.spend || 0),
-          impressions: parseInt(insight.impressions || 0),
-          clicks: parseInt(insight.clicks || 0),
-          reach: parseInt(insight.reach || 0),
-          cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-          cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-          ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-          frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-          actions: insight.actions || null,
-          cost_per_action_type: insight.cost_per_action_type || null,
-          updated_at: new Date().toISOString(),
-        }))
-        
-        const { success: adsetSuccess } = await batchInsert(supabase, 'meta_insights', adsetInsightRecords)
-        totalInsightsInserted += adsetSuccess
-        console.log(`Inserted ${adsetSuccess} adset insights`)
-      }
-      
-      // Get ad-level insights
-      console.log('Fetching ad-level insights...')
+      // Get ONLY ad-level insights (most granular level)
+      // This prevents data duplication - campaign/adset metrics are derived by aggregation
+      console.log('Fetching ad-level insights (granular)...')
       const adInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'ad')
-      console.log(`Got ${adInsights.insights.length} ad insights`)
+      console.log(`Got ${adInsights.insights.length} ad-level insights`)
       
-      // Insert ad insights into meta_insights
       if (adInsights.insights.length > 0) {
         const adInsightRecords = adInsights.insights.map((insight: any) => ({
           project_id: projectId,
@@ -1172,9 +1110,9 @@ async function syncInsightsSmartOptimized(
           updated_at: new Date().toISOString(),
         }))
         
-        const { success: adSuccess } = await batchInsert(supabase, 'meta_insights', adInsightRecords)
-        totalInsightsInserted += adSuccess
-        console.log(`Inserted ${adSuccess} ad insights`)
+        const { success } = await batchInsert(supabase, 'meta_insights', adInsightRecords)
+        totalInsightsInserted += success
+        console.log(`Inserted ${success} ad-level insights`)
       }
       
       // Delay between ranges

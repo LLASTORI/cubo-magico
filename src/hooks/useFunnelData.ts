@@ -88,29 +88,49 @@ const getPositionSortOrder = (tipo: string, ordem: number): number => {
   return 999;
 };
 
-const deduplicateInsights = (insights: MetaInsight[]) => {
-  const adLevelInsights = insights.filter(i => i.ad_id);
-  const campaignLevelInsights = insights.filter(i => !i.ad_id && !i.adset_id);
+// Insights are now stored ONLY at ad level (most granular)
+// No deduplication needed - just aggregate by the level you need
+const getInsightsAtLevel = (insights: MetaInsight[], level: 'ad' | 'adset' | 'campaign' | 'account') => {
+  // All insights are at ad level now, just return them for aggregation
+  return insights.filter(i => i.ad_id !== null);
+};
+
+// Aggregate insights by campaign
+const aggregateInsightsByCampaign = (insights: MetaInsight[]) => {
+  const byCampaign = new Map<string, { spend: number; impressions: number; clicks: number; reach: number }>();
   
-  if (adLevelInsights.length > 0) {
-    const unique = new Map<string, MetaInsight>();
-    adLevelInsights.forEach(i => {
-      const key = `${i.ad_id}_${i.date_start}`;
-      if (!unique.has(key)) unique.set(key, i);
+  insights.forEach(i => {
+    if (!i.campaign_id) return;
+    const key = `${i.campaign_id}_${i.date_start}`;
+    const existing = byCampaign.get(key) || { spend: 0, impressions: 0, clicks: 0, reach: 0 };
+    byCampaign.set(key, {
+      spend: existing.spend + (i.spend || 0),
+      impressions: existing.impressions + (i.impressions || 0),
+      clicks: existing.clicks + (i.clicks || 0),
+      reach: existing.reach + (i.reach || 0),
     });
-    return Array.from(unique.values());
-  }
+  });
   
-  if (campaignLevelInsights.length > 0) {
-    const unique = new Map<string, MetaInsight>();
-    campaignLevelInsights.forEach(i => {
-      const key = `${i.campaign_id}_${i.date_start}`;
-      if (!unique.has(key)) unique.set(key, i);
+  return byCampaign;
+};
+
+// Aggregate insights by adset
+const aggregateInsightsByAdset = (insights: MetaInsight[]) => {
+  const byAdset = new Map<string, { spend: number; impressions: number; clicks: number; reach: number }>();
+  
+  insights.forEach(i => {
+    if (!i.adset_id) return;
+    const key = `${i.adset_id}_${i.date_start}`;
+    const existing = byAdset.get(key) || { spend: 0, impressions: 0, clicks: 0, reach: 0 };
+    byAdset.set(key, {
+      spend: existing.spend + (i.spend || 0),
+      impressions: existing.impressions + (i.impressions || 0),
+      clicks: existing.clicks + (i.clicks || 0),
+      reach: existing.reach + (i.reach || 0),
     });
-    return Array.from(unique.values());
-  }
+  });
   
-  return [];
+  return byAdset;
 };
 
 export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataProps) => {
@@ -260,23 +280,25 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     return sortedMappings.map(m => m.codigo_oferta).filter(Boolean) as string[];
   }, [sortedMappings]);
 
-  // Deduplicated insights
-  const deduplicatedInsights = useMemo(() => {
+  // All insights are now at ad level only - no deduplication needed
+  // Just filter to ensure we only have ad-level data
+  const adLevelInsights = useMemo(() => {
     if (!rawInsights.length) return [];
-    return deduplicateInsights(rawInsights);
+    // Filter to only ad-level insights (ad_id is not null)
+    return rawInsights.filter(i => i.ad_id !== null);
   }, [rawInsights]);
 
-  // Total Meta investment
+  // Total Meta investment (sum of all ad-level insights)
   const totalMetaInvestment = useMemo(() => {
-    return deduplicatedInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
-  }, [deduplicatedInsights]);
+    return adLevelInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+  }, [adLevelInsights]);
 
-  // Meta metrics
+  // Meta metrics (aggregated from ad-level insights)
   const metaMetrics = useMemo(() => {
-    const spend = deduplicatedInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
-    const impressions = deduplicatedInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
-    const clicks = deduplicatedInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
-    const reach = deduplicatedInsights.reduce((sum, i) => sum + (i.reach || 0), 0);
+    const spend = adLevelInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
+    const impressions = adLevelInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
+    const clicks = adLevelInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
+    const reach = adLevelInsights.reduce((sum, i) => sum + (i.reach || 0), 0);
     
     return {
       spend,
@@ -286,7 +308,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
     };
-  }, [deduplicatedInsights]);
+  }, [adLevelInsights]);
 
   // Aggregated metrics by position
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
@@ -392,7 +414,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     sortedMappings,
     offerCodes,
     salesData,
-    metaInsights: deduplicatedInsights,
+    metaInsights: adLevelInsights,
+    rawInsights, // Keep raw for debugging
     metaStructure: { campaigns, adsets, ads: [] },
     activeAccountIds,
     aggregatedMetrics,

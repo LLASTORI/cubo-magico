@@ -133,11 +133,20 @@ export const MetaHierarchyAnalysis = ({
     return new Intl.NumberFormat('pt-BR').format(value);
   };
 
-  // Calculate metrics by campaign (individual tab)
+  // All insights are now at AD LEVEL ONLY
+  // We aggregate UP to campaign and adset levels from ad-level data
+  
+  // Get only ad-level insights (the only type we have now)
+  const adLevelInsights = useMemo(() => {
+    return insights.filter(i => i.ad_id !== null);
+  }, [insights]);
+
+  // Calculate metrics by campaign - AGGREGATE from ad-level insights
   const campaignMetrics = useMemo((): HierarchyMetrics[] => {
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
     
-    insights.forEach(insight => {
+    // Aggregate all ad-level insights by campaign_id
+    adLevelInsights.forEach(insight => {
       const campaignId = insight.campaign_id || 'unknown';
       if (!groups[campaignId]) {
         groups[campaignId] = { spend: 0, impressions: 0, clicks: 0, reach: 0 };
@@ -166,16 +175,17 @@ export const MetaHierarchyAnalysis = ({
         percentage: totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0,
       };
     }).sort((a, b) => b.spend - a.spend);
-  }, [insights, campaigns]);
+  }, [adLevelInsights, campaigns]);
 
-  // Calculate metrics by adset (individual tab) - only include insights that have adset_id
+  // Calculate metrics by adset - AGGREGATE from ad-level insights
   const adsetMetrics = useMemo((): HierarchyMetrics[] => {
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
     
-    // Only process insights that have an adset_id (adset-level or ad-level insights)
-    // Use adset-level insights only (has adset_id but no ad_id) to avoid double counting
-    insights.filter(i => i.adset_id && !i.ad_id).forEach(insight => {
-      const adsetId = insight.adset_id!;
+    // Aggregate all ad-level insights by adset_id
+    adLevelInsights.forEach(insight => {
+      const adsetId = insight.adset_id;
+      if (!adsetId) return;
+      
       if (!groups[adsetId]) {
         groups[adsetId] = { spend: 0, impressions: 0, clicks: 0, reach: 0 };
       }
@@ -189,7 +199,6 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const adset = adsets.find(a => a.adset_id === id);
-      // If no name found and ID looks like a number, show a better label
       const displayName = adset?.adset_name || (id.match(/^\d+$/) ? `Conjunto ${id}` : id);
       return {
         id,
@@ -205,14 +214,13 @@ export const MetaHierarchyAnalysis = ({
         percentage: totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0,
       };
     }).sort((a, b) => b.spend - a.spend);
-  }, [insights, adsets]);
+  }, [adLevelInsights, adsets]);
 
-  // Calculate metrics by ad (individual tab) - only include insights that have ad_id
+  // Calculate metrics by ad - directly use ad-level insights
   const adMetrics = useMemo((): HierarchyMetrics[] => {
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
     
-    // Only process insights that have an ad_id (ad-level insights)
-    insights.filter(i => i.ad_id).forEach(insight => {
+    adLevelInsights.forEach(insight => {
       const adId = insight.ad_id!;
       if (!groups[adId]) {
         groups[adId] = { spend: 0, impressions: 0, clicks: 0, reach: 0 };
@@ -227,7 +235,6 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const ad = ads.find(a => a.ad_id === id);
-      // If no name found and ID looks like a number, show a better label
       const displayName = ad?.ad_name || (id.match(/^\d+$/) ? `Anúncio ${id}` : id);
       return {
         id,
@@ -243,11 +250,12 @@ export const MetaHierarchyAnalysis = ({
         percentage: totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0,
       };
     }).sort((a, b) => b.spend - a.spend);
-  }, [insights, ads]);
+  }, [adLevelInsights, ads]);
 
-  // Hierarchical drilldown analysis
+  // Hierarchical drilldown analysis - ALL from ad-level insights
   const drilldownAnalysis = useMemo(() => {
-    let filteredInsights = [...insights];
+    // Start with ad-level insights only
+    let filteredInsights = [...adLevelInsights];
 
     // Apply drilldown filters
     if (drilldownPath.campaign) {
@@ -257,23 +265,7 @@ export const MetaHierarchyAnalysis = ({
       filteredInsights = filteredInsights.filter(i => i.adset_id === drilldownPath.adset?.id);
     }
 
-    // Filter by the appropriate level to avoid duplicate counting
-    // Level 0 (campaigns): use campaign-level insights (no adset_id, no ad_id)
-    // Level 1 (adsets): use adset-level insights (has adset_id, no ad_id)
-    // Level 2 (ads): use ad-level insights (has ad_id)
-    if (currentLevel === 0) {
-      filteredInsights = filteredInsights.filter(i => !i.adset_id && !i.ad_id);
-    } else if (currentLevel === 1) {
-      filteredInsights = filteredInsights.filter(i => i.adset_id && !i.ad_id);
-    } else {
-      filteredInsights = filteredInsights.filter(i => i.ad_id);
-    }
-
-    const totalSpend = filteredInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
-    const totalImpressions = filteredInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
-    const totalClicks = filteredInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
-
-    // Group by current level
+    // Group by current level (aggregate from ad-level data)
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
     
     filteredInsights.forEach(insight => {
@@ -286,7 +278,7 @@ export const MetaHierarchyAnalysis = ({
         id = insight.ad_id;
       }
 
-      if (!id) return; // Skip if no ID for the current level
+      if (!id) return;
 
       if (!groups[id]) {
         groups[id] = { spend: 0, impressions: 0, clicks: 0, reach: 0 };
@@ -296,6 +288,10 @@ export const MetaHierarchyAnalysis = ({
       groups[id].clicks += insight.clicks || 0;
       groups[id].reach += insight.reach || 0;
     });
+
+    const totalSpend = Object.values(groups).reduce((sum, g) => sum + g.spend, 0);
+    const totalImpressions = Object.values(groups).reduce((sum, g) => sum + g.impressions, 0);
+    const totalClicks = Object.values(groups).reduce((sum, g) => sum + g.clicks, 0);
 
     const data: HierarchyMetrics[] = Object.entries(groups).map(([id, d]) => {
       let name = id;
@@ -331,7 +327,7 @@ export const MetaHierarchyAnalysis = ({
     }).sort((a, b) => b.spend - a.spend);
 
     return { data, totalSpend, totalImpressions, totalClicks };
-  }, [insights, campaigns, adsets, ads, drilldownPath, currentLevel]);
+  }, [adLevelInsights, campaigns, adsets, ads, drilldownPath, currentLevel]);
 
   const handleDrilldown = (item: HierarchyMetrics) => {
     if (currentLevel >= 2) return; // Max level reached

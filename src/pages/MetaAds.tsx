@@ -238,7 +238,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     gcTime: 0,
   });
 
-  // Fetch insights - only from active accounts
+  // Fetch insights - only from active accounts (now all ad-level)
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights, error: insightsError, isFetching } = useQuery({
     queryKey: ['meta_insights', projectId, startDate, endDate, activeAccountIds.join(',')],
     queryFn: async () => {
@@ -250,13 +250,13 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         return [];
       }
       
+      // Fetch ad-level insights (the only level we have now)
       const { data, error, count } = await supabase
         .from('meta_insights')
         .select('*', { count: 'exact' })
         .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
-        .is('adset_id', null)
-        .is('ad_id', null)
+        .not('ad_id', 'is', null)
         .gte('date_start', startDate)
         .lte('date_start', endDate)
         .order('date_start', { ascending: true });
@@ -266,7 +266,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         throw error;
       }
       
-      console.log(`[Insights] SUCCESS: Fetched ${data?.length || 0} records (count: ${count})`);
+      console.log(`[Insights] SUCCESS: Fetched ${data?.length || 0} ad-level records (count: ${count})`);
       console.log('[Insights] First record:', data?.[0]);
       console.log('[Insights] Total spend:', data?.reduce((sum, r) => sum + (r.spend || 0), 0));
       return data || [];
@@ -289,20 +289,19 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     });
   }, [insights, insightsLoading, isFetching, insightsError]);
 
-  // Query to get the available date range in the database
+  // Query to get the available date range in the database (now from ad-level insights)
   const { data: availableDateRange } = useQuery({
     queryKey: ['meta_insights_date_range', projectId, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return null;
       
-      // Get min and max dates from campaign-level insights in a single query
+      // Get min and max dates from ad-level insights
       const { data, error } = await supabase
         .from('meta_insights')
         .select('date_start')
         .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
-        .is('adset_id', null)
-        .is('ad_id', null)
+        .not('ad_id', 'is', null)
         .order('date_start', { ascending: true });
       
       if (error || !data || data.length === 0) {
@@ -313,27 +312,26 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       const minDate = data[0]?.date_start;
       const maxDate = data[data.length - 1]?.date_start;
       
-      console.log(`[DateRange] Available data: ${minDate} to ${maxDate} (${data.length} records)`);
+      console.log(`[DateRange] Available ad-level data: ${minDate} to ${maxDate} (${data.length} records)`);
       return { minDate, maxDate, count: data.length };
     },
     enabled: !!metaCredentials && activeAccountIds.length > 0,
     staleTime: 60000,
   });
 
-  // VERIFICATION: Query to get the exact SUM from database for comparison
+  // VERIFICATION: Query to get the exact count from database (now ad-level)
   const { data: dbVerification } = useQuery({
     queryKey: ['meta_insights_verification', projectId, startDate, endDate, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return null;
       
-      // Get count - campaign-level only to avoid duplicates
+      // Get count - ad-level insights only
       const { count, error } = await supabase
         .from('meta_insights')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
-        .is('adset_id', null)
-        .is('ad_id', null)
+        .not('ad_id', 'is', null)
         .gte('date_start', startDate)
         .lte('date_start', endDate);
       
@@ -342,11 +340,11 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
         return null;
       }
       
-      console.log(`[Verification] DB record count: ${count}`);
+      console.log(`[Verification] DB ad-level record count: ${count}`);
       return { recordCount: count || 0 };
     },
     enabled: !!metaCredentials && activeAccountIds.length > 0,
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 30000,
   });
 
   const isMetaExpired = metaCredentials?.expires_at 

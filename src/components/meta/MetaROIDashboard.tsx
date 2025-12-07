@@ -80,19 +80,19 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-  // Fetch Meta insights (spend data) - campaign-level only to avoid duplicates
+  // Fetch Meta insights (spend data) - now all at ad-level, aggregate in memory
   const { data: metaInsights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
     queryKey: ['meta_roi_insights', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return [];
       
+      // Fetch ad-level insights (the only level we have now)
       const { data, error } = await supabase
         .from('meta_insights')
-        .select('date_start, spend, clicks, impressions')
+        .select('date_start, spend, clicks, impressions, ad_id')
         .eq('project_id', projectId)
         .in('ad_account_id', activeAccountIds)
-        .is('adset_id', null)
-        .is('ad_id', null)
+        .not('ad_id', 'is', null)
         .gte('date_start', startDateStr)
         .lte('date_start', endDateStr);
       

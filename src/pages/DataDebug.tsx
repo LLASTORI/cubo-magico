@@ -136,18 +136,38 @@ export default function DataDebug() {
     }
   };
 
-  // Cálculos derivados
+  // Cálculos derivados - NOVA ESTRUTURA: apenas ad-level
   const calculations = rawData ? {
-    // Meta totals
+    // Meta totals (agora todos os insights são ad-level)
     totalSpend: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.spend) || 0), 0),
     totalImpressions: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.impressions) || 0), 0),
     totalClicks: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.clicks) || 0), 0),
     totalReach: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.reach) || 0), 0),
     
-    // Unique campaign IDs in insights
+    // Unique IDs in insights
     uniqueCampaignIds: [...new Set(rawData.metaInsights.map(i => i.campaign_id).filter(Boolean))],
     uniqueAdsetIds: [...new Set(rawData.metaInsights.map(i => i.adset_id).filter(Boolean))],
     uniqueAdIds: [...new Set(rawData.metaInsights.map(i => i.ad_id).filter(Boolean))],
+    
+    // Insights por nível (para validar estrutura)
+    insightsByCampaign: rawData.metaInsights.filter(i => i.campaign_id && !i.adset_id && !i.ad_id),
+    insightsByAdset: rawData.metaInsights.filter(i => i.adset_id && !i.ad_id),
+    insightsByAd: rawData.metaInsights.filter(i => i.ad_id),
+    insightsAccountLevel: rawData.metaInsights.filter(i => !i.campaign_id && !i.adset_id && !i.ad_id),
+    
+    // Agregação por Campaign (soma dos ads de cada campaign)
+    spendByCampaign: rawData.metaInsights.reduce((acc, i) => {
+      if (!i.campaign_id) return acc;
+      acc[i.campaign_id] = (acc[i.campaign_id] || 0) + (Number(i.spend) || 0);
+      return acc;
+    }, {} as Record<string, number>),
+    
+    // Agregação por Adset (soma dos ads de cada adset)
+    spendByAdset: rawData.metaInsights.reduce((acc, i) => {
+      if (!i.adset_id) return acc;
+      acc[i.adset_id] = (acc[i.adset_id] || 0) + (Number(i.spend) || 0);
+      return acc;
+    }, {} as Record<string, number>),
     
     // Hotmart totals
     approvedSales: rawData.hotmartSales.filter(s => s.status === 'APPROVED' || s.status === 'COMPLETE'),
@@ -160,12 +180,6 @@ export default function DataDebug() {
       acc[s.status] = (acc[s.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-    
-    // Insights by level
-    insightsByCampaign: rawData.metaInsights.filter(i => i.campaign_id && !i.adset_id && !i.ad_id),
-    insightsByAdset: rawData.metaInsights.filter(i => i.adset_id && !i.ad_id),
-    insightsByAd: rawData.metaInsights.filter(i => i.ad_id),
-    insightsAccountLevel: rawData.metaInsights.filter(i => !i.campaign_id && !i.adset_id && !i.ad_id),
   } : null;
 
   return (
@@ -252,35 +266,51 @@ export default function DataDebug() {
               </Card>
             </div>
 
-            {/* Insights por Nível */}
-            <Card>
+            {/* Validação da Estrutura - Apenas Ad Level */}
+            <Card className="border-primary">
               <CardHeader>
-                <CardTitle>Meta Insights por Nível</CardTitle>
+                <CardTitle className="text-primary">✅ Validação da Estrutura (Apenas Ad Level)</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">Account Level</p>
-                  <p className="text-xl font-bold">{calculations.insightsAccountLevel.length}</p>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className={`p-4 rounded-lg ${calculations.insightsAccountLevel.length === 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    <p className="text-sm text-muted-foreground">Account Level</p>
+                    <p className="text-xl font-bold">{calculations.insightsAccountLevel.length}</p>
+                    <p className="text-xs">{calculations.insightsAccountLevel.length === 0 ? '✓ OK' : '⚠️ Deveria ser 0'}</p>
+                  </div>
+                  <div className={`p-4 rounded-lg ${calculations.insightsByCampaign.length === 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    <p className="text-sm text-muted-foreground">Campaign Level</p>
+                    <p className="text-xl font-bold">{calculations.insightsByCampaign.length}</p>
+                    <p className="text-xs">{calculations.insightsByCampaign.length === 0 ? '✓ OK' : '⚠️ Deveria ser 0'}</p>
+                  </div>
+                  <div className={`p-4 rounded-lg ${calculations.insightsByAdset.length === 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    <p className="text-sm text-muted-foreground">Adset Level</p>
+                    <p className="text-xl font-bold">{calculations.insightsByAdset.length}</p>
+                    <p className="text-xs">{calculations.insightsByAdset.length === 0 ? '✓ OK' : '⚠️ Deveria ser 0'}</p>
+                  </div>
+                  <div className={`p-4 rounded-lg ${calculations.insightsByAd.length > 0 ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
+                    <p className="text-sm text-muted-foreground">Ad Level</p>
+                    <p className="text-xl font-bold">{calculations.insightsByAd.length}</p>
+                    <p className="text-xs">{calculations.insightsByAd.length > 0 ? '✓ OK - Dados granulares' : '⚠️ Sem dados'}</p>
+                  </div>
                 </div>
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">Campaign Level</p>
-                  <p className="text-xl font-bold">{calculations.insightsByCampaign.length}</p>
-                </div>
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">Adset Level</p>
-                  <p className="text-xl font-bold">{calculations.insightsByAdset.length}</p>
-                </div>
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">Ad Level</p>
-                  <p className="text-xl font-bold">{calculations.insightsByAd.length}</p>
-                </div>
+                
+                {calculations.insightsByCampaign.length === 0 && 
+                 calculations.insightsByAdset.length === 0 && 
+                 calculations.insightsByAd.length > 0 && (
+                  <div className="p-4 bg-green-500/20 rounded-lg border border-green-500">
+                    <p className="text-green-700 dark:text-green-300 font-medium">
+                      ✓ Estrutura correta! Todos os {calculations.insightsByAd.length} insights são de nível Ad.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Totais Meta */}
+            {/* Totais Meta - Ad Level (sem duplicação) */}
             <Card>
               <CardHeader>
-                <CardTitle>Totais Meta (Soma de TODOS os Insights)</CardTitle>
+                <CardTitle>Totais Meta (Soma de Todos os Ads)</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 bg-blue-500/10 rounded-lg">
@@ -310,36 +340,63 @@ export default function DataDebug() {
               </CardContent>
             </Card>
 
-            {/* Cálculos Corretos - Apenas Campaign Level */}
-            <Card className="border-primary">
+            {/* Agregação por Campaign (derivada dos ads) */}
+            <Card>
               <CardHeader>
-                <CardTitle className="text-primary">⚠️ Cálculo Correto (Apenas Campaign Level)</CardTitle>
+                <CardTitle>📊 Agregação por Campaign (derivada dos Ads)</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-primary/10 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Spend (Campaign)</p>
-                  <p className="text-xl font-bold text-primary">
-                    R$ {calculations.insightsByCampaign.reduce((sum, i) => sum + (Number(i.spend) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                  {Object.entries(calculations.spendByCampaign)
+                    .sort(([,a], [,b]) => (b as number) - (a as number))
+                    .slice(0, 10)
+                    .map(([campaignId, spend]) => {
+                      const campaign = rawData.metaCampaigns.find(c => c.campaign_id === campaignId);
+                      return (
+                        <div key={campaignId} className="p-3 bg-muted rounded-lg">
+                          <p className="text-xs text-muted-foreground truncate" title={campaign?.campaign_name || campaignId}>
+                            {campaign?.campaign_name || campaignId}
+                          </p>
+                          <p className="text-sm font-bold">
+                            R$ {(spend as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      );
+                    })}
                 </div>
-                <div className="p-4 bg-primary/10 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Impressions (Campaign)</p>
-                  <p className="text-xl font-bold text-primary">
-                    {calculations.insightsByCampaign.reduce((sum, i) => sum + (Number(i.impressions) || 0), 0).toLocaleString('pt-BR')}
-                  </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Mostrando top 10 de {Object.keys(calculations.spendByCampaign).length} campaigns
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Agregação por Adset (derivada dos ads) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>📊 Agregação por Adset (derivada dos Ads)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                  {Object.entries(calculations.spendByAdset)
+                    .sort(([,a], [,b]) => (b as number) - (a as number))
+                    .slice(0, 10)
+                    .map(([adsetId, spend]) => {
+                      const adset = rawData.metaAdsets.find(a => a.adset_id === adsetId);
+                      return (
+                        <div key={adsetId} className="p-3 bg-muted rounded-lg">
+                          <p className="text-xs text-muted-foreground truncate" title={adset?.adset_name || adsetId}>
+                            {adset?.adset_name || adsetId}
+                          </p>
+                          <p className="text-sm font-bold">
+                            R$ {(spend as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      );
+                    })}
                 </div>
-                <div className="p-4 bg-primary/10 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Clicks (Campaign)</p>
-                  <p className="text-xl font-bold text-primary">
-                    {calculations.insightsByCampaign.reduce((sum, i) => sum + (Number(i.clicks) || 0), 0).toLocaleString('pt-BR')}
-                  </p>
-                </div>
-                <div className="p-4 bg-primary/10 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Reach (Campaign)</p>
-                  <p className="text-xl font-bold text-primary">
-                    {calculations.insightsByCampaign.reduce((sum, i) => sum + (Number(i.reach) || 0), 0).toLocaleString('pt-BR')}
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Mostrando top 10 de {Object.keys(calculations.spendByAdset).length} adsets
+                </p>
               </CardContent>
             </Card>
 

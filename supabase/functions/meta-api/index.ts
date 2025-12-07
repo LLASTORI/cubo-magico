@@ -145,6 +145,7 @@ async function getExistingDatesInCache(
 }
 
 // SMART SYNC: Determine which dates need to be fetched from Meta
+// IMPROVED: Only refetch dates that are NOT in cache, preserving existing data
 function determineDatesToFetch(
   dateStart: string,
   dateStop: string,
@@ -173,6 +174,7 @@ function determineDatesToFetch(
     
     const isInCache = cachedDates.has(dateStr)
     const isImmutable = daysAgo >= IMMUTABLE_DAYS_THRESHOLD
+    const isVeryRecent = daysAgo <= 2 // Last 2 days data might still change
     
     if (forceRefresh) {
       // Force refresh: always fetch
@@ -180,8 +182,12 @@ function determineDatesToFetch(
     } else if (isInCache && isImmutable) {
       // Data is old and in cache - use cache (data won't change)
       fromCache.push(dateStr)
-    } else if (isInCache && !isImmutable) {
-      // Data is recent and in cache - refetch (data might have changed)
+    } else if (isInCache && !isVeryRecent) {
+      // Data is in cache and not very recent (3+ days old) - use cache
+      // This prevents accidentally deleting good data
+      fromCache.push(dateStr)
+    } else if (isInCache && isVeryRecent) {
+      // Data is very recent (last 2 days) - refetch as it might change
       toFetch.push(dateStr)
     } else {
       // Data not in cache - need to fetch
@@ -191,7 +197,7 @@ function determineDatesToFetch(
   
   console.log(`Smart sync analysis:
   - Dates to fetch from Meta: ${toFetch.length}
-  - Dates using cache (>30 days): ${fromCache.length}
+  - Dates using cache: ${fromCache.length}
   - Dates skipped (future): ${toSkip.length}`)
   
   return { toFetch, toSkip, fromCache }

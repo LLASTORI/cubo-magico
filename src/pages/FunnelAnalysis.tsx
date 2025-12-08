@@ -320,7 +320,7 @@ const FunnelAnalysis = () => {
     }, POLL_INTERVAL);
   }, [stopPolling, refetchAll]);
 
-  // Sync only the missing date ranges (gaps)
+  // Sync only the missing date ranges (gaps) - consolidated to avoid rate limiting
   const handleFillGaps = useCallback(async () => {
     if (!dataGaps?.missingDateRanges?.length || !currentProject?.id || activeAccountIds.length === 0) {
       toast.error('Nenhuma lacuna encontrada para preencher');
@@ -337,27 +337,31 @@ const FunnelAnalysis = () => {
     setMetaSyncInProgress(true);
     stopPolling();
 
-    toast.info(`Preenchendo ${dataGaps.missingDays} dias faltantes...`);
-    console.log('[FillGaps] Starting gap fill for ranges:', dataGaps.missingDateRanges);
+    // Consolidate all gaps into a single range (earliest start to latest end)
+    // This avoids multiple API calls that cause rate limiting
+    const allDates = dataGaps.missingDateRanges.flatMap(r => [r.start, r.end]);
+    const earliestDate = allDates.sort()[0];
+    const latestDate = allDates.sort().reverse()[0];
 
-    // Sync each missing range
-    for (const range of dataGaps.missingDateRanges) {
-      console.log(`[FillGaps] Syncing range: ${range.start} to ${range.end}`);
-      
-      try {
-        await supabase.functions.invoke('meta-api', {
-          body: {
-            projectId: currentProject.id,
-            action: 'sync_insights',
-            accountIds: activeAccountIds,
-            dateStart: range.start,
-            dateStop: range.end,
-            forceRefresh: true, // Force refresh for gaps
-          },
-        });
-      } catch (error) {
-        console.error(`[FillGaps] Error syncing range ${range.start} to ${range.end}:`, error);
-      }
+    toast.info(`Preenchendo ${dataGaps.missingDays} dias faltantes (${earliestDate} a ${latestDate})...`);
+    console.log('[FillGaps] Consolidated range:', earliestDate, 'to', latestDate);
+    console.log('[FillGaps] Original ranges:', dataGaps.missingDateRanges);
+
+    try {
+      // Single API call for the entire gap period
+      await supabase.functions.invoke('meta-api', {
+        body: {
+          projectId: currentProject.id,
+          action: 'sync_insights',
+          accountIds: activeAccountIds,
+          dateStart: earliestDate,
+          dateStop: latestDate,
+          forceRefresh: true,
+        },
+      });
+    } catch (error) {
+      console.error('[FillGaps] Error syncing gaps:', error);
+      toast.error('Erro ao preencher lacunas');
     }
 
     // Start polling for the full applied period to check completion

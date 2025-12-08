@@ -477,16 +477,21 @@ export function CuboMagicoDashboard({
       matchingCampaignIds.has(i.campaign_id || '')
     );
     
-    // Filter adsets by matching campaigns
-    const filteredAdsets = (adsetsData || []).filter(a => 
-      matchingCampaignIds.has(a.campaign_id)
-    );
-    const matchingAdsetIds = new Set(filteredAdsets.map(a => a.adset_id));
+    // Get unique ad_ids and adset_ids from filtered insights
+    const insightAdIds = new Set(filteredInsights.filter(i => i.ad_id).map(i => i.ad_id));
+    const insightAdsetIds = new Set(filteredInsights.filter(i => i.adset_id).map(i => i.adset_id));
     
-    // Filter ads by matching adsets
-    const filteredAds = (adsData || []).filter(a => 
-      matchingAdsetIds.has(a.adset_id)
+    // Filter adsets by IDs that appear in insights (not by campaign)
+    const filteredAdsets = (adsetsData || []).filter(a => 
+      insightAdsetIds.has(a.adset_id)
     );
+    
+    // Filter ads by IDs that appear in insights (not by adset)
+    const filteredAds = (adsData || []).filter(a => 
+      insightAdIds.has(a.ad_id)
+    );
+    
+    console.log(`[getFilteredMetaData] Pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${filteredInsights.length} insights, ${filteredAdsets.length} adsets, ${filteredAds.length} ads (adsData total: ${adsData?.length || 0})`);
     
     return {
       campaigns: matchingCampaigns.map(c => ({

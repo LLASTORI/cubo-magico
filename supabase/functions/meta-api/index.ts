@@ -352,7 +352,7 @@ Deno.serve(async (req) => {
         break
 
       case 'get_insights':
-        result = await getInsights(accessToken, accountIds, dateStart, dateStop, level)
+        result = await getInsightsIncremental(accessToken, accountIds, dateStart, dateStop, level)
         break
 
       case 'sync_insights':
@@ -953,46 +953,59 @@ async function getInsightsForAccount(
   return allInsights
 }
 
-async function getInsights(
+// INCREMENTAL getInsights: Accepts callback to save data after each chunk
+async function getInsightsIncremental(
   accessToken: string, 
   accountIds: string[], 
   dateStart: string, 
   dateStop: string,
-  level: string = 'campaign'
-) {
-  // Split date range into monthly chunks to avoid "reduce data" error
+  level: string = 'campaign',
+  onChunkComplete?: (insights: any[]) => Promise<number>
+): Promise<{ insights: any[], totalSaved: number }> {
+  // Split date range into chunks to avoid "reduce data" error
   const dateChunks = splitDateRangeIntoChunks(dateStart, dateStop)
   
-  console.log('Fetching insights:', { accountIds: accountIds.length, dateStart, dateStop, level, chunks: dateChunks.length })
+  console.log('Fetching insights incrementally:', { accountIds: accountIds.length, dateStart, dateStop, level, chunks: dateChunks.length })
   
   const allInsights: any[] = []
+  let totalSaved = 0
 
   // Process each chunk
   for (let chunkIndex = 0; chunkIndex < dateChunks.length; chunkIndex++) {
     const chunk = dateChunks[chunkIndex]
     console.log(`Processing chunk ${chunkIndex + 1}/${dateChunks.length}: ${chunk.start} to ${chunk.stop}`)
     
+    const chunkInsights: any[] = []
+    
     // Process accounts sequentially to avoid rate limiting
     for (let i = 0; i < accountIds.length; i++) {
       const accountId = accountIds[i]
       const insights = await getInsightsForAccount(accessToken, accountId, chunk.start, chunk.stop, level)
-      allInsights.push(...insights)
+      chunkInsights.push(...insights)
       
       // Add delay between accounts to avoid rate limiting
       if (i < accountIds.length - 1) {
-        await delay(2000)
+        await delay(1000)
       }
     }
     
-    // Add delay between chunks
+    // SAVE IMMEDIATELY after each chunk if callback provided
+    if (onChunkComplete && chunkInsights.length > 0) {
+      const saved = await onChunkComplete(chunkInsights)
+      totalSaved += saved
+      console.log(`Chunk ${chunkIndex + 1} saved: ${saved} insights`)
+    }
+    
+    allInsights.push(...chunkInsights)
+    
+    // Shorter delay between chunks since we're saving incrementally
     if (chunkIndex < dateChunks.length - 1) {
-      console.log('Waiting before next chunk...')
-      await delay(3000)
+      await delay(1500)
     }
   }
 
-  console.log(`Found ${allInsights.length} total insight records for ${level} level`)
-  return { insights: allInsights }
+  console.log(`Completed: ${allInsights.length} total insights, ${totalSaved} saved`)
+  return { insights: allInsights, totalSaved }
 }
 
 // SMART SYNC: Optimized sync function with intelligent caching
@@ -1081,55 +1094,61 @@ async function syncInsightsSmartOptimized(
     console.log('Syncing ads from Meta API...')
     await syncAds(supabase, projectId, accessToken, accountIds)
 
-    // STEP 6: Fetch and insert insights for each date range
+    // STEP 6: Fetch and insert insights INCREMENTALLY
     // IMPORTANT: Only fetch AD-LEVEL insights (most granular)
-    // Campaign and adset metrics are calculated by aggregating ad data
+    // Save after EACH chunk to avoid losing data on timeout
     let totalInsightsInserted = 0
+    
+    // Create callback to save insights immediately after each chunk
+    const saveInsightsCallback = async (insights: any[]): Promise<number> => {
+      const adInsightRecords = insights.map((insight: any) => ({
+        project_id: projectId,
+        ad_account_id: insight.ad_account_id,
+        campaign_id: insight.campaign_id,
+        adset_id: insight.adset_id,
+        ad_id: insight.ad_id,
+        date_start: insight.date_start,
+        date_stop: insight.date_stop,
+        spend: parseFloat(insight.spend || 0),
+        impressions: parseInt(insight.impressions || 0),
+        clicks: parseInt(insight.clicks || 0),
+        reach: parseInt(insight.reach || 0),
+        cpc: insight.cpc ? parseFloat(insight.cpc) : null,
+        cpm: insight.cpm ? parseFloat(insight.cpm) : null,
+        ctr: insight.ctr ? parseFloat(insight.ctr) : null,
+        frequency: insight.frequency ? parseFloat(insight.frequency) : null,
+        actions: insight.actions || null,
+        cost_per_action_type: insight.cost_per_action_type || null,
+        updated_at: new Date().toISOString(),
+      }))
+      
+      const { success } = await batchUpsert(
+        supabase, 
+        'meta_insights', 
+        adInsightRecords,
+        'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop'
+      )
+      return success
+    }
     
     for (let rangeIdx = 0; rangeIdx < dateRanges.length; rangeIdx++) {
       const range = dateRanges[rangeIdx]
       console.log(`\n=== Processing range ${rangeIdx + 1}/${dateRanges.length}: ${range.start} to ${range.stop} ===`)
       
-      // Get ONLY ad-level insights (most granular level)
-      // This prevents data duplication - campaign/adset metrics are derived by aggregation
-      console.log('Fetching ad-level insights (granular)...')
-      const adInsights = await getInsights(accessToken, accountIds, range.start, range.stop, 'ad')
-      console.log(`Got ${adInsights.insights.length} ad-level insights`)
+      // Fetch and SAVE incrementally (after each API chunk)
+      console.log('Fetching ad-level insights with incremental save...')
+      const { totalSaved } = await getInsightsIncremental(
+        accessToken, 
+        accountIds, 
+        range.start, 
+        range.stop, 
+        'ad',
+        saveInsightsCallback
+      )
+      totalInsightsInserted += totalSaved
+      console.log(`Range ${rangeIdx + 1} complete: ${totalSaved} insights saved`)
       
-      if (adInsights.insights.length > 0) {
-        const adInsightRecords = adInsights.insights.map((insight: any) => ({
-          project_id: projectId,
-          ad_account_id: insight.ad_account_id,
-          campaign_id: insight.campaign_id,
-          adset_id: insight.adset_id,
-          ad_id: insight.ad_id,
-          date_start: insight.date_start,
-          date_stop: insight.date_stop,
-          spend: parseFloat(insight.spend || 0),
-          impressions: parseInt(insight.impressions || 0),
-          clicks: parseInt(insight.clicks || 0),
-          reach: parseInt(insight.reach || 0),
-          cpc: insight.cpc ? parseFloat(insight.cpc) : null,
-          cpm: insight.cpm ? parseFloat(insight.cpm) : null,
-          ctr: insight.ctr ? parseFloat(insight.ctr) : null,
-          frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-          actions: insight.actions || null,
-          cost_per_action_type: insight.cost_per_action_type || null,
-          updated_at: new Date().toISOString(),
-        }))
-        
-        // Use UPSERT with unique constraint columns to handle duplicates gracefully
-        const { success } = await batchUpsert(
-          supabase, 
-          'meta_insights', 
-          adInsightRecords,
-          'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop'
-        )
-        totalInsightsInserted += success
-        console.log(`Upserted ${success} ad-level insights`)
-      }
-      
-      // Delay between ranges
+      // Shorter delay between ranges since we're saving incrementally
       if (rangeIdx < dateRanges.length - 1) {
         console.log('Waiting before next range...')
         await delay(2000)

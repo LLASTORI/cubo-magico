@@ -52,6 +52,7 @@ interface MetaAd {
   adset_id: string;
   campaign_id: string;
   status: string | null;
+  preview_url: string | null;
 }
 
 interface MetaHierarchyAnalysisProps {
@@ -67,6 +68,7 @@ interface HierarchyMetrics {
   id: string;
   name: string;
   status?: string | null;
+  previewUrl?: string | null;
   spend: number;
   impressions: number;
   clicks: number;
@@ -243,6 +245,7 @@ export const MetaHierarchyAnalysis = ({
         id,
         name: displayName,
         status: ad?.status,
+        previewUrl: ad?.preview_url,
         spend: data.spend,
         impressions: data.impressions,
         clicks: data.clicks,
@@ -299,6 +302,7 @@ export const MetaHierarchyAnalysis = ({
     const data: HierarchyMetrics[] = Object.entries(groups).map(([id, d]) => {
       let name = id;
       let status: string | null = null;
+      let previewUrl: string | null = null;
 
       if (currentLevel === 0) {
         const campaign = campaigns.find(c => c.campaign_id === id);
@@ -312,12 +316,14 @@ export const MetaHierarchyAnalysis = ({
         const ad = ads.find(a => a.ad_id === id);
         name = ad?.ad_name || (id.match(/^\d+$/) ? `Anúncio ${id}` : id);
         status = ad?.status || null;
+        previewUrl = ad?.preview_url || null;
       }
 
       return {
         id,
         name,
         status,
+        previewUrl,
         spend: d.spend,
         impressions: d.impressions,
         clicks: d.clicks,
@@ -370,9 +376,11 @@ export const MetaHierarchyAnalysis = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleOpenAd = (adId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.open(`https://www.facebook.com/ads/library/?id=${adId}`, '_blank');
+  const handleOpenAd = (adId: string, previewUrl?: string | null, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    // Use preview URL from Meta API if available, otherwise fallback to Ads Library
+    const url = previewUrl || `https://www.facebook.com/ads/library/?id=${adId}`;
+    window.open(url, '_blank');
   };
 
   // Table component
@@ -466,8 +474,8 @@ export const MetaHierarchyAnalysis = ({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={(e) => handleOpenAd(item.id, e)}
-                  title="Ver anúncio na Biblioteca de Anúncios"
+                  onClick={(e) => handleOpenAd(item.id, item.previewUrl, e)}
+                  title={item.previewUrl ? "Ver preview do anúncio" : "Ver anúncio na Biblioteca de Anúncios"}
                 >
                   <ExternalLink className="w-4 h-4 text-primary" />
                 </Button>

@@ -424,6 +424,7 @@ export type Database = {
           created_time: string | null
           creative_id: string | null
           id: string
+          preview_url: string | null
           project_id: string
           status: string | null
           updated_at: string
@@ -438,6 +439,7 @@ export type Database = {
           created_time?: string | null
           creative_id?: string | null
           id?: string
+          preview_url?: string | null
           project_id: string
           status?: string | null
           updated_at?: string
@@ -452,6 +454,7 @@ export type Database = {
           created_time?: string | null
           creative_id?: string | null
           id?: string
+          preview_url?: string | null
           project_id?: string
           status?: string | null
           updated_at?: string

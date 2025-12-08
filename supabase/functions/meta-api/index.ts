@@ -749,7 +749,9 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
 // Fetch ads directly from Meta API with pagination
 async function getAdsForAccountWithPagination(accessToken: string, accountId: string) {
   const allAds: any[] = []
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative,created_time,preview_shareable_link&limit=500&access_token=${accessToken}`
+  // Request creative{effective_object_story_id} to build proper preview URLs
+  // The effective_object_story_id format is: {page_id}_{post_id}
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative{id,effective_object_story_id,thumbnail_url},created_time&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
   
@@ -765,10 +767,25 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
     }
 
     if (data.data && data.data.length > 0) {
-      const ads = data.data.map((a: any) => ({
-        ...a,
-        ad_account_id: accountId,
-      }))
+      const ads = data.data.map((a: any) => {
+        // Build preview URL from effective_object_story_id
+        // Format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
+        let previewUrl = null
+        const storyId = a.creative?.effective_object_story_id
+        if (storyId && storyId.includes('_')) {
+          const [pageId, postId] = storyId.split('_')
+          previewUrl = `https://www.facebook.com/${pageId}/posts/${postId}`
+        } else if (a.creative?.thumbnail_url) {
+          // Fallback to thumbnail URL if no story ID
+          previewUrl = a.creative.thumbnail_url
+        }
+        
+        return {
+          ...a,
+          ad_account_id: accountId,
+          preview_url: previewUrl,
+        }
+      })
       allAds.push(...ads)
       console.log(`Got ${data.data.length} ads from page ${pageCount}, total: ${allAds.length}`)
     }
@@ -905,7 +922,7 @@ async function syncAds(
     status: ad.status || null,
     creative_id: ad.creative?.id || null,
     created_time: ad.created_time || null,
-    preview_url: ad.preview_shareable_link || null,
+    preview_url: ad.preview_url || null, // Now comes from getAdsForAccountWithPagination with proper Facebook URL
     updated_at: new Date().toISOString(),
   }))
   

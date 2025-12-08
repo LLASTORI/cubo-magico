@@ -106,7 +106,7 @@ async function fetchWithRetry(
 }
 
 // SMART SYNC: Check which dates we already have COMPLETE data in the database
-// Complete means we have campaign, adset AND ad level insights
+// Adaptive: checks if project has ads, if not, considers campaign-level data as complete
 async function getExistingDatesInCache(
   supabase: any,
   projectId: string,
@@ -114,20 +114,36 @@ async function getExistingDatesInCache(
   dateStart: string,
   dateStop: string
 ): Promise<Set<string>> {
-  console.log('Checking existing cache for COMPLETE dates (with ad-level data)...')
+  console.log('Checking existing cache...')
   
   const completeDates = new Set<string>()
   
-  // Fetch dates that have ad-level data (ad_id IS NOT NULL)
-  // Only consider a date "cached" if it has ad-level insights
-  const { data, error } = await supabase
+  // First check if this project has any ads synced
+  const { data: adsCount } = await supabase
+    .from('meta_ads')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .limit(1)
+  
+  const hasAds = adsCount && adsCount.length > 0
+  console.log(`Project has ads synced: ${hasAds}`)
+  
+  // If project has ads, require ad-level data for cache
+  // If no ads, accept campaign-level data as valid cache
+  let query = supabase
     .from('meta_insights')
     .select('date_start')
     .eq('project_id', projectId)
     .in('ad_account_id', accountIds)
     .gte('date_start', dateStart)
     .lte('date_start', dateStop)
-    .not('ad_id', 'is', null) // Only count dates with ad-level data
+  
+  if (hasAds) {
+    query = query.not('ad_id', 'is', null) // Only count dates with ad-level data
+  }
+  // If no ads, accept any insights (campaign-level is fine)
+  
+  const { data, error } = await query
   
   if (error) {
     console.error('Error checking cache:', error)
@@ -140,7 +156,7 @@ async function getExistingDatesInCache(
     })
   }
   
-  console.log(`Found ${completeDates.size} COMPLETE dates (with ad-level data) in cache`)
+  console.log(`Found ${completeDates.size} cached dates (${hasAds ? 'ad-level' : 'campaign-level'} data)`)
   return completeDates
 }
 

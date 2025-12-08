@@ -166,9 +166,13 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const campaign = campaigns.find(c => c.campaign_id === id);
+      // Mostra ID como primário para consistência com a página de Análise de Funil
+      const displayName = campaign?.campaign_name 
+        ? `${id.slice(-8)} - ${campaign.campaign_name}`
+        : id;
       return {
         id,
-        name: campaign?.campaign_name || id,
+        name: displayName,
         status: campaign?.status,
         spend: data.spend,
         impressions: data.impressions,
@@ -204,7 +208,10 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const adset = adsets.find(a => a.adset_id === id);
-      const displayName = adset?.adset_name || (id.match(/^\d+$/) ? `Conjunto ${id}` : id);
+      // Mostra ID como primário para consistência com a página de Análise de Funil
+      const displayName = adset?.adset_name 
+        ? `${id.slice(-8)} - ${adset.adset_name}`
+        : id;
       return {
         id,
         name: displayName,
@@ -240,7 +247,10 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const ad = ads.find(a => a.ad_id === id);
-      const displayName = ad?.ad_name || (id.match(/^\d+$/) ? `Anúncio ${id}` : id);
+      // Mostra ID como primário para consistência com a página de Análise de Funil
+      const displayName = ad?.ad_name 
+        ? `${id.slice(-8)} - ${ad.ad_name}`
+        : id;
       return {
         id,
         name: displayName,
@@ -306,15 +316,24 @@ export const MetaHierarchyAnalysis = ({
 
       if (currentLevel === 0) {
         const campaign = campaigns.find(c => c.campaign_id === id);
-        name = campaign?.campaign_name || (id.match(/^\d+$/) ? `Campanha ${id}` : id);
+        // Mostra ID como primário para consistência
+        name = campaign?.campaign_name 
+          ? `${id.slice(-8)} - ${campaign.campaign_name}`
+          : id;
         status = campaign?.status || null;
       } else if (currentLevel === 1) {
         const adset = adsets.find(a => a.adset_id === id);
-        name = adset?.adset_name || (id.match(/^\d+$/) ? `Conjunto ${id}` : id);
+        // Mostra ID como primário para consistência
+        name = adset?.adset_name 
+          ? `${id.slice(-8)} - ${adset.adset_name}`
+          : id;
         status = adset?.status || null;
       } else {
         const ad = ads.find(a => a.ad_id === id);
-        name = ad?.ad_name || (id.match(/^\d+$/) ? `Anúncio ${id}` : id);
+        // Mostra ID como primário para consistência
+        name = ad?.ad_name 
+          ? `${id.slice(-8)} - ${ad.ad_name}`
+          : id;
         status = ad?.status || null;
         previewUrl = ad?.preview_url || null;
       }

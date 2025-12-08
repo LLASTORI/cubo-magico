@@ -200,6 +200,7 @@ export function CuboMagicoDashboard({
       if (activeAccountIds.length === 0) return [];
       
       // Only fetch ad-level insights (the only type we have now)
+      // Fetch ALL ad-level insights - no limit to ensure complete data
       const { data, error } = await supabase
         .from('meta_insights')
         .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
@@ -207,7 +208,8 @@ export function CuboMagicoDashboard({
         .in('ad_account_id', activeAccountIds)
         .not('ad_id', 'is', null)
         .gte('date_start', startDateStr)
-        .lte('date_start', endDateStr);
+        .lte('date_start', endDateStr)
+        .limit(10000);
       
       if (error) throw error;
       console.log(`[CuboMagico] Ad-level insights loaded: ${data?.length || 0}`);

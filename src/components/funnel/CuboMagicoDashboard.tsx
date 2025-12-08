@@ -235,7 +235,9 @@ export function CuboMagicoDashboard({
       return allData;
     },
     enabled: !!projectId && activeAccountIds.length > 0,
-    staleTime: 5 * 1000, // Match useFunnelData staleTime
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't cache
+    refetchOnMount: 'always',
   });
 
   // Extract unique ad_ids from insights for efficient lookup

@@ -712,7 +712,7 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
 // Fetch ads directly from Meta API with pagination
 async function getAdsForAccountWithPagination(accessToken: string, accountId: string) {
   const allAds: any[] = []
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative,created_time&limit=500&access_token=${accessToken}`
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative,created_time,preview_shareable_link&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
   
@@ -868,6 +868,7 @@ async function syncAds(
     status: ad.status || null,
     creative_id: ad.creative?.id || null,
     created_time: ad.created_time || null,
+    preview_url: ad.preview_shareable_link || null,
     updated_at: new Date().toISOString(),
   }))
   

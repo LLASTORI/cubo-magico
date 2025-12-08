@@ -269,7 +269,7 @@ export function CuboMagicoDashboard({
         const batch = insightAdIdsCubo.slice(i, i + batchSize);
         const { data, error } = await supabase
           .from('meta_ads')
-          .select('ad_id, ad_name, adset_id, campaign_id, status')
+          .select('ad_id, ad_name, adset_id, campaign_id, status, preview_url')
           .eq('project_id', projectId)
           .in('ad_id', batch);
         if (error) throw error;
@@ -528,6 +528,7 @@ export function CuboMagicoDashboard({
         adset_id: a.adset_id,
         campaign_id: a.campaign_id,
         status: a.status,
+        preview_url: a.preview_url || null,
       })),
       insights: filteredInsights.map(i => ({
         id: i.campaign_id || '',

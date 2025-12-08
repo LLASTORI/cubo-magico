@@ -248,7 +248,9 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       return allData as MetaInsight[];
     },
     enabled,
-    staleTime: 5 * 1000, // Reduced to 5 seconds for faster updates
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't cache
+    refetchOnMount: 'always',
   });
 
   const campaignsQuery = useQuery({

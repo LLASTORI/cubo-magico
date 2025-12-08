@@ -116,24 +116,40 @@ const FunnelAnalysis = () => {
     console.log('[DataGaps] Checking gaps for period:', dateStart, 'to', dateStop);
     console.log('[DataGaps] Active accounts:', activeAccountIds);
     
-    // Query the database directly to get unique dates with data
-    // Don't filter by ad_id - just check if any insights exist for the date
-    const { data, error } = await supabase
-      .from('meta_insights')
-      .select('date_start')
-      .eq('project_id', currentProject.id)
-      .in('ad_account_id', activeAccountIds)
-      .gte('date_start', dateStart)
-      .lte('date_start', dateStop);
+    // Query ALL unique dates - use pagination to get beyond 1000 limit
+    // First, get count and unique dates in a more efficient way
+    let allDates: string[] = [];
+    let offset = 0;
+    const pageSize = 1000;
+    let hasMore = true;
     
-    if (error) {
-      console.error('[DataGaps] Error querying:', error);
-      return;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('meta_insights')
+        .select('date_start')
+        .eq('project_id', currentProject.id)
+        .in('ad_account_id', activeAccountIds)
+        .gte('date_start', dateStart)
+        .lte('date_start', dateStop)
+        .range(offset, offset + pageSize - 1);
+      
+      if (error) {
+        console.error('[DataGaps] Error querying:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        allDates = allDates.concat(data.map(d => d.date_start));
+        offset += pageSize;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
+      }
     }
     
     // Get unique dates
-    const cachedDates = new Set(data?.map(d => d.date_start) || []);
-    console.log('[DataGaps] Unique dates found in DB:', cachedDates.size, 'Total records:', data?.length || 0);
+    const cachedDates = new Set(allDates);
+    console.log('[DataGaps] Unique dates found in DB:', cachedDates.size, 'Total records fetched:', allDates.length);
     
     // Calculate expected days (excluding future)
     const today = new Date();

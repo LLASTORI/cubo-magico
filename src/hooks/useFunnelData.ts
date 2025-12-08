@@ -281,6 +281,20 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     staleTime: 5 * 60 * 1000,
   });
 
+  const adsQuery = useQuery({
+    queryKey: ['ads', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ads')
+        .select('id, ad_id, ad_name, adset_id, campaign_id, status')
+        .eq('project_id', projectId!);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Extract data
   const funnels = funnelsQuery.data || [];
   const mappings = mappingsQuery.data || [];
@@ -289,6 +303,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const rawInsights = insightsQuery.data || [];
   const campaigns = campaignsQuery.data || [];
   const adsets = adsetsQuery.data || [];
+  const ads = adsQuery.data || [];
 
   // Loading states
   const loadingSales = salesQuery.isLoading;
@@ -447,7 +462,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     salesData,
     metaInsights: adLevelInsights,
     rawInsights, // Keep raw for debugging
-    metaStructure: { campaigns, adsets, ads: [] },
+    metaStructure: { campaigns, adsets, ads },
     activeAccountIds,
     aggregatedMetrics,
     summaryMetrics,

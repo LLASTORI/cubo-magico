@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,28 @@ interface MetaDateFiltersProps {
 }
 
 const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChange }: MetaDateFiltersProps) => {
+  const endDateRef = useRef<HTMLInputElement>(null);
+
+  const handleStartDateChange = (date: string) => {
+    onStartDateChange(date);
+    // Se a data inicial for maior que a final, ajusta a final
+    if (endDate && date > endDate) {
+      onEndDateChange(date);
+    }
+    // Foca no campo de data final após selecionar a inicial
+    setTimeout(() => {
+      endDateRef.current?.focus();
+      endDateRef.current?.showPicker?.();
+    }, 100);
+  };
+
+  const handleEndDateChange = (date: string) => {
+    // Impede que a data final seja menor que a inicial
+    if (startDate && date < startDate) {
+      return;
+    }
+    onEndDateChange(date);
+  };
   const handleQuickFilter = (days: number) => {
     const end = new Date();
     const start = new Date();
@@ -58,7 +81,8 @@ const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChang
             id="startDate"
             type="date"
             value={startDate}
-            onChange={(e) => onStartDateChange(e.target.value)}
+            max={endDate || undefined}
+            onChange={(e) => handleStartDateChange(e.target.value)}
             className="border-border"
           />
         </div>
@@ -66,10 +90,12 @@ const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChang
         <div className="space-y-2">
           <Label htmlFor="endDate" className="text-foreground text-sm">Data Final</Label>
           <Input
+            ref={endDateRef}
             id="endDate"
             type="date"
             value={endDate}
-            onChange={(e) => onEndDateChange(e.target.value)}
+            min={startDate || undefined}
+            onChange={(e) => handleEndDateChange(e.target.value)}
             className="border-border"
           />
         </div>

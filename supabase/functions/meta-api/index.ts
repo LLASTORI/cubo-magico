@@ -124,14 +124,13 @@ async function getExistingDatesInCache(
   const completeDates = new Set<string>()
   
   // First check if this project has any ads synced
-  const { data: adsCount } = await supabase
+  const { count: adsCountNum } = await supabase
     .from('meta_ads')
-    .select('id', { count: 'exact', head: true })
+    .select('*', { count: 'exact', head: true })
     .eq('project_id', projectId)
-    .limit(1)
   
-  const hasAds = adsCount && adsCount.length > 0
-  console.log(`Project has ads synced: ${hasAds}`)
+  const hasAds = (adsCountNum || 0) > 0
+  console.log(`Project has ads synced: ${hasAds} (${adsCountNum || 0} ads)`)
   
   // If project has ads, require ad-level data for cache
   // If no ads, accept campaign-level data as valid cache

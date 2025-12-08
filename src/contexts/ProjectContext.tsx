@@ -173,6 +173,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
               console.log('[ProjectContext] Restoring saved project:', savedProject.name);
               setCurrentProjectState(savedProject);
               return; // Don't override with auto-selection
+            } else {
+              // Saved project doesn't exist anymore - clear localStorage
+              console.log('[ProjectContext] Saved project not found, clearing localStorage');
+              localStorage.removeItem(CURRENT_PROJECT_KEY);
+              savedProjectIdRef.current = null;
             }
           }
           
@@ -187,6 +192,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
           // If already initialized, verify current project still exists
           if (currentProject && !data.find(p => p.id === currentProject.id)) {
             console.log('[ProjectContext] Current project no longer exists, resetting');
+            localStorage.removeItem(CURRENT_PROJECT_KEY);
+            savedProjectIdRef.current = null;
             const validatedProject = data.find(p => 
               credData?.some(c => c.project_id === p.id && c.is_validated)
             );

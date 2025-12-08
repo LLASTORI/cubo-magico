@@ -117,12 +117,12 @@ const FunnelAnalysis = () => {
     console.log('[DataGaps] Active accounts:', activeAccountIds);
     
     // Query the database directly to get unique dates with data
+    // Don't filter by ad_id - just check if any insights exist for the date
     const { data, error } = await supabase
       .from('meta_insights')
       .select('date_start')
       .eq('project_id', currentProject.id)
       .in('ad_account_id', activeAccountIds)
-      .not('ad_id', 'is', null)
       .gte('date_start', dateStart)
       .lte('date_start', dateStop);
     
@@ -133,7 +133,7 @@ const FunnelAnalysis = () => {
     
     // Get unique dates
     const cachedDates = new Set(data?.map(d => d.date_start) || []);
-    console.log('[DataGaps] Unique dates found in DB:', cachedDates.size);
+    console.log('[DataGaps] Unique dates found in DB:', cachedDates.size, 'Total records:', data?.length || 0);
     
     // Calculate expected days (excluding future)
     const today = new Date();

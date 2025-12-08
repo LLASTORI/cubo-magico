@@ -267,33 +267,62 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     staleTime: 5 * 60 * 1000,
   });
 
+  // Extract unique IDs from insights for optimized queries
+  const insightIds = useMemo(() => {
+    if (!insightsQuery.data) return { adIds: [], adsetIds: [], campaignIds: [] };
+    const adIds = [...new Set(insightsQuery.data.filter(i => i.ad_id).map(i => i.ad_id!))] as string[];
+    const adsetIds = [...new Set(insightsQuery.data.filter(i => i.adset_id).map(i => i.adset_id!))] as string[];
+    const campaignIds = [...new Set(insightsQuery.data.filter(i => i.campaign_id).map(i => i.campaign_id!))] as string[];
+    return { adIds, adsetIds, campaignIds };
+  }, [insightsQuery.data]);
+
+  // Fetch adsets only for those appearing in insights (optimized)
   const adsetsQuery = useQuery({
-    queryKey: ['adsets', projectId],
+    queryKey: ['adsets-filtered', projectId, insightIds.adsetIds.length],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_adsets')
-        .select('id, adset_id, adset_name, campaign_id, status')
-        .eq('project_id', projectId!);
-      if (error) throw error;
-      return data || [];
+      if (insightIds.adsetIds.length === 0) return [];
+      console.log(`[useFunnelData] Fetching ${insightIds.adsetIds.length} adsets for project=${projectId}`);
+      const allAdsets: any[] = [];
+      const batchSize = 100;
+      for (let i = 0; i < insightIds.adsetIds.length; i += batchSize) {
+        const batch = insightIds.adsetIds.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('meta_adsets')
+          .select('id, adset_id, adset_name, campaign_id, status')
+          .eq('project_id', projectId!)
+          .in('adset_id', batch);
+        if (error) throw error;
+        if (data) allAdsets.push(...data);
+      }
+      console.log(`[useFunnelData] Adsets loaded: ${allAdsets.length}`);
+      return allAdsets;
     },
-    enabled,
+    enabled: enabled && insightIds.adsetIds.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
+  // Fetch ads only for those appearing in insights (optimized)
   const adsQuery = useQuery({
-    queryKey: ['ads', projectId],
+    queryKey: ['ads-filtered', projectId, insightIds.adIds.length],
     queryFn: async () => {
-      console.log(`[useFunnelData] Fetching ads for project=${projectId}`);
-      const { data, error } = await supabase
-        .from('meta_ads')
-        .select('id, ad_id, ad_name, adset_id, campaign_id, status, preview_url')
-        .eq('project_id', projectId!);
-      if (error) throw error;
-      console.log(`[useFunnelData] Ads loaded: ${data?.length || 0}`);
-      return data || [];
+      if (insightIds.adIds.length === 0) return [];
+      console.log(`[useFunnelData] Fetching ${insightIds.adIds.length} ads for project=${projectId}`);
+      const allAds: any[] = [];
+      const batchSize = 100;
+      for (let i = 0; i < insightIds.adIds.length; i += batchSize) {
+        const batch = insightIds.adIds.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('meta_ads')
+          .select('id, ad_id, ad_name, adset_id, campaign_id, status, preview_url')
+          .eq('project_id', projectId!)
+          .in('ad_id', batch);
+        if (error) throw error;
+        if (data) allAds.push(...data);
+      }
+      console.log(`[useFunnelData] Ads loaded: ${allAds.length}`);
+      return allAds;
     },
-    enabled,
+    enabled: enabled && insightIds.adIds.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 

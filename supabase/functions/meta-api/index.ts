@@ -1073,7 +1073,7 @@ async function syncInsightsSmartOptimized(
     }
     console.log('Old insights for fetch dates cleaned')
 
-    // STEP 5: Sync campaigns first (only once)
+    // STEP 5: Sync campaigns (lightweight, always do)
     const { campaigns } = await getCampaigns(accessToken, accountIds)
     console.log(`Syncing ${campaigns.length} campaigns...`)
     
@@ -1102,13 +1102,38 @@ async function syncInsightsSmartOptimized(
       }
     }
     
-    // STEP 5b: Sync adsets directly from API
-    console.log('Syncing adsets from Meta API...')
-    await syncAdsets(supabase, projectId, accessToken, accountIds)
+    // STEP 5b: Check if we need to sync adsets/ads (EXPENSIVE - only when necessary)
+    // Only sync if:
+    // 1. forceRefresh is true
+    // 2. OR we have no adsets/ads in the database (first sync)
+    // 3. OR last sync was more than 24 hours ago
+    const { count: adsetsCount } = await supabase
+      .from('meta_adsets')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .limit(1)
     
-    // STEP 5c: Sync ads directly from API
-    console.log('Syncing ads from Meta API...')
-    await syncAds(supabase, projectId, accessToken, accountIds)
+    const { count: adsCount } = await supabase
+      .from('meta_ads')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .limit(1)
+    
+    const needsHierarchySync = forceRefresh || (adsetsCount || 0) === 0 || (adsCount || 0) === 0
+    
+    if (needsHierarchySync) {
+      console.log(`Syncing adsets/ads hierarchy (forceRefresh=${forceRefresh}, adsetsCount=${adsetsCount}, adsCount=${adsCount})...`)
+      
+      // Sync adsets directly from API
+      console.log('Syncing adsets from Meta API...')
+      await syncAdsets(supabase, projectId, accessToken, accountIds)
+      
+      // Sync ads directly from API
+      console.log('Syncing ads from Meta API...')
+      await syncAds(supabase, projectId, accessToken, accountIds)
+    } else {
+      console.log(`Skipping adsets/ads sync (already have ${adsetsCount} adsets, ${adsCount} ads)`)
+    }
 
     // STEP 6: Fetch and insert insights INCREMENTALLY
     // IMPORTANT: Only fetch AD-LEVEL insights (most granular)

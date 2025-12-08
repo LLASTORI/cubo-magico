@@ -297,7 +297,7 @@ const FunnelAnalysis = () => {
       setMetaSyncStatus('syncing');
       
       // Get initial count before sync
-      const { count: initialCount } = await supabase
+      const { count: initialCount, error: countError } = await supabase
         .from('meta_insights')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', currentProject!.id)
@@ -306,7 +306,12 @@ const FunnelAnalysis = () => {
         .gte('date_start', syncStartDateStr)
         .lte('date_start', syncEndDateStr);
 
+      if (countError) {
+        console.error(`[MetaSync] Error getting initial count:`, countError);
+      }
+      
       console.log(`[MetaSync] Initial count before sync: ${initialCount || 0}`);
+      console.log(`[MetaSync] Query params: project=${currentProject!.id}, accounts=[${activeAccountIds.join(',')}], dates=${syncStartDateStr} to ${syncEndDateStr}`);
       
       try {
         const response = await supabase.functions.invoke('meta-api', {

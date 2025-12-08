@@ -235,11 +235,12 @@ function groupConsecutiveDates(dates: string[]): Array<{start: string, stop: str
   return ranges
 }
 
-// Insert records in batches to avoid memory issues
-async function batchInsert(
+// Insert records in batches using UPSERT to avoid duplicate key errors
+async function batchUpsert(
   supabase: any,
   tableName: string,
   records: any[],
+  conflictColumns: string,
   batchSize: number = DB_INSERT_BATCH_SIZE
 ): Promise<{ success: number, failed: number }> {
   let success = 0
@@ -250,11 +251,11 @@ async function batchInsert(
     const batchNum = Math.floor(i / batchSize) + 1
     const totalBatches = Math.ceil(records.length / batchSize)
     
-    console.log(`Inserting batch ${batchNum}/${totalBatches} (${batch.length} records)...`)
+    console.log(`Upserting batch ${batchNum}/${totalBatches} (${batch.length} records)...`)
     
     const { error } = await supabase
       .from(tableName)
-      .insert(batch)
+      .upsert(batch, { onConflict: conflictColumns })
     
     if (error) {
       console.error(`Batch ${batchNum} error:`, error)
@@ -269,7 +270,7 @@ async function batchInsert(
     }
   }
   
-  console.log(`Batch insert complete: ${success} success, ${failed} failed`)
+  console.log(`Batch upsert complete: ${success} success, ${failed} failed`)
   return { success, failed }
 }
 
@@ -1116,9 +1117,15 @@ async function syncInsightsSmartOptimized(
           updated_at: new Date().toISOString(),
         }))
         
-        const { success } = await batchInsert(supabase, 'meta_insights', adInsightRecords)
+        // Use UPSERT with unique constraint columns to handle duplicates gracefully
+        const { success } = await batchUpsert(
+          supabase, 
+          'meta_insights', 
+          adInsightRecords,
+          'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop'
+        )
         totalInsightsInserted += success
-        console.log(`Inserted ${success} ad-level insights`)
+        console.log(`Upserted ${success} ad-level insights`)
       }
       
       // Delay between ranges

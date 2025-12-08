@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle, Search
+  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle, Search, CheckCircle2
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -28,7 +28,7 @@ import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
 import LTVAnalysis from "@/components/funnel/LTVAnalysis";
 import { CuboMagicoDashboard } from "@/components/funnel/CuboMagicoDashboard";
 import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
-import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
@@ -48,6 +48,8 @@ const FunnelAnalysis = () => {
   const [hotmartSyncStatus, setHotmartSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [metaSyncStatus, setMetaSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ elapsed: 0, estimated: 60 });
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use centralized hook for ALL data
   const {
@@ -95,11 +97,88 @@ const FunnelAnalysis = () => {
     setEndDate(endOfMonth(lastMonth));
   };
 
+  // Cleanup polling on unmount
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  // Intelligent polling - checks database for new data
+  const startPolling = useCallback(async (
+    projectId: string,
+    accountIds: string[],
+    dateStart: string,
+    dateStop: string,
+    initialCount: number
+  ) => {
+    const POLL_INTERVAL = 5000; // 5 seconds
+    const MAX_POLL_TIME = 300000; // 5 minutes max
+    const startTime = Date.now();
+    let elapsed = 0;
+    
+    // Estimate sync time based on date range
+    const days = differenceInDays(new Date(dateStop), new Date(dateStart)) + 1;
+    const estimatedTime = Math.max(30, Math.min(300, days * 3)); // 3 sec per day, 30s-5min range
+    setSyncProgress({ elapsed: 0, estimated: estimatedTime });
+
+    console.log(`[Polling] Starting intelligent polling. Initial count: ${initialCount}, period: ${days} days`);
+
+    pollingRef.current = setInterval(async () => {
+      elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setSyncProgress(prev => ({ ...prev, elapsed }));
+
+      // Check current count in database
+      const { count, error } = await supabase
+        .from('meta_insights')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .in('ad_account_id', accountIds)
+        .not('ad_id', 'is', null)
+        .gte('date_start', dateStart)
+        .lte('date_start', dateStop);
+
+      if (error) {
+        console.error('[Polling] Error checking data:', error);
+        return;
+      }
+
+      const currentCount = count || 0;
+      console.log(`[Polling] Check: ${currentCount} records (was ${initialCount}), elapsed: ${elapsed}s`);
+
+      // Data arrived or timeout
+      if (currentCount > initialCount || Date.now() - startTime > MAX_POLL_TIME) {
+        stopPolling();
+        setMetaSyncInProgress(false);
+        setMetaSyncStatus('done');
+        
+        if (currentCount > initialCount) {
+          const newRecords = currentCount - initialCount;
+          toast.success(`Meta Ads: ${newRecords} novos registros sincronizados!`);
+          console.log(`[Polling] Success! ${newRecords} new records detected.`);
+        } else {
+          toast.info('Sincronização Meta Ads finalizada (sem novos dados para o período)');
+          console.log(`[Polling] Timeout reached. No new data.`);
+        }
+        
+        // Refetch all data
+        await refetchAll();
+      }
+    }, POLL_INTERVAL);
+  }, [stopPolling, refetchAll]);
+
   // Sync handler - syncs data from APIs
   const handleRefreshAll = async () => {
+    if (isSyncing || metaSyncInProgress) {
+      toast.warning('Sincronização já em andamento');
+      return;
+    }
+
     setIsSyncing(true);
     setHotmartSyncStatus('syncing');
     setMetaSyncStatus('idle');
+    stopPolling(); // Clear any existing polling
     
     const syncStartDateStr = format(startDate, 'yyyy-MM-dd');
     const syncEndDateStr = format(endDate, 'yyyy-MM-dd');
@@ -145,13 +224,25 @@ const FunnelAnalysis = () => {
       }
     };
 
-    const metaSync = async (): Promise<boolean> => {
+    const metaSync = async () => {
       if (activeAccountIds.length === 0) {
         setMetaSyncStatus('done');
-        return false; // No background sync needed
+        return;
       }
 
       setMetaSyncStatus('syncing');
+      
+      // Get initial count before sync
+      const { count: initialCount } = await supabase
+        .from('meta_insights')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', currentProject!.id)
+        .in('ad_account_id', activeAccountIds)
+        .not('ad_id', 'is', null)
+        .gte('date_start', syncStartDateStr)
+        .lte('date_start', syncEndDateStr);
+
+      console.log(`[MetaSync] Initial count before sync: ${initialCount || 0}`);
       
       try {
         const response = await supabase.functions.invoke('meta-api', {
@@ -167,28 +258,24 @@ const FunnelAnalysis = () => {
         if (response.error) {
           setMetaSyncStatus('error');
           toast.error('Erro ao sincronizar Meta Ads');
-          return false;
-        } else {
-          // Meta sync runs in background - return info about poll duration
-          const periodDays = response.data?.periodDays || 30;
-          const pollDurationMs = Math.max(20000, Math.min(120000, periodDays * 800));
-          
-          setMetaSyncInProgress(true);
-          
-          // Return a promise that resolves when background sync is likely done
-          return new Promise((resolve) => {
-            setTimeout(async () => {
-              setMetaSyncInProgress(false);
-              setMetaSyncStatus('done');
-              toast.success('Meta Ads sincronizado!');
-              resolve(true);
-            }, pollDurationMs);
-          });
+          return;
         }
+        
+        // Meta sync runs in background - start intelligent polling
+        setMetaSyncInProgress(true);
+        toast.info('Sincronização Meta Ads iniciada em background...');
+        
+        startPolling(
+          currentProject!.id,
+          activeAccountIds,
+          syncStartDateStr,
+          syncEndDateStr,
+          initialCount || 0
+        );
+        
       } catch (error) {
         setMetaSyncStatus('error');
         toast.error('Erro ao sincronizar Meta Ads');
-        return false;
       }
     };
 
@@ -199,16 +286,8 @@ const FunnelAnalysis = () => {
       // Refresh sales data immediately
       await refetchAll();
       
-      // Start Meta sync (runs in background)
-      const metaPromise = metaSync();
-      
-      // When Meta sync completes (after background processing), refetch again
-      metaPromise.then(async (hadBackgroundSync) => {
-        if (hadBackgroundSync) {
-          console.log('[FunnelAnalysis] Meta sync complete, refetching data...');
-          await refetchAll();
-        }
-      });
+      // Start Meta sync (runs in background with polling)
+      await metaSync();
       
     } catch (error) {
       toast.error('Erro ao sincronizar dados');
@@ -338,11 +417,11 @@ const FunnelAnalysis = () => {
                       variant="outline" 
                       size="sm" 
                       onClick={handleRefreshAll}
-                      disabled={isRefreshingAll}
+                      disabled={isRefreshingAll || metaSyncInProgress}
                       className="gap-2"
                     >
-                      <RefreshCw className={cn("w-4 h-4", isRefreshingAll && "animate-spin")} />
-                      Atualizar
+                      <RefreshCw className={cn("w-4 h-4", (isRefreshingAll || metaSyncInProgress) && "animate-spin")} />
+                      {metaSyncInProgress ? 'Sincronizando...' : 'Atualizar'}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -416,10 +495,29 @@ const FunnelAnalysis = () => {
             </div>
           </Card>
 
-          {/* Meta sync in progress */}
+          {/* Meta sync in progress with intelligent polling */}
           {metaSyncInProgress && (
             <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
-              <SyncLoader showProgress={true} estimatedDuration={60} />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <RefreshCw className="w-5 h-5 animate-spin text-cube-blue" />
+                  <div>
+                    <span className="text-sm font-medium text-foreground">Sincronização Meta Ads em andamento...</span>
+                    <p className="text-xs text-muted-foreground">
+                      Verificando novos dados a cada 5 segundos. Tempo estimado: ~{syncProgress.estimated}s
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-mono text-cube-blue">{syncProgress.elapsed}s</span>
+                  <div className="w-32 h-2 bg-muted rounded-full overflow-hidden mt-1">
+                    <div 
+                      className="h-full bg-cube-blue transition-all duration-500"
+                      style={{ width: `${Math.min(100, (syncProgress.elapsed / syncProgress.estimated) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
             </Card>
           )}
 

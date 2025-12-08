@@ -156,18 +156,34 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch Meta adsets - filter by project_id
+  // Fetch Meta adsets - filter by project_id with pagination to get all
   const { data: adsetsData } = useQuery({
     queryKey: ['meta-adsets-cubo', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_adsets')
-        .select('adset_id, adset_name, campaign_id, status')
-        .eq('project_id', projectId);
+      const PAGE_SIZE = 1000;
+      let allAdsets: any[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      console.log(`[CuboMagico] Adsets loaded: ${data?.length || 0}`);
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_adsets')
+          .select('adset_id, adset_name, campaign_id, status')
+          .eq('project_id', projectId)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allAdsets = [...allAdsets, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[CuboMagico] Adsets loaded: ${allAdsets.length}`);
+      return allAdsets;
     },
     enabled: !!projectId,
   });

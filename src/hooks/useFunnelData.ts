@@ -209,6 +209,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const insightsQuery = useQuery({
     queryKey: ['insights', projectId, startDateStr, endDateStr],
     queryFn: async () => {
+      console.log(`[useFunnelData] Fetching insights for project=${projectId}, dates=${startDateStr} to ${endDateStr}`);
+      
       // Fetch ALL ad-level insights with pagination to handle any time period
       const PAGE_SIZE = 1000;
       let allData: MetaInsight[] = [];
@@ -226,7 +228,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           .order('date_start', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
-        if (error) throw error;
+        if (error) {
+          console.error(`[useFunnelData] Error fetching insights:`, error);
+          throw error;
+        }
+        
+        console.log(`[useFunnelData] Page ${page}: ${data?.length || 0} records`);
         
         if (data && data.length > 0) {
           allData = [...allData, ...data];
@@ -241,7 +248,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       return allData as MetaInsight[];
     },
     enabled,
-    staleTime: 30 * 1000,
+    staleTime: 5 * 1000, // Reduced to 5 seconds for faster updates
   });
 
   const campaignsQuery = useQuery({
@@ -422,10 +429,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
 
   // Refetch functions
   const refetchAll = async () => {
-    await Promise.all([
+    console.log(`[useFunnelData] Refetching all data...`);
+    const results = await Promise.all([
       salesQuery.refetch(),
       insightsQuery.refetch(),
     ]);
+    console.log(`[useFunnelData] Refetch complete. Sales: ${results[0].data?.length || 0}, Insights: ${results[1].data?.length || 0}`);
   };
 
   return {

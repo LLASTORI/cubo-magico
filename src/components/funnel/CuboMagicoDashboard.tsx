@@ -491,7 +491,9 @@ export function CuboMagicoDashboard({
       insightAdIds.has(a.ad_id)
     );
     
-    console.log(`[getFilteredMetaData] Pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${filteredInsights.length} insights, ${filteredAdsets.length} adsets, ${filteredAds.length} ads (adsData total: ${adsData?.length || 0})`);
+    console.log(`[getFilteredMetaData] Pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${filteredInsights.length} insights, ${filteredAdsets.length}/${adsetsData?.length || 0} adsets, ${filteredAds.length}/${adsData?.length || 0} ads`);
+    console.log(`[getFilteredMetaData] insightAdsetIds sample:`, [...insightAdsetIds].slice(0, 3));
+    console.log(`[getFilteredMetaData] adsetsData sample:`, adsetsData?.slice(0, 3)?.map(a => ({ id: a.adset_id, name: a.adset_name })));
     
     return {
       campaigns: matchingCampaigns.map(c => ({

@@ -194,10 +194,13 @@ export function CuboMagicoDashboard({
   }, [metaAdAccounts]);
 
   // Fetch Meta insights - ALL ad-level for accurate spend calculations with pagination
+  // IMPORTANT: Use same query key as useFunnelData for cache consistency
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
-    queryKey: ['meta-insights-cubo', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
+    queryKey: ['insights', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return [];
+      
+      console.log(`[CuboMagico] Fetching insights for project=${projectId}, dates=${startDateStr} to ${endDateStr}`);
       
       // Fetch ALL ad-level insights with pagination to handle any time period
       const PAGE_SIZE = 1000;
@@ -232,6 +235,7 @@ export function CuboMagicoDashboard({
       return allData;
     },
     enabled: !!projectId && activeAccountIds.length > 0,
+    staleTime: 5 * 1000, // Match useFunnelData staleTime
   });
 
   // Extract unique ad_ids from insights for efficient lookup

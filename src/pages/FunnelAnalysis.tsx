@@ -32,10 +32,12 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays 
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
+import { useQueryClient } from "@tanstack/react-query";
 
 const FunnelAnalysis = () => {
   const navigate = useNavigate();
   const { currentProject } = useProject();
+  const queryClient = useQueryClient();
   
   // Single source of truth for dates
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
@@ -563,8 +565,12 @@ const FunnelAnalysis = () => {
     }
   };
   
-  // Simple search - just apply filters without API sync
-  const handleSearch = () => {
+  // Simple search - apply filters and invalidate cache to get fresh data
+  const handleSearch = async () => {
+    // Invalidate all insights cache to force fresh fetch
+    await queryClient.invalidateQueries({ queryKey: ['insights'] });
+    await queryClient.invalidateQueries({ queryKey: ['meta-insights'] });
+    
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
   };

@@ -604,9 +604,13 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
               </Link>
-              <div className="flex items-center gap-2">
-                <Facebook className="h-6 w-6 text-[#1877F2]" />
-                <h1 className="text-xl font-bold text-foreground">Meta Ads Dashboard</h1>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <Facebook className="h-5 w-5 text-[#1877F2]" />
+                  <h1 className="text-xl font-bold text-foreground">Meta Ads</h1>
+                </div>
+                <p className="text-sm text-muted-foreground">{currentProject?.name}</p>
               </div>
               {metaCredentials && (
                 <Badge variant={isMetaExpired ? "destructive" : "secondary"} className="gap-1">

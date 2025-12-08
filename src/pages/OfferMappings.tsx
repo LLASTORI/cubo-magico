@@ -620,7 +620,7 @@ export default function OfferMappingsAuto() {
                 Mapeamento de Ofertas
               </h1>
               <p className="text-muted-foreground text-sm">
-                Importação via API e gerenciamento de ofertas
+                {currentProject?.name || 'Nenhum projeto selecionado'}
               </p>
             </div>
           </div>

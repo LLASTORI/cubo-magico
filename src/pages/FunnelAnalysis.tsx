@@ -127,11 +127,10 @@ const FunnelAnalysis = () => {
     const startTime = Date.now();
     let elapsed = 0;
     let lastCount = initialCount;
-    let stableCount = 0; // Track how many times count is stable after initial increase
+    let stableCount = 0;
     
-    // Estimate sync time based on date range
     const days = differenceInDays(new Date(dateStop), new Date(dateStart)) + 1;
-    const estimatedTime = Math.max(30, Math.min(300, days * 3)); // 3 sec per day, 30s-5min range
+    const estimatedTime = Math.max(30, Math.min(300, days * 3));
     setSyncProgress({ elapsed: 0, estimated: estimatedTime });
 
     console.log(`[Polling] Starting intelligent polling.`);
@@ -140,11 +139,31 @@ const FunnelAnalysis = () => {
     console.log(`[Polling] Period: ${dateStart} to ${dateStop} (${days} days)`);
     console.log(`[Polling] Initial count: ${initialCount}`);
 
+    // CRITICAL FIX: If data already exists (from cache), complete immediately!
+    if (initialCount > 0) {
+      const { data: existingData } = await supabase
+        .from('meta_insights')
+        .select('spend')
+        .eq('project_id', projectId)
+        .in('ad_account_id', accountIds)
+        .not('ad_id', 'is', null)
+        .gte('date_start', dateStart)
+        .lte('date_start', dateStop);
+      
+      const totalSpend = existingData?.reduce((sum, row) => sum + (row.spend || 0), 0) || 0;
+      
+      console.log(`[Polling] Data already in cache: ${initialCount} records, R$${totalSpend.toFixed(2)}`);
+      setMetaSyncInProgress(false);
+      setMetaSyncStatus('done');
+      toast.success(`Meta Ads: Dados carregados do cache (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+      await refetchAll();
+      return;
+    }
+
     pollingRef.current = setInterval(async () => {
       elapsed = Math.floor((Date.now() - startTime) / 1000);
       setSyncProgress(prev => ({ ...prev, elapsed }));
 
-      // Check current count in database - use SUM of spend to detect actual data
       const { data, count, error } = await supabase
         .from('meta_insights')
         .select('spend', { count: 'exact' })
@@ -163,20 +182,18 @@ const FunnelAnalysis = () => {
       const totalSpend = data?.reduce((sum, row) => sum + (row.spend || 0), 0) || 0;
       console.log(`[Polling] Check: ${currentCount} records, R$${totalSpend.toFixed(2)} spend (was ${lastCount}), elapsed: ${elapsed}s`);
 
-      // Check if data arrived
-      if (currentCount > initialCount) {
-        // Data is arriving, check if sync is complete (count stabilized)
+      // Data arrived - check if sync is complete
+      if (currentCount > 0) {
         if (currentCount === lastCount) {
           stableCount++;
           console.log(`[Polling] Count stable for ${stableCount} cycles`);
-          // If count is stable for 3 cycles (15 seconds), consider sync complete
-          if (stableCount >= 3) {
+          // If count is stable for 2 cycles (10 seconds), consider sync complete
+          if (stableCount >= 2) {
             stopPolling();
             setMetaSyncInProgress(false);
             setMetaSyncStatus('done');
-            const newRecords = currentCount - initialCount;
-            toast.success(`Meta Ads: ${newRecords} novos registros (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
-            console.log(`[Polling] Success! ${newRecords} new records, R$${totalSpend.toFixed(2)} total.`);
+            toast.success(`Meta Ads: ${currentCount} registros sincronizados (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+            console.log(`[Polling] Success! ${currentCount} records, R$${totalSpend.toFixed(2)} total.`);
             await refetchAll();
             return;
           }
@@ -192,13 +209,12 @@ const FunnelAnalysis = () => {
         setMetaSyncInProgress(false);
         setMetaSyncStatus('done');
         
-        if (currentCount > initialCount) {
-          const newRecords = currentCount - initialCount;
-          toast.success(`Meta Ads: ${newRecords} registros sincronizados!`);
-          console.log(`[Polling] Timeout but got ${newRecords} new records.`);
+        if (currentCount > 0) {
+          toast.success(`Meta Ads: ${currentCount} registros carregados (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+          console.log(`[Polling] Timeout with ${currentCount} records.`);
         } else {
           toast.warning('Tempo limite atingido. Verifique se há dados para o período selecionado.');
-          console.log(`[Polling] Timeout reached. No new data detected.`);
+          console.log(`[Polling] Timeout reached. No data detected.`);
         }
         
         await refetchAll();
@@ -377,7 +393,7 @@ const FunnelAnalysis = () => {
                   Análise de Funil
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Métricas consolidadas • Meta Ads + Vendas
+                  {currentProject ? currentProject.name : 'Selecione um projeto'}
                 </p>
               </div>
             </div>

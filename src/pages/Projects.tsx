@@ -533,9 +533,10 @@ const Projects = () => {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => {
               const userRole = projectRoles[project.id];
-              const canEdit = userRole === 'owner' || userRole === 'manager';
-              const canDelete = userRole === 'owner';
-              const canManageTeam = userRole === 'owner' || userRole === 'manager';
+              const isProjectOwner = project.user_id === user?.id;
+              const canEdit = isProjectOwner || userRole === 'owner' || userRole === 'manager';
+              const canDelete = isProjectOwner || userRole === 'owner';
+              const canManageTeam = isProjectOwner || userRole === 'owner' || userRole === 'manager';
 
               return (
                 <Card 
@@ -551,10 +552,10 @@ const Projects = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {userRole && (
+                        {(isProjectOwner || userRole) && (
                           <Badge variant="outline" className="gap-1 text-xs">
-                            {getRoleIcon(userRole)}
-                            {getRoleLabel(userRole)}
+                            {getRoleIcon(isProjectOwner ? 'owner' : userRole!)}
+                            {getRoleLabel(isProjectOwner ? 'owner' : userRole!)}
                           </Badge>
                         )}
                         {currentProject?.id === project.id && (

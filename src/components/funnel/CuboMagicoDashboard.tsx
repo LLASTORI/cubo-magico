@@ -17,6 +17,7 @@ import {
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useMetaHierarchy } from '@/hooks/useMetaHierarchy';
 
 // Import analysis components
 import TemporalChart from '@/components/funnel/TemporalChart';
@@ -141,19 +142,20 @@ export function CuboMagicoDashboard({
   // This avoids duplicate queries - FunnelAnalysis.tsx fetches all sales with full fields
   // and passes them down to this component
   const salesData = externalSalesData || [];
-  // Fetch Meta campaigns - use unified query key
+  // Fetch Meta campaigns - use unified query key (campaigns need all for pattern matching)
   const { data: campaignsData } = useQuery({
-    queryKey: ['meta-campaigns-unified', projectId],
+    queryKey: ['meta-hierarchy-campaigns', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('meta_campaigns')
-        .select('campaign_id, campaign_name, status')
+        .select('id, campaign_id, campaign_name, status')
         .eq('project_id', projectId);
       
       if (error) throw error;
       return data || [];
     },
     enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch active Meta ad accounts FIRST (needed for insights queries)
@@ -224,61 +226,11 @@ export function CuboMagicoDashboard({
     refetchOnMount: 'always',
   });
 
-  // Extract unique ad_ids and adset_ids from insights for efficient lookup
-  const insightAdIdsCubo = useMemo(() => {
-    if (!insightsData) return [];
-    return [...new Set(insightsData.filter(i => i.ad_id).map(i => i.ad_id))];
-  }, [insightsData]);
-
-  const insightAdsetIdsCubo = useMemo(() => {
-    if (!insightsData) return [];
-    return [...new Set(insightsData.filter(i => i.adset_id).map(i => i.adset_id))];
-  }, [insightsData]);
-
-  // Fetch Meta adsets - only the ones that appear in insights (same approach as ads)
-  const { data: adsetsData } = useQuery({
-    queryKey: ['meta-adsets-cubo-filtered', projectId, insightAdsetIdsCubo.length],
-    queryFn: async () => {
-      if (insightAdsetIdsCubo.length === 0) return [];
-      const allAdsets: any[] = [];
-      const batchSize = 100;
-      for (let i = 0; i < insightAdsetIdsCubo.length; i += batchSize) {
-        const batch = insightAdsetIdsCubo.slice(i, i + batchSize);
-        const { data, error } = await supabase
-          .from('meta_adsets')
-          .select('adset_id, adset_name, campaign_id, status')
-          .eq('project_id', projectId)
-          .in('adset_id', batch);
-        if (error) throw error;
-        if (data) allAdsets.push(...data);
-      }
-      console.log(`[CuboMagico] Adsets loaded (filtered): ${allAdsets.length} for ${insightAdsetIdsCubo.length} insight adset IDs`);
-      return allAdsets;
-    },
-    enabled: !!projectId && insightAdsetIdsCubo.length > 0,
-  });
-
-  // Fetch Meta ads - only the ones that appear in insights
-  const { data: adsData } = useQuery({
-    queryKey: ['meta-ads-cubo', projectId, insightAdIdsCubo.length],
-    queryFn: async () => {
-      if (insightAdIdsCubo.length === 0) return [];
-      const allAds: any[] = [];
-      const batchSize = 100;
-      for (let i = 0; i < insightAdIdsCubo.length; i += batchSize) {
-        const batch = insightAdIdsCubo.slice(i, i + batchSize);
-        const { data, error } = await supabase
-          .from('meta_ads')
-          .select('ad_id, ad_name, adset_id, campaign_id, status, preview_url')
-          .eq('project_id', projectId)
-          .in('ad_id', batch);
-        if (error) throw error;
-        if (data) allAds.push(...data);
-      }
-      console.log(`[CuboMagico] Ads loaded: ${allAds.length}`);
-      return allAds;
-    },
-    enabled: !!projectId && insightAdIdsCubo.length > 0,
+  // Use unified hook for Meta hierarchy (adsets, ads)
+  const { adsets: adsetsData, ads: adsData } = useMetaHierarchy({
+    projectId,
+    insights: insightsData,
+    enabled: !!projectId,
   });
 
   // Calculate metrics for each funnel

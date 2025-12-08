@@ -49,6 +49,7 @@ const FunnelAnalysis = () => {
   const [metaSyncStatus, setMetaSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ elapsed: 0, estimated: 60 });
+  const [dataGaps, setDataGaps] = useState<{ missingDays: number; completeness: number; missingRanges: string[] } | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use centralized hook for ALL data
@@ -104,6 +105,71 @@ const FunnelAnalysis = () => {
       pollingRef.current = null;
     }
   }, []);
+
+  // Check for data gaps in the selected period
+  const checkDataGaps = useCallback(async () => {
+    if (!currentProject?.id || activeAccountIds.length === 0) return;
+    
+    const dateStart = format(appliedStartDate, 'yyyy-MM-dd');
+    const dateStop = format(appliedEndDate, 'yyyy-MM-dd');
+    
+    const { data } = await supabase
+      .from('meta_insights')
+      .select('date_start')
+      .eq('project_id', currentProject.id)
+      .in('ad_account_id', activeAccountIds)
+      .not('ad_id', 'is', null)
+      .gte('date_start', dateStart)
+      .lte('date_start', dateStop);
+    
+    const cachedDates = new Set(data?.map(d => d.date_start) || []);
+    
+    // Calculate expected days (excluding future)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDateObj = new Date(dateStop);
+    const startDateObj = new Date(dateStart);
+    const effectiveEnd = endDateObj > today ? today : endDateObj;
+    const expectedDays = Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    const missingDays = expectedDays - cachedDates.size;
+    const completeness = expectedDays > 0 ? cachedDates.size / expectedDays : 1;
+    
+    // Find missing date ranges
+    const missingRanges: string[] = [];
+    if (missingDays > 0) {
+      let rangeStart: string | null = null;
+      let rangeEnd: string | null = null;
+      
+      for (let d = new Date(startDateObj); d <= effectiveEnd; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        if (!cachedDates.has(dateStr)) {
+          if (!rangeStart) rangeStart = dateStr;
+          rangeEnd = dateStr;
+        } else if (rangeStart && rangeEnd) {
+          missingRanges.push(rangeStart === rangeEnd ? rangeStart : `${rangeStart} a ${rangeEnd}`);
+          rangeStart = null;
+          rangeEnd = null;
+        }
+      }
+      if (rangeStart && rangeEnd) {
+        missingRanges.push(rangeStart === rangeEnd ? rangeStart : `${rangeStart} a ${rangeEnd}`);
+      }
+    }
+    
+    if (missingDays > 0 && completeness < 0.95) {
+      setDataGaps({ missingDays, completeness, missingRanges });
+    } else {
+      setDataGaps(null);
+    }
+  }, [currentProject?.id, activeAccountIds, appliedStartDate, appliedEndDate]);
+
+  // Check for gaps when data changes
+  useMemo(() => {
+    if (metaInsights.length > 0 && !metaSyncInProgress) {
+      checkDataGaps();
+    }
+  }, [metaInsights.length, metaSyncInProgress, checkDataGaps]);
 
   // Intelligent polling - checks database for new data
   const startPolling = useCallback(async (
@@ -230,7 +296,15 @@ const FunnelAnalysis = () => {
         
         if (currentCount > 0) {
           const finalCacheStatus = await checkCacheCompleteness();
-          toast.success(`Meta Ads: ${currentCount} registros carregados (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+          
+          // Check for gaps in the data
+          const missingDays = expectedDays - finalCacheStatus.cachedDaysCount;
+          if (missingDays > 0 && finalCacheStatus.completeness < 0.95) {
+            toast.warning(`Meta Ads: ${currentCount} registros. Atenção: ${missingDays} dias faltando (${(finalCacheStatus.completeness * 100).toFixed(0)}% completo)`);
+            console.log(`[Polling] WARNING: Missing ${missingDays} days. Consider re-syncing the period.`);
+          } else {
+            toast.success(`Meta Ads: ${currentCount} registros carregados (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+          }
           console.log(`[Polling] Timeout with ${currentCount} records. Cache: ${(finalCacheStatus.completeness * 100).toFixed(0)}%`);
         } else {
           toast.warning('Tempo limite atingido. Verifique se há dados para o período selecionado.');
@@ -614,6 +688,33 @@ const FunnelAnalysis = () => {
                 <span className="text-sm text-muted-foreground">Carregando dados do Meta Ads...</span>
               </div>
             </Card>
+          )}
+
+          {/* Data gaps warning */}
+          {dataGaps && !metaSyncInProgress && !loadingInsights && (
+            <Alert className="border-orange-500/50 bg-orange-500/10">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-700 dark:text-orange-400">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <strong>Lacuna detectada: {dataGaps.missingDays} dias sem dados ({((1 - dataGaps.completeness) * 100).toFixed(0)}% faltando)</strong>
+                    <p className="text-xs mt-1 opacity-80">
+                      Períodos faltantes: {dataGaps.missingRanges.slice(0, 3).join(', ')}
+                      {dataGaps.missingRanges.length > 3 && ` e mais ${dataGaps.missingRanges.length - 3} períodos`}
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRefreshAll}
+                    className="ml-4 border-orange-500 text-orange-600 hover:bg-orange-500/10"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Preencher lacunas
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Warning when no Meta investment data */}

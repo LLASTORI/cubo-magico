@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Megaphone, Layers, FileImage, ChevronRight, Home, GitBranch, RefreshCw } from "lucide-react";
+import { Megaphone, Layers, FileImage, ChevronRight, Home, GitBranch, RefreshCw, ExternalLink, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -360,27 +360,46 @@ export const MetaHierarchyAnalysis = ({
     );
   };
 
+  // State for copied ID feedback
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleOpenAd = (adId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(`https://www.facebook.com/ads/library/?id=${adId}`, '_blank');
+  };
+
   // Table component
   const MetricsTable = ({ 
     data, 
     showDrilldown = false,
+    showAdActions = false,
     onRowClick 
   }: { 
     data: HierarchyMetrics[]; 
     showDrilldown?: boolean;
+    showAdActions?: boolean;
     onRowClick?: (item: HierarchyMetrics) => void;
   }) => (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[300px]">Nome</TableHead>
+          <TableHead className="w-[280px]">Nome</TableHead>
+          {showAdActions && <TableHead className="w-[140px]">ID do Anúncio</TableHead>}
           <TableHead className="text-right">Gasto</TableHead>
           <TableHead className="text-right">Impressões</TableHead>
           <TableHead className="text-right">Cliques</TableHead>
           <TableHead className="text-right">CTR</TableHead>
           <TableHead className="text-right">CPC</TableHead>
           <TableHead className="text-right">CPM</TableHead>
-          <TableHead className="w-[120px]">% Gasto</TableHead>
+          <TableHead className="w-[100px]">% Gasto</TableHead>
+          {showAdActions && <TableHead className="w-[80px] text-center">Ver</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -396,7 +415,7 @@ export const MetaHierarchyAnalysis = ({
                   className="w-3 h-3 rounded-full flex-shrink-0" 
                   style={{ backgroundColor: COLORS[index % COLORS.length] }}
                 />
-                <span className="truncate max-w-[250px]" title={item.name}>
+                <span className="truncate max-w-[220px]" title={item.name}>
                   {item.name}
                 </span>
                 {getStatusBadge(item.status)}
@@ -405,6 +424,28 @@ export const MetaHierarchyAnalysis = ({
                 )}
               </div>
             </TableCell>
+            {showAdActions && (
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                    {item.id.slice(-8)}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => handleCopyId(item.id, e)}
+                    title="Copiar ID completo"
+                  >
+                    {copiedId === item.id ? (
+                      <Check className="w-3 h-3 text-green-500" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </Button>
+                </div>
+              </TableCell>
+            )}
             <TableCell className="text-right font-medium">{formatCurrency(item.spend)}</TableCell>
             <TableCell className="text-right">{formatNumber(item.impressions)}</TableCell>
             <TableCell className="text-right">{formatNumber(item.clicks)}</TableCell>
@@ -419,11 +460,24 @@ export const MetaHierarchyAnalysis = ({
                 </span>
               </div>
             </TableCell>
+            {showAdActions && (
+              <TableCell className="text-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={(e) => handleOpenAd(item.id, e)}
+                  title="Ver anúncio na Biblioteca de Anúncios"
+                >
+                  <ExternalLink className="w-4 h-4 text-primary" />
+                </Button>
+              </TableCell>
+            )}
           </TableRow>
         ))}
         {data.length === 0 && (
           <TableRow>
-            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+            <TableCell colSpan={showAdActions ? 10 : 8} className="text-center text-muted-foreground py-8">
               Nenhum dado disponível
             </TableCell>
           </TableRow>
@@ -554,6 +608,7 @@ export const MetaHierarchyAnalysis = ({
               <MetricsTable 
                 data={drilldownAnalysis.data} 
                 showDrilldown={true}
+                showAdActions={currentLevel === 2}
                 onRowClick={handleDrilldown}
               />
             </div>
@@ -682,7 +737,7 @@ export const MetaHierarchyAnalysis = ({
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              <MetricsTable data={adMetrics} />
+              <MetricsTable data={adMetrics} showAdActions />
             </div>
             <div className="flex items-center justify-center">
               {adMetrics.length > 0 ? (

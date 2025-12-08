@@ -221,16 +221,17 @@ const FunnelAnalysis = () => {
     }
   }, [currentProject?.id, activeAccountIds, appliedStartDate, appliedEndDate]);
 
-  // Check for gaps when sync completes or data changes
+  // Check for gaps when sync completes or data changes - and auto-fill them
   useEffect(() => {
-    if (!metaSyncInProgress && activeAccountIds.length > 0) {
+    if (!metaSyncInProgress && activeAccountIds.length > 0 && currentProject?.id) {
       // Small delay to ensure DB has been updated
-      const timer = setTimeout(() => {
-        checkDataGaps();
+      const timer = setTimeout(async () => {
+        // First check for gaps
+        await checkDataGaps();
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [metaSyncInProgress, activeAccountIds, checkDataGaps]);
+  }, [metaSyncInProgress, activeAccountIds, checkDataGaps, currentProject?.id]);
 
   // Intelligent polling - checks database for new data
   const startPolling = useCallback(async (
@@ -584,7 +585,118 @@ const FunnelAnalysis = () => {
     }
   };
   
-  // Simple search - apply filters and invalidate cache to get fresh data
+  // Auto-fill gaps for a given period
+  const autoFillGaps = useCallback(async (
+    projectId: string,
+    accountIds: string[],
+    dateStart: Date,
+    dateEnd: Date
+  ) => {
+    const dateStartStr = format(dateStart, 'yyyy-MM-dd');
+    const dateStopStr = format(dateEnd, 'yyyy-MM-dd');
+    
+    console.log('[AutoFillGaps] Checking gaps for period:', dateStartStr, 'to', dateStopStr);
+    
+    // Query existing dates from DB
+    let allDates: string[] = [];
+    let offset = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('meta_insights')
+        .select('date_start')
+        .eq('project_id', projectId)
+        .in('ad_account_id', accountIds)
+        .gte('date_start', dateStartStr)
+        .lte('date_start', dateStopStr)
+        .range(offset, offset + pageSize - 1);
+      
+      if (error) {
+        console.error('[AutoFillGaps] Error querying:', error);
+        return false;
+      }
+      
+      if (data && data.length > 0) {
+        allDates = allDates.concat(data.map(d => d.date_start));
+        offset += pageSize;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+    
+    const cachedDates = new Set(allDates);
+    
+    // Calculate expected days (excluding future)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const effectiveEnd = dateEnd > today ? today : dateEnd;
+    const expectedDays = Math.max(0, Math.floor((effectiveEnd.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    const missingDays = expectedDays - cachedDates.size;
+    const completeness = expectedDays > 0 ? cachedDates.size / expectedDays : 1;
+    
+    console.log('[AutoFillGaps] Expected:', expectedDays, 'Found:', cachedDates.size, 'Missing:', missingDays);
+    
+    // If more than 5% is missing, auto-sync
+    if (missingDays > 0 && completeness < 0.95) {
+      console.log('[AutoFillGaps] Gaps detected, auto-syncing...');
+      setMetaSyncStatus('syncing');
+      setMetaSyncInProgress(true);
+      
+      try {
+        await supabase.functions.invoke('meta-api', {
+          body: {
+            projectId,
+            action: 'sync_insights',
+            accountIds,
+            dateStart: dateStartStr,
+            dateStop: dateStopStr,
+            forceRefresh: false, // Smart sync - only fetch missing data
+          },
+        });
+        
+        // Get initial count for polling
+        const { count: initialCount } = await supabase
+          .from('meta_insights')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .in('ad_account_id', accountIds)
+          .not('ad_id', 'is', null)
+          .gte('date_start', dateStartStr)
+          .lte('date_start', dateStopStr);
+        
+        // Start polling to track progress
+        startPolling(projectId, accountIds, dateStartStr, dateStopStr, initialCount || 0);
+        
+        return true; // Gaps are being filled
+      } catch (error) {
+        console.error('[AutoFillGaps] Error syncing:', error);
+        setMetaSyncStatus('error');
+        setMetaSyncInProgress(false);
+        return false;
+      }
+    }
+    
+    return false; // No gaps to fill
+  }, [startPolling]);
+
+  // Auto-fill gaps when detected (runs after checkDataGaps updates state)
+  useEffect(() => {
+    if (dataGaps && dataGaps.missingDays > 0 && !metaSyncInProgress && !isSyncing && currentProject?.id && activeAccountIds.length > 0) {
+      console.log('[AutoFill] Gaps detected, starting auto-fill...');
+      // Auto-fill the gaps silently
+      const fillGaps = async () => {
+        setDataGaps(null); // Clear the warning immediately
+        await autoFillGaps(currentProject.id, activeAccountIds, appliedStartDate, appliedEndDate);
+      };
+      fillGaps();
+    }
+  }, [dataGaps, metaSyncInProgress, isSyncing, currentProject?.id, activeAccountIds, appliedStartDate, appliedEndDate, autoFillGaps]);
+
+  // Simple search - apply filters and auto-fill gaps if needed
   const handleSearch = async () => {
     // Invalidate all insights cache to force fresh fetch
     await queryClient.invalidateQueries({ queryKey: ['insights'] });
@@ -592,6 +704,24 @@ const FunnelAnalysis = () => {
     
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
+    setDataGaps(null); // Clear any existing gap warnings
+    
+    // Auto-fill gaps if Meta is configured
+    if (currentProject?.id && activeAccountIds.length > 0 && !metaSyncInProgress) {
+      // Small delay to let the UI update first
+      setTimeout(async () => {
+        const isFillingGaps = await autoFillGaps(
+          currentProject.id,
+          activeAccountIds,
+          startDate,
+          endDate
+        );
+        
+        if (isFillingGaps) {
+          toast.info('Sincronizando dados Meta Ads para o período selecionado...');
+        }
+      }, 500);
+    }
   };
 
   // ROAS status
@@ -825,31 +955,21 @@ const FunnelAnalysis = () => {
             </Card>
           )}
 
-          {/* Data gaps warning */}
+          {/* Data gaps info - now just informational since auto-fill handles it */}
           {dataGaps && !metaSyncInProgress && !loadingInsights && (
-            <Alert className="border-orange-500/50 bg-orange-500/10">
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-              <AlertDescription className="text-orange-700 dark:text-orange-400">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <strong>Lacuna detectada: {dataGaps.missingDays} dias sem dados ({((1 - dataGaps.completeness) * 100).toFixed(0)}% faltando)</strong>
-                    <p className="text-xs mt-1 opacity-80">
-                      Períodos faltantes: {dataGaps.missingRanges.slice(0, 3).join(', ')}
-                      {dataGaps.missingRanges.length > 3 && ` e mais ${dataGaps.missingRanges.length - 3} períodos`}
-                    </p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleFillGaps}
-                    className="ml-4 border-orange-500 text-orange-600 hover:bg-orange-500/10"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Preencher lacunas
-                  </Button>
+            <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 animate-spin text-cube-blue" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">
+                    Sincronizando {dataGaps.missingDays} dias de dados Meta Ads...
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Aguarde, os dados serão atualizados automaticamente.
+                  </p>
                 </div>
-              </AlertDescription>
-            </Alert>
+              </div>
+            </Card>
           )}
 
           {/* Warning when no Meta investment data */}

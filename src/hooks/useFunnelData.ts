@@ -225,7 +225,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           .not('ad_id', 'is', null)
           .gte('date_start', startDateStr)
           .lte('date_start', endDateStr)
-          .order('date_start', { ascending: true })
+          .order('id', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
         if (error) {

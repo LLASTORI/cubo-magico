@@ -284,11 +284,13 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const adsQuery = useQuery({
     queryKey: ['ads', projectId],
     queryFn: async () => {
+      console.log(`[useFunnelData] Fetching ads for project=${projectId}`);
       const { data, error } = await supabase
         .from('meta_ads')
         .select('id, ad_id, ad_name, adset_id, campaign_id, status')
         .eq('project_id', projectId!);
       if (error) throw error;
+      console.log(`[useFunnelData] Ads loaded: ${data?.length || 0}`);
       return data || [];
     },
     enabled,

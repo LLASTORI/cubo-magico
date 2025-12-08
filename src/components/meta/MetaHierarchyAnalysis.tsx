@@ -110,12 +110,15 @@ const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
 export const MetaHierarchyAnalysis = ({ 
   insights, 
   campaigns, 
-  adsets, 
+  adsets,
   ads,
   loading,
   onRefresh 
 }: MetaHierarchyAnalysisProps) => {
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});
+  
+  // Debug log
+  console.log(`[MetaHierarchy] Received: ${campaigns.length} campaigns, ${adsets.length} adsets, ${ads.length} ads, ${insights.length} insights`);
 
   const currentLevel = useMemo(() => {
     if (!drilldownPath.campaign) return 0;

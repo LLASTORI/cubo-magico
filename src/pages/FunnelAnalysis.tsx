@@ -131,7 +131,8 @@ const FunnelAnalysis = () => {
     let stableCount = 0;
     
     const days = differenceInDays(new Date(dateStop), new Date(dateStart)) + 1;
-    const estimatedTime = Math.max(20, Math.min(180, days * 2)); // Faster estimates
+    // More realistic estimation: ~4s per day for full sync, minimum 30s
+    const estimatedTime = Math.max(30, Math.min(600, days * 4));
     setSyncProgress({ elapsed: 0, estimated: estimatedTime });
 
     console.log(`[Polling] Starting intelligent polling.`);

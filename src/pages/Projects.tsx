@@ -70,6 +70,8 @@ const Projects = () => {
   const [testing, setTesting] = useState(false);
   const [projectCredentials, setProjectCredentials] = useState<Record<string, ProjectCredentialStatus>>({});
   const [projectRoles, setProjectRoles] = useState<Record<string, ProjectRole>>({});
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   // Fetch credentials status and user roles for all projects
   useEffect(() => {
@@ -158,13 +160,22 @@ const Projects = () => {
     }
   };
 
-  const handleDeleteProject = async (project: Project) => {
-    const { error } = await deleteProject(project.id);
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
+    
+    const { error } = await deleteProject(projectToDelete.id);
     if (error) {
       toast({ title: 'Erro ao excluir projeto', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Projeto excluído' });
+      setProjectToDelete(null);
+      setDeleteConfirmName('');
     }
+  };
+
+  const openDeleteDialog = (project: Project) => {
+    setProjectToDelete(project);
+    setDeleteConfirmName('');
   };
 
   const openEditDialog = (project: Project) => {
@@ -614,27 +625,13 @@ const Projects = () => {
                         </>
                       )}
                       {canDelete && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <Trash2 className="w-3 h-3 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta ação não pode ser desfeita. Todos os dados do projeto serão perdidos.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteProject(project)}>
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openDeleteDialog(project)}
+                        >
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
                       )}
                     </div>
                   </CardContent>
@@ -771,6 +768,48 @@ const Projects = () => {
           onOpenChange={setIsInvitesOpen}
           onInviteAccepted={handleInviteAccepted}
         />
+
+        {/* Delete Project Confirmation Dialog */}
+        <AlertDialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir projeto permanentemente?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <p>
+                  Esta ação <strong>não pode ser desfeita</strong>. Todos os dados do projeto serão excluídos permanentemente, incluindo:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                  <li>Vendas sincronizadas</li>
+                  <li>Funis e mapeamentos de ofertas</li>
+                  <li>Dados do Meta Ads</li>
+                  <li>Credenciais e configurações</li>
+                  <li>Membros e convites</li>
+                </ul>
+                <p className="pt-2">
+                  Para confirmar, digite <strong className="text-foreground">{projectToDelete?.name}</strong> abaixo:
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Input
+              placeholder="Digite o nome do projeto"
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              className="mt-2"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setProjectToDelete(null); setDeleteConfirmName(''); }}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteProject}
+                disabled={deleteConfirmName !== projectToDelete?.name}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Excluir permanentemente
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

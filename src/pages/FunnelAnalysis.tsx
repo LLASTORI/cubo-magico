@@ -43,6 +43,7 @@ const FunnelAnalysis = () => {
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [appliedStartDate, setAppliedStartDate] = useState<Date>(subDays(new Date(), 7));
+  const [endDatePopoverOpen, setEndDatePopoverOpen] = useState(false);
   const [appliedEndDate, setAppliedEndDate] = useState<Date>(new Date());
   
   // Sync states
@@ -76,6 +77,24 @@ const FunnelAnalysis = () => {
     startDate: appliedStartDate,
     endDate: appliedEndDate,
   });
+
+  // Date validation handlers
+  const handleStartDateChange = (date: Date) => {
+    setStartDate(date);
+    // Se a data inicial for maior que a final, ajusta a final
+    if (date > endDate) {
+      setEndDate(date);
+    }
+    // Abre o seletor de data final após selecionar a inicial
+    setTimeout(() => setEndDatePopoverOpen(true), 100);
+  };
+
+  const handleEndDateChange = (date: Date) => {
+    // Impede que a data final seja menor que a inicial
+    if (date < startDate) return;
+    setEndDate(date);
+    setEndDatePopoverOpen(false);
+  };
 
   // Quick date setters
   const setQuickDate = (days: number) => {
@@ -642,29 +661,31 @@ const FunnelAnalysis = () => {
                         {format(startDate, 'dd/MM/yyyy', { locale: ptBR })}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
                       <Calendar
                         mode="single"
                         selected={startDate}
-                        onSelect={(d) => d && setStartDate(d)}
+                        onSelect={(d) => d && handleStartDateChange(d)}
+                        disabled={(date) => date > new Date()}
                         initialFocus
                         locale={ptBR}
                       />
                     </PopoverContent>
                   </Popover>
                   <span className="text-muted-foreground">até</span>
-                  <Popover>
+                  <Popover open={endDatePopoverOpen} onOpenChange={setEndDatePopoverOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" size="sm" className="gap-2">
                         <CalendarIcon className="w-4 h-4" />
                         {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
                       <Calendar
                         mode="single"
                         selected={endDate}
-                        onSelect={(d) => d && setEndDate(d)}
+                        onSelect={(d) => d && handleEndDateChange(d)}
+                        disabled={(date) => date < startDate || date > new Date()}
                         initialFocus
                         locale={ptBR}
                       />

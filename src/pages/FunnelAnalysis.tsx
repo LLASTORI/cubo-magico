@@ -49,7 +49,7 @@ const FunnelAnalysis = () => {
   const [metaSyncStatus, setMetaSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ elapsed: 0, estimated: 60 });
-  const [dataGaps, setDataGaps] = useState<{ missingDays: number; completeness: number; missingRanges: string[] } | null>(null);
+  const [dataGaps, setDataGaps] = useState<{ missingDays: number; completeness: number; missingRanges: string[]; missingDateRanges: Array<{start: string, end: string}> } | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use centralized hook for ALL data
@@ -135,8 +135,10 @@ const FunnelAnalysis = () => {
     const missingDays = expectedDays - cachedDates.size;
     const completeness = expectedDays > 0 ? cachedDates.size / expectedDays : 1;
     
-    // Find missing date ranges
+    // Find missing date ranges with actual dates
     const missingRanges: string[] = [];
+    const missingDateRanges: Array<{start: string, end: string}> = [];
+    
     if (missingDays > 0) {
       let rangeStart: string | null = null;
       let rangeEnd: string | null = null;
@@ -148,17 +150,19 @@ const FunnelAnalysis = () => {
           rangeEnd = dateStr;
         } else if (rangeStart && rangeEnd) {
           missingRanges.push(rangeStart === rangeEnd ? rangeStart : `${rangeStart} a ${rangeEnd}`);
+          missingDateRanges.push({ start: rangeStart, end: rangeEnd });
           rangeStart = null;
           rangeEnd = null;
         }
       }
       if (rangeStart && rangeEnd) {
         missingRanges.push(rangeStart === rangeEnd ? rangeStart : `${rangeStart} a ${rangeEnd}`);
+        missingDateRanges.push({ start: rangeStart, end: rangeEnd });
       }
     }
     
     if (missingDays > 0 && completeness < 0.95) {
-      setDataGaps({ missingDays, completeness, missingRanges });
+      setDataGaps({ missingDays, completeness, missingRanges, missingDateRanges });
     } else {
       setDataGaps(null);
     }
@@ -315,6 +319,70 @@ const FunnelAnalysis = () => {
       }
     }, POLL_INTERVAL);
   }, [stopPolling, refetchAll]);
+
+  // Sync only the missing date ranges (gaps)
+  const handleFillGaps = useCallback(async () => {
+    if (!dataGaps?.missingDateRanges?.length || !currentProject?.id || activeAccountIds.length === 0) {
+      toast.error('Nenhuma lacuna encontrada para preencher');
+      return;
+    }
+
+    if (isSyncing || metaSyncInProgress) {
+      toast.warning('Sincronização já em andamento');
+      return;
+    }
+
+    setIsSyncing(true);
+    setMetaSyncStatus('syncing');
+    setMetaSyncInProgress(true);
+    stopPolling();
+
+    toast.info(`Preenchendo ${dataGaps.missingDays} dias faltantes...`);
+    console.log('[FillGaps] Starting gap fill for ranges:', dataGaps.missingDateRanges);
+
+    // Sync each missing range
+    for (const range of dataGaps.missingDateRanges) {
+      console.log(`[FillGaps] Syncing range: ${range.start} to ${range.end}`);
+      
+      try {
+        await supabase.functions.invoke('meta-api', {
+          body: {
+            projectId: currentProject.id,
+            action: 'sync_insights',
+            accountIds: activeAccountIds,
+            dateStart: range.start,
+            dateStop: range.end,
+            forceRefresh: true, // Force refresh for gaps
+          },
+        });
+      } catch (error) {
+        console.error(`[FillGaps] Error syncing range ${range.start} to ${range.end}:`, error);
+      }
+    }
+
+    // Start polling for the full applied period to check completion
+    const syncStartDateStr = format(appliedStartDate, 'yyyy-MM-dd');
+    const syncEndDateStr = format(appliedEndDate, 'yyyy-MM-dd');
+    
+    const { count: initialCount } = await supabase
+      .from('meta_insights')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', currentProject.id)
+      .in('ad_account_id', activeAccountIds)
+      .not('ad_id', 'is', null)
+      .gte('date_start', syncStartDateStr)
+      .lte('date_start', syncEndDateStr);
+
+    startPolling(
+      currentProject.id,
+      activeAccountIds,
+      syncStartDateStr,
+      syncEndDateStr,
+      initialCount || 0
+    );
+
+    setIsSyncing(false);
+  }, [dataGaps, currentProject?.id, activeAccountIds, isSyncing, metaSyncInProgress, stopPolling, appliedStartDate, appliedEndDate, startPolling]);
 
   // Sync handler - syncs data from APIs
   const handleRefreshAll = async () => {
@@ -706,7 +774,7 @@ const FunnelAnalysis = () => {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={handleRefreshAll}
+                    onClick={handleFillGaps}
                     className="ml-4 border-orange-500 text-orange-600 hover:bg-orange-500/10"
                   >
                     <RefreshCw className="w-4 h-4 mr-2" />

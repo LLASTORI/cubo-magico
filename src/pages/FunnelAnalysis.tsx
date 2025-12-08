@@ -184,11 +184,13 @@ const FunnelAnalysis = () => {
 
       // Data arrived - check if sync is complete
       if (currentCount > 0) {
-        if (currentCount === lastCount) {
+        // CRITICAL FIX: When data arrives from 0, wait just 1 more stable cycle
+        // This ensures we catch all data without waiting too long
+        if (currentCount === lastCount && currentCount > 0) {
           stableCount++;
-          console.log(`[Polling] Count stable for ${stableCount} cycles`);
-          // If count is stable for 2 cycles (10 seconds), consider sync complete
-          if (stableCount >= 2) {
+          console.log(`[Polling] Count stable for ${stableCount} cycles (${currentCount} records)`);
+          // If count is stable for 1 cycle after we got data, complete immediately
+          if (stableCount >= 1) {
             stopPolling();
             setMetaSyncInProgress(false);
             setMetaSyncStatus('done');
@@ -197,8 +199,10 @@ const FunnelAnalysis = () => {
             await refetchAll();
             return;
           }
-        } else {
-          stableCount = 0; // Reset if count is still changing
+        } else if (currentCount > lastCount) {
+          // Data is still arriving, reset stable counter
+          stableCount = 0;
+          console.log(`[Polling] Data increased: ${lastCount} -> ${currentCount}`);
         }
         lastCount = currentCount;
       }

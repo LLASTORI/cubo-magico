@@ -156,38 +156,6 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
-  // Fetch Meta adsets - filter by project_id with pagination to get all
-  const { data: adsetsData } = useQuery({
-    queryKey: ['meta-adsets-cubo', projectId],
-    queryFn: async () => {
-      const PAGE_SIZE = 1000;
-      let allAdsets: any[] = [];
-      let page = 0;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('meta_adsets')
-          .select('adset_id, adset_name, campaign_id, status')
-          .eq('project_id', projectId)
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
-        if (error) throw error;
-        if (data && data.length > 0) {
-          allAdsets = [...allAdsets, ...data];
-          page++;
-          hasMore = data.length === PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
-      }
-      
-      console.log(`[CuboMagico] Adsets loaded: ${allAdsets.length}`);
-      return allAdsets;
-    },
-    enabled: !!projectId,
-  });
-
   // Fetch active Meta ad accounts FIRST (needed for insights queries)
   const { data: metaAdAccounts } = useQuery({
     queryKey: ['meta-ad-accounts-cubo', projectId],
@@ -256,11 +224,39 @@ export function CuboMagicoDashboard({
     refetchOnMount: 'always',
   });
 
-  // Extract unique ad_ids from insights for efficient lookup
+  // Extract unique ad_ids and adset_ids from insights for efficient lookup
   const insightAdIdsCubo = useMemo(() => {
     if (!insightsData) return [];
     return [...new Set(insightsData.filter(i => i.ad_id).map(i => i.ad_id))];
   }, [insightsData]);
+
+  const insightAdsetIdsCubo = useMemo(() => {
+    if (!insightsData) return [];
+    return [...new Set(insightsData.filter(i => i.adset_id).map(i => i.adset_id))];
+  }, [insightsData]);
+
+  // Fetch Meta adsets - only the ones that appear in insights (same approach as ads)
+  const { data: adsetsData } = useQuery({
+    queryKey: ['meta-adsets-cubo-filtered', projectId, insightAdsetIdsCubo.length],
+    queryFn: async () => {
+      if (insightAdsetIdsCubo.length === 0) return [];
+      const allAdsets: any[] = [];
+      const batchSize = 100;
+      for (let i = 0; i < insightAdsetIdsCubo.length; i += batchSize) {
+        const batch = insightAdsetIdsCubo.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('meta_adsets')
+          .select('adset_id, adset_name, campaign_id, status')
+          .eq('project_id', projectId)
+          .in('adset_id', batch);
+        if (error) throw error;
+        if (data) allAdsets.push(...data);
+      }
+      console.log(`[CuboMagico] Adsets loaded (filtered): ${allAdsets.length} for ${insightAdsetIdsCubo.length} insight adset IDs`);
+      return allAdsets;
+    },
+    enabled: !!projectId && insightAdsetIdsCubo.length > 0,
+  });
 
   // Fetch Meta ads - only the ones that appear in insights
   const { data: adsData } = useQuery({

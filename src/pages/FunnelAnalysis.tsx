@@ -139,8 +139,34 @@ const FunnelAnalysis = () => {
     console.log(`[Polling] Period: ${dateStart} to ${dateStop} (${days} days)`);
     console.log(`[Polling] Initial count: ${initialCount}`);
 
-    // CRITICAL FIX: If data already exists (from cache), complete immediately!
-    if (initialCount > 0) {
+    // Check how many unique days we have data for in the cache
+    const { data: cachedDatesData } = await supabase
+      .from('meta_insights')
+      .select('date_start')
+      .eq('project_id', projectId)
+      .in('ad_account_id', accountIds)
+      .not('ad_id', 'is', null)
+      .gte('date_start', dateStart)
+      .lte('date_start', dateStop);
+    
+    const uniqueDatesInCache = new Set(cachedDatesData?.map(d => d.date_start) || []);
+    const cachedDaysCount = uniqueDatesInCache.size;
+    
+    // Calculate expected days (excluding future dates)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDateObj = new Date(dateStop);
+    const startDateObj = new Date(dateStart);
+    const effectiveEnd = endDateObj > today ? today : endDateObj;
+    const expectedDays = Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    console.log(`[Polling] Cache check: ${cachedDaysCount} days cached out of ${expectedDays} expected`);
+    
+    // Only use cache if we have data for ALL expected days (or at least 90%)
+    const cacheCompleteness = expectedDays > 0 ? cachedDaysCount / expectedDays : 0;
+    const cacheIsComplete = cacheCompleteness >= 0.9;
+    
+    if (initialCount > 0 && cacheIsComplete) {
       const { data: existingData } = await supabase
         .from('meta_insights')
         .select('spend')
@@ -152,12 +178,14 @@ const FunnelAnalysis = () => {
       
       const totalSpend = existingData?.reduce((sum, row) => sum + (row.spend || 0), 0) || 0;
       
-      console.log(`[Polling] Data already in cache: ${initialCount} records, R$${totalSpend.toFixed(2)}`);
+      console.log(`[Polling] Cache is complete (${(cacheCompleteness * 100).toFixed(0)}%): ${initialCount} records, R$${totalSpend.toFixed(2)}`);
       setMetaSyncInProgress(false);
       setMetaSyncStatus('done');
       toast.success(`Meta Ads: Dados carregados do cache (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
       await refetchAll();
       return;
+    } else if (initialCount > 0) {
+      console.log(`[Polling] Cache is incomplete (${(cacheCompleteness * 100).toFixed(0)}%). Will sync missing data.`);
     }
 
     pollingRef.current = setInterval(async () => {

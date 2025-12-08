@@ -209,19 +209,36 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const insightsQuery = useQuery({
     queryKey: ['insights', projectId, startDateStr, endDateStr],
     queryFn: async () => {
-      // Only fetch ad-level insights (ad_id IS NOT NULL)
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
-        .eq('project_id', projectId!)
-        .not('ad_id', 'is', null)
-        .gte('date_start', startDateStr)
-        .lte('date_start', endDateStr)
-        .limit(5000);
+      // Fetch ALL ad-level insights with pagination to handle any time period
+      const PAGE_SIZE = 1000;
+      let allData: MetaInsight[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      console.log(`[useFunnelData] Ad-level insights loaded: ${data?.length || 0}, total spend: ${data?.reduce((s, i) => s + (i.spend || 0), 0).toFixed(2)}`);
-      return (data as MetaInsight[]) || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_insights')
+          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
+          .eq('project_id', projectId!)
+          .not('ad_id', 'is', null)
+          .gte('date_start', startDateStr)
+          .lte('date_start', endDateStr)
+          .order('date_start', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[useFunnelData] Ad-level insights loaded: ${allData.length}, total spend: ${allData.reduce((s, i) => s + (i.spend || 0), 0).toFixed(2)}`);
+      return allData as MetaInsight[];
     },
     enabled,
     staleTime: 30 * 1000,

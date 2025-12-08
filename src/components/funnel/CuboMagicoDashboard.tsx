@@ -193,27 +193,43 @@ export function CuboMagicoDashboard({
     return metaAdAccounts.map(a => a.account_id).sort();
   }, [metaAdAccounts]);
 
-  // Fetch Meta insights - ALL ad-level for accurate spend calculations
+  // Fetch Meta insights - ALL ad-level for accurate spend calculations with pagination
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
     queryKey: ['meta-insights-cubo', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return [];
       
-      // Only fetch ad-level insights (the only type we have now)
-      // Fetch ALL ad-level insights - no limit to ensure complete data
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
-        .eq('project_id', projectId)
-        .in('ad_account_id', activeAccountIds)
-        .not('ad_id', 'is', null)
-        .gte('date_start', startDateStr)
-        .lte('date_start', endDateStr)
-        .limit(10000);
+      // Fetch ALL ad-level insights with pagination to handle any time period
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      console.log(`[CuboMagico] Ad-level insights loaded: ${data?.length || 0}`);
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_insights')
+          .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
+          .eq('project_id', projectId)
+          .in('ad_account_id', activeAccountIds)
+          .not('ad_id', 'is', null)
+          .gte('date_start', startDateStr)
+          .lte('date_start', endDateStr)
+          .order('date_start', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[CuboMagico] Ad-level insights loaded: ${allData.length}, total spend: R$${allData.reduce((s: number, i: any) => s + (i.spend || 0), 0).toFixed(2)}`);
+      return allData;
     },
     enabled: !!projectId && activeAccountIds.length > 0,
   });

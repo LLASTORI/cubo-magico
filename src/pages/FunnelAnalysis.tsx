@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle, Search, CheckCircle2
@@ -106,14 +106,18 @@ const FunnelAnalysis = () => {
     }
   }, []);
 
-  // Check for data gaps in the selected period
+  // Check for data gaps in the selected period - query DB directly for accuracy
   const checkDataGaps = useCallback(async () => {
     if (!currentProject?.id || activeAccountIds.length === 0) return;
     
     const dateStart = format(appliedStartDate, 'yyyy-MM-dd');
     const dateStop = format(appliedEndDate, 'yyyy-MM-dd');
     
-    const { data } = await supabase
+    console.log('[DataGaps] Checking gaps for period:', dateStart, 'to', dateStop);
+    console.log('[DataGaps] Active accounts:', activeAccountIds);
+    
+    // Query the database directly to get unique dates with data
+    const { data, error } = await supabase
       .from('meta_insights')
       .select('date_start')
       .eq('project_id', currentProject.id)
@@ -122,7 +126,14 @@ const FunnelAnalysis = () => {
       .gte('date_start', dateStart)
       .lte('date_start', dateStop);
     
+    if (error) {
+      console.error('[DataGaps] Error querying:', error);
+      return;
+    }
+    
+    // Get unique dates
     const cachedDates = new Set(data?.map(d => d.date_start) || []);
+    console.log('[DataGaps] Unique dates found in DB:', cachedDates.size);
     
     // Calculate expected days (excluding future)
     const today = new Date();
@@ -131,6 +142,8 @@ const FunnelAnalysis = () => {
     const startDateObj = new Date(dateStart);
     const effectiveEnd = endDateObj > today ? today : endDateObj;
     const expectedDays = Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    console.log('[DataGaps] Expected days:', expectedDays, 'Found:', cachedDates.size);
     
     const missingDays = expectedDays - cachedDates.size;
     const completeness = expectedDays > 0 ? cachedDates.size / expectedDays : 1;
@@ -144,7 +157,7 @@ const FunnelAnalysis = () => {
       let rangeEnd: string | null = null;
       
       for (let d = new Date(startDateObj); d <= effectiveEnd; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = format(d, 'yyyy-MM-dd');
         if (!cachedDates.has(dateStr)) {
           if (!rangeStart) rangeStart = dateStr;
           rangeEnd = dateStr;
@@ -161,6 +174,9 @@ const FunnelAnalysis = () => {
       }
     }
     
+    console.log('[DataGaps] Missing days:', missingDays, 'Completeness:', (completeness * 100).toFixed(1) + '%');
+    console.log('[DataGaps] Missing ranges:', missingRanges);
+    
     if (missingDays > 0 && completeness < 0.95) {
       setDataGaps({ missingDays, completeness, missingRanges, missingDateRanges });
     } else {
@@ -168,12 +184,16 @@ const FunnelAnalysis = () => {
     }
   }, [currentProject?.id, activeAccountIds, appliedStartDate, appliedEndDate]);
 
-  // Check for gaps when data changes
-  useMemo(() => {
-    if (metaInsights.length > 0 && !metaSyncInProgress) {
-      checkDataGaps();
+  // Check for gaps when sync completes or data changes
+  useEffect(() => {
+    if (!metaSyncInProgress && activeAccountIds.length > 0) {
+      // Small delay to ensure DB has been updated
+      const timer = setTimeout(() => {
+        checkDataGaps();
+      }, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [metaInsights.length, metaSyncInProgress, checkDataGaps]);
+  }, [metaSyncInProgress, activeAccountIds, checkDataGaps]);
 
   // Intelligent polling - checks database for new data
   const startPolling = useCallback(async (

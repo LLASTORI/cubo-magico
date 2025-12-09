@@ -1192,30 +1192,62 @@ export function CuboMagicoDashboard({
                                     {metrics.positionBreakdown.map((pos, index) => {
                                       const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
                                       
+                                      // Taxas ideais por tipo de posição
+                                      const getIdealRate = (tipo: string) => {
+                                        switch (tipo) {
+                                          case 'FRONT':
+                                          case 'FE':
+                                            return { ideal: '100%', desc: 'Produto principal - base de cálculo' };
+                                          case 'OB':
+                                            return { ideal: '20-40%', desc: 'Order Bump - oferta complementar no checkout' };
+                                          case 'US':
+                                            return { ideal: '10-20%', desc: 'Upsell - oferta de upgrade pós-compra' };
+                                          case 'DS':
+                                            return { ideal: '5-15%', desc: 'Downsell - alternativa mais acessível' };
+                                          default:
+                                            return { ideal: 'N/A', desc: 'Posição do funil' };
+                                        }
+                                      };
+                                      
+                                      const idealInfo = getIdealRate(pos.tipo);
+                                      
                                       return (
                                         <Fragment key={`${pos.tipo}${pos.ordem}`}>
-                                          <div 
-                                            className={cn(
-                                              "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px]",
-                                              gradient
-                                            )}
-                                          >
-                                            <div className="relative z-10 flex flex-col items-center justify-center text-white">
-                                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-                                                {pos.tipo}{pos.ordem || ''}
-                                              </span>
-                                              <span className="text-2xl font-black">
-                                                {pos.vendas}
-                                              </span>
-                                              <div className="flex items-center gap-1 text-[10px] font-medium opacity-90">
-                                                <Percent className="w-2.5 h-2.5" />
-                                                {pos.taxaConversao.toFixed(1)}%
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div 
+                                                className={cn(
+                                                  "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px] cursor-help",
+                                                  gradient
+                                                )}
+                                              >
+                                                <div className="relative z-10 flex flex-col items-center justify-center text-white">
+                                                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                                                    {pos.tipo}{pos.ordem || ''}
+                                                  </span>
+                                                  <span className="text-2xl font-black">
+                                                    {pos.vendas}
+                                                  </span>
+                                                  <div className="flex items-center gap-1 text-[10px] font-medium opacity-90">
+                                                    <Percent className="w-2.5 h-2.5" />
+                                                    {pos.taxaConversao.toFixed(1)}%
+                                                  </div>
+                                                  <span className="text-[10px] mt-1 opacity-70">
+                                                    {formatCurrency(pos.receita)}
+                                                  </span>
+                                                </div>
                                               </div>
-                                              <span className="text-[10px] mt-1 opacity-70">
-                                                {formatCurrency(pos.receita)}
-                                              </span>
-                                            </div>
-                                          </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[200px]">
+                                              <p className="font-semibold">{pos.tipo}{pos.ordem || ''}</p>
+                                              <p className="text-xs text-muted-foreground">{idealInfo.desc}</p>
+                                              <div className="mt-1 pt-1 border-t border-border/50">
+                                                <p className="text-xs"><strong>Taxa ideal:</strong> {idealInfo.ideal}</p>
+                                                <p className="text-xs"><strong>Taxa atual:</strong> {pos.taxaConversao.toFixed(1)}%</p>
+                                                <p className="text-xs"><strong>Receita:</strong> {formatCurrency(pos.receita)}</p>
+                                              </div>
+                                            </TooltipContent>
+                                          </Tooltip>
                                           
                                           {index < metrics.positionBreakdown.length - 1 && (
                                             <div className="flex items-center justify-center w-6">

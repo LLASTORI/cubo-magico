@@ -456,6 +456,16 @@ export function CuboMagicoDashboard({
     return Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
   }, [insightsData]);
 
+  // Calculate REAL totals from all sales data (not just mapped)
+  const faturamentoTotal = useMemo(() => {
+    if (!salesData) return 0;
+    return salesData.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+  }, [salesData]);
+
+  const totalProdutosReal = useMemo(() => {
+    return salesData?.length || 0;
+  }, [salesData]);
+
   // Totals from funnels with campaign patterns (attributed)
   const totals = useMemo(() => {
     const attributed = funnelMetrics.reduce((acc, m) => ({
@@ -469,8 +479,11 @@ export function CuboMagicoDashboard({
       ...attributed,
       investimentoTotal: totalInvestmentAll,
       investimentoNaoAtribuido: totalInvestmentAll - attributed.investimento,
+      faturamentoTotal, // Real total from all sales
+      totalProdutosReal, // Real total product count
+      faturamentoNaoAtribuido: faturamentoTotal - attributed.faturamento,
     };
-  }, [funnelMetrics, totalInvestmentAll]);
+  }, [funnelMetrics, totalInvestmentAll, faturamentoTotal, totalProdutosReal]);
 
   // Helper to get offer codes for a specific funnel
   // IMPORTANT: Prioritize funnel_id (FK), use id_funil only as fallback when funnel_id is null
@@ -847,7 +860,12 @@ export function CuboMagicoDashboard({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Faturamento</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamento)}</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamentoTotal)}</p>
+              {totals.faturamentoNaoAtribuido > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {formatCurrency(totals.faturamentoNaoAtribuido)} não atribuído
+                </p>
+              )}
             </div>
           </div>
         </Card>
@@ -871,7 +889,12 @@ export function CuboMagicoDashboard({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Produtos</p>
-              <p className="text-xl font-bold text-foreground">{totals.totalProdutos}</p>
+              <p className="text-xl font-bold text-foreground">{totals.totalProdutosReal}</p>
+              {(totals.totalProdutosReal - totals.totalProdutos) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {totals.totalProdutosReal - totals.totalProdutos} não atribuído
+                </p>
+              )}
             </div>
           </div>
         </Card>

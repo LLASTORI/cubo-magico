@@ -1276,14 +1276,25 @@ export function CuboMagicoDashboard({
                                       
                                       const idealInfo = getIdealInfo(pos.tipo, pos.ordem, pos.taxaConversao, pos.receita, pos.vendas);
                                       
+                                      // Determina a cor da borda baseado no status
+                                      const getBorderColor = (status: 'base' | 'success' | 'warning' | 'danger') => {
+                                        switch (status) {
+                                          case 'success': return 'ring-2 ring-green-400 ring-offset-2 ring-offset-background';
+                                          case 'warning': return 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background';
+                                          case 'danger': return 'ring-2 ring-red-400 ring-offset-2 ring-offset-background';
+                                          default: return '';
+                                        }
+                                      };
+                                      
                                       return (
                                         <Fragment key={`${pos.tipo}${pos.ordem}`}>
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <div 
                                                 className={cn(
-                                                  "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px] cursor-help",
-                                                  gradient
+                                                  "relative overflow-hidden rounded-lg p-3 bg-gradient-to-br shadow-md min-w-[90px] flex-1 max-w-[140px] cursor-help transition-all",
+                                                  gradient,
+                                                  getBorderColor(idealInfo.status)
                                                 )}
                                               >
                                                 <div className="relative z-10 flex flex-col items-center justify-center text-white">
@@ -1378,6 +1389,55 @@ export function CuboMagicoDashboard({
                                 </div>
                                 
                                 {/* Conversion Funnel Metrics */}
+                                {(() => {
+                                  // Função para calcular status e mensagem do Connect Rate
+                                  const getConnectRateInfo = (rate: number) => {
+                                    if (rate >= 81) {
+                                      return {
+                                        status: 'excellent' as const,
+                                        statusLabel: 'Ótimo',
+                                        ideal: '81% a 100%',
+                                        frasePositiva: 'Excelente! Sua página está convertendo muito bem os cliques em visitantes. Continue com esse ótimo trabalho!',
+                                        borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background'
+                                      };
+                                    } else if (rate >= 70) {
+                                      return {
+                                        status: 'good' as const,
+                                        statusLabel: 'Bom',
+                                        ideal: '70% a 80%',
+                                        frasePositiva: 'Bom trabalho! Sua página está performando bem. Com pequenos ajustes você pode alcançar o nível ótimo!',
+                                        borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background'
+                                      };
+                                    } else if (rate >= 55) {
+                                      return {
+                                        status: 'warning' as const,
+                                        statusLabel: 'Pode melhorar',
+                                        ideal: '55% a 69%',
+                                        frasePositiva: 'Há oportunidade de melhoria! Otimize a velocidade de carregamento e experiência mobile para aumentar a conversão.',
+                                        borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background'
+                                      };
+                                    } else if (rate >= 50) {
+                                      return {
+                                        status: 'danger' as const,
+                                        statusLabel: 'Precisa de ajustes',
+                                        ideal: 'Abaixo de 55%',
+                                        frasePositiva: 'A página precisa de atenção! Verifique velocidade de carregamento, compatibilidade mobile e se o anúncio está alinhado com a página.',
+                                        borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background'
+                                      };
+                                    } else {
+                                      return {
+                                        status: 'danger' as const,
+                                        statusLabel: 'Crítico',
+                                        ideal: 'Abaixo de 50%',
+                                        frasePositiva: 'Atenção! Taxa muito baixa indica problemas na página. Priorize: velocidade, mobile-first e consistência com o anúncio.',
+                                        borderClass: 'ring-2 ring-red-500 ring-offset-2 ring-offset-background'
+                                      };
+                                    }
+                                  };
+                                  
+                                  const connectRateInfo = getConnectRateInfo(metrics.connectRate);
+                                  
+                                  return (
                                 <div className="pt-4 border-t border-border/50">
                                   <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Funil de Conversão (Meta Ads)</h4>
                                   <div className="flex flex-wrap items-center gap-2">
@@ -1399,23 +1459,64 @@ export function CuboMagicoDashboard({
                                       <span className="text-[9px] text-muted-foreground">{metrics.landingPageViews}</span>
                                     </div>
                                     
-                                    {/* Landing Page Views */}
+                                    {/* Landing Page Views - Connect Rate with ideal metrics */}
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <div className="flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px] cursor-help">
+                                        <div className={cn(
+                                          "flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                          connectRateInfo.borderClass
+                                        )}>
                                           <span className="text-[10px] text-purple-600 font-medium uppercase">Views Página</span>
                                           <span className={cn(
                                             "text-xl font-bold",
-                                            metrics.connectRate >= 70 ? "text-green-600" : metrics.connectRate >= 50 ? "text-yellow-600" : "text-red-600"
+                                            connectRateInfo.status === 'excellent' && "text-green-600",
+                                            connectRateInfo.status === 'good' && "text-blue-600",
+                                            connectRateInfo.status === 'warning' && "text-yellow-600",
+                                            connectRateInfo.status === 'danger' && "text-red-600"
                                           )}>
                                             {metrics.connectRate.toFixed(1)}%
                                           </span>
                                           <span className="text-[9px] text-purple-500">Connect Rate</span>
                                         </div>
                                       </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p><strong>Connect Rate:</strong> Views Página ÷ Cliques Link</p>
-                                        <p className="text-xs text-muted-foreground">{metrics.landingPageViews} views de {metrics.linkClicks} cliques</p>
+                                      <TooltipContent side="bottom" className="max-w-[280px]">
+                                        <p className="font-semibold">Connect Rate</p>
+                                        <p className="text-xs text-muted-foreground">Taxa de visitantes que chegam à página após clicar no anúncio</p>
+                                        <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                                          <div className="flex justify-between text-xs">
+                                            <span>Status:</span>
+                                            <span className={cn(
+                                              "font-medium",
+                                              connectRateInfo.status === 'excellent' && "text-green-500",
+                                              connectRateInfo.status === 'good' && "text-blue-500",
+                                              connectRateInfo.status === 'warning' && "text-yellow-500",
+                                              connectRateInfo.status === 'danger' && "text-red-500"
+                                            )}>{connectRateInfo.statusLabel}</span>
+                                          </div>
+                                          <div className="flex justify-between text-xs">
+                                            <span>Taxa atual:</span>
+                                            <span className="font-medium">{metrics.connectRate.toFixed(1)}%</span>
+                                          </div>
+                                          <div className="flex justify-between text-xs">
+                                            <span>Views / Cliques:</span>
+                                            <span className="font-medium">{metrics.landingPageViews} / {metrics.linkClicks}</span>
+                                          </div>
+                                        </div>
+                                        <div className="mt-2 pt-2 border-t border-border/50 text-[10px] space-y-1 text-muted-foreground">
+                                          <p>• <strong>Ótimo:</strong> 81% a 100%</p>
+                                          <p>• <strong>Bom:</strong> 70% a 80%</p>
+                                          <p>• <strong>Pode melhorar:</strong> 55% a 69%</p>
+                                          <p>• <strong>Precisa de ajustes:</strong> abaixo de 55%</p>
+                                        </div>
+                                        <p className={cn(
+                                          "mt-2 pt-2 border-t border-border/50 text-xs italic",
+                                          connectRateInfo.status === 'excellent' && "text-green-500",
+                                          connectRateInfo.status === 'good' && "text-blue-500",
+                                          connectRateInfo.status === 'warning' && "text-yellow-500",
+                                          connectRateInfo.status === 'danger' && "text-orange-500"
+                                        )}>
+                                          {connectRateInfo.frasePositiva}
+                                        </p>
                                       </TooltipContent>
                                     </Tooltip>
                                     
@@ -1470,6 +1571,8 @@ export function CuboMagicoDashboard({
                                     </Tooltip>
                                   </div>
                                 </div>
+                                  );
+                                })()}
                               </div>
                             </TabsContent>
 

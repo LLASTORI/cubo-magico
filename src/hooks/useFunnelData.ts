@@ -39,6 +39,7 @@ interface SaleRecord {
   buyer_email: string | null;
   sale_date: string | null;
   status: string;
+  checkout_origin: string | null;
   meta_campaign_id_extracted: string | null;
   meta_adset_id_extracted: string | null;
   meta_ad_id_extracted: string | null;
@@ -205,7 +206,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       
       const { data, error } = await supabase
         .from('hotmart_sales')
-        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
+        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, checkout_origin, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
         .eq('project_id', projectId!)
         .in('status', ['APPROVED', 'COMPLETE'])
         .gte('sale_date', startTimestamp)

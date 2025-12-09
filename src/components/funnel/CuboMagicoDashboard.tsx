@@ -1016,7 +1016,6 @@ export function CuboMagicoDashboard({
                               <UTMAnalysis
                                 salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                metaHierarchy={{ campaigns: campaignsData, adsets: adsetsData, ads: adsData }}
                               />
                             </TabsContent>
 

@@ -262,12 +262,20 @@ export function CuboMagicoDashboard({
     }
 
     return funnels.map(funnel => {
-      const pattern = funnel.campaign_name_pattern?.toLowerCase() || '';
+      // IMPORTANT: Escape special regex characters in pattern for includes() 
+      // The "+" character doesn't need escaping for includes(), but we normalize the comparison
+      const rawPattern = funnel.campaign_name_pattern || '';
+      const pattern = rawPattern.toLowerCase();
       const roasTarget = funnel.roas_target || 2;
 
       // Find campaigns matching the pattern (Padrão do Nome da Campanha)
+      // Use a more robust matching that handles special characters
       const matchingCampaigns = pattern 
-        ? campaignsData.filter(c => c.campaign_name?.toLowerCase().includes(pattern))
+        ? campaignsData.filter(c => {
+            const campaignName = c.campaign_name?.toLowerCase() || '';
+            // Direct includes check - works with special chars like "+"
+            return campaignName.includes(pattern);
+          })
         : [];
       // Ensure campaign IDs are strings for consistent comparison
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
@@ -291,24 +299,20 @@ export function CuboMagicoDashboard({
       });
       const investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
       
-      // Debug log for funnel matching
-      if (pattern) {
-        // DETAILED DEBUG: Log ALL campaigns data for this pattern
-        if (funnel.name.includes('Maquiagem 35')) {
-          console.log(`[CuboMagico] DEBUG "${funnel.name}": campaignsData length=${campaignsData.length}, insightsData length=${insightsData.length}`);
-          console.log(`[CuboMagico] DEBUG "${funnel.name}": Pattern="${pattern}", Active accounts=[${activeAccountIds.join(', ')}]`);
-          const maq35Campaigns = campaignsData.filter(c => c.campaign_name?.toLowerCase().includes('maquiagem35'));
-          console.log(`[CuboMagico] DEBUG "${funnel.name}": Found ${maq35Campaigns.length} campaigns with maquiagem35, IDs: ${maq35Campaigns.map(c => c.campaign_id).join(', ')}`);
-          const insightCampaignIds = [...new Set(insightsData.map(i => i.campaign_id))];
-          console.log(`[CuboMagico] DEBUG "${funnel.name}": Insight campaign IDs: ${insightCampaignIds.join(', ')}`);
-        }
-        
-        // Extra debug for problematic funnels
+      // Debug log for funnel matching - detailed for problematic patterns
+      if (pattern && pattern.includes('maquiagem35')) {
+        console.log(`[CuboMagico] DEBUG "${funnel.name}": campaignsData=${campaignsData.length}, insightsData=${insightsData.length}`);
+        console.log(`[CuboMagico] DEBUG "${funnel.name}": Pattern="${pattern}"`);
+        console.log(`[CuboMagico] DEBUG "${funnel.name}": Matching campaigns=${matchingCampaigns.length}, IDs: ${matchingCampaigns.map(c => c.campaign_id).slice(0, 5).join(', ')}`);
+        console.log(`[CuboMagico] DEBUG "${funnel.name}": Matching insights=${matchingInsights.length}, Spend=R$${investimento.toFixed(2)}`);
         if (matchingCampaigns.length > 0 && matchingInsights.length === 0) {
-          const sampleCampaignIds = matchingCampaigns.slice(0, 3).map(c => c.campaign_id);
-          const insightCampaignIds = new Set(insightsData.slice(0, 100).map(i => i.campaign_id));
-          console.log(`[CuboMagico] DEBUG Funnel "${funnel.name}": sample campaign_ids=${JSON.stringify(sampleCampaignIds)}, sample insight campaign_ids=${JSON.stringify([...insightCampaignIds].slice(0, 5))}`);
+          const insightCampaignIds = [...new Set(insightsData.map(i => String(i.campaign_id)))];
+          console.log(`[CuboMagico] DEBUG "${funnel.name}": Insight campaign IDs: ${insightCampaignIds.slice(0, 10).join(', ')}`);
+          console.log(`[CuboMagico] DEBUG "${funnel.name}": Matching campaign IDs: ${[...matchingCampaignIds].slice(0, 5).join(', ')}`);
         }
+      }
+      
+      if (pattern) {
         console.log(`[CuboMagico] Funnel "${funnel.name}" pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${matchingInsights.length} insights, R$${investimento.toFixed(2)}`);
       }
 

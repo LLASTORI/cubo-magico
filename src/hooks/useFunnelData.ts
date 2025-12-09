@@ -220,10 +220,18 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     staleTime: 30 * 1000,
   });
 
+  // Get active account IDs first before building insights query
+  const activeAccountIds = accountsQuery.data || [];
+
   const insightsQuery = useQuery({
-    queryKey: ['insights', projectId, startDateStr, endDateStr],
+    queryKey: ['insights', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
-      console.log(`[useFunnelData] Fetching insights for project=${projectId}, dates=${startDateStr} to ${endDateStr}`);
+      if (activeAccountIds.length === 0) {
+        console.log(`[useFunnelData] No active accounts, skipping insights fetch`);
+        return [];
+      }
+      
+      console.log(`[useFunnelData] Fetching insights for project=${projectId}, dates=${startDateStr} to ${endDateStr}, accounts=${activeAccountIds.join(',')}`);
       
       // Fetch ALL ad-level insights with pagination to handle any time period
       const PAGE_SIZE = 1000;
@@ -236,6 +244,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           .from('meta_insights')
           .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
           .eq('project_id', projectId!)
+          .in('ad_account_id', activeAccountIds)
           .not('ad_id', 'is', null)
           .gte('date_start', startDateStr)
           .lte('date_start', endDateStr)
@@ -261,7 +270,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       console.log(`[useFunnelData] Ad-level insights loaded: ${allData.length}, total spend: ${allData.reduce((s, i) => s + (i.spend || 0), 0).toFixed(2)}`);
       return allData as MetaInsight[];
     },
-    enabled,
+    enabled: enabled && activeAccountIds.length > 0,
     staleTime: 0, // Always fetch fresh data
     gcTime: 0, // Don't cache
     refetchOnMount: 'always',
@@ -277,7 +286,6 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // Extract data
   const funnels = funnelsQuery.data || [];
   const mappings = mappingsQuery.data || [];
-  const activeAccountIds = accountsQuery.data || [];
   const salesData = salesQuery.data || [];
   const rawInsights = insightsQuery.data || [];
 

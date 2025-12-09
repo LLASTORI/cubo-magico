@@ -1192,65 +1192,89 @@ export function CuboMagicoDashboard({
                                     {metrics.positionBreakdown.map((pos, index) => {
                                       const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
                                       
-                                      // Taxas ideais por tipo de posição com frases positivas
-                                      const getIdealInfo = (tipo: string, taxaAtual: number) => {
-                                        switch (tipo) {
-                                          case 'FRONT':
-                                          case 'FE':
-                                            return { 
-                                              ideal: '100%', 
-                                              min: 100,
-                                              max: 100,
-                                              desc: 'Produto principal - base de cálculo',
-                                              frasePositiva: 'Este é o seu produto de entrada! Cada venda aqui é uma oportunidade de aumentar o ticket com OBs e Upsells.',
-                                              status: 'base'
-                                            };
-                                          case 'OB':
-                                            return { 
-                                              ideal: '20-40%', 
-                                              min: 20,
-                                              max: 40,
-                                              desc: 'Order Bump - oferta complementar no checkout',
-                                              frasePositiva: taxaAtual >= 20 
-                                                ? 'Excelente! Seu Order Bump está convertendo bem. Continue otimizando a oferta!'
-                                                : 'Dica: Teste diferentes ofertas e posicionamentos para aumentar a conversão do OB.',
-                                              status: taxaAtual >= 20 ? 'success' : taxaAtual >= 10 ? 'warning' : 'danger'
-                                            };
-                                          case 'US':
-                                            return { 
-                                              ideal: '10-20%', 
-                                              min: 10,
-                                              max: 20,
-                                              desc: 'Upsell - oferta de upgrade pós-compra',
-                                              frasePositiva: taxaAtual >= 10 
-                                                ? 'Ótimo trabalho! Seu Upsell está performando dentro do esperado.'
-                                                : 'Dica: Trabalhe na copy e na oferta irresistível para aumentar a conversão.',
-                                              status: taxaAtual >= 10 ? 'success' : taxaAtual >= 5 ? 'warning' : 'danger'
-                                            };
-                                          case 'DS':
-                                            return { 
-                                              ideal: '5-15%', 
-                                              min: 5,
-                                              max: 15,
-                                              desc: 'Downsell - alternativa mais acessível',
-                                              frasePositiva: taxaAtual >= 5 
-                                                ? 'Muito bem! Seu Downsell está recuperando vendas que seriam perdidas.'
-                                                : 'Dica: O Downsell é sua segunda chance. Ofereça algo irrecusável!',
-                                              status: taxaAtual >= 5 ? 'success' : taxaAtual >= 2 ? 'warning' : 'danger'
-                                            };
-                                          default:
-                                            return { 
-                                              ideal: 'N/A', 
-                                              min: 0,
-                                              max: 100,
-                                              desc: 'Posição do funil',
-                                              frasePositiva: 'Continue acompanhando suas métricas!',
-                                              status: 'base'
-                                            };
-                                        }
+                                      // Calcula potencial de aumento de receita
+                                      const calcularPotencial = (taxaAtual: number, taxaIdealMin: number, ticketMedio: number, vendasFront: number) => {
+                                        if (taxaAtual >= taxaIdealMin) return null;
+                                        const diferenca = taxaIdealMin - taxaAtual;
+                                        const vendasPotenciais = Math.round(vendasFront * (diferenca / 100));
+                                        const receitaPotencial = vendasPotenciais * ticketMedio;
+                                        return { diferenca, vendasPotenciais, receitaPotencial };
                                       };
                                       
-                                      const idealInfo = getIdealInfo(pos.tipo, pos.taxaConversao);
+                                      // Taxas ideais por posição específica (OB1, OB2, US1, etc)
+                                      const getIdealInfo = (tipo: string, ordem: number, taxaAtual: number, receita: number, vendas: number) => {
+                                        const ticketMedioPosicao = vendas > 0 ? receita / vendas : 0;
+                                        const vendasFront = metrics.vendasFront || 1;
+                                        
+                                        // Métricas ideais por posição específica
+                                        const ideais: Record<string, { min: number; max: number; desc: string }> = {
+                                          'OB1': { min: 30, max: 40, desc: 'Order Bump 1 - primeira oferta complementar' },
+                                          'OB2': { min: 20, max: 30, desc: 'Order Bump 2 - segunda oferta complementar' },
+                                          'OB3': { min: 10, max: 20, desc: 'Order Bump 3 - terceira oferta complementar' },
+                                          'OB4': { min: 5, max: 10, desc: 'Order Bump 4 - quarta oferta complementar' },
+                                          'OB5': { min: 3, max: 5, desc: 'Order Bump 5 - quinta oferta complementar' },
+                                          'US1': { min: 1, max: 5, desc: 'Upsell 1 - oferta de upgrade pós-compra' },
+                                          'DS1': { min: 1, max: 3, desc: 'Downsell 1 - alternativa mais acessível' },
+                                          'US2': { min: 0.5, max: 1.5, desc: 'Upsell 2 - segunda oferta de upgrade' },
+                                        };
+                                        
+                                        const ordemNum = ordem || 1;
+                                        const key = `${tipo}${ordemNum}`;
+                                        const idealConfig = ideais[key];
+                                        
+                                        if (tipo === 'FRONT' || tipo === 'FE') {
+                                          return { 
+                                            ideal: '100%', 
+                                            min: 100,
+                                            max: 100,
+                                            desc: 'Produto principal - base de cálculo para conversões',
+                                            frasePositiva: 'Este é o coração do seu funil! Cada venda aqui abre portas para OBs, Upsells e mais receita.',
+                                            status: 'base' as const
+                                          };
+                                        }
+                                        
+                                        if (!idealConfig) {
+                                          return { 
+                                            ideal: 'N/A', 
+                                            min: 0,
+                                            max: 100,
+                                            desc: 'Posição do funil',
+                                            frasePositiva: 'Continue acompanhando suas métricas!',
+                                            status: 'base' as const
+                                          };
+                                        }
+                                        
+                                        const { min, max, desc } = idealConfig;
+                                        const potencial = calcularPotencial(taxaAtual, min, ticketMedioPosicao, vendasFront);
+                                        
+                                        let status: 'success' | 'warning' | 'danger';
+                                        let frasePositiva: string;
+                                        
+                                        if (taxaAtual >= min) {
+                                          status = 'success';
+                                          frasePositiva = `Excelente! Você está dentro da faixa ideal. Continue assim!`;
+                                        } else {
+                                          const metadeDoMin = min / 2;
+                                          status = taxaAtual >= metadeDoMin ? 'warning' : 'danger';
+                                          
+                                          if (potencial && potencial.receitaPotencial > 0) {
+                                            frasePositiva = `Há margem para melhorar! Aumentando ${potencial.diferenca.toFixed(1)}% você pode gerar +${potencial.vendasPotenciais} vendas e +${formatCurrency(potencial.receitaPotencial)} em faturamento.`;
+                                          } else {
+                                            frasePositiva = `Há margem para melhorar! Foque em otimizar sua oferta para alcançar a meta de ${min}%.`;
+                                          }
+                                        }
+                                        
+                                        return { 
+                                          ideal: `${min}-${max}%`, 
+                                          min,
+                                          max,
+                                          desc,
+                                          frasePositiva,
+                                          status
+                                        };
+                                      };
+                                      
+                                      const idealInfo = getIdealInfo(pos.tipo, pos.ordem, pos.taxaConversao, pos.receita, pos.vendas);
                                       
                                       return (
                                         <Fragment key={`${pos.tipo}${pos.ordem}`}>

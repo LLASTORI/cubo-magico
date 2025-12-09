@@ -1192,24 +1192,65 @@ export function CuboMagicoDashboard({
                                     {metrics.positionBreakdown.map((pos, index) => {
                                       const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
                                       
-                                      // Taxas ideais por tipo de posição
-                                      const getIdealRate = (tipo: string) => {
+                                      // Taxas ideais por tipo de posição com frases positivas
+                                      const getIdealInfo = (tipo: string, taxaAtual: number) => {
                                         switch (tipo) {
                                           case 'FRONT':
                                           case 'FE':
-                                            return { ideal: '100%', desc: 'Produto principal - base de cálculo' };
+                                            return { 
+                                              ideal: '100%', 
+                                              min: 100,
+                                              max: 100,
+                                              desc: 'Produto principal - base de cálculo',
+                                              frasePositiva: 'Este é o seu produto de entrada! Cada venda aqui é uma oportunidade de aumentar o ticket com OBs e Upsells.',
+                                              status: 'base'
+                                            };
                                           case 'OB':
-                                            return { ideal: '20-40%', desc: 'Order Bump - oferta complementar no checkout' };
+                                            return { 
+                                              ideal: '20-40%', 
+                                              min: 20,
+                                              max: 40,
+                                              desc: 'Order Bump - oferta complementar no checkout',
+                                              frasePositiva: taxaAtual >= 20 
+                                                ? 'Excelente! Seu Order Bump está convertendo bem. Continue otimizando a oferta!'
+                                                : 'Dica: Teste diferentes ofertas e posicionamentos para aumentar a conversão do OB.',
+                                              status: taxaAtual >= 20 ? 'success' : taxaAtual >= 10 ? 'warning' : 'danger'
+                                            };
                                           case 'US':
-                                            return { ideal: '10-20%', desc: 'Upsell - oferta de upgrade pós-compra' };
+                                            return { 
+                                              ideal: '10-20%', 
+                                              min: 10,
+                                              max: 20,
+                                              desc: 'Upsell - oferta de upgrade pós-compra',
+                                              frasePositiva: taxaAtual >= 10 
+                                                ? 'Ótimo trabalho! Seu Upsell está performando dentro do esperado.'
+                                                : 'Dica: Trabalhe na copy e na oferta irresistível para aumentar a conversão.',
+                                              status: taxaAtual >= 10 ? 'success' : taxaAtual >= 5 ? 'warning' : 'danger'
+                                            };
                                           case 'DS':
-                                            return { ideal: '5-15%', desc: 'Downsell - alternativa mais acessível' };
+                                            return { 
+                                              ideal: '5-15%', 
+                                              min: 5,
+                                              max: 15,
+                                              desc: 'Downsell - alternativa mais acessível',
+                                              frasePositiva: taxaAtual >= 5 
+                                                ? 'Muito bem! Seu Downsell está recuperando vendas que seriam perdidas.'
+                                                : 'Dica: O Downsell é sua segunda chance. Ofereça algo irrecusável!',
+                                              status: taxaAtual >= 5 ? 'success' : taxaAtual >= 2 ? 'warning' : 'danger'
+                                            };
                                           default:
-                                            return { ideal: 'N/A', desc: 'Posição do funil' };
+                                            return { 
+                                              ideal: 'N/A', 
+                                              min: 0,
+                                              max: 100,
+                                              desc: 'Posição do funil',
+                                              frasePositiva: 'Continue acompanhando suas métricas!',
+                                              status: 'base'
+                                            };
                                         }
                                       };
                                       
-                                      const idealInfo = getIdealRate(pos.tipo);
+                                      const idealInfo = getIdealInfo(pos.tipo, pos.taxaConversao);
                                       
                                       return (
                                         <Fragment key={`${pos.tipo}${pos.ordem}`}>
@@ -1238,14 +1279,36 @@ export function CuboMagicoDashboard({
                                                 </div>
                                               </div>
                                             </TooltipTrigger>
-                                            <TooltipContent side="bottom" className="max-w-[200px]">
+                                            <TooltipContent side="bottom" className="max-w-[250px]">
                                               <p className="font-semibold">{pos.tipo}{pos.ordem || ''}</p>
                                               <p className="text-xs text-muted-foreground">{idealInfo.desc}</p>
-                                              <div className="mt-1 pt-1 border-t border-border/50">
-                                                <p className="text-xs"><strong>Taxa ideal:</strong> {idealInfo.ideal}</p>
-                                                <p className="text-xs"><strong>Taxa atual:</strong> {pos.taxaConversao.toFixed(1)}%</p>
-                                                <p className="text-xs"><strong>Receita:</strong> {formatCurrency(pos.receita)}</p>
+                                              <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                                                <div className="flex justify-between text-xs">
+                                                  <span>Taxa ideal:</span>
+                                                  <span className="font-medium">{idealInfo.ideal}</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs">
+                                                  <span>Taxa atual:</span>
+                                                  <span className={cn(
+                                                    "font-medium",
+                                                    idealInfo.status === 'success' && "text-green-500",
+                                                    idealInfo.status === 'warning' && "text-yellow-500",
+                                                    idealInfo.status === 'danger' && "text-red-500"
+                                                  )}>{pos.taxaConversao.toFixed(1)}%</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs">
+                                                  <span>Receita:</span>
+                                                  <span className="font-medium">{formatCurrency(pos.receita)}</span>
+                                                </div>
                                               </div>
+                                              <p className={cn(
+                                                "mt-2 pt-2 border-t border-border/50 text-xs italic",
+                                                idealInfo.status === 'success' && "text-green-500",
+                                                idealInfo.status === 'warning' && "text-yellow-500",
+                                                idealInfo.status === 'danger' && "text-orange-500"
+                                              )}>
+                                                {idealInfo.frasePositiva}
+                                              </p>
                                             </TooltipContent>
                                           </Tooltip>
                                           

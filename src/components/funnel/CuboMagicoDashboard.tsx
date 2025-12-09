@@ -1017,6 +1017,9 @@ export function CuboMagicoDashboard({
                                 salesData={salesData}
                                 funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
                                 metaInsights={insightsData || []}
+                                metaCampaigns={campaignsData || []}
+                                metaAdsets={adsetsData || []}
+                                metaAds={adsData || []}
                               />
                             </TabsContent>
 

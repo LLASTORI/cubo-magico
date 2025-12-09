@@ -28,7 +28,6 @@ import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
 import LTVAnalysis from '@/components/funnel/LTVAnalysis';
 import FunnelChangelog from '@/components/funnel/FunnelChangelog';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
-import { FunnelScoreHistory } from '@/components/funnel/FunnelScoreHistory';
 
 // Define unified sales type that matches FunnelAnalysis query
 interface UnifiedSale {
@@ -1227,49 +1226,45 @@ export function CuboMagicoDashboard({
                                       positionCount++;
                                     });
                                     
-                                    // Store individual scores for history
-                                    let positionsScoreValue = 0;
-                                    let connectScoreValue = 0;
-                                    let txPaginaScoreValue = 0;
-                                    let txCheckoutScoreValue = 0;
-                                    
                                     if (positionCount > 0) {
-                                      positionsScoreValue = Math.round(positionScore / positionCount);
-                                      totalScore += positionsScoreValue * 0.4;
+                                      totalScore += (positionScore / positionCount) * 0.4;
                                       totalWeight += 0.4;
                                     }
                                     
                                     // 2. Score do Connect Rate - peso 20%
                                     if (metrics.linkClicks > 0) {
-                                      if (metrics.connectRate >= 81) connectScoreValue = 100;
-                                      else if (metrics.connectRate >= 70) connectScoreValue = 80;
-                                      else if (metrics.connectRate >= 55) connectScoreValue = 60;
-                                      else if (metrics.connectRate >= 50) connectScoreValue = 40;
-                                      else connectScoreValue = Math.round((metrics.connectRate / 50) * 40);
+                                      let connectScore = 0;
+                                      if (metrics.connectRate >= 81) connectScore = 100;
+                                      else if (metrics.connectRate >= 70) connectScore = 80;
+                                      else if (metrics.connectRate >= 55) connectScore = 60;
+                                      else if (metrics.connectRate >= 50) connectScore = 40;
+                                      else connectScore = (metrics.connectRate / 50) * 40;
                                       
-                                      totalScore += connectScoreValue * 0.2;
+                                      totalScore += connectScore * 0.2;
                                       totalWeight += 0.2;
                                     }
                                     
                                     // 3. Score TX Página→Checkout - peso 20%
                                     if (metrics.landingPageViews > 0) {
-                                      if (metrics.txPaginaCheckout >= 35) txPaginaScoreValue = 100;
-                                      else if (metrics.txPaginaCheckout >= 25) txPaginaScoreValue = 80;
-                                      else if (metrics.txPaginaCheckout >= 15) txPaginaScoreValue = 60;
-                                      else txPaginaScoreValue = Math.round((metrics.txPaginaCheckout / 15) * 60);
+                                      let txPaginaScore = 0;
+                                      if (metrics.txPaginaCheckout >= 35) txPaginaScore = 100;
+                                      else if (metrics.txPaginaCheckout >= 25) txPaginaScore = 80;
+                                      else if (metrics.txPaginaCheckout >= 15) txPaginaScore = 60;
+                                      else txPaginaScore = (metrics.txPaginaCheckout / 15) * 60;
                                       
-                                      totalScore += txPaginaScoreValue * 0.2;
+                                      totalScore += txPaginaScore * 0.2;
                                       totalWeight += 0.2;
                                     }
                                     
                                     // 4. Score TX Checkout→Compra - peso 20%
                                     if (metrics.initiateCheckouts > 0) {
-                                      if (metrics.txCheckoutCompra >= 50) txCheckoutScoreValue = 100;
-                                      else if (metrics.txCheckoutCompra >= 35) txCheckoutScoreValue = 80;
-                                      else if (metrics.txCheckoutCompra >= 20) txCheckoutScoreValue = 60;
-                                      else txCheckoutScoreValue = Math.round((metrics.txCheckoutCompra / 20) * 60);
+                                      let txCheckoutScore = 0;
+                                      if (metrics.txCheckoutCompra >= 50) txCheckoutScore = 100;
+                                      else if (metrics.txCheckoutCompra >= 35) txCheckoutScore = 80;
+                                      else if (metrics.txCheckoutCompra >= 20) txCheckoutScore = 60;
+                                      else txCheckoutScore = (metrics.txCheckoutCompra / 20) * 60;
                                       
-                                      totalScore += txCheckoutScoreValue * 0.2;
+                                      totalScore += txCheckoutScore * 0.2;
                                       totalWeight += 0.2;
                                     }
                                     
@@ -1304,17 +1299,7 @@ export function CuboMagicoDashboard({
                                       gradient = 'from-red-500 to-rose-400';
                                     }
                                     
-                                    return { 
-                                      score: finalScore, 
-                                      status, 
-                                      statusLabel, 
-                                      message, 
-                                      gradient,
-                                      positionsScore: positionsScoreValue,
-                                      connectRateScore: connectScoreValue,
-                                      txPaginaCheckoutScore: txPaginaScoreValue,
-                                      txCheckoutCompraScore: txCheckoutScoreValue,
-                                    };
+                                    return { score: finalScore, status, statusLabel, message, gradient };
                                   };
                                   
                                   const funnelScore = calculateFunnelScore();
@@ -1404,21 +1389,6 @@ export function CuboMagicoDashboard({
                                           </div>
                                         </TooltipContent>
                                       </Tooltip>
-                                      
-                                      {/* Score History Chart */}
-                                      <div className="mt-4">
-                                        <FunnelScoreHistory
-                                          projectId={projectId}
-                                          funnelId={metrics.funnel.id}
-                                          currentScore={{
-                                            score: funnelScore.score,
-                                            positionsScore: funnelScore.positionsScore,
-                                            connectRateScore: funnelScore.connectRateScore,
-                                            txPaginaCheckoutScore: funnelScore.txPaginaCheckoutScore,
-                                            txCheckoutCompraScore: funnelScore.txCheckoutCompraScore,
-                                          }}
-                                        />
-                                      </div>
                                     </div>
                                   );
                                 })()}

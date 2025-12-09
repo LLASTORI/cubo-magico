@@ -194,7 +194,6 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       // - End: 2025-12-09 23:59:59 Brazil = 2025-12-10 02:59:59 UTC
       // Using timezone-aware timestamps ensures correct filtering
       const startTimestamp = `${startDateStr}T03:00:00.000Z`; // 00:00 Brazil = 03:00 UTC
-      const endTimestamp = `${endDateStr}T02:59:59.999Z`; // 23:59 Brazil (next day) = 02:59 UTC
       
       // Adjust end date to next day for the UTC conversion
       const endDateObj = new Date(endDateStr);
@@ -204,18 +203,41 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       
       console.log(`[useFunnelData] Sales query: Brazil ${startDateStr} to ${endDateStr} => UTC ${startTimestamp} to ${adjustedEndTimestamp}`);
       
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, checkout_origin, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
-        .eq('project_id', projectId!)
-        .in('status', ['APPROVED', 'COMPLETE'])
-        .gte('sale_date', startTimestamp)
-        .lte('sale_date', adjustedEndTimestamp)
-        .order('sale_date', { ascending: false })
-        .limit(5000);
+      // Fetch ALL sales with pagination to handle large date ranges
+      const PAGE_SIZE = 1000;
+      let allData: SaleRecord[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      return (data as SaleRecord[]) || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, checkout_origin, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
+          .eq('project_id', projectId!)
+          .in('status', ['APPROVED', 'COMPLETE'])
+          .gte('sale_date', startTimestamp)
+          .lte('sale_date', adjustedEndTimestamp)
+          .order('transaction_id', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) {
+          console.error(`[useFunnelData] Error fetching sales page ${page}:`, error);
+          throw error;
+        }
+        
+        console.log(`[useFunnelData] Sales page ${page}: ${data?.length || 0} records`);
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[useFunnelData] Total sales loaded: ${allData.length}, total revenue: R$${allData.reduce((s, sale) => s + (sale.total_price_brl || 0), 0).toFixed(2)}`);
+      return allData;
     },
     enabled,
     staleTime: 30 * 1000,

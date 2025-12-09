@@ -113,6 +113,60 @@ export type Database = {
           },
         ]
       }
+      funnel_score_history: {
+        Row: {
+          connect_rate_score: number | null
+          created_at: string
+          funnel_id: string
+          id: string
+          positions_score: number | null
+          project_id: string
+          recorded_date: string
+          score: number
+          tx_checkout_compra_score: number | null
+          tx_pagina_checkout_score: number | null
+        }
+        Insert: {
+          connect_rate_score?: number | null
+          created_at?: string
+          funnel_id: string
+          id?: string
+          positions_score?: number | null
+          project_id: string
+          recorded_date?: string
+          score: number
+          tx_checkout_compra_score?: number | null
+          tx_pagina_checkout_score?: number | null
+        }
+        Update: {
+          connect_rate_score?: number | null
+          created_at?: string
+          funnel_id?: string
+          id?: string
+          positions_score?: number | null
+          project_id?: string
+          recorded_date?: string
+          score?: number
+          tx_checkout_compra_score?: number | null
+          tx_pagina_checkout_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_score_history_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_score_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnels: {
         Row: {
           campaign_name_pattern: string | null

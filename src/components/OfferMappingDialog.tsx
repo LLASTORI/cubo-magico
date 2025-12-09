@@ -185,6 +185,10 @@ export function OfferMappingDialog({
       const ordemPosicao = values.ordem_posicao ? parseInt(values.ordem_posicao) : 1;
       const nomePosicao = generatePositionName(values.tipo_posicao || null, ordemPosicao);
 
+      // Find the funnel_id (FK) that corresponds to the selected funnel name
+      const selectedFunnel = existingFunnels.find(f => f.name === values.id_funil);
+      const funnelId = selectedFunnel?.id || null;
+
       const data = {
         id_produto: values.id_produto_visual || null,
         id_produto_visual: values.id_produto_visual || null,
@@ -196,6 +200,7 @@ export function OfferMappingDialog({
         data_ativacao: values.data_ativacao || null,
         data_desativacao: values.data_desativacao || null,
         id_funil: values.id_funil,
+        funnel_id: funnelId, // Sync the FK with the funnel name
         anotacoes: values.anotacoes || null,
         tipo_posicao: values.tipo_posicao || null,
         ordem_posicao: ordemPosicao,

@@ -225,9 +225,20 @@ export default function OfferMappingsAuto() {
         valor: number | null;
         status: string;
         id_funil: string;
+        funnel_id: string | null;
         data_ativacao: string;
         project_id: string;
       }
+
+      // Get the "A Definir" funnel ID for new imports
+      const { data: defaultFunnel } = await supabase
+        .from('funnels')
+        .select('id')
+        .eq('project_id', currentProject.id)
+        .eq('name', 'A Definir')
+        .maybeSingle();
+      
+      const defaultFunnelId = defaultFunnel?.id || null;
       
       const offersToImport: OfferToImport[] = [];
       const seenOfferCodes = new Set<string>();
@@ -276,6 +287,7 @@ export default function OfferMappingsAuto() {
               valor: data.bestPrice,
               status: 'Ativo',
               id_funil: 'A Definir',
+              funnel_id: defaultFunnelId,
               data_ativacao: new Date().toISOString().split('T')[0],
               project_id: currentProject.id,
             });
@@ -328,6 +340,7 @@ export default function OfferMappingsAuto() {
                       valor: offer.price.value,
                       status: 'Ativo',
                       id_funil: 'A Definir',
+                      funnel_id: defaultFunnelId,
                       data_ativacao: new Date().toISOString().split('T')[0],
                       project_id: currentProject.id,
                     });

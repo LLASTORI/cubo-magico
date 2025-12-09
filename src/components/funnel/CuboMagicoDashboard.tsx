@@ -247,10 +247,15 @@ export function CuboMagicoDashboard({
       const matchingCampaigns = pattern 
         ? campaignsData.filter(c => c.campaign_name?.toLowerCase().includes(pattern))
         : [];
-      const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
+      // Ensure campaign IDs are strings for consistent comparison
+      const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
 
       // Calculate total spend from ad-level insights (aggregate by ad_id + date)
-      const matchingInsights = insightsData.filter(i => matchingCampaignIds.has(i.campaign_id || ''));
+      // Ensure campaign_id comparison is done as strings
+      const matchingInsights = insightsData.filter(i => {
+        const campaignId = String(i.campaign_id || '');
+        return matchingCampaignIds.has(campaignId);
+      });
       
       // Deduplicate by ad_id + date to avoid double counting
       const uniqueSpend = new Map<string, number>();
@@ -266,6 +271,12 @@ export function CuboMagicoDashboard({
       
       // Debug log for funnel matching
       if (pattern) {
+        // Extra debug for problematic funnels
+        if (matchingCampaigns.length > 0 && matchingInsights.length === 0) {
+          const sampleCampaignIds = matchingCampaigns.slice(0, 3).map(c => c.campaign_id);
+          const insightCampaignIds = new Set(insightsData.slice(0, 100).map(i => i.campaign_id));
+          console.log(`[CuboMagico] DEBUG Funnel "${funnel.name}": sample campaign_ids=${JSON.stringify(sampleCampaignIds)}, sample insight campaign_ids=${JSON.stringify([...insightCampaignIds].slice(0, 5))}`);
+        }
         console.log(`[CuboMagico] Funnel "${funnel.name}" pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${matchingInsights.length} insights, R$${investimento.toFixed(2)}`);
       }
 

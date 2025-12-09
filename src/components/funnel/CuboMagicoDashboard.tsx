@@ -1466,7 +1466,7 @@ export function CuboMagicoDashboard({
                                           "flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
                                           connectRateInfo.borderClass
                                         )}>
-                                          <span className="text-[10px] text-purple-600 font-medium uppercase">Views Página</span>
+                                          <span className="text-[10px] text-purple-600 font-medium uppercase">Connect Rate</span>
                                           <span className={cn(
                                             "text-xl font-bold",
                                             connectRateInfo.status === 'excellent' && "text-green-600",
@@ -1476,7 +1476,7 @@ export function CuboMagicoDashboard({
                                           )}>
                                             {metrics.connectRate.toFixed(1)}%
                                           </span>
-                                          <span className="text-[9px] text-purple-500">Connect Rate</span>
+                                          <span className="text-[9px] text-purple-500">Views Página</span>
                                         </div>
                                       </TooltipTrigger>
                                       <TooltipContent side="bottom" className="max-w-[280px]">
@@ -1525,50 +1525,208 @@ export function CuboMagicoDashboard({
                                       <span className="text-[9px] text-muted-foreground">{metrics.initiateCheckouts}</span>
                                     </div>
                                     
-                                    {/* Initiate Checkouts */}
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px] cursor-help">
-                                          <span className="text-[10px] text-orange-600 font-medium uppercase">Checkouts</span>
-                                          <span className={cn(
-                                            "text-xl font-bold",
-                                            metrics.txPaginaCheckout >= 10 ? "text-green-600" : metrics.txPaginaCheckout >= 5 ? "text-yellow-600" : "text-red-600"
-                                          )}>
-                                            {metrics.txPaginaCheckout.toFixed(1)}%
-                                          </span>
-                                          <span className="text-[9px] text-orange-500">TX Pág→Ckout</span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p><strong>TX Página→Checkout:</strong> Checkouts ÷ Views Página</p>
-                                        <p className="text-xs text-muted-foreground">{metrics.initiateCheckouts} checkouts de {metrics.landingPageViews} views</p>
-                                      </TooltipContent>
-                                    </Tooltip>
+                                    {/* Initiate Checkouts - TX Página→Checkout with ideal metrics */}
+                                    {(() => {
+                                      const getTxPaginaCheckoutInfo = (rate: number) => {
+                                        if (rate >= 35) {
+                                          return {
+                                            status: 'excellent' as const,
+                                            statusLabel: 'Ótimo',
+                                            frasePositiva: 'Excelente! Sua página está convertendo muito bem visitantes em interessados. Continue com essa oferta irresistível!',
+                                            borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        } else if (rate >= 25) {
+                                          return {
+                                            status: 'good' as const,
+                                            statusLabel: 'Bom',
+                                            frasePositiva: 'Bom trabalho! Sua página está performando bem. Pequenos ajustes na headline ou na oferta podem elevar ainda mais!',
+                                            borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        } else if (rate >= 15) {
+                                          return {
+                                            status: 'warning' as const,
+                                            statusLabel: 'Pode melhorar',
+                                            frasePositiva: 'Há oportunidade de melhoria! Teste diferentes headlines, provas sociais e escassez para aumentar o interesse.',
+                                            borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        } else {
+                                          return {
+                                            status: 'danger' as const,
+                                            statusLabel: 'Precisa de ajustes',
+                                            frasePositiva: 'A página precisa de atenção! Revise a clareza da oferta, benefícios e se o preço está adequado ao público.',
+                                            borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        }
+                                      };
+                                      
+                                      const txPaginaInfo = getTxPaginaCheckoutInfo(metrics.txPaginaCheckout);
+                                      
+                                      return (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={cn(
+                                              "flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                              txPaginaInfo.borderClass
+                                            )}>
+                                              <span className="text-[10px] text-orange-600 font-medium uppercase">TX Pág→Ckout</span>
+                                              <span className={cn(
+                                                "text-xl font-bold",
+                                                txPaginaInfo.status === 'excellent' && "text-green-600",
+                                                txPaginaInfo.status === 'good' && "text-blue-600",
+                                                txPaginaInfo.status === 'warning' && "text-yellow-600",
+                                                txPaginaInfo.status === 'danger' && "text-red-600"
+                                              )}>
+                                                {metrics.txPaginaCheckout.toFixed(1)}%
+                                              </span>
+                                              <span className="text-[9px] text-orange-500">Checkouts</span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[280px]">
+                                            <p className="font-semibold">TX Página→Checkout</p>
+                                            <p className="text-xs text-muted-foreground">Taxa de visitantes que iniciam o checkout</p>
+                                            <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                                              <div className="flex justify-between text-xs">
+                                                <span>Status:</span>
+                                                <span className={cn(
+                                                  "font-medium",
+                                                  txPaginaInfo.status === 'excellent' && "text-green-500",
+                                                  txPaginaInfo.status === 'good' && "text-blue-500",
+                                                  txPaginaInfo.status === 'warning' && "text-yellow-500",
+                                                  txPaginaInfo.status === 'danger' && "text-red-500"
+                                                )}>{txPaginaInfo.statusLabel}</span>
+                                              </div>
+                                              <div className="flex justify-between text-xs">
+                                                <span>Taxa atual:</span>
+                                                <span className="font-medium">{metrics.txPaginaCheckout.toFixed(1)}%</span>
+                                              </div>
+                                              <div className="flex justify-between text-xs">
+                                                <span>Views / Checkout:</span>
+                                                <span className="font-medium">{metrics.landingPageViews} / {metrics.initiateCheckouts}</span>
+                                              </div>
+                                            </div>
+                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] space-y-1 text-muted-foreground">
+                                              <p>• <strong>Ótimo:</strong> 35% ou mais</p>
+                                              <p>• <strong>Bom:</strong> 25% a 34%</p>
+                                              <p>• <strong>Pode melhorar:</strong> 15% a 24%</p>
+                                              <p>• <strong>Precisa de ajustes:</strong> abaixo de 15%</p>
+                                            </div>
+                                            <p className={cn(
+                                              "mt-2 pt-2 border-t border-border/50 text-xs italic",
+                                              txPaginaInfo.status === 'excellent' && "text-green-500",
+                                              txPaginaInfo.status === 'good' && "text-blue-500",
+                                              txPaginaInfo.status === 'warning' && "text-yellow-500",
+                                              txPaginaInfo.status === 'danger' && "text-orange-500"
+                                            )}>
+                                              {txPaginaInfo.frasePositiva}
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      );
+                                    })()}
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
                                       <span className="text-[9px] text-muted-foreground">{metrics.purchases}</span>
                                     </div>
                                     
-                                    {/* Purchases */}
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px] cursor-help">
-                                          <span className="text-[10px] text-green-600 font-medium uppercase">Compras</span>
-                                          <span className={cn(
-                                            "text-xl font-bold",
-                                            metrics.txCheckoutCompra >= 50 ? "text-green-600" : metrics.txCheckoutCompra >= 30 ? "text-yellow-600" : "text-red-600"
-                                          )}>
-                                            {metrics.txCheckoutCompra.toFixed(1)}%
-                                          </span>
-                                          <span className="text-[9px] text-green-500">TX Ckout→Compra</span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p><strong>TX Checkout→Compra:</strong> Compras ÷ Checkouts</p>
-                                        <p className="text-xs text-muted-foreground">{metrics.purchases} compras de {metrics.initiateCheckouts} checkouts</p>
-                                      </TooltipContent>
-                                    </Tooltip>
+                                    {/* Purchases - TX Checkout→Compra with ideal metrics */}
+                                    {(() => {
+                                      const getTxCheckoutCompraInfo = (rate: number) => {
+                                        if (rate >= 50) {
+                                          return {
+                                            status: 'excellent' as const,
+                                            statusLabel: 'Ótimo',
+                                            frasePositiva: 'Excelente! Seu checkout está convertendo muito bem. A experiência de pagamento está fluida e confiável!',
+                                            borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        } else if (rate >= 35) {
+                                          return {
+                                            status: 'good' as const,
+                                            statusLabel: 'Bom',
+                                            frasePositiva: 'Bom trabalho! Seu checkout está performando bem. Teste mais opções de pagamento e garantias para elevar!',
+                                            borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        } else if (rate >= 20) {
+                                          return {
+                                            status: 'warning' as const,
+                                            statusLabel: 'Pode melhorar',
+                                            frasePositiva: 'Há oportunidade de melhoria! Verifique se há fricção no checkout, ofereça mais meios de pagamento e destaque garantias.',
+                                            borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        } else {
+                                          return {
+                                            status: 'danger' as const,
+                                            statusLabel: 'Precisa de ajustes',
+                                            frasePositiva: 'O checkout precisa de atenção! Revise: preço, formas de pagamento, selos de segurança e clareza nas garantias.',
+                                            borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background'
+                                          };
+                                        }
+                                      };
+                                      
+                                      const txCheckoutInfo = getTxCheckoutCompraInfo(metrics.txCheckoutCompra);
+                                      
+                                      return (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={cn(
+                                              "flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                              txCheckoutInfo.borderClass
+                                            )}>
+                                              <span className="text-[10px] text-green-600 font-medium uppercase">TX Ckout→Compra</span>
+                                              <span className={cn(
+                                                "text-xl font-bold",
+                                                txCheckoutInfo.status === 'excellent' && "text-green-600",
+                                                txCheckoutInfo.status === 'good' && "text-blue-600",
+                                                txCheckoutInfo.status === 'warning' && "text-yellow-600",
+                                                txCheckoutInfo.status === 'danger' && "text-red-600"
+                                              )}>
+                                                {metrics.txCheckoutCompra.toFixed(1)}%
+                                              </span>
+                                              <span className="text-[9px] text-green-500">Compras</span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[280px]">
+                                            <p className="font-semibold">TX Checkout→Compra</p>
+                                            <p className="text-xs text-muted-foreground">Taxa de checkouts que se convertem em compras</p>
+                                            <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                                              <div className="flex justify-between text-xs">
+                                                <span>Status:</span>
+                                                <span className={cn(
+                                                  "font-medium",
+                                                  txCheckoutInfo.status === 'excellent' && "text-green-500",
+                                                  txCheckoutInfo.status === 'good' && "text-blue-500",
+                                                  txCheckoutInfo.status === 'warning' && "text-yellow-500",
+                                                  txCheckoutInfo.status === 'danger' && "text-red-500"
+                                                )}>{txCheckoutInfo.statusLabel}</span>
+                                              </div>
+                                              <div className="flex justify-between text-xs">
+                                                <span>Taxa atual:</span>
+                                                <span className="font-medium">{metrics.txCheckoutCompra.toFixed(1)}%</span>
+                                              </div>
+                                              <div className="flex justify-between text-xs">
+                                                <span>Checkouts / Compras:</span>
+                                                <span className="font-medium">{metrics.initiateCheckouts} / {metrics.purchases}</span>
+                                              </div>
+                                            </div>
+                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] space-y-1 text-muted-foreground">
+                                              <p>• <strong>Ótimo:</strong> 50% ou mais</p>
+                                              <p>• <strong>Bom:</strong> 35% a 49%</p>
+                                              <p>• <strong>Pode melhorar:</strong> 20% a 34%</p>
+                                              <p>• <strong>Precisa de ajustes:</strong> abaixo de 20%</p>
+                                            </div>
+                                            <p className={cn(
+                                              "mt-2 pt-2 border-t border-border/50 text-xs italic",
+                                              txCheckoutInfo.status === 'excellent' && "text-green-500",
+                                              txCheckoutInfo.status === 'good' && "text-blue-500",
+                                              txCheckoutInfo.status === 'warning' && "text-yellow-500",
+                                              txCheckoutInfo.status === 'danger' && "text-orange-500"
+                                            )}>
+                                              {txCheckoutInfo.frasePositiva}
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                                   );

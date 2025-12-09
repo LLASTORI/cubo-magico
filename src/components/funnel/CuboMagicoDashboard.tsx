@@ -1101,7 +1101,12 @@ export function CuboMagicoDashboard({
               return (
                 <Fragment key={metrics.funnel.id}>
                   <TableRow 
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    className={cn(
+                      "cursor-pointer transition-all",
+                      isExpanded 
+                        ? "bg-primary/5 border-l-2 border-l-primary hover:bg-primary/10" 
+                        : "hover:bg-muted/50"
+                    )}
                     onClick={() => {
                       setExpandedFunnelId(isExpanded ? null : metrics.funnel.id);
                       onFunnelSelect?.(metrics.funnel.id);
@@ -1159,36 +1164,36 @@ export function CuboMagicoDashboard({
                       <TableCell colSpan={11} className="p-0">
                         <div className="p-4 animate-in slide-in-from-top-2 duration-200">
                           <Tabs defaultValue="overview" className="w-full">
-                            <TabsList className="flex flex-wrap gap-1 h-auto p-1 mb-4">
-                              <TabsTrigger value="overview" className="text-xs gap-1">
+                            <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 mb-4 bg-muted/50">
+                              <TabsTrigger value="overview" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <Target className="w-3 h-3" />
                                 Visão Geral
                               </TabsTrigger>
-                              <TabsTrigger value="meta" className="text-xs gap-1">
+                              <TabsTrigger value="meta" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <Megaphone className="w-3 h-3" />
                                 Meta Ads
                               </TabsTrigger>
-                              <TabsTrigger value="temporal" className="text-xs gap-1">
+                              <TabsTrigger value="temporal" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <LineChart className="w-3 h-3" />
                                 Evolução
                               </TabsTrigger>
-                              <TabsTrigger value="comparison" className="text-xs gap-1">
+                              <TabsTrigger value="comparison" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <GitCompare className="w-3 h-3" />
                                 Comparar
                               </TabsTrigger>
-                              <TabsTrigger value="utm" className="text-xs gap-1">
+                              <TabsTrigger value="utm" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <Tag className="w-3 h-3" />
                                 UTM
                               </TabsTrigger>
-                              <TabsTrigger value="payment" className="text-xs gap-1">
+                              <TabsTrigger value="payment" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <CreditCard className="w-3 h-3" />
                                 Pagamentos
                               </TabsTrigger>
-                              <TabsTrigger value="ltv" className="text-xs gap-1">
+                              <TabsTrigger value="ltv" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <Coins className="w-3 h-3" />
                                 LTV
                               </TabsTrigger>
-                              <TabsTrigger value="changelog" className="text-xs gap-1">
+                              <TabsTrigger value="changelog" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <History className="w-3 h-3" />
                                 Histórico
                               </TabsTrigger>

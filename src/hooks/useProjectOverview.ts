@@ -95,51 +95,54 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     enabled: !!projectId,
   });
 
-  // Fetch meta insights
+  // Fetch meta insights with campaign info
   const { data: metaInsights, isLoading: insightsLoading } = useQuery({
     queryKey: ['project-overview-insights', projectId, startDate, endDate],
     queryFn: async () => {
       if (!projectId) return [];
       
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('*')
-        .eq('project_id', projectId)
-        .gte('date_start', startDate)
-        .lte('date_stop', endDate);
+      // Fetch insights with pagination
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_insights')
+          .select('*')
+          .eq('project_id', projectId)
+          .not('ad_id', 'is', null)
+          .gte('date_start', startDate)
+          .lte('date_start', endDate)
+          .order('id', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allData;
     },
     enabled: !!projectId,
   });
 
-  // Fetch funnel meta accounts
-  const { data: funnelMetaAccounts, isLoading: funnelAccountsLoading } = useQuery({
-    queryKey: ['project-overview-funnel-accounts', projectId],
+  // Fetch meta campaigns for name pattern matching
+  const { data: metaCampaigns, isLoading: campaignsLoading } = useQuery({
+    queryKey: ['project-overview-campaigns', projectId],
     queryFn: async () => {
       if (!projectId) return [];
       
       const { data, error } = await supabase
-        .from('funnel_meta_accounts')
-        .select('*')
-        .eq('project_id', projectId);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!projectId,
-  });
-
-  // Fetch meta ad accounts
-  const { data: metaAdAccounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['project-overview-meta-accounts', projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      
-      const { data, error } = await supabase
-        .from('meta_ad_accounts')
-        .select('*')
+        .from('meta_campaigns')
+        .select('campaign_id, campaign_name')
         .eq('project_id', projectId);
       
       if (error) throw error;
@@ -176,9 +179,9 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     })).sort((a, b) => b.revenue - a.revenue);
   }, [sales]);
 
-  // Calculate funnel ROAS
+  // Calculate funnel ROAS using campaign_name_pattern
   const funnelROAS = useMemo((): FunnelROAS[] => {
-    if (!funnels || !sales || !metaInsights || !offerMappings || !funnelMetaAccounts || !metaAdAccounts) {
+    if (!funnels || !sales || !metaInsights || !offerMappings || !metaCampaigns) {
       return [];
     }
 
@@ -194,20 +197,19 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
         .filter(sale => sale.offer_code && funnelOfferCodes.includes(sale.offer_code))
         .reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0);
 
-      // Get meta account IDs for this funnel
-      const funnelAccountIds = funnelMetaAccounts
-        .filter(fma => fma.funnel_id === funnel.id)
-        .map(fma => fma.meta_account_id);
+      // Find campaigns that match the funnel's campaign_name_pattern
+      let funnelSpend = 0;
+      if (funnel.campaign_name_pattern) {
+        const pattern = funnel.campaign_name_pattern.toLowerCase();
+        const matchingCampaignIds = metaCampaigns
+          .filter(c => c.campaign_name?.toLowerCase().includes(pattern))
+          .map(c => c.campaign_id);
 
-      // Get account_id strings from meta_ad_accounts
-      const accountIdStrings = metaAdAccounts
-        .filter(acc => funnelAccountIds.includes(acc.id))
-        .map(acc => acc.account_id);
-
-      // Calculate spend from insights for these accounts
-      const funnelSpend = metaInsights
-        .filter(insight => accountIdStrings.includes(insight.ad_account_id))
-        .reduce((sum, insight) => sum + (insight.spend || 0), 0);
+        // Calculate spend from insights for these campaigns
+        funnelSpend = metaInsights
+          .filter(insight => insight.campaign_id && matchingCampaignIds.includes(insight.campaign_id))
+          .reduce((sum, insight) => sum + (insight.spend || 0), 0);
+      }
 
       return {
         funnelId: funnel.id,
@@ -217,7 +219,7 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
         roas: funnelSpend > 0 ? funnelRevenue / funnelSpend : 0,
       };
     }).filter(f => f.revenue > 0 || f.spend > 0);
-  }, [funnels, sales, metaInsights, offerMappings, funnelMetaAccounts, metaAdAccounts]);
+  }, [funnels, sales, metaInsights, offerMappings, metaCampaigns]);
 
   // Calculate general ROAS (all sales vs all spend)
   const generalROAS = useMemo(() => {
@@ -292,7 +294,7 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     };
   }, [sales, metaInsights]);
 
-  const isLoading = salesLoading || funnelsLoading || mappingsLoading || insightsLoading || funnelAccountsLoading || accountsLoading;
+  const isLoading = salesLoading || funnelsLoading || mappingsLoading || insightsLoading || campaignsLoading;
 
   return {
     categoryMetrics,

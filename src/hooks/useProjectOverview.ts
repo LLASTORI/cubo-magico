@@ -95,11 +95,31 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     enabled: !!projectId,
   });
 
-  // Fetch meta insights with campaign info
-  const { data: metaInsights, isLoading: insightsLoading } = useQuery({
-    queryKey: ['project-overview-insights', projectId, startDate, endDate],
+  // Fetch active meta ad accounts first (same as useFunnelData)
+  const { data: activeAccountIds, isLoading: accountsLoading } = useQuery({
+    queryKey: ['project-overview-accounts', projectId],
     queryFn: async () => {
       if (!projectId) return [];
+      
+      const { data, error } = await supabase
+        .from('meta_ad_accounts')
+        .select('account_id')
+        .eq('project_id', projectId)
+        .eq('is_active', true);
+      
+      if (error) throw error;
+      return (data || []).map(a => a.account_id).sort();
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch meta insights filtered by active accounts (same as useFunnelData)
+  const { data: metaInsights, isLoading: insightsLoading } = useQuery({
+    queryKey: ['project-overview-insights', projectId, startDate, endDate, activeAccountIds?.join(',')],
+    queryFn: async () => {
+      if (!projectId || !activeAccountIds || activeAccountIds.length === 0) return [];
+      
+      console.log(`[ProjectOverview] Fetching insights for accounts: ${activeAccountIds.join(',')}`);
       
       // Fetch insights with pagination
       const PAGE_SIZE = 1000;
@@ -112,6 +132,7 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
           .from('meta_insights')
           .select('*')
           .eq('project_id', projectId)
+          .in('ad_account_id', activeAccountIds)
           .not('ad_id', 'is', null)
           .gte('date_start', startDate)
           .lte('date_start', endDate)
@@ -129,9 +150,10 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
         }
       }
       
+      console.log(`[ProjectOverview] Insights loaded: ${allData.length}, total spend: ${allData.reduce((s: number, i: any) => s + (i.spend || 0), 0).toFixed(2)}`);
       return allData;
     },
-    enabled: !!projectId,
+    enabled: !!projectId && !!activeAccountIds && activeAccountIds.length > 0,
   });
 
   // Fetch meta campaigns for name pattern matching
@@ -310,7 +332,7 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     };
   }, [sales, metaInsights]);
 
-  const isLoading = salesLoading || funnelsLoading || mappingsLoading || insightsLoading || campaignsLoading;
+  const isLoading = salesLoading || funnelsLoading || mappingsLoading || insightsLoading || campaignsLoading || accountsLoading;
 
   return {
     categoryMetrics,

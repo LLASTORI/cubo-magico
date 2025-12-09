@@ -2051,22 +2051,30 @@ export function CuboMagicoDashboard({
       {/* Legend */}
       <Card className="p-4">
         <h4 className="font-semibold text-sm mb-3">Legenda de Status</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-500" />
-            <span><strong>Excelente:</strong> CPA ≤ 80% do máximo</span>
+            <span><strong>Excelente:</strong> CPA ≤ 80% do máx</span>
           </div>
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-500" />
-            <span><strong>Bom:</strong> CPA ≤ 100% do máximo</span>
+            <span><strong>Bom:</strong> CPA ≤ 100% do máx</span>
           </div>
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-yellow-500" />
-            <span><strong>Atenção:</strong> CPA até 120% do máximo</span>
+            <span><strong>Atenção:</strong> CPA até 120% do máx</span>
           </div>
           <div className="flex items-center gap-2">
             <XCircle className="w-4 h-4 text-red-500" />
-            <span><strong>Crítico:</strong> CPA &gt; 120% do máximo</span>
+            <span><strong>Crítico:</strong> CPA &gt; 120% do máx</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-red-600" />
+            <span><strong>Sem Retorno:</strong> Invest. sem vendas</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-muted-foreground/30" />
+            <span><strong>Inativo:</strong> Sem dados</span>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-3">

@@ -143,16 +143,35 @@ export function CuboMagicoDashboard({
   // and passes them down to this component
   const salesData = externalSalesData || [];
   // Fetch Meta campaigns - use unified query key (campaigns need all for pattern matching)
+  // Fetch Meta campaigns with pagination to handle >1000 campaigns
   const { data: campaignsData } = useQuery({
     queryKey: ['meta-hierarchy-campaigns', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meta_campaigns')
-        .select('id, campaign_id, campaign_name, status')
-        .eq('project_id', projectId);
+      const PAGE_SIZE = 1000;
+      let allCampaigns: any[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_campaigns')
+          .select('id, campaign_id, campaign_name, status')
+          .eq('project_id', projectId)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allCampaigns = [...allCampaigns, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[CuboMagico] Loaded ${allCampaigns.length} campaigns`);
+      return allCampaigns;
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,

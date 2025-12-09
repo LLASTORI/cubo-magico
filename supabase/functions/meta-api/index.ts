@@ -762,9 +762,9 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
 // Fetch ads directly from Meta API with pagination
 async function getAdsForAccountWithPagination(accessToken: string, accountId: string) {
   const allAds: any[] = []
-  // Request creative{effective_object_story_id} to build proper preview URLs
-  // The effective_object_story_id format is: {page_id}_{post_id}
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative{id,effective_object_story_id,thumbnail_url},created_time&limit=500&access_token=${accessToken}`
+  // Request preview_shareable_link directly from Meta API - this is the correct permanent shareable link
+  // Format: https://fb.me/{encoded_id} - redirects to the ad preview page
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,preview_shareable_link,creative{id,thumbnail_url},created_time&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
   
@@ -781,16 +781,12 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
 
     if (data.data && data.data.length > 0) {
       const ads = data.data.map((a: any) => {
-        // Build preview URL from effective_object_story_id
-        // Format: {page_id}_{post_id} -> https://facebook.com/{page_id}_{post_id}
-        // This format redirects to the correct post automatically
-        let previewUrl = null
-        const storyId = a.creative?.effective_object_story_id
-        if (storyId && storyId.includes('_')) {
-          // Use the full story ID with underscore - Facebook handles the redirect
-          previewUrl = `https://facebook.com/${storyId}`
-        } else if (a.creative?.thumbnail_url) {
-          // Fallback to thumbnail URL if no story ID
+        // Use preview_shareable_link from Meta API - this is the official permanent shareable link
+        // Format: https://fb.me/XXXXX - works for all ad types
+        let previewUrl = a.preview_shareable_link || null
+        
+        // Fallback to thumbnail URL if no shareable link available
+        if (!previewUrl && a.creative?.thumbnail_url) {
           previewUrl = a.creative.thumbnail_url
         }
         

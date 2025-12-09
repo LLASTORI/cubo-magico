@@ -782,12 +782,13 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
     if (data.data && data.data.length > 0) {
       const ads = data.data.map((a: any) => {
         // Build preview URL from effective_object_story_id
-        // Format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
+        // Format: {page_id}_{post_id} -> https://facebook.com/{page_id}_{post_id}
+        // This format redirects to the correct post automatically
         let previewUrl = null
         const storyId = a.creative?.effective_object_story_id
         if (storyId && storyId.includes('_')) {
-          const [pageId, postId] = storyId.split('_')
-          previewUrl = `https://www.facebook.com/${pageId}/posts/${postId}`
+          // Use the full story ID with underscore - Facebook handles the redirect
+          previewUrl = `https://facebook.com/${storyId}`
         } else if (a.creative?.thumbnail_url) {
           // Fallback to thumbnail URL if no story ID
           previewUrl = a.creative.thumbnail_url

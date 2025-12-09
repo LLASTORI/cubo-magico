@@ -318,6 +318,9 @@ const FunnelAnalysis = () => {
     const STABLE_CYCLES_REQUIRED = cacheWasEmpty ? 2 : 3; // 2 cycles if empty, 3 if partial
 
     pollingRef.current = setInterval(async () => {
+      // Early exit if polling was stopped
+      if (!pollingRef.current) return;
+      
       elapsed = Math.floor((Date.now() - startTime) / 1000);
       setSyncProgress(prev => ({ ...prev, elapsed }));
 

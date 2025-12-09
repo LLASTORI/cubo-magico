@@ -877,97 +877,145 @@ export function CuboMagicoDashboard({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-500/10">
-              <Coins className="w-5 h-5 text-red-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Investimento Total</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimentoTotal)}</p>
-              {totals.investimentoNaoAtribuido > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {formatCurrency(totals.investimentoNaoAtribuido)} não atribuído
-                </p>
-              )}
-            </div>
-          </div>
-        </Card>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className="p-4 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-red-500/10">
+                  <Coins className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Investimento Total</p>
+                  <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimentoTotal)}</p>
+                  {totals.investimentoNaoAtribuido > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(totals.investimentoNaoAtribuido)} não atribuído
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p><strong>Investimento Total:</strong> Soma de todo gasto em anúncios no período</p>
+            <p className="text-xs text-muted-foreground">Inclui campanhas atribuídas e não atribuídas a funis</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-orange-500/10">
-              <TrendingDown className="w-5 h-5 text-orange-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Invest. Atribuído</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimento)}</p>
-            </div>
-          </div>
-        </Card>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className="p-4 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-500/10">
+                  <TrendingDown className="w-5 h-5 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Invest. Atribuído</p>
+                  <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimento)}</p>
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p><strong>Investimento Atribuído:</strong> Gasto em campanhas vinculadas a funis</p>
+            <p className="text-xs text-muted-foreground">Baseado no padrão de nome das campanhas</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-500/10">
-              <DollarSign className="w-5 h-5 text-green-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Faturamento</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamentoTotal)}</p>
-              {totals.faturamentoNaoAtribuido > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {formatCurrency(totals.faturamentoNaoAtribuido)} não atribuído
-                </p>
-              )}
-            </div>
-          </div>
-        </Card>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className="p-4 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <DollarSign className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Faturamento</p>
+                  <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamentoTotal)}</p>
+                  {totals.faturamentoNaoAtribuido > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(totals.faturamentoNaoAtribuido)} não atribuído
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p><strong>Faturamento:</strong> Receita total de vendas aprovadas</p>
+            <p className="text-xs text-muted-foreground">Status: approved, complete, completed</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <ShoppingCart className="w-5 h-5 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Vendas FRONT</p>
-              <p className="text-xl font-bold text-foreground">{totals.vendasFront}</p>
-            </div>
-          </div>
-        </Card>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className="p-4 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <ShoppingCart className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Vendas FRONT</p>
+                  <p className="text-xl font-bold text-foreground">{totals.vendasFront}</p>
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p><strong>Vendas FRONT:</strong> Quantidade de vendas do produto principal</p>
+            <p className="text-xs text-muted-foreground">Primeira posição do funil (FE/FRONT)</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-500/10">
-              <Users className="w-5 h-5 text-purple-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Produtos</p>
-              <p className="text-xl font-bold text-foreground">{totals.totalProdutosReal}</p>
-              {(totals.totalProdutosReal - totals.totalProdutos) > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {totals.totalProdutosReal - totals.totalProdutos} não atribuído
-                </p>
-              )}
-            </div>
-          </div>
-        </Card>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className="p-4 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <Users className="w-5 h-5 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Produtos</p>
+                  <p className="text-xl font-bold text-foreground">{totals.totalProdutosReal}</p>
+                  {(totals.totalProdutosReal - totals.totalProdutos) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {totals.totalProdutosReal - totals.totalProdutos} não atribuído
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p><strong>Total Produtos:</strong> Soma de todas as vendas (FRONT + Order Bumps + Upsells)</p>
+            <p className="text-xs text-muted-foreground">Inclui todas as posições do funil</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
-              <TrendingUp className={`w-5 h-5 ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">ROAS Geral</p>
-              <p className={`text-xl font-bold ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`}>
-                {totals.investimentoTotal > 0 ? (totals.faturamentoTotal / totals.investimentoTotal).toFixed(2) : '0.00'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Fat. Total / Invest. Total
-              </p>
-            </div>
-          </div>
-        </Card>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className="p-4 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
+                  <TrendingUp className={`w-5 h-5 ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`} />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">ROAS Geral</p>
+                  <p className={`text-xl font-bold ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`}>
+                    {totals.investimentoTotal > 0 ? (totals.faturamentoTotal / totals.investimentoTotal).toFixed(2) : '0.00'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Fat. Total / Invest. Total
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p><strong>ROAS:</strong> Return on Ad Spend (Retorno sobre Investimento)</p>
+            <p className="text-xs text-muted-foreground">Faturamento ÷ Investimento. Meta: ≥ 2x</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Funnel Table with Drill-down */}
@@ -978,14 +1026,54 @@ export function CuboMagicoDashboard({
               <TableHead className="w-8"></TableHead>
               <TableHead>Funil</TableHead>
               <TableHead>Padrão</TableHead>
-              <TableHead className="text-right">Investimento</TableHead>
-              <TableHead className="text-right">Faturamento</TableHead>
-              <TableHead className="text-right">FRONT</TableHead>
-              <TableHead className="text-right">Ticket Médio</TableHead>
-              <TableHead className="text-right">CPA Máximo</TableHead>
-              <TableHead className="text-right">CPA Real</TableHead>
-              <TableHead className="text-right">ROAS</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Investimento</TooltipTrigger>
+                  <TooltipContent>Gasto em anúncios atribuído ao funil</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Faturamento</TooltipTrigger>
+                  <TooltipContent>Receita total de vendas aprovadas do funil</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">FRONT</TooltipTrigger>
+                  <TooltipContent>Vendas do produto principal (primeira posição)</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Ticket Médio</TooltipTrigger>
+                  <TooltipContent>Faturamento ÷ Vendas FRONT</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">CPA Máximo</TooltipTrigger>
+                  <TooltipContent>Ticket Médio ÷ ROAS Alvo. Quanto pode pagar por aquisição</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">CPA Real</TooltipTrigger>
+                  <TooltipContent>Investimento ÷ Vendas FRONT. Custo real por aquisição</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-right">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">ROAS</TooltipTrigger>
+                  <TooltipContent>Faturamento ÷ Investimento. Meta: ≥ ROAS Alvo do funil</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Status</TooltipTrigger>
+                  <TooltipContent>Baseado na relação CPA Real vs CPA Máximo</TooltipContent>
+                </Tooltip>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

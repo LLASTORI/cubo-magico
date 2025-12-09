@@ -310,12 +310,35 @@ export function CuboMagicoDashboard({
       // Ensure campaign IDs are strings for consistent comparison
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
 
+      // DEBUG: Log campaign IDs for 35+ funnel
+      if (pattern.includes('maquiagem35')) {
+        console.log(`[DEBUG 35+] Pattern: "${pattern}"`);
+        console.log(`[DEBUG 35+] Matching campaigns:`, matchingCampaigns.slice(0, 3).map(c => ({ id: c.campaign_id, name: c.campaign_name })));
+        console.log(`[DEBUG 35+] Campaign IDs in Set:`, Array.from(matchingCampaignIds).slice(0, 5));
+        console.log(`[DEBUG 35+] Sample insights campaign_ids:`, insightsData.slice(0, 5).map(i => i.campaign_id));
+      }
+
       // Calculate total spend from ad-level insights (aggregate by ad_id + date)
       // Ensure campaign_id comparison is done as strings
       const matchingInsights = insightsData.filter(i => {
         const campaignId = String(i.campaign_id || '');
         return matchingCampaignIds.has(campaignId);
       });
+      
+      // DEBUG: For 35+ funnel, check if any insight matches
+      if (pattern.includes('maquiagem35') && matchingInsights.length === 0 && insightsData.length > 0) {
+        // Check if ANY insight's campaign_id is in any campaign
+        const sampleInsight = insightsData[0];
+        const allCampaignIds = new Set(campaignsData.map(c => String(c.campaign_id)));
+        console.log(`[DEBUG 35+] Sample insight campaign_id: "${sampleInsight.campaign_id}" (type: ${typeof sampleInsight.campaign_id})`);
+        console.log(`[DEBUG 35+] Is sample in ALL campaigns?`, allCampaignIds.has(String(sampleInsight.campaign_id)));
+        console.log(`[DEBUG 35+] Is sample in 35+ campaigns?`, matchingCampaignIds.has(String(sampleInsight.campaign_id)));
+        
+        // Check if campaign 6840169073692 exists
+        const target = '6840169073692';
+        console.log(`[DEBUG 35+] Is ${target} in matchingCampaignIds?`, matchingCampaignIds.has(target));
+        console.log(`[DEBUG 35+] Insights with campaign ${target}:`, insightsData.filter(i => String(i.campaign_id) === target).length);
+      }
       
       // Deduplicate by ad_id + date to avoid double counting
       const uniqueSpend = new Map<string, number>();

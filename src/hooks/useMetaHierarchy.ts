@@ -49,6 +49,7 @@ interface UseMetaHierarchyProps {
   projectId: string | undefined;
   insights: MetaInsight[] | undefined;
   enabled?: boolean;
+  activeAccountIds?: string[]; // Filter by active accounts
 }
 
 interface UseMetaHierarchyResult {
@@ -66,11 +67,13 @@ interface UseMetaHierarchyResult {
 /**
  * Unified hook for fetching Meta Ads hierarchy (campaigns, adsets, ads)
  * based on insight data. This ensures consistent caching across components.
+ * IMPORTANT: Filters by activeAccountIds to only fetch data from selected accounts.
  */
 export const useMetaHierarchy = ({
   projectId,
   insights,
   enabled = true,
+  activeAccountIds = [],
 }: UseMetaHierarchyProps): UseMetaHierarchyResult => {
   const isEnabled = enabled && !!projectId;
 
@@ -85,18 +88,28 @@ export const useMetaHierarchy = ({
     return { adIds, adsetIds, campaignIds };
   }, [insights]);
 
-  // Fetch all campaigns for project (needed for name matching)
+  // Extract unique account IDs from insights if not provided
+  const accountIdsFromInsights = useMemo(() => {
+    if (activeAccountIds.length > 0) return activeAccountIds;
+    if (!insights || insights.length === 0) return [];
+    return [...new Set(insights.map(i => i.ad_account_id))];
+  }, [insights, activeAccountIds]);
+
+  // Fetch campaigns - ONLY from active accounts (filtered by ad_account_id)
   const campaignsQuery = useQuery({
-    queryKey: ['meta-hierarchy-campaigns', projectId],
+    queryKey: ['meta-hierarchy-campaigns', projectId, accountIdsFromInsights.join(',')],
     queryFn: async () => {
+      if (accountIdsFromInsights.length === 0) return [];
       const { data, error } = await supabase
         .from('meta_campaigns')
         .select('id, campaign_id, campaign_name, status')
-        .eq('project_id', projectId!);
+        .eq('project_id', projectId!)
+        .in('ad_account_id', accountIdsFromInsights);
       if (error) throw error;
+      console.log(`[useMetaHierarchy] Campaigns loaded: ${data?.length || 0} from ${accountIdsFromInsights.length} accounts`);
       return (data as MetaCampaign[]) || [];
     },
-    enabled: isEnabled,
+    enabled: isEnabled && accountIdsFromInsights.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 

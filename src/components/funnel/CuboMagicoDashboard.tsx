@@ -142,42 +142,8 @@ export function CuboMagicoDashboard({
   // This avoids duplicate queries - FunnelAnalysis.tsx fetches all sales with full fields
   // and passes them down to this component
   const salesData = externalSalesData || [];
-  // Fetch Meta campaigns - use unified query key (campaigns need all for pattern matching)
-  // Fetch Meta campaigns with pagination to handle >1000 campaigns
-  const { data: campaignsData } = useQuery({
-    queryKey: ['meta-hierarchy-campaigns', projectId],
-    queryFn: async () => {
-      const PAGE_SIZE = 1000;
-      let allCampaigns: any[] = [];
-      let page = 0;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('meta_campaigns')
-          .select('id, campaign_id, campaign_name, status')
-          .eq('project_id', projectId)
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allCampaigns = [...allCampaigns, ...data];
-          page++;
-          hasMore = data.length === PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
-      }
-      
-      console.log(`[CuboMagico] Loaded ${allCampaigns.length} campaigns`);
-      return allCampaigns;
-    },
-    enabled: !!projectId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Fetch active Meta ad accounts FIRST (needed for insights queries)
+  
+  // Fetch active Meta ad accounts FIRST (needed for filtering all queries)
   const { data: metaAdAccounts } = useQuery({
     queryKey: ['meta-ad-accounts-cubo', projectId],
     queryFn: async () => {
@@ -198,10 +164,47 @@ export function CuboMagicoDashboard({
     return metaAdAccounts.map(a => a.account_id).sort();
   }, [metaAdAccounts]);
 
+  // Fetch Meta campaigns - ONLY from active accounts with pagination
+  const { data: campaignsData } = useQuery({
+    queryKey: ['meta-hierarchy-campaigns', projectId, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) return [];
+      
+      const PAGE_SIZE = 1000;
+      let allCampaigns: any[] = [];
+      let page = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_campaigns')
+          .select('id, campaign_id, campaign_name, status, ad_account_id')
+          .eq('project_id', projectId)
+          .in('ad_account_id', activeAccountIds)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allCampaigns = [...allCampaigns, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[CuboMagico] Loaded ${allCampaigns.length} campaigns from ${activeAccountIds.length} active accounts`);
+      return allCampaigns;
+    },
+    enabled: !!projectId && activeAccountIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Fetch Meta insights - ALL ad-level for accurate spend calculations with pagination
-  // IMPORTANT: Use same query key as useFunnelData for cache consistency
+  // IMPORTANT: Include activeAccountIds in query key to refetch when accounts change
   const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
-    queryKey: ['insights', projectId, startDateStr, endDateStr],
+    queryKey: ['insights', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return [];
       

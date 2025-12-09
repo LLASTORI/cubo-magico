@@ -293,6 +293,16 @@ export function CuboMagicoDashboard({
       
       // Debug log for funnel matching
       if (pattern) {
+        // DETAILED DEBUG: Log ALL campaigns data for this pattern
+        if (funnel.name.includes('Maquiagem 35')) {
+          console.log(`[CuboMagico] DEBUG "${funnel.name}": campaignsData length=${campaignsData.length}, insightsData length=${insightsData.length}`);
+          console.log(`[CuboMagico] DEBUG "${funnel.name}": Pattern="${pattern}", Active accounts=[${activeAccountIds.join(', ')}]`);
+          const maq35Campaigns = campaignsData.filter(c => c.campaign_name?.toLowerCase().includes('maquiagem35'));
+          console.log(`[CuboMagico] DEBUG "${funnel.name}": Found ${maq35Campaigns.length} campaigns with maquiagem35, IDs: ${maq35Campaigns.map(c => c.campaign_id).join(', ')}`);
+          const insightCampaignIds = [...new Set(insightsData.map(i => i.campaign_id))];
+          console.log(`[CuboMagico] DEBUG "${funnel.name}": Insight campaign IDs: ${insightCampaignIds.join(', ')}`);
+        }
+        
         // Extra debug for problematic funnels
         if (matchingCampaigns.length > 0 && matchingInsights.length === 0) {
           const sampleCampaignIds = matchingCampaigns.slice(0, 3).map(c => c.campaign_id);

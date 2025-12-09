@@ -1184,8 +1184,215 @@ export function CuboMagicoDashboard({
                             </TabsList>
 
                             <TabsContent value="overview" className="mt-0">
-                              {/* Funnel Flow */}
+                              {/* Funnel Score + Funnel Flow */}
                               <div className="space-y-4">
+                                {/* Funnel Score Card */}
+                                {(() => {
+                                  // Calcular score geral do funil (0-100)
+                                  const calculateFunnelScore = () => {
+                                    let totalScore = 0;
+                                    let totalWeight = 0;
+                                    
+                                    // 1. Score das posições do funil (OBs, USs, DSs) - peso 40%
+                                    const ideaisConfig: Record<string, { min: number; max: number }> = {
+                                      'OB1': { min: 30, max: 40 },
+                                      'OB2': { min: 20, max: 30 },
+                                      'OB3': { min: 10, max: 20 },
+                                      'OB4': { min: 5, max: 10 },
+                                      'OB5': { min: 3, max: 5 },
+                                      'US1': { min: 1, max: 5 },
+                                      'DS1': { min: 1, max: 3 },
+                                      'US2': { min: 0.5, max: 1.5 },
+                                    };
+                                    
+                                    let positionScore = 0;
+                                    let positionCount = 0;
+                                    
+                                    metrics.positionBreakdown.forEach(pos => {
+                                      if (pos.tipo === 'FRONT' || pos.tipo === 'FE') return;
+                                      
+                                      const key = `${pos.tipo}${pos.ordem || 1}`;
+                                      const ideal = ideaisConfig[key];
+                                      if (!ideal) return;
+                                      
+                                      // Score baseado em quão perto está do ideal (0-100 para cada posição)
+                                      if (pos.taxaConversao >= ideal.min) {
+                                        positionScore += 100; // Atingiu o ideal
+                                      } else if (pos.taxaConversao >= ideal.min * 0.5) {
+                                        positionScore += 50 + (pos.taxaConversao / ideal.min) * 50; // Parcial
+                                      } else {
+                                        positionScore += (pos.taxaConversao / ideal.min) * 50; // Abaixo
+                                      }
+                                      positionCount++;
+                                    });
+                                    
+                                    if (positionCount > 0) {
+                                      totalScore += (positionScore / positionCount) * 0.4;
+                                      totalWeight += 0.4;
+                                    }
+                                    
+                                    // 2. Score do Connect Rate - peso 20%
+                                    if (metrics.linkClicks > 0) {
+                                      let connectScore = 0;
+                                      if (metrics.connectRate >= 81) connectScore = 100;
+                                      else if (metrics.connectRate >= 70) connectScore = 80;
+                                      else if (metrics.connectRate >= 55) connectScore = 60;
+                                      else if (metrics.connectRate >= 50) connectScore = 40;
+                                      else connectScore = (metrics.connectRate / 50) * 40;
+                                      
+                                      totalScore += connectScore * 0.2;
+                                      totalWeight += 0.2;
+                                    }
+                                    
+                                    // 3. Score TX Página→Checkout - peso 20%
+                                    if (metrics.landingPageViews > 0) {
+                                      let txPaginaScore = 0;
+                                      if (metrics.txPaginaCheckout >= 35) txPaginaScore = 100;
+                                      else if (metrics.txPaginaCheckout >= 25) txPaginaScore = 80;
+                                      else if (metrics.txPaginaCheckout >= 15) txPaginaScore = 60;
+                                      else txPaginaScore = (metrics.txPaginaCheckout / 15) * 60;
+                                      
+                                      totalScore += txPaginaScore * 0.2;
+                                      totalWeight += 0.2;
+                                    }
+                                    
+                                    // 4. Score TX Checkout→Compra - peso 20%
+                                    if (metrics.initiateCheckouts > 0) {
+                                      let txCheckoutScore = 0;
+                                      if (metrics.txCheckoutCompra >= 50) txCheckoutScore = 100;
+                                      else if (metrics.txCheckoutCompra >= 35) txCheckoutScore = 80;
+                                      else if (metrics.txCheckoutCompra >= 20) txCheckoutScore = 60;
+                                      else txCheckoutScore = (metrics.txCheckoutCompra / 20) * 60;
+                                      
+                                      totalScore += txCheckoutScore * 0.2;
+                                      totalWeight += 0.2;
+                                    }
+                                    
+                                    // Normalizar o score baseado nos pesos reais utilizados
+                                    const finalScore = totalWeight > 0 ? Math.round(totalScore / totalWeight) : 0;
+                                    
+                                    // Determinar status e mensagem
+                                    let status: 'excellent' | 'good' | 'warning' | 'danger';
+                                    let statusLabel: string;
+                                    let message: string;
+                                    let gradient: string;
+                                    
+                                    if (finalScore >= 80) {
+                                      status = 'excellent';
+                                      statusLabel = 'Excelente';
+                                      message = 'Seu funil está performando muito bem! Continue otimizando para manter esse resultado.';
+                                      gradient = 'from-green-500 to-emerald-400';
+                                    } else if (finalScore >= 60) {
+                                      status = 'good';
+                                      statusLabel = 'Bom';
+                                      message = 'Bom trabalho! Há algumas oportunidades de melhoria nas posições ou conversões.';
+                                      gradient = 'from-blue-500 to-cyan-400';
+                                    } else if (finalScore >= 40) {
+                                      status = 'warning';
+                                      statusLabel = 'Atenção';
+                                      message = 'Seu funil tem margem para melhorar. Foque nas métricas destacadas em amarelo e vermelho.';
+                                      gradient = 'from-yellow-500 to-amber-400';
+                                    } else {
+                                      status = 'danger';
+                                      statusLabel = 'Crítico';
+                                      message = 'Seu funil precisa de atenção urgente. Revise as métricas e otimize cada etapa.';
+                                      gradient = 'from-red-500 to-rose-400';
+                                    }
+                                    
+                                    return { score: finalScore, status, statusLabel, message, gradient };
+                                  };
+                                  
+                                  const funnelScore = calculateFunnelScore();
+                                  
+                                  return (
+                                    <div className="mb-6">
+                                      <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Score Geral do Funil</h4>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className={cn(
+                                            "relative overflow-hidden rounded-xl p-4 bg-gradient-to-br shadow-lg cursor-help",
+                                            funnelScore.gradient
+                                          )}>
+                                            <div className="flex items-center justify-between text-white">
+                                              <div className="flex items-center gap-4">
+                                                <div className="relative">
+                                                  <svg className="w-20 h-20 transform -rotate-90">
+                                                    <circle
+                                                      cx="40"
+                                                      cy="40"
+                                                      r="35"
+                                                      stroke="rgba(255,255,255,0.2)"
+                                                      strokeWidth="6"
+                                                      fill="none"
+                                                    />
+                                                    <circle
+                                                      cx="40"
+                                                      cy="40"
+                                                      r="35"
+                                                      stroke="white"
+                                                      strokeWidth="6"
+                                                      fill="none"
+                                                      strokeLinecap="round"
+                                                      strokeDasharray={`${(funnelScore.score / 100) * 220} 220`}
+                                                    />
+                                                  </svg>
+                                                  <div className="absolute inset-0 flex items-center justify-center">
+                                                    <span className="text-2xl font-black">{funnelScore.score}</span>
+                                                  </div>
+                                                </div>
+                                                <div>
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="text-lg font-bold">{funnelScore.statusLabel}</span>
+                                                    <Badge className="bg-white/20 text-white border-white/30 text-xs">
+                                                      {funnelScore.score}/100
+                                                    </Badge>
+                                                  </div>
+                                                  <p className="text-sm text-white/80 max-w-md mt-1">
+                                                    {funnelScore.message}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <div className="hidden md:flex flex-col items-end text-right text-xs text-white/70 space-y-1">
+                                                <span>Posições do Funil: 40%</span>
+                                                <span>Connect Rate: 20%</span>
+                                                <span>TX Pág→Checkout: 20%</span>
+                                                <span>TX Checkout→Compra: 20%</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="max-w-[320px]">
+                                          <p className="font-semibold">Como o Score é calculado?</p>
+                                          <div className="mt-2 space-y-2 text-xs">
+                                            <div className="flex justify-between">
+                                              <span>Posições do Funil (OBs, USs, DSs):</span>
+                                              <span className="font-medium">40%</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span>Connect Rate:</span>
+                                              <span className="font-medium">20%</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span>TX Página→Checkout:</span>
+                                              <span className="font-medium">20%</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span>TX Checkout→Compra:</span>
+                                              <span className="font-medium">20%</span>
+                                            </div>
+                                          </div>
+                                          <div className="mt-3 pt-2 border-t border-border/50 text-[10px] space-y-1 text-muted-foreground">
+                                            <p>• <strong>80-100:</strong> Excelente performance</p>
+                                            <p>• <strong>60-79:</strong> Boa performance</p>
+                                            <p>• <strong>40-59:</strong> Precisa de atenção</p>
+                                            <p>• <strong>0-39:</strong> Situação crítica</p>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  );
+                                })()}
+                                
                                 <div>
                                   <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil</h4>
                                   <div className="flex flex-wrap items-stretch gap-2">

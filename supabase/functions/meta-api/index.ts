@@ -17,8 +17,8 @@ const BATCH_SIZE = 5
 
 // Retry configuration for rate limits
 const MAX_RETRIES = 5
-const INITIAL_DELAY_MS = 5000 // 5 seconds
-const MAX_DELAY_MS = 120000 // 2 minutes
+const INITIAL_DELAY_MS = 3000 // 3 seconds (reduced from 5)
+const MAX_DELAY_MS = 60000 // 1 minute (reduced from 2)
 
 // Max days per request to avoid "reduce data" error from Meta API
 const MAX_DAYS_PER_CHUNK = 15
@@ -31,8 +31,17 @@ const IMMUTABLE_DAYS_THRESHOLD = 8
 // Days threshold for "very recent" data that might still change significantly
 const VERY_RECENT_DAYS_THRESHOLD = 2
 
-// Batch size for database inserts to avoid memory issues
-const DB_INSERT_BATCH_SIZE = 100
+// Batch size for database inserts - INCREASED for performance
+const DB_INSERT_BATCH_SIZE = 250
+
+// Number of chunks to process in parallel - balance between speed and rate limits
+const PARALLEL_CHUNKS = 3
+
+// Optimized delays for faster processing
+const DELAY_BETWEEN_PAGES_MS = 200
+const DELAY_BETWEEN_BATCHES_MS = 50
+const DELAY_BETWEEN_CHUNKS_MS = 500
+const DELAY_BETWEEN_ACCOUNTS_MS = 500
 
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -301,9 +310,9 @@ async function batchUpsert(
       success += batch.length
     }
     
-    // Small delay between batches to avoid overwhelming the DB
+    // Minimal delay between batches for max speed
     if (i + batchSize < records.length) {
-      await delay(100)
+      await delay(DELAY_BETWEEN_BATCHES_MS)
     }
   }
   
@@ -997,9 +1006,9 @@ async function getInsightsForAccount(
     // Check for next page
     url = data.paging?.next || null
     
-    // Add small delay between pages to avoid rate limiting
+    // Optimized delay between pages
     if (url) {
-      await delay(500)
+      await delay(DELAY_BETWEEN_PAGES_MS)
     }
   }
 
@@ -1007,7 +1016,43 @@ async function getInsightsForAccount(
   return allInsights
 }
 
-// INCREMENTAL getInsights: Accepts callback to save data after each chunk
+// Helper to process a single chunk (for parallel execution)
+async function processChunk(
+  accessToken: string,
+  accountIds: string[],
+  chunk: { start: string, stop: string },
+  chunkIndex: number,
+  totalChunks: number,
+  level: string,
+  onChunkComplete?: (insights: any[]) => Promise<number>
+): Promise<{ insights: any[], saved: number }> {
+  console.log(`Processing chunk ${chunkIndex + 1}/${totalChunks}: ${chunk.start} to ${chunk.stop}`)
+  
+  const chunkInsights: any[] = []
+  
+  // Process accounts sequentially to avoid rate limiting per account
+  for (let i = 0; i < accountIds.length; i++) {
+    const accountId = accountIds[i]
+    const insights = await getInsightsForAccount(accessToken, accountId, chunk.start, chunk.stop, level)
+    chunkInsights.push(...insights)
+    
+    // Reduced delay between accounts
+    if (i < accountIds.length - 1) {
+      await delay(DELAY_BETWEEN_ACCOUNTS_MS)
+    }
+  }
+  
+  // SAVE IMMEDIATELY after each chunk if callback provided
+  let saved = 0
+  if (onChunkComplete && chunkInsights.length > 0) {
+    saved = await onChunkComplete(chunkInsights)
+    console.log(`Chunk ${chunkIndex + 1} saved: ${saved} insights`)
+  }
+  
+  return { insights: chunkInsights, saved }
+}
+
+// INCREMENTAL getInsights with PARALLEL chunk processing
 async function getInsightsIncremental(
   accessToken: string, 
   accountIds: string[], 
@@ -1019,46 +1064,56 @@ async function getInsightsIncremental(
   // Split date range into chunks to avoid "reduce data" error
   const dateChunks = splitDateRangeIntoChunks(dateStart, dateStop)
   
-  console.log('Fetching insights incrementally:', { accountIds: accountIds.length, dateStart, dateStop, level, chunks: dateChunks.length })
+  console.log('Fetching insights with PARALLEL processing:', { 
+    accountIds: accountIds.length, 
+    dateStart, 
+    dateStop, 
+    level, 
+    chunks: dateChunks.length,
+    parallelism: PARALLEL_CHUNKS 
+  })
   
   const allInsights: any[] = []
   let totalSaved = 0
 
-  // Process each chunk
-  for (let chunkIndex = 0; chunkIndex < dateChunks.length; chunkIndex++) {
-    const chunk = dateChunks[chunkIndex]
-    console.log(`Processing chunk ${chunkIndex + 1}/${dateChunks.length}: ${chunk.start} to ${chunk.stop}`)
+  // Process chunks in parallel batches
+  for (let batchStart = 0; batchStart < dateChunks.length; batchStart += PARALLEL_CHUNKS) {
+    const batchEnd = Math.min(batchStart + PARALLEL_CHUNKS, dateChunks.length)
+    const batchChunks = dateChunks.slice(batchStart, batchEnd)
     
-    const chunkInsights: any[] = []
+    console.log(`\n🚀 Processing parallel batch ${Math.floor(batchStart / PARALLEL_CHUNKS) + 1}/${Math.ceil(dateChunks.length / PARALLEL_CHUNKS)} (chunks ${batchStart + 1}-${batchEnd}/${dateChunks.length})`)
     
-    // Process accounts sequentially to avoid rate limiting
-    for (let i = 0; i < accountIds.length; i++) {
-      const accountId = accountIds[i]
-      const insights = await getInsightsForAccount(accessToken, accountId, chunk.start, chunk.stop, level)
-      chunkInsights.push(...insights)
-      
-      // Add delay between accounts to avoid rate limiting
-      if (i < accountIds.length - 1) {
-        await delay(1000)
-      }
+    // Process this batch of chunks in parallel
+    const chunkPromises = batchChunks.map((chunk, idx) => 
+      processChunk(
+        accessToken,
+        accountIds,
+        chunk,
+        batchStart + idx,
+        dateChunks.length,
+        level,
+        onChunkComplete
+      )
+    )
+    
+    // Wait for all chunks in this batch to complete
+    const results = await Promise.all(chunkPromises)
+    
+    // Aggregate results
+    for (const result of results) {
+      allInsights.push(...result.insights)
+      totalSaved += result.saved
     }
     
-    // SAVE IMMEDIATELY after each chunk if callback provided
-    if (onChunkComplete && chunkInsights.length > 0) {
-      const saved = await onChunkComplete(chunkInsights)
-      totalSaved += saved
-      console.log(`Chunk ${chunkIndex + 1} saved: ${saved} insights`)
-    }
+    console.log(`✅ Parallel batch complete: ${results.reduce((sum, r) => sum + r.saved, 0)} insights saved in this batch`)
     
-    allInsights.push(...chunkInsights)
-    
-    // Shorter delay between chunks since we're saving incrementally
-    if (chunkIndex < dateChunks.length - 1) {
-      await delay(1500)
+    // Brief delay between parallel batches to avoid overwhelming Meta API
+    if (batchEnd < dateChunks.length) {
+      await delay(DELAY_BETWEEN_CHUNKS_MS)
     }
   }
 
-  console.log(`Completed: ${allInsights.length} total insights, ${totalSaved} saved`)
+  console.log(`\n🎉 Completed: ${allInsights.length} total insights, ${totalSaved} saved`)
   return { insights: allInsights, totalSaved }
 }
 
@@ -1227,10 +1282,10 @@ async function syncInsightsSmartOptimized(
       totalInsightsInserted += totalSaved
       console.log(`Range ${rangeIdx + 1} complete: ${totalSaved} insights saved`)
       
-      // Shorter delay between ranges since we're saving incrementally
+      // Minimal delay between ranges with parallel processing
       if (rangeIdx < dateRanges.length - 1) {
-        console.log('Waiting before next range...')
-        await delay(2000)
+        console.log('Brief pause before next range...')
+        await delay(DELAY_BETWEEN_CHUNKS_MS)
       }
     }
 

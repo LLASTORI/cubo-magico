@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { Target, Megaphone, Layers, ChevronRight, Home, GitBranch, Image, Globe, FileText, TrendingUp, DollarSign } from "lucide-react";
+import { Target, Megaphone, Layers, ChevronRight, Home, GitBranch, Image, Globe, FileText, TrendingUp, DollarSign, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   ChartContainer,
   ChartTooltip,
@@ -610,14 +611,25 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         <p className="text-sm text-muted-foreground">Origem, Campanha, Conjunto, Criativo, Posicionamento e Página das vendas</p>
       </div>
 
-      {/* Summary Cards */}
+      {/* Alert when no Meta data */}
+      {analyzeUTM.totalSpend === 0 && metaInsights.length === 0 && (
+        <Alert className="mb-6 border-yellow-500/50 bg-yellow-500/10">
+          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <AlertDescription className="text-yellow-600 dark:text-yellow-400">
+            Este funil não possui contas Meta vinculadas ou padrão de campanha configurado. 
+            Configure nas opções do funil para visualizar dados de investimento e ROAS.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Summary Cards - Order: Investimento, Receita, Vendas, ROAS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card className="p-4 bg-muted/30">
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-            <Target className="w-4 h-4" />
-            <span>Vendas</span>
+            <DollarSign className="w-4 h-4" />
+            <span>Investimento Total</span>
           </div>
-          <p className="text-2xl font-bold">{analyzeUTM.totalSales}</p>
+          <p className="text-2xl font-bold text-red-500">{formatCurrency(analyzeUTM.totalSpend)}</p>
         </Card>
         <Card className="p-4 bg-muted/30">
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
@@ -628,10 +640,10 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         </Card>
         <Card className="p-4 bg-muted/30">
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-            <DollarSign className="w-4 h-4" />
-            <span>Investimento Total</span>
+            <Target className="w-4 h-4" />
+            <span>Vendas</span>
           </div>
-          <p className="text-2xl font-bold text-red-500">{formatCurrency(analyzeUTM.totalSpend)}</p>
+          <p className="text-2xl font-bold">{analyzeUTM.totalSales}</p>
         </Card>
         <Card className="p-4 bg-muted/30">
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">

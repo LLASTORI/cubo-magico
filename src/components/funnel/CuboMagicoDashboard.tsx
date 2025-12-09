@@ -299,19 +299,7 @@ export function CuboMagicoDashboard({
       });
       const investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
       
-      // Debug log for funnel matching - detailed for problematic patterns
-      if (pattern && pattern.includes('maquiagem35')) {
-        console.log(`[CuboMagico] DEBUG "${funnel.name}": campaignsData=${campaignsData.length}, insightsData=${insightsData.length}`);
-        console.log(`[CuboMagico] DEBUG "${funnel.name}": Pattern="${pattern}"`);
-        console.log(`[CuboMagico] DEBUG "${funnel.name}": Matching campaigns=${matchingCampaigns.length}, IDs: ${matchingCampaigns.map(c => c.campaign_id).slice(0, 5).join(', ')}`);
-        console.log(`[CuboMagico] DEBUG "${funnel.name}": Matching insights=${matchingInsights.length}, Spend=R$${investimento.toFixed(2)}`);
-        if (matchingCampaigns.length > 0 && matchingInsights.length === 0) {
-          const insightCampaignIds = [...new Set(insightsData.map(i => String(i.campaign_id)))];
-          console.log(`[CuboMagico] DEBUG "${funnel.name}": Insight campaign IDs: ${insightCampaignIds.slice(0, 10).join(', ')}`);
-          console.log(`[CuboMagico] DEBUG "${funnel.name}": Matching campaign IDs: ${[...matchingCampaignIds].slice(0, 5).join(', ')}`);
-        }
-      }
-      
+      // Log funnel matching summary (production level)
       if (pattern) {
         console.log(`[CuboMagico] Funnel "${funnel.name}" pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${matchingInsights.length} insights, R$${investimento.toFixed(2)}`);
       }

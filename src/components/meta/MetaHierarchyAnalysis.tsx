@@ -53,6 +53,7 @@ interface MetaAd {
   campaign_id: string;
   status: string | null;
   preview_url: string | null;
+  thumbnail_url?: string | null;
 }
 
 interface MetaHierarchyAnalysisProps {
@@ -69,6 +70,7 @@ interface HierarchyMetrics {
   name: string;
   status?: string | null;
   previewUrl?: string | null;
+  thumbnailUrl?: string | null;
   spend: number;
   impressions: number;
   clicks: number;
@@ -256,6 +258,7 @@ export const MetaHierarchyAnalysis = ({
         name: displayName,
         status: ad?.status,
         previewUrl: ad?.preview_url,
+        thumbnailUrl: ad?.thumbnail_url,
         spend: data.spend,
         impressions: data.impressions,
         clicks: data.clicks,
@@ -313,6 +316,7 @@ export const MetaHierarchyAnalysis = ({
       let name = id;
       let status: string | null = null;
       let previewUrl: string | null = null;
+      let thumbnailUrl: string | null = null;
 
       if (currentLevel === 0) {
         const campaign = campaigns.find(c => c.campaign_id === id);
@@ -336,6 +340,7 @@ export const MetaHierarchyAnalysis = ({
           : id;
         status = ad?.status || null;
         previewUrl = ad?.preview_url || null;
+        thumbnailUrl = ad?.thumbnail_url || null;
       }
 
       return {
@@ -343,6 +348,7 @@ export const MetaHierarchyAnalysis = ({
         name,
         status,
         previewUrl,
+        thumbnailUrl,
         spend: d.spend,
         impressions: d.impressions,
         clicks: d.clicks,
@@ -417,7 +423,8 @@ export const MetaHierarchyAnalysis = ({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[280px]">Nome</TableHead>
+          {showAdActions && <TableHead className="w-[60px]">Preview</TableHead>}
+          <TableHead className="w-[240px]">Nome</TableHead>
           {showAdActions && <TableHead className="w-[140px]">ID do Anúncio</TableHead>}
           <TableHead className="text-right">Gasto</TableHead>
           <TableHead className="text-right">Impressões</TableHead>
@@ -426,7 +433,6 @@ export const MetaHierarchyAnalysis = ({
           <TableHead className="text-right">CPC</TableHead>
           <TableHead className="text-right">CPM</TableHead>
           <TableHead className="w-[100px]">% Gasto</TableHead>
-          {showAdActions && <TableHead className="w-[80px] text-center">Ver</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -436,13 +442,39 @@ export const MetaHierarchyAnalysis = ({
             className={cn(showDrilldown && currentLevel < 2 && "cursor-pointer hover:bg-muted/50")}
             onClick={() => showDrilldown && onRowClick?.(item)}
           >
+            {showAdActions && (
+              <TableCell className="p-1">
+                {item.thumbnailUrl ? (
+                  <a
+                    href={item.previewUrl || `https://www.facebook.com/ads/library/?id=${item.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="block"
+                  >
+                    <img
+                      src={item.thumbnailUrl}
+                      alt="Preview"
+                      className="w-12 h-12 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </a>
+                ) : (
+                  <div className="w-12 h-12 bg-muted rounded border flex items-center justify-center">
+                    <FileImage className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                )}
+              </TableCell>
+            )}
             <TableCell className="font-medium">
               <div className="flex items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-full flex-shrink-0" 
                   style={{ backgroundColor: COLORS[index % COLORS.length] }}
                 />
-                <span className="truncate max-w-[220px]" title={item.name}>
+                <span className="truncate max-w-[180px]" title={item.name}>
                   {item.name}
                 </span>
                 {getStatusBadge(item.status)}
@@ -487,19 +519,6 @@ export const MetaHierarchyAnalysis = ({
                 </span>
               </div>
             </TableCell>
-            {showAdActions && (
-              <TableCell className="text-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={(e) => handleOpenAd(item.id, item.previewUrl, e)}
-                  title={item.previewUrl ? "Ver preview do anúncio" : "Ver anúncio na Biblioteca de Anúncios"}
-                >
-                  <ExternalLink className="w-4 h-4 text-primary" />
-                </Button>
-              </TableCell>
-            )}
           </TableRow>
         ))}
         {data.length === 0 && (

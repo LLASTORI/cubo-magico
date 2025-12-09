@@ -762,9 +762,9 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
 // Fetch ads directly from Meta API with pagination
 async function getAdsForAccountWithPagination(accessToken: string, accountId: string) {
   const allAds: any[] = []
-  // Request preview_shareable_link directly from Meta API - this is the correct permanent shareable link
-  // Format: https://fb.me/{encoded_id} - redirects to the ad preview page
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,preview_shareable_link,creative{id,thumbnail_url},created_time&limit=500&access_token=${accessToken}`
+  // Request effective_object_story_id for public post link and thumbnail_url for preview image
+  // effective_object_story_id format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative{id,effective_object_story_id,thumbnail_url},created_time&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
   
@@ -781,19 +781,24 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
 
     if (data.data && data.data.length > 0) {
       const ads = data.data.map((a: any) => {
-        // Use preview_shareable_link from Meta API - this is the official permanent shareable link
-        // Format: https://fb.me/XXXXX - works for all ad types
-        let previewUrl = a.preview_shareable_link || null
-        
-        // Fallback to thumbnail URL if no shareable link available
-        if (!previewUrl && a.creative?.thumbnail_url) {
-          previewUrl = a.creative.thumbnail_url
+        // Build public preview URL from effective_object_story_id
+        // Format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
+        // This creates a public link to the post (if it's public)
+        let previewUrl = null
+        const storyId = a.creative?.effective_object_story_id
+        if (storyId && storyId.includes('_')) {
+          const [pageId, postId] = storyId.split('_')
+          previewUrl = `https://www.facebook.com/${pageId}/posts/${postId}`
         }
+        
+        // Get thumbnail URL for inline preview
+        const thumbnailUrl = a.creative?.thumbnail_url || null
         
         return {
           ...a,
           ad_account_id: accountId,
           preview_url: previewUrl,
+          thumbnail_url: thumbnailUrl,
         }
       })
       allAds.push(...ads)
@@ -932,7 +937,8 @@ async function syncAds(
     status: ad.status || null,
     creative_id: ad.creative?.id || null,
     created_time: ad.created_time || null,
-    preview_url: ad.preview_url || null, // Now comes from getAdsForAccountWithPagination with proper Facebook URL
+    preview_url: ad.preview_url || null, // Public Facebook post URL
+    thumbnail_url: ad.thumbnail_url || null, // Thumbnail image for inline preview
     updated_at: new Date().toISOString(),
   }))
   

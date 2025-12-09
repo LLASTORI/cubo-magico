@@ -446,6 +446,20 @@ async function syncSales(
     exchangeRates = { ...fallbackRates };
   }
 
+  // Log first sale's tracking for debugging
+  if (sales.length > 0 && sales[0].purchase.tracking) {
+    console.log('Sample tracking data from first sale:', JSON.stringify(sales[0].purchase.tracking, null, 2));
+  }
+  
+  // Also log any sale with non-null tracking fields
+  const saleWithTracking = sales.find(s => s.purchase.tracking && Object.keys(s.purchase.tracking).length > 0);
+  if (saleWithTracking) {
+    console.log('Found sale with tracking data:', {
+      transaction: saleWithTracking.purchase.transaction,
+      tracking: saleWithTracking.purchase.tracking
+    });
+  }
+  
   // Prepare all sales data
   const salesData = sales.map(sale => {
     const tracking = sale.purchase.tracking;

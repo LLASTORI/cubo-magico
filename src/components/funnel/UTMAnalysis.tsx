@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Target, Megaphone, Layers, MousePointer, Sparkles, ChevronRight, Home, GitBranch, Image, Globe, FileText } from "lucide-react";
+import { Target, Megaphone, Layers, ChevronRight, Home, GitBranch, Image, Globe, FileText, TrendingUp, DollarSign } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +19,15 @@ interface SaleData {
   checkout_origin?: string | null;
 }
 
+interface MetaInsight {
+  id?: string;
+  campaign_id: string | null;
+  adset_id: string | null;
+  ad_id: string | null;
+  spend: number | null;
+  date_start?: string;
+}
+
 // Parsed UTM structure from checkout_origin
 // Format: Origem|Conjunto|Campanha|Posicionamento|Criativo|Pagina
 interface ParsedUTM {
@@ -28,11 +37,16 @@ interface ParsedUTM {
   placement: string;   // Posicionamento (e.g., "Instagram_Reels")
   creative: string;    // Criativo (e.g., "VENDA_VIDEO_02_MAKE_13_MINUTOS_6845240176092")
   page: string;        // Página (e.g., "page_name=hm-make-pratica-2")
+  // Extracted Meta IDs from UTM names
+  adsetId: string | null;
+  campaignId: string | null;
+  adId: string | null;
 }
 
 interface UTMAnalysisProps {
   salesData: SaleData[];
   funnelOfferCodes: string[];
+  metaInsights?: MetaInsight[];
 }
 
 interface UTMMetrics {
@@ -41,6 +55,8 @@ interface UTMMetrics {
   revenue: number;
   avgTicket: number;
   percentage: number;
+  spend: number;
+  roi: number | null;
 }
 
 interface DrilldownPath {
@@ -66,6 +82,7 @@ const COLORS = [
 const chartConfig = {
   sales: { label: "Produtos Vendidos", color: "hsl(var(--primary))" },
   revenue: { label: "Receita", color: "hsl(142, 76%, 36%)" },
+  spend: { label: "Investimento", color: "hsl(339, 82%, 51%)" },
 };
 
 // Hierarchy: Source > Campaign > Adset > Placement > Creative > Page
@@ -81,6 +98,14 @@ const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
   page: { label: 'Página', icon: FileText },
 };
 
+// Extract Meta ID from UTM name (ID is always the last part after underscore with digits)
+const extractMetaId = (utmName: string): string | null => {
+  if (!utmName) return null;
+  // Match the last sequence of digits at the end of the string
+  const match = utmName.match(/_(\d{10,})$/);
+  return match ? match[1] : null;
+};
+
 // Parse checkout_origin into structured UTM data
 const parseCheckoutOrigin = (checkoutOrigin: string | null | undefined): ParsedUTM => {
   const empty: ParsedUTM = {
@@ -90,24 +115,56 @@ const parseCheckoutOrigin = (checkoutOrigin: string | null | undefined): ParsedU
     placement: '',
     creative: '',
     page: '',
+    adsetId: null,
+    campaignId: null,
+    adId: null,
   };
 
   if (!checkoutOrigin) return empty;
 
   const parts = checkoutOrigin.split('|');
   
+  const adset = parts[1] || '';
+  const campaign = parts[2] || '';
+  const creative = parts[4] || '';
+  
   return {
     source: parts[0] || '',
-    adset: parts[1] || '',
-    campaign: parts[2] || '',
+    adset,
+    campaign,
     placement: parts[3] || '',
-    creative: parts[4] || '',
+    creative,
     page: parts[5] || '',
+    // Extract Meta IDs from UTM names
+    adsetId: extractMetaId(adset),
+    campaignId: extractMetaId(campaign),
+    adId: extractMetaId(creative),
   };
 };
 
-const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
+const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [] }: UTMAnalysisProps) => {
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});
+
+  // Build spend lookup maps from meta insights
+  const spendMaps = useMemo(() => {
+    const byCampaign = new Map<string, number>();
+    const byAdset = new Map<string, number>();
+    const byAd = new Map<string, number>();
+    
+    metaInsights.forEach(insight => {
+      if (insight.campaign_id) {
+        byCampaign.set(insight.campaign_id, (byCampaign.get(insight.campaign_id) || 0) + (insight.spend || 0));
+      }
+      if (insight.adset_id) {
+        byAdset.set(insight.adset_id, (byAdset.get(insight.adset_id) || 0) + (insight.spend || 0));
+      }
+      if (insight.ad_id) {
+        byAd.set(insight.ad_id, (byAd.get(insight.ad_id) || 0) + (insight.spend || 0));
+      }
+    });
+    
+    return { byCampaign, byAdset, byAd };
+  }, [metaInsights]);
 
   // Filter sales by funnel offer codes and parse checkout_origin
   const filteredSales = useMemo(() => {
@@ -142,6 +199,36 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
     return value;
   };
 
+  // Get spend for a UTM value based on the field type
+  const getSpendForUTM = (field: HierarchyLevel, utmValue: string, salesWithUTM: typeof filteredSales): number => {
+    // For campaign, adset, creative - we can extract IDs and look up spend
+    const ids = new Set<string>();
+    
+    salesWithUTM.forEach(sale => {
+      const parsedUTM = sale.parsedUTM;
+      if (field === 'campaign' && parsedUTM.campaignId) {
+        ids.add(parsedUTM.campaignId);
+      } else if (field === 'adset' && parsedUTM.adsetId) {
+        ids.add(parsedUTM.adsetId);
+      } else if (field === 'creative' && parsedUTM.adId) {
+        ids.add(parsedUTM.adId);
+      }
+    });
+    
+    let totalSpend = 0;
+    ids.forEach(id => {
+      if (field === 'campaign') {
+        totalSpend += spendMaps.byCampaign.get(id) || 0;
+      } else if (field === 'adset') {
+        totalSpend += spendMaps.byAdset.get(id) || 0;
+      } else if (field === 'creative') {
+        totalSpend += spendMaps.byAd.get(id) || 0;
+      }
+    });
+    
+    return totalSpend;
+  };
+
   // Analysis for individual tabs (no drilldown filtering)
   const analyzeUTM = useMemo(() => {
     if (filteredSales.length === 0) {
@@ -154,14 +241,16 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
         page: [],
         totalSales: 0,
         totalRevenue: 0,
+        totalSpend: 0,
       };
     }
 
     const totalSales = filteredSales.length;
     const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const totalSpend = metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
 
     const analyzeByField = (field: HierarchyLevel): UTMMetrics[] => {
-      const groups: Record<string, { sales: number; revenue: number }> = {};
+      const groups: Record<string, { sales: number; revenue: number; salesData: typeof filteredSales }> = {};
       
       filteredSales.forEach(sale => {
         const value = getFieldValue(sale.parsedUTM, field);
@@ -169,20 +258,28 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
         const valueInBRL = sale.total_price_brl || 0;
         
         if (!groups[displayName]) {
-          groups[displayName] = { sales: 0, revenue: 0 };
+          groups[displayName] = { sales: 0, revenue: 0, salesData: [] };
         }
         groups[displayName].sales += 1;
         groups[displayName].revenue += valueInBRL;
+        groups[displayName].salesData.push(sale);
       });
 
       return Object.entries(groups)
-        .map(([name, data]) => ({
-          name,
-          sales: data.sales,
-          revenue: data.revenue,
-          avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
-          percentage: totalSales > 0 ? (data.sales / totalSales) * 100 : 0,
-        }))
+        .map(([name, data]) => {
+          const spend = getSpendForUTM(field, name, data.salesData);
+          const roi = spend > 0 ? data.revenue / spend : null;
+          
+          return {
+            name,
+            sales: data.sales,
+            revenue: data.revenue,
+            avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
+            percentage: totalSales > 0 ? (data.sales / totalSales) * 100 : 0,
+            spend,
+            roi,
+          };
+        })
         .sort((a, b) => b.sales - a.sales);
     };
 
@@ -195,8 +292,9 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
       page: analyzeByField('page'),
       totalSales,
       totalRevenue,
+      totalSpend,
     };
-  }, [filteredSales]);
+  }, [filteredSales, spendMaps, metaInsights]);
 
   // Analysis with drilldown filtering applied
   const drilldownData = useMemo(() => {
@@ -225,7 +323,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
     const totalSales = filtered.length;
     const totalRevenue = filtered.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
 
-    const groups: Record<string, { sales: number; revenue: number }> = {};
+    const groups: Record<string, { sales: number; revenue: number; salesData: typeof filteredSales }> = {};
     
     filtered.forEach(sale => {
       const value = getFieldValue(sale.parsedUTM, currentField);
@@ -233,24 +331,32 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
       const valueInBRL = sale.total_price_brl || 0;
       
       if (!groups[displayName]) {
-        groups[displayName] = { sales: 0, revenue: 0 };
+        groups[displayName] = { sales: 0, revenue: 0, salesData: [] };
       }
       groups[displayName].sales += 1;
       groups[displayName].revenue += valueInBRL;
+      groups[displayName].salesData.push(sale);
     });
 
     const metrics: UTMMetrics[] = Object.entries(groups)
-      .map(([name, data]) => ({
-        name,
-        sales: data.sales,
-        revenue: data.revenue,
-        avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
-        percentage: totalSales > 0 ? (data.sales / totalSales) * 100 : 0,
-      }))
+      .map(([name, data]) => {
+        const spend = getSpendForUTM(currentField, name, data.salesData);
+        const roi = spend > 0 ? data.revenue / spend : null;
+        
+        return {
+          name,
+          sales: data.sales,
+          revenue: data.revenue,
+          avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
+          percentage: totalSales > 0 ? (data.sales / totalSales) * 100 : 0,
+          spend,
+          roi,
+        };
+      })
       .sort((a, b) => b.sales - a.sales);
 
     return { metrics, totalSales, totalRevenue };
-  }, [filteredSales, drilldownPath, currentField]);
+  }, [filteredSales, drilldownPath, currentField, spendMaps]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -344,7 +450,8 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
           <TableHead>Nome</TableHead>
           <TableHead className="text-right">Vendas</TableHead>
           <TableHead className="text-right">Receita</TableHead>
-          <TableHead className="text-right">Ticket Médio</TableHead>
+          <TableHead className="text-right">Invest.</TableHead>
+          <TableHead className="text-right">ROI</TableHead>
           <TableHead className="text-right">%</TableHead>
         </TableRow>
       </TableHeader>
@@ -361,7 +468,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
                   className="w-3 h-3 rounded-full flex-shrink-0" 
                   style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                 />
-                <span className="truncate max-w-[200px]" title={metric.name}>{metric.name}</span>
+                <span className="truncate max-w-[180px]" title={metric.name}>{metric.name}</span>
                 {showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && (
                   <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 )}
@@ -369,11 +476,20 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
             </TableCell>
             <TableCell className="text-right">{metric.sales}</TableCell>
             <TableCell className="text-right">{formatCurrency(metric.revenue)}</TableCell>
-            <TableCell className="text-right">{formatCurrency(metric.avgTicket)}</TableCell>
+            <TableCell className="text-right">
+              {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
+            </TableCell>
+            <TableCell className="text-right">
+              {metric.roi !== null ? (
+                <Badge variant={metric.roi >= 1 ? "default" : "destructive"} className="font-mono">
+                  {metric.roi.toFixed(2)}x
+                </Badge>
+              ) : '-'}
+            </TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-2">
                 <span>{metric.percentage.toFixed(1)}%</span>
-                <Progress value={metric.percentage} className="w-16 h-2" />
+                <Progress value={metric.percentage} className="w-12 h-2" />
               </div>
             </TableCell>
           </TableRow>

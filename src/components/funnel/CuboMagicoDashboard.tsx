@@ -302,10 +302,14 @@ export function CuboMagicoDashboard({
         console.log(`[CuboMagico] Funnel "${funnel.name}" pattern="${pattern}": ${matchingCampaigns.length} campaigns, ${matchingInsights.length} insights, R$${investimento.toFixed(2)}`);
       }
 
-      // Get offer codes for this funnel - check both funnel_id (FK) and id_funil (legacy name)
-      const funnelOffers = offerMappings.filter(o => 
-        o.funnel_id === funnel.id || o.id_funil === funnel.name
-      );
+      // Get offer codes for this funnel - PRIORITIZE funnel_id (FK)
+      // Only use id_funil as fallback when funnel_id is null
+      const funnelOffers = offerMappings.filter(o => {
+        if (o.funnel_id) {
+          return o.funnel_id === funnel.id;
+        }
+        return o.id_funil === funnel.name;
+      });
       const offerCodes = new Set(funnelOffers.map(o => o.codigo_oferta));
 
       // Calculate sales metrics
@@ -437,19 +441,33 @@ export function CuboMagicoDashboard({
   }, [funnelMetrics, totalInvestmentAll]);
 
   // Helper to get offer codes for a specific funnel
+  // IMPORTANT: Prioritize funnel_id (FK), use id_funil only as fallback when funnel_id is null
   const getOfferCodesForFunnel = (funnelId: string, funnelName: string): string[] => {
     if (!offerMappings) return [];
     return offerMappings
-      .filter(o => o.funnel_id === funnelId || o.id_funil === funnelName)
+      .filter(o => {
+        // If offer has funnel_id set, match by funnel_id only
+        if (o.funnel_id) {
+          return o.funnel_id === funnelId;
+        }
+        // Fallback: if funnel_id is null, match by id_funil (legacy text field)
+        return o.id_funil === funnelName;
+      })
       .map(o => o.codigo_oferta)
       .filter(Boolean) as string[];
   };
 
   // Helper to get offer options for FunnelChangelog
+  // IMPORTANT: Prioritize funnel_id (FK), use id_funil only as fallback when funnel_id is null
   const getOfferOptionsForFunnel = (funnelId: string, funnelName: string) => {
     if (!offerMappings) return [];
     return offerMappings
-      .filter(o => o.funnel_id === funnelId || o.id_funil === funnelName)
+      .filter(o => {
+        if (o.funnel_id) {
+          return o.funnel_id === funnelId;
+        }
+        return o.id_funil === funnelName;
+      })
       .map(o => ({
         codigo_oferta: o.codigo_oferta || '',
         nome_oferta: o.nome_posicao || o.codigo_oferta || '',

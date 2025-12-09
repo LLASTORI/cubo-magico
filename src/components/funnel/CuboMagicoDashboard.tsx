@@ -1181,52 +1181,52 @@ export function CuboMagicoDashboard({
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
-                                      <span className={cn(
-                                        "text-[10px] font-bold",
-                                        metrics.connectRate >= 70 ? "text-green-600" : metrics.connectRate >= 50 ? "text-yellow-600" : "text-red-600"
-                                      )}>
-                                        {metrics.connectRate.toFixed(1)}%
-                                      </span>
+                                      <span className="text-[9px] text-muted-foreground">{metrics.landingPageViews}</span>
                                     </div>
                                     
                                     {/* Landing Page Views */}
                                     <div className="flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px]">
                                       <span className="text-[10px] text-purple-600 font-medium uppercase">Views Página</span>
-                                      <span className="text-xl font-bold text-purple-600">{metrics.landingPageViews}</span>
+                                      <span className={cn(
+                                        "text-xl font-bold",
+                                        metrics.connectRate >= 70 ? "text-green-600" : metrics.connectRate >= 50 ? "text-yellow-600" : "text-red-600"
+                                      )}>
+                                        {metrics.connectRate.toFixed(1)}%
+                                      </span>
                                       <span className="text-[9px] text-purple-500">Connect Rate</span>
                                     </div>
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
-                                      <span className={cn(
-                                        "text-[10px] font-bold",
-                                        metrics.txPaginaCheckout >= 10 ? "text-green-600" : metrics.txPaginaCheckout >= 5 ? "text-yellow-600" : "text-red-600"
-                                      )}>
-                                        {metrics.txPaginaCheckout.toFixed(1)}%
-                                      </span>
+                                      <span className="text-[9px] text-muted-foreground">{metrics.initiateCheckouts}</span>
                                     </div>
                                     
                                     {/* Initiate Checkouts */}
                                     <div className="flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px]">
                                       <span className="text-[10px] text-orange-600 font-medium uppercase">Checkouts</span>
-                                      <span className="text-xl font-bold text-orange-600">{metrics.initiateCheckouts}</span>
+                                      <span className={cn(
+                                        "text-xl font-bold",
+                                        metrics.txPaginaCheckout >= 10 ? "text-green-600" : metrics.txPaginaCheckout >= 5 ? "text-yellow-600" : "text-red-600"
+                                      )}>
+                                        {metrics.txPaginaCheckout.toFixed(1)}%
+                                      </span>
                                       <span className="text-[9px] text-orange-500">TX Pág→Ckout</span>
                                     </div>
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
-                                      <span className={cn(
-                                        "text-[10px] font-bold",
-                                        metrics.txCheckoutCompra >= 50 ? "text-green-600" : metrics.txCheckoutCompra >= 30 ? "text-yellow-600" : "text-red-600"
-                                      )}>
-                                        {metrics.txCheckoutCompra.toFixed(1)}%
-                                      </span>
+                                      <span className="text-[9px] text-muted-foreground">{metrics.purchases}</span>
                                     </div>
                                     
                                     {/* Purchases */}
                                     <div className="flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px]">
                                       <span className="text-[10px] text-green-600 font-medium uppercase">Compras</span>
-                                      <span className="text-xl font-bold text-green-600">{metrics.purchases}</span>
+                                      <span className={cn(
+                                        "text-xl font-bold",
+                                        metrics.txCheckoutCompra >= 50 ? "text-green-600" : metrics.txCheckoutCompra >= 30 ? "text-yellow-600" : "text-red-600"
+                                      )}>
+                                        {metrics.txCheckoutCompra.toFixed(1)}%
+                                      </span>
                                       <span className="text-[9px] text-green-500">TX Ckout→Compra</span>
                                     </div>
                                   </div>

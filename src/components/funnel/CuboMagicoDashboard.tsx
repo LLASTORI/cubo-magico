@@ -320,23 +320,12 @@ export function CuboMagicoDashboard({
       // Ensure campaign IDs are strings for consistent comparison
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
 
-      // Debug: Log pattern matching results for 35+ funnel to diagnose intermittent zero issue
-      if (pattern.includes('maquiagem35')) {
-        console.log(`[CuboMagico DEBUG] Funnel "${funnel.name}": pattern="${pattern}", campaigns found=${matchingCampaigns.length}, campaign IDs:`, Array.from(matchingCampaignIds));
-        console.log(`[CuboMagico DEBUG] Total insights available: ${insightsData.length}, sample campaign_ids:`, insightsData.slice(0, 5).map(i => i.campaign_id));
-      }
-
       // Calculate total spend from ad-level insights (aggregate by ad_id + date)
       // Ensure campaign_id comparison is done as strings
       const matchingInsights = insightsData.filter(i => {
         const campaignId = String(i.campaign_id || '');
         return matchingCampaignIds.has(campaignId);
       });
-
-      // Debug: Log matching insights for 35+ funnel
-      if (pattern.includes('maquiagem35')) {
-        console.log(`[CuboMagico DEBUG] Matching insights: ${matchingInsights.length}, total spend: R$${matchingInsights.reduce((s, i) => s + (i.spend || 0), 0).toFixed(2)}`);
-      }
       
       // Deduplicate by ad_id + date to avoid double counting
       const uniqueSpend = new Map<string, number>();
@@ -594,11 +583,12 @@ export function CuboMagicoDashboard({
     const matchingCampaigns = campaignsData.filter(c => 
       c.campaign_name?.toLowerCase().includes(pattern)
     );
-    const matchingCampaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
+    // CRITICAL: Convert to strings to ensure consistent comparison
+    const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
     
-    // Filter insights by matching campaigns
+    // Filter insights by matching campaigns - also convert to string
     const filteredInsights = insightsData.filter(i => 
-      matchingCampaignIds.has(i.campaign_id || '')
+      matchingCampaignIds.has(String(i.campaign_id || ''))
     );
     
     // Get unique ad_ids and adset_ids from filtered insights

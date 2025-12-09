@@ -446,17 +446,36 @@ async function syncSales(
     exchangeRates = { ...fallbackRates };
   }
 
-  // Log first sale's tracking for debugging
-  if (sales.length > 0 && sales[0].purchase.tracking) {
-    console.log('Sample tracking data from first sale:', JSON.stringify(sales[0].purchase.tracking, null, 2));
+  // Log first sale's full purchase for debugging source_sck and checkout_origin
+  if (sales.length > 0) {
+    const firstSale = sales[0];
+    const purchase = firstSale.purchase as Record<string, unknown>;
+    console.log('First sale tracking debug:', {
+      transaction: firstSale.purchase.transaction,
+      tracking: firstSale.purchase.tracking,
+      checkout_source: purchase['checkout_source'],
+      sck: purchase['sck'],
+      source: purchase['source'],
+      origin: purchase['origin'],
+      // Log all purchase keys to find the right field
+      purchaseKeys: Object.keys(purchase)
+    });
   }
   
-  // Also log any sale with non-null tracking fields
-  const saleWithTracking = sales.find(s => s.purchase.tracking && Object.keys(s.purchase.tracking).length > 0);
-  if (saleWithTracking) {
-    console.log('Found sale with tracking data:', {
-      transaction: saleWithTracking.purchase.transaction,
-      tracking: saleWithTracking.purchase.tracking
+  // Find a sale with source_sck that looks like Meta UTM pattern
+  const saleWithMetaSource = sales.find(s => {
+    const purchase = s.purchase as Record<string, unknown>;
+    const tracking = s.purchase.tracking as Record<string, unknown> | undefined;
+    const sck = (tracking?.['source_sck'] || purchase['sck'] || '') as string;
+    return sck.includes('|') && (sck.includes('Meta') || sck.includes('PERPETUO') || sck.includes('ADVANTAGE'));
+  });
+  if (saleWithMetaSource) {
+    const purchase = saleWithMetaSource.purchase as Record<string, unknown>;
+    const tracking = saleWithMetaSource.purchase.tracking as Record<string, unknown> | undefined;
+    console.log('Found sale with Meta source_sck:', {
+      transaction: saleWithMetaSource.purchase.transaction,
+      tracking: saleWithMetaSource.purchase.tracking,
+      source_sck: tracking?.['source_sck'] || purchase['sck']
     });
   }
   
@@ -538,7 +557,7 @@ async function syncSales(
       utm_source: tracking?.utm_source || null,
       utm_campaign_id: tracking?.utm_campaign || null,
       utm_creative: tracking?.utm_content || null,
-      checkout_origin: tracking?.source || null,
+      checkout_origin: tracking?.source_sck || tracking?.source || null,
       sale_attribution_type: attributionType,
       meta_campaign_id_extracted: campaignId,
       meta_adset_id_extracted: adsetId,

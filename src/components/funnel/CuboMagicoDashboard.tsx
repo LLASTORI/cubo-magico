@@ -73,7 +73,7 @@ interface FunnelMetrics {
   cpaMaximo: number;
   cpaReal: number;
   roas: number;
-  status: 'excellent' | 'good' | 'warning' | 'danger';
+  status: 'excellent' | 'good' | 'attention' | 'danger' | 'no-return' | 'inactive';
   productsByPosition: Record<string, number>;
   // Detailed breakdown by position
   positionBreakdown: Array<{
@@ -433,18 +433,28 @@ export function CuboMagicoDashboard({
       // ROAS real
       const roas = investimento > 0 ? faturamento / investimento : 0;
 
-      // Status based on CPA comparison
-      let status: 'excellent' | 'good' | 'warning' | 'danger' = 'good';
-      if (cpaReal === 0 || investimento === 0) {
-        status = 'good';
-      } else if (cpaReal <= cpaMaximo * 0.8) {
-        status = 'excellent';
-      } else if (cpaReal <= cpaMaximo) {
-        status = 'good';
-      } else if (cpaReal <= cpaMaximo * 1.2) {
-        status = 'warning';
-      } else {
-        status = 'danger';
+      // Status based on investment, revenue and CPA comparison
+      let status: 'excellent' | 'good' | 'attention' | 'danger' | 'no-return' | 'inactive' = 'good';
+      
+      // Check for inactive funnel (no data)
+      if (investimento === 0 && faturamento === 0) {
+        status = 'inactive';
+      } 
+      // Check for investment with zero return (critical)
+      else if (investimento > 0 && faturamento === 0) {
+        status = 'no-return';
+      }
+      // CPA-based status for active funnels
+      else if (cpaReal > 0 && cpaMaximo > 0) {
+        if (cpaReal <= cpaMaximo * 0.8) {
+          status = 'excellent';
+        } else if (cpaReal <= cpaMaximo) {
+          status = 'good';
+        } else if (cpaReal <= cpaMaximo * 1.2) {
+          status = 'attention';
+        } else {
+          status = 'danger';
+        }
       }
 
       // Build position breakdown for drill-down
@@ -744,8 +754,10 @@ export function CuboMagicoDashboard({
     switch (status) {
       case 'excellent': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
       case 'good': return <TrendingUp className="w-5 h-5 text-blue-500" />;
-      case 'warning': return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+      case 'attention': return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
       case 'danger': return <XCircle className="w-5 h-5 text-red-500" />;
+      case 'no-return': return <XCircle className="w-5 h-5 text-red-600" />;
+      case 'inactive': return <div className="w-5 h-5 rounded-full bg-muted-foreground/30" />;
       default: return null;
     }
   };
@@ -754,8 +766,10 @@ export function CuboMagicoDashboard({
     switch (status) {
       case 'excellent': return <Badge className="bg-green-500/20 text-green-700 border-green-500/30">Excelente</Badge>;
       case 'good': return <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30">Bom</Badge>;
-      case 'warning': return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">Atenção</Badge>;
+      case 'attention': return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">Atenção</Badge>;
       case 'danger': return <Badge className="bg-red-500/20 text-red-700 border-red-500/30">Crítico</Badge>;
+      case 'no-return': return <Badge className="bg-red-600/20 text-red-800 border-red-600/30">Sem Retorno</Badge>;
+      case 'inactive': return <Badge className="bg-muted text-muted-foreground border-muted-foreground/30">Inativo</Badge>;
       default: return null;
     }
   };
@@ -1132,8 +1146,10 @@ export function CuboMagicoDashboard({
                       "text-right font-mono font-bold",
                       metrics.status === 'excellent' && "text-green-600",
                       metrics.status === 'good' && "text-blue-600",
-                      metrics.status === 'warning' && "text-yellow-600",
-                      metrics.status === 'danger' && "text-red-600"
+                      metrics.status === 'attention' && "text-yellow-600",
+                      metrics.status === 'danger' && "text-red-600",
+                      metrics.status === 'no-return' && "text-red-700",
+                      metrics.status === 'inactive' && "text-muted-foreground"
                     )}>
                       {formatCurrency(metrics.cpaReal)}
                     </TableCell>
@@ -1278,7 +1294,7 @@ export function CuboMagicoDashboard({
                                     const finalScore = totalWeight > 0 ? Math.round(totalScore / totalWeight) : 0;
                                     
                                     // Determinar status e mensagem
-                                    let status: 'excellent' | 'good' | 'warning' | 'danger';
+                                    let status: 'excellent' | 'good' | 'attention' | 'danger';
                                     let statusLabel: string;
                                     let message: string;
                                     let gradient: string;
@@ -1294,7 +1310,7 @@ export function CuboMagicoDashboard({
                                       message = 'Bom trabalho! Há algumas oportunidades de melhoria nas posições ou conversões.';
                                       gradient = 'from-blue-500 to-cyan-400';
                                     } else if (finalScore >= 40) {
-                                      status = 'warning';
+                                      status = 'attention';
                                       statusLabel = 'Atenção';
                                       message = 'Seu funil tem margem para melhorar. Foque nas métricas destacadas em amarelo e vermelho.';
                                       gradient = 'from-yellow-500 to-amber-400';

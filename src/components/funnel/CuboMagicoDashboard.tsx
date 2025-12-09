@@ -1160,9 +1160,9 @@ export function CuboMagicoDashboard({
                   
                   {/* Expanded Details Row with Nested Tabs */}
                   {isExpanded && (
-                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableRow className="hover:bg-transparent">
                       <TableCell colSpan={11} className="p-0">
-                        <div className="p-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="p-6 animate-in slide-in-from-top-2 duration-200 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent border-l-4 border-l-primary/30 rounded-br-lg">
                           <Tabs defaultValue="overview" className="w-full">
                             <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 mb-4 bg-muted/50">
                               <TabsTrigger value="overview" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
@@ -1322,7 +1322,7 @@ export function CuboMagicoDashboard({
                                   
                                   return (
                                     <div className="mb-6">
-                                      <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Score Geral do Funil</h4>
+                                      <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Score Geral do Funil — <span className="text-foreground">{metrics.funnel.name}</span></h4>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
                                           <div className={cn(
@@ -1410,7 +1410,7 @@ export function CuboMagicoDashboard({
                                 })()}
                                 
                                 <div>
-                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil</h4>
+                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil — <span className="text-foreground">{metrics.funnel.name}</span></h4>
                                   <div className="flex flex-wrap items-stretch gap-2">
                                     {metrics.positionBreakdown.map((pos, index) => {
                                       const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
@@ -1662,7 +1662,7 @@ export function CuboMagicoDashboard({
                                   
                                   return (
                                 <div className="pt-4 border-t border-border/50">
-                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Funil de Conversão (Meta Ads)</h4>
+                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Funil de Conversão (Meta Ads) — <span className="text-foreground">{metrics.funnel.name}</span></h4>
                                   <div className="flex flex-wrap items-center gap-2">
                                     {/* Link Clicks */}
                                     <Tooltip>

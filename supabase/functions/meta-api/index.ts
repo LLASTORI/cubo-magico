@@ -34,14 +34,18 @@ const VERY_RECENT_DAYS_THRESHOLD = 2
 // Batch size for database inserts - INCREASED for performance
 const DB_INSERT_BATCH_SIZE = 250
 
-// Number of chunks to process in parallel - balance between speed and rate limits
-const PARALLEL_CHUNKS = 3
+// DYNAMIC PARALLELISM: More aggressive for old data, conservative for recent
+// Old data (30+ days) is immutable, so we can fetch faster
+const PARALLEL_CHUNKS_HISTORICAL = 6  // For data 30+ days old
+const PARALLEL_CHUNKS_RECENT = 2       // For data 0-30 days (might change, rate limits matter)
+const HISTORICAL_DAYS_THRESHOLD = 30   // Days after which data is considered "historical"
 
-// Optimized delays for faster processing
-const DELAY_BETWEEN_PAGES_MS = 200
-const DELAY_BETWEEN_BATCHES_MS = 50
-const DELAY_BETWEEN_CHUNKS_MS = 500
-const DELAY_BETWEEN_ACCOUNTS_MS = 500
+// Optimized delays - shorter for historical, longer for recent
+const DELAY_BETWEEN_PAGES_MS = 150
+const DELAY_BETWEEN_BATCHES_MS = 30
+const DELAY_BETWEEN_CHUNKS_HISTORICAL_MS = 300  // Faster for old data
+const DELAY_BETWEEN_CHUNKS_RECENT_MS = 800      // Slower for recent data
+const DELAY_BETWEEN_ACCOUNTS_MS = 400
 
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -1052,7 +1056,8 @@ async function processChunk(
   return { insights: chunkInsights, saved }
 }
 
-// INCREMENTAL getInsights with PARALLEL chunk processing
+// INCREMENTAL getInsights with DYNAMIC PARALLEL chunk processing
+// Uses more parallelism for historical data, less for recent data
 async function getInsightsIncremental(
   accessToken: string, 
   accountIds: string[], 
@@ -1064,24 +1069,39 @@ async function getInsightsIncremental(
   // Split date range into chunks to avoid "reduce data" error
   const dateChunks = splitDateRangeIntoChunks(dateStart, dateStop)
   
-  console.log('Fetching insights with PARALLEL processing:', { 
+  // Determine if this is historical or recent data
+  const today = new Date()
+  const endDate = new Date(dateStop)
+  const daysFromEnd = Math.floor((today.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24))
+  const isHistorical = daysFromEnd >= HISTORICAL_DAYS_THRESHOLD
+  
+  // Use dynamic parallelism based on data age
+  const parallelChunks = isHistorical ? PARALLEL_CHUNKS_HISTORICAL : PARALLEL_CHUNKS_RECENT
+  const delayBetweenChunks = isHistorical ? DELAY_BETWEEN_CHUNKS_HISTORICAL_MS : DELAY_BETWEEN_CHUNKS_RECENT_MS
+  
+  console.log(`\n📊 DYNAMIC PARALLELISM: ${isHistorical ? 'HISTORICAL' : 'RECENT'} mode`)
+  console.log(`   Data ends ${daysFromEnd} days ago (threshold: ${HISTORICAL_DAYS_THRESHOLD} days)`)
+  console.log(`   Using ${parallelChunks} parallel chunks, ${delayBetweenChunks}ms delay`)
+  
+  console.log('Fetching insights with DYNAMIC PARALLEL processing:', { 
     accountIds: accountIds.length, 
     dateStart, 
     dateStop, 
     level, 
     chunks: dateChunks.length,
-    parallelism: PARALLEL_CHUNKS 
+    parallelism: parallelChunks,
+    mode: isHistorical ? 'historical' : 'recent'
   })
   
   const allInsights: any[] = []
   let totalSaved = 0
 
-  // Process chunks in parallel batches
-  for (let batchStart = 0; batchStart < dateChunks.length; batchStart += PARALLEL_CHUNKS) {
-    const batchEnd = Math.min(batchStart + PARALLEL_CHUNKS, dateChunks.length)
+  // Process chunks in parallel batches with dynamic size
+  for (let batchStart = 0; batchStart < dateChunks.length; batchStart += parallelChunks) {
+    const batchEnd = Math.min(batchStart + parallelChunks, dateChunks.length)
     const batchChunks = dateChunks.slice(batchStart, batchEnd)
     
-    console.log(`\n🚀 Processing parallel batch ${Math.floor(batchStart / PARALLEL_CHUNKS) + 1}/${Math.ceil(dateChunks.length / PARALLEL_CHUNKS)} (chunks ${batchStart + 1}-${batchEnd}/${dateChunks.length})`)
+    console.log(`\n🚀 Processing parallel batch ${Math.floor(batchStart / parallelChunks) + 1}/${Math.ceil(dateChunks.length / parallelChunks)} (chunks ${batchStart + 1}-${batchEnd}/${dateChunks.length})`)
     
     // Process this batch of chunks in parallel
     const chunkPromises = batchChunks.map((chunk, idx) => 
@@ -1107,9 +1127,9 @@ async function getInsightsIncremental(
     
     console.log(`✅ Parallel batch complete: ${results.reduce((sum, r) => sum + r.saved, 0)} insights saved in this batch`)
     
-    // Brief delay between parallel batches to avoid overwhelming Meta API
+    // Dynamic delay between parallel batches
     if (batchEnd < dateChunks.length) {
-      await delay(DELAY_BETWEEN_CHUNKS_MS)
+      await delay(delayBetweenChunks)
     }
   }
 
@@ -1282,10 +1302,10 @@ async function syncInsightsSmartOptimized(
       totalInsightsInserted += totalSaved
       console.log(`Range ${rangeIdx + 1} complete: ${totalSaved} insights saved`)
       
-      // Minimal delay between ranges with parallel processing
+      // Dynamic delay between ranges based on data age
       if (rangeIdx < dateRanges.length - 1) {
         console.log('Brief pause before next range...')
-        await delay(DELAY_BETWEEN_CHUNKS_MS)
+        await delay(DELAY_BETWEEN_CHUNKS_RECENT_MS)
       }
     }
 

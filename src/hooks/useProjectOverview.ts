@@ -156,19 +156,39 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     enabled: !!projectId && !!activeAccountIds && activeAccountIds.length > 0,
   });
 
-  // Fetch meta campaigns for name pattern matching
+  // Fetch meta campaigns for name pattern matching (with pagination)
   const { data: metaCampaigns, isLoading: campaignsLoading } = useQuery({
     queryKey: ['project-overview-campaigns', projectId],
     queryFn: async () => {
       if (!projectId) return [];
       
-      const { data, error } = await supabase
-        .from('meta_campaigns')
-        .select('campaign_id, campaign_name')
-        .eq('project_id', projectId);
+      // Fetch ALL campaigns with pagination
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let page = 0;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_campaigns')
+          .select('campaign_id, campaign_name')
+          .eq('project_id', projectId)
+          .order('campaign_id', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[ProjectOverview] Campaigns loaded: ${allData.length}`);
+      return allData;
     },
     enabled: !!projectId,
   });

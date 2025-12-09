@@ -1053,7 +1053,6 @@ const FunnelAnalysis = () => {
                 <UTMAnalysis
                   salesData={salesData}
                   funnelOfferCodes={offerCodes}
-                  metaHierarchy={metaStructure}
                 />
               </TabsContent>
 

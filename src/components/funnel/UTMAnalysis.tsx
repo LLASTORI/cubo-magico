@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Target, Megaphone, Layers, MousePointer, Sparkles, ChevronRight, Home, GitBranch, Image } from "lucide-react";
+import { Target, Megaphone, Layers, MousePointer, Sparkles, ChevronRight, Home, GitBranch, Image, Globe, FileText } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,32 +16,27 @@ import { PieChart, Pie, Cell } from "recharts";
 interface SaleData {
   offer_code?: string | null;
   total_price_brl?: number | null;
-  utm_source?: string | null;
-  utm_campaign_id?: string | null;
-  utm_adset_name?: string | null;
-  utm_creative?: string | null;
-  utm_placement?: string | null;
-  // Meta extracted fields - these are the IDs extracted from tracking
-  meta_campaign_id_extracted?: string | null;
-  meta_adset_id_extracted?: string | null;
-  meta_ad_id_extracted?: string | null;
+  checkout_origin?: string | null;
 }
 
-interface MetaHierarchyData {
-  campaigns?: Array<{ campaign_id: string; campaign_name: string | null; id?: string; status?: string | null }>;
-  adsets?: Array<{ adset_id: string; adset_name: string | null; campaign_id: string; id?: string; status?: string | null }>;
-  ads?: Array<{ ad_id: string; ad_name: string | null; adset_id: string; campaign_id: string; id?: string; status?: string | null }>;
+// Parsed UTM structure from checkout_origin
+// Format: Origem|Conjunto|Campanha|Posicionamento|Criativo|Pagina
+interface ParsedUTM {
+  source: string;      // Origem de Checkout (e.g., "Meta-Ads")
+  adset: string;       // Conjunto (e.g., "00_ADVANTAGE_6845240173892")
+  campaign: string;    // Campanha (e.g., "PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA_6845240176292")
+  placement: string;   // Posicionamento (e.g., "Instagram_Reels")
+  creative: string;    // Criativo (e.g., "VENDA_VIDEO_02_MAKE_13_MINUTOS_6845240176092")
+  page: string;        // Página (e.g., "page_name=hm-make-pratica-2")
 }
 
 interface UTMAnalysisProps {
   salesData: SaleData[];
   funnelOfferCodes: string[];
-  metaHierarchy?: MetaHierarchyData;
 }
 
 interface UTMMetrics {
   name: string;
-  id?: string; // Keep the ID for reference
   sales: number;
   revenue: number;
   avgTicket: number;
@@ -49,9 +44,12 @@ interface UTMMetrics {
 }
 
 interface DrilldownPath {
+  source?: string;
   campaign?: string;
   adset?: string;
-  ad?: string;
+  placement?: string;
+  creative?: string;
+  page?: string;
 }
 
 const COLORS = [
@@ -70,129 +68,90 @@ const chartConfig = {
   revenue: { label: "Receita", color: "hsl(142, 76%, 36%)" },
 };
 
-// Updated hierarchy to use Meta structure: Campaign > Adset > Ad
-const HIERARCHY = ['campaign', 'adset', 'ad'] as const;
+// Hierarchy: Source > Campaign > Adset > Placement > Creative > Page
+const HIERARCHY = ['source', 'campaign', 'adset', 'placement', 'creative', 'page'] as const;
 type HierarchyLevel = typeof HIERARCHY[number];
 
 const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
+  source: { label: 'Origem', icon: Globe },
   campaign: { label: 'Campanha', icon: Megaphone },
   adset: { label: 'Conjunto', icon: Layers },
-  ad: { label: 'Anúncio', icon: Image },
+  placement: { label: 'Posicionamento', icon: Target },
+  creative: { label: 'Criativo', icon: Image },
+  page: { label: 'Página', icon: FileText },
 };
 
-const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysisProps) => {
+// Parse checkout_origin into structured UTM data
+const parseCheckoutOrigin = (checkoutOrigin: string | null | undefined): ParsedUTM => {
+  const empty: ParsedUTM = {
+    source: '',
+    adset: '',
+    campaign: '',
+    placement: '',
+    creative: '',
+    page: '',
+  };
+
+  if (!checkoutOrigin) return empty;
+
+  const parts = checkoutOrigin.split('|');
+  
+  return {
+    source: parts[0] || '',
+    adset: parts[1] || '',
+    campaign: parts[2] || '',
+    placement: parts[3] || '',
+    creative: parts[4] || '',
+    page: parts[5] || '',
+  };
+};
+
+const UTMAnalysis = ({ salesData, funnelOfferCodes }: UTMAnalysisProps) => {
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});
 
-  // Create lookup maps for Meta hierarchy names
-  const nameLookups = useMemo(() => {
-    const campaignNames = new Map<string, string>();
-    const adsetNames = new Map<string, string>();
-    const adNames = new Map<string, string>();
-    
-    // Also create reverse lookups: adset_id -> campaign_id, ad_id -> adset_id
-    const adsetToCampaign = new Map<string, string>();
-    const adToAdset = new Map<string, string>();
-
-    metaHierarchy?.campaigns?.forEach(c => {
-      if (c.campaign_id && c.campaign_name) {
-        campaignNames.set(c.campaign_id, c.campaign_name);
-      }
-    });
-
-    metaHierarchy?.adsets?.forEach(a => {
-      if (a.adset_id && a.adset_name) {
-        adsetNames.set(a.adset_id, a.adset_name);
-      }
-      if (a.adset_id && a.campaign_id) {
-        adsetToCampaign.set(a.adset_id, a.campaign_id);
-      }
-    });
-
-    metaHierarchy?.ads?.forEach(a => {
-      if (a.ad_id && a.ad_name) {
-        adNames.set(a.ad_id, a.ad_name);
-      }
-      if (a.ad_id && a.adset_id) {
-        adToAdset.set(a.ad_id, a.adset_id);
-      }
-    });
-
-    return { campaignNames, adsetNames, adNames, adsetToCampaign, adToAdset };
-  }, [metaHierarchy]);
-
-  // Filter sales by funnel offer codes
+  // Filter sales by funnel offer codes and parse checkout_origin
   const filteredSales = useMemo(() => {
-    return salesData.filter(sale => 
-      funnelOfferCodes.includes(sale.offer_code || '')
-    );
+    return salesData
+      .filter(sale => funnelOfferCodes.includes(sale.offer_code || ''))
+      .map(sale => ({
+        ...sale,
+        parsedUTM: parseCheckoutOrigin(sale.checkout_origin),
+      }));
   }, [salesData, funnelOfferCodes]);
 
   const currentLevel = useMemo(() => {
-    if (!drilldownPath.campaign) return 0;
-    if (!drilldownPath.adset) return 1;
-    if (!drilldownPath.ad) return 2;
-    return 3;
+    if (!drilldownPath.source) return 0;
+    if (!drilldownPath.campaign) return 1;
+    if (!drilldownPath.adset) return 2;
+    if (!drilldownPath.placement) return 3;
+    if (!drilldownPath.creative) return 4;
+    if (!drilldownPath.page) return 5;
+    return 6;
   }, [drilldownPath]);
 
   const currentField: HierarchyLevel = HIERARCHY[Math.min(currentLevel, HIERARCHY.length - 1)];
 
-  // Get the ID for a given field from a sale
-  const getFieldId = (sale: SaleData, field: HierarchyLevel): string => {
-    switch (field) {
-      case 'campaign': {
-        // Try to get campaign from ad -> adset -> campaign chain
-        if (sale.meta_campaign_id_extracted) return sale.meta_campaign_id_extracted;
-        if (sale.meta_adset_id_extracted) {
-          const campaignId = nameLookups.adsetToCampaign.get(sale.meta_adset_id_extracted);
-          if (campaignId) return campaignId;
-        }
-        if (sale.meta_ad_id_extracted) {
-          const adsetId = nameLookups.adToAdset.get(sale.meta_ad_id_extracted);
-          if (adsetId) {
-            const campaignId = nameLookups.adsetToCampaign.get(adsetId);
-            if (campaignId) return campaignId;
-          }
-        }
-        return '';
-      }
-      case 'adset': {
-        if (sale.meta_adset_id_extracted) return sale.meta_adset_id_extracted;
-        if (sale.meta_ad_id_extracted) {
-          const adsetId = nameLookups.adToAdset.get(sale.meta_ad_id_extracted);
-          if (adsetId) return adsetId;
-        }
-        return '';
-      }
-      case 'ad':
-        return sale.meta_ad_id_extracted || '';
-      default:
-        return '';
-    }
+  // Get the value for a given field from a parsed sale
+  const getFieldValue = (parsedUTM: ParsedUTM, field: HierarchyLevel): string => {
+    return parsedUTM[field] || '';
   };
 
   // Get display name for a field value
-  const getDisplayName = (field: HierarchyLevel, id: string): string => {
-    if (!id) return '(não definido)';
-    
-    switch (field) {
-      case 'campaign':
-        return nameLookups.campaignNames.get(id) || `Campanha ${id}`;
-      case 'adset':
-        return nameLookups.adsetNames.get(id) || `Conjunto ${id}`;
-      case 'ad':
-        return nameLookups.adNames.get(id) || `Anúncio ${id}`;
-      default:
-        return id;
-    }
+  const getDisplayName = (value: string): string => {
+    if (!value) return '(não definido)';
+    return value;
   };
 
   // Analysis for individual tabs (no drilldown filtering)
   const analyzeUTM = useMemo(() => {
     if (filteredSales.length === 0) {
       return {
+        source: [],
         campaign: [],
         adset: [],
-        ad: [],
+        placement: [],
+        creative: [],
+        page: [],
         totalSales: 0,
         totalRevenue: 0,
       };
@@ -202,15 +161,15 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
     const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
 
     const analyzeByField = (field: HierarchyLevel): UTMMetrics[] => {
-      const groups: Record<string, { id: string; sales: number; revenue: number }> = {};
+      const groups: Record<string, { sales: number; revenue: number }> = {};
       
       filteredSales.forEach(sale => {
-        const id = getFieldId(sale, field);
-        const displayName = getDisplayName(field, id);
+        const value = getFieldValue(sale.parsedUTM, field);
+        const displayName = getDisplayName(value);
         const valueInBRL = sale.total_price_brl || 0;
         
         if (!groups[displayName]) {
-          groups[displayName] = { id, sales: 0, revenue: 0 };
+          groups[displayName] = { sales: 0, revenue: 0 };
         }
         groups[displayName].sales += 1;
         groups[displayName].revenue += valueInBRL;
@@ -219,7 +178,6 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
       return Object.entries(groups)
         .map(([name, data]) => ({
           name,
-          id: data.id,
           sales: data.sales,
           revenue: data.revenue,
           avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
@@ -229,41 +187,53 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
     };
 
     return {
+      source: analyzeByField('source'),
       campaign: analyzeByField('campaign'),
       adset: analyzeByField('adset'),
-      ad: analyzeByField('ad'),
+      placement: analyzeByField('placement'),
+      creative: analyzeByField('creative'),
+      page: analyzeByField('page'),
       totalSales,
       totalRevenue,
     };
-  }, [filteredSales, nameLookups]);
+  }, [filteredSales]);
 
   // Analysis with drilldown filtering applied
   const drilldownData = useMemo(() => {
     let filtered = [...filteredSales];
     
-    // Filter by drilldown path using IDs
+    // Filter by drilldown path
+    if (drilldownPath.source) {
+      filtered = filtered.filter(s => s.parsedUTM.source === drilldownPath.source);
+    }
     if (drilldownPath.campaign) {
-      filtered = filtered.filter(s => getFieldId(s, 'campaign') === drilldownPath.campaign);
+      filtered = filtered.filter(s => s.parsedUTM.campaign === drilldownPath.campaign);
     }
     if (drilldownPath.adset) {
-      filtered = filtered.filter(s => getFieldId(s, 'adset') === drilldownPath.adset);
+      filtered = filtered.filter(s => s.parsedUTM.adset === drilldownPath.adset);
     }
-    if (drilldownPath.ad) {
-      filtered = filtered.filter(s => getFieldId(s, 'ad') === drilldownPath.ad);
+    if (drilldownPath.placement) {
+      filtered = filtered.filter(s => s.parsedUTM.placement === drilldownPath.placement);
+    }
+    if (drilldownPath.creative) {
+      filtered = filtered.filter(s => s.parsedUTM.creative === drilldownPath.creative);
+    }
+    if (drilldownPath.page) {
+      filtered = filtered.filter(s => s.parsedUTM.page === drilldownPath.page);
     }
 
     const totalSales = filtered.length;
     const totalRevenue = filtered.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
 
-    const groups: Record<string, { id: string; sales: number; revenue: number }> = {};
+    const groups: Record<string, { sales: number; revenue: number }> = {};
     
     filtered.forEach(sale => {
-      const id = getFieldId(sale, currentField);
-      const displayName = getDisplayName(currentField, id);
+      const value = getFieldValue(sale.parsedUTM, currentField);
+      const displayName = getDisplayName(value);
       const valueInBRL = sale.total_price_brl || 0;
       
       if (!groups[displayName]) {
-        groups[displayName] = { id, sales: 0, revenue: 0 };
+        groups[displayName] = { sales: 0, revenue: 0 };
       }
       groups[displayName].sales += 1;
       groups[displayName].revenue += valueInBRL;
@@ -272,7 +242,6 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
     const metrics: UTMMetrics[] = Object.entries(groups)
       .map(([name, data]) => ({
         name,
-        id: data.id,
         sales: data.sales,
         revenue: data.revenue,
         avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
@@ -281,27 +250,33 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
       .sort((a, b) => b.sales - a.sales);
 
     return { metrics, totalSales, totalRevenue };
-  }, [filteredSales, drilldownPath, currentField, nameLookups]);
+  }, [filteredSales, drilldownPath, currentField]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
   const handleDrilldown = (metric: UTMMetrics) => {
-    if (!metric.id) return; // Can't drill down on undefined
+    if (metric.name === '(não definido)') return; // Can't drill down on undefined
     
     const newPath = { ...drilldownPath };
-    if (currentLevel === 0) newPath.campaign = metric.id;
-    else if (currentLevel === 1) newPath.adset = metric.id;
-    else if (currentLevel === 2) newPath.ad = metric.id;
+    if (currentLevel === 0) newPath.source = metric.name;
+    else if (currentLevel === 1) newPath.campaign = metric.name;
+    else if (currentLevel === 2) newPath.adset = metric.name;
+    else if (currentLevel === 3) newPath.placement = metric.name;
+    else if (currentLevel === 4) newPath.creative = metric.name;
+    else if (currentLevel === 5) newPath.page = metric.name;
     setDrilldownPath(newPath);
   };
 
   const goBack = () => {
     const newPath = { ...drilldownPath };
-    if (currentLevel === 3) delete newPath.ad;
-    else if (currentLevel === 2) delete newPath.adset;
-    else if (currentLevel === 1) delete newPath.campaign;
+    if (currentLevel === 6) delete newPath.page;
+    else if (currentLevel === 5) delete newPath.creative;
+    else if (currentLevel === 4) delete newPath.placement;
+    else if (currentLevel === 3) delete newPath.adset;
+    else if (currentLevel === 2) delete newPath.campaign;
+    else if (currentLevel === 1) delete newPath.source;
     setDrilldownPath(newPath);
   };
 
@@ -323,33 +298,41 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
       </Button>
     );
 
-    if (drilldownPath.campaign) {
-      const name = getDisplayName('campaign', drilldownPath.campaign);
-      items.push(<ChevronRight key="sep1" className="w-4 h-4 text-muted-foreground" />);
-      items.push(
-        <Badge key="campaign" variant="secondary" className="cursor-pointer truncate max-w-[150px]" onClick={() => setDrilldownPath({ campaign: drilldownPath.campaign })}>
-          {name}
-        </Badge>
-      );
-    }
-    if (drilldownPath.adset) {
-      const name = getDisplayName('adset', drilldownPath.adset);
-      items.push(<ChevronRight key="sep2" className="w-4 h-4 text-muted-foreground" />);
-      items.push(
-        <Badge key="adset" variant="secondary" className="cursor-pointer truncate max-w-[150px]" onClick={() => setDrilldownPath({ campaign: drilldownPath.campaign, adset: drilldownPath.adset })}>
-          {name}
-        </Badge>
-      );
-    }
-    if (drilldownPath.ad) {
-      const name = getDisplayName('ad', drilldownPath.ad);
-      items.push(<ChevronRight key="sep3" className="w-4 h-4 text-muted-foreground" />);
-      items.push(
-        <Badge key="ad" variant="secondary" className="truncate max-w-[150px]">
-          {name}
-        </Badge>
-      );
-    }
+    const pathItems: { key: keyof DrilldownPath; value: string | undefined }[] = [
+      { key: 'source', value: drilldownPath.source },
+      { key: 'campaign', value: drilldownPath.campaign },
+      { key: 'adset', value: drilldownPath.adset },
+      { key: 'placement', value: drilldownPath.placement },
+      { key: 'creative', value: drilldownPath.creative },
+      { key: 'page', value: drilldownPath.page },
+    ];
+
+    pathItems.forEach((item, index) => {
+      if (item.value) {
+        items.push(<ChevronRight key={`sep-${index}`} className="w-4 h-4 text-muted-foreground" />);
+        
+        // Build the path up to this point for the click handler
+        const pathUpToHere: DrilldownPath = {};
+        for (let i = 0; i <= index; i++) {
+          const key = pathItems[i].key;
+          if (pathItems[i].value) {
+            pathUpToHere[key] = pathItems[i].value;
+          }
+        }
+        
+        items.push(
+          <Badge 
+            key={item.key} 
+            variant="secondary" 
+            className="cursor-pointer truncate max-w-[120px]" 
+            onClick={() => setDrilldownPath(pathUpToHere)}
+            title={item.value}
+          >
+            {item.value}
+          </Badge>
+        );
+      }
+    });
 
     return <div className="flex items-center gap-1 flex-wrap">{items}</div>;
   };
@@ -369,8 +352,8 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
         {metrics.slice(0, 10).map((metric, idx) => (
           <TableRow 
             key={`${metric.name}-${idx}`} 
-            className={showDrilldown && currentLevel < HIERARCHY.length && metric.id ? "cursor-pointer hover:bg-muted/50" : ""}
-            onClick={() => showDrilldown && currentLevel < HIERARCHY.length && metric.id && handleDrilldown(metric)}
+            className={showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/50" : ""}
+            onClick={() => showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && handleDrilldown(metric)}
           >
             <TableCell>
               <div className="flex items-center gap-2">
@@ -379,7 +362,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
                   style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                 />
                 <span className="truncate max-w-[200px]" title={metric.name}>{metric.name}</span>
-                {showDrilldown && currentLevel < HIERARCHY.length && metric.id && (
+                {showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && (
                   <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 )}
               </div>
@@ -423,19 +406,22 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
   return (
     <Card className="p-6">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold">Análise de Atribuição Meta</h3>
-        <p className="text-sm text-muted-foreground">Campanhas, Conjuntos e Anúncios vinculados às vendas</p>
+        <h3 className="text-lg font-semibold">Análise de UTMs</h3>
+        <p className="text-sm text-muted-foreground">Origem, Campanha, Conjunto, Posicionamento, Criativo e Página das vendas</p>
       </div>
 
       <Tabs defaultValue="drilldown" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="drilldown" className="gap-2">
             <GitBranch className="w-4 h-4" />
             Drill-down
           </TabsTrigger>
+          <TabsTrigger value="source">Origem</TabsTrigger>
           <TabsTrigger value="campaign">Campanha</TabsTrigger>
           <TabsTrigger value="adset">Conjunto</TabsTrigger>
-          <TabsTrigger value="ad">Anúncio</TabsTrigger>
+          <TabsTrigger value="placement">Posicionamento</TabsTrigger>
+          <TabsTrigger value="creative">Criativo</TabsTrigger>
+          <TabsTrigger value="page">Página</TabsTrigger>
         </TabsList>
 
         <TabsContent value="drilldown">
@@ -477,7 +463,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaHierarchy }: UTMAnalysis
           </div>
         </TabsContent>
 
-        {(['campaign', 'adset', 'ad'] as const).map(field => (
+        {HIERARCHY.map(field => (
           <TabsContent key={field} value={field}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="p-4">

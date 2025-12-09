@@ -601,11 +601,47 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     </ChartContainer>
   );
 
+  const generalRoas = analyzeUTM.totalSpend > 0 ? analyzeUTM.totalRevenue / analyzeUTM.totalSpend : null;
+
   return (
     <Card className="p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Análise de UTMs</h3>
         <p className="text-sm text-muted-foreground">Origem, Campanha, Conjunto, Criativo, Posicionamento e Página das vendas</p>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Card className="p-4 bg-muted/30">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+            <Target className="w-4 h-4" />
+            <span>Vendas</span>
+          </div>
+          <p className="text-2xl font-bold">{analyzeUTM.totalSales}</p>
+        </Card>
+        <Card className="p-4 bg-muted/30">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+            <TrendingUp className="w-4 h-4" />
+            <span>Receita Total</span>
+          </div>
+          <p className="text-2xl font-bold text-green-500">{formatCurrency(analyzeUTM.totalRevenue)}</p>
+        </Card>
+        <Card className="p-4 bg-muted/30">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+            <DollarSign className="w-4 h-4" />
+            <span>Investimento Total</span>
+          </div>
+          <p className="text-2xl font-bold text-red-500">{formatCurrency(analyzeUTM.totalSpend)}</p>
+        </Card>
+        <Card className="p-4 bg-muted/30">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+            <TrendingUp className="w-4 h-4" />
+            <span>ROAS Geral</span>
+          </div>
+          <p className={`text-2xl font-bold ${generalRoas !== null && generalRoas >= 1 ? 'text-green-500' : 'text-red-500'}`}>
+            {generalRoas !== null ? `${generalRoas.toFixed(2)}x` : '-'}
+          </p>
+        </Card>
       </div>
 
       <Tabs defaultValue="drilldown" className="space-y-4">

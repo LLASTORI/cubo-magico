@@ -1,11 +1,10 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, FileText, AlertTriangle, Search, CheckCircle2
+  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { generateExecutiveReport } from "@/components/funnel/ExecutiveReport";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -882,43 +881,6 @@ const FunnelAnalysis = () => {
                 )}
               </div>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    onClick={async () => {
-                      try {
-                        toast.info('Gerando relatório executivo...');
-                        await generateExecutiveReport({
-                          startDate,
-                          endDate,
-                          summaryMetrics,
-                          salesData,
-                          projectName: currentProject.name,
-                          funnelsConfig: funnels,
-                          mappings,
-                          metaCampaigns: metaStructure.campaigns,
-                          metaAds: metaStructure.ads,
-                          metaInsights,
-                        });
-                        toast.success('Relatório PDF gerado com sucesso!');
-                      } catch (error) {
-                        console.error('Error generating report:', error);
-                        toast.error('Erro ao gerar relatório');
-                      }
-                    }}
-                    disabled={loadingSales || !salesData.length}
-                    className="gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Relatório
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Gera relatório executivo em PDF com todas as métricas</p>
-                </TooltipContent>
-              </Tooltip>
             </div>
           </Card>
 

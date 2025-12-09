@@ -259,6 +259,7 @@ export type Database = {
           received_value: number | null
           recurrence: number | null
           sale_attribution_type: string | null
+          sale_category: string | null
           sale_date: string | null
           sale_origin: string | null
           shipping_value: number | null
@@ -328,6 +329,7 @@ export type Database = {
           received_value?: number | null
           recurrence?: number | null
           sale_attribution_type?: string | null
+          sale_category?: string | null
           sale_date?: string | null
           sale_origin?: string | null
           shipping_value?: number | null
@@ -397,6 +399,7 @@ export type Database = {
           received_value?: number | null
           recurrence?: number | null
           sale_attribution_type?: string | null
+          sale_category?: string | null
           sale_date?: string | null
           sale_origin?: string | null
           shipping_value?: number | null

@@ -138,6 +138,36 @@ export function CuboMagicoDashboard({
     enabled: !!projectId,
   });
 
+  // Fetch funnel_meta_accounts to know which Meta accounts are linked to each funnel
+  const { data: funnelMetaAccounts } = useQuery({
+    queryKey: ['funnel-meta-accounts', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funnel_meta_accounts')
+        .select('funnel_id, meta_account_id')
+        .eq('project_id', projectId);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch meta_ad_accounts to map UUIDs to account_ids
+  const { data: metaAdAccountsWithIds } = useQuery({
+    queryKey: ['meta-ad-accounts-with-ids', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_ad_accounts')
+        .select('id, account_id')
+        .eq('project_id', projectId)
+        .eq('is_active', true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
   // Use external sales data if provided, otherwise fetch from cache
   // This avoids duplicate queries - FunnelAnalysis.tsx fetches all sales with full fields
   // and passes them down to this component
@@ -553,7 +583,63 @@ export function CuboMagicoDashboard({
     };
   };
 
-  // Format sales data for LTVAnalysis
+  // Get filtered Meta data for UTM Analysis based on funnel's linked accounts AND campaign pattern
+  const getFilteredMetaDataForFunnel = (funnelId: string, campaignPattern: string | null) => {
+    if (!insightsData || !campaignsData) {
+      return { insights: [], campaigns: [], adsets: [], ads: [] };
+    }
+
+    // Get meta account IDs linked to this funnel via funnel_meta_accounts
+    const linkedMetaAccountUuids = (funnelMetaAccounts || [])
+      .filter(fma => fma.funnel_id === funnelId)
+      .map(fma => fma.meta_account_id);
+    
+    // Map UUIDs to actual account_ids
+    const linkedAccountIds = new Set(
+      (metaAdAccountsWithIds || [])
+        .filter(ma => linkedMetaAccountUuids.includes(ma.id))
+        .map(ma => ma.account_id)
+    );
+
+    // If no linked accounts, return empty (or fall back to campaign pattern)
+    let filteredInsights = insightsData;
+    let filteredCampaigns = campaignsData;
+
+    // Filter by linked Meta accounts if any are configured
+    if (linkedAccountIds.size > 0) {
+      filteredInsights = insightsData.filter(i => linkedAccountIds.has(i.ad_account_id));
+      filteredCampaigns = campaignsData.filter(c => linkedAccountIds.has(c.ad_account_id));
+    }
+
+    // Additionally filter by campaign pattern if configured
+    if (campaignPattern) {
+      const pattern = campaignPattern.toLowerCase();
+      filteredCampaigns = filteredCampaigns.filter(c => 
+        c.campaign_name?.toLowerCase().includes(pattern)
+      );
+      const matchingCampaignIds = new Set(filteredCampaigns.map(c => String(c.campaign_id)));
+      filteredInsights = filteredInsights.filter(i => 
+        matchingCampaignIds.has(String(i.campaign_id || ''))
+      );
+    }
+
+    // Get unique ad_ids and adset_ids from filtered insights
+    const insightAdIds = new Set(filteredInsights.filter(i => i.ad_id).map(i => i.ad_id));
+    const insightAdsetIds = new Set(filteredInsights.filter(i => i.adset_id).map(i => i.adset_id));
+
+    // Filter adsets and ads
+    const filteredAdsets = (adsetsData || []).filter(a => insightAdsetIds.has(a.adset_id));
+    const filteredAds = (adsData || []).filter(a => insightAdIds.has(a.ad_id));
+
+    console.log(`[getFilteredMetaDataForFunnel] Funnel ${funnelId}: linkedAccounts=${linkedAccountIds.size}, pattern="${campaignPattern}", insights=${filteredInsights.length}, campaigns=${filteredCampaigns.length}`);
+
+    return {
+      insights: filteredInsights,
+      campaigns: filteredCampaigns,
+      adsets: filteredAdsets,
+      ads: filteredAds,
+    };
+  };
   const getFormattedSalesData = (offerCodes: string[]) => {
     if (!salesData) return [];
     const offerCodesSet = new Set(offerCodes);
@@ -1013,14 +1099,22 @@ export function CuboMagicoDashboard({
                             </TabsContent>
 
                             <TabsContent value="utm" className="mt-0">
-                              <UTMAnalysis
-                                salesData={salesData}
-                                funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                                metaInsights={insightsData || []}
-                                metaCampaigns={campaignsData || []}
-                                metaAdsets={adsetsData || []}
-                                metaAds={adsData || []}
-                              />
+                              {(() => {
+                                const funnelMetaData = getFilteredMetaDataForFunnel(
+                                  metrics.funnel.id, 
+                                  metrics.funnel.campaign_name_pattern
+                                );
+                                return (
+                                  <UTMAnalysis
+                                    salesData={salesData}
+                                    funnelOfferCodes={getOfferCodesForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                                    metaInsights={funnelMetaData.insights}
+                                    metaCampaigns={funnelMetaData.campaigns}
+                                    metaAdsets={funnelMetaData.adsets}
+                                    metaAds={funnelMetaData.ads}
+                                  />
+                                );
+                              })()}
                             </TabsContent>
 
                             <TabsContent value="payment" className="mt-0">

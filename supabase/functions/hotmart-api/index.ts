@@ -137,51 +137,51 @@ function extractMetaIds(tracking: HotmartSale['purchase']['tracking']) {
   return { campaignId, adsetId, adId };
 }
 
-// Determine attribution type based on UTMs and funnel configuration
-async function determineAttributionType(
+// Determine sale_category based on:
+// 1. Oferta → Funil (always defines the funnel)
+// 2. UTM → Origin (ads vs unidentified vs other)
+// Categories: 'funnel_ads', 'funnel_no_ads', 'unidentified_origin', 'other_origin'
+function determineSaleCategory(
   sale: HotmartSale,
-  projectId: string,
-  supabase: any,
+  offerToFunnel: Map<string, string>,
   funnelsWithAds: Set<string>
-): Promise<string> {
+): string {
   const tracking = sale.purchase.tracking;
   const offerCode = sale.purchase.offer?.code;
   
-  // Check if we have valid Meta IDs in UTMs
+  // Check if we have Meta tracking
   const { campaignId, adsetId, adId } = extractMetaIds(tracking);
   const hasMetaIds = !!(campaignId || adsetId || adId);
-  
-  // Check if utm_source indicates Meta ads
   const utmSource = tracking?.utm_source?.toLowerCase() || '';
   const isFromMeta = ['fb', 'facebook', 'ig', 'instagram', 'meta'].some(s => utmSource.includes(s));
+  const hasMetaTracking = hasMetaIds || (isFromMeta && tracking?.utm_campaign);
   
-  if (hasMetaIds || (isFromMeta && tracking?.utm_campaign)) {
-    // Has UTM tracking from Meta
-    return 'paid_tracked';
+  // Check if offer belongs to a funnel
+  const funnelId = offerCode ? offerToFunnel.get(offerCode) : null;
+  const hasFunnel = !!funnelId && funnelId !== 'A Definir';
+  const funnelHasAds = funnelId ? funnelsWithAds.has(funnelId) : false;
+  
+  // Check for affiliate (other origin)
+  const hasAffiliate = !!sale.affiliate?.affiliate_code;
+  
+  // Categorization logic:
+  // 1. Funil + Ads: Has funnel AND has Meta tracking
+  if (hasFunnel && hasMetaTracking) {
+    return 'funnel_ads';
   }
   
-  // Check if offer belongs to a funnel with Meta ads
-  if (offerCode) {
-    // Get the funnel for this offer
-    const { data: offerMapping } = await supabase
-      .from('offer_mappings')
-      .select('id_funil, funnel_id')
-      .eq('project_id', projectId)
-      .eq('codigo_oferta', offerCode)
-      .maybeSingle();
-    
-    if (offerMapping) {
-      const funnelId = offerMapping.funnel_id || offerMapping.id_funil;
-      if (funnelsWithAds.has(funnelId)) {
-        // Offer is in a funnel that has Meta ads, but no UTM
-        // Could be organic within the funnel or UTM failed
-        return 'paid_untracked';
-      }
-    }
+  // 2. Funil sem Ads: Has funnel but NO Meta tracking
+  if (hasFunnel && !hasMetaTracking) {
+    return 'funnel_no_ads';
   }
   
-  // No Meta tracking and not in a funnel with ads
-  return 'organic_pure';
+  // 3. Outras Origens: Has affiliate or other known sources (not funnel)
+  if (hasAffiliate) {
+    return 'other_origin';
+  }
+  
+  // 4. Origem Não Identificada: No funnel, no Meta tracking, no affiliate
+  return 'unidentified_origin';
 }
 
 // Get all funnels that have Meta ad accounts linked
@@ -353,7 +353,7 @@ async function syncSales(
   startDate: number,
   endDate: number,
   status?: string
-): Promise<{ synced: number; updated: number; errors: number; attributionStats: Record<string, number> }> {
+): Promise<{ synced: number; updated: number; errors: number; categoryStats: Record<string, number> }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -368,7 +368,7 @@ async function syncSales(
   console.log(`Total sales fetched: ${sales.length}`);
   
   if (sales.length === 0) {
-    return { synced: 0, updated: 0, errors: 0, attributionStats: {} };
+    return { synced: 0, updated: 0, errors: 0, categoryStats: {} };
   }
   
   // Get offer mappings for attribution (one query)
@@ -389,12 +389,12 @@ async function syncSales(
   console.log(`Offer mappings loaded: ${offerMappings?.length || 0}`);
   console.log(`Funnels with Meta ads: ${funnelsWithAds.size}`);
   
-  const attributionStats: Record<string, number> = {
-    paid_tracked: 0,
-    paid_untracked: 0,
-    organic_funnel: 0,
-    organic_pure: 0,
-    unknown: 0,
+  // Stats for sale categories
+  const categoryStats: Record<string, number> = {
+    funnel_ads: 0,
+    funnel_no_ads: 0,
+    unidentified_origin: 0,
+    other_origin: 0,
   };
   
   // Fallback exchange rates (conservative estimates for BRL conversion)
@@ -483,28 +483,18 @@ async function syncSales(
   const salesData = sales.map(sale => {
     const tracking = sale.purchase.tracking;
     const { campaignId, adsetId, adId } = extractMetaIds(tracking);
-    const offerCode = sale.purchase.offer?.code;
     
-    // Determine attribution type (fast, no queries)
-    let attributionType = 'unknown';
+    // Determine sale category using the new logic
+    const saleCategory = determineSaleCategory(sale, offerToFunnel, funnelsWithAds);
+    categoryStats[saleCategory] = (categoryStats[saleCategory] || 0) + 1;
+    
+    // Keep legacy attribution type for backwards compatibility
     const hasMetaIds = !!(campaignId || adsetId || adId);
     const utmSource = tracking?.utm_source?.toLowerCase() || '';
     const isFromMeta = ['fb', 'facebook', 'ig', 'instagram', 'meta'].some(s => utmSource.includes(s));
-    
-    if (hasMetaIds || (isFromMeta && tracking?.utm_campaign)) {
-      attributionType = 'paid_tracked';
-    } else if (offerCode) {
-      const funnelId = offerToFunnel.get(offerCode);
-      if (funnelId && funnelsWithAds.has(funnelId)) {
-        attributionType = 'paid_untracked';
-      } else {
-        attributionType = 'organic_pure';
-      }
-    } else {
-      attributionType = 'organic_pure';
-    }
-    
-    attributionStats[attributionType]++;
+    const attributionType = (hasMetaIds || (isFromMeta && tracking?.utm_campaign)) 
+      ? 'paid_tracked' 
+      : 'organic_pure';
     
     // Calculate BRL conversion with exchange rates
     const currencyCode = sale.purchase.price?.currency_code || 'BRL';
@@ -559,6 +549,7 @@ async function syncSales(
       utm_creative: tracking?.utm_content || null,
       checkout_origin: tracking?.source_sck || tracking?.source || null,
       sale_attribution_type: attributionType,
+      sale_category: saleCategory,
       meta_campaign_id_extracted: campaignId,
       meta_adset_id_extracted: adsetId,
       meta_ad_id_extracted: adId,
@@ -597,9 +588,9 @@ async function syncSales(
   }
   
   console.log(`Sync complete: ${synced} processed, ${errors} errors`);
-  console.log('Attribution stats:', attributionStats);
+  console.log('Category stats:', categoryStats);
   
-  return { synced, updated: 0, errors, attributionStats };
+  return { synced, updated: 0, errors, categoryStats };
 }
 
 serve(async (req) => {
@@ -658,11 +649,10 @@ serve(async (req) => {
         let totalSynced = 0;
         let totalErrors = 0;
         const combinedStats: Record<string, number> = {
-          paid_tracked: 0,
-          paid_untracked: 0,
-          organic_funnel: 0,
-          organic_pure: 0,
-          unknown: 0,
+          funnel_ads: 0,
+          funnel_no_ads: 0,
+          unidentified_origin: 0,
+          other_origin: 0,
         };
         
         for (let i = 0; i < chunks.length; i++) {
@@ -673,9 +663,9 @@ serve(async (req) => {
           totalSynced += result.synced;
           totalErrors += result.errors;
           
-          // Combine attribution stats
-          Object.keys(result.attributionStats).forEach(key => {
-            combinedStats[key] = (combinedStats[key] || 0) + result.attributionStats[key];
+          // Combine category stats
+          Object.keys(result.categoryStats || {}).forEach(key => {
+            combinedStats[key] = (combinedStats[key] || 0) + (result.categoryStats?.[key] || 0);
           });
           
           // Small delay between chunks to avoid rate limiting
@@ -690,7 +680,7 @@ serve(async (req) => {
           synced: totalSynced,
           updated: 0,
           errors: totalErrors,
-          attributionStats: combinedStats,
+          categoryStats: combinedStats,
           chunks: chunks.length
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

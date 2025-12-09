@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { RefreshCw, CheckCircle, AlertCircle, Users, Target, Leaf, History } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Target, HelpCircle, History, Megaphone, Share2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -24,12 +24,11 @@ interface SyncResult {
   synced: number;
   updated: number;
   errors: number;
-  attributionStats: {
-    paid_tracked: number;
-    paid_untracked: number;
-    organic_funnel: number;
-    organic_pure: number;
-    unknown: number;
+  categoryStats: {
+    funnel_ads: number;
+    funnel_no_ads: number;
+    unidentified_origin: number;
+    other_origin: number;
   };
 }
 
@@ -86,36 +85,36 @@ export function HotmartSyncManager({ projectId, startDate, endDate, onSyncComple
     return `${startDate.toLocaleDateString('pt-BR')} - ${endDate.toLocaleDateString('pt-BR')}`;
   };
 
-  const getAttributionIcon = (type: string) => {
+  const getCategoryIcon = (type: string) => {
     switch (type) {
-      case 'paid_tracked':
+      case 'funnel_ads':
         return <Target className="w-4 h-4 text-green-500" />;
-      case 'paid_untracked':
-        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      case 'organic_pure':
-        return <Leaf className="w-4 h-4 text-blue-500" />;
+      case 'funnel_no_ads':
+        return <Megaphone className="w-4 h-4 text-blue-500" />;
+      case 'other_origin':
+        return <Share2 className="w-4 h-4 text-purple-500" />;
+      case 'unidentified_origin':
       default:
-        return <Users className="w-4 h-4 text-muted-foreground" />;
+        return <HelpCircle className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
-  const getAttributionLabel = (type: string) => {
+  const getCategoryLabel = (type: string) => {
     switch (type) {
-      case 'paid_tracked':
-        return 'Paga Rastreada';
-      case 'paid_untracked':
-        return 'Paga Não-Rastreada';
-      case 'organic_funnel':
-        return 'Orgânica de Funil';
-      case 'organic_pure':
-        return 'Orgânica Pura';
+      case 'funnel_ads':
+        return 'Funil + Ads';
+      case 'funnel_no_ads':
+        return 'Funil sem Ads';
+      case 'other_origin':
+        return 'Outras Origens';
+      case 'unidentified_origin':
       default:
-        return 'Desconhecido';
+        return 'Origem Não Identificada';
     }
   };
 
   const totalSales = lastSyncResult 
-    ? Object.values(lastSyncResult.attributionStats).reduce((a, b) => a + b, 0)
+    ? Object.values(lastSyncResult.categoryStats || {}).reduce((a, b) => a + b, 0)
     : 0;
 
   return (
@@ -188,13 +187,14 @@ export function HotmartSyncManager({ projectId, startDate, endDate, onSyncComple
               )}
             </div>
 
-            {/* Attribution Breakdown */}
+            {/* Category Breakdown */}
             {totalSales > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Classificação das Vendas:</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(lastSyncResult.attributionStats)
+                  {Object.entries(lastSyncResult.categoryStats || {})
                     .filter(([_, count]) => count > 0)
+                    .sort((a, b) => b[1] - a[1])
                     .map(([type, count]) => {
                       const percentage = ((count / totalSales) * 100).toFixed(1);
                       return (
@@ -203,8 +203,8 @@ export function HotmartSyncManager({ projectId, startDate, endDate, onSyncComple
                           className="flex items-center justify-between p-2 rounded-md bg-muted/50"
                         >
                           <div className="flex items-center gap-2">
-                            {getAttributionIcon(type)}
-                            <span className="text-xs">{getAttributionLabel(type)}</span>
+                            {getCategoryIcon(type)}
+                            <span className="text-xs">{getCategoryLabel(type)}</span>
                           </div>
                           <Badge variant="secondary" className="text-xs">
                             {count} ({percentage}%)
@@ -220,28 +220,27 @@ export function HotmartSyncManager({ projectId, startDate, endDate, onSyncComple
             {totalSales > 0 && (
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Qualidade do Rastreamento:</span>
+                  <span className="text-xs text-muted-foreground">Vendas em Funis:</span>
                   <div className="flex items-center gap-2">
                     {(() => {
-                      const trackedPercentage = (lastSyncResult.attributionStats.paid_tracked / totalSales) * 100;
-                      if (trackedPercentage >= 70) {
+                      const funnelSales = (lastSyncResult.categoryStats?.funnel_ads || 0) + (lastSyncResult.categoryStats?.funnel_no_ads || 0);
+                      const funnelPercentage = (funnelSales / totalSales) * 100;
+                      if (funnelPercentage >= 70) {
                         return (
-                          <>
-                            <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
-                              Ótimo ({trackedPercentage.toFixed(0)}% rastreado)
-                            </Badge>
-                          </>
+                          <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
+                            Ótimo ({funnelPercentage.toFixed(0)}% em funis)
+                          </Badge>
                         );
-                      } else if (trackedPercentage >= 40) {
+                      } else if (funnelPercentage >= 40) {
                         return (
                           <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
-                            Regular ({trackedPercentage.toFixed(0)}% rastreado)
+                            Regular ({funnelPercentage.toFixed(0)}% em funis)
                           </Badge>
                         );
                       } else {
                         return (
                           <Badge className="bg-red-500/10 text-red-500 border-red-500/20">
-                            Baixo ({trackedPercentage.toFixed(0)}% rastreado)
+                            Baixo ({funnelPercentage.toFixed(0)}% em funis)
                           </Badge>
                         );
                       }

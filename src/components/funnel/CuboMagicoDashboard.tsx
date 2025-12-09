@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1174,10 +1175,17 @@ export function CuboMagicoDashboard({
                                   <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Funil de Conversão (Meta Ads)</h4>
                                   <div className="flex flex-wrap items-center gap-2">
                                     {/* Link Clicks */}
-                                    <div className="flex flex-col items-center p-3 bg-blue-500/10 rounded-lg min-w-[100px]">
-                                      <span className="text-[10px] text-blue-600 font-medium uppercase">Cliques Link</span>
-                                      <span className="text-xl font-bold text-blue-600">{metrics.linkClicks}</span>
-                                    </div>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex flex-col items-center p-3 bg-blue-500/10 rounded-lg min-w-[100px] cursor-help">
+                                          <span className="text-[10px] text-blue-600 font-medium uppercase">Cliques Link</span>
+                                          <span className="text-xl font-bold text-blue-600">{metrics.linkClicks}</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Total de cliques em links nos anúncios</p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
@@ -1185,16 +1193,24 @@ export function CuboMagicoDashboard({
                                     </div>
                                     
                                     {/* Landing Page Views */}
-                                    <div className="flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px]">
-                                      <span className="text-[10px] text-purple-600 font-medium uppercase">Views Página</span>
-                                      <span className={cn(
-                                        "text-xl font-bold",
-                                        metrics.connectRate >= 70 ? "text-green-600" : metrics.connectRate >= 50 ? "text-yellow-600" : "text-red-600"
-                                      )}>
-                                        {metrics.connectRate.toFixed(1)}%
-                                      </span>
-                                      <span className="text-[9px] text-purple-500">Connect Rate</span>
-                                    </div>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px] cursor-help">
+                                          <span className="text-[10px] text-purple-600 font-medium uppercase">Views Página</span>
+                                          <span className={cn(
+                                            "text-xl font-bold",
+                                            metrics.connectRate >= 70 ? "text-green-600" : metrics.connectRate >= 50 ? "text-yellow-600" : "text-red-600"
+                                          )}>
+                                            {metrics.connectRate.toFixed(1)}%
+                                          </span>
+                                          <span className="text-[9px] text-purple-500">Connect Rate</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p><strong>Connect Rate:</strong> Views Página ÷ Cliques Link</p>
+                                        <p className="text-xs text-muted-foreground">{metrics.landingPageViews} views de {metrics.linkClicks} cliques</p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
@@ -1202,16 +1218,24 @@ export function CuboMagicoDashboard({
                                     </div>
                                     
                                     {/* Initiate Checkouts */}
-                                    <div className="flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px]">
-                                      <span className="text-[10px] text-orange-600 font-medium uppercase">Checkouts</span>
-                                      <span className={cn(
-                                        "text-xl font-bold",
-                                        metrics.txPaginaCheckout >= 10 ? "text-green-600" : metrics.txPaginaCheckout >= 5 ? "text-yellow-600" : "text-red-600"
-                                      )}>
-                                        {metrics.txPaginaCheckout.toFixed(1)}%
-                                      </span>
-                                      <span className="text-[9px] text-orange-500">TX Pág→Ckout</span>
-                                    </div>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px] cursor-help">
+                                          <span className="text-[10px] text-orange-600 font-medium uppercase">Checkouts</span>
+                                          <span className={cn(
+                                            "text-xl font-bold",
+                                            metrics.txPaginaCheckout >= 10 ? "text-green-600" : metrics.txPaginaCheckout >= 5 ? "text-yellow-600" : "text-red-600"
+                                          )}>
+                                            {metrics.txPaginaCheckout.toFixed(1)}%
+                                          </span>
+                                          <span className="text-[9px] text-orange-500">TX Pág→Ckout</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p><strong>TX Página→Checkout:</strong> Checkouts ÷ Views Página</p>
+                                        <p className="text-xs text-muted-foreground">{metrics.initiateCheckouts} checkouts de {metrics.landingPageViews} views</p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                     
                                     <div className="flex flex-col items-center">
                                       <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
@@ -1219,16 +1243,24 @@ export function CuboMagicoDashboard({
                                     </div>
                                     
                                     {/* Purchases */}
-                                    <div className="flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px]">
-                                      <span className="text-[10px] text-green-600 font-medium uppercase">Compras</span>
-                                      <span className={cn(
-                                        "text-xl font-bold",
-                                        metrics.txCheckoutCompra >= 50 ? "text-green-600" : metrics.txCheckoutCompra >= 30 ? "text-yellow-600" : "text-red-600"
-                                      )}>
-                                        {metrics.txCheckoutCompra.toFixed(1)}%
-                                      </span>
-                                      <span className="text-[9px] text-green-500">TX Ckout→Compra</span>
-                                    </div>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px] cursor-help">
+                                          <span className="text-[10px] text-green-600 font-medium uppercase">Compras</span>
+                                          <span className={cn(
+                                            "text-xl font-bold",
+                                            metrics.txCheckoutCompra >= 50 ? "text-green-600" : metrics.txCheckoutCompra >= 30 ? "text-yellow-600" : "text-red-600"
+                                          )}>
+                                            {metrics.txCheckoutCompra.toFixed(1)}%
+                                          </span>
+                                          <span className="text-[9px] text-green-500">TX Ckout→Compra</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p><strong>TX Checkout→Compra:</strong> Compras ÷ Checkouts</p>
+                                        <p className="text-xs text-muted-foreground">{metrics.purchases} compras de {metrics.initiateCheckouts} checkouts</p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </div>
                                 </div>
                               </div>

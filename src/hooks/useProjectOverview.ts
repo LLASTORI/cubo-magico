@@ -181,11 +181,20 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
 
   // Calculate funnel ROAS using campaign_name_pattern
   const funnelROAS = useMemo((): FunnelROAS[] => {
+    console.log('[ProjectOverview] Calculating funnelROAS:', {
+      funnels: funnels?.length,
+      sales: sales?.length,
+      metaInsights: metaInsights?.length,
+      offerMappings: offerMappings?.length,
+      metaCampaigns: metaCampaigns?.length,
+    });
+
     if (!funnels || !sales || !metaInsights || !offerMappings || !metaCampaigns) {
+      console.log('[ProjectOverview] Missing data, returning empty');
       return [];
     }
 
-    return funnels.map(funnel => {
+    const results = funnels.map(funnel => {
       // Get offer codes for this funnel
       const funnelOfferCodes = offerMappings
         .filter(m => m.funnel_id === funnel.id)
@@ -199,9 +208,11 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
 
       // Find campaigns that match the funnel's campaign_name_pattern
       let funnelSpend = 0;
+      let matchingCampaignIds: string[] = [];
+      
       if (funnel.campaign_name_pattern) {
         const pattern = funnel.campaign_name_pattern.toLowerCase();
-        const matchingCampaignIds = metaCampaigns
+        matchingCampaignIds = metaCampaigns
           .filter(c => c.campaign_name?.toLowerCase().includes(pattern))
           .map(c => c.campaign_id);
 
@@ -211,6 +222,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
           .reduce((sum, insight) => sum + (insight.spend || 0), 0);
       }
 
+      console.log(`[ProjectOverview] Funnel "${funnel.name}": pattern="${funnel.campaign_name_pattern}", campaigns=${matchingCampaignIds.length}, offers=${funnelOfferCodes.length}, revenue=${funnelRevenue.toFixed(2)}, spend=${funnelSpend.toFixed(2)}`);
+
       return {
         funnelId: funnel.id,
         funnelName: funnel.name,
@@ -219,6 +232,9 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
         roas: funnelSpend > 0 ? funnelRevenue / funnelSpend : 0,
       };
     }).filter(f => f.revenue > 0 || f.spend > 0);
+
+    console.log('[ProjectOverview] Final funnelROAS results:', results);
+    return results;
   }, [funnels, sales, metaInsights, offerMappings, metaCampaigns]);
 
   // Calculate general ROAS (all sales vs all spend)

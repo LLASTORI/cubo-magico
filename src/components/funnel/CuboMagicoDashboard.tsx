@@ -82,6 +82,15 @@ interface FunnelMetrics {
     receita: number;
     taxaConversao: number;
   }>;
+  // New conversion metrics
+  connectRate: number; // landing_page_view / link_click
+  txPaginaCheckout: number; // initiate_checkout / landing_page_view
+  txCheckoutCompra: number; // purchase / initiate_checkout
+  // Raw action counts for display
+  linkClicks: number;
+  landingPageViews: number;
+  initiateCheckouts: number;
+  purchases: number;
 }
 
 export function CuboMagicoDashboard({ 
@@ -249,7 +258,7 @@ export function CuboMagicoDashboard({
       while (hasMore) {
         const { data, error } = await supabase
           .from('meta_insights')
-          .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm')
+          .select('campaign_id, ad_account_id, spend, date_start, date_stop, adset_id, ad_id, impressions, clicks, reach, ctr, cpc, cpm, actions')
           .eq('project_id', projectId)
           .in('ad_account_id', activeAccountIds)
           .not('ad_id', 'is', null)
@@ -328,6 +337,41 @@ export function CuboMagicoDashboard({
         }
       });
       const investimento = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+      
+      // Extract action metrics from insights (aggregate all matching insights)
+      // Helper to extract action value from actions array
+      const getActionValue = (actions: any[] | null, actionType: string): number => {
+        if (!actions || !Array.isArray(actions)) return 0;
+        const action = actions.find((a: any) => a.action_type === actionType);
+        return action ? parseInt(action.value || '0', 10) : 0;
+      };
+      
+      // Aggregate action metrics across all matching insights (deduplicated by ad_id + date)
+      const actionMetrics = new Map<string, { linkClicks: number; landingPageViews: number; initiateCheckouts: number; purchases: number }>();
+      matchingInsights.forEach(i => {
+        if (i.ad_id) {
+          const key = `${i.ad_id}_${i.date_start}`;
+          if (!actionMetrics.has(key)) {
+            actionMetrics.set(key, {
+              linkClicks: getActionValue(i.actions, 'link_click'),
+              landingPageViews: getActionValue(i.actions, 'landing_page_view') || getActionValue(i.actions, 'omni_landing_page_view'),
+              initiateCheckouts: getActionValue(i.actions, 'initiate_checkout') || getActionValue(i.actions, 'omni_initiated_checkout'),
+              purchases: getActionValue(i.actions, 'purchase') || getActionValue(i.actions, 'omni_purchase'),
+            });
+          }
+        }
+      });
+      
+      // Sum all action metrics
+      const linkClicks = Array.from(actionMetrics.values()).reduce((sum, m) => sum + m.linkClicks, 0);
+      const landingPageViews = Array.from(actionMetrics.values()).reduce((sum, m) => sum + m.landingPageViews, 0);
+      const initiateCheckouts = Array.from(actionMetrics.values()).reduce((sum, m) => sum + m.initiateCheckouts, 0);
+      const purchases = Array.from(actionMetrics.values()).reduce((sum, m) => sum + m.purchases, 0);
+      
+      // Calculate conversion rates
+      const connectRate = linkClicks > 0 ? (landingPageViews / linkClicks) * 100 : 0;
+      const txPaginaCheckout = landingPageViews > 0 ? (initiateCheckouts / landingPageViews) * 100 : 0;
+      const txCheckoutCompra = initiateCheckouts > 0 ? (purchases / initiateCheckouts) * 100 : 0;
       
       // Log funnel matching summary (production level)
       if (pattern) {
@@ -436,6 +480,14 @@ export function CuboMagicoDashboard({
         status,
         productsByPosition,
         positionBreakdown,
+        // New conversion metrics
+        connectRate,
+        txPaginaCheckout,
+        txCheckoutCompra,
+        linkClicks,
+        landingPageViews,
+        initiateCheckouts,
+        purchases,
       };
     });
   }, [funnels, offerMappings, salesData, campaignsData, insightsData]);
@@ -1114,6 +1166,69 @@ export function CuboMagicoDashboard({
                                     )}>
                                       {formatCurrency(metrics.cpaMaximo - metrics.cpaReal)}
                                     </p>
+                                  </div>
+                                </div>
+                                
+                                {/* Conversion Funnel Metrics */}
+                                <div className="pt-4 border-t border-border/50">
+                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Funil de Conversão (Meta Ads)</h4>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {/* Link Clicks */}
+                                    <div className="flex flex-col items-center p-3 bg-blue-500/10 rounded-lg min-w-[100px]">
+                                      <span className="text-[10px] text-blue-600 font-medium uppercase">Cliques Link</span>
+                                      <span className="text-xl font-bold text-blue-600">{metrics.linkClicks}</span>
+                                    </div>
+                                    
+                                    <div className="flex flex-col items-center">
+                                      <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
+                                      <span className={cn(
+                                        "text-[10px] font-bold",
+                                        metrics.connectRate >= 70 ? "text-green-600" : metrics.connectRate >= 50 ? "text-yellow-600" : "text-red-600"
+                                      )}>
+                                        {metrics.connectRate.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Landing Page Views */}
+                                    <div className="flex flex-col items-center p-3 bg-purple-500/10 rounded-lg min-w-[100px]">
+                                      <span className="text-[10px] text-purple-600 font-medium uppercase">Views Página</span>
+                                      <span className="text-xl font-bold text-purple-600">{metrics.landingPageViews}</span>
+                                      <span className="text-[9px] text-purple-500">Connect Rate</span>
+                                    </div>
+                                    
+                                    <div className="flex flex-col items-center">
+                                      <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
+                                      <span className={cn(
+                                        "text-[10px] font-bold",
+                                        metrics.txPaginaCheckout >= 10 ? "text-green-600" : metrics.txPaginaCheckout >= 5 ? "text-yellow-600" : "text-red-600"
+                                      )}>
+                                        {metrics.txPaginaCheckout.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Initiate Checkouts */}
+                                    <div className="flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px]">
+                                      <span className="text-[10px] text-orange-600 font-medium uppercase">Checkouts</span>
+                                      <span className="text-xl font-bold text-orange-600">{metrics.initiateCheckouts}</span>
+                                      <span className="text-[9px] text-orange-500">TX Pág→Ckout</span>
+                                    </div>
+                                    
+                                    <div className="flex flex-col items-center">
+                                      <ArrowRight className="w-4 h-4 text-muted-foreground/50" />
+                                      <span className={cn(
+                                        "text-[10px] font-bold",
+                                        metrics.txCheckoutCompra >= 50 ? "text-green-600" : metrics.txCheckoutCompra >= 30 ? "text-yellow-600" : "text-red-600"
+                                      )}>
+                                        {metrics.txCheckoutCompra.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Purchases */}
+                                    <div className="flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px]">
+                                      <span className="text-[10px] text-green-600 font-medium uppercase">Compras</span>
+                                      <span className="text-xl font-bold text-green-600">{metrics.purchases}</span>
+                                      <span className="text-[9px] text-green-500">TX Ckout→Compra</span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>

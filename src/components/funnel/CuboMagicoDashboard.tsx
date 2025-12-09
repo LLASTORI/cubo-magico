@@ -762,16 +762,60 @@ export function CuboMagicoDashboard({
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusTooltip = (status: string, cpaReal?: number, cpaMaximo?: number): string => {
+    const formatCPA = (value: number) => `R$ ${value.toFixed(2)}`;
     switch (status) {
-      case 'excellent': return <Badge className="bg-green-500/20 text-green-700 border-green-500/30">Excelente</Badge>;
-      case 'good': return <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30">Bom</Badge>;
-      case 'attention': return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">Atenção</Badge>;
-      case 'danger': return <Badge className="bg-red-500/20 text-red-700 border-red-500/30">Crítico</Badge>;
-      case 'no-return': return <Badge className="bg-red-600/20 text-red-800 border-red-600/30">Sem Retorno</Badge>;
-      case 'inactive': return <Badge className="bg-muted text-muted-foreground border-muted-foreground/30">Inativo</Badge>;
-      default: return null;
+      case 'excellent': 
+        return cpaReal !== undefined && cpaMaximo !== undefined
+          ? `Excelente: CPA Real (${formatCPA(cpaReal)}) ≤ 80% do CPA Máximo (${formatCPA(cpaMaximo * 0.8)})`
+          : 'CPA Real está até 80% do CPA Máximo - Performance excelente!';
+      case 'good': 
+        return cpaReal !== undefined && cpaMaximo !== undefined
+          ? `Bom: CPA Real (${formatCPA(cpaReal)}) ≤ CPA Máximo (${formatCPA(cpaMaximo)})`
+          : 'CPA Real está dentro do CPA Máximo - Performance boa';
+      case 'attention': 
+        return cpaReal !== undefined && cpaMaximo !== undefined
+          ? `Atenção: CPA Real (${formatCPA(cpaReal)}) está entre 100% e 120% do CPA Máximo (${formatCPA(cpaMaximo)})`
+          : 'CPA Real está até 20% acima do máximo - Requer atenção';
+      case 'danger': 
+        return cpaReal !== undefined && cpaMaximo !== undefined
+          ? `Crítico: CPA Real (${formatCPA(cpaReal)}) > 120% do CPA Máximo (${formatCPA(cpaMaximo * 1.2)})`
+          : 'CPA Real está mais de 20% acima do máximo - Situação crítica';
+      case 'no-return': 
+        return 'Sem Retorno: O funil tem investimento em anúncios mas ainda não gerou vendas no período';
+      case 'inactive': 
+        return 'Inativo: Sem investimento e sem vendas no período selecionado';
+      default: 
+        return '';
     }
+  };
+
+  const getStatusBadge = (status: string, cpaReal?: number, cpaMaximo?: number) => {
+    const tooltip = getStatusTooltip(status, cpaReal, cpaMaximo);
+    const badge = (() => {
+      switch (status) {
+        case 'excellent': return <Badge className="bg-green-500/20 text-green-700 border-green-500/30 cursor-help">Excelente</Badge>;
+        case 'good': return <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30 cursor-help">Bom</Badge>;
+        case 'attention': return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30 cursor-help">Atenção</Badge>;
+        case 'danger': return <Badge className="bg-red-500/20 text-red-700 border-red-500/30 cursor-help">Crítico</Badge>;
+        case 'no-return': return <Badge className="bg-red-600/20 text-red-800 border-red-600/30 cursor-help">Sem Retorno</Badge>;
+        case 'inactive': return <Badge className="bg-muted text-muted-foreground border-muted-foreground/30 cursor-help">Inativo</Badge>;
+        default: return null;
+      }
+    })();
+
+    if (!badge) return null;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {badge}
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          <p className="text-sm">{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
   };
 
   const setQuickDate = (days: number) => {
@@ -1159,7 +1203,7 @@ export function CuboMagicoDashboard({
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {getStatusIcon(metrics.status)}
-                        {getStatusBadge(metrics.status)}
+                        {getStatusBadge(metrics.status, metrics.cpaReal, metrics.cpaMaximo)}
                       </div>
                     </TableCell>
                   </TableRow>

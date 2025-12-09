@@ -448,9 +448,16 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     if (!offerToMove || !targetFunnelName) return;
 
     try {
+      // Find the funnel_id (FK) for the target funnel
+      const targetFunnel = funnels.find(f => f.name === targetFunnelName);
+      const targetFunnelId = targetFunnel?.id || null;
+
       const { error } = await supabase
         .from('offer_mappings')
-        .update({ id_funil: targetFunnelName })
+        .update({ 
+          id_funil: targetFunnelName,
+          funnel_id: targetFunnelId // Sync the FK with the funnel name
+        })
         .eq('id', offerToMove.id);
 
       if (error) throw error;

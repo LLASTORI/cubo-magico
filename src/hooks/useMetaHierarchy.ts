@@ -95,19 +95,39 @@ export const useMetaHierarchy = ({
     return [...new Set(insights.map(i => i.ad_account_id))];
   }, [insights, activeAccountIds]);
 
-  // Fetch campaigns - ONLY from active accounts (filtered by ad_account_id)
+  // Fetch campaigns - ONLY from active accounts (filtered by ad_account_id) with pagination
   const campaignsQuery = useQuery({
     queryKey: ['meta-hierarchy-campaigns', projectId, accountIdsFromInsights.join(',')],
     queryFn: async () => {
       if (accountIdsFromInsights.length === 0) return [];
-      const { data, error } = await supabase
-        .from('meta_campaigns')
-        .select('id, campaign_id, campaign_name, status')
-        .eq('project_id', projectId!)
-        .in('ad_account_id', accountIdsFromInsights);
-      if (error) throw error;
-      console.log(`[useMetaHierarchy] Campaigns loaded: ${data?.length || 0} from ${accountIdsFromInsights.length} accounts`);
-      return (data as MetaCampaign[]) || [];
+      
+      // Use pagination to fetch all campaigns (Supabase default limit is 1000)
+      const PAGE_SIZE = 1000;
+      let allCampaigns: MetaCampaign[] = [];
+      let page = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_campaigns')
+          .select('id, campaign_id, campaign_name, status')
+          .eq('project_id', projectId!)
+          .in('ad_account_id', accountIdsFromInsights)
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allCampaigns = [...allCampaigns, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[useMetaHierarchy] Campaigns loaded: ${allCampaigns.length} from ${accountIdsFromInsights.length} accounts`);
+      return allCampaigns;
     },
     enabled: isEnabled && accountIdsFromInsights.length > 0,
     staleTime: 5 * 60 * 1000,

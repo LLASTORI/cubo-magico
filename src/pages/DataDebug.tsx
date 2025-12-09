@@ -79,12 +79,19 @@ export default function DataDebug() {
       console.log("Meta Ads encontrados:", metaAds?.length || 0);
 
       // 5. Buscar Hotmart Sales
+      // IMPORTANT: Use Brazil timezone (UTC-3) for date filtering
+      const startTimestamp = `${startDate}T03:00:00.000Z`; // 00:00 Brazil = 03:00 UTC
+      const endDateObj = new Date(endDate);
+      endDateObj.setDate(endDateObj.getDate() + 1);
+      const adjustedEndDate = endDateObj.toISOString().split('T')[0];
+      const endTimestamp = `${adjustedEndDate}T02:59:59.999Z`; // 23:59 Brazil = 02:59 UTC next day
+      
       const { data: hotmartSales, error: salesError } = await supabase
         .from('hotmart_sales')
         .select('*')
         .eq('project_id', currentProject.id)
-        .gte('sale_date', startDate)
-        .lte('sale_date', endDate + 'T23:59:59');
+        .gte('sale_date', startTimestamp)
+        .lte('sale_date', endTimestamp);
 
       if (salesError) console.error("Erro hotmart_sales:", salesError);
       console.log("Hotmart Sales encontradas:", hotmartSales?.length || 0);

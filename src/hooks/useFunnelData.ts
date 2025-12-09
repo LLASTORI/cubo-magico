@@ -187,8 +187,21 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const salesQuery = useQuery({
     queryKey: ['sales', projectId, startDateStr, endDateStr],
     queryFn: async () => {
-      const startTimestamp = `${startDateStr}T00:00:00`;
-      const endTimestamp = `${endDateStr}T23:59:59`;
+      // IMPORTANT: Sales are stored in UTC. To filter by Brazil timezone (UTC-3),
+      // we need to adjust the timestamps. When user selects "2025-12-09" in Brazil:
+      // - Start: 2025-12-09 00:00:00 Brazil = 2025-12-09 03:00:00 UTC
+      // - End: 2025-12-09 23:59:59 Brazil = 2025-12-10 02:59:59 UTC
+      // Using timezone-aware timestamps ensures correct filtering
+      const startTimestamp = `${startDateStr}T03:00:00.000Z`; // 00:00 Brazil = 03:00 UTC
+      const endTimestamp = `${endDateStr}T02:59:59.999Z`; // 23:59 Brazil (next day) = 02:59 UTC
+      
+      // Adjust end date to next day for the UTC conversion
+      const endDateObj = new Date(endDateStr);
+      endDateObj.setDate(endDateObj.getDate() + 1);
+      const adjustedEndDate = endDateObj.toISOString().split('T')[0];
+      const adjustedEndTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
+      
+      console.log(`[useFunnelData] Sales query: Brazil ${startDateStr} to ${endDateStr} => UTC ${startTimestamp} to ${adjustedEndTimestamp}`);
       
       const { data, error } = await supabase
         .from('hotmart_sales')
@@ -196,7 +209,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         .eq('project_id', projectId!)
         .in('status', ['APPROVED', 'COMPLETE'])
         .gte('sale_date', startTimestamp)
-        .lte('sale_date', endTimestamp)
+        .lte('sale_date', adjustedEndTimestamp)
         .order('sale_date', { ascending: false })
         .limit(5000);
       

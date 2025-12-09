@@ -103,15 +103,25 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
   });
 
   // Fetch Hotmart sales (revenue data) - optionally filter by paid traffic
+  // IMPORTANT: Use Brazil timezone (UTC-3) for date filtering
   const { data: hotmartSales, isLoading: salesLoading, refetch: refetchSales } = useQuery({
     queryKey: ['hotmart_roi_sales', projectId, startDateStr, endDateStr, paidTrafficOnly],
     queryFn: async () => {
+      // Convert Brazil dates to UTC timestamps
+      // Start: 00:00 Brazil = 03:00 UTC
+      // End: 23:59 Brazil (next day) = 02:59 UTC
+      const startTimestamp = `${startDateStr}T03:00:00.000Z`;
+      const endDateObj = new Date(endDateStr);
+      endDateObj.setDate(endDateObj.getDate() + 1);
+      const adjustedEndDate = endDateObj.toISOString().split('T')[0];
+      const endTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
+      
       let query = supabase
         .from('hotmart_sales')
         .select('sale_date, total_price, total_price_brl, net_revenue, status, sale_attribution_type')
         .eq('project_id', projectId)
-        .gte('sale_date', `${startDateStr}T00:00:00`)
-        .lte('sale_date', `${endDateStr}T23:59:59`)
+        .gte('sale_date', startTimestamp)
+        .lte('sale_date', endTimestamp)
         .in('status', ['COMPLETE', 'APPROVED']);
       
       // Filter by paid traffic if enabled

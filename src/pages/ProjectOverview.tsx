@@ -166,8 +166,8 @@ const ProjectOverview = () => {
   }));
 
   const chartConfig = {
-    receita: { label: "Receita", color: "hsl(var(--chart-1))" },
     investimento: { label: "Investimento", color: "hsl(var(--chart-2))" },
+    receita: { label: "Receita", color: "hsl(var(--chart-1))" },
     lucro: { label: "Lucro", color: "hsl(var(--chart-3))" },
     acumulado: { label: "Acumulado", color: "hsl(var(--chart-4))" },
   };
@@ -289,20 +289,6 @@ const ProjectOverview = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Faturamento Total
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(summaryMetrics.totalRevenue)}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <TrendingUp className="w-4 h-4" />
                     Investimento Ads
                   </CardTitle>
@@ -310,6 +296,20 @@ const ProjectOverview = () => {
                 <CardContent>
                   <p className="text-2xl font-bold text-foreground">
                     {formatCurrency(summaryMetrics.totalSpend)}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Faturamento Total
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-foreground">
+                    {formatCurrency(summaryMetrics.totalRevenue)}
                   </p>
                 </CardContent>
               </Card>
@@ -456,8 +456,8 @@ const ProjectOverview = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Funil</TableHead>
-                        <TableHead className="text-right">Receita</TableHead>
                         <TableHead className="text-right">Investimento</TableHead>
+                        <TableHead className="text-right">Receita</TableHead>
                         <TableHead className="text-right">ROAS</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -467,8 +467,8 @@ const ProjectOverview = () => {
                           {funnelROAS.map((funnel) => (
                             <TableRow key={funnel.funnelId}>
                               <TableCell className="font-medium">{funnel.funnelName}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(funnel.revenue)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(funnel.spend)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(funnel.revenue)}</TableCell>
                               <TableCell className="text-right">
                                 <Badge variant={funnel.roas >= 2 ? "default" : funnel.roas >= 1 ? "secondary" : "destructive"}>
                                   {funnel.roas.toFixed(2)}x
@@ -478,8 +478,8 @@ const ProjectOverview = () => {
                           ))}
                           <TableRow className="bg-muted/50 font-semibold">
                             <TableCell>GERAL</TableCell>
-                            <TableCell className="text-right">{formatCurrency(generalROAS.revenue)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(generalROAS.spend)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(generalROAS.revenue)}</TableCell>
                             <TableCell className="text-right">
                               <Badge variant={generalROAS.roas >= 2 ? "default" : generalROAS.roas >= 1 ? "secondary" : "destructive"}>
                                 {generalROAS.roas.toFixed(2)}x
@@ -532,8 +532,8 @@ const ProjectOverview = () => {
                         }
                       />
                       <Legend />
-                      <Bar dataKey="receita" fill="hsl(var(--chart-1))" name="Receita" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="investimento" fill="hsl(var(--chart-2))" name="Investimento" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="receita" fill="hsl(var(--chart-1))" name="Receita" radius={[4, 4, 0, 0]} />
                       <Line 
                         type="monotone" 
                         dataKey="acumulado" 

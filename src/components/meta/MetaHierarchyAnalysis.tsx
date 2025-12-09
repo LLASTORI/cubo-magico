@@ -444,28 +444,18 @@ export const MetaHierarchyAnalysis = ({
           >
             {showAdActions && (
               <TableCell className="p-1">
-                {item.thumbnailUrl ? (
-                  <a
-                    href={item.previewUrl || `https://www.facebook.com/ads/library/?id=${item.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="block"
-                  >
-                    <img
-                      src={item.thumbnailUrl}
-                      alt="Preview"
-                      className="w-12 h-12 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  </a>
-                ) : (
-                  <div className="w-12 h-12 bg-muted rounded border flex items-center justify-center">
-                    <FileImage className="w-5 h-5 text-muted-foreground" />
+                <a
+                  href={item.previewUrl || `https://www.facebook.com/ads/library/?id=${item.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="block group"
+                  title="Abrir na Biblioteca de Anúncios"
+                >
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded border flex items-center justify-center group-hover:opacity-80 transition-opacity cursor-pointer">
+                    <ExternalLink className="w-5 h-5 text-white" />
                   </div>
-                )}
+                </a>
               </TableCell>
             )}
             <TableCell className="font-medium">

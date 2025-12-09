@@ -1054,6 +1054,9 @@ const FunnelAnalysis = () => {
                   salesData={salesData}
                   funnelOfferCodes={offerCodes}
                   metaInsights={metaInsights}
+                  metaCampaigns={metaStructure.campaigns}
+                  metaAdsets={metaStructure.adsets}
+                  metaAds={metaStructure.ads}
                 />
               </TabsContent>
 

@@ -104,8 +104,8 @@ const chartConfig = {
   spend: { label: "Investimento", color: "hsl(339, 82%, 51%)" },
 };
 
-// Hierarchy: Source > Campaign > Adset > Placement > Creative > Page
-const HIERARCHY = ['source', 'campaign', 'adset', 'placement', 'creative', 'page'] as const;
+// Hierarchy: Source > Campaign > Adset > Creative > Placement > Page
+const HIERARCHY = ['source', 'campaign', 'adset', 'creative', 'placement', 'page'] as const;
 type HierarchyLevel = typeof HIERARCHY[number];
 
 const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
@@ -605,7 +605,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     <Card className="p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Análise de UTMs</h3>
-        <p className="text-sm text-muted-foreground">Origem, Campanha, Conjunto, Posicionamento, Criativo e Página das vendas</p>
+        <p className="text-sm text-muted-foreground">Origem, Campanha, Conjunto, Criativo, Posicionamento e Página das vendas</p>
       </div>
 
       <Tabs defaultValue="drilldown" className="space-y-4">
@@ -617,8 +617,8 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
           <TabsTrigger value="source">Origem</TabsTrigger>
           <TabsTrigger value="campaign">Campanha</TabsTrigger>
           <TabsTrigger value="adset">Conjunto</TabsTrigger>
-          <TabsTrigger value="placement">Posicionamento</TabsTrigger>
           <TabsTrigger value="creative">Criativo</TabsTrigger>
+          <TabsTrigger value="placement">Posicionamento</TabsTrigger>
           <TabsTrigger value="page">Página</TabsTrigger>
         </TabsList>
 
@@ -654,7 +654,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
                 {renderPieChart(drilldownData.metrics)}
               </Card>
               <Card className="p-4">
-                <h4 className="font-medium mb-4">Detalhamento</h4>
+                <h4 className="font-medium mb-4">Detalhamento - {LEVEL_CONFIG[currentField].label}</h4>
                 {renderMetricsTable(drilldownData.metrics, true)}
               </Card>
             </div>
@@ -669,7 +669,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
                 {renderPieChart(analyzeUTM[field])}
               </Card>
               <Card className="p-4">
-                <h4 className="font-medium mb-4">Detalhamento</h4>
+                <h4 className="font-medium mb-4">Detalhamento - {LEVEL_CONFIG[field].label}</h4>
                 {renderMetricsTable(analyzeUTM[field])}
               </Card>
             </div>

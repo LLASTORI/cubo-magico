@@ -583,44 +583,58 @@ export function CuboMagicoDashboard({
     };
   };
 
-  // Get filtered Meta data for UTM Analysis based on funnel's linked accounts AND campaign pattern
+  // Get filtered Meta data for UTM Analysis based on funnel's campaign pattern (primary) and linked accounts (secondary)
+  // Uses the same logic as CuboMagico's funnelMetrics calculation for consistency
   const getFilteredMetaDataForFunnel = (funnelId: string, campaignPattern: string | null) => {
     if (!insightsData || !campaignsData) {
-      return { insights: [], campaigns: [], adsets: [], ads: [] };
+      return { insights: [], campaigns: [], adsets: [], ads: [], hasConfig: false };
     }
 
-    // Get meta account IDs linked to this funnel via funnel_meta_accounts
-    const linkedMetaAccountUuids = (funnelMetaAccounts || [])
-      .filter(fma => fma.funnel_id === funnelId)
-      .map(fma => fma.meta_account_id);
-    
-    // Map UUIDs to actual account_ids
-    const linkedAccountIds = new Set(
-      (metaAdAccountsWithIds || [])
-        .filter(ma => linkedMetaAccountUuids.includes(ma.id))
-        .map(ma => ma.account_id)
-    );
+    let filteredInsights: typeof insightsData = [];
+    let filteredCampaigns: typeof campaignsData = [];
+    let hasConfig = false;
 
-    // If no linked accounts, return empty (or fall back to campaign pattern)
-    let filteredInsights = insightsData;
-    let filteredCampaigns = campaignsData;
-
-    // Filter by linked Meta accounts if any are configured
-    if (linkedAccountIds.size > 0) {
-      filteredInsights = insightsData.filter(i => linkedAccountIds.has(i.ad_account_id));
-      filteredCampaigns = campaignsData.filter(c => linkedAccountIds.has(c.ad_account_id));
-    }
-
-    // Additionally filter by campaign pattern if configured
+    // PRIORITY 1: Use campaign pattern (this is the proven approach that CuboMagico uses)
     if (campaignPattern) {
+      hasConfig = true;
       const pattern = campaignPattern.toLowerCase();
-      filteredCampaigns = filteredCampaigns.filter(c => 
+      
+      // Filter campaigns by pattern
+      filteredCampaigns = campaignsData.filter(c => 
         c.campaign_name?.toLowerCase().includes(pattern)
       );
+      
+      // Get campaign IDs as strings for consistent comparison
       const matchingCampaignIds = new Set(filteredCampaigns.map(c => String(c.campaign_id)));
-      filteredInsights = filteredInsights.filter(i => 
+      
+      // Filter insights by matching campaign IDs
+      filteredInsights = insightsData.filter(i => 
         matchingCampaignIds.has(String(i.campaign_id || ''))
       );
+      
+      console.log(`[getFilteredMetaDataForFunnel] Funnel ${funnelId}: pattern="${pattern}", campaigns=${filteredCampaigns.length}, insights=${filteredInsights.length}`);
+    } else {
+      // PRIORITY 2: If no pattern, try using linked Meta accounts
+      const linkedMetaAccountUuids = (funnelMetaAccounts || [])
+        .filter(fma => fma.funnel_id === funnelId)
+        .map(fma => fma.meta_account_id);
+      
+      // Map UUIDs to actual account_ids
+      const linkedAccountIds = new Set(
+        (metaAdAccountsWithIds || [])
+          .filter(ma => linkedMetaAccountUuids.includes(ma.id))
+          .map(ma => ma.account_id)
+      );
+
+      if (linkedAccountIds.size > 0) {
+        hasConfig = true;
+        filteredInsights = insightsData.filter(i => linkedAccountIds.has(i.ad_account_id));
+        filteredCampaigns = campaignsData.filter(c => linkedAccountIds.has(c.ad_account_id));
+        
+        console.log(`[getFilteredMetaDataForFunnel] Funnel ${funnelId}: linkedAccounts=${linkedAccountIds.size}, insights=${filteredInsights.length}, campaigns=${filteredCampaigns.length}`);
+      } else {
+        console.log(`[getFilteredMetaDataForFunnel] Funnel ${funnelId}: NO CONFIG (no pattern, no linked accounts)`);
+      }
     }
 
     // Get unique ad_ids and adset_ids from filtered insights
@@ -631,13 +645,12 @@ export function CuboMagicoDashboard({
     const filteredAdsets = (adsetsData || []).filter(a => insightAdsetIds.has(a.adset_id));
     const filteredAds = (adsData || []).filter(a => insightAdIds.has(a.ad_id));
 
-    console.log(`[getFilteredMetaDataForFunnel] Funnel ${funnelId}: linkedAccounts=${linkedAccountIds.size}, pattern="${campaignPattern}", insights=${filteredInsights.length}, campaigns=${filteredCampaigns.length}`);
-
     return {
       insights: filteredInsights,
       campaigns: filteredCampaigns,
       adsets: filteredAdsets,
       ads: filteredAds,
+      hasConfig,
     };
   };
   const getFormattedSalesData = (offerCodes: string[]) => {
@@ -1112,6 +1125,7 @@ export function CuboMagicoDashboard({
                                     metaCampaigns={funnelMetaData.campaigns}
                                     metaAdsets={funnelMetaData.adsets}
                                     metaAds={funnelMetaData.ads}
+                                    hasMetaConfig={funnelMetaData.hasConfig}
                                   />
                                 );
                               })()}

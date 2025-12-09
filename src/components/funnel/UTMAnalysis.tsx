@@ -66,6 +66,7 @@ interface UTMAnalysisProps {
   metaCampaigns?: MetaCampaign[];
   metaAdsets?: MetaAdset[];
   metaAds?: MetaAd[];
+  hasMetaConfig?: boolean; // Whether the funnel has Meta configuration (pattern or linked accounts)
 }
 
 interface UTMMetrics {
@@ -162,7 +163,7 @@ const parseCheckoutOrigin = (checkoutOrigin: string | null | undefined): ParsedU
   };
 };
 
-const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampaigns = [], metaAdsets = [], metaAds = [] }: UTMAnalysisProps) => {
+const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampaigns = [], metaAdsets = [], metaAds = [], hasMetaConfig = true }: UTMAnalysisProps) => {
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});
 
   // Build spend lookup maps from meta insights
@@ -611,12 +612,12 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         <p className="text-sm text-muted-foreground">Origem, Campanha, Conjunto, Criativo, Posicionamento e Página das vendas</p>
       </div>
 
-      {/* Alert when no Meta data */}
-      {analyzeUTM.totalSpend === 0 && metaInsights.length === 0 && (
+      {/* Alert when no Meta config */}
+      {!hasMetaConfig && (
         <Alert className="mb-6 border-yellow-500/50 bg-yellow-500/10">
           <AlertTriangle className="h-4 w-4 text-yellow-500" />
           <AlertDescription className="text-yellow-600 dark:text-yellow-400">
-            Este funil não possui contas Meta vinculadas ou padrão de campanha configurado. 
+            Este funil não possui padrão de campanha ou contas Meta vinculadas configurados. 
             Configure nas opções do funil para visualizar dados de investimento e ROAS.
           </AlertDescription>
         </Alert>

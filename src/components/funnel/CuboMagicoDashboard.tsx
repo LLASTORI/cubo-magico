@@ -1162,7 +1162,7 @@ export function CuboMagicoDashboard({
                   {isExpanded && (
                     <TableRow className="hover:bg-transparent">
                       <TableCell colSpan={11} className="p-0">
-                        <div className="p-6 animate-in slide-in-from-top-2 duration-200 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent border-l-4 border-l-primary/30 rounded-br-lg">
+                        <div className="p-6 animate-in slide-in-from-top-2 duration-200 bg-gradient-to-br from-primary/10 via-primary/5 to-muted/30 border-l-4 border-l-primary rounded-br-lg shadow-inner">
                           <Tabs defaultValue="overview" className="w-full">
                             <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 mb-4 bg-muted/50">
                               <TabsTrigger value="overview" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">

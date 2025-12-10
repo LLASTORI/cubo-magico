@@ -590,6 +590,105 @@ async function syncSales(
   console.log(`Sync complete: ${synced} processed, ${errors} errors`);
   console.log('Category stats:', categoryStats);
   
+  // Auto-create offer mappings for new offer codes
+  const existingOfferCodes = new Set(offerMappings?.map(m => m.codigo_oferta).filter(Boolean) || []);
+  const newOfferCodes = new Set<string>();
+  
+  // Collect unique offer codes from sales that don't exist in mappings
+  const offerDataMap = new Map<string, { productName: string; bestPrice: number | null }>();
+  
+  for (const sale of sales) {
+    const offerCode = sale.purchase.offer?.code;
+    if (!offerCode || existingOfferCodes.has(offerCode) || newOfferCodes.has(offerCode)) continue;
+    
+    newOfferCodes.add(offerCode);
+    
+    // Get product info for the new mapping
+    const productName = sale.product?.name || 'Produto Desconhecido';
+    const currencyCode = sale.purchase.price?.currency_code || 'BRL';
+    const totalPrice = sale.purchase.price?.value || null;
+    
+    // Only store BRL prices, convert others
+    const existing = offerDataMap.get(offerCode);
+    if (!existing) {
+      const priceInBrl = currencyCode === 'BRL' ? totalPrice : 
+        (totalPrice && exchangeRates[currencyCode] ? totalPrice * exchangeRates[currencyCode] : null);
+      offerDataMap.set(offerCode, { productName, bestPrice: priceInBrl });
+    }
+  }
+  
+  // Create mappings for new offer codes
+  if (newOfferCodes.size > 0) {
+    console.log(`Auto-creating ${newOfferCodes.size} new offer mappings...`);
+    
+    // Get or create "A Definir" funnel for this project
+    let defaultFunnelId: string | null = null;
+    const { data: existingFunnel } = await supabase
+      .from('funnels')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('funnel_type', 'indefinido')
+      .limit(1)
+      .maybeSingle();
+    
+    if (existingFunnel) {
+      defaultFunnelId = existingFunnel.id;
+    } else {
+      // Create "A Definir" funnel if it doesn't exist
+      const { data: newFunnel, error: funnelError } = await supabase
+        .from('funnels')
+        .insert({
+          project_id: projectId,
+          name: 'A Definir',
+          funnel_type: 'indefinido'
+        })
+        .select('id')
+        .single();
+      
+      if (!funnelError && newFunnel) {
+        defaultFunnelId = newFunnel.id;
+        console.log('Created "A Definir" funnel:', defaultFunnelId);
+      }
+    }
+    
+    // Prepare offer mappings to insert
+    const newMappings = Array.from(newOfferCodes).map(code => {
+      const data = offerDataMap.get(code);
+      return {
+        project_id: projectId,
+        codigo_oferta: code,
+        nome_produto: data?.productName || 'Produto Desconhecido',
+        nome_oferta: 'Auto-importado',
+        valor: data?.bestPrice,
+        status: 'Ativo',
+        id_funil: 'A Definir',
+        funnel_id: defaultFunnelId,
+        data_ativacao: new Date().toISOString().split('T')[0],
+      };
+    });
+    
+    // Insert in batches, ignoring duplicates (constraint will prevent them)
+    const MAPPING_BATCH_SIZE = 50;
+    let mappingsCreated = 0;
+    
+    for (let i = 0; i < newMappings.length; i += MAPPING_BATCH_SIZE) {
+      const batch = newMappings.slice(i, i + MAPPING_BATCH_SIZE);
+      const { error: insertError } = await supabase
+        .from('offer_mappings')
+        .insert(batch)
+        .select();
+      
+      if (!insertError) {
+        mappingsCreated += batch.length;
+      } else {
+        // Log but don't fail - duplicates are expected if running multiple syncs
+        console.log('Some offer mappings already exist (this is normal):', insertError.message);
+      }
+    }
+    
+    console.log(`Auto-created ${mappingsCreated} offer mappings`);
+  }
+  
   return { synced, updated: 0, errors, categoryStats };
 }
 

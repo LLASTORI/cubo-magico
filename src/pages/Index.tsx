@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package, Rocket } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -495,6 +495,14 @@ const Index = () => {
                   >
                     <Package className="w-4 h-4" />
                     A Definir
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/launch-dashboard')}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Rocket className="w-4 h-4" />
+                    Lançamentos
                   </Button>
                   <TooltipProvider>
                     <Tooltip>

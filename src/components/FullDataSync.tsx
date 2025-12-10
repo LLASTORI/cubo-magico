@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { 
   RefreshCw, 
@@ -530,19 +531,30 @@ export function FullDataSync() {
 
         {/* Sync All Button */}
         <div className="flex flex-col items-center gap-3 pt-4 border-t">
-          <Button 
-            onClick={handleSyncAll}
-            disabled={(!hasMetaConnection && !hasHotmartConnection) || isSyncing}
-            size="lg"
-            className="min-w-[200px]"
-          >
-            {isSyncing ? (
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            ) : (
-              <TrendingUp className="h-5 w-5 mr-2" />
-            )}
-            Sincronizar Tudo
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={handleSyncAll}
+                  disabled={(!hasMetaConnection && !hasHotmartConnection) || isSyncing}
+                  size="lg"
+                  className="min-w-[200px]"
+                >
+                  {isSyncing ? (
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  ) : (
+                    <TrendingUp className="h-5 w-5 mr-2" />
+                  )}
+                  Sincronizar Tudo
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-center">
+                <p className="font-medium">Períodos de sincronização:</p>
+                <p>Meta Ads: últimos 13 meses</p>
+                <p>Hotmart: últimos 24 meses</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           <p className="text-xs text-muted-foreground text-center max-w-md">
             Esta operação pode levar alguns minutos. Os dados antigos (mais de 30 dias) 

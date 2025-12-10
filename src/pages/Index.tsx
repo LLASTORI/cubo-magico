@@ -13,9 +13,7 @@ import { useProjectMembers } from "@/hooks/useProjectMembers";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
-import NotificationsDropdown from "@/components/NotificationsDropdown";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const Index = () => {
@@ -549,8 +547,6 @@ const Index = () => {
                   Atualizar
                 </Button>
               )}
-              <NotificationsDropdown />
-              <ThemeToggle />
               <UserAvatar size="sm" />
               <Button
                 onClick={handleLogout}

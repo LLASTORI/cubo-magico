@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -36,6 +37,7 @@ const Admin = () => {
 
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -45,6 +47,7 @@ const Admin = () => {
     can_create_projects: false,
     max_projects: 0,
     is_active: true,
+    role: 'user' as string,
   });
 
   // Check if current user is admin or super_admin
@@ -68,6 +71,7 @@ const Admin = () => {
       }
 
       setIsAdmin(true);
+      setIsSuperAdmin(data?.role === 'super_admin');
       fetchUsers();
     };
 
@@ -127,6 +131,7 @@ const Admin = () => {
       can_create_projects: userProfile.can_create_projects,
       max_projects: userProfile.max_projects,
       is_active: userProfile.is_active,
+      role: userProfile.role || 'user',
     });
     setIsEditOpen(true);
   };
@@ -136,7 +141,8 @@ const Admin = () => {
 
     setSaving(true);
     try {
-      const { error } = await supabase
+      // Update profile permissions
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           can_create_projects: editForm.can_create_projects,
@@ -145,7 +151,17 @@ const Admin = () => {
         })
         .eq('id', editingUser.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Update role if super_admin and role changed
+      if (isSuperAdmin && editForm.role !== editingUser.role) {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .update({ role: editForm.role as 'admin' | 'super_admin' | 'user' })
+          .eq('user_id', editingUser.id);
+
+        if (roleError) throw roleError;
+      }
 
       toast({ title: 'Usuário atualizado com sucesso!' });
       setIsEditOpen(false);
@@ -161,6 +177,13 @@ const Admin = () => {
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const stats = {
+    total: users.length,
+    active: users.filter(u => u.is_active).length,
+    admins: users.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+    canCreate: users.filter(u => u.can_create_projects).length,
+  };
 
   if (!isAdmin || loading) {
     return (
@@ -182,11 +205,19 @@ const Admin = () => {
               <CuboBrand size="md" />
               <div className="h-8 w-px bg-border" />
               <div>
-                <h1 className="text-xl font-bold text-foreground font-display">
-                  Administração de Usuários
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold text-foreground font-display">
+                    {isSuperAdmin ? 'Super Admin' : 'Administração'}
+                  </h1>
+                  {isSuperAdmin && (
+                    <Badge variant="destructive" className="text-xs">
+                      <ShieldCheck className="w-3 h-3 mr-1" />
+                      Super Admin
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  Gerencie permissões e limites de projetos
+                  {isSuperAdmin ? 'Controle total do sistema' : 'Gerencie permissões e limites'}
                 </p>
               </div>
             </div>
@@ -198,7 +229,64 @@ const Admin = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 py-8 space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.total}</p>
+                  <p className="text-xs text-muted-foreground">Total de Usuários</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500/10 rounded-lg">
+                  <Activity className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.active}</p>
+                  <p className="text-xs text-muted-foreground">Usuários Ativos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-lg">
+                  <Shield className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.admins}</p>
+                  <p className="text-xs text-muted-foreground">Administradores</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <UserCog className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.canCreate}</p>
+                  <p className="text-xs text-muted-foreground">Podem Criar Projetos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Users Table */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -206,7 +294,7 @@ const Admin = () => {
                 <Users className="w-6 h-6 text-primary" />
                 <div>
                   <CardTitle>Usuários Cadastrados</CardTitle>
-                  <CardDescription>{users.length} usuários no sistema</CardDescription>
+                  <CardDescription>{filteredUsers.length} usuários encontrados</CardDescription>
                 </div>
               </div>
               <div className="relative w-64">
@@ -298,6 +386,29 @@ const Admin = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6 py-4">
+              {/* Role selector - only for super_admin */}
+              {isSuperAdmin && (
+                <div className="space-y-2">
+                  <Label>Função (Role)</Label>
+                  <Select
+                    value={editForm.role}
+                    onValueChange={(value) => setEditForm({ ...editForm, role: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">Usuário</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="super_admin">Super Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Define o nível de acesso do usuário no sistema
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Conta Ativa</Label>

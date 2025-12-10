@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { 
-  ArrowLeft, RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2
+  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -13,12 +12,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { SyncLoader } from "@/components/SyncLoader";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { UserAvatar } from "@/components/UserAvatar";
-import NotificationsDropdown from "@/components/NotificationsDropdown";
+import { AppHeader } from "@/components/AppHeader";
 import PeriodComparison from "@/components/funnel/PeriodComparison";
 import FunnelChangelog from "@/components/funnel/FunnelChangelog";
 import TemporalChart from "@/components/funnel/TemporalChart";
@@ -34,7 +30,6 @@ import { useFunnelData } from "@/hooks/useFunnelData";
 import { useQueryClient } from "@tanstack/react-query";
 
 const FunnelAnalysis = () => {
-  const navigate = useNavigate();
   const { currentProject } = useProject();
   const queryClient = useQueryClient();
   
@@ -742,33 +737,7 @@ const FunnelAnalysis = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card shadow-cube">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <CuboBrand size="sm" />
-              <div className="h-8 w-px bg-border" />
-              <div>
-                <h1 className="text-xl font-bold text-foreground font-display">
-                  Análise de Funil
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  {currentProject ? currentProject.name : 'Selecione um projeto'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <NotificationsDropdown />
-              <ThemeToggle />
-              <UserAvatar size="sm" />
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8">
         <div className="space-y-6">

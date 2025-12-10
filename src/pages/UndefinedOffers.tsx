@@ -5,8 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
-import { ArrowLeft, CalendarIcon, Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle } from "lucide-react";
+import { CalendarIcon, Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,9 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CubeLoader } from "@/components/CubeLoader";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { UserAvatar } from "@/components/UserAvatar";
-import NotificationsDropdown from "@/components/NotificationsDropdown";
+import { AppHeader } from "@/components/AppHeader";
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -219,25 +216,7 @@ const UndefinedOffers = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold">Ofertas A Definir</h1>
-              <p className="text-sm text-muted-foreground">{currentProject.name}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <NotificationsDropdown />
-            <ThemeToggle />
-            <UserAvatar />
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-4 py-6 space-y-6">
         {/* Date Filters */}

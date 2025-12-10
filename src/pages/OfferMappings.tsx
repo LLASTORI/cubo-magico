@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, ArrowLeft, Filter, Search, X, Download, Loader2, RotateCw } from 'lucide-react';
+import { Pencil, Trash2, Filter, Search, X, Download, Loader2, RotateCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -37,11 +37,8 @@ import {
 import { OfferMappingDialog } from '@/components/OfferMappingDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FunnelManager } from '@/components/FunnelManager';
-import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { UserAvatar } from '@/components/UserAvatar';
-import NotificationsDropdown from '@/components/NotificationsDropdown';
+import { AppHeader } from '@/components/AppHeader';
 
 interface Funnel {
   id: string;
@@ -615,34 +612,9 @@ export default function OfferMappingsAuto() {
 
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/')}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <CuboBrand size="sm" />
-            <div className="h-8 w-px bg-border" />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight font-display">
-                Mapeamento de Ofertas
-              </h1>
-              <p className="text-muted-foreground text-sm">
-                {currentProject?.name || 'Nenhum projeto selecionado'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <NotificationsDropdown />
-            <ThemeToggle />
-            <UserAvatar size="sm" />
-          </div>
-        </div>
+    <div className="min-h-screen bg-background">
+      <AppHeader />
+      <div className="container mx-auto px-6 py-6 space-y-6">
 
         <Tabs defaultValue="existing" className="w-full">
           <TabsList className="grid w-full grid-cols-3 max-w-lg">

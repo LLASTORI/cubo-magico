@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Settings2, Filter, Building2, BarChart3 } from 'lucide-react';
+import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const META_APP_ID = '845927421602166';
@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { SyncLoader } from '@/components/SyncLoader';
 import { AppHeader } from '@/components/AppHeader';
-import { MetaAccountSelector } from '@/components/MetaAccountSelector';
+
 import { MetaAccountsManager } from '@/components/MetaAccountsManager';
 import MetaDateFilters from '@/components/MetaDateFilters';
 import { Button } from '@/components/ui/button';
@@ -119,13 +119,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}`;
     
     window.location.href = authUrl;
-  };
-
-  // Handle accounts selection callback
-  const handleAccountsSelected = (accountIds: string[]) => {
-    queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
-    // Auto-sync after selection
-    handleSyncWithAccounts(accountIds);
   };
 
   // Fetch Meta credentials
@@ -602,17 +595,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 <Filter className="h-4 w-4" />
                 {startDate} - {endDate}
               </Button>
-              <MetaAccountSelector 
-                projectId={projectId} 
-                onAccountsSelected={handleAccountsSelected}
-              >
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Settings2 className="h-4 w-4" />
-                  Contas {adAccounts && adAccounts.length > 0 && (
-                    <Badge variant="secondary" className="ml-1">{adAccounts.length}</Badge>
-                  )}
-                </Button>
-              </MetaAccountSelector>
               <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" size="sm" className="gap-2">
                 {syncing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -652,15 +634,10 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                   <p className="text-muted-foreground text-center mb-4 max-w-md">
                     Selecione as contas de anúncio do Meta que deseja acompanhar neste projeto.
                   </p>
-                  <MetaAccountSelector 
-                    projectId={projectId} 
-                    onAccountsSelected={handleAccountsSelected}
-                  >
-                    <Button className="gap-2">
-                      <Settings2 className="h-4 w-4" />
-                      Selecionar Contas
-                    </Button>
-                  </MetaAccountSelector>
+                  <Button onClick={() => setActiveTab('accounts')} className="gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Ir para Contas Meta
+                  </Button>
                 </CardContent>
               </Card>
             )}

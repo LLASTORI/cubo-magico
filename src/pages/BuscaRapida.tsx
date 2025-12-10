@@ -1,26 +1,15 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package, Rocket, ChevronDown, Search } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
-import ProjectSelector from "@/components/ProjectSelector";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
-import { useProjectMembers } from "@/hooks/useProjectMembers";
 import { Button } from "@/components/ui/button";
-import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
-import { UserAvatar } from "@/components/UserAvatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AppHeader } from "@/components/AppHeader";
 
 const BuscaRapida = () => {
   const [loading, setLoading] = useState(false);
@@ -29,12 +18,7 @@ const BuscaRapida = () => {
   const [offerMappings, setOfferMappings] = useState<any[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
   const { currentProject, credentials, markCredentialsValidated } = useProject();
-  const { userRole } = useProjectMembers(currentProject?.id || '');
-  
-  // Check if user can access offer mappings (only owner and manager)
-  const canAccessOfferMappings = userRole === 'owner' || userRole === 'manager';
 
   // Clear all data when project changes to avoid cross-project data leakage
   useEffect(() => {
@@ -54,11 +38,6 @@ const BuscaRapida = () => {
       navigate('/projects');
     }
   }, [currentProject, credentials, navigate, toast]);
-
-  const handleLogout = async () => {
-    await signOut();
-    navigate('/auth');
-  };
 
   // Load offer mappings when project changes
   useEffect(() => {
@@ -408,127 +387,23 @@ const BuscaRapida = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card shadow-cube">
-        <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <CuboBrand size="md" />
-              <div className="h-8 w-px bg-border" />
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {currentProject ? currentProject.name : 'Selecione um projeto'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {currentProject ? 'Projeto ativo' : 'Nenhum projeto selecionado'}
-                </p>
-              </div>
-              <ProjectSelector />
-            </div>
-            <div className="flex gap-2 items-center">
-              {currentProject && (
-                <>
-                  <Button
-                    onClick={() => navigate('/')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    Visão Geral
-                  </Button>
-                  {/* Dropdown Busca Rápida */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="default" className="gap-2">
-                        <Search className="w-4 h-4" />
-                        Busca Rápida
-                        <ChevronDown className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuItem className="gap-2 cursor-default bg-muted">
-                        <ShoppingCart className="w-4 h-4" />
-                        Hotmart
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate('/meta-ads')} className="gap-2 cursor-pointer">
-                        <Facebook className="w-4 h-4" />
-                        Meta Ads
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button
-                    onClick={() => navigate('/funnel-analysis')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    Análise de Funil
-                  </Button>
-                  <Button
-                    onClick={() => navigate('/undefined-offers')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Package className="w-4 h-4" />
-                    A Definir
-                  </Button>
-                  <Button
-                    onClick={() => navigate('/launch-dashboard')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Rocket className="w-4 h-4" />
-                    Lançamentos
-                  </Button>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button
-                            onClick={() => canAccessOfferMappings && navigate('/offer-mappings')}
-                            variant="outline"
-                            className="gap-2"
-                            disabled={!canAccessOfferMappings}
-                          >
-                            {!canAccessOfferMappings && <Lock className="w-4 h-4" />}
-                            {canAccessOfferMappings && <Settings className="w-4 h-4" />}
-                            Mapeamento de Ofertas
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      {!canAccessOfferMappings && (
-                        <TooltipContent>
-                          <p>Disponível apenas para proprietários e gerentes</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
-                </>
-              )}
-              {salesData && currentProject && (
-                <Button
-                  onClick={handleRefresh}
-                  disabled={loading}
-                  variant="outline"
-                  className="gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  Atualizar
-                </Button>
-              )}
-              <UserAvatar size="sm" />
-              <Button
-                onClick={handleLogout}
-                variant="outline"
-                className="gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Sair
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader 
+        showNotifications={false}
+        showThemeToggle={false}
+        rightContent={
+          salesData && currentProject && (
+            <Button
+              onClick={handleRefresh}
+              disabled={loading}
+              variant="outline"
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          )
+        }
+      />
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">

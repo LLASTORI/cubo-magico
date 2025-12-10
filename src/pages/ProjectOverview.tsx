@@ -5,22 +5,14 @@ import { ptBR } from "date-fns/locale";
 import { 
   DollarSign, 
   TrendingUp, 
-  ShoppingCart, 
   Target,
   ArrowUpRight,
   ArrowDownRight,
-  BarChart3,
   PieChart,
   Calendar,
-  LogOut,
-  Settings,
-  Lock,
-  Facebook,
   FolderOpen,
-  ChevronDown,
-  Search,
-  Package,
-  Rocket
+  ShoppingCart,
+  BarChart3
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,21 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { CuboBrand } from "@/components/CuboLogo";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { UserAvatar } from "@/components/UserAvatar";
-import NotificationsDropdown from "@/components/NotificationsDropdown";
-import ProjectSelector from "@/components/ProjectSelector";
-import { useAuth } from "@/contexts/AuthContext";
+import { AppHeader } from "@/components/AppHeader";
 import { useProject } from "@/contexts/ProjectContext";
-import { useProjectMembers } from "@/hooks/useProjectMembers";
 import { useProjectOverview } from "@/hooks/useProjectOverview";
 import { CubeLoader } from "@/components/CubeLoader";
 import {
@@ -88,11 +67,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const ProjectOverview = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
-  const { currentProject, credentials } = useProject();
-  const { userRole } = useProjectMembers(currentProject?.id || '');
-  
-  const canAccessOfferMappings = userRole === 'owner' || userRole === 'manager';
+  const { currentProject } = useProject();
 
   // Date range state
   const [dateRange, setDateRange] = useState('30d');
@@ -156,10 +131,6 @@ const ProjectOverview = () => {
     endDate,
   });
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate('/auth');
-  };
 
   if (!currentProject) {
     return (
@@ -200,105 +171,7 @@ const ProjectOverview = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card shadow-sm">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <CuboBrand size="md" />
-              <div className="h-8 w-px bg-border" />
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {currentProject.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Visão Geral do Projeto
-                </p>
-              </div>
-              <ProjectSelector />
-            </div>
-            <div className="flex gap-2 items-center">
-              {/* Dropdown Busca Rápida */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <Search className="w-4 h-4" />
-                    Busca Rápida
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48">
-                  <DropdownMenuItem onClick={() => navigate('/busca-rapida')} className="gap-2 cursor-pointer">
-                    <ShoppingCart className="w-4 h-4" />
-                    Hotmart
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/meta-ads')} className="gap-2 cursor-pointer">
-                    <Facebook className="w-4 h-4" />
-                    Meta Ads
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                onClick={() => navigate('/funnel-analysis')}
-                variant="outline"
-                className="gap-2"
-              >
-                <BarChart3 className="w-4 h-4" />
-                Análise de Funil
-              </Button>
-              <Button
-                onClick={() => navigate('/undefined-offers')}
-                variant="outline"
-                className="gap-2"
-              >
-                <Package className="w-4 h-4" />
-                A Definir
-              </Button>
-              <Button
-                onClick={() => navigate('/launch-dashboard')}
-                variant="outline"
-                className="gap-2"
-              >
-                <Rocket className="w-4 h-4" />
-                Lançamentos
-              </Button>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button
-                        onClick={() => canAccessOfferMappings && navigate('/offer-mappings')}
-                        variant="outline"
-                        className="gap-2"
-                        disabled={!canAccessOfferMappings}
-                      >
-                        {!canAccessOfferMappings && <Lock className="w-4 h-4" />}
-                        {canAccessOfferMappings && <Settings className="w-4 h-4" />}
-                        Ofertas
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {!canAccessOfferMappings && (
-                    <TooltipContent>
-                      <p>Apenas proprietários e gerentes podem acessar</p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
-              <NotificationsDropdown />
-              <ThemeToggle />
-              <UserAvatar />
-              <Button
-                onClick={handleLogout}
-                variant="ghost"
-                size="icon"
-              >
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8 space-y-6">
         {/* Date Range Selector */}

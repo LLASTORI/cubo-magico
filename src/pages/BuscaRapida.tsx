@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package, Rocket } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package, Rocket, ChevronDown, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -15,8 +15,14 @@ import { CuboBrand } from "@/components/CuboLogo";
 import { CubeLoader } from "@/components/CubeLoader";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-const Index = () => {
+const BuscaRapida = () => {
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState<any>(null);
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
@@ -423,13 +429,33 @@ const Index = () => {
               {currentProject && (
                 <>
                   <Button
-                    onClick={() => navigate('/project-overview')}
+                    onClick={() => navigate('/')}
                     variant="outline"
                     className="gap-2"
                   >
                     <LayoutDashboard className="w-4 h-4" />
                     Visão Geral
                   </Button>
+                  {/* Dropdown Plataformas */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="default" className="gap-2">
+                        <Search className="w-4 h-4" />
+                        Plataformas
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuItem className="gap-2 cursor-default bg-muted">
+                        <ShoppingCart className="w-4 h-4" />
+                        Busca Rápida
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/meta-ads')} className="gap-2 cursor-pointer">
+                        <Facebook className="w-4 h-4" />
+                        Meta Ads
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     onClick={() => navigate('/funnel-analysis')}
                     variant="outline"
@@ -437,14 +463,6 @@ const Index = () => {
                   >
                     <BarChart3 className="w-4 h-4" />
                     Análise de Funil
-                  </Button>
-                  <Button
-                    onClick={() => navigate('/meta-ads')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Facebook className="w-4 h-4" />
-                    Meta Ads
                   </Button>
                   <Button
                     onClick={() => navigate('/undefined-offers')}
@@ -595,4 +613,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default BuscaRapida;

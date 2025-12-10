@@ -74,6 +74,27 @@ const FUNNEL_TYPE_COLORS: Record<FunnelType, string> = {
   indefinido: 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30',
 };
 
+const SECTION_STYLES: Record<FunnelType, { bg: string; border: string; dot: string; text: string }> = {
+  perpetuo: {
+    bg: 'bg-emerald-500/5',
+    border: 'border-emerald-500/30',
+    dot: 'bg-emerald-500',
+    text: 'text-emerald-700 dark:text-emerald-400',
+  },
+  lancamento: {
+    bg: 'bg-blue-500/5',
+    border: 'border-blue-500/30',
+    dot: 'bg-blue-500',
+    text: 'text-blue-700 dark:text-blue-400',
+  },
+  indefinido: {
+    bg: 'bg-amber-500/5',
+    border: 'border-amber-500/30',
+    dot: 'bg-amber-500',
+    text: 'text-amber-700 dark:text-amber-400',
+  },
+};
+
 interface OfferMapping {
   id: string;
   nome_produto: string;
@@ -209,7 +230,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     if (!projectId) return;
     
     try {
-      // Get distinct funnel names from offer_mappings that don't exist in funnels table
       const { data: mappingFunnels, error: mappingError } = await supabase
         .from('offer_mappings')
         .select('id_funil')
@@ -372,7 +392,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     if (!editingId || !editingName.trim()) return;
 
     try {
-      // Update funnel name and type
       const { error } = await supabase
         .from('funnels')
         .update({ 
@@ -393,7 +412,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         throw error;
       }
 
-      // Update all offer mappings that reference this funnel
       const { error: updateOffersError } = await supabase
         .from('offer_mappings')
         .update({ id_funil: editingName.trim() })
@@ -478,7 +496,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     if (!offerToMove || !targetFunnelName) return;
 
     try {
-      // Find the funnel_id (FK) for the target funnel
       const targetFunnel = funnels.find(f => f.name === targetFunnelName);
       const targetFunnelId = targetFunnel?.id || null;
 
@@ -486,7 +503,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         .from('offer_mappings')
         .update({ 
           id_funil: targetFunnelName,
-          funnel_id: targetFunnelId // Sync the FK with the funnel name
+          funnel_id: targetFunnelId
         })
         .eq('id', offerToMove.id);
 
@@ -497,7 +514,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         description: `Oferta movida para o funil "${targetFunnelName}"`,
       });
 
-      // Refresh offers for both funnels
       const oldFunnel = offerToMove.id_funil;
       setOffersByFunnel({});
       
@@ -561,6 +577,319 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     }
   };
 
+  const renderFunnelItem = (funnel: Funnel) => (
+    <Collapsible
+      key={funnel.id}
+      open={expandedFunnels.has(funnel.name)}
+      onOpenChange={() => toggleFunnel(funnel.name)}
+    >
+      <div className="border rounded-lg bg-background">
+        <div className="flex items-center p-3 hover:bg-muted/50 transition-colors">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+              {expandedFunnels.has(funnel.name) ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+          
+          <div className="flex-1 ml-2">
+            {editingId === funnel.id ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveEdit(funnel.name);
+                    if (e.key === 'Escape') handleCancelEdit();
+                  }}
+                  className="h-8 max-w-[200px]"
+                  autoFocus
+                />
+                <Select value={editingType} onValueChange={(v) => setEditingType(v as FunnelType)}>
+                  <SelectTrigger className="h-8 w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="perpetuo">Perpétuo</SelectItem>
+                    <SelectItem value="lancamento">Lançamento</SelectItem>
+                    <SelectItem value="indefinido">A Definir</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button size="icon" variant="ghost" onClick={() => handleSaveEdit(funnel.name)} className="h-8 w-8">
+                  <Check className="h-4 w-4 text-green-600" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={handleCancelEdit} className="h-8 w-8">
+                  <X className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <CollapsibleTrigger asChild>
+                  <button className="text-left font-medium hover:underline cursor-pointer">
+                    {funnel.name}
+                  </button>
+                </CollapsibleTrigger>
+                <Badge variant="outline" className={`text-xs ${FUNNEL_TYPE_COLORS[funnel.funnel_type]}`}>
+                  {FUNNEL_TYPE_LABELS[funnel.funnel_type]}
+                </Badge>
+              </div>
+            )}
+          </div>
+          
+          <Badge variant="secondary" className="mr-2">
+            {offersByFunnel[funnel.name]?.length ?? '?'} ofertas
+          </Badge>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <FunnelMetaAccountsSelector
+                  projectId={projectId!}
+                  funnelId={funnel.id}
+                  funnelName={funnel.name}
+                  onAssociationsChange={fetchMetaAccountsCounts}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 mr-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Link2 className="h-3 w-3" />
+                    <span className="text-xs">
+                      {metaAccountsByFunnel[funnel.id] || 0} contas
+                    </span>
+                  </Button>
+                </FunnelMetaAccountsSelector>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Vincular contas Meta Ads</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          {editingId !== funnel.id && (
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEdit(funnel);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClick(funnel);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        <CollapsibleContent>
+          <div className="border-t px-4 py-3 bg-muted/30 space-y-4">
+            {/* Cubo Mágico Config Section */}
+            <div className="border rounded-lg p-4 bg-background">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Configuração Cubo Mágico</span>
+                </div>
+                {editingConfig === funnel.id ? (
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleSaveConfig(funnel.id)}
+                      disabled={savingConfig}
+                    >
+                      {savingConfig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      Salvar
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => setEditingConfig(null)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleEditConfig(funnel)}
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Configurar
+                  </Button>
+                )}
+              </div>
+              
+              {editingConfig === funnel.id ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`pattern-${funnel.id}`}>Padrão do Nome da Campanha</Label>
+                    <Input
+                      id={`pattern-${funnel.id}`}
+                      placeholder="Ex: PERPETUO_MAQUIAGEM35+"
+                      value={configCampaignPattern}
+                      onChange={(e) => setConfigCampaignPattern(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Campanhas que contêm este texto serão consideradas deste funil
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`roas-${funnel.id}`}>ROAS Alvo</Label>
+                    <Input
+                      id={`roas-${funnel.id}`}
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      placeholder="Ex: 2.0"
+                      value={configRoasTarget}
+                      onChange={(e) => setConfigRoasTarget(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      CPA Máximo = Ticket Médio ÷ ROAS Alvo
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Padrão: </span>
+                    {funnel.campaign_name_pattern ? (
+                      <Badge variant="outline" className="font-mono">{funnel.campaign_name_pattern}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground italic">Não configurado</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">ROAS Alvo: </span>
+                    <Badge variant="secondary">{funnel.roas_target || 2}x</Badge>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Offers Section */}
+            {loadingOffers.has(funnel.name) ? (
+              <div className="flex items-center justify-center py-4 gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Carregando ofertas...</span>
+              </div>
+            ) : offersByFunnel[funnel.name]?.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Nenhuma oferta neste funil
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">Posição</TableHead>
+                    <TableHead>Produto</TableHead>
+                    <TableHead>Oferta</TableHead>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[100px] text-right">Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {offersByFunnel[funnel.name]?.map((offer) => (
+                    <TableRow key={offer.id}>
+                      <TableCell>
+                        {offer.nome_posicao ? (
+                          <Badge className={getPositionBadgeClass(offer.tipo_posicao)}>
+                            {offer.nome_posicao}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium max-w-[200px] truncate">
+                        {offer.nome_produto}
+                      </TableCell>
+                      <TableCell className="max-w-[150px] truncate">
+                        {offer.nome_oferta || '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {offer.codigo_oferta || '-'}
+                      </TableCell>
+                      <TableCell>{formatCurrency(offer.valor)}</TableCell>
+                      <TableCell>
+                        {offer.status ? (
+                          <Badge variant={
+                            offer.status === 'ativo' ? 'default' :
+                            offer.status === 'inativo' ? 'secondary' :
+                            'outline'
+                          }>
+                            {offer.status}
+                          </Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveOfferClick(offer)}
+                          className="gap-1"
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                          Mover
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+
+  const renderSection = (type: FunnelType, title: string) => {
+    const filteredFunnels = funnels.filter(f => f.funnel_type === type);
+    if (filteredFunnels.length === 0) return null;
+
+    const styles = SECTION_STYLES[type];
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 mb-3">
+          <div className={`h-3 w-3 rounded-full ${styles.dot}`} />
+          <h3 className={`font-semibold ${styles.text}`}>
+            {title}
+          </h3>
+          <Badge variant="secondary" className="text-xs">
+            {filteredFunnels.length}
+          </Badge>
+        </div>
+        <Card className={`${styles.border} ${styles.bg}`}>
+          <div className="p-4 space-y-2">
+            {filteredFunnels.map(renderFunnelItem)}
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
   if (!projectId) {
     return (
       <Card className="p-6">
@@ -570,10 +899,6 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
       </Card>
     );
   }
-
-  const getOfferCount = (funnelName: string) => {
-    return offersByFunnel[funnelName]?.length ?? '...';
-  };
 
   return (
     <div className="space-y-4">
@@ -634,309 +959,28 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         </Card>
       )}
 
-      <Card className="p-6">
-        {loading ? (
+      {loading ? (
+        <Card className="p-6">
           <div className="text-center py-8">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
             <p className="text-muted-foreground">Carregando funis...</p>
           </div>
-        ) : funnels.length === 0 ? (
+        </Card>
+      ) : funnels.length === 0 ? (
+        <Card className="p-6">
           <div className="text-center py-8">
             <p className="text-muted-foreground">
               Nenhum funil cadastrado. Crie um funil acima para começar.
             </p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {funnels.map((funnel) => (
-              <Collapsible
-                key={funnel.id}
-                open={expandedFunnels.has(funnel.name)}
-                onOpenChange={() => toggleFunnel(funnel.name)}
-              >
-                <div className="border rounded-lg">
-                  <div className="flex items-center p-3 hover:bg-muted/50 transition-colors">
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
-                        {expandedFunnels.has(funnel.name) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </CollapsibleTrigger>
-                    
-                    <div className="flex-1 ml-2">
-                      {editingId === funnel.id ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Input
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEdit(funnel.name);
-                              if (e.key === 'Escape') handleCancelEdit();
-                            }}
-                            className="h-8 max-w-[200px]"
-                            autoFocus
-                          />
-                          <Select value={editingType} onValueChange={(v) => setEditingType(v as FunnelType)}>
-                            <SelectTrigger className="h-8 w-[130px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="perpetuo">Perpétuo</SelectItem>
-                              <SelectItem value="lancamento">Lançamento</SelectItem>
-                              <SelectItem value="indefinido">A Definir</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button size="icon" variant="ghost" onClick={() => handleSaveEdit(funnel.name)} className="h-8 w-8">
-                            <Check className="h-4 w-4 text-green-600" />
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={handleCancelEdit} className="h-8 w-8">
-                            <X className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <CollapsibleTrigger asChild>
-                            <button className="text-left font-medium hover:underline cursor-pointer">
-                              {funnel.name}
-                            </button>
-                          </CollapsibleTrigger>
-                          <Badge variant="outline" className={`text-xs ${FUNNEL_TYPE_COLORS[funnel.funnel_type]}`}>
-                            {FUNNEL_TYPE_LABELS[funnel.funnel_type]}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <Badge variant="secondary" className="mr-2">
-                      {offersByFunnel[funnel.name]?.length ?? '?'} ofertas
-                    </Badge>
-                    
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <FunnelMetaAccountsSelector
-                            projectId={projectId!}
-                            funnelId={funnel.id}
-                            funnelName={funnel.name}
-                            onAssociationsChange={fetchMetaAccountsCounts}
-                          >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1 mr-2"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Link2 className="h-3 w-3" />
-                              <span className="text-xs">
-                                {metaAccountsByFunnel[funnel.id] || 0} contas
-                              </span>
-                            </Button>
-                          </FunnelMetaAccountsSelector>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Vincular contas Meta Ads</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    
-                    {editingId !== funnel.id && (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(funnel);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClick(funnel);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <CollapsibleContent>
-                    <div className="border-t px-4 py-3 bg-muted/30 space-y-4">
-                      {/* Cubo Mágico Config Section */}
-                      <div className="border rounded-lg p-4 bg-background">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <Target className="h-4 w-4 text-primary" />
-                            <span className="font-medium text-sm">Configuração Cubo Mágico</span>
-                          </div>
-                          {editingConfig === funnel.id ? (
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleSaveConfig(funnel.id)}
-                                disabled={savingConfig}
-                              >
-                                {savingConfig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                                Salvar
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                onClick={() => setEditingConfig(null)}
-                              >
-                                Cancelar
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleEditConfig(funnel)}
-                            >
-                              <Pencil className="h-4 w-4 mr-1" />
-                              Configurar
-                            </Button>
-                          )}
-                        </div>
-                        
-                        {editingConfig === funnel.id ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor={`pattern-${funnel.id}`}>Padrão do Nome da Campanha</Label>
-                              <Input
-                                id={`pattern-${funnel.id}`}
-                                placeholder="Ex: PERPETUO_MAQUIAGEM35+"
-                                value={configCampaignPattern}
-                                onChange={(e) => setConfigCampaignPattern(e.target.value)}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                Campanhas que contêm este texto serão consideradas deste funil
-                              </p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`roas-${funnel.id}`}>ROAS Alvo</Label>
-                              <Input
-                                id={`roas-${funnel.id}`}
-                                type="number"
-                                step="0.1"
-                                min="0.1"
-                                placeholder="Ex: 2.0"
-                                value={configRoasTarget}
-                                onChange={(e) => setConfigRoasTarget(e.target.value)}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                CPA Máximo = Ticket Médio ÷ ROAS Alvo
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Padrão: </span>
-                              {funnel.campaign_name_pattern ? (
-                                <Badge variant="outline" className="font-mono">{funnel.campaign_name_pattern}</Badge>
-                              ) : (
-                                <span className="text-muted-foreground italic">Não configurado</span>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">ROAS Alvo: </span>
-                              <Badge variant="secondary">{funnel.roas_target || 2}x</Badge>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Offers Section */}
-                      {loadingOffers.has(funnel.name) ? (
-                        <div className="flex items-center justify-center py-4 gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm text-muted-foreground">Carregando ofertas...</span>
-                        </div>
-                      ) : offersByFunnel[funnel.name]?.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          Nenhuma oferta neste funil
-                        </p>
-                      ) : (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[80px]">Posição</TableHead>
-                              <TableHead>Produto</TableHead>
-                              <TableHead>Oferta</TableHead>
-                              <TableHead>Código</TableHead>
-                              <TableHead>Valor</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead className="w-[100px] text-right">Ação</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {offersByFunnel[funnel.name]?.map((offer) => (
-                              <TableRow key={offer.id}>
-                                <TableCell>
-                                  {offer.nome_posicao ? (
-                                    <Badge className={getPositionBadgeClass(offer.tipo_posicao)}>
-                                      {offer.nome_posicao}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-muted-foreground text-xs">-</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="font-medium max-w-[200px] truncate">
-                                  {offer.nome_produto}
-                                </TableCell>
-                                <TableCell className="max-w-[150px] truncate">
-                                  {offer.nome_oferta || '-'}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  {offer.codigo_oferta || '-'}
-                                </TableCell>
-                                <TableCell>{formatCurrency(offer.valor)}</TableCell>
-                                <TableCell>
-                                  {offer.status ? (
-                                    <Badge variant={
-                                      offer.status === 'ativo' ? 'default' :
-                                      offer.status === 'inativo' ? 'secondary' :
-                                      'outline'
-                                    }>
-                                      {offer.status}
-                                    </Badge>
-                                  ) : '-'}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleMoveOfferClick(offer)}
-                                    className="gap-1"
-                                  >
-                                    <ArrowRightLeft className="h-4 w-4" />
-                                    Mover
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      )}
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Collapsible>
-            ))}
-          </div>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {renderSection('perpetuo', 'Perpétuos')}
+          {renderSection('lancamento', 'Lançamentos')}
+          {renderSection('indefinido', 'A Definir')}
+        </div>
+      )}
 
       {/* Delete Funnel Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

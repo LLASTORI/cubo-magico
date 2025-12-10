@@ -76,9 +76,7 @@ export const HeroSection = ({ startDate, endDate }: HeroSectionProps) => {
 
         {/* Right content - Animated Cube Logo */}
         <div className="relative animate-hero-cube">
-          <div className="relative w-28 h-28 md:w-36 md:h-36 lg:w-40 lg:h-40">
-            <CuboLogo size="lg" className="w-full h-full !w-28 !h-28 md:!w-36 md:!h-36 lg:!w-40 lg:!h-40" />
-          </div>
+          <CuboLogo size="xl" interactive />
           {/* Glow effect */}
           <div className="absolute inset-0 bg-cyan/30 blur-3xl rounded-full -z-10 scale-150" />
         </div>

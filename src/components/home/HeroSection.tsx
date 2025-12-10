@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
-import { RubiksCube3D } from "@/components/RubiksCube3D";
+import { CuboLogo } from "@/components/CuboLogo";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -13,7 +13,6 @@ export const HeroSection = ({ startDate, endDate }: HeroSectionProps) => {
   const { user } = useAuth();
   const { currentProject } = useProject();
   
-  // Get first name from user metadata or email
   const getFirstName = () => {
     const fullName = user?.user_metadata?.full_name;
     if (fullName) {
@@ -75,11 +74,13 @@ export const HeroSection = ({ startDate, endDate }: HeroSectionProps) => {
           </div>
         </div>
 
-        {/* Right content - 3D Rubik's Cube */}
-        <div className="relative">
-          <RubiksCube3D size={120} />
+        {/* Right content - Animated Cube Logo */}
+        <div className="relative animate-hero-cube">
+          <div className="relative w-28 h-28 md:w-36 md:h-36 lg:w-40 lg:h-40">
+            <CuboLogo size="lg" className="w-full h-full !w-28 !h-28 md:!w-36 md:!h-36 lg:!w-40 lg:!h-40" />
+          </div>
           {/* Glow effect */}
-          <div className="absolute inset-0 bg-cyan/20 blur-2xl rounded-full -z-10" />
+          <div className="absolute inset-0 bg-cyan/30 blur-3xl rounded-full -z-10 scale-150" />
         </div>
       </div>
     </section>

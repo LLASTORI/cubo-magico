@@ -218,19 +218,19 @@ const ProjectOverview = () => {
               <ProjectSelector />
             </div>
             <div className="flex gap-2 items-center">
-              {/* Dropdown Plataformas */}
+              {/* Dropdown Busca Rápida */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="gap-2">
                     <Search className="w-4 h-4" />
-                    Plataformas
+                    Busca Rápida
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuItem onClick={() => navigate('/busca-rapida')} className="gap-2 cursor-pointer">
                     <ShoppingCart className="w-4 h-4" />
-                    Busca Rápida
+                    Hotmart
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/meta-ads')} className="gap-2 cursor-pointer">
                     <Facebook className="w-4 h-4" />

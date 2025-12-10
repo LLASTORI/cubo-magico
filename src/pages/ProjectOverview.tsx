@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
@@ -25,6 +24,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useProject } from "@/contexts/ProjectContext";
 import { useProjectOverview } from "@/hooks/useProjectOverview";
 import { CubeLoader } from "@/components/CubeLoader";
+import { HeroSection } from "@/components/home/HeroSection";
 import {
   ChartContainer,
   ChartTooltip,
@@ -173,15 +173,12 @@ const ProjectOverview = () => {
     <div className="min-h-screen bg-background">
       <AppHeader />
 
-      <main className="container mx-auto px-6 py-8 space-y-6">
+      <main className="container mx-auto px-4 md:px-6 py-6 space-y-6">
+        {/* Hero Section */}
+        <HeroSection startDate={startDate} endDate={endDate} />
+
         {/* Date Range Selector */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Visão Geral do Projeto</h1>
-            <p className="text-muted-foreground">
-              Análise consolidada de {format(new Date(startDate), "dd 'de' MMMM", { locale: ptBR })} a {format(new Date(endDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-            </p>
-          </div>
+        <div className="flex items-center justify-end">
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-52">
               <Calendar className="w-4 h-4 mr-2" />

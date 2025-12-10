@@ -23,6 +23,9 @@ export default {
           orange: "hsl(var(--cube-orange))",
           white: "hsl(var(--cube-white))",
         },
+        cyan: {
+          DEFAULT: "hsl(var(--cyan-accent))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -80,6 +83,7 @@ export default {
         'gradient-cube': 'var(--gradient-cube)',
         'gradient-success': 'var(--gradient-success)',
         'gradient-card': 'var(--gradient-card)',
+        'gradient-hero': 'var(--gradient-hero)',
       },
       boxShadow: {
         'elegant': 'var(--shadow-elegant)',

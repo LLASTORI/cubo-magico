@@ -119,6 +119,10 @@ export default {
           "0%": { transform: "rotateX(-20deg) rotateY(0deg)" },
           "100%": { transform: "rotateX(-20deg) rotateY(360deg)" },
         },
+        cubeIntro: {
+          "0%": { transform: "rotateX(-20deg) rotateY(0deg)" },
+          "100%": { transform: "rotateX(-20deg) rotateY(360deg)" },
+        },
         colorShift: {
           "0%, 100%": { borderColor: "hsl(var(--cube-blue))" },
           "20%": { borderColor: "hsl(var(--cube-red))" },
@@ -133,6 +137,7 @@ export default {
         "fade-in": "fadeIn 0.5s ease-out",
         "cube-rotate": "cubeRotate 8s ease-in-out infinite",
         "cube-spin": "cubeSpin 3s linear infinite",
+        "cube-intro": "cubeIntro 2s ease-out forwards",
         "color-shift": "colorShift 5s ease-in-out infinite",
       },
     },

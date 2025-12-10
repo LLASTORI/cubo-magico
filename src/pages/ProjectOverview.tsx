@@ -105,6 +105,14 @@ const ProjectOverview = () => {
         setStartDate(format(subDays(now, 90), 'yyyy-MM-dd'));
         setEndDate(format(now, 'yyyy-MM-dd'));
         break;
+      case '180d':
+        setStartDate(format(subDays(now, 180), 'yyyy-MM-dd'));
+        setEndDate(format(now, 'yyyy-MM-dd'));
+        break;
+      case '365d':
+        setStartDate(format(subDays(now, 365), 'yyyy-MM-dd'));
+        setEndDate(format(now, 'yyyy-MM-dd'));
+        break;
       case 'month':
         setStartDate(format(startOfMonth(now), 'yyyy-MM-dd'));
         setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'));
@@ -113,6 +121,14 @@ const ProjectOverview = () => {
         const lastMonth = subDays(startOfMonth(now), 1);
         setStartDate(format(startOfMonth(lastMonth), 'yyyy-MM-dd'));
         setEndDate(format(endOfMonth(lastMonth), 'yyyy-MM-dd'));
+        break;
+      case 'year':
+        setStartDate(format(new Date(now.getFullYear(), 0, 1), 'yyyy-MM-dd'));
+        setEndDate(format(now, 'yyyy-MM-dd'));
+        break;
+      case 'all':
+        setStartDate('2020-01-01');
+        setEndDate(format(now, 'yyyy-MM-dd'));
         break;
     }
   }, [dateRange]);
@@ -264,7 +280,7 @@ const ProjectOverview = () => {
             </p>
           </div>
           <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-52">
               <Calendar className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Período" />
             </SelectTrigger>
@@ -272,8 +288,12 @@ const ProjectOverview = () => {
               <SelectItem value="7d">Últimos 7 dias</SelectItem>
               <SelectItem value="30d">Últimos 30 dias</SelectItem>
               <SelectItem value="90d">Últimos 90 dias</SelectItem>
+              <SelectItem value="180d">Últimos 6 meses</SelectItem>
+              <SelectItem value="365d">Último ano</SelectItem>
               <SelectItem value="month">Mês atual</SelectItem>
               <SelectItem value="lastMonth">Mês anterior</SelectItem>
+              <SelectItem value="year">Ano atual</SelectItem>
+              <SelectItem value="all">Todo o histórico</SelectItem>
             </SelectContent>
           </Select>
         </div>

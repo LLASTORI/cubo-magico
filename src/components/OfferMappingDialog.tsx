@@ -189,6 +189,29 @@ export function OfferMappingDialog({
       const selectedFunnel = existingFunnels.find(f => f.name === values.id_funil);
       const funnelId = selectedFunnel?.id || null;
 
+      // Check for duplicate offer code if it's being set/changed
+      if (values.codigo_oferta) {
+        const isChangingCode = !mapping || mapping.codigo_oferta !== values.codigo_oferta;
+        
+        if (isChangingCode) {
+          const { data: existingOffer } = await supabase
+            .from('offer_mappings')
+            .select('id, nome_produto')
+            .eq('project_id', projectId)
+            .eq('codigo_oferta', values.codigo_oferta)
+            .maybeSingle();
+          
+          if (existingOffer) {
+            toast({
+              title: 'Código já existe',
+              description: `Este código de oferta já está cadastrado para "${existingOffer.nome_produto}"`,
+              variant: 'destructive',
+            });
+            return;
+          }
+        }
+      }
+
       const data = {
         id_produto: values.id_produto_visual || null,
         id_produto_visual: values.id_produto_visual || null,
@@ -213,7 +236,17 @@ export function OfferMappingDialog({
           .update(data)
           .eq('id', mapping.id);
 
-        if (error) throw error;
+        if (error) {
+          if (error.code === '23505') {
+            toast({
+              title: 'Código já existe',
+              description: 'Este código de oferta já está cadastrado para outra oferta',
+              variant: 'destructive',
+            });
+            return;
+          }
+          throw error;
+        }
 
         toast({
           title: 'Sucesso!',
@@ -224,7 +257,17 @@ export function OfferMappingDialog({
           .from('offer_mappings')
           .insert({ ...data, project_id: projectId });
 
-        if (error) throw error;
+        if (error) {
+          if (error.code === '23505') {
+            toast({
+              title: 'Código já existe',
+              description: 'Este código de oferta já está cadastrado para outra oferta',
+              variant: 'destructive',
+            });
+            return;
+          }
+          throw error;
+        }
 
         toast({
           title: 'Sucesso!',

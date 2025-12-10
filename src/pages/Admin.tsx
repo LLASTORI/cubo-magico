@@ -47,7 +47,7 @@ const Admin = () => {
     is_active: true,
   });
 
-  // Check if current user is admin
+  // Check if current user is admin or super_admin
   useEffect(() => {
     const checkAdmin = async () => {
       if (!user) {
@@ -61,7 +61,7 @@ const Admin = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (data?.role !== 'admin') {
+      if (data?.role !== 'admin' && data?.role !== 'super_admin') {
         toast({ title: 'Acesso negado', description: 'Você não tem permissão para acessar esta página', variant: 'destructive' });
         navigate('/projects');
         return;
@@ -243,8 +243,8 @@ const Admin = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>
-                        {u.role === 'admin' ? 'Admin' : 'Usuário'}
+                      <Badge variant={u.role === 'super_admin' ? 'destructive' : u.role === 'admin' ? 'default' : 'secondary'}>
+                        {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Admin' : 'Usuário'}
                       </Badge>
                     </TableCell>
                     <TableCell>

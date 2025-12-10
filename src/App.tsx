@@ -7,7 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import Index from "./pages/Index";
+import BuscaRapida from "./pages/BuscaRapida";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -41,7 +41,12 @@ const App = () => (
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/" element={
                   <ProtectedRoute>
-                    <Index />
+                    <ProjectOverview />
+                  </ProtectedRoute>
+                } />
+                <Route path="/busca-rapida" element={
+                  <ProtectedRoute>
+                    <BuscaRapida />
                   </ProtectedRoute>
                 } />
                 <Route path="/projects" element={
@@ -59,11 +64,7 @@ const App = () => (
                     <FunnelAnalysis />
                   </ProtectedRoute>
                 } />
-                <Route path="/project-overview" element={
-                  <ProtectedRoute>
-                    <ProjectOverview />
-                  </ProtectedRoute>
-                } />
+                {/* /project-overview now redirects to / */}
                 <Route path="/data-debug" element={
                   <ProtectedRoute>
                     <DataDebug />

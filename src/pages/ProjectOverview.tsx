@@ -16,7 +16,11 @@ import {
   Settings,
   Lock,
   Facebook,
-  FolderOpen
+  FolderOpen,
+  ChevronDown,
+  Search,
+  Package,
+  Rocket
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +30,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CuboBrand } from "@/components/CuboLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -208,14 +218,26 @@ const ProjectOverview = () => {
               <ProjectSelector />
             </div>
             <div className="flex gap-2 items-center">
-              <Button
-                onClick={() => navigate('/')}
-                variant="outline"
-                className="gap-2"
-              >
-                <ShoppingCart className="w-4 h-4" />
-                Vendas
-              </Button>
+              {/* Dropdown Plataformas */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Search className="w-4 h-4" />
+                    Plataformas
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuItem onClick={() => navigate('/busca-rapida')} className="gap-2 cursor-pointer">
+                    <ShoppingCart className="w-4 h-4" />
+                    Busca Rápida
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/meta-ads')} className="gap-2 cursor-pointer">
+                    <Facebook className="w-4 h-4" />
+                    Meta Ads
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 onClick={() => navigate('/funnel-analysis')}
                 variant="outline"
@@ -225,12 +247,20 @@ const ProjectOverview = () => {
                 Análise de Funil
               </Button>
               <Button
-                onClick={() => navigate('/meta-ads')}
+                onClick={() => navigate('/undefined-offers')}
                 variant="outline"
                 className="gap-2"
               >
-                <Facebook className="w-4 h-4" />
-                Meta Ads
+                <Package className="w-4 h-4" />
+                A Definir
+              </Button>
+              <Button
+                onClick={() => navigate('/launch-dashboard')}
+                variant="outline"
+                className="gap-2"
+              >
+                <Rocket className="w-4 h-4" />
+                Lançamentos
               </Button>
               <TooltipProvider>
                 <Tooltip>

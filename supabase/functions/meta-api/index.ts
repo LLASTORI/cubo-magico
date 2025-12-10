@@ -580,7 +580,12 @@ async function getCampaignsForAccount(accessToken: string, accountId: string) {
   }))
 }
 
-async function getCampaigns(accessToken: string, accountIds: string[]) {
+async function getCampaigns(accessToken: string, rawAccountIds: any[]) {
+  // Normalize account IDs to handle both strings and objects
+  const accountIds = rawAccountIds.map((acc: any) => 
+    typeof acc === 'string' ? acc : (acc?.account_id || acc)
+  ).filter(Boolean)
+  
   console.log('Fetching campaigns for accounts:', accountIds)
   
   const allCampaigns: any[] = []
@@ -646,8 +651,13 @@ async function syncCampaigns(
   supabase: any,
   projectId: string,
   accessToken: string,
-  accountIds: string[]
+  rawAccountIds: any[]
 ) {
+  // Normalize account IDs to handle both strings and objects
+  const accountIds = rawAccountIds.map((acc: any) => 
+    typeof acc === 'string' ? acc : (acc?.account_id || acc)
+  ).filter(Boolean)
+  
   console.log('Syncing campaigns for accounts:', accountIds)
   
   const allCampaigns: any[] = []
@@ -821,8 +831,13 @@ async function syncAdsets(
   supabase: any,
   projectId: string,
   accessToken: string,
-  accountIds: string[]
+  rawAccountIds: any[]
 ) {
+  // Normalize account IDs to handle both strings and objects
+  const accountIds = rawAccountIds.map((acc: any) => 
+    typeof acc === 'string' ? acc : (acc?.account_id || acc)
+  ).filter(Boolean)
+  
   console.log('Syncing adsets for accounts:', accountIds)
   
   const allAdsets: any[] = []
@@ -896,8 +911,13 @@ async function syncAds(
   supabase: any,
   projectId: string,
   accessToken: string,
-  accountIds: string[]
+  rawAccountIds: any[]
 ) {
+  // Normalize account IDs to handle both strings and objects
+  const accountIds = rawAccountIds.map((acc: any) => 
+    typeof acc === 'string' ? acc : (acc?.account_id || acc)
+  ).filter(Boolean)
+  
   console.log('Syncing ads for accounts:', accountIds)
   
   const allAds: any[] = []
@@ -1140,16 +1160,30 @@ async function getInsightsIncremental(
   return { insights: allInsights, totalSaved }
 }
 
+// Helper to normalize account IDs - handles both strings and objects
+function normalizeAccountIds(accounts: any[]): string[] {
+  return accounts.map(acc => {
+    if (typeof acc === 'string') return acc
+    // Handle objects with account_id property (from meta_ad_accounts table)
+    if (acc && typeof acc === 'object' && acc.account_id) return acc.account_id
+    console.error('Invalid account format:', acc)
+    return null
+  }).filter(Boolean) as string[]
+}
+
 // SMART SYNC: Optimized sync function with intelligent caching
 async function syncInsightsSmartOptimized(
   supabase: any,
   projectId: string,
   accessToken: string,
-  accountIds: string[],
+  rawAccountIds: any[],
   dateStart: string,
   dateStop: string,
   forceRefresh: boolean = false
 ) {
+  // NORMALIZE: Handle both string arrays and object arrays
+  const accountIds = normalizeAccountIds(rawAccountIds)
+  
   console.log('=== SMART SYNC STARTED ===')
   console.log({ projectId, accountIds: accountIds.length, dateStart, dateStop, forceRefresh })
 

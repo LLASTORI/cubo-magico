@@ -8,6 +8,7 @@ export interface UserPermissions {
   currentProjectCount: number;
   isActive: boolean;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   loading: boolean;
 }
 
@@ -19,6 +20,7 @@ export const useUserPermissions = () => {
     currentProjectCount: 0,
     isActive: true,
     isAdmin: false,
+    isSuperAdmin: false,
     loading: true,
   });
 
@@ -51,15 +53,18 @@ export const useUserPermissions = () => {
           .eq('user_id', user.id);
 
         const isAdmin = roleData?.role === 'admin';
+        const isSuperAdmin = roleData?.role === 'super_admin';
         const canCreate = profile?.can_create_projects ?? false;
         const maxProjects = profile?.max_projects ?? 0;
         const projectCount = count ?? 0;
 
+        // Super admin can always create projects
         // User can create if: is active, has permission, and hasn't reached limit (0 = unlimited)
         const canCreateProjects = 
-          (profile?.is_active !== false) && 
+          isSuperAdmin ||
+          ((profile?.is_active !== false) && 
           canCreate && 
-          (maxProjects === 0 || projectCount < maxProjects);
+          (maxProjects === 0 || projectCount < maxProjects));
 
         setPermissions({
           canCreateProjects,
@@ -67,6 +72,7 @@ export const useUserPermissions = () => {
           currentProjectCount: projectCount,
           isActive: profile?.is_active ?? true,
           isAdmin,
+          isSuperAdmin,
           loading: false,
         });
       } catch (error) {

@@ -575,51 +575,58 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   }
 
   const metaRightContent = (
-    <div className="flex items-center gap-2">
-      {metaCredentials && (
-        <Badge variant={isMetaExpired ? "destructive" : "secondary"} className="gap-1">
-          {isMetaExpired ? (
-            <><AlertCircle className="h-3 w-3" /> Token expirado</>
-          ) : (
-            <><CheckCircle className="h-3 w-3" /> Conectado</>
-          )}
-        </Badge>
+    <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" className="gap-2">
+      {syncing ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <RefreshCw className="h-4 w-4" />
       )}
-      <Button 
-        variant="outline" 
-        className="gap-2"
-        onClick={() => setShowFilters(!showFilters)}
-      >
-        <Filter className="h-4 w-4" />
-        {startDate} - {endDate}
-      </Button>
-      <MetaAccountSelector 
-        projectId={projectId} 
-        onAccountsSelected={handleAccountsSelected}
-      >
-        <Button variant="outline" className="gap-2">
-          <Settings2 className="h-4 w-4" />
-          Contas {adAccounts && adAccounts.length > 0 && (
-            <Badge variant="secondary" className="ml-1">{adAccounts.length}</Badge>
-          )}
-        </Button>
-      </MetaAccountSelector>
-      <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" className="gap-2">
-        {syncing ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <RefreshCw className="h-4 w-4" />
-        )}
-        Sincronizar
-      </Button>
-    </div>
+      Sincronizar
+    </Button>
   );
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader rightContent={metaRightContent} />
 
-      <main className="container mx-auto px-4 py-8 space-y-6">
+      <main className="container mx-auto px-6 py-8 space-y-6">
+        {/* Filters Card */}
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {metaCredentials && (
+                <Badge variant={isMetaExpired ? "destructive" : "secondary"} className="gap-1">
+                  {isMetaExpired ? (
+                    <><AlertCircle className="h-3 w-3" /> Token expirado</>
+                  ) : (
+                    <><CheckCircle className="h-3 w-3" /> Conectado</>
+                  )}
+                </Badge>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Filter className="h-4 w-4" />
+                {startDate} - {endDate}
+              </Button>
+              <MetaAccountSelector 
+                projectId={projectId} 
+                onAccountsSelected={handleAccountsSelected}
+              >
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Contas {adAccounts && adAccounts.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">{adAccounts.length}</Badge>
+                  )}
+                </Button>
+              </MetaAccountSelector>
+            </div>
+          </div>
+        </Card>
+
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>

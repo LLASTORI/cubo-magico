@@ -618,9 +618,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
               <BarChart3 className="h-4 w-4 mr-1" />
               Análise ROI
             </TabsTrigger>
-            <TabsTrigger value="accounts">
-              <Building2 className="h-4 w-4 mr-1" />
+            <TabsTrigger value="accounts" className="gap-1">
+              <Building2 className="h-4 w-4" />
               Contas Meta
+              {adAccounts && adAccounts.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5">
+                  {adAccounts.filter(a => a.is_active).length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 

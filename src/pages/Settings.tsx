@@ -17,6 +17,7 @@ import { CubeLoader } from '@/components/CubeLoader';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { FullDataSync } from '@/components/FullDataSync';
+import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 
 const META_APP_ID = '845927421602166';
 
@@ -672,48 +673,54 @@ const Settings = () => {
 
           {/* Security Tab */}
           <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <CardTitle>Alterar Senha</CardTitle>
-                <CardDescription>
-                  Atualize sua senha para manter sua conta segura.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleUpdatePassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">Nova senha</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Digite a nova senha"
-                      minLength={6}
-                    />
-                  </div>
+            <div className="space-y-6">
+              {/* Two-Factor Authentication */}
+              <TwoFactorSettings />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirme a nova senha"
-                      minLength={6}
-                    />
-                  </div>
+              {/* Change Password */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Alterar Senha</CardTitle>
+                  <CardDescription>
+                    Atualize sua senha para manter sua conta segura.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">Nova senha</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Digite a nova senha"
+                        minLength={6}
+                      />
+                    </div>
 
-                  <Button 
-                    type="submit" 
-                    disabled={updatePasswordMutation.isPending || !newPassword || !confirmPassword}
-                  >
-                    {updatePasswordMutation.isPending ? 'Alterando...' : 'Alterar senha'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirme a nova senha"
+                        minLength={6}
+                      />
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      disabled={updatePasswordMutation.isPending || !newPassword || !confirmPassword}
+                    >
+                      {updatePasswordMutation.isPending ? 'Alterando...' : 'Alterar senha'}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

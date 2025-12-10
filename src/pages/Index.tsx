@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Zap, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package, Rocket } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, BarChart3, LogOut, FolderOpen, Lock, Facebook, LayoutDashboard, Package, Rocket } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -18,7 +18,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 const Index = () => {
   const [loading, setLoading] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [salesData, setSalesData] = useState<any>(null);
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
   const [offerMappings, setOfferMappings] = useState<any[]>([]);
@@ -182,45 +181,6 @@ const Index = () => {
       fetchHotmartData(currentFilters);
     }
   };
-
-  const testConnection = async () => {
-    try {
-      setTestingConnection(true);
-      
-      if (!currentProject) {
-        throw new Error('Selecione um projeto primeiro');
-      }
-      
-      // Make a minimal request to test authentication
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/sales/summary',
-          params: {},
-          projectId: currentProject.id,
-        },
-      });
-
-      if (error) throw error;
-
-      // Mark credentials as validated on success
-      await markCredentialsValidated(currentProject.id);
-
-      toast({
-        title: "✓ Conexão bem-sucedida!",
-        description: "As credenciais da Hotmart estão configuradas corretamente",
-      });
-    } catch (error: any) {
-      console.error('Connection test failed:', error);
-      toast({
-        title: "✗ Falha na conexão",
-        description: error.message || "Verifique suas credenciais da Hotmart",
-        variant: "destructive",
-      });
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   // Calculate metrics from filtered data
   const calculateMetrics = (filteredSales: any[]) => {
     if (!filteredSales || filteredSales.length === 0) {
@@ -525,15 +485,6 @@ const Index = () => {
                       )}
                     </Tooltip>
                   </TooltipProvider>
-                  <Button
-                    onClick={testConnection}
-                    disabled={testingConnection || loading}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Zap className={`w-4 h-4 ${testingConnection ? 'animate-pulse' : ''}`} />
-                    Testar Conexão
-                  </Button>
                 </>
               )}
               {salesData && currentProject && (

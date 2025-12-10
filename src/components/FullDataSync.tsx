@@ -39,14 +39,18 @@ export function FullDataSync() {
 
   const projectId = currentProject?.id;
 
-  // Calculate 24 months ago
+  // Different periods for each platform
   const endDate = new Date();
-  const startDate = subMonths(endDate, 24);
   
-  const dateStartStr = format(startDate, 'yyyy-MM-dd');
-  const dateEndStr = format(endDate, 'yyyy-MM-dd');
-  const dateStartMs = startDate.getTime();
-  const dateEndMs = endDate.getTime();
+  // Meta: 13 months (API limitation for consistent data)
+  const metaStartDate = subMonths(endDate, 13);
+  const metaDateStartStr = format(metaStartDate, 'yyyy-MM-dd');
+  const metaDateEndStr = format(endDate, 'yyyy-MM-dd');
+  
+  // Hotmart: 24 months (sales history is more flexible)
+  const hotmartStartDate = subMonths(endDate, 24);
+  const hotmartDateStartMs = hotmartStartDate.getTime();
+  const hotmartDateEndMs = endDate.getTime();
 
   // Check if Meta is connected
   const { data: metaCredentials } = useQuery({
@@ -186,8 +190,7 @@ export function FullDataSync() {
         console.error('Campaign sync error:', campaignError);
       }
 
-      // Then sync insights for 24 months
-      setSyncStatus(prev => ({ ...prev, metaMessage: 'Sincronizando insights (24 meses)...' }));
+      setSyncStatus(prev => ({ ...prev, metaMessage: 'Sincronizando insights (13 meses)...' }));
       setProgress(40);
 
       const { data, error } = await supabase.functions.invoke('meta-api', {
@@ -195,8 +198,8 @@ export function FullDataSync() {
           action: 'sync_insights',
           projectId,
           accountIds,
-          dateStart: dateStartStr,
-          dateStop: dateEndStr,
+          dateStart: metaDateStartStr,
+          dateStop: metaDateEndStr,
           forceRefresh: false, // Use smart sync to avoid refetching immutable data
         },
       });
@@ -206,13 +209,13 @@ export function FullDataSync() {
       setSyncStatus(prev => ({ 
         ...prev, 
         meta: 'completed', 
-        metaMessage: data?.message || 'Sincronização iniciada em background!' 
+        metaMessage: data?.message || 'Sincronização de 13 meses iniciada!' 
       }));
       setProgress(100);
 
       toast({
         title: 'Meta Ads',
-        description: 'Sincronização de 24 meses iniciada. Os dados serão atualizados em background.',
+        description: 'Sincronização de 13 meses iniciada. Os dados serão atualizados em background.',
       });
 
       // Refresh stats after a delay
@@ -242,7 +245,7 @@ export function FullDataSync() {
     try {
       // Split 24 months into smaller chunks (3 months each) to avoid timeout
       const chunks: { start: number; end: number }[] = [];
-      let chunkStart = new Date(startDate);
+      let chunkStart = new Date(hotmartStartDate);
       
       while (chunkStart < endDate) {
         const chunkEnd = new Date(chunkStart);
@@ -362,12 +365,17 @@ export function FullDataSync() {
               Sincronização Completa de Dados
             </CardTitle>
             <CardDescription>
-              Sincronize os últimos 24 meses de dados do Meta Ads e Hotmart
+              Meta Ads: últimos 13 meses | Hotmart: últimos 24 meses
             </CardDescription>
           </div>
-          <Badge variant="outline" className="text-xs">
-            {format(startDate, 'MMM yyyy', { locale: ptBR })} - {format(endDate, 'MMM yyyy', { locale: ptBR })}
-          </Badge>
+          <div className="flex flex-col gap-1 items-end">
+            <Badge variant="outline" className="text-xs">
+              Meta: {format(metaStartDate, 'MMM yyyy', { locale: ptBR })} - {format(endDate, 'MMM yyyy', { locale: ptBR })}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              Hotmart: {format(hotmartStartDate, 'MMM yyyy', { locale: ptBR })} - {format(endDate, 'MMM yyyy', { locale: ptBR })}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">

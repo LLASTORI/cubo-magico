@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface CuboLogoProps {
   className?: string;
@@ -83,7 +84,6 @@ export const CuboBrand: React.FC<CuboBrandProps> = ({
   showText = true,
   size = 'md' 
 }) => {
-  const { useNavigate } = require('react-router-dom');
   const navigate = useNavigate();
   
   const textSizeMap = {

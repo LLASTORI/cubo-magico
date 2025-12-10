@@ -877,6 +877,8 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 <MetaROIDashboard 
                   projectId={projectId}
                   activeAccountIds={activeAccountIds}
+                  startDate={startDate}
+                  endDate={endDate}
                 />
               </div>
             )}

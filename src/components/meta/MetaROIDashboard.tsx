@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { format, subDays, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -9,8 +9,6 @@ import {
   Target, 
   ShoppingCart, 
   Calculator,
-  Calendar,
-  RefreshCw,
   AlertCircle,
   BarChart3,
   Filter
@@ -19,10 +17,7 @@ import { HotmartSyncManager } from "@/components/HotmartSyncManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -49,6 +44,8 @@ import {
 interface MetaROIDashboardProps {
   projectId: string;
   activeAccountIds: string[];
+  startDate: string;
+  endDate: string;
 }
 
 interface DailyROIData {
@@ -70,15 +67,12 @@ const chartConfig = {
   roas: { label: "ROAS", color: "hsl(262, 83%, 58%)" },
 };
 
-export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboardProps) => {
+export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDate }: MetaROIDashboardProps) => {
   const { currentProject } = useProject();
-  const today = new Date();
-  const [startDate, setStartDate] = useState<Date>(subDays(today, 30));
-  const [endDate, setEndDate] = useState<Date>(today);
   const [paidTrafficOnly, setPaidTrafficOnly] = useState(true); // Default to paid traffic only
 
-  const startDateStr = format(startDate, 'yyyy-MM-dd');
-  const endDateStr = format(endDate, 'yyyy-MM-dd');
+  const startDateStr = startDate;
+  const endDateStr = endDate;
 
   // Fetch Meta insights (spend data) - now all at ad-level, aggregate in memory
   const { data: metaInsights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
@@ -218,16 +212,15 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
     return new Intl.NumberFormat('pt-BR').format(value);
   };
 
-  const handleRefresh = () => {
-    refetchInsights();
-    refetchSales();
-  };
-
   const loading = insightsLoading || salesLoading;
   const hasSpendData = roiData.totals && roiData.totals.spend > 0;
   const hasRevenueData = roiData.totals && roiData.totals.revenue > 0;
   const hasData = hasSpendData || hasRevenueData;
   const isProfitable = roiData.totals && roiData.totals.profit > 0;
+
+  // Convert string dates to Date objects for HotmartSyncManager
+  const startDateObj = parseISO(startDate);
+  const endDateObj = parseISO(endDate);
 
   return (
     <Card className="p-6">
@@ -239,77 +232,16 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
           </h3>
           <p className="text-sm text-muted-foreground">Meta Ads + Hotmart - Análise de Retorno sobre Investimento</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-          <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
-          Atualizar
-        </Button>
-      </div>
-
-      {/* Date Selectors */}
-      <div className="flex items-center gap-4 mb-6 p-4 bg-muted/20 rounded-lg">
-        <div className="space-y-1">
-          <Label className="text-xs">De</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="w-[130px] justify-start">
-                <Calendar className="mr-2 h-3 w-3" />
-                {format(startDate, "dd/MM/yyyy", { locale: ptBR })}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={startDate}
-                onSelect={(date) => date && setStartDate(date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Até</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="w-[130px] justify-start">
-                <Calendar className="mr-2 h-3 w-3" />
-                {format(endDate, "dd/MM/yyyy", { locale: ptBR })}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={endDate}
-                onSelect={(date) => date && setEndDate(date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="flex gap-2 ml-auto items-center">
-          <div className="flex items-center gap-2 mr-4 px-3 py-1.5 bg-background rounded-md border">
-            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-            <Label htmlFor="paid-traffic-filter" className="text-xs cursor-pointer">
-              Apenas tráfego pago
-            </Label>
-            <Switch
-              id="paid-traffic-filter"
-              checked={paidTrafficOnly}
-              onCheckedChange={setPaidTrafficOnly}
-            />
-          </div>
-          {[7, 15, 30, 60, 90].map(days => (
-            <Button
-              key={days}
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setStartDate(subDays(today, days));
-                setEndDate(today);
-              }}
-            >
-              {days}d
-            </Button>
-          ))}
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/20 rounded-md border">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+          <Label htmlFor="paid-traffic-filter" className="text-xs cursor-pointer">
+            Apenas tráfego pago
+          </Label>
+          <Switch
+            id="paid-traffic-filter"
+            checked={paidTrafficOnly}
+            onCheckedChange={setPaidTrafficOnly}
+          />
         </div>
       </div>
 
@@ -333,8 +265,8 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
           {/* Hotmart Sync Manager */}
           <HotmartSyncManager 
             projectId={projectId}
-            startDate={startDate}
-            endDate={endDate}
+            startDate={startDateObj}
+            endDate={endDateObj}
             onSyncComplete={() => {
               refetchSales();
             }}
@@ -385,8 +317,8 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds }: MetaROIDashboa
           {/* Hotmart Sync Manager */}
           <HotmartSyncManager 
             projectId={projectId}
-            startDate={startDate}
-            endDate={endDate}
+            startDate={startDateObj}
+            endDate={endDateObj}
             onSyncComplete={() => {
               refetchSales();
             }}

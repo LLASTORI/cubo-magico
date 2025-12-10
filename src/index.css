@@ -63,7 +63,9 @@
     --gradient-cube: linear-gradient(135deg, hsl(220 90% 50%) 0%, hsl(28 95% 55%) 50%, hsl(0 80% 55%) 100%);
     --gradient-success: linear-gradient(135deg, hsl(145 70% 42%), hsl(145 70% 52%));
     --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(220 25% 98%));
-    --gradient-hero: linear-gradient(135deg, hsl(230 65% 18%) 0%, hsl(235 70% 25%) 50%, hsl(230 60% 20%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(220 40% 96%) 0%, hsl(225 45% 92%) 50%, hsl(220 35% 94%) 100%);
+    --hero-text: 220 25% 15%;
+    --hero-text-muted: 220 15% 40%;
     
     /* Cyan accent for highlights */
     --cyan-accent: 180 70% 55%;
@@ -123,6 +125,8 @@
     --gradient-success: linear-gradient(135deg, hsl(145 65% 45%), hsl(145 65% 55%));
     --gradient-card: linear-gradient(135deg, hsl(220 20% 14%), hsl(220 15% 18%));
     --gradient-hero: linear-gradient(135deg, hsl(230 65% 12%) 0%, hsl(235 70% 18%) 50%, hsl(230 60% 14%) 100%);
+    --hero-text: 0 0% 100%;
+    --hero-text-muted: 0 0% 80%;
     
     --cyan-accent: 180 65% 50%;
     

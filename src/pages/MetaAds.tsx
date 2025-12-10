@@ -28,7 +28,7 @@ import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/componen
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
-import { MetaCampaignSync } from '@/components/meta/MetaCampaignSync';
+
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -573,7 +573,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       <AppHeader />
 
       <main className="container mx-auto px-6 py-8 space-y-6">
-        {/* Filters Card */}
+        {/* Unified Filters Card */}
         <Card className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -605,7 +605,38 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
               </Button>
             </div>
           </div>
+          
+          {/* Expandable Date Filters */}
+          <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+            <CollapsibleContent className="pt-4">
+              <MetaDateFilters
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={handleStartDateChange}
+                onEndDateChange={handleEndDateChange}
+              />
+            </CollapsibleContent>
+          </Collapsible>
         </Card>
+
+        {/* Needs Sync Indicator - when date changed */}
+        {needsSync && !syncing && adAccounts && adAccounts.length > 0 && (
+          <Card className="border-yellow-500/50 bg-yellow-500/5">
+            <CardContent className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-yellow-500" />
+                <div>
+                  <p className="font-medium text-foreground">Período alterado</p>
+                  <p className="text-sm text-muted-foreground">Clique em Sincronizar para buscar dados do novo período.</p>
+                </div>
+              </div>
+              <Button onClick={handleSyncData} disabled={syncing} className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Sincronizar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -647,46 +678,20 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
               </Card>
             )}
 
-            {/* Date Filters - only show when accounts exist */}
+            {/* Content when accounts exist */}
             {adAccounts && adAccounts.length > 0 && (
               <>
-                <Collapsible open={showFilters} onOpenChange={setShowFilters}>
-                  <CollapsibleContent>
-                    <Card className="p-4 mb-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Filter className="w-5 h-5 text-primary" />
-                        <h2 className="text-lg font-semibold text-foreground">Filtros de Data</h2>
-                      </div>
-                      <MetaDateFilters
-                        startDate={startDate}
-                        endDate={endDate}
-                        onStartDateChange={handleStartDateChange}
-                        onEndDateChange={handleEndDateChange}
+                {/* Syncing Indicator */}
+                {syncing && (
+                  <Card className="border-primary/50 bg-primary/5">
+                    <CardContent className="py-4">
+                      <SyncLoader 
+                        showProgress={true} 
+                        estimatedDuration={estimatedDuration}
                       />
-                    </Card>
-                  </CollapsibleContent>
-                </Collapsible>
-
-                {/* Needs Sync Indicator - when date changed */}
-                {needsSync && !syncing && (
-                  <Card className="border-yellow-500/50 bg-yellow-500/5">
-                    <CardContent className="flex items-center justify-between py-4">
-                      <div className="flex items-center gap-3">
-                        <AlertCircle className="h-5 w-5 text-yellow-500" />
-                        <div>
-                          <p className="font-medium text-foreground">Período alterado</p>
-                          <p className="text-sm text-muted-foreground">Clique em Sincronizar para buscar dados do novo período.</p>
-                        </div>
-                      </div>
-                      <Button onClick={handleSyncData} disabled={syncing} className="gap-2">
-                        <RefreshCw className="h-4 w-4" />
-                        Sincronizar
-                      </Button>
                     </CardContent>
                   </Card>
                 )}
-
-                {/* Syncing Indicator */}
                 {syncing && (
                   <Card className="border-primary/50 bg-primary/5">
                     <CardContent className="py-4">
@@ -869,18 +874,12 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
-                <MetaCampaignSync 
-                  projectId={projectId}
-                  accountIds={activeAccountIds}
-                />
-                <MetaROIDashboard 
-                  projectId={projectId}
-                  activeAccountIds={activeAccountIds}
-                  startDate={startDate}
-                  endDate={endDate}
-                />
-              </div>
+              <MetaROIDashboard 
+                projectId={projectId}
+                activeAccountIds={activeAccountIds}
+                startDate={startDate}
+                endDate={endDate}
+              />
             )}
           </TabsContent>
 

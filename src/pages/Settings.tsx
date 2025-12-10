@@ -10,14 +10,15 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown } from 'lucide-react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { FullDataSync } from '@/components/FullDataSync';
 import { TwoFactorSettings } from '@/components/TwoFactorSettings';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 const META_APP_ID = '845927421602166';
 
@@ -28,6 +29,8 @@ const Settings = () => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { isSuperAdmin } = useUserPermissions();
   
   const [fullName, setFullName] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -367,7 +370,7 @@ const Settings = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full max-w-lg grid-cols-4">
+          <TabsList className={`grid w-full max-w-lg ${isSuperAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Perfil</span>
@@ -384,6 +387,19 @@ const Settings = () => {
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Segurança</span>
             </TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger 
+                value="admin" 
+                className="flex items-center gap-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/admin');
+                }}
+              >
+                <Crown className="h-4 w-4" />
+                <span className="hidden sm:inline">Admin</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Profile Tab */}

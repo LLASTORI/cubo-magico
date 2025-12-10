@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { MFAVerification } from '@/components/MFAVerification';
 import { z } from 'zod';
 
 const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9]).{8,}$/;
@@ -33,7 +35,7 @@ const signupSchema = z.object({
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { user, signIn, signUp } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(false);
@@ -46,12 +48,48 @@ const Auth = () => {
     confirmPassword: '' 
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // MFA state
+  const [showMFA, setShowMFA] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
-      navigate('/projects');
+      // Check if MFA verification is needed
+      checkMFAStatus();
     }
-  }, [user, navigate]);
+  }, [user]);
+
+  const checkMFAStatus = async () => {
+    try {
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error) throw error;
+      
+      // If user has MFA but hasn't verified yet (aal1 but needs aal2)
+      if (data.currentLevel === 'aal1' && data.nextLevel === 'aal2') {
+        // User needs to complete MFA
+        const factorsData = await supabase.auth.mfa.listFactors();
+        if (factorsData.data?.totp && factorsData.data.totp.length > 0) {
+          const verifiedFactor = factorsData.data.totp.find(f => f.status === 'verified');
+          if (verifiedFactor) {
+            setMfaFactorId(verifiedFactor.id);
+            setShowMFA(true);
+            return;
+          }
+        }
+      }
+      
+      // No MFA needed or already verified, proceed
+      if (user) {
+        navigate('/projects');
+      }
+    } catch (error) {
+      console.error('Error checking MFA status:', error);
+      if (user) {
+        navigate('/projects');
+      }
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +109,10 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const { error } = await signIn(loginData.email, loginData.password);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: loginData.email,
+      password: loginData.password,
+    });
     setLoading(false);
 
     if (error) {
@@ -82,7 +123,23 @@ const Auth = () => {
           : error.message,
         variant: 'destructive',
       });
-    } else {
+    } else if (data.user) {
+      // Check if MFA is required after login
+      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      
+      if (aalData?.currentLevel === 'aal1' && aalData?.nextLevel === 'aal2') {
+        // Need MFA verification
+        const factorsData = await supabase.auth.mfa.listFactors();
+        if (factorsData.data?.totp && factorsData.data.totp.length > 0) {
+          const verifiedFactor = factorsData.data.totp.find(f => f.status === 'verified');
+          if (verifiedFactor) {
+            setMfaFactorId(verifiedFactor.id);
+            setShowMFA(true);
+            return;
+          }
+        }
+      }
+
       toast({
         title: 'Login realizado!',
         description: 'Bem-vindo de volta!',
@@ -109,7 +166,18 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const { error } = await signUp(signupData.email, signupData.password, signupData.fullName);
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signUp({
+      email: signupData.email,
+      password: signupData.password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: signupData.fullName,
+        },
+      },
+    });
     setLoading(false);
 
     if (error) {
@@ -134,6 +202,43 @@ const Auth = () => {
       navigate('/projects');
     }
   };
+
+  const handleMFASuccess = () => {
+    setShowMFA(false);
+    setMfaFactorId(null);
+    toast({
+      title: 'Login realizado!',
+      description: 'Verificação 2FA concluída.',
+    });
+    navigate('/projects');
+  };
+
+  const handleMFACancel = async () => {
+    await supabase.auth.signOut();
+    setShowMFA(false);
+    setMfaFactorId(null);
+    setLoginData({ email: '', password: '' });
+  };
+
+  // Show MFA verification screen
+  if (showMFA && mfaFactorId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4 cube-pattern relative">
+        <div className="fixed top-4 right-4 z-20">
+          <ThemeToggle />
+        </div>
+        
+        <div className="fixed top-10 left-10 w-20 h-20 bg-cube-blue/10 rounded-lg rotate-12 blur-sm" />
+        <div className="fixed bottom-20 right-20 w-16 h-16 bg-cube-orange/10 rounded-lg -rotate-12 blur-sm" />
+        
+        <MFAVerification
+          factorId={mfaFactorId}
+          onSuccess={handleMFASuccess}
+          onCancel={handleMFACancel}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 cube-pattern relative">

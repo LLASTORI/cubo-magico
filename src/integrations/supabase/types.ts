@@ -171,6 +171,7 @@ export type Database = {
         Row: {
           campaign_name_pattern: string | null
           created_at: string
+          funnel_type: string
           id: string
           name: string
           project_id: string | null
@@ -180,6 +181,7 @@ export type Database = {
         Insert: {
           campaign_name_pattern?: string | null
           created_at?: string
+          funnel_type?: string
           id?: string
           name: string
           project_id?: string | null
@@ -189,6 +191,7 @@ export type Database = {
         Update: {
           campaign_name_pattern?: string | null
           created_at?: string
+          funnel_type?: string
           id?: string
           name?: string
           project_id?: string | null

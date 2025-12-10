@@ -49,6 +49,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+type FunnelType = 'perpetuo' | 'lancamento' | 'indefinido';
+
 interface Funnel {
   id: string;
   name: string;
@@ -57,7 +59,20 @@ interface Funnel {
   updated_at: string;
   roas_target: number | null;
   campaign_name_pattern: string | null;
+  funnel_type: FunnelType;
 }
+
+const FUNNEL_TYPE_LABELS: Record<FunnelType, string> = {
+  perpetuo: 'Perpétuo',
+  lancamento: 'Lançamento',
+  indefinido: 'A Definir',
+};
+
+const FUNNEL_TYPE_COLORS: Record<FunnelType, string> = {
+  perpetuo: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+  lancamento: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  indefinido: 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30',
+};
 
 interface OfferMapping {
   id: string;
@@ -100,8 +115,10 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [loading, setLoading] = useState(true);
   const [newFunnelName, setNewFunnelName] = useState('');
+  const [newFunnelType, setNewFunnelType] = useState<FunnelType>('perpetuo');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingType, setEditingType] = useState<FunnelType>('perpetuo');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [funnelToDelete, setFunnelToDelete] = useState<Funnel | null>(null);
   const [offersByFunnel, setOffersByFunnel] = useState<Record<string, OfferMapping[]>>({});
@@ -139,7 +156,12 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         .order('name');
 
       if (error) throw error;
-      setFunnels(data || []);
+      // Cast funnel_type from string to FunnelType
+      const typedData = (data || []).map(f => ({
+        ...f,
+        funnel_type: (f.funnel_type as FunnelType) || 'perpetuo',
+      }));
+      setFunnels(typedData);
     } catch (error: any) {
       console.error('Error fetching funnels:', error);
       toast({
@@ -306,6 +328,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
         .insert({
           name: newFunnelName.trim(),
           project_id: projectId,
+          funnel_type: newFunnelType,
         });
 
       if (error) {
@@ -326,6 +349,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
       });
 
       setNewFunnelName('');
+      setNewFunnelType('perpetuo');
       fetchFunnels();
       onFunnelChange?.();
     } catch (error: any) {
@@ -341,16 +365,20 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   const handleEdit = (funnel: Funnel) => {
     setEditingId(funnel.id);
     setEditingName(funnel.name);
+    setEditingType(funnel.funnel_type);
   };
 
   const handleSaveEdit = async (oldName: string) => {
     if (!editingId || !editingName.trim()) return;
 
     try {
-      // Update funnel name
+      // Update funnel name and type
       const { error } = await supabase
         .from('funnels')
-        .update({ name: editingName.trim() })
+        .update({ 
+          name: editingName.trim(),
+          funnel_type: editingType,
+        })
         .eq('id', editingId);
 
       if (error) {
@@ -378,11 +406,12 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
 
       toast({
         title: 'Sucesso!',
-        description: 'Nome do funil atualizado',
+        description: 'Funil atualizado',
       });
 
       setEditingId(null);
       setEditingName('');
+      setEditingType('perpetuo');
       setOffersByFunnel({});
       setExpandedFunnels(new Set());
       fetchFunnels();
@@ -400,6 +429,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditingName('');
+    setEditingType('perpetuo');
   };
 
   const handleDeleteClick = (funnel: Funnel) => {
@@ -548,21 +578,31 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Input
             placeholder="Ex: FACE | SKINCARE 35+ ou GOOGLE | EBOOK GRÁTIS"
             value={newFunnelName}
             onChange={(e) => setNewFunnelName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            className="flex-1"
+            className="flex-1 min-w-[200px]"
           />
+          <Select value={newFunnelType} onValueChange={(v) => setNewFunnelType(v as FunnelType)}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="perpetuo">Perpétuo</SelectItem>
+              <SelectItem value="lancamento">Lançamento</SelectItem>
+              <SelectItem value="indefinido">A Definir</SelectItem>
+            </SelectContent>
+          </Select>
           <Button onClick={handleCreate} disabled={!newFunnelName.trim()}>
             <Plus className="h-4 w-4 mr-2" />
             Criar Funil
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Sugestão: ORIGEM | NOME DO FUNIL (ex: FACE | SKINCARE 35+, GOOGLE | EBOOK GRÁTIS)
+          <strong>Perpétuo:</strong> Cubo Mágico (vendas diárias) | <strong>Lançamento:</strong> Campanhas pontuais | <strong>A Definir:</strong> Ofertas aguardando classificação
         </p>
       </Card>
 
@@ -628,7 +668,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                     
                     <div className="flex-1 ml-2">
                       {editingId === funnel.id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Input
                             value={editingName}
                             onChange={(e) => setEditingName(e.target.value)}
@@ -636,9 +676,19 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                               if (e.key === 'Enter') handleSaveEdit(funnel.name);
                               if (e.key === 'Escape') handleCancelEdit();
                             }}
-                            className="h-8 max-w-md"
+                            className="h-8 max-w-[200px]"
                             autoFocus
                           />
+                          <Select value={editingType} onValueChange={(v) => setEditingType(v as FunnelType)}>
+                            <SelectTrigger className="h-8 w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="perpetuo">Perpétuo</SelectItem>
+                              <SelectItem value="lancamento">Lançamento</SelectItem>
+                              <SelectItem value="indefinido">A Definir</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <Button size="icon" variant="ghost" onClick={() => handleSaveEdit(funnel.name)} className="h-8 w-8">
                             <Check className="h-4 w-4 text-green-600" />
                           </Button>
@@ -647,11 +697,16 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                           </Button>
                         </div>
                       ) : (
-                        <CollapsibleTrigger asChild>
-                          <button className="text-left font-medium hover:underline cursor-pointer">
-                            {funnel.name}
-                          </button>
-                        </CollapsibleTrigger>
+                        <div className="flex items-center gap-2">
+                          <CollapsibleTrigger asChild>
+                            <button className="text-left font-medium hover:underline cursor-pointer">
+                              {funnel.name}
+                            </button>
+                          </CollapsibleTrigger>
+                          <Badge variant="outline" className={`text-xs ${FUNNEL_TYPE_COLORS[funnel.funnel_type]}`}>
+                            {FUNNEL_TYPE_LABELS[funnel.funnel_type]}
+                          </Badge>
+                        </div>
                       )}
                     </div>
                     

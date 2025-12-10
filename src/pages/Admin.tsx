@@ -11,12 +11,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SubscriptionsManager } from '@/components/admin/SubscriptionsManager';
 
 interface UserProfile {
   id: string;
@@ -230,61 +232,74 @@ const Admin = () => {
       </header>
 
       <main className="container mx-auto px-6 py-8 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Users className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">Total de Usuários</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <Activity className="w-5 h-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.active}</p>
-                  <p className="text-xs text-muted-foreground">Usuários Ativos</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/10 rounded-lg">
-                  <Shield className="w-5 h-5 text-amber-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.admins}</p>
-                  <p className="text-xs text-muted-foreground">Administradores</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <UserCog className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.canCreate}</p>
-                  <p className="text-xs text-muted-foreground">Podem Criar Projetos</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="users" className="gap-2">
+              <Users className="h-4 w-4" />
+              Usuários
+            </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="gap-2">
+              <CreditCard className="h-4 w-4" />
+              Assinaturas
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Users className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{stats.total}</p>
+                      <p className="text-xs text-muted-foreground">Total de Usuários</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-500/10 rounded-lg">
+                      <Activity className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{stats.active}</p>
+                      <p className="text-xs text-muted-foreground">Usuários Ativos</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-500/10 rounded-lg">
+                      <Shield className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{stats.admins}</p>
+                      <p className="text-xs text-muted-foreground">Administradores</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-lg">
+                      <UserCog className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{stats.canCreate}</p>
+                      <p className="text-xs text-muted-foreground">Podem Criar Projetos</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
         {/* Users Table */}
         <Card>
@@ -376,89 +391,95 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Edit Dialog */}
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Permissões</DialogTitle>
-              <DialogDescription>
-                {editingUser?.full_name || editingUser?.email}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-6 py-4">
-              {/* Role selector - only for super_admin */}
-              {isSuperAdmin && (
-                <div className="space-y-2">
-                  <Label>Função (Role)</Label>
-                  <Select
-                    value={editForm.role}
-                    onValueChange={(value) => setEditForm({ ...editForm, role: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">Usuário</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="super_admin">Super Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">
-                    Define o nível de acesso do usuário no sistema
-                  </p>
-                </div>
-              )}
+            {/* Edit Dialog */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Editar Permissões</DialogTitle>
+                  <DialogDescription>
+                    {editingUser?.full_name || editingUser?.email}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  {/* Role selector - only for super_admin */}
+                  {isSuperAdmin && (
+                    <div className="space-y-2">
+                      <Label>Função (Role)</Label>
+                      <Select
+                        value={editForm.role}
+                        onValueChange={(value) => setEditForm({ ...editForm, role: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">Usuário</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="super_admin">Super Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-sm text-muted-foreground">
+                        Define o nível de acesso do usuário no sistema
+                      </p>
+                    </div>
+                  )}
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Conta Ativa</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Usuários inativos não podem acessar o sistema
-                  </p>
-                </div>
-                <Switch
-                  checked={editForm.is_active}
-                  onCheckedChange={(checked) => setEditForm({ ...editForm, is_active: checked })}
-                />
-              </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Conta Ativa</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Usuários inativos não podem acessar o sistema
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editForm.is_active}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, is_active: checked })}
+                    />
+                  </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Pode Criar Projetos</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Permite criar novos projetos no sistema
-                  </p>
-                </div>
-                <Switch
-                  checked={editForm.can_create_projects}
-                  onCheckedChange={(checked) => setEditForm({ ...editForm, can_create_projects: checked })}
-                />
-              </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Pode Criar Projetos</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Permite criar novos projetos no sistema
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editForm.can_create_projects}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, can_create_projects: checked })}
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Limite de Projetos</Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  0 = Ilimitado
-                </p>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editForm.max_projects}
-                  onChange={(e) => setEditForm({ ...editForm, max_projects: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                Salvar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                  <div className="space-y-2">
+                    <Label>Limite de Projetos</Label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      0 = Ilimitado
+                    </p>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={editForm.max_projects}
+                      onChange={(e) => setEditForm({ ...editForm, max_projects: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Salvar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+
+          <TabsContent value="subscriptions">
+            <SubscriptionsManager />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

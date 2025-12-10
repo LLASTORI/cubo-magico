@@ -574,20 +574,10 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     );
   }
 
-  const metaRightContent = (
-    <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" className="gap-2">
-      {syncing ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <RefreshCw className="h-4 w-4" />
-      )}
-      Sincronizar
-    </Button>
-  );
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader rightContent={metaRightContent} />
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8 space-y-6">
         {/* Filters Card */}
@@ -623,6 +613,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                   )}
                 </Button>
               </MetaAccountSelector>
+              <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" size="sm" className="gap-2">
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Sincronizar
+              </Button>
             </div>
           </div>
         </Card>

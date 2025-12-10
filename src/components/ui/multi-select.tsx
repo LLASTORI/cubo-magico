@@ -84,25 +84,39 @@ export function MultiSelect({
                   className="mr-1 mb-1"
                 >
                   {label}
-                  <button
-                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer hover:bg-muted"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => handleRemove(selected[i], e)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleRemove(selected[i], e as unknown as React.MouseEvent);
+                      }
+                    }}
                   >
                     <X className="h-3 w-3" />
-                  </button>
+                  </span>
                 </Badge>
               ))
             ) : (
               <Badge variant="secondary">
                 {selected.length} selecionados
-                <button
-                  className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer hover:bg-muted"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={handleClearAll}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleClearAll(e as unknown as React.MouseEvent);
+                    }
+                  }}
                 >
                   <X className="h-3 w-3" />
-                </button>
+                </span>
               </Badge>
             )}
           </div>

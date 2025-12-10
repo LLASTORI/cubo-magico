@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown } from 'lucide-react';
+import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Trash2, Check } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -19,6 +19,12 @@ import { Badge } from '@/components/ui/badge';
 import { FullDataSync } from '@/components/FullDataSync';
 import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useNotifications } from '@/hooks/useNotifications';
+import { useTheme } from 'next-themes';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 const META_APP_ID = '845927421602166';
 
@@ -31,6 +37,8 @@ const Settings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isSuperAdmin } = useUserPermissions();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, loading: notificationsLoading } = useNotifications();
+  const { theme, setTheme } = useTheme();
   
   const [fullName, setFullName] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -351,18 +359,15 @@ const Settings = () => {
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-                <ArrowLeft className="h-4 w-4" />
-                Voltar
-              </Link>
-              <div className="flex items-center gap-2">
-                <SettingsIcon className="h-6 w-6 text-primary" />
-                <h1 className="text-xl font-bold text-foreground">Configurações</h1>
-              </div>
+          <div className="flex items-center gap-4">
+            <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Link>
+            <div className="flex items-center gap-2">
+              <SettingsIcon className="h-6 w-6 text-primary" />
+              <h1 className="text-xl font-bold text-foreground">Configurações</h1>
             </div>
-            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -484,64 +489,213 @@ const Settings = () => {
                 </form>
               </CardContent>
             </Card>
+
+            {/* Appearance Card */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Aparência</CardTitle>
+                <CardDescription>
+                  Personalize a aparência do aplicativo.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <Label>Tema</Label>
+                  <div className="grid grid-cols-3 gap-4">
+                    <button
+                      onClick={() => setTheme('light')}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                        theme === 'light' 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Sun className="h-6 w-6" />
+                      <span className="text-sm font-medium">Claro</span>
+                    </button>
+                    <button
+                      onClick={() => setTheme('dark')}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                        theme === 'dark' 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Moon className="h-6 w-6" />
+                      <span className="text-sm font-medium">Escuro</span>
+                    </button>
+                    <button
+                      onClick={() => setTheme('system')}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                        theme === 'system' 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Monitor className="h-6 w-6" />
+                      <span className="text-sm font-medium">Sistema</span>
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Notifications Tab */}
           <TabsContent value="notifications">
-            <Card>
-              <CardHeader>
-                <CardTitle>Preferências de Notificação</CardTitle>
-                <CardDescription>
-                  Configure como você deseja receber notificações.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="emailNotifications">Notificações por email</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receba atualizações importantes por email.
-                    </p>
+            <div className="space-y-6">
+              {/* Recent Notifications */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        Notificações Recentes
+                        {unreadCount > 0 && (
+                          <Badge variant="destructive" className="text-xs">
+                            {unreadCount} nova{unreadCount > 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        Suas notificações mais recentes.
+                      </CardDescription>
+                    </div>
+                    {unreadCount > 0 && (
+                      <Button variant="outline" size="sm" onClick={markAllAsRead}>
+                        <Check className="h-4 w-4 mr-2" />
+                        Marcar todas como lidas
+                      </Button>
+                    )}
                   </div>
-                  <Switch
-                    id="emailNotifications"
-                    checked={preferences?.email_notifications ?? true}
-                    onCheckedChange={(checked) => handleTogglePreference('email_notifications', checked)}
-                    disabled={updatePreferencesMutation.isPending}
-                  />
-                </div>
+                </CardHeader>
+                <CardContent>
+                  {notificationsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Bell className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Nenhuma notificação</p>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[300px] pr-4">
+                      <div className="space-y-3">
+                        {notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
+                              notification.is_read 
+                                ? 'bg-muted/30' 
+                                : 'bg-primary/5 border border-primary/20'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className={`text-sm font-medium ${!notification.is_read ? 'text-primary' : ''}`}>
+                                  {notification.title}
+                                </p>
+                                {!notification.is_read && (
+                                  <span className="h-2 w-2 rounded-full bg-primary" />
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {notification.message}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {formatDistanceToNow(new Date(notification.created_at), { 
+                                  addSuffix: true, 
+                                  locale: ptBR 
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {!notification.is_read && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => markAsRead(notification.id)}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => deleteNotification(notification.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="salesAlerts">Alertas de vendas</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Seja notificado sobre novas vendas em tempo real.
-                    </p>
-                  </div>
-                  <Switch
-                    id="salesAlerts"
-                    checked={preferences?.sales_alerts ?? true}
-                    onCheckedChange={(checked) => handleTogglePreference('sales_alerts', checked)}
-                    disabled={updatePreferencesMutation.isPending}
-                  />
-                </div>
+              <Separator />
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="weeklyReport">Relatório semanal</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receba um resumo semanal das suas métricas.
-                    </p>
+              {/* Notification Preferences */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Preferências de Notificação</CardTitle>
+                  <CardDescription>
+                    Configure como você deseja receber notificações.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="emailNotifications">Notificações por email</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Receba atualizações importantes por email.
+                      </p>
+                    </div>
+                    <Switch
+                      id="emailNotifications"
+                      checked={preferences?.email_notifications ?? true}
+                      onCheckedChange={(checked) => handleTogglePreference('email_notifications', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
                   </div>
-                  <Switch
-                    id="weeklyReport"
-                    checked={preferences?.weekly_report ?? false}
-                    onCheckedChange={(checked) => handleTogglePreference('weekly_report', checked)}
-                    disabled={updatePreferencesMutation.isPending}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="salesAlerts">Alertas de vendas</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Seja notificado sobre novas vendas em tempo real.
+                      </p>
+                    </div>
+                    <Switch
+                      id="salesAlerts"
+                      checked={preferences?.sales_alerts ?? true}
+                      onCheckedChange={(checked) => handleTogglePreference('sales_alerts', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="weeklyReport">Relatório semanal</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Receba um resumo semanal das suas métricas.
+                      </p>
+                    </div>
+                    <Switch
+                      id="weeklyReport"
+                      checked={preferences?.weekly_report ?? false}
+                      onCheckedChange={(checked) => handleTogglePreference('weekly_report', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Integrations Tab */}

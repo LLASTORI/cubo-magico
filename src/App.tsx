@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import NotificationsHistory from "./pages/NotificationsHistory";
 import Admin from "./pages/Admin";
 import MetaAds from "./pages/MetaAds";
+import UndefinedOffers from "./pages/UndefinedOffers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,11 @@ const App = () => (
                 <Route path="/meta-ads" element={
                   <ProtectedRoute>
                     <MetaAds />
+                  </ProtectedRoute>
+                } />
+                <Route path="/undefined-offers" element={
+                  <ProtectedRoute>
+                    <UndefinedOffers />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

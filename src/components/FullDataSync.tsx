@@ -541,7 +541,7 @@ export function FullDataSync() {
             ) : (
               <TrendingUp className="h-5 w-5 mr-2" />
             )}
-            Sincronizar Tudo (24 meses)
+            Sincronizar Tudo
           </Button>
           
           <p className="text-xs text-muted-foreground text-center max-w-md">

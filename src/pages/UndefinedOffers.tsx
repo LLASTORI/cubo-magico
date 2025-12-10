@@ -49,26 +49,49 @@ const UndefinedOffers = () => {
     enabled: !!currentProject?.id,
   });
 
-  // Fetch offer mappings for indefinido funnels
-  const { data: offerMappings } = useQuery({
-    queryKey: ['offer-mappings-indefinido', currentProject?.id, indefinidoFunnels?.map(f => f.id)],
+  // Fetch ALL offer mappings to identify which are in indefinido vs other funnels
+  const { data: allOfferMappings } = useQuery({
+    queryKey: ['all-offer-mappings', currentProject?.id],
     queryFn: async () => {
-      if (!indefinidoFunnels || indefinidoFunnels.length === 0) return [];
-      
-      const funnelIds = indefinidoFunnels.map(f => f.id);
-      const funnelNames = indefinidoFunnels.map(f => f.name);
-      
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('*')
-        .eq('project_id', currentProject!.id)
-        .or(`funnel_id.in.(${funnelIds.join(',')}),id_funil.in.(${funnelNames.map(n => `"${n}"`).join(',')})`);
+        .select('*, funnels!offer_mappings_funnel_id_fkey(id, name, funnel_type)')
+        .eq('project_id', currentProject!.id);
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentProject?.id && !!indefinidoFunnels && indefinidoFunnels.length > 0,
+    enabled: !!currentProject?.id,
   });
+
+  // Separate mappings into indefinido and other funnels
+  const { indefinidoMappings, otherFunnelCodes } = useMemo(() => {
+    if (!allOfferMappings || !indefinidoFunnels) {
+      return { indefinidoMappings: [], otherFunnelCodes: new Set<string>() };
+    }
+
+    const indefinidoFunnelIds = new Set(indefinidoFunnels.map(f => f.id));
+    const indefinidoFunnelNames = new Set(indefinidoFunnels.map(f => f.name));
+    
+    const indefinido: typeof allOfferMappings = [];
+    const otherCodes = new Set<string>();
+
+    allOfferMappings.forEach(mapping => {
+      const isIndefinido = 
+        (mapping.funnel_id && indefinidoFunnelIds.has(mapping.funnel_id)) ||
+        indefinidoFunnelNames.has(mapping.id_funil) ||
+        (mapping.funnels as any)?.funnel_type === 'indefinido';
+
+      if (isIndefinido) {
+        indefinido.push(mapping);
+      } else if (mapping.codigo_oferta) {
+        // This code is mapped to a perpetuo or lancamento funnel
+        otherCodes.add(mapping.codigo_oferta);
+      }
+    });
+
+    return { indefinidoMappings: indefinido, otherFunnelCodes: otherCodes };
+  }, [allOfferMappings, indefinidoFunnels]);
 
   // Fetch sales data for the period
   const { data: salesData, isLoading: loadingSales } = useQuery({
@@ -95,13 +118,10 @@ const UndefinedOffers = () => {
 
   // Calculate metrics for each offer
   const offerMetrics = useMemo(() => {
-    if (!salesData || !offerMappings) return [];
+    if (!salesData) return [];
 
     // Get offer codes from indefinido funnels
-    const indefinidoOfferCodes = new Set(offerMappings.map(m => m.codigo_oferta));
-    
-    // Also find sales that aren't mapped to any offer (truly undefined)
-    const allMappedCodes = new Set(offerMappings.map(m => m.codigo_oferta));
+    const indefinidoOfferCodes = new Set(indefinidoMappings.map(m => m.codigo_oferta));
     
     // Group sales by offer code
     const salesByOffer: Record<string, { count: number; revenue: number; uniqueBuyers: Set<string> }> = {};
@@ -109,8 +129,14 @@ const UndefinedOffers = () => {
     salesData.forEach(sale => {
       const code = sale.offer_code || 'SEM_CODIGO';
       
-      // Only include offers that are in indefinido funnels OR completely unmapped
-      if (!indefinidoOfferCodes.has(code) && allMappedCodes.has(code)) return;
+      // Skip offers that are mapped to perpetuo or lancamento funnels
+      if (otherFunnelCodes.has(code)) return;
+      
+      // Only include: offers in indefinido funnels OR completely unmapped offers
+      const isInIndefinido = indefinidoOfferCodes.has(code);
+      const isUnmapped = !otherFunnelCodes.has(code) && !indefinidoOfferCodes.has(code);
+      
+      if (!isInIndefinido && !isUnmapped) return;
       
       if (!salesByOffer[code]) {
         salesByOffer[code] = { count: 0, revenue: 0, uniqueBuyers: new Set() };
@@ -131,7 +157,7 @@ const UndefinedOffers = () => {
     // Transform to array with metrics
     return Object.entries(salesByOffer)
       .map(([code, data]) => {
-        const mapping = offerMappings.find(m => m.codigo_oferta === code);
+        const mapping = indefinidoMappings.find(m => m.codigo_oferta === code);
         const funnel = indefinidoFunnels?.find(f => 
           f.id === mapping?.funnel_id || f.name === mapping?.id_funil
         );
@@ -147,7 +173,7 @@ const UndefinedOffers = () => {
         };
       })
       .sort((a, b) => b.receita - a.receita);
-  }, [salesData, offerMappings, indefinidoFunnels]);
+  }, [salesData, indefinidoMappings, otherFunnelCodes, indefinidoFunnels]);
 
   // Summary totals
   const totals = useMemo(() => {

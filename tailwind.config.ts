@@ -108,6 +108,12 @@ export default {
           "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        heroCube: {
+          "0%": { opacity: "0", transform: "scale(0.5) rotate(-180deg)" },
+          "60%": { opacity: "1", transform: "scale(1.1) rotate(10deg)" },
+          "80%": { transform: "scale(0.95) rotate(-5deg)" },
+          "100%": { opacity: "1", transform: "scale(1) rotate(0deg)" },
+        },
         cubeRotate: {
           "0%": { transform: "rotateY(0deg) rotateX(0deg)" },
           "25%": { transform: "rotateY(90deg) rotateX(0deg)" },
@@ -135,6 +141,7 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fadeIn 0.5s ease-out",
+        "hero-cube": "heroCube 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
         "cube-rotate": "cubeRotate 8s ease-in-out infinite",
         "cube-spin": "cubeSpin 3s linear infinite",
         "cube-intro": "cubeIntro 2s ease-out forwards",

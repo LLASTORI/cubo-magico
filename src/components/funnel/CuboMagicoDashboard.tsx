@@ -116,17 +116,18 @@ export function CuboMagicoDashboard({
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-  // Fetch funnels with config - show ALL funnels
+  // Fetch funnels with config - ONLY perpetuo funnels (exclude 'A Definir' and 'Lançamento')
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
-    queryKey: ['funnels-with-config', projectId],
+    queryKey: ['funnels-with-config-perpetuo', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnels')
         .select('id, name, roas_target, campaign_name_pattern')
-        .eq('project_id', projectId);
+        .eq('project_id', projectId)
+        .eq('funnel_type', 'perpetuo');
       
       if (error) throw error;
-      console.log(`[CuboMagico] Funnels loaded: ${data?.length || 0}`);
+      console.log(`[CuboMagico] Perpetuo funnels loaded: ${data?.length || 0}`);
       return (data as FunnelWithConfig[]) || [];
     },
     enabled: !!projectId,

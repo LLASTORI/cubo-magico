@@ -141,13 +141,15 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const enabled = !!projectId;
 
   // STABLE individual queries - no useQueries to avoid hooks order issues
+  // Filter only 'perpetuo' funnels (exclude 'A Definir' and 'Lançamento')
   const funnelsQuery = useQuery({
-    queryKey: ['funnels', projectId],
+    queryKey: ['funnels-perpetuo', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnels')
         .select('id, name, campaign_name_pattern, roas_target')
-        .eq('project_id', projectId!);
+        .eq('project_id', projectId!)
+        .eq('funnel_type', 'perpetuo');
       if (error) throw error;
       return (data as FunnelConfig[]) || [];
     },

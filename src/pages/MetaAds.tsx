@@ -468,7 +468,16 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     setNeedsSync(true);
   };
 
-  // Sync data from Meta API (uses existing active accounts)
+  // Helper to format dates in readable format
+  const formatDateRange = () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const startStr = format(start, "dd MMM", { locale: ptBR });
+    const endStr = format(end, "dd MMM", { locale: ptBR });
+    return `${startStr} - ${endStr}`;
+  };
+
+  // Sync data from Meta API AND Hotmart (uses existing active accounts)
   const handleSyncData = async () => {
     if (!projectId || !metaCredentials) return;
 
@@ -483,7 +492,38 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
 
     setNeedsSync(false); // Clear the needs sync flag
     const accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
+    
+    // Sync Meta Ads
     await handleSyncWithAccounts(accountIdsToSync);
+    
+    // Also sync Hotmart sales
+    try {
+      const startMs = new Date(startDate).getTime();
+      const endMs = new Date(endDate).getTime();
+      
+      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          projectId,
+          action: 'sync_sales',
+          startDate: startMs,
+          endDate: endMs,
+        },
+      });
+      
+      if (error) {
+        console.error('Hotmart sync error:', error);
+      } else {
+        const total = (data?.synced || 0) + (data?.updated || 0);
+        if (total > 0) {
+          toast({
+            title: 'Hotmart sincronizado',
+            description: `${total} vendas processadas`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Hotmart sync error:', err);
+    }
   };
 
   // Calculate totals from insights
@@ -593,7 +633,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 onClick={() => setShowFilters(!showFilters)}
               >
                 <Filter className="h-4 w-4" />
-                {startDate} - {endDate}
+                {formatDateRange()}
               </Button>
               <Button onClick={handleSyncData} disabled={syncing || isMetaExpired} variant="outline" size="sm" className="gap-2">
                 {syncing ? (

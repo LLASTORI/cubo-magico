@@ -15,6 +15,8 @@ export const CuboLogo: React.FC<CuboLogoProps> = ({
   interactive = false
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isInitialAnimation, setIsInitialAnimation] = useState(true);
+  const [colorIndex, setColorIndex] = useState(0);
   
   const sizeMap = {
     sm: 'w-8 h-8',
@@ -23,20 +25,41 @@ export const CuboLogo: React.FC<CuboLogoProps> = ({
     xl: 'w-28 h-28 md:w-36 md:h-36 lg:w-40 lg:h-40',
   };
 
-  // Color patterns - shuffle on hover
-  const defaultColors = [
-    'bg-cube-blue', 'bg-cube-red', 'bg-cube-green',
-    'bg-cube-yellow', 'bg-cube-white', 'bg-cube-orange',
-    'bg-cube-red', 'bg-cube-blue', 'bg-cube-green'
-  ];
-  
-  const hoveredColors = [
-    'bg-cube-orange', 'bg-cube-green', 'bg-cube-yellow',
-    'bg-cube-blue', 'bg-cube-white', 'bg-cube-red',
-    'bg-cube-green', 'bg-cube-yellow', 'bg-cube-blue'
+  // Color patterns - cycle through during animation
+  const colorPatterns = [
+    ['bg-cube-blue', 'bg-cube-red', 'bg-cube-green', 'bg-cube-yellow', 'bg-cube-white', 'bg-cube-orange', 'bg-cube-red', 'bg-cube-blue', 'bg-cube-green'],
+    ['bg-cube-orange', 'bg-cube-green', 'bg-cube-yellow', 'bg-cube-blue', 'bg-cube-white', 'bg-cube-red', 'bg-cube-green', 'bg-cube-yellow', 'bg-cube-blue'],
+    ['bg-cube-red', 'bg-cube-yellow', 'bg-cube-blue', 'bg-cube-green', 'bg-cube-white', 'bg-cube-orange', 'bg-cube-yellow', 'bg-cube-red', 'bg-cube-orange'],
+    ['bg-cube-green', 'bg-cube-blue', 'bg-cube-orange', 'bg-cube-red', 'bg-cube-white', 'bg-cube-yellow', 'bg-cube-blue', 'bg-cube-green', 'bg-cube-red'],
   ];
 
-  const colors = isHovered ? hoveredColors : defaultColors;
+  // Animate colors during initial animation
+  React.useEffect(() => {
+    if (!interactive) return;
+    
+    // Cycle colors during initial 3 seconds
+    const colorInterval = setInterval(() => {
+      setColorIndex(prev => (prev + 1) % colorPatterns.length);
+    }, 500);
+
+    // Stop after 3 seconds
+    const stopTimer = setTimeout(() => {
+      setIsInitialAnimation(false);
+      clearInterval(colorInterval);
+      setColorIndex(0);
+    }, 3000);
+
+    return () => {
+      clearInterval(colorInterval);
+      clearTimeout(stopTimer);
+    };
+  }, [interactive]);
+
+  const colors = isHovered 
+    ? colorPatterns[1] 
+    : isInitialAnimation 
+      ? colorPatterns[colorIndex] 
+      : colorPatterns[0];
 
   return (
     <div 

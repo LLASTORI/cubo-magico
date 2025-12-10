@@ -13,7 +13,7 @@ import {
   BarChart3,
   Filter
 } from "lucide-react";
-import { HotmartSyncManager } from "@/components/HotmartSyncManager";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -262,15 +262,6 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
         </div>
       ) : !hasRevenueData && hasSpendData ? (
         <div className="space-y-6">
-          {/* Hotmart Sync Manager */}
-          <HotmartSyncManager 
-            projectId={projectId}
-            startDate={startDateObj}
-            endDate={endDateObj}
-            onSyncComplete={() => {
-              refetchSales();
-            }}
-          />
 
           {/* Show only spend summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -314,15 +305,6 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Hotmart Sync Manager */}
-          <HotmartSyncManager 
-            projectId={projectId}
-            startDate={startDateObj}
-            endDate={endDateObj}
-            onSyncComplete={() => {
-              refetchSales();
-            }}
-          />
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">

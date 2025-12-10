@@ -10,6 +10,9 @@ export interface UserPermissions {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   loading: boolean;
+  hasActiveSubscription: boolean;
+  subscriptionStatus: string | null;
+  planName: string | null;
 }
 
 export const useUserPermissions = () => {
@@ -22,6 +25,9 @@ export const useUserPermissions = () => {
     isAdmin: false,
     isSuperAdmin: false,
     loading: true,
+    hasActiveSubscription: false,
+    subscriptionStatus: null,
+    planName: null,
   });
 
   useEffect(() => {
@@ -46,6 +52,13 @@ export const useUserPermissions = () => {
           .eq('user_id', user.id)
           .maybeSingle();
 
+        // Fetch subscription with plan
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select(`*, plan:plans(*)`)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
         // Count current projects
         const { count } = await supabase
           .from('projects')
@@ -54,17 +67,39 @@ export const useUserPermissions = () => {
 
         const isAdmin = roleData?.role === 'admin';
         const isSuperAdmin = roleData?.role === 'super_admin';
-        const canCreate = profile?.can_create_projects ?? false;
-        const maxProjects = profile?.max_projects ?? 0;
         const projectCount = count ?? 0;
 
+        // Check subscription status
+        const now = new Date();
+        let hasActiveSubscription = false;
+        let maxProjectsFromSub = 0;
+        let subscriptionStatus = subscription?.status || null;
+        let planName = subscription?.plan?.name || null;
+
+        if (subscription) {
+          const isExpired = subscription.expires_at && new Date(subscription.expires_at) < now;
+          const isTrialExpired = subscription.is_trial && subscription.trial_ends_at && new Date(subscription.trial_ends_at) < now;
+          
+          if (!isExpired && !isTrialExpired && (subscription.status === 'active' || subscription.status === 'trial')) {
+            hasActiveSubscription = true;
+            maxProjectsFromSub = subscription.plan?.max_projects ?? 0;
+          } else if (isExpired || isTrialExpired) {
+            subscriptionStatus = 'expired';
+          }
+        }
+
+        // Determine max projects: subscription takes precedence, then profile
+        const maxProjects = hasActiveSubscription ? maxProjectsFromSub : (profile?.max_projects ?? 0);
+
         // Super admin can always create projects
-        // User can create if: is active, has permission, and hasn't reached limit (0 = unlimited)
+        // User can create if: has active subscription OR (legacy: is active, has permission, and hasn't reached limit)
         const canCreateProjects = 
           isSuperAdmin ||
-          ((profile?.is_active !== false) && 
-          canCreate && 
-          (maxProjects === 0 || projectCount < maxProjects));
+          (hasActiveSubscription && (maxProjects === 0 || projectCount < maxProjects)) ||
+          (!hasActiveSubscription && 
+            (profile?.is_active !== false) && 
+            (profile?.can_create_projects ?? false) && 
+            ((profile?.max_projects ?? 0) === 0 || projectCount < (profile?.max_projects ?? 0)));
 
         setPermissions({
           canCreateProjects,
@@ -74,6 +109,9 @@ export const useUserPermissions = () => {
           isAdmin,
           isSuperAdmin,
           loading: false,
+          hasActiveSubscription,
+          subscriptionStatus,
+          planName,
         });
       } catch (error) {
         console.error('Error fetching permissions:', error);
@@ -93,26 +131,53 @@ export const useUserPermissions = () => {
       .eq('id', user.id)
       .maybeSingle();
 
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select(`*, plan:plans(*)`)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
     const { count } = await supabase
       .from('projects')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
-    const canCreate = profile?.can_create_projects ?? false;
-    const maxProjects = profile?.max_projects ?? 0;
     const projectCount = count ?? 0;
+    const now = new Date();
+    
+    let hasActiveSubscription = false;
+    let maxProjectsFromSub = 0;
+
+    if (subscription) {
+      const isExpired = subscription.expires_at && new Date(subscription.expires_at) < now;
+      const isTrialExpired = subscription.is_trial && subscription.trial_ends_at && new Date(subscription.trial_ends_at) < now;
+      
+      if (!isExpired && !isTrialExpired && (subscription.status === 'active' || subscription.status === 'trial')) {
+        hasActiveSubscription = true;
+        maxProjectsFromSub = subscription.plan?.max_projects ?? 0;
+      }
+    }
+
+    const maxProjects = hasActiveSubscription ? maxProjectsFromSub : (profile?.max_projects ?? 0);
 
     setPermissions(prev => ({
       ...prev,
       canCreateProjects: 
-        (profile?.is_active !== false) && 
-        canCreate && 
-        (maxProjects === 0 || projectCount < maxProjects),
+        prev.isSuperAdmin ||
+        (hasActiveSubscription && (maxProjects === 0 || projectCount < maxProjects)) ||
+        (!hasActiveSubscription && 
+          (profile?.is_active !== false) && 
+          (profile?.can_create_projects ?? false) && 
+          ((profile?.max_projects ?? 0) === 0 || projectCount < (profile?.max_projects ?? 0))),
       maxProjects,
       currentProjectCount: projectCount,
       isActive: profile?.is_active ?? true,
+      hasActiveSubscription,
+      subscriptionStatus: subscription?.status || null,
+      planName: subscription?.plan?.name || null,
     }));
   };
 
   return { ...permissions, refreshPermissions };
 };
+

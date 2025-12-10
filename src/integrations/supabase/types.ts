@@ -921,6 +921,39 @@ export type Database = {
           },
         ]
       }
+      plans: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          max_projects: number
+          name: string
+          price_cents: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_projects?: number
+          name: string
+          price_cents?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_projects?: number
+          name?: string
+          price_cents?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1113,6 +1146,59 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_trial: boolean | null
+          notes: string | null
+          plan_id: string
+          starts_at: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_trial?: boolean | null
+          notes?: string | null
+          plan_id: string
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_trial?: boolean | null
+          notes?: string | null
+          plan_id?: string
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -1174,10 +1260,12 @@ export type Database = {
       count_project_members: { Args: { _project_id: string }; Returns: number }
       count_user_projects: { Args: { _user_id: string }; Returns: number }
       get_user_email: { Args: { _user_id: string }; Returns: string }
+      get_user_max_projects: { Args: { _user_id: string }; Returns: number }
       get_user_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["project_role"]
       }
+      has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
       has_project_access: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
@@ -1195,6 +1283,12 @@ export type Database = {
       app_role: "admin" | "user" | "super_admin"
       invite_status: "pending" | "accepted" | "rejected" | "expired"
       project_role: "owner" | "manager" | "operator"
+      subscription_status:
+        | "active"
+        | "trial"
+        | "expired"
+        | "cancelled"
+        | "pending"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1325,6 +1419,13 @@ export const Constants = {
       app_role: ["admin", "user", "super_admin"],
       invite_status: ["pending", "accepted", "rejected", "expired"],
       project_role: ["owner", "manager", "operator"],
+      subscription_status: [
+        "active",
+        "trial",
+        "expired",
+        "cancelled",
+        "pending",
+      ],
     },
   },
 } as const

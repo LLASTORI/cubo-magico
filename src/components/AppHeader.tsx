@@ -14,9 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
-import NotificationsDropdown from "@/components/NotificationsDropdown";
 import ProjectSelector from "@/components/ProjectSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -31,15 +29,11 @@ import { useProjectMembers } from "@/hooks/useProjectMembers";
 
 interface AppHeaderProps {
   pageSubtitle?: string;
-  showNotifications?: boolean;
-  showThemeToggle?: boolean;
   rightContent?: React.ReactNode;
 }
 
 export const AppHeader = ({ 
   pageSubtitle,
-  showNotifications = true,
-  showThemeToggle = true,
   rightContent
 }: AppHeaderProps) => {
   const navigate = useNavigate();
@@ -197,8 +191,6 @@ export const AppHeader = ({
             {rightContent}
 
             {/* User actions */}
-            {showNotifications && <NotificationsDropdown />}
-            {showThemeToggle && <ThemeToggle />}
             <UserAvatar size="sm" />
             <Button
               onClick={handleLogout}

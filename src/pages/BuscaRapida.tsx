@@ -388,8 +388,6 @@ const BuscaRapida = () => {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader 
-        showNotifications={false}
-        showThemeToggle={false}
         rightContent={
           salesData && currentProject && (
             <Button

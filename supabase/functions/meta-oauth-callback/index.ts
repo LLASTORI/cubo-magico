@@ -1,8 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { encode as hexEncode } from "https://deno.land/std@0.208.0/encoding/hex.ts"
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// SECURITY: Restrict CORS to specific origins
+const ALLOWED_ORIGINS = [
+  'https://cubomagico.leandrolastori.com.br',
+  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
+]
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(o => origin.startsWith(o.replace('https://', '').split('.')[0]) || origin === o)
+    ? origin
+    : ALLOWED_ORIGINS[0]
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 const META_APP_ID = Deno.env.get('META_APP_ID')
@@ -10,7 +23,44 @@ const META_APP_SECRET = Deno.env.get('META_APP_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+// SECURITY: Generate HMAC signature for state validation
+async function generateHmac(data: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(META_APP_SECRET || 'fallback-secret')
+  const messageData = encoder.encode(data)
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  
+  const signature = await crypto.subtle.sign('HMAC', key, messageData)
+  return new TextDecoder().decode(hexEncode(new Uint8Array(signature)))
+}
+
+// SECURITY: Validate HMAC signature
+async function validateHmac(data: string, signature: string): Promise<boolean> {
+  const expectedSignature = await generateHmac(data)
+  return signature === expectedSignature
+}
+
+// Helper to create signed state
+export async function createSignedState(projectId: string, userId: string, redirectUrl: string): Promise<string> {
+  const timestamp = Date.now()
+  const stateData = { projectId, userId, redirectUrl, timestamp }
+  const stateJson = JSON.stringify(stateData)
+  const signature = await generateHmac(stateJson)
+  
+  return btoa(JSON.stringify({ data: stateData, sig: signature }))
+}
+
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -19,31 +69,67 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url)
     const code = url.searchParams.get('code')
-    const state = url.searchParams.get('state') // Contains projectId and userId
+    const state = url.searchParams.get('state') // Contains projectId, userId and signature
     const error = url.searchParams.get('error')
     const errorDescription = url.searchParams.get('error_description')
 
-    console.log('OAuth callback received:', { code: !!code, state, error })
+    console.log('OAuth callback received:', { code: !!code, state: !!state, error })
 
     // Parse state first to get redirect URL
-    let stateData: { projectId: string; userId: string; redirectUrl: string } | null = null
+    let stateData: { projectId: string; userId: string; redirectUrl: string; timestamp: number } | null = null
+    let signature: string | null = null
+    
     if (state) {
       try {
-        stateData = JSON.parse(atob(state))
+        const parsed = JSON.parse(atob(state))
+        // Check if it's the new signed format
+        if (parsed.data && parsed.sig) {
+          stateData = parsed.data
+          signature = parsed.sig
+        } else {
+          // Legacy format (backwards compatibility)
+          stateData = parsed
+          console.warn('⚠️ Legacy state format detected (no signature)')
+        }
       } catch (e) {
         console.error('Invalid state:', e)
       }
     }
+    
     const baseRedirectUrl = stateData?.redirectUrl || `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
 
     if (error) {
       console.error('OAuth error:', error, errorDescription)
-      return redirectWithError(`Erro no login: ${errorDescription || error}`, baseRedirectUrl)
+      return redirectWithError(`Erro no login: ${errorDescription || error}`, baseRedirectUrl, corsHeaders)
     }
 
     if (!code || !stateData) {
       console.error('Missing code or state')
-      return redirectWithError('Parâmetros inválidos', baseRedirectUrl)
+      return redirectWithError('Parâmetros inválidos', baseRedirectUrl, corsHeaders)
+    }
+
+    // SECURITY: Validate HMAC signature if present
+    if (signature) {
+      const stateJson = JSON.stringify(stateData)
+      const isValid = await validateHmac(stateJson, signature)
+      
+      if (!isValid) {
+        console.error('❌ Invalid state signature - potential CSRF attack')
+        return redirectWithError('Assinatura inválida. Tente novamente.', baseRedirectUrl, corsHeaders)
+      }
+      
+      // Check timestamp (state expires after 10 minutes)
+      const stateAge = Date.now() - stateData.timestamp
+      const maxAge = 10 * 60 * 1000 // 10 minutes
+      
+      if (stateAge > maxAge) {
+        console.error('❌ State expired:', stateAge, 'ms')
+        return redirectWithError('Sessão expirada. Tente novamente.', baseRedirectUrl, corsHeaders)
+      }
+      
+      console.log('✅ State signature validated successfully')
+    } else {
+      console.warn('⚠️ No signature in state - accepting for backwards compatibility')
     }
 
     const { projectId, userId, redirectUrl } = stateData
@@ -64,7 +150,7 @@ Deno.serve(async (req) => {
 
     if (tokenData.error) {
       console.error('Token exchange error:', tokenData.error)
-      return redirectWithError(`Erro ao obter token: ${tokenData.error.message}`, redirectUrl)
+      return redirectWithError(`Erro ao obter token: ${tokenData.error.message}`, redirectUrl, corsHeaders)
     }
 
     const { access_token, expires_in } = tokenData
@@ -118,10 +204,10 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       console.error('Database error:', upsertError)
-      return redirectWithError('Erro ao salvar credenciais', redirectUrl)
+      return redirectWithError('Erro ao salvar credenciais', redirectUrl, corsHeaders)
     }
 
-    console.log('Credentials saved successfully')
+    console.log('✅ Credentials saved successfully')
 
     // Redirect back to app with success
     const successUrl = new URL(redirectUrl)
@@ -139,11 +225,11 @@ Deno.serve(async (req) => {
     console.error('Unexpected error:', error)
     // Use a fallback URL for unexpected errors
     const fallbackUrl = `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
-    return redirectWithError('Erro inesperado', fallbackUrl)
+    return redirectWithError('Erro inesperado', fallbackUrl, getCorsHeaders(null))
   }
 })
 
-function redirectWithError(message: string, redirectUrl: string): Response {
+function redirectWithError(message: string, redirectUrl: string, corsHeaders: Record<string, string>): Response {
   // Redirect to app with error
   const errorUrl = new URL(redirectUrl)
   errorUrl.searchParams.set('meta_error', message)

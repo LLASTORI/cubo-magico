@@ -23,6 +23,7 @@ import MetaAds from "./pages/MetaAds";
 import UndefinedOffers from "./pages/UndefinedOffers";
 import LaunchDashboard from "./pages/LaunchDashboard";
 import AnaliseMensal from "./pages/AnaliseMensal";
+import AgencyDashboard from "./pages/AgencyDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -104,6 +105,11 @@ const App = () => (
                 <Route path="/analise-mensal" element={
                   <ProtectedRoute>
                     <AnaliseMensal />
+                  </ProtectedRoute>
+                } />
+                <Route path="/agencia" element={
+                  <ProtectedRoute>
+                    <AgencyDashboard />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

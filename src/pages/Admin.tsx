@@ -13,13 +13,14 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAvatar } from '@/components/UserAvatar';
 import { SubscriptionsManager } from '@/components/admin/SubscriptionsManager';
 import { NotificationSettingsManager } from '@/components/admin/NotificationSettingsManager';
+import { ProjectsManager } from '@/components/admin/ProjectsManager';
 
 interface UserProfile {
   id: string;
@@ -243,6 +244,12 @@ const Admin = () => {
               <CreditCard className="h-4 w-4" />
               Assinaturas
             </TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger value="projects" className="gap-2">
+                <FolderKanban className="h-4 w-4" />
+                Projetos
+              </TabsTrigger>
+            )}
             {isSuperAdmin && (
               <TabsTrigger value="notifications" className="gap-2">
                 <Bell className="h-4 w-4" />
@@ -486,6 +493,12 @@ const Admin = () => {
           <TabsContent value="subscriptions">
             <SubscriptionsManager />
           </TabsContent>
+
+          {isSuperAdmin && (
+            <TabsContent value="projects">
+              <ProjectsManager />
+            </TabsContent>
+          )}
 
           {isSuperAdmin && (
             <TabsContent value="notifications">

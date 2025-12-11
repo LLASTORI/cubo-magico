@@ -59,6 +59,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       return data || [];
     },
     enabled: !!projectId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch funnels
@@ -76,6 +78,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       return data || [];
     },
     enabled: !!projectId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch offer mappings
@@ -93,6 +97,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       return data || [];
     },
     enabled: !!projectId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch active meta ad accounts first (same as useFunnelData)
@@ -111,6 +117,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       return (data || []).map(a => a.account_id).sort();
     },
     enabled: !!projectId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch meta insights filtered by active accounts (same as useFunnelData)
@@ -154,6 +162,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       return allData;
     },
     enabled: !!projectId && !!activeAccountIds && activeAccountIds.length > 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch meta campaigns for name pattern matching (with pagination)
@@ -191,6 +201,8 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       return allData;
     },
     enabled: !!projectId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Calculate category metrics

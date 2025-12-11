@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_notification_settings: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          setting_description: string | null
+          setting_key: string
+          setting_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          setting_description?: string | null
+          setting_key: string
+          setting_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          setting_description?: string | null
+          setting_key?: string
+          setting_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       funnel_changes: {
         Row: {
           anotacoes: string | null

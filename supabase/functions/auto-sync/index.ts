@@ -24,62 +24,101 @@ interface SyncResult {
   error?: string
 }
 
+interface NotificationSetting {
+  setting_key: string
+  is_enabled: boolean
+}
+
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Send failure notification email to superadmin
-async function sendFailureNotification(
+// Check if a notification type is enabled
+async function isNotificationEnabled(supabase: any, settingKey: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('admin_notification_settings')
+      .select('is_enabled')
+      .eq('setting_key', settingKey)
+      .maybeSingle()
+
+    if (error || !data) return true // Default to enabled if not found
+    return data.is_enabled
+  } catch {
+    return true // Default to enabled on error
+  }
+}
+
+// Get superadmin user IDs and emails
+async function getSuperAdmins(supabase: any): Promise<{ userIds: string[], emails: string[] }> {
+  const { data: superAdmins, error: superAdminsError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('role', 'super_admin')
+
+  if (superAdminsError || !superAdmins || superAdmins.length === 0) {
+    console.log('⚠️ No superadmins found')
+    return { userIds: [], emails: [] }
+  }
+
+  const userIds = (superAdmins as any[]).map(sa => sa.user_id)
+  
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, email')
+    .in('id', userIds)
+
+  if (profilesError || !profiles || profiles.length === 0) {
+    return { userIds, emails: [] }
+  }
+
+  const emails = (profiles as any[]).map(p => p.email).filter(Boolean) as string[]
+  return { userIds, emails }
+}
+
+// Create in-app notifications for superadmins
+async function createInAppNotifications(
   supabase: any,
+  userIds: string[],
+  title: string,
+  message: string,
+  type: string,
+  metadata: Record<string, any> = {}
+) {
+  if (userIds.length === 0) return
+
+  const notifications = userIds.map(userId => ({
+    user_id: userId,
+    title,
+    message,
+    type,
+    metadata,
+    is_read: false,
+  }))
+
+  const { error } = await supabase
+    .from('notifications')
+    .insert(notifications)
+
+  if (error) {
+    console.error('❌ Failed to create in-app notifications:', error)
+  } else {
+    console.log(`📱 In-app notifications created for ${userIds.length} superadmin(s)`)
+  }
+}
+
+// Send failure notification email to superadmin
+async function sendFailureNotificationEmail(
+  emails: string[],
   failedProjects: SyncResult[],
   totalProjects: number
 ) {
-  if (!RESEND_API_KEY) {
-    console.log('⚠️ RESEND_API_KEY not configured, skipping email notification')
+  if (!RESEND_API_KEY || emails.length === 0) {
+    console.log('⚠️ RESEND_API_KEY not configured or no emails, skipping email notification')
     return
   }
 
   try {
-    // Get superadmin emails
-    const { data: superAdmins, error: superAdminsError } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'super_admin')
-
-    if (superAdminsError || !superAdmins || superAdmins.length === 0) {
-      console.log('⚠️ No superadmins found to notify')
-      return
-    }
-
-    // Get emails from profiles
-    const userIds = (superAdmins as any[]).map(sa => sa.user_id)
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('email')
-      .in('id', userIds)
-      .not('email', 'is', null)
-
-    if (profilesError || !profiles || profiles.length === 0) {
-      console.log('⚠️ No superadmin emails found')
-      return
-    }
-
-    const emails = (profiles as any[]).map(p => p.email).filter(Boolean) as string[]
-    
-    if (emails.length === 0) {
-      console.log('⚠️ No valid superadmin emails')
-      return
-    }
-
     const resend = new Resend(RESEND_API_KEY)
-
-    // Build failure details
-    const failureDetails = failedProjects.map(fp => {
-      const issues: string[] = []
-      if (fp.metaStatus === 'error') issues.push('Meta Ads')
-      if (fp.hotmartStatus === 'error') issues.push('Hotmart')
-      return `• ${fp.projectName}: ${issues.join(', ')} ${fp.error ? `(${fp.error})` : ''}`
-    }).join('\n')
-
     const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 
     const htmlContent = `
@@ -162,7 +201,97 @@ async function sendFailureNotification(
       console.log(`📧 Notification email sent to ${emails.length} superadmin(s)`)
     }
   } catch (error) {
-    console.error('❌ Error sending notification:', error)
+    console.error('❌ Error sending email notification:', error)
+  }
+}
+
+// Send failure notifications (email and in-app)
+async function sendFailureNotifications(
+  supabase: any,
+  failedProjects: SyncResult[],
+  totalProjects: number
+) {
+  const { userIds, emails } = await getSuperAdmins(supabase)
+  
+  if (userIds.length === 0) {
+    console.log('⚠️ No superadmins found to notify')
+    return
+  }
+
+  const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  const projectNames = failedProjects.map(fp => fp.projectName).join(', ')
+
+  // Check and send in-app notification
+  const inAppEnabled = await isNotificationEnabled(supabase, 'sync_failure_inapp')
+  if (inAppEnabled) {
+    await createInAppNotifications(
+      supabase,
+      userIds,
+      '⚠️ Falha na Sincronização Automática',
+      `${failedProjects.length} de ${totalProjects} projeto(s) falharam: ${projectNames}`,
+      'sync_failure',
+      { 
+        failedCount: failedProjects.length, 
+        totalCount: totalProjects,
+        failedProjects: failedProjects.map(fp => ({
+          name: fp.projectName,
+          metaStatus: fp.metaStatus,
+          hotmartStatus: fp.hotmartStatus,
+          error: fp.error
+        })),
+        timestamp 
+      }
+    )
+  }
+
+  // Check and send email notification
+  const emailEnabled = await isNotificationEnabled(supabase, 'sync_failure_email')
+  if (emailEnabled && emails.length > 0) {
+    await sendFailureNotificationEmail(emails, failedProjects, totalProjects)
+  }
+}
+
+// Send critical error notifications
+async function sendCriticalErrorNotifications(
+  supabase: any,
+  errorMessage: string
+) {
+  const { userIds, emails } = await getSuperAdmins(supabase)
+  const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+  // Check and send in-app notification
+  const inAppEnabled = await isNotificationEnabled(supabase, 'sync_critical_inapp')
+  if (inAppEnabled && userIds.length > 0) {
+    await createInAppNotifications(
+      supabase,
+      userIds,
+      '🚨 Erro Crítico na Sincronização',
+      `A sincronização automática falhou completamente: ${errorMessage}`,
+      'sync_critical',
+      { error: errorMessage, timestamp }
+    )
+  }
+
+  // Check and send email notification
+  const emailEnabled = await isNotificationEnabled(supabase, 'sync_critical_email')
+  if (emailEnabled && emails.length > 0 && RESEND_API_KEY) {
+    try {
+      const resend = new Resend(RESEND_API_KEY)
+      await resend.emails.send({
+        from: 'Cubo Mágico <onboarding@resend.dev>',
+        to: emails,
+        subject: '🚨 Erro Crítico na Sincronização Automática',
+        html: `
+          <h2>🚨 Erro Crítico</h2>
+          <p>A sincronização automática falhou completamente em ${timestamp}:</p>
+          <pre style="background: #fee2e2; padding: 15px; border-radius: 6px; color: #dc2626;">${errorMessage}</pre>
+          <p>Por favor, verifique os logs da função para mais detalhes.</p>
+        `,
+      })
+      console.log('📧 Critical error notification sent')
+    } catch (error) {
+      console.error('Failed to send critical error email:', error)
+    }
   }
 }
 
@@ -368,8 +497,8 @@ Deno.serve(async (req) => {
     )
 
     if (failedProjects.length > 0 && sendNotification) {
-      console.log(`\n📧 Sending failure notification for ${failedProjects.length} project(s)...`)
-      await sendFailureNotification(supabase, failedProjects, results.length)
+      console.log(`\n📧 Sending failure notifications for ${failedProjects.length} project(s)...`)
+      await sendFailureNotifications(supabase, failedProjects, results.length)
     }
 
     console.log(`\n✅ Auto-sync completed: ${successCount}/${results.length} projects synced`)
@@ -388,45 +517,12 @@ Deno.serve(async (req) => {
     console.error('Auto-sync error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     
-    // Try to send notification for critical failure
-    if (RESEND_API_KEY) {
-      try {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-        const resend = new Resend(RESEND_API_KEY)
-        
-        const { data: superAdmins } = await supabase
-          .from('user_roles')
-          .select('user_id')
-          .eq('role', 'super_admin')
-
-        if (superAdmins && superAdmins.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('email')
-            .in('id', superAdmins.map(sa => sa.user_id))
-            .not('email', 'is', null)
-
-          if (profiles && profiles.length > 0) {
-            const emails = profiles.map(p => p.email).filter(Boolean) as string[]
-            const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-            
-            await resend.emails.send({
-              from: 'Cubo Mágico <onboarding@resend.dev>',
-              to: emails,
-              subject: '🚨 Erro Crítico na Sincronização Automática',
-              html: `
-                <h2>🚨 Erro Crítico</h2>
-                <p>A sincronização automática falhou completamente em ${timestamp}:</p>
-                <pre style="background: #fee2e2; padding: 15px; border-radius: 6px; color: #dc2626;">${errorMessage}</pre>
-                <p>Por favor, verifique os logs da função para mais detalhes.</p>
-              `,
-            })
-            console.log('📧 Critical error notification sent')
-          }
-        }
-      } catch (notifyError) {
-        console.error('Failed to send critical error notification:', notifyError)
-      }
+    // Try to send critical error notifications
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      await sendCriticalErrorNotifications(supabase, errorMessage)
+    } catch (notifyError) {
+      console.error('Failed to send critical error notification:', notifyError)
     }
     
     return new Response(JSON.stringify({ 

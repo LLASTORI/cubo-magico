@@ -763,6 +763,12 @@ const Settings = () => {
                           <span className="text-sm text-muted-foreground">Usuário conectado:</span>
                           <span className="text-sm font-medium">{metaCredentials.user_name || 'N/A'}</span>
                         </div>
+                        {metaCredentials.user_id && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">ID da conta Meta:</span>
+                            <span className="text-sm font-medium font-mono">{metaCredentials.user_id}</span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Projeto:</span>
                           <span className="text-sm font-medium">{currentProject.name}</span>

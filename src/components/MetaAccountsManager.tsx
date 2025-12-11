@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Check, Loader2, RefreshCw, Trash2, Building2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Check, Loader2, RefreshCw, Trash2, Building2, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +56,7 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: MetaAccount
   const [syncing, setSyncing] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<MetaAdAccount | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
   const fetchSavedAccounts = async () => {
@@ -235,6 +237,15 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: MetaAccount
     a => !savedAccounts.some(s => s.account_id === a.id)
   );
 
+  // Filter by search query
+  const filteredNewAccounts = useMemo(() => {
+    if (!searchQuery.trim()) return newAccounts;
+    const query = searchQuery.toLowerCase();
+    return newAccounts.filter(
+      a => a.name?.toLowerCase().includes(query) || a.id.toLowerCase().includes(query)
+    );
+  }, [newAccounts, searchQuery]);
+
   const activeCount = savedAccounts.filter(a => a.is_active).length;
 
   if (loading) {
@@ -339,12 +350,26 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: MetaAccount
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Contas Disponíveis para Adicionar</CardTitle>
             <CardDescription>
-              {newAccounts.length} conta(s) encontrada(s) no Meta Business
+              {filteredNewAccounts.length} de {newAccounts.length} conta(s) encontrada(s) no Meta Business
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 space-y-4">
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou ID da conta..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
             <div className="space-y-2">
-              {newAccounts.map((account) => (
+              {filteredNewAccounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma conta encontrada para "{searchQuery}"
+                </p>
+              ) : filteredNewAccounts.map((account) => (
                 <div
                   key={account.id}
                   className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"

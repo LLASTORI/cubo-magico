@@ -68,10 +68,18 @@ const getRoasBadgeClass = (roas: number) => {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'funnel_ads': '#3b82f6',      // Blue
-  'funnel_no_ads': '#f97316',   // Orange
-  'unidentified_origin': '#22c55e', // Green
-  'other_origin': '#a855f7',    // Purple
+  'funnel_ads': '#3b82f6',           // Blue - Funil + Ads
+  'funnel_no_ads': '#f97316',        // Orange - Funil sem Ads
+  'unidentified_origin': '#64748b',  // Slate - Origem não identificada
+  'other_origin': '#a855f7',         // Purple - Outras origens
+  'affiliate': '#22c55e',            // Green - Afiliado
+  'organic': '#06b6d4',              // Cyan - Orgânico
+  'direct': '#eab308',               // Yellow - Direto
+  'social': '#ec4899',               // Pink - Redes Sociais
+  'email': '#14b8a6',                // Teal - Email Marketing
+  'referral': '#8b5cf6',             // Violet - Indicação
+  'paid_search': '#ef4444',          // Red - Busca Paga
+  'default': '#6b7280',              // Gray - Padrão
 };
 
 const ProjectOverview = () => {
@@ -158,7 +166,7 @@ const ProjectOverview = () => {
   const pieData = categoryMetrics.map(cat => ({
     name: cat.label,
     value: cat.revenue,
-    fill: CATEGORY_COLORS[cat.category] || 'hsl(var(--chart-5))',
+    fill: CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.default,
   }));
 
   // Balance chart data

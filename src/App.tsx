@@ -22,6 +22,7 @@ import Admin from "./pages/Admin";
 import MetaAds from "./pages/MetaAds";
 import UndefinedOffers from "./pages/UndefinedOffers";
 import LaunchDashboard from "./pages/LaunchDashboard";
+import AnaliseMensal from "./pages/AnaliseMensal";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -98,6 +99,11 @@ const App = () => (
                 <Route path="/launch-dashboard" element={
                   <ProtectedRoute>
                     <LaunchDashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/analise-mensal" element={
+                  <ProtectedRoute>
+                    <AnaliseMensal />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -10,7 +10,8 @@ import {
   ShoppingCart, 
   Search, 
   ChevronDown,
-  LogOut
+  LogOut,
+  CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -48,6 +49,7 @@ export const AppHeader = ({
   
   // Check if current page is in the "Busca Rápida" dropdown
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
+  const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal';
   
   const handleLogout = async () => {
     await signOut();
@@ -61,6 +63,7 @@ export const AppHeader = ({
       case '/busca-rapida': return 'Busca Rápida - Hotmart';
       case '/meta-ads': return 'Meta Ads';
       case '/funnel-analysis': return 'Análise de Funil';
+      case '/analise-mensal': return 'Análise Mensal';
       case '/undefined-offers': return 'Ofertas a Definir';
       case '/launch-dashboard': return 'Dashboard de Lançamentos';
       case '/offer-mappings': return 'Mapeamento de Ofertas';
@@ -130,15 +133,32 @@ export const AppHeader = ({
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Análise de Funil */}
-                <Button
-                  onClick={() => navigate('/funnel-analysis')}
-                  variant={currentPath === '/funnel-analysis' ? "default" : "outline"}
-                  className="gap-2"
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  Análise de Funil
-                </Button>
+                {/* Dropdown Análises */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant={isInAnalytics ? "default" : "outline"} className="gap-2">
+                      <BarChart3 className="w-4 h-4" />
+                      Análises
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem 
+                      onClick={() => navigate('/funnel-analysis')} 
+                      className={`gap-2 cursor-pointer ${currentPath === '/funnel-analysis' ? 'bg-muted' : ''}`}
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      Análise de Funil
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => navigate('/analise-mensal')} 
+                      className={`gap-2 cursor-pointer ${currentPath === '/analise-mensal' ? 'bg-muted' : ''}`}
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      Índices Mensais
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* A Definir */}
                 <Button

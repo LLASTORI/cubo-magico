@@ -11,7 +11,8 @@ import {
   Search, 
   ChevronDown,
   LogOut,
-  CalendarDays
+  CalendarDays,
+  Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -64,6 +65,7 @@ export const AppHeader = ({
       case '/meta-ads': return 'Meta Ads';
       case '/funnel-analysis': return 'Análise de Funil';
       case '/analise-mensal': return 'Análise Mensal';
+      case '/agencia': return 'Visão da Agência';
       case '/undefined-offers': return 'Ofertas a Definir';
       case '/launch-dashboard': return 'Dashboard de Lançamentos';
       case '/offer-mappings': return 'Mapeamento de Ofertas';
@@ -90,21 +92,31 @@ export const AppHeader = ({
             <ProjectSelector />
           </div>
 
-          {/* Right side - Navigation */}
-          <div className="flex gap-2 items-center">
-            {currentProject && (
-              <>
-                {/* Visão Geral - only show if not on home */}
-                {currentPath !== '/' && (
-                  <Button
-                    onClick={() => navigate('/')}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    Visão Geral
-                  </Button>
-                )}
+            {/* Right side - Navigation */}
+            <div className="flex gap-2 items-center">
+              {/* Agência - sempre visível */}
+              <Button
+                onClick={() => navigate('/agencia')}
+                variant={currentPath === '/agencia' ? "default" : "outline"}
+                className="gap-2"
+              >
+                <Building2 className="w-4 h-4" />
+                Agência
+              </Button>
+
+              {currentProject && (
+                <>
+                  {/* Visão Geral - only show if not on home */}
+                  {currentPath !== '/' && currentPath !== '/agencia' && (
+                    <Button
+                      onClick={() => navigate('/')}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      Visão Geral
+                    </Button>
+                  )}
 
                 {/* Dropdown Busca Rápida */}
                 <DropdownMenu>

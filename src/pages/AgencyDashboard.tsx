@@ -11,7 +11,9 @@ import {
   Building2,
   ExternalLink,
   ShoppingCart,
-  FolderOpen
+  FolderOpen,
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { CubeLoader } from "@/components/CubeLoader";
 import { useAgencyOverview } from "@/hooks/useAgencyOverview";
 import { useProject } from "@/contexts/ProjectContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -48,6 +52,8 @@ const getRoasBadgeClass = (roas: number) => {
 const AgencyDashboard = () => {
   const navigate = useNavigate();
   const { setCurrentProject } = useProject();
+  const { toast } = useToast();
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // Date range state
   const [dateRange, setDateRange] = useState('year');
@@ -101,6 +107,38 @@ const AgencyDashboard = () => {
     navigate('/');
   };
 
+  const handleSyncAll = async () => {
+    if (isSyncingAll) return;
+    
+    setIsSyncingAll(true);
+    toast({
+      title: 'Sincronização iniciada',
+      description: 'Atualizando dados de todos os projetos...',
+    });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-sync', {
+        body: {},
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sincronização completa',
+        description: `${data.results?.length || 0} projeto(s) processado(s).`,
+      });
+    } catch (error: any) {
+      console.error('Sync all error:', error);
+      toast({
+        title: 'Erro na sincronização',
+        description: error.message || 'Não foi possível sincronizar',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -125,7 +163,20 @@ const AgencyDashboard = () => {
         </div>
 
         {/* Date Range Selector */}
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3">
+          <Button
+            onClick={handleSyncAll}
+            disabled={isSyncingAll}
+            variant="outline"
+            size="sm"
+          >
+            {isSyncingAll ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            {isSyncingAll ? 'Sincronizando...' : 'Atualizar Todos'}
+          </Button>
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-52 border-border/50 bg-card/50">
               <Calendar className="w-4 h-4 mr-2" />

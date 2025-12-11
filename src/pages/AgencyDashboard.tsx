@@ -96,7 +96,7 @@ const AgencyDashboard = () => {
     }
   }, [dateRange]);
 
-  const { projectSummaries, agencyTotals, isLoading } = useAgencyOverview({
+  const { projectSummaries, agencyTotals, isLoading, refetchAll } = useAgencyOverview({
     startDate,
     endDate,
   });
@@ -122,6 +122,9 @@ const AgencyDashboard = () => {
       });
 
       if (error) throw error;
+
+      // Refetch data after sync
+      await refetchAll();
 
       toast({
         title: 'Sincronização completa',

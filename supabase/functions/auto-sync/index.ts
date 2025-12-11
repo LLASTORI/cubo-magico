@@ -2,14 +2,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { subMonths, format } from 'https://esm.sh/date-fns@3.6.0'
 import { Resend } from 'https://esm.sh/resend@2.0.0'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// SECURITY: Restrict CORS to specific origins
+const ALLOWED_ORIGINS = [
+  'https://cubomagico.leandrolastori.com.br',
+  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
+]
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(o => origin.startsWith(o.replace('https://', '').split('.')[0]) || origin === o)
+    ? origin
+    : ALLOWED_ORIGINS[0]
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
+  }
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+const AUTO_SYNC_SECRET = Deno.env.get('AUTO_SYNC_SECRET')
 
 interface Project {
   id: string
@@ -31,6 +44,53 @@ interface NotificationSetting {
 
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// SECURITY: Validate the request - accepts secret OR authenticated user
+async function validateRequest(req: Request): Promise<{ valid: boolean; userId?: string }> {
+  // Check header secret first (for cron jobs)
+  const headerSecret = req.headers.get('x-sync-secret')
+  if (headerSecret && headerSecret === AUTO_SYNC_SECRET) {
+    console.log('✅ Validated via sync secret')
+    return { valid: true }
+  }
+  
+  // Check if request has service role key (internal calls)
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.includes(SUPABASE_SERVICE_ROLE_KEY)) {
+    console.log('✅ Validated via service role key')
+    return { valid: true }
+  }
+  
+  // Check for authenticated user (client calls)
+  if (authHeader) {
+    const supabase = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }
+    })
+    
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (!error && user) {
+      // Check if user is super_admin
+      const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const { data: role } = await serviceSupabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'super_admin')
+        .maybeSingle()
+      
+      if (role) {
+        console.log('✅ Validated via super_admin user:', user.id)
+        return { valid: true, userId: user.id }
+      }
+      
+      // Regular users can only sync their own projects
+      console.log('✅ Validated via authenticated user:', user.id)
+      return { valid: true, userId: user.id }
+    }
+  }
+  
+  return { valid: false }
+}
 
 // Check if a notification type is enabled
 async function isNotificationEnabled(supabase: any, settingKey: string): Promise<boolean> {
@@ -296,6 +356,9 @@ async function sendCriticalErrorNotifications(
 }
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -304,16 +367,29 @@ Deno.serve(async (req) => {
   try {
     console.log('🔄 Auto-sync started at:', new Date().toISOString())
 
+    // SECURITY: Validate the request
+    const validation = await validateRequest(req)
+    if (!validation.valid) {
+      console.error('❌ Unauthorized: Invalid credentials')
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized: Invalid credentials' 
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     // Get body params if any (for manual trigger with specific project)
     let specificProjectId: string | null = null
     let sendNotification = true // Default to sending notifications for auto-sync
+    let requestBody: any = {}
     try {
-      const body = await req.json()
-      specificProjectId = body.projectId || null
+      requestBody = await req.json()
+      specificProjectId = requestBody.projectId || null
       // Manual syncs can disable notifications
-      if (body.skipNotification === true) {
+      if (requestBody.skipNotification === true) {
         sendNotification = false
       }
     } catch {
@@ -321,6 +397,7 @@ Deno.serve(async (req) => {
     }
 
     // Get all active projects (or specific one)
+    // If user is authenticated (not admin/cron), only sync their projects
     let projectsQuery = supabase
       .from('projects')
       .select('id, name')
@@ -328,6 +405,25 @@ Deno.serve(async (req) => {
 
     if (specificProjectId) {
       projectsQuery = projectsQuery.eq('id', specificProjectId)
+    } else if (validation.userId) {
+      // Non-admin users can only sync their own projects
+      const { data: userProjects } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', validation.userId)
+      
+      if (userProjects && userProjects.length > 0) {
+        const projectIds = userProjects.map(p => p.project_id)
+        projectsQuery = projectsQuery.in('id', projectIds)
+      } else {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'No projects to sync',
+          results: [] 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     const { data: projects, error: projectsError } = await projectsQuery
@@ -498,36 +594,37 @@ Deno.serve(async (req) => {
 
     if (failedProjects.length > 0 && sendNotification) {
       console.log(`\n📧 Sending failure notifications for ${failedProjects.length} project(s)...`)
-      await sendFailureNotifications(supabase, failedProjects, results.length)
+      await sendFailureNotifications(supabase, failedProjects, projects.length)
     }
 
-    console.log(`\n✅ Auto-sync completed: ${successCount}/${results.length} projects synced`)
+    console.log(`\n✅ Auto-sync completed: ${successCount}/${projects.length} projects synced successfully`)
 
     return new Response(JSON.stringify({ 
       success: true, 
-      message: `Auto-sync completed for ${results.length} projects`,
+      message: `Synced ${successCount} of ${projects.length} projects`,
       results,
-      failedCount: failedProjects.length,
-      timestamp: new Date().toISOString(),
+      failedCount: failedProjects.length
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
   } catch (error) {
-    console.error('Auto-sync error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('❌ Auto-sync critical error:', error)
     
-    // Try to send critical error notifications
+    // Send critical error notification
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-      await sendCriticalErrorNotifications(supabase, errorMessage)
-    } catch (notifyError) {
-      console.error('Failed to send critical error notification:', notifyError)
+      await sendCriticalErrorNotifications(
+        supabase, 
+        error instanceof Error ? error.message : 'Unknown critical error'
+      )
+    } catch (notifError) {
+      console.error('Failed to send critical error notification:', notifError)
     }
     
     return new Response(JSON.stringify({ 
       success: false, 
-      error: errorMessage 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

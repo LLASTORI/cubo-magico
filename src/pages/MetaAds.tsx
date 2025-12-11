@@ -97,7 +97,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   }, [projectId]);
 
   // Connect to Meta
-  const handleConnectMeta = () => {
+  const handleConnectMeta = async () => {
     if (!projectId || !user?.id) {
       toast({
         title: 'Erro',
@@ -107,18 +107,33 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       return;
     }
 
-    const state = btoa(JSON.stringify({
-      projectId: projectId,
-      userId: user.id,
-      redirectUrl: window.location.href.split('?')[0],
-    }));
+    try {
+      // Get signed state from backend for security
+      const { data, error } = await supabase.functions.invoke('meta-oauth-state', {
+        body: {
+          projectId: projectId,
+          redirectUrl: window.location.href.split('?')[0],
+        },
+      });
 
-    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
-    const scope = 'ads_read,ads_management,business_management';
-    
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}`;
-    
-    window.location.href = authUrl;
+      if (error || !data?.state) {
+        throw new Error(error?.message || 'Falha ao gerar estado de autenticação');
+      }
+
+      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
+      const scope = 'ads_read,ads_management,business_management';
+      
+      const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${data.state}&scope=${scope}`;
+      
+      window.location.href = authUrl;
+    } catch (error: any) {
+      console.error('Error initiating Meta OAuth:', error);
+      toast({
+        title: 'Erro ao conectar',
+        description: error.message || 'Tente novamente.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Fetch Meta credentials

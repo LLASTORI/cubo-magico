@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/AppHeader";
 import { useProject } from "@/contexts/ProjectContext";
 import { useProjectOverview } from "@/hooks/useProjectOverview";
@@ -28,23 +27,21 @@ import { HeroSection } from "@/components/home/HeroSection";
 import {
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart";
 import { 
-  BarChart, 
-  Bar, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
   ResponsiveContainer,
-  LineChart,
-  Line,
   PieChart as RechartsPie,
   Pie,
   Cell,
-  Legend,
   ComposedChart,
-  Area
+  Bar,
+  Line,
+  Legend,
+  Tooltip,
+  ReferenceLine
 } from "recharts";
 
 const formatCurrency = (value: number) => {
@@ -54,8 +51,20 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const formatPercentage = (value: number) => {
-  return `${value.toFixed(1)}%`;
+const formatCompactCurrency = (value: number) => {
+  if (value >= 1000000) {
+    return `R$ ${(value / 1000000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `R$ ${(value / 1000).toFixed(1)}K`;
+  }
+  return formatCurrency(value);
+};
+
+const getRoasBadgeClass = (roas: number) => {
+  if (roas >= 2) return 'bg-green-500/20 text-green-400 border-green-500/30';
+  if (roas >= 1) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+  return 'bg-red-500/20 text-red-400 border-red-500/30';
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -131,7 +140,6 @@ const ProjectOverview = () => {
     endDate,
   });
 
-
   if (!currentProject) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -160,13 +168,14 @@ const ProjectOverview = () => {
     investimento: item.spend,
     lucro: item.profit,
     acumulado: item.accumulatedProfit,
+    roas: item.spend > 0 ? item.revenue / item.spend : 0,
   }));
 
   const chartConfig = {
-    investimento: { label: "Investimento", color: "hsl(var(--chart-2))" },
-    receita: { label: "Receita", color: "hsl(var(--chart-1))" },
-    lucro: { label: "Lucro", color: "hsl(var(--chart-3))" },
-    acumulado: { label: "Acumulado", color: "hsl(var(--chart-4))" },
+    investimento: { label: "Investimento", color: "hsl(210, 100%, 60%)" },
+    receita: { label: "Receita", color: "hsl(30, 100%, 60%)" },
+    lucro: { label: "Lucro", color: "hsl(142, 76%, 45%)" },
+    roas: { label: "ROAS", color: "hsl(280, 100%, 70%)" },
   };
 
   return (
@@ -180,7 +189,7 @@ const ProjectOverview = () => {
         {/* Date Range Selector */}
         <div className="flex items-center justify-end">
           <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-52">
+            <SelectTrigger className="w-52 border-border/50 bg-card/50">
               <Calendar className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Período" />
             </SelectTrigger>
@@ -205,76 +214,66 @@ const ProjectOverview = () => {
         ) : (
           <>
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <Card className="border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-blue-400 mb-2">
                     <TrendingUp className="w-4 h-4" />
-                    Investimento Ads
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(summaryMetrics.totalSpend)}
+                    <span className="text-xs font-medium">Investimento</span>
+                  </div>
+                  <p className="text-xl md:text-2xl font-bold text-blue-400">
+                    {formatCompactCurrency(summaryMetrics.totalSpend)}
                   </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-orange-400 mb-2">
                     <DollarSign className="w-4 h-4" />
-                    Faturamento Total
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(summaryMetrics.totalRevenue)}
+                    <span className="text-xs font-medium">Faturamento</span>
+                  </div>
+                  <p className="text-xl md:text-2xl font-bold text-orange-400">
+                    {formatCompactCurrency(summaryMetrics.totalRevenue)}
                   </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Card className={`border-${summaryMetrics.profit >= 0 ? 'green' : 'red'}-500/30 bg-gradient-to-br from-${summaryMetrics.profit >= 0 ? 'green' : 'red'}-500/10 to-transparent`}>
+                <CardContent className="p-4">
+                  <div className={`flex items-center gap-2 ${summaryMetrics.profit >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
                     {summaryMetrics.profit >= 0 ? (
-                      <ArrowUpRight className="w-4 h-4 text-green-500" />
+                      <ArrowUpRight className="w-4 h-4" />
                     ) : (
-                      <ArrowDownRight className="w-4 h-4 text-red-500" />
+                      <ArrowDownRight className="w-4 h-4" />
                     )}
-                    Lucro
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className={`text-2xl font-bold ${summaryMetrics.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(summaryMetrics.profit)}
+                    <span className="text-xs font-medium">Lucro</span>
+                  </div>
+                  <p className={`text-xl md:text-2xl font-bold ${summaryMetrics.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatCompactCurrency(summaryMetrics.profit)}
                   </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-primary mb-2">
                     <Target className="w-4 h-4" />
-                    ROAS Geral
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className={`text-2xl font-bold ${summaryMetrics.roas >= 2 ? 'text-green-600' : summaryMetrics.roas >= 1 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    <span className="text-xs font-medium">ROAS</span>
+                  </div>
+                  <p className={`text-xl md:text-2xl font-bold ${summaryMetrics.roas >= 2 ? 'text-green-400' : summaryMetrics.roas >= 1 ? 'text-yellow-400' : 'text-red-400'}`}>
                     {summaryMetrics.roas.toFixed(2)}x
                   </p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-purple-400 mb-2">
                     <ShoppingCart className="w-4 h-4" />
-                    Total de Vendas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-foreground">
+                    <span className="text-xs font-medium">Vendas</span>
+                  </div>
+                  <p className="text-xl md:text-2xl font-bold text-purple-400">
                     {summaryMetrics.totalSales}
                   </p>
                 </CardContent>
@@ -284,10 +283,10 @@ const ProjectOverview = () => {
             {/* Category Analysis & Funnel ROAS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Revenue by Category */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieChart className="w-5 h-5" />
+              <Card className="border-border/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <PieChart className="w-5 h-5 text-primary" />
                     Faturamento por Categoria
                   </CardTitle>
                   <CardDescription>
@@ -313,13 +312,13 @@ const ProjectOverview = () => {
                               <Cell key={`cell-${index}`} fill={entry.fill} />
                             ))}
                           </Pie>
-                          <ChartTooltip 
+                          <Tooltip 
                             content={({ active, payload }) => {
                               if (active && payload && payload.length) {
                                 return (
-                                  <div className="bg-popover border border-border rounded-lg p-2 shadow-lg">
-                                    <p className="font-medium">{payload[0].name}</p>
-                                    <p className="text-sm text-muted-foreground">
+                                  <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
+                                    <p className="font-medium text-foreground">{payload[0].name}</p>
+                                    <p className="text-sm text-orange-400 font-semibold">
                                       {formatCurrency(payload[0].value as number)}
                                     </p>
                                   </div>
@@ -332,7 +331,7 @@ const ProjectOverview = () => {
                       </ResponsiveContainer>
                     </div>
                     <div className="space-y-3">
-                      {categoryMetrics.map((cat, index) => (
+                      {categoryMetrics.map((cat) => (
                         <div key={cat.category} className="space-y-1">
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
@@ -340,18 +339,18 @@ const ProjectOverview = () => {
                                 className="w-3 h-3 rounded-full" 
                                 style={{ backgroundColor: CATEGORY_COLORS[cat.category] }}
                               />
-                              <span className="font-medium">{cat.label}</span>
+                              <span className="font-medium text-foreground">{cat.label}</span>
                             </div>
                             <span className="text-muted-foreground">{cat.count} vendas</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Progress value={cat.percentage} className="h-2 flex-1" />
-                            <span className="text-sm font-medium w-20 text-right">
-                              {formatCurrency(cat.revenue)}
+                            <span className="text-sm font-medium w-24 text-right text-orange-400">
+                              {formatCompactCurrency(cat.revenue)}
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground text-right">
-                            {formatPercentage(cat.percentage)}
+                            {cat.percentage.toFixed(1)}%
                           </p>
                         </div>
                       ))}
@@ -361,111 +360,139 @@ const ProjectOverview = () => {
               </Card>
 
               {/* Funnel ROAS Comparison */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="w-5 h-5" />
+              <Card className="border-border/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Target className="w-5 h-5 text-primary" />
                     ROAS por Funil
                   </CardTitle>
                   <CardDescription>
                     Comparativo de retorno sobre investimento por funil
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Funil</TableHead>
-                        <TableHead className="text-right">Investimento</TableHead>
-                        <TableHead className="text-right">Receita</TableHead>
-                        <TableHead className="text-right">ROAS</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {funnelROAS.length > 0 ? (
-                        <>
-                          {funnelROAS.map((funnel) => (
-                            <TableRow key={funnel.funnelId}>
-                              <TableCell className="font-medium">{funnel.funnelName}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(funnel.spend)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(funnel.revenue)}</TableCell>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="font-semibold">Funil</TableHead>
+                          <TableHead className="text-right font-semibold">Investimento</TableHead>
+                          <TableHead className="text-right font-semibold">Receita</TableHead>
+                          <TableHead className="text-right font-semibold">ROAS</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {funnelROAS.length > 0 ? (
+                          <>
+                            {funnelROAS.map((funnel) => (
+                              <TableRow key={funnel.funnelId} className="hover:bg-muted/30 transition-colors">
+                                <TableCell className="font-medium">{funnel.funnelName}</TableCell>
+                                <TableCell className="text-right text-blue-400">{formatCompactCurrency(funnel.spend)}</TableCell>
+                                <TableCell className="text-right text-orange-400">{formatCompactCurrency(funnel.revenue)}</TableCell>
+                                <TableCell className="text-right">
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getRoasBadgeClass(funnel.roas)}`}>
+                                    {funnel.roas.toFixed(2)}x
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="bg-primary/10 border-t-2 border-primary/30 font-bold">
+                              <TableCell className="font-bold text-primary">GERAL</TableCell>
+                              <TableCell className="text-right text-blue-400 font-bold">{formatCompactCurrency(generalROAS.spend)}</TableCell>
+                              <TableCell className="text-right text-orange-400 font-bold">{formatCompactCurrency(generalROAS.revenue)}</TableCell>
                               <TableCell className="text-right">
-                                <Badge variant={funnel.roas >= 2 ? "default" : funnel.roas >= 1 ? "secondary" : "destructive"}>
-                                  {funnel.roas.toFixed(2)}x
-                                </Badge>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold border ${getRoasBadgeClass(generalROAS.roas)}`}>
+                                  {generalROAS.roas.toFixed(2)}x
+                                </span>
                               </TableCell>
                             </TableRow>
-                          ))}
-                          <TableRow className="bg-muted/50 font-semibold">
-                            <TableCell>GERAL</TableCell>
-                            <TableCell className="text-right">{formatCurrency(generalROAS.spend)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(generalROAS.revenue)}</TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant={generalROAS.roas >= 2 ? "default" : generalROAS.roas >= 1 ? "secondary" : "destructive"}>
-                                {generalROAS.roas.toFixed(2)}x
-                              </Badge>
+                          </>
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                              Nenhum dado de funil disponível para o período
                             </TableCell>
                           </TableRow>
-                        </>
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                            Nenhum dado de funil disponível para o período
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
             {/* Monthly Balance Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  Saldo Mensal Acumulado
+            <Card className="border-border/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Evolução Mensal
                 </CardTitle>
                 <CardDescription>
-                  Evolução mensal de receita, investimento e lucro acumulado
+                  Evolução mensal de receita, investimento e ROAS
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {balanceChartData.length > 0 ? (
                   <ChartContainer config={chartConfig} className="h-80 w-full">
                     <ComposedChart data={balanceChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
                       <XAxis 
                         dataKey="month" 
-                        className="text-xs fill-muted-foreground"
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
                       />
                       <YAxis 
-                        className="text-xs fill-muted-foreground"
-                        tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                        yAxisId="left"
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                        tickFormatter={(value) => formatCompactCurrency(value)}
+                        axisLine={false}
+                        tickLine={false}
                       />
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(value, name) => [formatCurrency(value as number), name]}
-                          />
-                        }
+                      <YAxis 
+                        yAxisId="right"
+                        orientation="right"
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                        tickFormatter={(value) => `${value.toFixed(1)}x`}
+                        axisLine={false}
+                        tickLine={false}
+                        domain={[0, 'auto']}
                       />
-                      <Legend />
-                      <Bar dataKey="investimento" fill="hsl(var(--chart-2))" name="Investimento" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="receita" fill="hsl(var(--chart-1))" name="Receita" radius={[4, 4, 0, 0]} />
-                      <Line 
-                        type="monotone" 
-                        dataKey="acumulado" 
-                        stroke="hsl(var(--chart-4))" 
-                        strokeWidth={3}
-                        name="Lucro Acumulado"
-                        dot={{ fill: 'hsl(var(--chart-4))' }}
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
+                                <p className="font-medium text-foreground mb-2">{data.month}</p>
+                                <div className="space-y-1 text-sm">
+                                  <p className="text-blue-400">Investimento: {formatCurrency(data.investimento)}</p>
+                                  <p className="text-orange-400">Receita: {formatCurrency(data.receita)}</p>
+                                  <p className={data.lucro >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                    Lucro: {formatCurrency(data.lucro)}
+                                  </p>
+                                  <p className="text-purple-400">ROAS: {data.roas.toFixed(2)}x</p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
                       />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '20px' }}
+                        formatter={(value) => <span className="text-foreground text-sm">{value}</span>}
+                      />
+                      <ReferenceLine yAxisId="right" y={1} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" label={{ value: 'Break-even', fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                      <Bar yAxisId="left" dataKey="investimento" name="Investimento" fill="hsl(210, 100%, 60%)" radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="left" dataKey="receita" name="Receita" fill="hsl(30, 100%, 60%)" radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="left" dataKey="lucro" name="Lucro" fill="hsl(142, 76%, 45%)" radius={[4, 4, 0, 0]} />
+                      <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="hsl(280, 100%, 70%)" strokeWidth={3} dot={{ fill: 'hsl(280, 100%, 70%)', strokeWidth: 2 }} />
                     </ComposedChart>
                   </ChartContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-64 text-muted-foreground">
+                  <div className="h-80 flex items-center justify-center text-muted-foreground">
                     Nenhum dado disponível para o período selecionado
                   </div>
                 )}
@@ -473,28 +500,28 @@ const ProjectOverview = () => {
             </Card>
 
             {/* Category Details Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Detalhamento por Categoria</CardTitle>
-                <CardDescription>
-                  Métricas detalhadas de cada categoria de venda
-                </CardDescription>
+            <Card className="border-border/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Detalhamento por Categoria
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead className="text-right">Vendas</TableHead>
-                      <TableHead className="text-right">Faturamento</TableHead>
-                      <TableHead className="text-right">Ticket Médio</TableHead>
-                      <TableHead className="text-right">% do Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categoryMetrics.length > 0 ? (
-                      categoryMetrics.map((cat) => (
-                        <TableRow key={cat.category}>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="font-semibold">Categoria</TableHead>
+                        <TableHead className="text-right font-semibold">Vendas</TableHead>
+                        <TableHead className="text-right font-semibold">Faturamento</TableHead>
+                        <TableHead className="text-right font-semibold">% do Total</TableHead>
+                        <TableHead className="text-right font-semibold">Ticket Médio</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categoryMetrics.map((cat) => (
+                        <TableRow key={cat.category} className="hover:bg-muted/30 transition-colors">
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <div 
@@ -504,25 +531,34 @@ const ProjectOverview = () => {
                               <span className="font-medium">{cat.label}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">{cat.count}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(cat.revenue)}</TableCell>
+                          <TableCell className="text-right text-purple-400 font-medium">{cat.count}</TableCell>
+                          <TableCell className="text-right text-orange-400 font-medium">{formatCompactCurrency(cat.revenue)}</TableCell>
                           <TableCell className="text-right">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
+                              {cat.percentage.toFixed(1)}%
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right text-green-400 font-medium">
                             {formatCurrency(cat.count > 0 ? cat.revenue / cat.count : 0)}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="outline">{formatPercentage(cat.percentage)}</Badge>
-                          </TableCell>
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                          Nenhum dado disponível para o período
+                      ))}
+                      <TableRow className="bg-primary/10 border-t-2 border-primary/30 font-bold">
+                        <TableCell className="font-bold text-primary">TOTAL</TableCell>
+                        <TableCell className="text-right text-purple-400 font-bold">{summaryMetrics.totalSales}</TableCell>
+                        <TableCell className="text-right text-orange-400 font-bold">{formatCompactCurrency(summaryMetrics.totalRevenue)}</TableCell>
+                        <TableCell className="text-right">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-primary/20 text-primary">
+                            100%
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right text-green-400 font-bold">
+                          {formatCurrency(summaryMetrics.totalSales > 0 ? summaryMetrics.totalRevenue / summaryMetrics.totalSales : 0)}
                         </TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </>

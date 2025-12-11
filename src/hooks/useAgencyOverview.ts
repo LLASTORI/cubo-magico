@@ -44,6 +44,8 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
       if (error) throw error;
       return data || [];
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch sales for all projects
@@ -66,6 +68,8 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
       return data || [];
     },
     enabled: !!projects && projects.length > 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Fetch meta insights for all projects
@@ -99,6 +103,8 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
       return data || [];
     },
     enabled: !!projects && projects.length > 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Calculate summaries per project

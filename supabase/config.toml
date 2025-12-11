@@ -12,3 +12,7 @@ verify_jwt = false
 [functions.meta-api]
 verify_jwt = true
 max_duration = 300
+
+[functions.auto-sync]
+verify_jwt = false
+max_duration = 540

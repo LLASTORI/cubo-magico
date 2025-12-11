@@ -24,6 +24,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useProjectOverview } from "@/hooks/useProjectOverview";
 import { CubeLoader } from "@/components/CubeLoader";
 import { HeroSection } from "@/components/home/HeroSection";
+import { QuickSyncButton } from "@/components/QuickSyncButton";
 import {
   ChartContainer,
   ChartTooltip,
@@ -195,7 +196,8 @@ const ProjectOverview = () => {
         <HeroSection startDate={startDate} endDate={endDate} />
 
         {/* Date Range Selector */}
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3">
+          <QuickSyncButton />
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-52 border-border/50 bg-card/50">
               <Calendar className="w-4 h-4 mr-2" />

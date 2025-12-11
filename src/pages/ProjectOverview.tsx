@@ -68,10 +68,10 @@ const getRoasBadgeClass = (roas: number) => {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'funnel_ads': 'hsl(var(--chart-1))',
-  'funnel_no_ads': 'hsl(var(--chart-2))',
-  'unidentified_origin': 'hsl(var(--chart-3))',
-  'other_origin': 'hsl(var(--chart-4))',
+  'funnel_ads': '#3b82f6',      // Blue
+  'funnel_no_ads': '#f97316',   // Orange
+  'unidentified_origin': '#22c55e', // Green
+  'other_origin': '#a855f7',    // Purple
 };
 
 const ProjectOverview = () => {

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProject } from '@/contexts/ProjectContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +25,8 @@ import {
   XCircle,
   ExternalLink,
   Calendar,
-  User
+  User,
+  LogIn
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -54,6 +57,8 @@ interface ProjectMember {
 
 export const ProjectsManager = () => {
   const { user } = useAuth();
+  const { setCurrentProject, refreshProjects } = useProject();
+  const navigate = useNavigate();
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(true);
@@ -124,6 +129,33 @@ export const ProjectsManager = () => {
       toast({ title: 'Erro ao carregar projetos', description: error.message, variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAccessProject = async (project: Project) => {
+    try {
+      // Log the access
+      await logAuditAction('access_project', project.id, {
+        project_name: project.name,
+        owner_id: project.user_id,
+        owner_email: project.owner_email,
+      });
+
+      // Set as current project and navigate
+      setCurrentProject({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        is_active: project.is_active,
+        created_at: project.created_at,
+        updated_at: project.updated_at,
+        user_id: project.user_id,
+      });
+      
+      toast({ title: `Acessando projeto: ${project.name}` });
+      navigate('/projects');
+    } catch (error: any) {
+      toast({ title: 'Erro ao acessar projeto', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -419,6 +451,16 @@ export const ProjectsManager = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleAccessProject(project)}
+                        title="Acessar projeto"
+                        className="gap-1"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        Acessar
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

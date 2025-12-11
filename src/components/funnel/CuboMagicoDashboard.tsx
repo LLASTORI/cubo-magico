@@ -82,6 +82,7 @@ interface FunnelMetrics {
     vendas: number;
     receita: number;
     taxaConversao: number;
+    produtos: Array<{ nome_produto: string; nome_oferta: string | null; codigo_oferta: string | null }>;
   }>;
   // New conversion metrics
   connectRate: number; // landing_page_view / link_click
@@ -139,7 +140,7 @@ export function CuboMagicoDashboard({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id_funil, funnel_id, codigo_oferta, tipo_posicao, nome_posicao, valor, ordem_posicao')
+        .select('id_funil, funnel_id, codigo_oferta, tipo_posicao, nome_posicao, valor, ordem_posicao, nome_produto, nome_oferta')
         .eq('project_id', projectId)
         .eq('status', 'Ativo');
       
@@ -399,7 +400,7 @@ export function CuboMagicoDashboard({
       
       // Count products by position
       const productsByPosition: Record<string, number> = {};
-      const positionDetails: Record<string, { vendas: number; receita: number; ordem: number }> = {};
+      const positionDetails: Record<string, { vendas: number; receita: number; ordem: number; produtos: Array<{ nome_produto: string; nome_oferta: string | null; codigo_oferta: string | null }> }> = {};
       
       funnelOffers.forEach(offer => {
         const pos = offer.tipo_posicao || 'OTHER';
@@ -412,10 +413,15 @@ export function CuboMagicoDashboard({
         productsByPosition[pos] = (productsByPosition[pos] || 0) + salesCount;
         
         if (!positionDetails[posKey]) {
-          positionDetails[posKey] = { vendas: 0, receita: 0, ordem };
+          positionDetails[posKey] = { vendas: 0, receita: 0, ordem, produtos: [] };
         }
         positionDetails[posKey].vendas += salesCount;
         positionDetails[posKey].receita += salesRevenue;
+        positionDetails[posKey].produtos.push({
+          nome_produto: offer.nome_produto,
+          nome_oferta: offer.nome_oferta,
+          codigo_oferta: offer.codigo_oferta
+        });
       });
 
       // FRONT sales count
@@ -469,6 +475,7 @@ export function CuboMagicoDashboard({
             vendas: details.vendas,
             receita: details.receita,
             taxaConversao,
+            produtos: details.produtos,
           };
         })
         .sort((a, b) => {
@@ -1590,9 +1597,27 @@ export function CuboMagicoDashboard({
                                                 </div>
                                               </div>
                                             </TooltipTrigger>
-                                            <TooltipContent side="bottom" className="max-w-[250px]">
+                                            <TooltipContent side="bottom" className="max-w-[300px]">
                                               <p className="font-semibold">{pos.tipo}{pos.ordem || ''}</p>
                                               <p className="text-xs text-muted-foreground">{idealInfo.desc}</p>
+                                              
+                                              {/* Product/Offer Info */}
+                                              {pos.produtos && pos.produtos.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-border/50">
+                                                  <p className="text-xs text-muted-foreground mb-1">Produto(s) associado(s):</p>
+                                                  <div className="space-y-1">
+                                                    {pos.produtos.map((p, idx) => (
+                                                      <div key={idx} className="text-xs">
+                                                        <span className="font-medium text-foreground">{p.nome_produto}</span>
+                                                        {p.nome_oferta && (
+                                                          <span className="text-muted-foreground"> — {p.nome_oferta}</span>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              
                                               <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
                                                 <div className="flex justify-between text-xs">
                                                   <span>Taxa ideal:</span>

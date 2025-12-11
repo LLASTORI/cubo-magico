@@ -295,18 +295,27 @@ const ProjectOverview = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="h-64">
+                    <div className="h-64 relative flex items-center justify-center">
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-orange-500/5 rounded-xl" />
                       <ResponsiveContainer width="100%" height="100%">
                         <RechartsPie>
+                          <defs>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.3"/>
+                            </filter>
+                          </defs>
                           <Pie
                             data={pieData}
                             dataKey="value"
                             nameKey="name"
                             cx="50%"
                             cy="50%"
-                            innerRadius={50}
-                            outerRadius={80}
-                            paddingAngle={2}
+                            innerRadius={55}
+                            outerRadius={90}
+                            paddingAngle={3}
+                            strokeWidth={2}
+                            stroke="hsl(var(--background))"
+                            style={{ filter: 'url(#shadow)' }}
                           >
                             {pieData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -329,6 +338,13 @@ const ProjectOverview = () => {
                           />
                         </RechartsPie>
                       </ResponsiveContainer>
+                      {/* Center text */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">Total</p>
+                          <p className="text-lg font-bold text-orange-400">{formatCompactCurrency(summaryMetrics.totalRevenue)}</p>
+                        </div>
+                      </div>
                     </div>
                     <div className="space-y-3">
                       {categoryMetrics.map((cat) => (

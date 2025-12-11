@@ -29,7 +29,7 @@ export interface UseAgencyOverviewProps {
 
 export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps) => {
   // Fetch all projects where user is owner
-  const { data: projects, isLoading: projectsLoading } = useQuery({
+  const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = useQuery({
     queryKey: ['agency-projects'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -49,7 +49,7 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
   });
 
   // Fetch sales for all projects
-  const { data: allSales, isLoading: salesLoading } = useQuery({
+  const { data: allSales, isLoading: salesLoading, refetch: refetchSales } = useQuery({
     queryKey: ['agency-sales', projects?.map(p => p.id), startDate, endDate],
     queryFn: async () => {
       if (!projects || projects.length === 0) return [];
@@ -73,7 +73,7 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
   });
 
   // Fetch meta insights for all projects
-  const { data: allInsights, isLoading: insightsLoading } = useQuery({
+  const { data: allInsights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
     queryKey: ['agency-insights', projects?.map(p => p.id), startDate, endDate],
     queryFn: async () => {
       if (!projects || projects.length === 0) return [];
@@ -90,8 +90,6 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
       if (accountsError) throw accountsError;
       if (!accounts || accounts.length === 0) return [];
 
-      const accountIds = accounts.map(a => a.id);
-
       const { data, error } = await supabase
         .from('meta_insights')
         .select('project_id, spend')
@@ -106,6 +104,15 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
     staleTime: 0,
     refetchOnMount: 'always',
   });
+
+  // Refetch all data
+  const refetchAll = async () => {
+    await Promise.all([
+      refetchProjects(),
+      refetchSales(),
+      refetchInsights(),
+    ]);
+  };
 
   // Calculate summaries per project
   const projectSummaries: ProjectSummary[] = useMemo(() => {
@@ -156,5 +163,6 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
     projectSummaries,
     agencyTotals,
     isLoading,
+    refetchAll,
   };
 };

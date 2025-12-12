@@ -107,12 +107,77 @@ export interface CRMFilters {
 
 export const DEFAULT_STATUS_FILTER = ['APPROVED', 'COMPLETE'];
 
+export interface StatusBreakdown {
+  status: string;
+  count: number;
+  uniqueClients: number;
+}
+
 export function useCRMJourneyData(filters: CRMFilters) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
   const { entryFilter, targetFilter, dateFilter, statusFilter } = filters;
 
-  // Fetch all sales for the project
+  // Fetch status breakdown (all statuses, no filter) for summary
+  const { data: statusBreakdown, isLoading: loadingBreakdown } = useQuery({
+    queryKey: ['crm-status-breakdown', projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      
+      const allSales: { status: string; buyer_email: string }[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('status, buyer_email')
+          .eq('project_id', projectId)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allSales.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      // Group by status
+      const statusMap = new Map<string, { count: number; emails: Set<string> }>();
+      
+      for (const sale of allSales) {
+        const status = sale.status || 'UNKNOWN';
+        if (!statusMap.has(status)) {
+          statusMap.set(status, { count: 0, emails: new Set() });
+        }
+        const data = statusMap.get(status)!;
+        data.count++;
+        if (sale.buyer_email) {
+          data.emails.add(sale.buyer_email.toLowerCase());
+        }
+      }
+
+      const breakdown: StatusBreakdown[] = [];
+      statusMap.forEach((value, key) => {
+        breakdown.push({
+          status: key,
+          count: value.count,
+          uniqueClients: value.emails.size,
+        });
+      });
+
+      return breakdown.sort((a, b) => b.count - a.count);
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch all sales for the project (filtered by status)
   const { data: salesData, isLoading: loadingSales } = useQuery({
     queryKey: ['crm-sales', projectId, statusFilter],
     queryFn: async () => {
@@ -469,6 +534,8 @@ export function useCRMJourneyData(filters: CRMFilters) {
     journeyMetrics,
     uniqueProducts,
     uniqueFunnels,
+    statusBreakdown: statusBreakdown || [],
     isLoading: loadingSales || loadingMappings || loadingFunnels,
+    isLoadingBreakdown: loadingBreakdown,
   };
 }

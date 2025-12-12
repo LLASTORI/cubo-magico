@@ -787,16 +787,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                     </CardContent>
                   </Card>
                 )}
-                {syncing && (
-                  <Card className="border-primary/50 bg-primary/5">
-                    <CardContent className="py-4">
-                      <SyncLoader 
-                        showProgress={true} 
-                        estimatedDuration={estimatedDuration}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
 
                 {/* Metric Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

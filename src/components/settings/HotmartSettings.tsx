@@ -7,9 +7,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectModules } from '@/hooks/useProjectModules';
-import { CheckCircle, AlertCircle, Loader2, ShoppingCart, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react';
+import { 
+  CheckCircle, 
+  AlertCircle, 
+  Loader2, 
+  ShoppingCart, 
+  Eye, 
+  EyeOff, 
+  RefreshCw, 
+  Lock, 
+  Database,
+  Calendar
+} from 'lucide-react';
+import { format, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export const HotmartSettings = () => {
   const { currentProject } = useProject();
@@ -25,21 +40,60 @@ export const HotmartSettings = () => {
   });
   const [showSecrets, setShowSecrets] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  const projectId = currentProject?.id;
 
   const { data: hotmartCredentials, isLoading } = useQuery({
-    queryKey: ['hotmart_credentials', currentProject?.id],
+    queryKey: ['hotmart_credentials', projectId],
     queryFn: async () => {
-      if (!currentProject?.id) return null;
+      if (!projectId) return null;
       const { data, error } = await supabase
         .from('project_credentials')
         .select('*')
-        .eq('project_id', currentProject.id)
+        .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
       return data;
     },
-    enabled: !!currentProject?.id,
+    enabled: !!projectId,
+  });
+
+  // Get current Hotmart data stats
+  const { data: dataStats, refetch: refetchStats } = useQuery({
+    queryKey: ['hotmart_data_stats', projectId],
+    queryFn: async () => {
+      if (!projectId) return null;
+
+      const { count: hotmartCount } = await supabase
+        .from('hotmart_sales')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId);
+
+      const { data: hotmartDatesMin } = await supabase
+        .from('hotmart_sales')
+        .select('sale_date')
+        .eq('project_id', projectId)
+        .order('sale_date', { ascending: true })
+        .limit(1);
+
+      const { data: hotmartDatesMax } = await supabase
+        .from('hotmart_sales')
+        .select('sale_date')
+        .eq('project_id', projectId)
+        .order('sale_date', { ascending: false })
+        .limit(1);
+
+      return {
+        count: hotmartCount || 0,
+        minDate: hotmartDatesMin?.[0]?.sale_date,
+        maxDate: hotmartDatesMax?.[0]?.sale_date,
+      };
+    },
+    enabled: !!projectId,
   });
 
   useEffect(() => {
@@ -56,12 +110,12 @@ export const HotmartSettings = () => {
 
   const saveCredentialsMutation = useMutation({
     mutationFn: async (creds: typeof credentials) => {
-      if (!currentProject?.id) throw new Error('Projeto não selecionado');
+      if (!projectId) throw new Error('Projeto não selecionado');
 
       const { error } = await supabase
         .from('project_credentials')
         .upsert({
-          project_id: currentProject.id,
+          project_id: projectId,
           provider: 'hotmart',
           client_id: creds.client_id,
           client_secret: creds.client_secret,
@@ -91,7 +145,7 @@ export const HotmartSettings = () => {
   });
 
   const handleTestConnection = async () => {
-    if (!currentProject?.id) return;
+    if (!projectId) return;
 
     if (!credentials.client_id || !credentials.client_secret) {
       toast({
@@ -104,31 +158,26 @@ export const HotmartSettings = () => {
 
     setTesting(true);
     try {
-      // Save credentials first
       await saveCredentialsMutation.mutateAsync(credentials);
-
-      // Wait for DB sync
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Test connection
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: '/sales/summary',
           params: {},
-          projectId: currentProject.id,
+          projectId,
         },
       });
 
       if (error) throw error;
 
-      // Mark as validated
       await supabase
         .from('project_credentials')
         .update({ 
           is_validated: true, 
           validated_at: new Date().toISOString() 
         })
-        .eq('project_id', currentProject.id)
+        .eq('project_id', projectId)
         .eq('provider', 'hotmart');
 
       queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
@@ -148,14 +197,104 @@ export const HotmartSettings = () => {
     }
   };
 
+  const handleSyncHotmart = async () => {
+    if (!projectId || !isConfigured) return;
+
+    setSyncing(true);
+    setSyncProgress(10);
+    setSyncMessage('Iniciando sincronização...');
+
+    try {
+      const endDate = new Date();
+      const hotmartStartDate = subMonths(endDate, 24);
+
+      // Split 24 months into smaller chunks (3 months each)
+      const chunks: { start: number; end: number }[] = [];
+      let chunkStart = new Date(hotmartStartDate);
+      
+      while (chunkStart < endDate) {
+        const chunkEnd = new Date(chunkStart);
+        chunkEnd.setMonth(chunkEnd.getMonth() + 3);
+        if (chunkEnd > endDate) {
+          chunkEnd.setTime(endDate.getTime());
+        }
+        
+        chunks.push({
+          start: chunkStart.getTime(),
+          end: chunkEnd.getTime(),
+        });
+        
+        chunkStart = new Date(chunkEnd);
+        chunkStart.setDate(chunkStart.getDate() + 1);
+      }
+
+      let totalSynced = 0;
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const chunkProgress = 10 + ((i + 1) / chunks.length) * 80;
+        
+        const chunkStartDate = new Date(chunk.start);
+        const chunkEndDate = new Date(chunk.end);
+        
+        setSyncMessage(`Sincronizando ${format(chunkStartDate, 'MMM yyyy', { locale: ptBR })} - ${format(chunkEndDate, 'MMM yyyy', { locale: ptBR })}... (${i + 1}/${chunks.length})`);
+        setSyncProgress(chunkProgress);
+
+        const { data, error } = await supabase.functions.invoke('hotmart-api', {
+          body: {
+            action: 'sync_sales',
+            projectId,
+            startDate: chunk.start,
+            endDate: chunk.end,
+          },
+        });
+
+        if (error) {
+          console.error(`Hotmart chunk ${i + 1} error:`, error);
+        } else {
+          totalSynced += (data?.synced || 0) + (data?.updated || 0);
+        }
+
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      setSyncProgress(100);
+      setSyncMessage(`${totalSynced.toLocaleString()} vendas sincronizadas!`);
+
+      toast({
+        title: 'Sincronização concluída!',
+        description: `${totalSynced.toLocaleString()} vendas processadas.`,
+      });
+
+      refetchStats();
+
+    } catch (error: any) {
+      console.error('Hotmart sync error:', error);
+      setSyncMessage(error.message || 'Erro ao sincronizar');
+      toast({
+        title: 'Erro na sincronização',
+        description: error.message || 'Erro ao sincronizar dados do Hotmart',
+        variant: 'destructive',
+      });
+    } finally {
+      setTimeout(() => {
+        setSyncing(false);
+        setSyncProgress(0);
+        setSyncMessage('');
+      }, 3000);
+    }
+  };
+
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      if (!currentProject?.id) throw new Error('Projeto não selecionado');
+      if (!projectId) throw new Error('Projeto não selecionado');
       
       const { error } = await supabase
         .from('project_credentials')
         .delete()
-        .eq('project_id', currentProject.id)
+        .eq('project_id', projectId)
         .eq('provider', 'hotmart');
       
       if (error) throw error;
@@ -179,6 +318,15 @@ export const HotmartSettings = () => {
 
   const isConfigured = hotmartCredentials?.is_configured;
   const isValidated = hotmartCredentials?.is_validated;
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'N/A';
+    try {
+      return format(new Date(dateStr), 'dd/MM/yyyy', { locale: ptBR });
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <Card>
@@ -231,97 +379,166 @@ export const HotmartSettings = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="client_id">Client ID</Label>
-              <Input
-                id="client_id"
-                value={credentials.client_id}
-                onChange={(e) => setCredentials(prev => ({ ...prev, client_id: e.target.value }))}
-                placeholder="Seu Client ID da Hotmart"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="client_secret">Client Secret</Label>
-              <div className="relative">
+          <div className="space-y-6">
+            {/* Credentials Section */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="client_id">Client ID</Label>
                 <Input
-                  id="client_secret"
-                  type={showSecrets ? 'text' : 'password'}
-                  value={credentials.client_secret}
-                  onChange={(e) => setCredentials(prev => ({ ...prev, client_secret: e.target.value }))}
-                  placeholder="Seu Client Secret da Hotmart"
+                  id="client_id"
+                  value={credentials.client_id}
+                  onChange={(e) => setCredentials(prev => ({ ...prev, client_id: e.target.value }))}
+                  placeholder="Seu Client ID da Hotmart"
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full"
-                  onClick={() => setShowSecrets(!showSecrets)}
-                >
-                  {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="basic_auth">Basic Auth (opcional)</Label>
-              <Input
-                id="basic_auth"
-                type={showSecrets ? 'text' : 'password'}
-                value={credentials.basic_auth}
-                onChange={(e) => setCredentials(prev => ({ ...prev, basic_auth: e.target.value }))}
-                placeholder="Basic auth se necessário"
-              />
-              <p className="text-xs text-muted-foreground">
-                Usado apenas em algumas configurações específicas da Hotmart.
-              </p>
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="client_secret">Client Secret</Label>
+                <div className="relative">
+                  <Input
+                    id="client_secret"
+                    type={showSecrets ? 'text' : 'password'}
+                    value={credentials.client_secret}
+                    onChange={(e) => setCredentials(prev => ({ ...prev, client_secret: e.target.value }))}
+                    placeholder="Seu Client Secret da Hotmart"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowSecrets(!showSecrets)}
+                  >
+                    {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
 
-            <div className="flex gap-3 pt-2">
-              <Button
-                onClick={handleTestConnection}
-                disabled={testing || !credentials.client_id || !credentials.client_secret}
-                className="flex-1"
-              >
-                {testing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Testando...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Salvar e Testar Conexão
-                  </>
-                )}
-              </Button>
-              
-              {isConfigured && (
+              <div className="space-y-2">
+                <Label htmlFor="basic_auth">Basic Auth (opcional)</Label>
+                <Input
+                  id="basic_auth"
+                  type={showSecrets ? 'text' : 'password'}
+                  value={credentials.basic_auth}
+                  onChange={(e) => setCredentials(prev => ({ ...prev, basic_auth: e.target.value }))}
+                  placeholder="Basic auth se necessário"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Usado apenas em algumas configurações específicas da Hotmart.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
                 <Button
-                  variant="destructive"
-                  onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
+                  onClick={handleTestConnection}
+                  disabled={testing || !credentials.client_id || !credentials.client_secret}
+                  className="flex-1"
                 >
-                  {disconnectMutation.isPending ? 'Removendo...' : 'Desconectar'}
+                  {testing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Testando...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Salvar e Testar Conexão
+                    </>
+                  )}
                 </Button>
+                
+                {isConfigured && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => disconnectMutation.mutate()}
+                    disabled={disconnectMutation.isPending}
+                  >
+                    {disconnectMutation.isPending ? 'Removendo...' : 'Desconectar'}
+                  </Button>
+                )}
+              </div>
+
+              {isValidated && (
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <div className="flex items-center gap-2 text-green-600 text-sm">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="font-medium">Credenciais validadas com sucesso!</span>
+                  </div>
+                  {hotmartCredentials?.validated_at && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Última validação: {new Date(hotmartCredentials.validated_at).toLocaleString('pt-BR')}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
+            {/* Sync Section - Only show when validated */}
             {isValidated && (
-              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                <div className="flex items-center gap-2 text-green-600 text-sm">
-                  <CheckCircle className="h-4 w-4" />
-                  <span className="font-medium">Credenciais validadas com sucesso!</span>
+              <>
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Sincronização de Dados</h3>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="p-4 rounded-lg border bg-card space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Vendas sincronizadas:</span>
+                      <span className="font-medium">{dataStats?.count?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Período disponível:</span>
+                      <span className="font-medium">
+                        {dataStats?.minDate && dataStats?.maxDate 
+                          ? `${formatDate(dataStats.minDate)} - ${formatDate(dataStats.maxDate)}`
+                          : 'Sem dados'
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span>Sincroniza os últimos 24 meses de vendas</span>
+                    </div>
+                  </div>
+
+                  {/* Progress */}
+                  {syncing && (
+                    <div className="space-y-2">
+                      <Progress value={syncProgress} className="h-2" />
+                      <p className="text-sm text-muted-foreground text-center">
+                        {syncMessage}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Sync Button */}
+                  <Button
+                    onClick={handleSyncHotmart}
+                    disabled={syncing}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {syncing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Sincronizando...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Sincronizar Vendas Hotmart
+                      </>
+                    )}
+                  </Button>
                 </div>
-                {hotmartCredentials?.validated_at && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Última validação: {new Date(hotmartCredentials.validated_at).toLocaleString('pt-BR')}
-                  </p>
-                )}
-              </div>
+              </>
             )}
 
+            {/* Help Section */}
             <div className="p-4 rounded-lg bg-muted">
               <p className="text-sm font-medium mb-2">Como obter as credenciais:</p>
               <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">

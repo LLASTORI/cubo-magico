@@ -12,7 +12,8 @@ import {
   ChevronDown,
   LogOut,
   CalendarDays,
-  Building2
+  Building2,
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -68,6 +69,7 @@ export const AppHeader = ({
       case '/agencia': return 'Visão da Agência';
       case '/undefined-offers': return 'Ofertas a Definir';
       case '/launch-dashboard': return 'Dashboard de Lançamentos';
+      case '/crm': return 'CRM - Jornada do Cliente';
       case '/offer-mappings': return 'Mapeamento de Ofertas';
       default: return 'Projeto ativo';
     }
@@ -187,6 +189,16 @@ export const AppHeader = ({
                 >
                   <Package className="w-4 h-4" />
                   A Definir
+                </Button>
+
+                {/* CRM */}
+                <Button
+                  onClick={() => navigate('/crm')}
+                  variant={currentPath === '/crm' ? "default" : "outline"}
+                  className="gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  CRM
                 </Button>
 
                 {/* Mapeamento de Ofertas */}

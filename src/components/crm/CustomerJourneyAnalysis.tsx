@@ -38,6 +38,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from '@/lib/utils';
+import { CustomerFlowChart } from './CustomerFlowChart';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -470,6 +471,7 @@ export function CustomerJourneyAnalysis() {
       <Tabs defaultValue="journeys" className="space-y-4">
         <TabsList>
           <TabsTrigger value="journeys">Jornadas de Clientes</TabsTrigger>
+          <TabsTrigger value="flow">Fluxo de Clientes</TabsTrigger>
           <TabsTrigger value="cohorts">
             {analysisMode === 'entry' ? 'Análise por Cohort' : 'Análise de Origem'}
           </TabsTrigger>
@@ -539,6 +541,10 @@ export function CustomerJourneyAnalysis() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="flow">
+          <CustomerFlowChart journeys={customerJourneys} />
         </TabsContent>
 
         <TabsContent value="cohorts">

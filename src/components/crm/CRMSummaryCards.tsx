@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Package, Layers, Target, ShoppingBag } from 'lucide-react';
+import { Users, Package, Layers, Target, ShoppingBag, Globe, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { type GenericBreakdown } from '@/hooks/useCRMJourneyData';
@@ -13,9 +13,21 @@ interface CRMSummaryCardsProps {
   funnelBreakdown: GenericBreakdown[];
   positionBreakdown: GenericBreakdown[];
   productBreakdown: GenericBreakdown[];
+  sourceBreakdown: GenericBreakdown[];
+  contactStatusBreakdown: GenericBreakdown[];
   isLoading: boolean;
   selectedStatuses: string[];
+  selectedSources: string[];
+  selectedContactStatuses: string[];
   onStatusToggle: (status: string) => void;
+  onSourceToggle: (source: string) => void;
+  onContactStatusToggle: (status: string) => void;
+  onProductClick?: (product: string) => void;
+  onFunnelClick?: (funnelId: string) => void;
+  onOfferClick?: (offerCode: string) => void;
+  selectedProducts?: string[];
+  selectedFunnels?: string[];
+  selectedOffers?: string[];
 }
 
 export function CRMSummaryCards({
@@ -24,17 +36,30 @@ export function CRMSummaryCards({
   funnelBreakdown,
   positionBreakdown,
   productBreakdown,
+  sourceBreakdown,
+  contactStatusBreakdown,
   isLoading,
   selectedStatuses,
+  selectedSources,
+  selectedContactStatuses,
   onStatusToggle,
+  onSourceToggle,
+  onContactStatusToggle,
+  onProductClick,
+  onFunnelClick,
+  onOfferClick,
+  selectedProducts = [],
+  selectedFunnels = [],
+  selectedOffers = [],
 }: CRMSummaryCardsProps) {
-  const [activeTab, setActiveTab] = useState('status');
+  const [activeTab, setActiveTab] = useState('contactStatus');
 
   const renderBreakdownCards = (
     items: GenericBreakdown[],
     isClickable: boolean = false,
     selectedItems?: string[],
-    onToggle?: (key: string) => void
+    onToggle?: (key: string) => void,
+    labelPrefix?: string
   ) => {
     if (items.length === 0) {
       return (
@@ -66,10 +91,10 @@ export function CRMSummaryCards({
               </span>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant={isClickable && isSelected ? "default" : "secondary"} className="text-xs">
-                  {item.count.toLocaleString('pt-BR')} vendas
+                  {item.count.toLocaleString('pt-BR')} {labelPrefix || 'itens'}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {item.uniqueClients.toLocaleString('pt-BR')} clientes
+                  {item.uniqueClients.toLocaleString('pt-BR')} contatos
                 </span>
               </div>
             </CardWrapper>
@@ -88,11 +113,74 @@ export function CRMSummaryCards({
   );
 
   const tabs = [
-    { id: 'status', label: 'Status', icon: Target, data: statusBreakdown, clickable: true },
-    { id: 'funnel', label: 'Funis', icon: Layers, data: funnelBreakdown, clickable: false },
-    { id: 'product', label: 'Produtos', icon: Package, data: productBreakdown, clickable: false },
-    { id: 'offer', label: 'Ofertas', icon: ShoppingBag, data: offerBreakdown, clickable: false },
-    { id: 'position', label: 'Posições', icon: Target, data: positionBreakdown, clickable: false },
+    { 
+      id: 'contactStatus', 
+      label: 'Status Contato', 
+      icon: UserCheck, 
+      data: contactStatusBreakdown, 
+      clickable: true,
+      selected: selectedContactStatuses,
+      onToggle: onContactStatusToggle,
+      labelPrefix: 'contatos'
+    },
+    { 
+      id: 'source', 
+      label: 'Fonte', 
+      icon: Globe, 
+      data: sourceBreakdown, 
+      clickable: true,
+      selected: selectedSources,
+      onToggle: onSourceToggle,
+      labelPrefix: 'contatos'
+    },
+    { 
+      id: 'status', 
+      label: 'Status Transação', 
+      icon: Target, 
+      data: statusBreakdown, 
+      clickable: true,
+      selected: selectedStatuses,
+      onToggle: onStatusToggle,
+      labelPrefix: 'vendas'
+    },
+    { 
+      id: 'funnel', 
+      label: 'Funis', 
+      icon: Layers, 
+      data: funnelBreakdown, 
+      clickable: true,
+      selected: selectedFunnels,
+      onToggle: onFunnelClick,
+      labelPrefix: 'vendas'
+    },
+    { 
+      id: 'product', 
+      label: 'Produtos', 
+      icon: Package, 
+      data: productBreakdown, 
+      clickable: true,
+      selected: selectedProducts,
+      onToggle: onProductClick,
+      labelPrefix: 'vendas'
+    },
+    { 
+      id: 'offer', 
+      label: 'Ofertas', 
+      icon: ShoppingBag, 
+      data: offerBreakdown, 
+      clickable: true,
+      selected: selectedOffers,
+      onToggle: onOfferClick,
+      labelPrefix: 'vendas'
+    },
+    { 
+      id: 'position', 
+      label: 'Posições', 
+      icon: Target, 
+      data: positionBreakdown, 
+      clickable: false,
+      labelPrefix: 'vendas'
+    },
   ];
 
   return (
@@ -103,12 +191,12 @@ export function CRMSummaryCards({
           Resumo Geral
         </CardTitle>
         <CardDescription>
-          Visão geral de vendas e clientes únicos por categoria (antes dos filtros aplicados)
+          Visão geral de contatos e transações por categoria. Clique para filtrar.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex-wrap h-auto gap-1">
             {tabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon className="h-4 w-4" />
@@ -129,12 +217,13 @@ export function CRMSummaryCards({
                   {renderBreakdownCards(
                     tab.data,
                     tab.clickable,
-                    tab.clickable ? selectedStatuses : undefined,
-                    tab.clickable ? onStatusToggle : undefined
+                    tab.selected,
+                    tab.onToggle,
+                    tab.labelPrefix
                   )}
                   {tab.clickable && (
                     <p className="text-xs text-muted-foreground mt-3">
-                      Clique nos status para adicionar/remover do filtro
+                      Clique nos cards para adicionar/remover do filtro
                     </p>
                   )}
                 </>

@@ -153,7 +153,9 @@ export type Database = {
           first_utm_adset: string | null
           first_utm_campaign: string | null
           first_utm_content: string | null
+          first_utm_creative: string | null
           first_utm_medium: string | null
+          first_utm_placement: string | null
           first_utm_source: string | null
           first_utm_term: string | null
           id: string
@@ -190,7 +192,9 @@ export type Database = {
           first_utm_adset?: string | null
           first_utm_campaign?: string | null
           first_utm_content?: string | null
+          first_utm_creative?: string | null
           first_utm_medium?: string | null
+          first_utm_placement?: string | null
           first_utm_source?: string | null
           first_utm_term?: string | null
           id?: string
@@ -227,7 +231,9 @@ export type Database = {
           first_utm_adset?: string | null
           first_utm_campaign?: string | null
           first_utm_content?: string | null
+          first_utm_creative?: string | null
           first_utm_medium?: string | null
+          first_utm_placement?: string | null
           first_utm_source?: string | null
           first_utm_term?: string | null
           id?: string

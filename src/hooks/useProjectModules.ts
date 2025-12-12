@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'analytics';
+export type ModuleKey = 'crm' | 'meta_ads';
 
 export interface ProjectModule {
   id: string;
@@ -36,12 +36,6 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'Meta Ads',
     description: 'Integração com Facebook e Instagram Ads para análise de ROI',
     icon: 'facebook',
-  },
-  {
-    key: 'analytics',
-    name: 'Analytics Avançado',
-    description: 'Dashboards e relatórios avançados de performance',
-    icon: 'chart',
   },
 ];
 

@@ -49,6 +49,7 @@ export const AppHeader = ({
   
   const canAccessOfferMappings = userRole === 'owner' || userRole === 'manager';
   const isCRMEnabled = isModuleEnabled('crm');
+  const isMetaAdsEnabled = isModuleEnabled('meta_ads');
   
   const currentPath = location.pathname;
   
@@ -140,13 +141,15 @@ export const AppHeader = ({
                       <ShoppingCart className="w-4 h-4" />
                       Hotmart
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => navigate('/meta-ads')} 
-                      className={`gap-2 cursor-pointer ${currentPath === '/meta-ads' ? 'bg-muted' : ''}`}
-                    >
-                      <Facebook className="w-4 h-4" />
-                      Meta Ads
-                    </DropdownMenuItem>
+                    {isMetaAdsEnabled && (
+                      <DropdownMenuItem 
+                        onClick={() => navigate('/meta-ads')} 
+                        className={`gap-2 cursor-pointer ${currentPath === '/meta-ads' ? 'bg-muted' : ''}`}
+                      >
+                        <Facebook className="w-4 h-4" />
+                        Meta Ads
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
 

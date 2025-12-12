@@ -125,7 +125,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
           .from('hotmart_sales')
           .select('transaction_id, buyer_email, buyer_name, product_name, offer_code, sale_date, total_price_brl, status')
           .eq('project_id', projectId)
-          .eq('status', 'APPROVED')
+          .in('status', ['APPROVED', 'COMPLETE'])
           .order('sale_date', { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
 

@@ -309,18 +309,7 @@ const Projects = () => {
   };
 
   const selectAndGo = (project: Project) => {
-    const status = projectCredentials[project.id];
-    
-    if (!status?.is_validated) {
-      toast({ 
-        title: 'Credenciais não validadas', 
-        description: 'Configure e teste as credenciais antes de acessar o Dashboard',
-        variant: 'destructive' 
-      });
-      openCredentialsDialog(project);
-      return;
-    }
-    
+    // Removed Hotmart credential validation requirement - users can access dashboard without it
     setCurrentProject(project);
     navigate('/');
   };

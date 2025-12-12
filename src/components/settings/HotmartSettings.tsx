@@ -1,0 +1,338 @@
+import { useState, useEffect } from 'react';
+import { useProject } from '@/contexts/ProjectContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { useProjectModules } from '@/hooks/useProjectModules';
+import { CheckCircle, AlertCircle, Loader2, ShoppingCart, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react';
+
+export const HotmartSettings = () => {
+  const { currentProject } = useProject();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { isModuleEnabled } = useProjectModules();
+  const isHotmartEnabled = isModuleEnabled('hotmart');
+
+  const [credentials, setCredentials] = useState({
+    client_id: '',
+    client_secret: '',
+    basic_auth: ''
+  });
+  const [showSecrets, setShowSecrets] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const { data: hotmartCredentials, isLoading } = useQuery({
+    queryKey: ['hotmart_credentials', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return null;
+      const { data, error } = await supabase
+        .from('project_credentials')
+        .select('*')
+        .eq('project_id', currentProject.id)
+        .eq('provider', 'hotmart')
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!currentProject?.id,
+  });
+
+  useEffect(() => {
+    if (hotmartCredentials) {
+      setCredentials({
+        client_id: hotmartCredentials.client_id || '',
+        client_secret: hotmartCredentials.client_secret || '',
+        basic_auth: hotmartCredentials.basic_auth || ''
+      });
+    } else {
+      setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
+    }
+  }, [hotmartCredentials]);
+
+  const saveCredentialsMutation = useMutation({
+    mutationFn: async (creds: typeof credentials) => {
+      if (!currentProject?.id) throw new Error('Projeto não selecionado');
+
+      const { error } = await supabase
+        .from('project_credentials')
+        .upsert({
+          project_id: currentProject.id,
+          provider: 'hotmart',
+          client_id: creds.client_id,
+          client_secret: creds.client_secret,
+          basic_auth: creds.basic_auth,
+          is_configured: !!(creds.client_id && creds.client_secret),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'project_id,provider'
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
+      toast({
+        title: 'Credenciais salvas',
+        description: 'Suas credenciais Hotmart foram atualizadas.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao salvar',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleTestConnection = async () => {
+    if (!currentProject?.id) return;
+
+    if (!credentials.client_id || !credentials.client_secret) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Client ID e Client Secret são necessários.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setTesting(true);
+    try {
+      // Save credentials first
+      await saveCredentialsMutation.mutateAsync(credentials);
+
+      // Wait for DB sync
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test connection
+      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+        body: {
+          endpoint: '/sales/summary',
+          params: {},
+          projectId: currentProject.id,
+        },
+      });
+
+      if (error) throw error;
+
+      // Mark as validated
+      await supabase
+        .from('project_credentials')
+        .update({ 
+          is_validated: true, 
+          validated_at: new Date().toISOString() 
+        })
+        .eq('project_id', currentProject.id)
+        .eq('provider', 'hotmart');
+
+      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
+
+      toast({
+        title: 'Conexão bem-sucedida!',
+        description: 'Credenciais Hotmart validadas com sucesso.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Falha na conexão',
+        description: error.message || 'Verifique suas credenciais.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentProject?.id) throw new Error('Projeto não selecionado');
+      
+      const { error } = await supabase
+        .from('project_credentials')
+        .delete()
+        .eq('project_id', currentProject.id)
+        .eq('provider', 'hotmart');
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
+      setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
+      toast({
+        title: 'Hotmart desconectado',
+        description: 'As credenciais foram removidas.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao desconectar',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const isConfigured = hotmartCredentials?.is_configured;
+  const isValidated = hotmartCredentials?.is_validated;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-orange-500/10">
+              <ShoppingCart className="h-6 w-6 text-orange-500" />
+            </div>
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                Hotmart
+                {!isHotmartEnabled && (
+                  <Badge variant="outline" className="bg-muted text-muted-foreground border-muted-foreground/30">
+                    <Lock className="h-3 w-3 mr-1" />
+                    Módulo Desativado
+                  </Badge>
+                )}
+                {isHotmartEnabled && isValidated && (
+                  <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Conectado
+                  </Badge>
+                )}
+                {isHotmartEnabled && isConfigured && !isValidated && (
+                  <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Não Validado
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Configure suas credenciais da API Hotmart para sincronizar vendas.
+              </CardDescription>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!currentProject ? (
+          <div className="p-4 rounded-lg bg-muted">
+            <p className="text-sm text-muted-foreground">
+              Selecione um projeto primeiro para configurar o Hotmart.
+            </p>
+          </div>
+        ) : !isHotmartEnabled ? (
+          <div className="p-4 rounded-lg bg-muted">
+            <p className="text-sm text-muted-foreground">
+              O módulo Hotmart está desativado para este projeto. Entre em contato com o administrador para ativá-lo.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="client_id">Client ID</Label>
+              <Input
+                id="client_id"
+                value={credentials.client_id}
+                onChange={(e) => setCredentials(prev => ({ ...prev, client_id: e.target.value }))}
+                placeholder="Seu Client ID da Hotmart"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="client_secret">Client Secret</Label>
+              <div className="relative">
+                <Input
+                  id="client_secret"
+                  type={showSecrets ? 'text' : 'password'}
+                  value={credentials.client_secret}
+                  onChange={(e) => setCredentials(prev => ({ ...prev, client_secret: e.target.value }))}
+                  placeholder="Seu Client Secret da Hotmart"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full"
+                  onClick={() => setShowSecrets(!showSecrets)}
+                >
+                  {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="basic_auth">Basic Auth (opcional)</Label>
+              <Input
+                id="basic_auth"
+                type={showSecrets ? 'text' : 'password'}
+                value={credentials.basic_auth}
+                onChange={(e) => setCredentials(prev => ({ ...prev, basic_auth: e.target.value }))}
+                placeholder="Basic auth se necessário"
+              />
+              <p className="text-xs text-muted-foreground">
+                Usado apenas em algumas configurações específicas da Hotmart.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                onClick={handleTestConnection}
+                disabled={testing || !credentials.client_id || !credentials.client_secret}
+                className="flex-1"
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Testando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Salvar e Testar Conexão
+                  </>
+                )}
+              </Button>
+              
+              {isConfigured && (
+                <Button
+                  variant="destructive"
+                  onClick={() => disconnectMutation.mutate()}
+                  disabled={disconnectMutation.isPending}
+                >
+                  {disconnectMutation.isPending ? 'Removendo...' : 'Desconectar'}
+                </Button>
+              )}
+            </div>
+
+            {isValidated && (
+              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="flex items-center gap-2 text-green-600 text-sm">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="font-medium">Credenciais validadas com sucesso!</span>
+                </div>
+                {hotmartCredentials?.validated_at && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Última validação: {new Date(hotmartCredentials.validated_at).toLocaleString('pt-BR')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="p-4 rounded-lg bg-muted">
+              <p className="text-sm font-medium mb-2">Como obter as credenciais:</p>
+              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Acesse o painel da Hotmart</li>
+                <li>Vá em Configurações → Credenciais de API</li>
+                <li>Copie o Client ID e Client Secret</li>
+              </ol>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};

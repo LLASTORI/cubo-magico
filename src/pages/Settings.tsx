@@ -26,6 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { ProjectModulesManager } from '@/components/settings/ProjectModulesManager';
+import { HotmartSettings } from '@/components/settings/HotmartSettings';
 
 const META_APP_ID = '845927421602166';
 
@@ -834,41 +835,8 @@ const Settings = () => {
                 </CardContent>
               </Card>
 
-              {/* Hotmart Integration Info */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-orange-500/10">
-                      <svg className="h-6 w-6 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                      </svg>
-                    </div>
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        Hotmart
-                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Configurado
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Integração de vendas da Hotmart.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    A configuração do Hotmart é feita por projeto, na página de gerenciamento de projetos.
-                  </p>
-                  <Link to="/projects">
-                    <Button variant="link" className="px-0 mt-2">
-                      Ir para projetos
-                      <ExternalLink className="h-4 w-4 ml-2" />
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+              {/* Hotmart Integration */}
+              <HotmartSettings />
             </div>
           </TabsContent>
 

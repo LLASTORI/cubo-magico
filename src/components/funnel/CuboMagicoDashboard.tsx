@@ -1,6 +1,7 @@
 import { useState, useMemo, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,7 @@ import {
   CalendarIcon, RefreshCw, TrendingUp, TrendingDown, Target, 
   DollarSign, ShoppingCart, Users, AlertTriangle, CheckCircle2, XCircle,
   ChevronDown, ChevronRight, Percent, ArrowRight, Megaphone, LineChart, 
-  GitCompare, Tag, CreditCard, UsersRound, Coins, History
+  GitCompare, Tag, CreditCard, UsersRound, Coins, History, Lock
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -103,6 +104,9 @@ export function CuboMagicoDashboard({
   onFunnelSelect,
   salesData: externalSalesData
 }: CuboMagicoDashboardProps) {
+  const { isModuleEnabled } = useProjectModules();
+  const isMetaAdsEnabled = isModuleEnabled('meta_ads');
+  
   const [internalStartDate, setInternalStartDate] = useState<Date>(subDays(new Date(), 7));
   const [internalEndDate, setInternalEndDate] = useState<Date>(new Date());
   const [expandedFunnelId, setExpandedFunnelId] = useState<string | null>(null);
@@ -1224,15 +1228,36 @@ export function CuboMagicoDashboard({
                       <TableCell colSpan={11} className="p-0">
                         <div className="p-6 animate-in slide-in-from-top-2 duration-200 bg-gradient-to-br from-primary/10 via-primary/5 to-muted/30 border-l-4 border-l-primary rounded-br-lg shadow-inner">
                           <Tabs defaultValue="overview" className="w-full">
+                            <TooltipProvider>
                             <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 mb-4 bg-muted/50">
                               <TabsTrigger value="overview" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <Target className="w-3 h-3" />
                                 Visão Geral
                               </TabsTrigger>
-                              <TabsTrigger value="meta" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
-                                <Megaphone className="w-3 h-3" />
-                                Meta Ads
-                              </TabsTrigger>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <TabsTrigger 
+                                      value="meta" 
+                                      className={`text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md ${!isMetaAdsEnabled ? 'opacity-60' : ''}`}
+                                      disabled={!isMetaAdsEnabled}
+                                    >
+                                      {isMetaAdsEnabled ? (
+                                        <Megaphone className="w-3 h-3" />
+                                      ) : (
+                                        <Lock className="w-3 h-3" />
+                                      )}
+                                      Meta Ads
+                                      {!isMetaAdsEnabled && <Lock className="w-2 h-2 ml-0.5" />}
+                                    </TabsTrigger>
+                                  </span>
+                                </TooltipTrigger>
+                                {!isMetaAdsEnabled && (
+                                  <TooltipContent>
+                                    <p>Módulo bloqueado. Contate o suporte.</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
                               <TabsTrigger value="temporal" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                                 <LineChart className="w-3 h-3" />
                                 Evolução
@@ -1258,6 +1283,7 @@ export function CuboMagicoDashboard({
                                 Histórico
                               </TabsTrigger>
                             </TabsList>
+                            </TooltipProvider>
 
                             <TabsContent value="overview" className="mt-0">
                               {/* Funnel Score + Funnel Flow */}
@@ -2036,7 +2062,19 @@ export function CuboMagicoDashboard({
                             </TabsContent>
 
                             <TabsContent value="meta" className="mt-0">
-                              {(() => {
+                              {!isMetaAdsEnabled ? (
+                                <Card className="p-8 text-center border-dashed">
+                                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                    <Lock className="w-6 h-6 text-muted-foreground" />
+                                  </div>
+                                  <h3 className="text-lg font-semibold text-foreground mb-1">
+                                    Módulo Meta Ads Bloqueado
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    Contate o suporte para ativar este recurso.
+                                  </p>
+                                </Card>
+                              ) : (() => {
                                 const metaData = getFilteredMetaData(metrics.funnel.campaign_name_pattern || '');
                                 return (
                                   <MetaHierarchyAnalysis

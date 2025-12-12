@@ -6,7 +6,8 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Settings, Loader2 } from 'lucide-react';
+import { Users, Settings, Loader2, Lock } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function CRM() {
   const navigate = useNavigate();
@@ -61,26 +62,34 @@ export default function CRM() {
             </CardContent>
           </Card>
         ) : !crmEnabled ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Módulo CRM Desativado
-              </CardTitle>
-              <CardDescription>
-                O módulo CRM não está habilitado para este projeto.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">
-                Para utilizar o CRM, acesse as configurações e ative o módulo na aba "Módulos".
-              </p>
-              <Button onClick={() => navigate('/settings')} className="gap-2">
-                <Settings className="h-4 w-4" />
-                Ir para Configurações
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-center py-12">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="max-w-md cursor-help border-muted">
+                  <CardHeader className="text-center pb-4">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Lock className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <CardTitle className="flex items-center justify-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Módulo CRM
+                    </CardTitle>
+                    <CardDescription>
+                      Este módulo não está habilitado para o seu projeto.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Entre em contato com o suporte para ativar este recurso.
+                    </p>
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p>Para ativar o módulo CRM, entre em contato com nosso suporte pelo email suporte@cubo.app ou WhatsApp.</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         ) : (
           <div className="space-y-6">
             <div>

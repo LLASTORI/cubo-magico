@@ -30,7 +30,8 @@ import {
   type TargetFilter,
   type DateFilter,
   type CustomerJourney,
-  type CRMFilters
+  type CRMFilters,
+  DEFAULT_STATUS_FILTER
 } from '@/hooks/useCRMJourneyData';
 import {
   Collapsible,
@@ -176,6 +177,7 @@ export function CustomerJourneyAnalysis() {
   const [filterType, setFilterType] = useState<'product' | 'funnel' | null>(null);
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilter>({ startDate: null, endDate: null });
+  const [statusFilter, setStatusFilter] = useState<string[]>(DEFAULT_STATUS_FILTER);
 
   const entryFilter: EntryFilter | null = analysisMode === 'entry' && filterType && selectedValues.length > 0
     ? { type: filterType, values: selectedValues }
@@ -189,6 +191,7 @@ export function CustomerJourneyAnalysis() {
     entryFilter,
     targetFilter,
     dateFilter,
+    statusFilter,
   };
 
   const { 
@@ -211,7 +214,21 @@ export function CustomerJourneyAnalysis() {
   const clearAllFilters = () => {
     clearFilter();
     clearDateFilter();
+    setStatusFilter(DEFAULT_STATUS_FILTER);
   };
+
+  const availableStatuses = [
+    { value: 'APPROVED', label: 'Aprovado' },
+    { value: 'COMPLETE', label: 'Completo' },
+    { value: 'CANCELED', label: 'Cancelado' },
+    { value: 'REFUNDED', label: 'Reembolsado' },
+    { value: 'CHARGEBACK', label: 'Chargeback' },
+    { value: 'EXPIRED', label: 'Expirado' },
+    { value: 'OVERDUE', label: 'Vencido' },
+    { value: 'STARTED', label: 'Iniciado' },
+    { value: 'PRINTED_BILLET', label: 'Boleto Impresso' },
+    { value: 'WAITING_PAYMENT', label: 'Aguardando Pagamento' },
+  ];
 
   const handleFilterTypeChange = (value: string) => {
     if (value === 'all') {
@@ -395,6 +412,17 @@ export function CustomerJourneyAnalysis() {
                 />
               </div>
             )}
+
+            {/* Status Filter */}
+            <div className="space-y-2 min-w-[250px]">
+              <label className="text-sm font-medium">Status das Vendas</label>
+              <MultiSelect
+                options={availableStatuses}
+                selected={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="Selecione os status..."
+              />
+            </div>
 
             {(entryFilter || targetFilter) && (
               <Button variant="outline" size="sm" onClick={clearFilter} className="gap-2">

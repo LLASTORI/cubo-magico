@@ -12,14 +12,23 @@ interface ModuleLockedValueProps {
   /** Additional class names */
   className?: string;
   /** Display variant */
-  variant?: 'cell' | 'card' | 'inline';
+  variant?: 'cell' | 'card' | 'inline' | 'badge' | 'status';
   /** Whether to show the lock icon */
   showLockIcon?: boolean;
+  /** Placeholder text when locked (default: "-") */
+  placeholder?: string;
 }
 
 /**
  * Reusable component to display module-locked values.
  * Shows the actual value when unlocked, or a locked state with tooltip when locked.
+ * 
+ * Variants:
+ * - cell: For table cells (right-aligned, opacity)
+ * - card: For card values (larger text, bold)
+ * - inline: For inline text
+ * - badge: For badge-style locked indicators
+ * - status: For status indicators with background
  * 
  * @example
  * // In a table cell
@@ -30,11 +39,12 @@ interface ModuleLockedValueProps {
  * />
  * 
  * @example
- * // In a card
+ * // In a card with custom placeholder
  * <ModuleLockedValue 
  *   isLocked={!isHotmartEnabled} 
  *   value={<span className="text-green-600">{formatCurrency(revenue)}</span>}
  *   variant="card"
+ *   placeholder="--"
  * />
  */
 export function ModuleLockedValue({
@@ -44,6 +54,7 @@ export function ModuleLockedValue({
   className,
   variant = 'cell',
   showLockIcon = true,
+  placeholder = '-',
 }: ModuleLockedValueProps) {
   if (!isLocked) {
     return <>{value}</>;
@@ -56,11 +67,16 @@ export function ModuleLockedValue({
         variant === 'cell' && 'justify-end opacity-60',
         variant === 'card' && 'text-xl font-bold',
         variant === 'inline' && 'opacity-60',
+        variant === 'badge' && 'px-2 py-0.5 rounded-md bg-muted/50 text-xs',
+        variant === 'status' && 'px-2 py-1 rounded-md bg-muted/30 border border-muted-foreground/20',
         className
       )}
     >
-      {showLockIcon && <Lock className="w-3 h-3" />}
-      <span>-</span>
+      {showLockIcon && <Lock className={cn(
+        variant === 'badge' ? 'w-2.5 h-2.5' : 'w-3 h-3',
+        variant === 'status' && 'w-4 h-4'
+      )} />}
+      <span>{placeholder}</span>
     </span>
   );
 
@@ -69,7 +85,9 @@ export function ModuleLockedValue({
       <TooltipTrigger className={cn(
         variant === 'cell' && 'flex items-center justify-end gap-1',
         variant === 'card' && 'w-full',
-        variant === 'inline' && ''
+        variant === 'inline' && '',
+        variant === 'badge' && 'inline-flex',
+        variant === 'status' && 'inline-flex'
       )}>
         {content}
       </TooltipTrigger>
@@ -96,14 +114,6 @@ interface ModuleLockedHeaderProps {
 /**
  * Reusable component for table headers that may be locked.
  * Shows a lock icon when the module is disabled.
- * 
- * @example
- * <ModuleLockedHeader
- *   isLocked={!isMetaAdsEnabled}
- *   label="Investimento"
- *   lockedTooltip="Módulo bloqueado"
- *   unlockedTooltip="Gasto em anúncios atribuído ao funil"
- * />
  */
 export function ModuleLockedHeader({
   isLocked,
@@ -120,6 +130,44 @@ export function ModuleLockedHeader({
       </TooltipTrigger>
       <TooltipContent>
         {isLocked ? lockedTooltip : unlockedTooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface ModuleLockedCardProps {
+  /** Whether the module is locked */
+  isLocked: boolean;
+  /** Card content when unlocked */
+  children: React.ReactNode;
+  /** Tooltip when locked */
+  tooltip?: string;
+  /** Additional class names for the wrapper */
+  className?: string;
+}
+
+/**
+ * Wrapper component for cards that should be dimmed/locked when module is disabled.
+ */
+export function ModuleLockedCard({
+  isLocked,
+  children,
+  tooltip = 'Módulo bloqueado. Entre em contato com o suporte.',
+  className,
+}: ModuleLockedCardProps) {
+  if (!isLocked) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className={cn('opacity-60 cursor-help', className)}>
+          {children}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{tooltip}</p>
       </TooltipContent>
     </Tooltip>
   );

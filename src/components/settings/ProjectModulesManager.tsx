@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useProjectModules, AVAILABLE_MODULES, type ModuleKey } from '@/hooks/useProjectModules';
 import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Users, BarChart3, Facebook, Blocks, Lock, Info } from 'lucide-react';
+import { Users, BarChart3, Facebook, Blocks, Lock, Info, ShoppingCart } from 'lucide-react';
 import { CRMWebhookKeysManager } from './CRMWebhookKeysManager';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +15,7 @@ const iconMap: Record<string, React.ElementType> = {
   users: Users,
   facebook: Facebook,
   chart: BarChart3,
+  'shopping-cart': ShoppingCart,
 };
 
 export function ProjectModulesManager() {

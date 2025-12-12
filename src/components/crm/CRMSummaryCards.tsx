@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Package, Layers, Target, ShoppingBag, Globe, UserCheck } from 'lucide-react';
+import { Users, Package, Layers, Target, ShoppingBag, Globe, UserCheck, CreditCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 import { type GenericBreakdown } from '@/hooks/useCRMJourneyData';
 
 interface CRMSummaryCardsProps {
@@ -52,7 +53,7 @@ export function CRMSummaryCards({
   selectedFunnels = [],
   selectedOffers = [],
 }: CRMSummaryCardsProps) {
-  const [activeTab, setActiveTab] = useState('contactStatus');
+  const [activeTab, setActiveTab] = useState('contacts');
 
   const renderBreakdownCards = (
     items: GenericBreakdown[],
@@ -112,10 +113,11 @@ export function CRMSummaryCards({
     </div>
   );
 
-  const tabs = [
+  // Contact-level tabs
+  const contactTabs = [
     { 
       id: 'contactStatus', 
-      label: 'Status Contato', 
+      label: 'Status', 
       icon: UserCheck, 
       data: contactStatusBreakdown, 
       clickable: true,
@@ -133,10 +135,14 @@ export function CRMSummaryCards({
       onToggle: onSourceToggle,
       labelPrefix: 'contatos'
     },
+  ];
+
+  // Transaction-level tabs
+  const transactionTabs = [
     { 
       id: 'status', 
-      label: 'Status Transação', 
-      icon: Target, 
+      label: 'Status Pagamento', 
+      icon: CreditCard, 
       data: statusBreakdown, 
       clickable: true,
       selected: selectedStatuses,
@@ -191,45 +197,97 @@ export function CRMSummaryCards({
           Resumo Geral
         </CardTitle>
         <CardDescription>
-          Visão geral de contatos e transações por categoria. Clique para filtrar.
+          Visão geral de contatos e transações. Clique nos cards para filtrar.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4 flex-wrap h-auto gap-1">
-            {tabs.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-                <Badge variant="secondary" className="ml-1 text-xs">
-                  {tab.data.length}
-                </Badge>
-              </TabsTrigger>
-            ))}
+          <TabsList className="mb-4">
+            <TabsTrigger value="contacts" className="gap-2">
+              <Users className="h-4 w-4" />
+              Contatos
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {contactStatusBreakdown.reduce((acc, item) => acc + item.count, 0).toLocaleString('pt-BR')}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="transactions" className="gap-2">
+              <CreditCard className="h-4 w-4" />
+              Transações
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {statusBreakdown.reduce((acc, item) => acc + item.count, 0).toLocaleString('pt-BR')}
+              </Badge>
+            </TabsTrigger>
           </TabsList>
 
-          {tabs.map((tab) => (
-            <TabsContent key={tab.id} value={tab.id} className="mt-0">
-              {isLoading ? (
-                <LoadingSkeleton />
-              ) : (
-                <>
-                  {renderBreakdownCards(
-                    tab.data,
-                    tab.clickable,
-                    tab.selected,
-                    tab.onToggle,
-                    tab.labelPrefix
-                  )}
-                  {tab.clickable && (
-                    <p className="text-xs text-muted-foreground mt-3">
-                      Clique nos cards para adicionar/remover do filtro
-                    </p>
-                  )}
-                </>
-              )}
-            </TabsContent>
-          ))}
+          <TabsContent value="contacts" className="mt-0 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Filtros baseados em dados do contato (aplicam-se a todos os leads, independente de ter transações).
+            </p>
+            {contactTabs.map((tab) => (
+              <div key={tab.id} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <tab.icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{tab.label}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {tab.data.length}
+                  </Badge>
+                </div>
+                {isLoading ? (
+                  <LoadingSkeleton />
+                ) : (
+                  <>
+                    {renderBreakdownCards(
+                      tab.data,
+                      tab.clickable,
+                      tab.selected,
+                      tab.onToggle,
+                      tab.labelPrefix
+                    )}
+                    {tab.clickable && tab.data.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Clique nos cards para adicionar/remover do filtro
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="transactions" className="mt-0 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Filtros baseados em transações (vendas). Leads sem transações não aparecerão se filtrar por status de pagamento.
+            </p>
+            {transactionTabs.map((tab) => (
+              <div key={tab.id} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <tab.icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{tab.label}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {tab.data.length}
+                  </Badge>
+                </div>
+                {isLoading ? (
+                  <LoadingSkeleton />
+                ) : (
+                  <>
+                    {renderBreakdownCards(
+                      tab.data,
+                      tab.clickable,
+                      tab.selected,
+                      tab.onToggle,
+                      tab.labelPrefix
+                    )}
+                    {tab.clickable && tab.data.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Clique nos cards para adicionar/remover do filtro
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </TabsContent>
         </Tabs>
       </CardContent>
     </Card>

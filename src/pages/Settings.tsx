@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Trash2, Check, Blocks } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -25,6 +25,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { ProjectModulesManager } from '@/components/settings/ProjectModulesManager';
 
 const META_APP_ID = '845927421602166';
 
@@ -390,7 +391,7 @@ const Settings = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className={`grid w-full max-w-lg ${isSuperAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          <TabsList className={`grid w-full max-w-2xl ${isSuperAdmin ? 'grid-cols-6' : 'grid-cols-5'}`}>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Perfil</span>
@@ -398,6 +399,10 @@ const Settings = () => {
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <span className="hidden sm:inline">Notificações</span>
+            </TabsTrigger>
+            <TabsTrigger value="modules" className="flex items-center gap-2">
+              <Blocks className="h-4 w-4" />
+              <span className="hidden sm:inline">Módulos</span>
             </TabsTrigger>
             <TabsTrigger value="integrations" className="flex items-center gap-2">
               <Link2 className="h-4 w-4" />
@@ -711,6 +716,11 @@ const Settings = () => {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Modules Tab */}
+          <TabsContent value="modules">
+            <ProjectModulesManager />
           </TabsContent>
 
           {/* Integrations Tab */}

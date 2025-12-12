@@ -1629,12 +1629,12 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
-      migrate_hotmart_to_crm: { Args: never; Returns: undefined }
-      sync_hotmart_sale_to_crm_manual: {
-        Args: {
-          sale_record: Database["public"]["Tables"]["hotmart_sales"]["Row"]
-        }
-        Returns: undefined
+      migrate_hotmart_to_crm: {
+        Args: never
+        Returns: {
+          contacts_created: number
+          transactions_created: number
+        }[]
       }
     }
     Enums: {

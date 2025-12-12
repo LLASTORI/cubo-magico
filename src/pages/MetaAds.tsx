@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings } from 'lucide-react';
+import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const META_APP_ID = '845927421602166';
@@ -84,27 +84,33 @@ const MetaAds = () => {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Meta Ads" />
-        <main className="container mx-auto px-6 py-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Facebook className="h-5 w-5" />
-                Módulo Meta Ads Desativado
-              </CardTitle>
-              <CardDescription>
-                O módulo Meta Ads não está habilitado para este projeto.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">
-                Para utilizar o Meta Ads, entre em contato com o administrador para ativar o módulo.
-              </p>
-              <Button onClick={() => navigate('/settings')} className="gap-2">
-                <Settings className="h-4 w-4" />
-                Ir para Configurações
-              </Button>
-            </CardContent>
-          </Card>
+        <main className="container mx-auto px-6 py-8 flex items-center justify-center">
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="max-w-md cursor-help border-muted">
+                <CardHeader className="text-center pb-4">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                    <Lock className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <CardTitle className="flex items-center justify-center gap-2">
+                    <Facebook className="h-5 w-5" />
+                    Módulo Meta Ads
+                  </CardTitle>
+                  <CardDescription>
+                    Este módulo não está habilitado para o seu projeto.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Entre em contato com o suporte para ativar este recurso.
+                  </p>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p>Para ativar o módulo Meta Ads, entre em contato com nosso suporte pelo email suporte@cubo.app ou WhatsApp.</p>
+            </TooltipContent>
+          </UITooltip>
         </main>
       </div>
     );

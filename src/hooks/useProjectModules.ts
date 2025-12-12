@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart';
 
 export interface ProjectModule {
   id: string;
@@ -36,6 +36,12 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'Meta Ads',
     description: 'Integração com Facebook e Instagram Ads para análise de ROI',
     icon: 'facebook',
+  },
+  {
+    key: 'hotmart',
+    name: 'Hotmart',
+    description: 'Sincronização de vendas, produtos e métricas de faturamento',
+    icon: 'shopping-cart',
   },
 ];
 

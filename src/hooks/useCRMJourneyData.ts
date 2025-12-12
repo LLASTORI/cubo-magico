@@ -91,6 +91,7 @@ interface OfferMapping {
   codigo_oferta: string;
   funnel_id: string | null;
   nome_produto: string;
+  nome_posicao?: string | null;
 }
 
 interface Funnel {
@@ -113,18 +114,25 @@ export interface StatusBreakdown {
   uniqueClients: number;
 }
 
+export interface GenericBreakdown {
+  key: string;
+  label: string;
+  count: number;
+  uniqueClients: number;
+}
+
 export function useCRMJourneyData(filters: CRMFilters) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
   const { entryFilter, targetFilter, dateFilter, statusFilter } = filters;
 
-  // Fetch status breakdown (all statuses, no filter) for summary
-  const { data: statusBreakdown, isLoading: loadingBreakdown } = useQuery({
-    queryKey: ['crm-status-breakdown', projectId],
+  // Fetch all sales for breakdowns (no status filter)
+  const { data: allSalesForBreakdown, isLoading: loadingBreakdown } = useQuery({
+    queryKey: ['crm-all-sales-breakdown', projectId],
     queryFn: async () => {
       if (!projectId) return [];
       
-      const allSales: { status: string; buyer_email: string }[] = [];
+      const allSales: { status: string; buyer_email: string; product_name: string; offer_code: string | null }[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
@@ -132,7 +140,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       while (hasMore) {
         const { data, error } = await supabase
           .from('hotmart_sales')
-          .select('status, buyer_email')
+          .select('status, buyer_email, product_name, offer_code')
           .eq('project_id', projectId)
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -147,31 +155,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
         }
       }
 
-      // Group by status
-      const statusMap = new Map<string, { count: number; emails: Set<string> }>();
-      
-      for (const sale of allSales) {
-        const status = sale.status || 'UNKNOWN';
-        if (!statusMap.has(status)) {
-          statusMap.set(status, { count: 0, emails: new Set() });
-        }
-        const data = statusMap.get(status)!;
-        data.count++;
-        if (sale.buyer_email) {
-          data.emails.add(sale.buyer_email.toLowerCase());
-        }
-      }
-
-      const breakdown: StatusBreakdown[] = [];
-      statusMap.forEach((value, key) => {
-        breakdown.push({
-          status: key,
-          count: value.count,
-          uniqueClients: value.emails.size,
-        });
-      });
-
-      return breakdown.sort((a, b) => b.count - a.count);
+      return allSales;
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
@@ -227,7 +211,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('codigo_oferta, funnel_id, nome_produto')
+        .select('codigo_oferta, funnel_id, nome_produto, nome_posicao')
         .eq('project_id', projectId);
 
       if (error) throw error;
@@ -289,6 +273,109 @@ export function useCRMJourneyData(filters: CRMFilters) {
     return map;
   }, [funnelsData]);
 
+  // Calculate all breakdowns from the unfiltered data
+  const breakdowns = useMemo(() => {
+    const statusLabels: Record<string, string> = {
+      'APPROVED': 'Aprovado',
+      'COMPLETE': 'Completo',
+      'CANCELED': 'Cancelado',
+      'REFUNDED': 'Reembolsado',
+      'CHARGEBACK': 'Chargeback',
+      'EXPIRED': 'Expirado',
+      'OVERDUE': 'Vencido',
+      'STARTED': 'Iniciado',
+      'PRINTED_BILLET': 'Boleto Impresso',
+      'WAITING_PAYMENT': 'Aguardando Pagamento',
+    };
+
+    if (!allSalesForBreakdown || allSalesForBreakdown.length === 0) {
+      return {
+        statusBreakdown: [] as GenericBreakdown[],
+        productBreakdown: [] as GenericBreakdown[],
+        offerBreakdown: [] as GenericBreakdown[],
+        funnelBreakdown: [] as GenericBreakdown[],
+        positionBreakdown: [] as GenericBreakdown[],
+      };
+    }
+
+    const createBreakdown = (
+      keyFn: (sale: typeof allSalesForBreakdown[0]) => string | null,
+      labelFn: (key: string) => string
+    ): GenericBreakdown[] => {
+      const map = new Map<string, { count: number; emails: Set<string> }>();
+      
+      for (const sale of allSalesForBreakdown) {
+        const key = keyFn(sale);
+        if (!key) continue;
+        
+        if (!map.has(key)) {
+          map.set(key, { count: 0, emails: new Set() });
+        }
+        const data = map.get(key)!;
+        data.count++;
+        if (sale.buyer_email) {
+          data.emails.add(sale.buyer_email.toLowerCase());
+        }
+      }
+
+      const result: GenericBreakdown[] = [];
+      map.forEach((value, key) => {
+        result.push({
+          key,
+          label: labelFn(key),
+          count: value.count,
+          uniqueClients: value.emails.size,
+        });
+      });
+
+      return result.sort((a, b) => b.count - a.count);
+    };
+
+    // Status breakdown
+    const statusBreakdown = createBreakdown(
+      (sale) => sale.status || 'UNKNOWN',
+      (key) => statusLabels[key] || key
+    );
+
+    // Product breakdown
+    const productBreakdown = createBreakdown(
+      (sale) => sale.product_name,
+      (key) => key
+    );
+
+    // Offer breakdown
+    const offerBreakdown = createBreakdown(
+      (sale) => sale.offer_code,
+      (key) => key
+    );
+
+    // Funnel breakdown
+    const funnelBreakdown = createBreakdown(
+      (sale) => sale.offer_code ? offerToFunnel.get(sale.offer_code) || null : null,
+      (key) => funnelNames.get(key) || key
+    );
+
+    // Position breakdown (from mappings)
+    const offerToPosition = new Map<string, string>();
+    mappingsData?.forEach(m => {
+      if (m.codigo_oferta && m.nome_posicao) {
+        offerToPosition.set(m.codigo_oferta, m.nome_posicao);
+      }
+    });
+
+    const positionBreakdown = createBreakdown(
+      (sale) => sale.offer_code ? offerToPosition.get(sale.offer_code) || null : null,
+      (key) => key
+    );
+
+    return {
+      statusBreakdown,
+      productBreakdown,
+      offerBreakdown,
+      funnelBreakdown,
+      positionBreakdown,
+    };
+  }, [allSalesForBreakdown, offerToFunnel, funnelNames, mappingsData]);
   // Process customer journeys
   const customerJourneys = useMemo(() => {
     if (!salesData || salesData.length === 0) return [];
@@ -534,7 +621,11 @@ export function useCRMJourneyData(filters: CRMFilters) {
     journeyMetrics,
     uniqueProducts,
     uniqueFunnels,
-    statusBreakdown: statusBreakdown || [],
+    statusBreakdown: breakdowns.statusBreakdown,
+    productBreakdown: breakdowns.productBreakdown,
+    offerBreakdown: breakdowns.offerBreakdown,
+    funnelBreakdown: breakdowns.funnelBreakdown,
+    positionBreakdown: breakdowns.positionBreakdown,
     isLoading: loadingSales || loadingMappings || loadingFunnels,
     isLoadingBreakdown: loadingBreakdown,
   };

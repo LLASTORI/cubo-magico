@@ -31,7 +31,6 @@ import {
   type DateFilter,
   type CustomerJourney,
   type CRMFilters,
-  type StatusBreakdown,
   DEFAULT_STATUS_FILTER
 } from '@/hooks/useCRMJourneyData';
 import {
@@ -41,6 +40,7 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from '@/lib/utils';
 import { CustomerFlowChart } from './CustomerFlowChart';
+import { CRMSummaryCards } from './CRMSummaryCards';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -201,24 +201,29 @@ export function CustomerJourneyAnalysis() {
     uniqueProducts, 
     uniqueFunnels,
     statusBreakdown,
+    productBreakdown,
+    offerBreakdown,
+    funnelBreakdown,
+    positionBreakdown,
     isLoading,
     isLoadingBreakdown 
   } = useCRMJourneyData(filters);
 
-  const statusLabels: Record<string, string> = {
-    'APPROVED': 'Aprovado',
-    'COMPLETE': 'Completo',
-    'CANCELED': 'Cancelado',
-    'REFUNDED': 'Reembolsado',
-    'CHARGEBACK': 'Chargeback',
-    'EXPIRED': 'Expirado',
-    'OVERDUE': 'Vencido',
-    'STARTED': 'Iniciado',
-    'PRINTED_BILLET': 'Boleto Impresso',
-    'WAITING_PAYMENT': 'Aguardando Pagamento',
+  const getStatusLabel = (key: string) => {
+    const statusLabels: Record<string, string> = {
+      'APPROVED': 'Aprovado',
+      'COMPLETE': 'Completo',
+      'CANCELED': 'Cancelado',
+      'REFUNDED': 'Reembolsado',
+      'CHARGEBACK': 'Chargeback',
+      'EXPIRED': 'Expirado',
+      'OVERDUE': 'Vencido',
+      'STARTED': 'Iniciado',
+      'PRINTED_BILLET': 'Boleto Impresso',
+      'WAITING_PAYMENT': 'Aguardando Pagamento',
+    };
+    return statusLabels[key] || key;
   };
-
-  const getStatusLabel = (status: string) => statusLabels[status] || status;
 
   const clearFilter = () => {
     setFilterType(null);
@@ -277,63 +282,23 @@ export function CustomerJourneyAnalysis() {
 
   return (
     <div className="space-y-6">
-      {/* Status Breakdown Summary */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Resumo por Status
-          </CardTitle>
-          <CardDescription>
-            Quantidade de vendas e clientes únicos por status (antes dos filtros)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoadingBreakdown ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-              Carregando...
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {statusBreakdown.map((item) => {
-                const isSelected = statusFilter.includes(item.status);
-                return (
-                  <button
-                    key={item.status}
-                    onClick={() => {
-                      if (isSelected) {
-                        setStatusFilter(statusFilter.filter(s => s !== item.status));
-                      } else {
-                        setStatusFilter([...statusFilter, item.status]);
-                      }
-                    }}
-                    className={cn(
-                      "flex flex-col items-start p-3 rounded-lg border transition-all",
-                      isSelected 
-                        ? "bg-primary/10 border-primary" 
-                        : "bg-muted/50 border-border hover:border-primary/50"
-                    )}
-                  >
-                    <span className="text-sm font-medium">{getStatusLabel(item.status)}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant={isSelected ? "default" : "secondary"} className="text-xs">
-                        {item.count.toLocaleString('pt-BR')} vendas
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {item.uniqueClients.toLocaleString('pt-BR')} clientes
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <p className="text-xs text-muted-foreground mt-3">
-            Clique nos status para adicionar/remover do filtro
-          </p>
-        </CardContent>
-      </Card>
+      {/* Summary Cards with Tabs */}
+      <CRMSummaryCards
+        statusBreakdown={statusBreakdown}
+        offerBreakdown={offerBreakdown}
+        funnelBreakdown={funnelBreakdown}
+        positionBreakdown={positionBreakdown}
+        productBreakdown={productBreakdown}
+        isLoading={isLoadingBreakdown}
+        selectedStatuses={statusFilter}
+        onStatusToggle={(status) => {
+          if (statusFilter.includes(status)) {
+            setStatusFilter(statusFilter.filter(s => s !== status));
+          } else {
+            setStatusFilter([...statusFilter, status]);
+          }
+        }}
+      />
 
       {/* Analysis Mode Toggle */}
       <Card>

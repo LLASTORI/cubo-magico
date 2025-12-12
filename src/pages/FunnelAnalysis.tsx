@@ -1,11 +1,12 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { 
-  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2
+  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { useProjectModules } from "@/hooks/useProjectModules";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -31,6 +32,8 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const FunnelAnalysis = () => {
   const { currentProject } = useProject();
+  const { isModuleEnabled } = useProjectModules();
+  const isMetaAdsEnabled = isModuleEnabled('meta_ads');
   const queryClient = useQueryClient();
   
   // Single source of truth for dates
@@ -934,10 +937,30 @@ const FunnelAnalysis = () => {
             <Tabs defaultValue="overview" className="space-y-6">
               <TabsList className="flex flex-wrap w-full max-w-5xl gap-1">
                 <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-                <TabsTrigger value="meta-hierarchy" className="gap-1">
-                  <Megaphone className="w-3 h-3" />
-                  Meta Ads
-                </TabsTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <TabsTrigger 
+                        value="meta-hierarchy" 
+                        className={`gap-1 ${!isMetaAdsEnabled ? 'opacity-60' : ''}`}
+                        disabled={!isMetaAdsEnabled}
+                      >
+                        {isMetaAdsEnabled ? (
+                          <Megaphone className="w-3 h-3" />
+                        ) : (
+                          <Lock className="w-3 h-3" />
+                        )}
+                        Meta Ads
+                        {!isMetaAdsEnabled && <Lock className="w-2.5 h-2.5 ml-1" />}
+                      </TabsTrigger>
+                    </span>
+                  </TooltipTrigger>
+                  {!isMetaAdsEnabled && (
+                    <TooltipContent>
+                      <p>Módulo bloqueado. Contate o suporte para ativar.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
                 <TabsTrigger value="temporal">Evolução</TabsTrigger>
                 <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
                 <TabsTrigger value="utm">UTM</TabsTrigger>
@@ -1025,7 +1048,19 @@ const FunnelAnalysis = () => {
               </TabsContent>
 
               <TabsContent value="meta-hierarchy">
-                {metaStructure.campaigns.length > 0 ? (
+                {!isMetaAdsEnabled ? (
+                  <Card className="p-12 text-center">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Lock className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground mb-2">
+                      Módulo Meta Ads Bloqueado
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Entre em contato com o suporte para ativar este recurso.
+                    </p>
+                  </Card>
+                ) : metaStructure.campaigns.length > 0 ? (
                   <MetaHierarchyAnalysis
                     insights={metaInsights}
                     campaigns={metaStructure.campaigns}

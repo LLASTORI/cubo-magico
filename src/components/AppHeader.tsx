@@ -141,15 +141,30 @@ export const AppHeader = ({
                       <ShoppingCart className="w-4 h-4" />
                       Hotmart
                     </DropdownMenuItem>
-                    {isMetaAdsEnabled && (
-                      <DropdownMenuItem 
-                        onClick={() => navigate('/meta-ads')} 
-                        className={`gap-2 cursor-pointer ${currentPath === '/meta-ads' ? 'bg-muted' : ''}`}
-                      >
-                        <Facebook className="w-4 h-4" />
-                        Meta Ads
-                      </DropdownMenuItem>
-                    )}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuItem 
+                            onClick={() => isMetaAdsEnabled && navigate('/meta-ads')} 
+                            className={`gap-2 ${isMetaAdsEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} ${currentPath === '/meta-ads' ? 'bg-muted' : ''}`}
+                            disabled={!isMetaAdsEnabled}
+                          >
+                            {isMetaAdsEnabled ? (
+                              <Facebook className="w-4 h-4" />
+                            ) : (
+                              <Lock className="w-4 h-4" />
+                            )}
+                            Meta Ads
+                            {!isMetaAdsEnabled && <Lock className="w-3 h-3 ml-auto" />}
+                          </DropdownMenuItem>
+                        </TooltipTrigger>
+                        {!isMetaAdsEnabled && (
+                          <TooltipContent side="right">
+                            <p>Módulo bloqueado. Contate o suporte para ativar.</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -197,17 +212,34 @@ export const AppHeader = ({
                   A Definir
                 </Button>
 
-                {/* CRM - only show if module is enabled */}
-                {isCRMEnabled && (
-                  <Button
-                    onClick={() => navigate('/crm')}
-                    variant={currentPath === '/crm' ? "default" : "outline"}
-                    className="gap-2"
-                  >
-                    <Users className="w-4 h-4" />
-                    CRM
-                  </Button>
-                )}
+                {/* CRM - show with lock if disabled */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          onClick={() => isCRMEnabled && navigate('/crm')}
+                          variant={currentPath === '/crm' ? "default" : "outline"}
+                          className={`gap-2 ${!isCRMEnabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          disabled={!isCRMEnabled}
+                        >
+                          {isCRMEnabled ? (
+                            <Users className="w-4 h-4" />
+                          ) : (
+                            <Lock className="w-4 h-4" />
+                          )}
+                          CRM
+                          {!isCRMEnabled && <Lock className="w-3 h-3" />}
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {!isCRMEnabled && (
+                      <TooltipContent>
+                        <p>Módulo bloqueado. Contate o suporte para ativar.</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
 
                 {/* Mapeamento de Ofertas */}
                 <TooltipProvider>

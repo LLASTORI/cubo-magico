@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3 } from 'lucide-react';
+import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const META_APP_ID = '845927421602166';
@@ -10,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectModules } from '@/hooks/useProjectModules';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { SyncLoader } from '@/components/SyncLoader';
@@ -35,9 +36,13 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3
 // Wrapper component to handle OAuth callback and project switching
 const MetaAds = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { currentProject, loading: projectLoading } = useProject();
+  const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const metaAdsEnabled = isModuleEnabled('meta_ads');
 
   // Handle OAuth callback params - only once on mount
   useEffect(() => {
@@ -65,9 +70,44 @@ const MetaAds = () => {
     }
   }, []);
 
-  // Show loading while project context is loading
-  if (projectLoading || !currentProject?.id) {
+  // Show loading while project context or modules are loading
+  if (projectLoading || modulesLoading) {
     return <CubeLoader />;
+  }
+
+  if (!currentProject?.id) {
+    return <CubeLoader />;
+  }
+
+  // Check if module is enabled
+  if (!metaAdsEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader pageSubtitle="Meta Ads" />
+        <main className="container mx-auto px-6 py-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Facebook className="h-5 w-5" />
+                Módulo Meta Ads Desativado
+              </CardTitle>
+              <CardDescription>
+                O módulo Meta Ads não está habilitado para este projeto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">
+                Para utilizar o Meta Ads, entre em contato com o administrador para ativar o módulo.
+              </p>
+              <Button onClick={() => navigate('/settings')} className="gap-2">
+                <Settings className="h-4 w-4" />
+                Ir para Configurações
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
   }
 
   // Key forces complete remount when project changes

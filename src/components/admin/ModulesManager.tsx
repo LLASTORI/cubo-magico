@@ -38,7 +38,6 @@ interface ProjectWithModules {
 const MODULE_ICONS: Record<ModuleKey, React.ReactNode> = {
   crm: <Users className="w-4 h-4" />,
   meta_ads: <Facebook className="w-4 h-4" />,
-  analytics: <BarChart3 className="w-4 h-4" />,
 };
 
 export const ModulesManager = () => {
@@ -204,7 +203,6 @@ export const ModulesManager = () => {
     totalProjects: projects.length,
     crmEnabled: projects.filter(p => p.modules.find(m => m.module_key === 'crm')?.is_enabled).length,
     metaAdsEnabled: projects.filter(p => p.modules.find(m => m.module_key === 'meta_ads')?.is_enabled).length,
-    analyticsEnabled: projects.filter(p => p.modules.find(m => m.module_key === 'analytics')?.is_enabled).length,
   };
 
   if (loading) {
@@ -218,7 +216,7 @@ export const ModulesManager = () => {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -254,19 +252,6 @@ export const ModulesManager = () => {
               <div>
                 <p className="text-2xl font-bold">{stats.metaAdsEnabled}</p>
                 <p className="text-xs text-muted-foreground">Meta Ads Ativo</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/10 rounded-lg">
-                <BarChart3 className="w-5 h-5 text-amber-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.analyticsEnabled}</p>
-                <p className="text-xs text-muted-foreground">Analytics Ativo</p>
               </div>
             </div>
           </CardContent>

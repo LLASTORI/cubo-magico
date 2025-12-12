@@ -107,6 +107,7 @@ export function CuboMagicoDashboard({
 }: CuboMagicoDashboardProps) {
   const { isModuleEnabled } = useProjectModules();
   const isMetaAdsEnabled = isModuleEnabled('meta_ads');
+  const isHotmartEnabled = isModuleEnabled('hotmart');
   
   const [internalStartDate, setInternalStartDate] = useState<Date>(subDays(new Date(), 7));
   const [internalEndDate, setInternalEndDate] = useState<Date>(new Date());
@@ -1034,71 +1035,126 @@ export function CuboMagicoDashboard({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Card className="p-4 cursor-help">
+            <Card className={cn("p-4 cursor-help", !isHotmartEnabled && "opacity-60")}>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-green-500/10">
-                  <DollarSign className="w-5 h-5 text-green-500" />
+                  {isHotmartEnabled ? (
+                    <DollarSign className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                  )}
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Faturamento</p>
-                  <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamentoTotal)}</p>
-                  {totals.faturamentoNaoAtribuido > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {formatCurrency(totals.faturamentoNaoAtribuido)} não atribuído
-                    </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    Faturamento
+                    {!isHotmartEnabled && <Lock className="w-3 h-3" />}
+                  </p>
+                  {isHotmartEnabled ? (
+                    <>
+                      <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamentoTotal)}</p>
+                      {totals.faturamentoNaoAtribuido > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(totals.faturamentoNaoAtribuido)} não atribuído
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xl font-bold text-muted-foreground">-</p>
                   )}
                 </div>
               </div>
             </Card>
           </TooltipTrigger>
           <TooltipContent>
-            <p><strong>Faturamento:</strong> Receita total de vendas aprovadas</p>
-            <p className="text-xs text-muted-foreground">Status: approved, complete, completed</p>
+            {isHotmartEnabled ? (
+              <>
+                <p><strong>Faturamento:</strong> Receita total de vendas aprovadas</p>
+                <p className="text-xs text-muted-foreground">Status: approved, complete, completed</p>
+              </>
+            ) : (
+              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
+            )}
           </TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Card className="p-4 cursor-help">
+            <Card className={cn("p-4 cursor-help", !isHotmartEnabled && "opacity-60")}>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-500/10">
-                  <ShoppingCart className="w-5 h-5 text-blue-500" />
+                  {isHotmartEnabled ? (
+                    <ShoppingCart className="w-5 h-5 text-blue-500" />
+                  ) : (
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                  )}
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Vendas FRONT</p>
-                  <p className="text-xl font-bold text-foreground">{totals.vendasFront}</p>
-                </div>
-              </div>
-            </Card>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p><strong>Vendas FRONT:</strong> Quantidade de vendas do produto principal</p>
-            <p className="text-xs text-muted-foreground">Primeira posição do funil (FE/FRONT)</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Card className="p-4 cursor-help">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  <Users className="w-5 h-5 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Produtos</p>
-                  <p className="text-xl font-bold text-foreground">{totals.totalProdutosReal}</p>
-                  {(totals.totalProdutosReal - totals.totalProdutos) > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {totals.totalProdutosReal - totals.totalProdutos} não atribuído
-                    </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    Vendas FRONT
+                    {!isHotmartEnabled && <Lock className="w-3 h-3" />}
+                  </p>
+                  {isHotmartEnabled ? (
+                    <p className="text-xl font-bold text-foreground">{totals.vendasFront}</p>
+                  ) : (
+                    <p className="text-xl font-bold text-muted-foreground">-</p>
                   )}
                 </div>
               </div>
             </Card>
           </TooltipTrigger>
           <TooltipContent>
-            <p><strong>Total Produtos:</strong> Soma de todas as vendas (FRONT + Order Bumps + Upsells)</p>
-            <p className="text-xs text-muted-foreground">Inclui todas as posições do funil</p>
+            {isHotmartEnabled ? (
+              <>
+                <p><strong>Vendas FRONT:</strong> Quantidade de vendas do produto principal</p>
+                <p className="text-xs text-muted-foreground">Primeira posição do funil (FE/FRONT)</p>
+              </>
+            ) : (
+              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className={cn("p-4 cursor-help", !isHotmartEnabled && "opacity-60")}>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  {isHotmartEnabled ? (
+                    <Users className="w-5 h-5 text-purple-500" />
+                  ) : (
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    Total Produtos
+                    {!isHotmartEnabled && <Lock className="w-3 h-3" />}
+                  </p>
+                  {isHotmartEnabled ? (
+                    <>
+                      <p className="text-xl font-bold text-foreground">{totals.totalProdutosReal}</p>
+                      {(totals.totalProdutosReal - totals.totalProdutos) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {totals.totalProdutosReal - totals.totalProdutos} não atribuído
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xl font-bold text-muted-foreground">-</p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent>
+            {isHotmartEnabled ? (
+              <>
+                <p><strong>Total Produtos:</strong> Soma de todas as vendas (FRONT + Order Bumps + Upsells)</p>
+                <p className="text-xs text-muted-foreground">Inclui todas as posições do funil</p>
+              </>
+            ) : (
+              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
+            )}
           </TooltipContent>
         </Tooltip>
 
@@ -1170,28 +1226,32 @@ export function CuboMagicoDashboard({
                 />
               </TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help">Faturamento</TooltipTrigger>
-                  <TooltipContent>Receita total de vendas aprovadas do funil</TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isHotmartEnabled}
+                  label="Faturamento"
+                  unlockedTooltip="Receita total de vendas aprovadas do funil"
+                />
               </TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help">FRONT</TooltipTrigger>
-                  <TooltipContent>Vendas do produto principal (primeira posição)</TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isHotmartEnabled}
+                  label="FRONT"
+                  unlockedTooltip="Vendas do produto principal (primeira posição)"
+                />
               </TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help">Ticket Médio</TooltipTrigger>
-                  <TooltipContent>Faturamento ÷ Vendas FRONT</TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isHotmartEnabled}
+                  label="Ticket Médio"
+                  unlockedTooltip="Faturamento ÷ Vendas FRONT"
+                />
               </TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help">CPA Máximo</TooltipTrigger>
-                  <TooltipContent>Ticket Médio ÷ ROAS Alvo. Quanto pode pagar por aquisição</TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isHotmartEnabled}
+                  label="CPA Máximo"
+                  unlockedTooltip="Ticket Médio ÷ ROAS Alvo. Quanto pode pagar por aquisição"
+                />
               </TableHead>
               <TableHead className="text-right">
                 <ModuleLockedHeader
@@ -1260,15 +1320,33 @@ export function CuboMagicoDashboard({
                         variant="cell"
                       />
                     </TableCell>
-                    <TableCell className="text-right font-mono text-green-600">
-                      {formatCurrency(metrics.faturamento)}
-                    </TableCell>
-                    <TableCell className="text-right">{metrics.vendasFront}</TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatCurrency(metrics.ticketMedio)}
+                      <ModuleLockedValue
+                        isLocked={!isHotmartEnabled}
+                        value={<span className="text-green-600">{formatCurrency(metrics.faturamento)}</span>}
+                        variant="cell"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ModuleLockedValue
+                        isLocked={!isHotmartEnabled}
+                        value={metrics.vendasFront}
+                        variant="cell"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      <ModuleLockedValue
+                        isLocked={!isHotmartEnabled}
+                        value={formatCurrency(metrics.ticketMedio)}
+                        variant="cell"
+                      />
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
-                      {formatCurrency(metrics.cpaMaximo)}
+                      <ModuleLockedValue
+                        isLocked={!isHotmartEnabled}
+                        value={formatCurrency(metrics.cpaMaximo)}
+                        variant="cell"
+                      />
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       <ModuleLockedValue

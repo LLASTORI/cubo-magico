@@ -29,6 +29,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
 import { useProjectMembers } from "@/hooks/useProjectMembers";
+import { useProjectModules } from "@/hooks/useProjectModules";
 
 interface AppHeaderProps {
   pageSubtitle?: string;
@@ -44,8 +45,10 @@ export const AppHeader = ({
   const { signOut } = useAuth();
   const { currentProject } = useProject();
   const { userRole } = useProjectMembers(currentProject?.id || '');
+  const { isModuleEnabled } = useProjectModules();
   
   const canAccessOfferMappings = userRole === 'owner' || userRole === 'manager';
+  const isCRMEnabled = isModuleEnabled('crm');
   
   const currentPath = location.pathname;
   
@@ -191,15 +194,17 @@ export const AppHeader = ({
                   A Definir
                 </Button>
 
-                {/* CRM */}
-                <Button
-                  onClick={() => navigate('/crm')}
-                  variant={currentPath === '/crm' ? "default" : "outline"}
-                  className="gap-2"
-                >
-                  <Users className="w-4 h-4" />
-                  CRM
-                </Button>
+                {/* CRM - only show if module is enabled */}
+                {isCRMEnabled && (
+                  <Button
+                    onClick={() => navigate('/crm')}
+                    variant={currentPath === '/crm' ? "default" : "outline"}
+                    className="gap-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    CRM
+                  </Button>
+                )}
 
                 {/* Mapeamento de Ofertas */}
                 <TooltipProvider>

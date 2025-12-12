@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
@@ -65,6 +64,22 @@ interface CustomerRowProps {
 function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  const sourceLabels: Record<string, string> = {
+    'hotmart': 'Hotmart',
+    'kiwify': 'Kiwify',
+    'manual': 'Manual',
+    'webhook': 'Webhook',
+    'import': 'Importado',
+  };
+
+  const statusLabels: Record<string, string> = {
+    'lead': 'Lead',
+    'prospect': 'Prospect',
+    'customer': 'Cliente',
+    'churned': 'Churned',
+    'inactive': 'Inativo',
+  };
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <TableRow className="cursor-pointer hover:bg-muted/50">
@@ -79,6 +94,14 @@ function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
           <div>
             <p className="font-medium">{journey.buyerName}</p>
             <p className="text-xs text-muted-foreground">{journey.buyerEmail}</p>
+            <div className="flex gap-1 mt-1">
+              <Badge variant="outline" className="text-xs">
+                {sourceLabels[journey.contactSource] || journey.contactSource}
+              </Badge>
+              <Badge variant={journey.contactStatus === 'customer' ? 'default' : 'secondary'} className="text-xs">
+                {statusLabels[journey.contactStatus] || journey.contactStatus}
+              </Badge>
+            </div>
           </div>
         </TableCell>
         <TableCell>
@@ -126,40 +149,59 @@ function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
         <TableRow className="bg-muted/30">
           <TableCell colSpan={7} className="p-4">
             <div className="space-y-3">
-              <h4 className="font-medium text-sm">Histórico de Compras</h4>
-              <div className="flex flex-wrap gap-2 items-center">
-                {journey.purchases.map((purchase, index) => (
-                  <div key={purchase.transactionId} className="flex items-center gap-2">
-                    <div className={cn(
-                      "px-3 py-2 rounded-lg border",
-                      purchase.isEntry && "bg-primary/10 border-primary/30",
-                      purchase.isTarget && "bg-orange-500/10 border-orange-500/30",
-                      !purchase.isEntry && !purchase.isTarget && "bg-card border-border"
-                    )}>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{purchase.productName}</p>
-                        {purchase.isEntry && (
-                          <Badge variant="outline" className="text-xs">Entrada</Badge>
-                        )}
-                        {purchase.isTarget && (
-                          <Badge variant="outline" className="text-xs bg-orange-500/20">Alvo</Badge>
+              <div className="flex items-center gap-4">
+                <h4 className="font-medium text-sm">Histórico de Compras</h4>
+                {journey.tags.length > 0 && (
+                  <div className="flex gap-1">
+                    {journey.tags.map((tag, i) => (
+                      <Badge key={i} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {journey.purchases.length > 0 ? (
+                <div className="flex flex-wrap gap-2 items-center">
+                  {journey.purchases.map((purchase, index) => (
+                    <div key={purchase.transactionId} className="flex items-center gap-2">
+                      <div className={cn(
+                        "px-3 py-2 rounded-lg border",
+                        purchase.isEntry && "bg-primary/10 border-primary/30",
+                        purchase.isTarget && "bg-orange-500/10 border-orange-500/30",
+                        !purchase.isEntry && !purchase.isTarget && "bg-card border-border"
+                      )}>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{purchase.productName}</p>
+                          {purchase.isEntry && (
+                            <Badge variant="outline" className="text-xs">Entrada</Badge>
+                          )}
+                          {purchase.isTarget && (
+                            <Badge variant="outline" className="text-xs bg-orange-500/20">Alvo</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{formatDate(purchase.saleDate)}</span>
+                          <span>•</span>
+                          <span>{formatCurrency(purchase.totalPrice)}</span>
+                          <span>•</span>
+                          <span className="capitalize">{purchase.platform}</span>
+                        </div>
+                        {purchase.funnelName && (
+                          <p className="text-xs text-primary mt-1">Funil: {purchase.funnelName}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{formatDate(purchase.saleDate)}</span>
-                        <span>•</span>
-                        <span>{formatCurrency(purchase.totalPrice)}</span>
-                      </div>
-                      {purchase.funnelName && (
-                        <p className="text-xs text-primary mt-1">Funil: {purchase.funnelName}</p>
+                      {index < journey.purchases.length - 1 && (
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
                       )}
                     </div>
-                    {index < journey.purchases.length - 1 && (
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Este contato ainda não realizou compras (Lead/Prospect)
+                </p>
+              )}
               {journey.avgTimeBetweenPurchases && (
                 <p className="text-xs text-muted-foreground">
                   Tempo médio entre compras: {Math.round(journey.avgTimeBetweenPurchases)} dias
@@ -179,6 +221,8 @@ export function CustomerJourneyAnalysis() {
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilter>({ startDate: null, endDate: null });
   const [statusFilter, setStatusFilter] = useState<string[]>(DEFAULT_STATUS_FILTER);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [contactStatusFilter, setContactStatusFilter] = useState<string[]>([]);
 
   const entryFilter: EntryFilter | null = analysisMode === 'entry' && filterType && selectedValues.length > 0
     ? { type: filterType, values: selectedValues }
@@ -193,6 +237,9 @@ export function CustomerJourneyAnalysis() {
     targetFilter,
     dateFilter,
     statusFilter,
+    transactionStatusFilter: statusFilter,
+    sourceFilter,
+    contactStatusFilter,
   };
 
   const { 
@@ -200,11 +247,15 @@ export function CustomerJourneyAnalysis() {
     journeyMetrics, 
     uniqueProducts, 
     uniqueFunnels,
+    uniqueSources,
+    uniqueContactStatuses,
     statusBreakdown,
     productBreakdown,
     offerBreakdown,
     funnelBreakdown,
     positionBreakdown,
+    sourceBreakdown,
+    contactStatusBreakdown,
     isLoading,
     isLoadingBreakdown 
   } = useCRMJourneyData(filters);
@@ -239,20 +290,16 @@ export function CustomerJourneyAnalysis() {
     );
   };
 
-  const getStatusLabel = (key: string) => {
-    const statusLabels: Record<string, string> = {
-      'APPROVED': 'Aprovado',
-      'COMPLETE': 'Completo',
-      'CANCELED': 'Cancelado',
-      'REFUNDED': 'Reembolsado',
-      'CHARGEBACK': 'Chargeback',
-      'EXPIRED': 'Expirado',
-      'OVERDUE': 'Vencido',
-      'STARTED': 'Iniciado',
-      'PRINTED_BILLET': 'Boleto Impresso',
-      'WAITING_PAYMENT': 'Aguardando Pagamento',
-    };
-    return statusLabels[key] || key;
+  const handleSourceToggle = (source: string) => {
+    setSourceFilter((prev) =>
+      prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]
+    );
+  };
+
+  const handleContactStatusToggle = (status: string) => {
+    setContactStatusFilter((prev) =>
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+    );
   };
 
   const clearFilter = () => {
@@ -268,20 +315,9 @@ export function CustomerJourneyAnalysis() {
     clearFilter();
     clearDateFilter();
     setStatusFilter(DEFAULT_STATUS_FILTER);
+    setSourceFilter([]);
+    setContactStatusFilter([]);
   };
-
-  const availableStatuses = [
-    { value: 'APPROVED', label: 'Aprovado' },
-    { value: 'COMPLETE', label: 'Completo' },
-    { value: 'CANCELED', label: 'Cancelado' },
-    { value: 'REFUNDED', label: 'Reembolsado' },
-    { value: 'CHARGEBACK', label: 'Chargeback' },
-    { value: 'EXPIRED', label: 'Expirado' },
-    { value: 'OVERDUE', label: 'Vencido' },
-    { value: 'STARTED', label: 'Iniciado' },
-    { value: 'PRINTED_BILLET', label: 'Boleto Impresso' },
-    { value: 'WAITING_PAYMENT', label: 'Aguardando Pagamento' },
-  ];
 
   const handleFilterTypeChange = (value: string) => {
     if (value === 'all') {
@@ -297,7 +333,7 @@ export function CustomerJourneyAnalysis() {
     clearFilter();
   };
 
-  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate;
+  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate || sourceFilter.length > 0 || contactStatusFilter.length > 0;
 
   if (isLoading) {
     return (
@@ -319,8 +355,12 @@ export function CustomerJourneyAnalysis() {
         funnelBreakdown={funnelBreakdown}
         positionBreakdown={positionBreakdown}
         productBreakdown={productBreakdown}
+        sourceBreakdown={sourceBreakdown}
+        contactStatusBreakdown={contactStatusBreakdown}
         isLoading={isLoadingBreakdown}
         selectedStatuses={statusFilter}
+        selectedSources={sourceFilter}
+        selectedContactStatuses={contactStatusFilter}
         onStatusToggle={(status) => {
           if (statusFilter.includes(status)) {
             setStatusFilter(statusFilter.filter(s => s !== status));
@@ -328,6 +368,14 @@ export function CustomerJourneyAnalysis() {
             setStatusFilter([...statusFilter, status]);
           }
         }}
+        onSourceToggle={handleSourceToggle}
+        onContactStatusToggle={handleContactStatusToggle}
+        onProductClick={handleProductCardClick}
+        onFunnelClick={handleFunnelCardClick}
+        onOfferClick={handleOfferCardClick}
+        selectedProducts={selectedProductsFromCards}
+        selectedFunnels={selectedFunnelsFromCards}
+        selectedOffers={selectedOffersFromCards}
       />
 
       {/* Analysis Mode Toggle */}
@@ -484,375 +532,200 @@ export function CustomerJourneyAnalysis() {
               </div>
             )}
 
-            {/* Status Filter */}
-            <div className="space-y-2 min-w-[250px]">
-              <label className="text-sm font-medium">Status das Vendas</label>
-              <MultiSelect
-                options={availableStatuses}
-                selected={statusFilter}
-                onChange={setStatusFilter}
-                placeholder="Selecione os status..."
-              />
-            </div>
-
-            {(entryFilter || targetFilter) && (
-              <Button variant="outline" size="sm" onClick={clearFilter} className="gap-2">
+            {(filterType && selectedValues.length > 0) && (
+              <Button variant="ghost" size="icon" onClick={clearFilter}>
                 <X className="h-4 w-4" />
-                Limpar Filtro
               </Button>
             )}
           </div>
+
+          {/* Active filter badges */}
+          {(sourceFilter.length > 0 || contactStatusFilter.length > 0) && (
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+              {sourceFilter.map(source => (
+                <Badge key={source} variant="secondary" className="gap-1">
+                  Fonte: {source}
+                  <button onClick={() => handleSourceToggle(source)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              {contactStatusFilter.map(status => (
+                <Badge key={status} variant="secondary" className="gap-1">
+                  Status: {status}
+                  <button onClick={() => handleContactStatusToggle(status)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Metrics Summary */}
-      {journeyMetrics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-blue-500/10">
-                  <Users className="h-6 w-6 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total de Clientes</p>
-                  <p className="text-2xl font-bold">{journeyMetrics.totalCustomers}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Contatos</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{journeyMetrics.totalCustomers.toLocaleString('pt-BR')}</div>
+            <p className="text-xs text-muted-foreground">
+              {journeyMetrics.repeatCustomerRate.toFixed(1)}% compraram mais de uma vez
+            </p>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-green-500/10">
-                  <DollarSign className="h-6 w-6 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">LTV Médio</p>
-                  <p className="text-2xl font-bold">{formatCurrency(journeyMetrics.avgLTV)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">LTV Médio</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(journeyMetrics.avgLTV)}</div>
+            <p className="text-xs text-muted-foreground">
+              Valor médio por cliente
+            </p>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-purple-500/10">
-                  <ShoppingCart className="h-6 w-6 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Compras por Cliente</p>
-                  <p className="text-2xl font-bold">{journeyMetrics.avgPurchases.toFixed(1)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Compras Médias</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{journeyMetrics.avgPurchases.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">
+              Compras por cliente
+            </p>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-orange-500/10">
-                  <TrendingUp className="h-6 w-6 text-orange-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Taxa de Recompra</p>
-                  <p className="text-2xl font-bold">{journeyMetrics.repeatCustomerRate.toFixed(1)}%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Taxa de Recompra</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{journeyMetrics.repeatCustomerRate.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">
+              Clientes que voltaram
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Flow Chart */}
+      {customerJourneys.length > 0 && (
+        <CustomerFlowChart journeys={customerJourneys} />
       )}
 
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="journeys" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="journeys">Jornadas de Clientes</TabsTrigger>
-          <TabsTrigger value="flow">Fluxo de Clientes</TabsTrigger>
-          <TabsTrigger value="cohorts">
-            {analysisMode === 'entry' ? 'Análise por Cohort' : 'Análise de Origem'}
-          </TabsTrigger>
-          <TabsTrigger value="products">
-            {analysisMode === 'entry' ? 'Produtos Subsequentes' : 'Produtos de Origem'}
-          </TabsTrigger>
-        </TabsList>
+      {/* Cohort Analysis */}
+      {journeyMetrics.cohortMetrics.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Análise por Ponto de Entrada</CardTitle>
+            <CardDescription>
+              Métricas de clientes agrupados por primeiro produto/funil
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Produto de Entrada</TableHead>
+                  <TableHead>Funil</TableHead>
+                  <TableHead className="text-center">Clientes</TableHead>
+                  <TableHead className="text-right">LTV Médio</TableHead>
+                  <TableHead className="text-center">Compras Médias</TableHead>
+                  <TableHead className="text-center">Taxa Recompra</TableHead>
+                  <TableHead className="text-right">Receita Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {journeyMetrics.cohortMetrics.slice(0, 10).map((cohort, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-medium">{cohort.entryProduct}</TableCell>
+                    <TableCell>
+                      {cohort.entryFunnel ? (
+                        <Badge variant="outline">{cohort.entryFunnel}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">{cohort.customerCount}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(cohort.avgLTV)}</TableCell>
+                    <TableCell className="text-center">{cohort.avgPurchases.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={cohort.repeatRate > 20 ? "default" : "secondary"}>
+                        {cohort.repeatRate.toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(cohort.totalRevenue)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="journeys">
-          <Card>
-            <CardHeader>
-              <CardTitle>Jornadas de Clientes</CardTitle>
-              <CardDescription>
-                {analysisMode === 'entry' 
-                  ? (entryFilter 
-                      ? `Clientes que entraram via ${entryFilter.type === 'product' ? 'produto(s)' : 'funil(is)'} selecionado(s)`
-                      : 'Todos os clientes ordenados por LTV'
-                    )
-                  : (targetFilter
-                      ? `Clientes que compraram ${targetFilter.type === 'product' ? 'produto(s)' : 'no(s) funil(is)'} selecionado(s)`
-                      : 'Selecione um produto/funil de destino para análise'
-                    )
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {customerJourneys.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>
-                    {analysisMode === 'origin' && !targetFilter
-                      ? 'Selecione um produto ou funil de destino para ver de onde os clientes vieram'
-                      : 'Nenhuma jornada encontrada com os filtros selecionados'
-                    }
-                  </p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10"></TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Produto de Entrada</TableHead>
-                      <TableHead className="text-center">Compras</TableHead>
-                      <TableHead className="text-right">LTV</TableHead>
-                      <TableHead className="text-center">
-                        {analysisMode === 'entry' ? 'Recompras' : 'Antes do Alvo'}
-                      </TableHead>
-                      <TableHead className="text-right">Primeira Compra</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {customerJourneys.slice(0, 50).map((journey) => (
-                      <CustomerRow 
-                        key={journey.buyerEmail} 
-                        journey={journey} 
-                        showOrigin={analysisMode === 'origin'}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-              {customerJourneys.length > 50 && (
-                <p className="text-sm text-muted-foreground text-center mt-4">
-                  Mostrando 50 de {customerJourneys.length} clientes
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="flow">
-          <CustomerFlowChart journeys={customerJourneys} />
-        </TabsContent>
-
-        <TabsContent value="cohorts">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {analysisMode === 'entry' ? 'Análise por Cohort de Entrada' : 'Análise de Origem'}
-              </CardTitle>
-              <CardDescription>
-                {analysisMode === 'entry'
-                  ? 'Compare o LTV e taxa de recompra entre diferentes pontos de entrada'
-                  : 'Veja de onde vieram os clientes que compraram o produto/funil selecionado'
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {analysisMode === 'origin' && journeyMetrics && journeyMetrics.originMetrics.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Origem (Ponto de Entrada)</TableHead>
-                      <TableHead className="text-center">Clientes</TableHead>
-                      <TableHead className="text-center">% do Total</TableHead>
-                      <TableHead className="text-right">LTV Após Destino</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {journeyMetrics.originMetrics.map((origin, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{origin.funnel || origin.product}</p>
-                            {origin.funnel && (
-                              <p className="text-xs text-muted-foreground">{origin.product}</p>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">{origin.customerCount}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline">
-                            {origin.percentage.toFixed(1)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(origin.avgLTVAfter)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : analysisMode === 'entry' && journeyMetrics && journeyMetrics.cohortMetrics.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Entrada</TableHead>
-                      <TableHead className="text-center">Clientes</TableHead>
-                      <TableHead className="text-right">LTV Médio</TableHead>
-                      <TableHead className="text-center">Compras/Cliente</TableHead>
-                      <TableHead className="text-center">Taxa Recompra</TableHead>
-                      <TableHead className="text-right">Receita Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {journeyMetrics.cohortMetrics.map((cohort, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{cohort.entryFunnel || cohort.entryProduct}</p>
-                            {cohort.entryFunnel && (
-                              <p className="text-xs text-muted-foreground">{cohort.entryProduct}</p>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">{cohort.customerCount}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(cohort.avgLTV)}
-                        </TableCell>
-                        <TableCell className="text-center">{cohort.avgPurchases.toFixed(1)}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={cohort.repeatRate > 20 ? "default" : "secondary"}>
-                            {cohort.repeatRate.toFixed(1)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(cohort.totalRevenue)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>
-                    {analysisMode === 'origin' && !targetFilter
-                      ? 'Selecione um produto ou funil de destino para ver a análise de origem'
-                      : 'Nenhum dado disponível'
-                    }
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="products">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {analysisMode === 'entry' 
-                  ? 'Produtos Mais Comprados Após Entrada' 
-                  : 'Produtos Comprados Antes do Destino'
-                }
-              </CardTitle>
-              <CardDescription>
-                {analysisMode === 'entry'
-                  ? 'Quais produtos os clientes mais compram depois da primeira compra'
-                  : 'Quais produtos os clientes compraram antes de chegar ao produto/funil de destino'
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {analysisMode === 'entry' && journeyMetrics && journeyMetrics.topSubsequentProducts.length > 0 ? (
-                <div className="space-y-4">
-                  {journeyMetrics.topSubsequentProducts.map((item, index) => (
-                    <div key={item.product} className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="font-medium">{item.product}</p>
-                          <span className="text-sm text-muted-foreground">
-                            {item.count} clientes ({item.percentage.toFixed(1)}%)
-                          </span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${Math.min(item.percentage * 2, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : analysisMode === 'origin' && targetFilter ? (
-                <div className="space-y-4">
-                  {(() => {
-                    // Calculate products purchased before target
-                    const previousProductCounts = new Map<string, number>();
-                    customerJourneys.forEach(j => {
-                      j.previousProducts.forEach(p => {
-                        previousProductCounts.set(p, (previousProductCounts.get(p) || 0) + 1);
-                      });
-                    });
-
-                    const totalCustomers = customerJourneys.length;
-                    const sortedProducts = Array.from(previousProductCounts.entries())
-                      .map(([product, count]) => ({
-                        product,
-                        count,
-                        percentage: (count / totalCustomers) * 100,
-                      }))
-                      .sort((a, b) => b.count - a.count)
-                      .slice(0, 10);
-
-                    if (sortedProducts.length === 0) {
-                      return (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <p>A maioria dos clientes entrou diretamente pelo produto/funil de destino</p>
-                        </div>
-                      );
-                    }
-
-                    return sortedProducts.map((item, index) => (
-                      <div key={item.product} className="flex items-center gap-4">
-                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-sm font-medium text-blue-600">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="font-medium">{item.product}</p>
-                            <span className="text-sm text-muted-foreground">
-                              {item.count} clientes ({item.percentage.toFixed(1)}%)
-                            </span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-blue-500 rounded-full transition-all"
-                              style={{ width: `${Math.min(item.percentage * 2, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>
-                    {analysisMode === 'origin' && !targetFilter
-                      ? 'Selecione um produto ou funil de destino para ver os produtos de origem'
-                      : 'Nenhuma recompra encontrada'
-                    }
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Customer List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Lista de Contatos</CardTitle>
+          <CardDescription>
+            {customerJourneys.length} contatos encontrados
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40px]"></TableHead>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>
+                    {analysisMode === 'entry' ? 'Produto de Entrada' : 'Produto Alvo'}
+                  </TableHead>
+                  <TableHead className="text-center">Compras</TableHead>
+                  <TableHead className="text-right">LTV</TableHead>
+                  <TableHead className="text-center">
+                    {analysisMode === 'entry' ? 'Evolução' : 'Origem'}
+                  </TableHead>
+                  <TableHead className="text-right">Primeira Compra</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customerJourneys.slice(0, 50).map((journey) => (
+                  <CustomerRow 
+                    key={journey.buyerEmail} 
+                    journey={journey}
+                    showOrigin={analysisMode === 'origin'}
+                  />
+                ))}
+                {customerJourneys.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      Nenhum contato encontrado com os filtros aplicados
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {customerJourneys.length > 50 && (
+            <p className="text-sm text-muted-foreground mt-4 text-center">
+              Exibindo 50 de {customerJourneys.length} contatos. Use os filtros para refinar a busca.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

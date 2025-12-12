@@ -60,7 +60,8 @@ export function useProjectModules() {
       return (data || []) as ProjectModule[];
     },
     enabled: !!projectId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000, // 30 seconds - more responsive to changes
+    refetchOnWindowFocus: true,
   });
 
   const toggleModuleMutation = useMutation({

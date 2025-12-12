@@ -77,6 +77,327 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_activities: {
+        Row: {
+          activity_type: string
+          contact_id: string
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          performed_by: string | null
+          project_id: string
+          transaction_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          contact_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          performed_by?: string | null
+          project_id: string
+          transaction_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          contact_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          performed_by?: string | null
+          project_id?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_activities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_activities_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "crm_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contacts: {
+        Row: {
+          address: string | null
+          address_complement: string | null
+          address_number: string | null
+          cep: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          custom_fields: Json | null
+          document: string | null
+          email: string
+          first_purchase_at: string | null
+          first_seen_at: string
+          first_utm_ad: string | null
+          first_utm_adset: string | null
+          first_utm_campaign: string | null
+          first_utm_content: string | null
+          first_utm_medium: string | null
+          first_utm_source: string | null
+          first_utm_term: string | null
+          id: string
+          instagram: string | null
+          last_activity_at: string
+          last_purchase_at: string | null
+          name: string | null
+          neighborhood: string | null
+          phone: string | null
+          phone_ddd: string | null
+          project_id: string
+          source: string
+          state: string | null
+          status: string
+          tags: string[] | null
+          total_purchases: number | null
+          total_revenue: number | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          cep?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          custom_fields?: Json | null
+          document?: string | null
+          email: string
+          first_purchase_at?: string | null
+          first_seen_at?: string
+          first_utm_ad?: string | null
+          first_utm_adset?: string | null
+          first_utm_campaign?: string | null
+          first_utm_content?: string | null
+          first_utm_medium?: string | null
+          first_utm_source?: string | null
+          first_utm_term?: string | null
+          id?: string
+          instagram?: string | null
+          last_activity_at?: string
+          last_purchase_at?: string | null
+          name?: string | null
+          neighborhood?: string | null
+          phone?: string | null
+          phone_ddd?: string | null
+          project_id: string
+          source?: string
+          state?: string | null
+          status?: string
+          tags?: string[] | null
+          total_purchases?: number | null
+          total_revenue?: number | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          cep?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          custom_fields?: Json | null
+          document?: string | null
+          email?: string
+          first_purchase_at?: string | null
+          first_seen_at?: string
+          first_utm_ad?: string | null
+          first_utm_adset?: string | null
+          first_utm_campaign?: string | null
+          first_utm_content?: string | null
+          first_utm_medium?: string | null
+          first_utm_source?: string | null
+          first_utm_term?: string | null
+          id?: string
+          instagram?: string | null
+          last_activity_at?: string
+          last_purchase_at?: string | null
+          name?: string | null
+          neighborhood?: string | null
+          phone?: string | null
+          phone_ddd?: string | null
+          project_id?: string
+          source?: string
+          state?: string | null
+          status?: string
+          tags?: string[] | null
+          total_purchases?: number | null
+          total_revenue?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_transactions: {
+        Row: {
+          affiliate_code: string | null
+          affiliate_name: string | null
+          confirmation_date: string | null
+          contact_id: string
+          coupon: string | null
+          created_at: string
+          external_id: string | null
+          funnel_id: string | null
+          id: string
+          installment_number: number | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          metadata: Json | null
+          net_revenue: number | null
+          offer_code: string | null
+          offer_name: string | null
+          offer_price: number | null
+          payment_method: string | null
+          payment_type: string | null
+          platform: string
+          product_code: string | null
+          product_name: string
+          product_price: number | null
+          project_id: string
+          status: string
+          total_price: number | null
+          total_price_brl: number | null
+          transaction_date: string | null
+          updated_at: string
+          utm_ad: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_creative: string | null
+          utm_medium: string | null
+          utm_placement: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          affiliate_code?: string | null
+          affiliate_name?: string | null
+          confirmation_date?: string | null
+          contact_id: string
+          coupon?: string | null
+          created_at?: string
+          external_id?: string | null
+          funnel_id?: string | null
+          id?: string
+          installment_number?: number | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          metadata?: Json | null
+          net_revenue?: number | null
+          offer_code?: string | null
+          offer_name?: string | null
+          offer_price?: number | null
+          payment_method?: string | null
+          payment_type?: string | null
+          platform?: string
+          product_code?: string | null
+          product_name: string
+          product_price?: number | null
+          project_id: string
+          status: string
+          total_price?: number | null
+          total_price_brl?: number | null
+          transaction_date?: string | null
+          updated_at?: string
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_creative?: string | null
+          utm_medium?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          affiliate_code?: string | null
+          affiliate_name?: string | null
+          confirmation_date?: string | null
+          contact_id?: string
+          coupon?: string | null
+          created_at?: string
+          external_id?: string | null
+          funnel_id?: string | null
+          id?: string
+          installment_number?: number | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          metadata?: Json | null
+          net_revenue?: number | null
+          offer_code?: string | null
+          offer_name?: string | null
+          offer_price?: number | null
+          payment_method?: string | null
+          payment_type?: string | null
+          platform?: string
+          product_code?: string | null
+          product_name?: string
+          product_price?: number | null
+          project_id?: string
+          status?: string
+          total_price?: number | null
+          total_price_brl?: number | null
+          transaction_date?: string | null
+          updated_at?: string
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_creative?: string | null
+          utm_medium?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_transactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_changes: {
         Row: {
           anotacoes: string | null
@@ -1308,6 +1629,13 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      migrate_hotmart_to_crm: { Args: never; Returns: undefined }
+      sync_hotmart_sale_to_crm_manual: {
+        Args: {
+          sale_record: Database["public"]["Tables"]["hotmart_sales"]["Row"]
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "user" | "super_admin"

@@ -50,7 +50,7 @@ export const AppHeader = ({
   
   // Check if current page is in the "Busca Rápida" dropdown
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
-  const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal';
+  const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard';
   
   const handleLogout = async () => {
     await signOut();
@@ -169,6 +169,13 @@ export const AppHeader = ({
                       <CalendarDays className="w-4 h-4" />
                       Índices Mensais
                     </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => navigate('/launch-dashboard')} 
+                      className={`gap-2 cursor-pointer ${currentPath === '/launch-dashboard' ? 'bg-muted' : ''}`}
+                    >
+                      <Rocket className="w-4 h-4" />
+                      Lançamentos
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -180,16 +187,6 @@ export const AppHeader = ({
                 >
                   <Package className="w-4 h-4" />
                   A Definir
-                </Button>
-
-                {/* Lançamentos */}
-                <Button
-                  onClick={() => navigate('/launch-dashboard')}
-                  variant={currentPath === '/launch-dashboard' ? "default" : "outline"}
-                  className="gap-2"
-                >
-                  <Rocket className="w-4 h-4" />
-                  Lançamentos
                 </Button>
 
                 {/* Mapeamento de Ofertas */}

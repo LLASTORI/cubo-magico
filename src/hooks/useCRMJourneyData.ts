@@ -102,16 +102,19 @@ export interface CRMFilters {
   entryFilter: EntryFilter | null;
   targetFilter: TargetFilter | null;
   dateFilter: DateFilter;
+  statusFilter: string[];
 }
+
+export const DEFAULT_STATUS_FILTER = ['APPROVED', 'COMPLETE'];
 
 export function useCRMJourneyData(filters: CRMFilters) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
-  const { entryFilter, targetFilter, dateFilter } = filters;
+  const { entryFilter, targetFilter, dateFilter, statusFilter } = filters;
 
   // Fetch all sales for the project
   const { data: salesData, isLoading: loadingSales } = useQuery({
-    queryKey: ['crm-sales', projectId],
+    queryKey: ['crm-sales', projectId, statusFilter],
     queryFn: async () => {
       if (!projectId) return [];
       
@@ -121,11 +124,16 @@ export function useCRMJourneyData(filters: CRMFilters) {
       let hasMore = true;
 
       while (hasMore) {
-        const { data, error } = await supabase
+        let query = supabase
           .from('hotmart_sales')
           .select('transaction_id, buyer_email, buyer_name, product_name, offer_code, sale_date, total_price_brl, status')
-          .eq('project_id', projectId)
-          .in('status', ['APPROVED', 'COMPLETE'])
+          .eq('project_id', projectId);
+        
+        if (statusFilter.length > 0) {
+          query = query.in('status', statusFilter);
+        }
+        
+        const { data, error } = await query
           .order('sale_date', { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
 

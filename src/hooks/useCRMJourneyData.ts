@@ -34,12 +34,12 @@ export interface CustomerPurchase {
 }
 
 export interface EntryFilter {
-  type: 'product' | 'funnel';
+  type: 'product' | 'funnel' | 'offer';
   values: string[];
 }
 
 export interface TargetFilter {
-  type: 'product' | 'funnel';
+  type: 'product' | 'funnel' | 'offer';
   values: string[];
 }
 
@@ -179,7 +179,8 @@ export function useCRMJourneyData(filters: CRMFilters) {
           .eq('project_id', projectId);
         
         if (statusFilter.length > 0) {
-          query = query.in('status', statusFilter);
+          const statusValuesForQuery = statusFilter.flatMap((s) => [s, s.toLowerCase()]);
+          query = query.in('status', statusValuesForQuery);
         }
         
         const { data, error } = await query
@@ -333,7 +334,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
 
     // Status breakdown
     const statusBreakdown = createBreakdown(
-      (sale) => sale.status || 'UNKNOWN',
+      (sale) => (sale.status || 'UNKNOWN').toUpperCase(),
       (key) => statusLabels[key] || key
     );
 
@@ -421,6 +422,8 @@ export function useCRMJourneyData(filters: CRMFilters) {
           if (!entryFilter.values.includes(firstSale.product_name)) return;
         } else if (entryFilter.type === 'funnel') {
           if (!entryFunnelId || !entryFilter.values.includes(entryFunnelId)) return;
+        } else if (entryFilter.type === 'offer') {
+          if (!firstSale.offer_code || !entryFilter.values.includes(firstSale.offer_code)) return;
         }
       }
 
@@ -438,6 +441,10 @@ export function useCRMJourneyData(filters: CRMFilters) {
             targetPurchaseIndex = i;
             break;
           } else if (targetFilter.type === 'funnel' && saleFunnelId && targetFilter.values.includes(saleFunnelId)) {
+            hasTargetProduct = true;
+            targetPurchaseIndex = i;
+            break;
+          } else if (targetFilter.type === 'offer' && sale.offer_code && targetFilter.values.includes(sale.offer_code)) {
             hasTargetProduct = true;
             targetPurchaseIndex = i;
             break;

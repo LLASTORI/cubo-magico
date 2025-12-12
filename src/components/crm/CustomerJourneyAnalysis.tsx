@@ -175,7 +175,7 @@ function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
 
 export function CustomerJourneyAnalysis() {
   const [analysisMode, setAnalysisMode] = useState<'entry' | 'origin'>('entry');
-  const [filterType, setFilterType] = useState<'product' | 'funnel' | null>(null);
+  const [filterType, setFilterType] = useState<'product' | 'funnel' | 'offer' | null>(null);
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilter>({ startDate: null, endDate: null });
   const [statusFilter, setStatusFilter] = useState<string[]>(DEFAULT_STATUS_FILTER);
@@ -208,6 +208,36 @@ export function CustomerJourneyAnalysis() {
     isLoading,
     isLoadingBreakdown 
   } = useCRMJourneyData(filters);
+
+  const offerOptions = offerBreakdown.map((offer) => ({
+    value: offer.key,
+    label: offer.label,
+  }));
+
+  const selectedProductsFromCards = filterType === 'product' ? selectedValues : [];
+  const selectedFunnelsFromCards = filterType === 'funnel' ? selectedValues : [];
+  const selectedOffersFromCards = filterType === 'offer' ? selectedValues : [];
+
+  const handleProductCardClick = (product: string) => {
+    setFilterType('product');
+    setSelectedValues((prev) =>
+      prev.includes(product) ? prev.filter((p) => p !== product) : [...prev, product]
+    );
+  };
+
+  const handleFunnelCardClick = (funnelId: string) => {
+    setFilterType('funnel');
+    setSelectedValues((prev) =>
+      prev.includes(funnelId) ? prev.filter((f) => f !== funnelId) : [...prev, funnelId]
+    );
+  };
+
+  const handleOfferCardClick = (offerCode: string) => {
+    setFilterType('offer');
+    setSelectedValues((prev) =>
+      prev.includes(offerCode) ? prev.filter((o) => o !== offerCode) : [...prev, offerCode]
+    );
+  };
 
   const getStatusLabel = (key: string) => {
     const statusLabels: Record<string, string> = {

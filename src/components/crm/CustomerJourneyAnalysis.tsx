@@ -5,28 +5,39 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { 
   Users, 
   DollarSign, 
   ShoppingCart, 
   TrendingUp, 
   ArrowRight,
+  ArrowLeft,
   ChevronDown,
   ChevronUp,
   Filter,
-  X
+  X,
+  CalendarIcon,
+  RotateCcw
 } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { 
   useCRMJourneyData, 
   type EntryFilter, 
-  type CustomerJourney 
+  type TargetFilter,
+  type DateFilter,
+  type CustomerJourney,
+  type CRMFilters
 } from '@/hooks/useCRMJourneyData';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { cn } from '@/lib/utils';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -45,9 +56,10 @@ const formatDate = (date: Date) => {
 
 interface CustomerRowProps {
   journey: CustomerJourney;
+  showOrigin?: boolean;
 }
 
-function CustomerRow({ journey }: CustomerRowProps) {
+function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -69,8 +81,8 @@ function CustomerRow({ journey }: CustomerRowProps) {
         <TableCell>
           <div>
             <p className="font-medium text-sm">{journey.entryProduct}</p>
-            {journey.entryFunnelId && (
-              <p className="text-xs text-muted-foreground">via Funil</p>
+            {journey.entryFunnelName && (
+              <p className="text-xs text-primary">{journey.entryFunnelName}</p>
             )}
           </div>
         </TableCell>
@@ -83,12 +95,24 @@ function CustomerRow({ journey }: CustomerRowProps) {
           {formatCurrency(journey.totalSpent)}
         </TableCell>
         <TableCell className="text-center">
-          {journey.subsequentProducts.length > 0 ? (
-            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-              +{journey.subsequentProducts.length} produtos
-            </Badge>
+          {showOrigin ? (
+            journey.previousProducts.length > 0 ? (
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
+                {journey.previousProducts.length} antes
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                Entrada direta
+              </Badge>
+            )
           ) : (
-            <span className="text-muted-foreground text-sm">-</span>
+            journey.subsequentProducts.length > 0 ? (
+              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                +{journey.subsequentProducts.length} produtos
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground text-sm">-</span>
+            )
           )}
         </TableCell>
         <TableCell className="text-right text-muted-foreground text-sm">
@@ -103,8 +127,21 @@ function CustomerRow({ journey }: CustomerRowProps) {
               <div className="flex flex-wrap gap-2 items-center">
                 {journey.purchases.map((purchase, index) => (
                   <div key={purchase.transactionId} className="flex items-center gap-2">
-                    <div className={`px-3 py-2 rounded-lg border ${purchase.isEntry ? 'bg-primary/10 border-primary/30' : 'bg-card border-border'}`}>
-                      <p className="font-medium text-sm">{purchase.productName}</p>
+                    <div className={cn(
+                      "px-3 py-2 rounded-lg border",
+                      purchase.isEntry && "bg-primary/10 border-primary/30",
+                      purchase.isTarget && "bg-orange-500/10 border-orange-500/30",
+                      !purchase.isEntry && !purchase.isTarget && "bg-card border-border"
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm">{purchase.productName}</p>
+                        {purchase.isEntry && (
+                          <Badge variant="outline" className="text-xs">Entrada</Badge>
+                        )}
+                        {purchase.isTarget && (
+                          <Badge variant="outline" className="text-xs bg-orange-500/20">Alvo</Badge>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>{formatDate(purchase.saleDate)}</span>
                         <span>•</span>
@@ -134,12 +171,24 @@ function CustomerRow({ journey }: CustomerRowProps) {
 }
 
 export function CustomerJourneyAnalysis() {
+  const [analysisMode, setAnalysisMode] = useState<'entry' | 'origin'>('entry');
   const [filterType, setFilterType] = useState<'product' | 'funnel' | null>(null);
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
+  const [dateFilter, setDateFilter] = useState<DateFilter>({ startDate: null, endDate: null });
 
-  const entryFilter: EntryFilter | null = filterType && selectedValues.length > 0
+  const entryFilter: EntryFilter | null = analysisMode === 'entry' && filterType && selectedValues.length > 0
     ? { type: filterType, values: selectedValues }
     : null;
+
+  const targetFilter: TargetFilter | null = analysisMode === 'origin' && filterType && selectedValues.length > 0
+    ? { type: filterType, values: selectedValues }
+    : null;
+
+  const filters: CRMFilters = {
+    entryFilter,
+    targetFilter,
+    dateFilter,
+  };
 
   const { 
     customerJourneys, 
@@ -147,11 +196,20 @@ export function CustomerJourneyAnalysis() {
     uniqueProducts, 
     uniqueFunnels,
     isLoading 
-  } = useCRMJourneyData(entryFilter);
+  } = useCRMJourneyData(filters);
 
   const clearFilter = () => {
     setFilterType(null);
     setSelectedValues([]);
+  };
+
+  const clearDateFilter = () => {
+    setDateFilter({ startDate: null, endDate: null });
+  };
+
+  const clearAllFilters = () => {
+    clearFilter();
+    clearDateFilter();
   };
 
   const handleFilterTypeChange = (value: string) => {
@@ -162,6 +220,13 @@ export function CustomerJourneyAnalysis() {
       setSelectedValues([]);
     }
   };
+
+  const handleModeChange = (mode: 'entry' | 'origin') => {
+    setAnalysisMode(mode);
+    clearFilter();
+  };
+
+  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate;
 
   if (isLoading) {
     return (
@@ -176,19 +241,118 @@ export function CustomerJourneyAnalysis() {
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
+      {/* Analysis Mode Toggle */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtro de Entrada
-          </CardTitle>
+          <CardTitle className="text-lg">Modo de Análise</CardTitle>
           <CardDescription>
-            Selecione o produto ou funil de entrada para analisar a jornada dos clientes
+            Escolha como deseja analisar a jornada dos clientes
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex gap-4">
+            <Button
+              variant={analysisMode === 'entry' ? 'default' : 'outline'}
+              onClick={() => handleModeChange('entry')}
+              className="gap-2"
+            >
+              <ArrowRight className="h-4 w-4" />
+              Por Entrada
+              <span className="text-xs opacity-70">(O que compraram depois?)</span>
+            </Button>
+            <Button
+              variant={analysisMode === 'origin' ? 'default' : 'outline'}
+              onClick={() => handleModeChange('origin')}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Por Destino
+              <span className="text-xs opacity-70">(De onde vieram?)</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                {analysisMode === 'entry' ? 'Filtro de Entrada' : 'Filtro de Destino'}
+              </CardTitle>
+              <CardDescription>
+                {analysisMode === 'entry' 
+                  ? 'Selecione o produto ou funil de entrada para ver o que os clientes compraram depois'
+                  : 'Selecione o produto ou funil de destino para ver de onde os clientes vieram'
+                }
+              </CardDescription>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Limpar Tudo
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
           <div className="flex flex-wrap gap-4 items-end">
+            {/* Date Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {analysisMode === 'entry' ? 'Data da Primeira Compra' : 'Período'}
+              </label>
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn(
+                      "w-[140px] justify-start text-left font-normal",
+                      !dateFilter.startDate && "text-muted-foreground"
+                    )}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFilter.startDate ? format(dateFilter.startDate, "dd/MM/yyyy") : "Início"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateFilter.startDate || undefined}
+                      onSelect={(date) => setDateFilter(prev => ({ ...prev, startDate: date || null }))}
+                      locale={ptBR}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn(
+                      "w-[140px] justify-start text-left font-normal",
+                      !dateFilter.endDate && "text-muted-foreground"
+                    )}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFilter.endDate ? format(dateFilter.endDate, "dd/MM/yyyy") : "Fim"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateFilter.endDate || undefined}
+                      onSelect={(date) => setDateFilter(prev => ({ ...prev, endDate: date || null }))}
+                      locale={ptBR}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {(dateFilter.startDate || dateFilter.endDate) && (
+                  <Button variant="ghost" size="icon" onClick={clearDateFilter}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Tipo de Filtro</label>
               <Select value={filterType || 'all'} onValueChange={handleFilterTypeChange}>
@@ -205,7 +369,9 @@ export function CustomerJourneyAnalysis() {
 
             {filterType === 'product' && (
               <div className="space-y-2 flex-1 min-w-[300px]">
-                <label className="text-sm font-medium">Produtos de Entrada</label>
+                <label className="text-sm font-medium">
+                  {analysisMode === 'entry' ? 'Produtos de Entrada' : 'Produtos de Destino'}
+                </label>
                 <MultiSelect
                   options={uniqueProducts.map(p => ({ value: p, label: p }))}
                   selected={selectedValues}
@@ -217,7 +383,9 @@ export function CustomerJourneyAnalysis() {
 
             {filterType === 'funnel' && (
               <div className="space-y-2 flex-1 min-w-[300px]">
-                <label className="text-sm font-medium">Funis de Entrada</label>
+                <label className="text-sm font-medium">
+                  {analysisMode === 'entry' ? 'Funis de Entrada' : 'Funis de Destino'}
+                </label>
                 <MultiSelect
                   options={uniqueFunnels.map(f => ({ value: f.id, label: f.name }))}
                   selected={selectedValues}
@@ -227,7 +395,7 @@ export function CustomerJourneyAnalysis() {
               </div>
             )}
 
-            {entryFilter && (
+            {(entryFilter || targetFilter) && (
               <Button variant="outline" size="sm" onClick={clearFilter} className="gap-2">
                 <X className="h-4 w-4" />
                 Limpar Filtro
@@ -302,8 +470,12 @@ export function CustomerJourneyAnalysis() {
       <Tabs defaultValue="journeys" className="space-y-4">
         <TabsList>
           <TabsTrigger value="journeys">Jornadas de Clientes</TabsTrigger>
-          <TabsTrigger value="cohorts">Análise por Cohort</TabsTrigger>
-          <TabsTrigger value="products">Produtos Subsequentes</TabsTrigger>
+          <TabsTrigger value="cohorts">
+            {analysisMode === 'entry' ? 'Análise por Cohort' : 'Análise de Origem'}
+          </TabsTrigger>
+          <TabsTrigger value="products">
+            {analysisMode === 'entry' ? 'Produtos Subsequentes' : 'Produtos de Origem'}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="journeys">
@@ -311,9 +483,15 @@ export function CustomerJourneyAnalysis() {
             <CardHeader>
               <CardTitle>Jornadas de Clientes</CardTitle>
               <CardDescription>
-                {entryFilter 
-                  ? `Clientes que entraram via ${entryFilter.type === 'product' ? 'produto(s)' : 'funil(is)'} selecionado(s)`
-                  : 'Todos os clientes ordenados por LTV'
+                {analysisMode === 'entry' 
+                  ? (entryFilter 
+                      ? `Clientes que entraram via ${entryFilter.type === 'product' ? 'produto(s)' : 'funil(is)'} selecionado(s)`
+                      : 'Todos os clientes ordenados por LTV'
+                    )
+                  : (targetFilter
+                      ? `Clientes que compraram ${targetFilter.type === 'product' ? 'produto(s)' : 'no(s) funil(is)'} selecionado(s)`
+                      : 'Selecione um produto/funil de destino para análise'
+                    )
                 }
               </CardDescription>
             </CardHeader>
@@ -321,7 +499,12 @@ export function CustomerJourneyAnalysis() {
               {customerJourneys.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhuma jornada encontrada com os filtros selecionados</p>
+                  <p>
+                    {analysisMode === 'origin' && !targetFilter
+                      ? 'Selecione um produto ou funil de destino para ver de onde os clientes vieram'
+                      : 'Nenhuma jornada encontrada com os filtros selecionados'
+                    }
+                  </p>
                 </div>
               ) : (
                 <Table>
@@ -332,13 +515,19 @@ export function CustomerJourneyAnalysis() {
                       <TableHead>Produto de Entrada</TableHead>
                       <TableHead className="text-center">Compras</TableHead>
                       <TableHead className="text-right">LTV</TableHead>
-                      <TableHead className="text-center">Recompras</TableHead>
+                      <TableHead className="text-center">
+                        {analysisMode === 'entry' ? 'Recompras' : 'Antes do Alvo'}
+                      </TableHead>
                       <TableHead className="text-right">Primeira Compra</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {customerJourneys.slice(0, 50).map((journey) => (
-                      <CustomerRow key={journey.buyerEmail} journey={journey} />
+                      <CustomerRow 
+                        key={journey.buyerEmail} 
+                        journey={journey} 
+                        showOrigin={analysisMode === 'origin'}
+                      />
                     ))}
                   </TableBody>
                 </Table>
@@ -355,13 +544,52 @@ export function CustomerJourneyAnalysis() {
         <TabsContent value="cohorts">
           <Card>
             <CardHeader>
-              <CardTitle>Análise por Cohort de Entrada</CardTitle>
+              <CardTitle>
+                {analysisMode === 'entry' ? 'Análise por Cohort de Entrada' : 'Análise de Origem'}
+              </CardTitle>
               <CardDescription>
-                Compare o LTV e taxa de recompra entre diferentes pontos de entrada
+                {analysisMode === 'entry'
+                  ? 'Compare o LTV e taxa de recompra entre diferentes pontos de entrada'
+                  : 'Veja de onde vieram os clientes que compraram o produto/funil selecionado'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {journeyMetrics && journeyMetrics.cohortMetrics.length > 0 ? (
+              {analysisMode === 'origin' && journeyMetrics && journeyMetrics.originMetrics.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Origem (Ponto de Entrada)</TableHead>
+                      <TableHead className="text-center">Clientes</TableHead>
+                      <TableHead className="text-center">% do Total</TableHead>
+                      <TableHead className="text-right">LTV Após Destino</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {journeyMetrics.originMetrics.map((origin, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{origin.funnel || origin.product}</p>
+                            {origin.funnel && (
+                              <p className="text-xs text-muted-foreground">{origin.product}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{origin.customerCount}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline">
+                            {origin.percentage.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(origin.avgLTVAfter)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : analysisMode === 'entry' && journeyMetrics && journeyMetrics.cohortMetrics.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -401,7 +629,12 @@ export function CustomerJourneyAnalysis() {
                 </Table>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>Nenhum dado de cohort disponível</p>
+                  <p>
+                    {analysisMode === 'origin' && !targetFilter
+                      ? 'Selecione um produto ou funil de destino para ver a análise de origem'
+                      : 'Nenhum dado disponível'
+                    }
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -411,13 +644,21 @@ export function CustomerJourneyAnalysis() {
         <TabsContent value="products">
           <Card>
             <CardHeader>
-              <CardTitle>Produtos Mais Comprados Após Entrada</CardTitle>
+              <CardTitle>
+                {analysisMode === 'entry' 
+                  ? 'Produtos Mais Comprados Após Entrada' 
+                  : 'Produtos Comprados Antes do Destino'
+                }
+              </CardTitle>
               <CardDescription>
-                Quais produtos os clientes mais compram depois da primeira compra
+                {analysisMode === 'entry'
+                  ? 'Quais produtos os clientes mais compram depois da primeira compra'
+                  : 'Quais produtos os clientes compraram antes de chegar ao produto/funil de destino'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {journeyMetrics && journeyMetrics.topSubsequentProducts.length > 0 ? (
+              {analysisMode === 'entry' && journeyMetrics && journeyMetrics.topSubsequentProducts.length > 0 ? (
                 <div className="space-y-4">
                   {journeyMetrics.topSubsequentProducts.map((item, index) => (
                     <div key={item.product} className="flex items-center gap-4">
@@ -441,9 +682,66 @@ export function CustomerJourneyAnalysis() {
                     </div>
                   ))}
                 </div>
+              ) : analysisMode === 'origin' && targetFilter ? (
+                <div className="space-y-4">
+                  {(() => {
+                    // Calculate products purchased before target
+                    const previousProductCounts = new Map<string, number>();
+                    customerJourneys.forEach(j => {
+                      j.previousProducts.forEach(p => {
+                        previousProductCounts.set(p, (previousProductCounts.get(p) || 0) + 1);
+                      });
+                    });
+
+                    const totalCustomers = customerJourneys.length;
+                    const sortedProducts = Array.from(previousProductCounts.entries())
+                      .map(([product, count]) => ({
+                        product,
+                        count,
+                        percentage: (count / totalCustomers) * 100,
+                      }))
+                      .sort((a, b) => b.count - a.count)
+                      .slice(0, 10);
+
+                    if (sortedProducts.length === 0) {
+                      return (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p>A maioria dos clientes entrou diretamente pelo produto/funil de destino</p>
+                        </div>
+                      );
+                    }
+
+                    return sortedProducts.map((item, index) => (
+                      <div key={item.product} className="flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-sm font-medium text-blue-600">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-medium">{item.product}</p>
+                            <span className="text-sm text-muted-foreground">
+                              {item.count} clientes ({item.percentage.toFixed(1)}%)
+                            </span>
+                          </div>
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500 rounded-full transition-all"
+                              style={{ width: `${Math.min(item.percentage * 2, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>Nenhuma recompra encontrada</p>
+                  <p>
+                    {analysisMode === 'origin' && !targetFilter
+                      ? 'Selecione um produto ou funil de destino para ver os produtos de origem'
+                      : 'Nenhuma recompra encontrada'
+                    }
+                  </p>
                 </div>
               )}
             </CardContent>

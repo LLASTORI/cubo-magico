@@ -10,10 +10,12 @@ export interface CustomerJourney {
   entryProduct: string;
   entryOfferCode: string;
   entryFunnelId: string | null;
+  entryFunnelName: string | null;
   totalPurchases: number;
   totalSpent: number;
   purchases: CustomerPurchase[];
   subsequentProducts: string[];
+  previousProducts: string[];
   daysSinceFirstPurchase: number;
   avgTimeBetweenPurchases: number | null;
 }
@@ -28,11 +30,22 @@ export interface CustomerPurchase {
   totalPrice: number;
   status: string;
   isEntry: boolean;
+  isTarget: boolean;
 }
 
 export interface EntryFilter {
   type: 'product' | 'funnel';
   values: string[];
+}
+
+export interface TargetFilter {
+  type: 'product' | 'funnel';
+  values: string[];
+}
+
+export interface DateFilter {
+  startDate: Date | null;
+  endDate: Date | null;
 }
 
 export interface CohortMetrics {
@@ -45,6 +58,14 @@ export interface CohortMetrics {
   totalRevenue: number;
 }
 
+export interface OriginMetrics {
+  product: string;
+  funnel: string | null;
+  customerCount: number;
+  percentage: number;
+  avgLTVAfter: number;
+}
+
 export interface JourneyMetrics {
   totalCustomers: number;
   avgLTV: number;
@@ -52,6 +73,7 @@ export interface JourneyMetrics {
   repeatCustomerRate: number;
   topSubsequentProducts: { product: string; count: number; percentage: number }[];
   cohortMetrics: CohortMetrics[];
+  originMetrics: OriginMetrics[];
 }
 
 interface Sale {
@@ -76,9 +98,16 @@ interface Funnel {
   name: string;
 }
 
-export function useCRMJourneyData(entryFilter: EntryFilter | null) {
+export interface CRMFilters {
+  entryFilter: EntryFilter | null;
+  targetFilter: TargetFilter | null;
+  dateFilter: DateFilter;
+}
+
+export function useCRMJourneyData(filters: CRMFilters) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
+  const { entryFilter, targetFilter, dateFilter } = filters;
 
   // Fetch all sales for the project
   const { data: salesData, isLoading: loadingSales } = useQuery({
@@ -213,6 +242,18 @@ export function useCRMJourneyData(entryFilter: EntryFilter | null) {
 
       const firstSale = sortedSales[0];
       const entryFunnelId = firstSale.offer_code ? offerToFunnel.get(firstSale.offer_code) || null : null;
+      const entryFunnelName = entryFunnelId ? funnelNames.get(entryFunnelId) || null : null;
+
+      // Apply date filter on first purchase date
+      if (dateFilter.startDate || dateFilter.endDate) {
+        const firstPurchaseDate = new Date(firstSale.sale_date);
+        if (dateFilter.startDate && firstPurchaseDate < dateFilter.startDate) return;
+        if (dateFilter.endDate) {
+          const endOfDay = new Date(dateFilter.endDate);
+          endOfDay.setHours(23, 59, 59, 999);
+          if (firstPurchaseDate > endOfDay) return;
+        }
+      }
 
       // Apply entry filter
       if (entryFilter) {
@@ -221,6 +262,29 @@ export function useCRMJourneyData(entryFilter: EntryFilter | null) {
         } else if (entryFilter.type === 'funnel') {
           if (!entryFunnelId || !entryFilter.values.includes(entryFunnelId)) return;
         }
+      }
+
+      // Check if customer bought target product (for reverse analysis)
+      let hasTargetProduct = false;
+      let targetPurchaseIndex = -1;
+      
+      if (targetFilter) {
+        for (let i = 0; i < sortedSales.length; i++) {
+          const sale = sortedSales[i];
+          const saleFunnelId = sale.offer_code ? offerToFunnel.get(sale.offer_code) || null : null;
+          
+          if (targetFilter.type === 'product' && targetFilter.values.includes(sale.product_name)) {
+            hasTargetProduct = true;
+            targetPurchaseIndex = i;
+            break;
+          } else if (targetFilter.type === 'funnel' && saleFunnelId && targetFilter.values.includes(saleFunnelId)) {
+            hasTargetProduct = true;
+            targetPurchaseIndex = i;
+            break;
+          }
+        }
+        
+        if (!hasTargetProduct) return;
       }
 
       const purchases: CustomerPurchase[] = sortedSales.map((sale, index) => ({
@@ -235,13 +299,23 @@ export function useCRMJourneyData(entryFilter: EntryFilter | null) {
         totalPrice: sale.total_price_brl || 0,
         status: sale.status,
         isEntry: index === 0,
+        isTarget: targetFilter ? index === targetPurchaseIndex : false,
       }));
 
       const totalSpent = purchases.reduce((sum, p) => sum + p.totalPrice, 0);
+      
       const subsequentProducts = purchases
         .filter(p => !p.isEntry)
         .map(p => p.productName)
         .filter((v, i, a) => a.indexOf(v) === i);
+
+      // Products purchased BEFORE the target (for reverse analysis)
+      const previousProducts = targetPurchaseIndex > 0
+        ? purchases
+            .slice(0, targetPurchaseIndex)
+            .map(p => p.productName)
+            .filter((v, i, a) => a.indexOf(v) === i)
+        : [];
 
       // Calculate average time between purchases
       let avgTimeBetweenPurchases: number | null = null;
@@ -261,17 +335,19 @@ export function useCRMJourneyData(entryFilter: EntryFilter | null) {
         entryProduct: firstSale.product_name,
         entryOfferCode: firstSale.offer_code || '',
         entryFunnelId,
+        entryFunnelName,
         totalPurchases: purchases.length,
         totalSpent,
         purchases,
         subsequentProducts,
+        previousProducts,
         daysSinceFirstPurchase: Math.floor((Date.now() - new Date(firstSale.sale_date).getTime()) / (1000 * 60 * 60 * 24)),
         avgTimeBetweenPurchases,
       });
     });
 
     return journeys.sort((a, b) => b.totalSpent - a.totalSpent);
-  }, [salesData, entryFilter, offerToFunnel, funnelNames]);
+  }, [salesData, entryFilter, targetFilter, dateFilter, offerToFunnel, funnelNames]);
 
   // Calculate journey metrics
   const journeyMetrics = useMemo((): JourneyMetrics | null => {
@@ -329,6 +405,46 @@ export function useCRMJourneyData(entryFilter: EntryFilter | null) {
       };
     }).sort((a, b) => b.avgLTV - a.avgLTV);
 
+    // Origin metrics (for reverse analysis - where customers came from before target product)
+    const originMap = new Map<string, { journeys: CustomerJourney[], ltvAfterTarget: number[] }>();
+    
+    if (targetFilter) {
+      customerJourneys.forEach(j => {
+        // Group by entry point
+        const key = j.entryFunnelId 
+          ? `funnel:${j.entryFunnelId}` 
+          : `product:${j.entryProduct}`;
+        
+        if (!originMap.has(key)) {
+          originMap.set(key, { journeys: [], ltvAfterTarget: [] });
+        }
+        
+        // Calculate LTV after target purchase
+        const targetIndex = j.purchases.findIndex(p => p.isTarget);
+        const ltvAfter = targetIndex >= 0 
+          ? j.purchases.slice(targetIndex).reduce((sum, p) => sum + p.totalPrice, 0)
+          : 0;
+        
+        originMap.get(key)!.journeys.push(j);
+        originMap.get(key)!.ltvAfterTarget.push(ltvAfter);
+      });
+    }
+
+    const originMetrics: OriginMetrics[] = Array.from(originMap.entries()).map(([key, data]) => {
+      const [type, value] = key.split(':');
+      const avgLTVAfter = data.ltvAfterTarget.length > 0
+        ? data.ltvAfterTarget.reduce((a, b) => a + b, 0) / data.ltvAfterTarget.length
+        : 0;
+
+      return {
+        product: type === 'product' ? value : data.journeys[0]?.entryProduct || '',
+        funnel: type === 'funnel' ? funnelNames.get(value) || value : null,
+        customerCount: data.journeys.length,
+        percentage: (data.journeys.length / totalCustomers) * 100,
+        avgLTVAfter,
+      };
+    }).sort((a, b) => b.customerCount - a.customerCount);
+
     return {
       totalCustomers,
       avgLTV,
@@ -336,8 +452,9 @@ export function useCRMJourneyData(entryFilter: EntryFilter | null) {
       repeatCustomerRate,
       topSubsequentProducts,
       cohortMetrics,
+      originMetrics,
     };
-  }, [customerJourneys, funnelNames]);
+  }, [customerJourneys, funnelNames, targetFilter]);
 
   return {
     customerJourneys,

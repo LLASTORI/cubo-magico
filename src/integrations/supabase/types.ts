@@ -404,6 +404,56 @@ export type Database = {
           },
         ]
       }
+      crm_webhook_keys: {
+        Row: {
+          allowed_sources: string[] | null
+          api_key: string
+          created_at: string
+          default_tags: string[] | null
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+          name: string
+          project_id: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          allowed_sources?: string[] | null
+          api_key?: string
+          created_at?: string
+          default_tags?: string[] | null
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          name?: string
+          project_id: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          allowed_sources?: string[] | null
+          api_key?: string
+          created_at?: string
+          default_tags?: string[] | null
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          name?: string
+          project_id?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_webhook_keys_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_changes: {
         Row: {
           anotacoes: string | null

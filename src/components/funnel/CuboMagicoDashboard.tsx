@@ -20,6 +20,7 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useMetaHierarchy } from '@/hooks/useMetaHierarchy';
+import { ModuleLockedValue, ModuleLockedHeader } from '@/components/ModuleLockedValue';
 
 // Import analysis components
 import TemporalChart from '@/components/funnel/TemporalChart';
@@ -1162,17 +1163,11 @@ export function CuboMagicoDashboard({
               <TableHead>Funil</TableHead>
               <TableHead>Padrão</TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help flex items-center justify-end gap-1">
-                    {!isMetaAdsEnabled && <Lock className="w-3 h-3 text-muted-foreground" />}
-                    Investimento
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {isMetaAdsEnabled 
-                      ? 'Gasto em anúncios atribuído ao funil' 
-                      : 'Módulo bloqueado. Entre em contato com o suporte para ativar.'}
-                  </TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isMetaAdsEnabled}
+                  label="Investimento"
+                  unlockedTooltip="Gasto em anúncios atribuído ao funil"
+                />
               </TableHead>
               <TableHead className="text-right">
                 <Tooltip>
@@ -1199,30 +1194,18 @@ export function CuboMagicoDashboard({
                 </Tooltip>
               </TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help flex items-center justify-end gap-1">
-                    {!isMetaAdsEnabled && <Lock className="w-3 h-3 text-muted-foreground" />}
-                    CPA Real
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {isMetaAdsEnabled 
-                      ? 'Investimento ÷ Vendas FRONT. Custo real por aquisição' 
-                      : 'Módulo bloqueado. Entre em contato com o suporte para ativar.'}
-                  </TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isMetaAdsEnabled}
+                  label="CPA Real"
+                  unlockedTooltip="Investimento ÷ Vendas FRONT. Custo real por aquisição"
+                />
               </TableHead>
               <TableHead className="text-right">
-                <Tooltip>
-                  <TooltipTrigger className="cursor-help flex items-center justify-end gap-1">
-                    {!isMetaAdsEnabled && <Lock className="w-3 h-3 text-muted-foreground" />}
-                    ROAS
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {isMetaAdsEnabled 
-                      ? 'Faturamento ÷ Investimento. Meta: ≥ ROAS Alvo do funil' 
-                      : 'Módulo bloqueado. Entre em contato com o suporte para ativar.'}
-                  </TooltipContent>
-                </Tooltip>
+                <ModuleLockedHeader
+                  isLocked={!isMetaAdsEnabled}
+                  label="ROAS"
+                  unlockedTooltip="Faturamento ÷ Investimento. Meta: ≥ ROAS Alvo do funil"
+                />
               </TableHead>
               <TableHead>
                 <Tooltip>
@@ -1271,17 +1254,11 @@ export function CuboMagicoDashboard({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {isMetaAdsEnabled ? (
-                        formatCurrency(metrics.investimento)
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger className="flex items-center justify-end gap-1 text-muted-foreground opacity-60">
-                            <Lock className="w-3 h-3" />
-                            <span>-</span>
-                          </TooltipTrigger>
-                          <TooltipContent>Módulo bloqueado. Entre em contato com o suporte.</TooltipContent>
-                        </Tooltip>
-                      )}
+                      <ModuleLockedValue
+                        isLocked={!isMetaAdsEnabled}
+                        value={formatCurrency(metrics.investimento)}
+                        variant="cell"
+                      />
                     </TableCell>
                     <TableCell className="text-right font-mono text-green-600">
                       {formatCurrency(metrics.faturamento)}
@@ -1294,40 +1271,30 @@ export function CuboMagicoDashboard({
                       {formatCurrency(metrics.cpaMaximo)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {isMetaAdsEnabled ? (
-                        <span className={cn(
-                          "font-bold",
-                          metrics.status === 'excellent' && "text-green-600",
-                          metrics.status === 'good' && "text-blue-600",
-                          metrics.status === 'attention' && "text-yellow-600",
-                          metrics.status === 'danger' && "text-red-600",
-                          metrics.status === 'no-return' && "text-red-700",
-                          metrics.status === 'inactive' && "text-muted-foreground"
-                        )}>
-                          {formatCurrency(metrics.cpaReal)}
-                        </span>
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger className="flex items-center justify-end gap-1 text-muted-foreground opacity-60">
-                            <Lock className="w-3 h-3" />
-                            <span>-</span>
-                          </TooltipTrigger>
-                          <TooltipContent>Módulo bloqueado. Entre em contato com o suporte.</TooltipContent>
-                        </Tooltip>
-                      )}
+                      <ModuleLockedValue
+                        isLocked={!isMetaAdsEnabled}
+                        value={
+                          <span className={cn(
+                            "font-bold",
+                            metrics.status === 'excellent' && "text-green-600",
+                            metrics.status === 'good' && "text-blue-600",
+                            metrics.status === 'attention' && "text-yellow-600",
+                            metrics.status === 'danger' && "text-red-600",
+                            metrics.status === 'no-return' && "text-red-700",
+                            metrics.status === 'inactive' && "text-muted-foreground"
+                          )}>
+                            {formatCurrency(metrics.cpaReal)}
+                          </span>
+                        }
+                        variant="cell"
+                      />
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {isMetaAdsEnabled ? (
-                        `${metrics.roas.toFixed(2)}x`
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger className="flex items-center justify-end gap-1 text-muted-foreground opacity-60">
-                            <Lock className="w-3 h-3" />
-                            <span>-</span>
-                          </TooltipTrigger>
-                          <TooltipContent>Módulo bloqueado. Entre em contato com o suporte.</TooltipContent>
-                        </Tooltip>
-                      )}
+                      <ModuleLockedValue
+                        isLocked={!isMetaAdsEnabled}
+                        value={`${metrics.roas.toFixed(2)}x`}
+                        variant="cell"
+                      />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

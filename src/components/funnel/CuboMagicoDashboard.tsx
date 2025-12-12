@@ -1103,26 +1103,52 @@ export function CuboMagicoDashboard({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Card className="p-4 cursor-help">
+            <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
-                  <TrendingUp className={`w-5 h-5 ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`} />
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  !isMetaAdsEnabled 
+                    ? "bg-muted" 
+                    : totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 
+                      ? 'bg-green-500/10' 
+                      : 'bg-yellow-500/10'
+                )}>
+                  {isMetaAdsEnabled ? (
+                    <TrendingUp className={`w-5 h-5 ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`} />
+                  ) : (
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                  )}
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">ROAS Geral</p>
-                  <p className={`text-xl font-bold ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`}>
-                    {totals.investimentoTotal > 0 ? (totals.faturamentoTotal / totals.investimentoTotal).toFixed(2) : '0.00'}
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    ROAS Geral
+                    {!isMetaAdsEnabled && <Lock className="w-3 h-3" />}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Fat. Total / Invest. Total
-                  </p>
+                  {isMetaAdsEnabled ? (
+                    <>
+                      <p className={`text-xl font-bold ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`}>
+                        {totals.investimentoTotal > 0 ? (totals.faturamentoTotal / totals.investimentoTotal).toFixed(2) : '0.00'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Fat. Total / Invest. Total
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xl font-bold text-muted-foreground">-</p>
+                  )}
                 </div>
               </div>
             </Card>
           </TooltipTrigger>
           <TooltipContent>
-            <p><strong>ROAS:</strong> Return on Ad Spend (Retorno sobre Investimento)</p>
-            <p className="text-xs text-muted-foreground">Faturamento ÷ Investimento. Meta: ≥ 2x</p>
+            {isMetaAdsEnabled ? (
+              <>
+                <p><strong>ROAS:</strong> Return on Ad Spend (Retorno sobre Investimento)</p>
+                <p className="text-xs text-muted-foreground">Faturamento ÷ Investimento. Meta: ≥ 2x</p>
+              </>
+            ) : (
+              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
+            )}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -1174,14 +1200,28 @@ export function CuboMagicoDashboard({
               </TableHead>
               <TableHead className="text-right">
                 <Tooltip>
-                  <TooltipTrigger className="cursor-help">CPA Real</TooltipTrigger>
-                  <TooltipContent>Investimento ÷ Vendas FRONT. Custo real por aquisição</TooltipContent>
+                  <TooltipTrigger className="cursor-help flex items-center justify-end gap-1">
+                    {!isMetaAdsEnabled && <Lock className="w-3 h-3 text-muted-foreground" />}
+                    CPA Real
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isMetaAdsEnabled 
+                      ? 'Investimento ÷ Vendas FRONT. Custo real por aquisição' 
+                      : 'Módulo bloqueado. Entre em contato com o suporte para ativar.'}
+                  </TooltipContent>
                 </Tooltip>
               </TableHead>
               <TableHead className="text-right">
                 <Tooltip>
-                  <TooltipTrigger className="cursor-help">ROAS</TooltipTrigger>
-                  <TooltipContent>Faturamento ÷ Investimento. Meta: ≥ ROAS Alvo do funil</TooltipContent>
+                  <TooltipTrigger className="cursor-help flex items-center justify-end gap-1">
+                    {!isMetaAdsEnabled && <Lock className="w-3 h-3 text-muted-foreground" />}
+                    ROAS
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isMetaAdsEnabled 
+                      ? 'Faturamento ÷ Investimento. Meta: ≥ ROAS Alvo do funil' 
+                      : 'Módulo bloqueado. Entre em contato com o suporte para ativar.'}
+                  </TooltipContent>
                 </Tooltip>
               </TableHead>
               <TableHead>
@@ -1253,19 +1293,41 @@ export function CuboMagicoDashboard({
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {formatCurrency(metrics.cpaMaximo)}
                     </TableCell>
-                    <TableCell className={cn(
-                      "text-right font-mono font-bold",
-                      metrics.status === 'excellent' && "text-green-600",
-                      metrics.status === 'good' && "text-blue-600",
-                      metrics.status === 'attention' && "text-yellow-600",
-                      metrics.status === 'danger' && "text-red-600",
-                      metrics.status === 'no-return' && "text-red-700",
-                      metrics.status === 'inactive' && "text-muted-foreground"
-                    )}>
-                      {formatCurrency(metrics.cpaReal)}
+                    <TableCell className="text-right font-mono">
+                      {isMetaAdsEnabled ? (
+                        <span className={cn(
+                          "font-bold",
+                          metrics.status === 'excellent' && "text-green-600",
+                          metrics.status === 'good' && "text-blue-600",
+                          metrics.status === 'attention' && "text-yellow-600",
+                          metrics.status === 'danger' && "text-red-600",
+                          metrics.status === 'no-return' && "text-red-700",
+                          metrics.status === 'inactive' && "text-muted-foreground"
+                        )}>
+                          {formatCurrency(metrics.cpaReal)}
+                        </span>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger className="flex items-center justify-end gap-1 text-muted-foreground opacity-60">
+                            <Lock className="w-3 h-3" />
+                            <span>-</span>
+                          </TooltipTrigger>
+                          <TooltipContent>Módulo bloqueado. Entre em contato com o suporte.</TooltipContent>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {metrics.roas.toFixed(2)}x
+                      {isMetaAdsEnabled ? (
+                        `${metrics.roas.toFixed(2)}x`
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger className="flex items-center justify-end gap-1 text-muted-foreground opacity-60">
+                            <Lock className="w-3 h-3" />
+                            <span>-</span>
+                          </TooltipTrigger>
+                          <TooltipContent>Módulo bloqueado. Entre em contato com o suporte.</TooltipContent>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

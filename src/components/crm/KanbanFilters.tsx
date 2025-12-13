@@ -70,14 +70,20 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
   const [dateToOpen, setDateToOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
 
-  // Extract all unique tags from contacts
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
+  // Extract all unique tags from contacts with counts
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
     contacts.forEach(c => {
-      c.tags?.forEach(t => tags.add(t));
+      c.tags?.forEach(t => {
+        counts.set(t, (counts.get(t) || 0) + 1);
+      });
     });
-    return Array.from(tags).sort();
+    return counts;
   }, [contacts]);
+
+  const allTags = useMemo(() => {
+    return Array.from(tagCounts.keys()).sort();
+  }, [tagCounts]);
 
   // Filter contacts for search autocomplete
   const searchResults = useMemo(() => {
@@ -232,6 +238,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                         onClick={() => handleTagToggle(tag)}
                       >
                         {tag}
+                        <span className="ml-1 opacity-70">({tagCounts.get(tag)})</span>
                       </Badge>
                     ))
                 )}

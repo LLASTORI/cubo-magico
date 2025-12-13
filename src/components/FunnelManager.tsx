@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft, Link2, Target, Save } from 'lucide-react';
+import { Pencil, Trash2, Plus, Check, X, Loader2, ChevronDown, ChevronRight, ArrowRightLeft, Link2, Target, Save, Rocket } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -42,6 +42,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FunnelMetaAccountsSelector } from './FunnelMetaAccountsSelector';
+import { LaunchConfigDialog } from './launch/LaunchConfigDialog';
 import {
   Tooltip,
   TooltipContent,
@@ -60,6 +61,9 @@ interface Funnel {
   roas_target: number | null;
   campaign_name_pattern: string | null;
   funnel_type: FunnelType;
+  launch_start_date?: string | null;
+  launch_end_date?: string | null;
+  has_fixed_dates?: boolean;
 }
 
 const FUNNEL_TYPE_LABELS: Record<FunnelType, string> = {
@@ -673,6 +677,30 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
           
           {editingId !== funnel.id && (
             <div className="flex gap-1">
+              {funnel.funnel_type === 'lancamento' && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <LaunchConfigDialog
+                        funnel={funnel}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Rocket className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Configurar Lançamento</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -785,6 +813,51 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                 </div>
               )}
             </div>
+
+            {/* Launch Config Summary - Only for launch funnels */}
+            {funnel.funnel_type === 'lancamento' && (
+              <div className="border rounded-lg p-4 bg-blue-500/5 border-blue-500/30">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Rocket className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-sm text-blue-700 dark:text-blue-400">
+                      Configuração do Lançamento
+                    </span>
+                  </div>
+                  <LaunchConfigDialog
+                    funnel={funnel}
+                    trigger={
+                      <Button size="sm" variant="outline" className="gap-2 border-blue-500/30 text-blue-600 hover:bg-blue-500/10">
+                        <Pencil className="h-3 w-3" />
+                        Configurar Fases
+                      </Button>
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Período: </span>
+                    {funnel.launch_start_date && funnel.launch_end_date ? (
+                      <Badge variant="outline" className="border-blue-500/30">
+                        {new Date(funnel.launch_start_date).toLocaleDateString('pt-BR')} - {new Date(funnel.launch_end_date).toLocaleDateString('pt-BR')}
+                      </Badge>
+                    ) : funnel.launch_start_date ? (
+                      <Badge variant="outline" className="border-blue-500/30">
+                        A partir de {new Date(funnel.launch_start_date).toLocaleDateString('pt-BR')}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground italic">Não definido</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Datas fixas: </span>
+                    <Badge variant="secondary">
+                      {funnel.has_fixed_dates !== false ? 'Sim' : 'Não'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Offers Section */}
             {loadingOffers.has(funnel.name) ? (

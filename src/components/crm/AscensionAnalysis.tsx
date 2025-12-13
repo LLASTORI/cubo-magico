@@ -61,11 +61,29 @@ export function AscensionAnalysis() {
     enabled: !!projectId,
   });
 
-  // Extract unique products and offers
+  // Fetch offer mappings to include all configured offers
+  const { data: offerMappings = [], isLoading: loadingOfferMappings } = useQuery({
+    queryKey: ['crm-ascension-offer-mappings', projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      
+      const { data, error } = await supabase
+        .from('offer_mappings')
+        .select('codigo_oferta, nome_oferta, nome_produto, id_produto')
+        .eq('project_id', projectId);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Extract unique products and offers (from both transactions AND offer_mappings)
   const { products, offers } = useMemo(() => {
     const productSet = new Set<string>();
     const offerMap = new Map<string, string>();
 
+    // Add from transactions
     transactions.forEach(t => {
       if (t.product_name) productSet.add(t.product_name);
       if (t.offer_code && t.offer_name) {
@@ -75,11 +93,19 @@ export function AscensionAnalysis() {
       }
     });
 
+    // Add from offer_mappings (so all configured offers appear even without transactions)
+    offerMappings.forEach(m => {
+      if (m.nome_produto) productSet.add(m.nome_produto);
+      if (m.codigo_oferta) {
+        offerMap.set(m.codigo_oferta, m.nome_oferta || m.codigo_oferta);
+      }
+    });
+
     return {
       products: Array.from(productSet).sort(),
       offers: Array.from(offerMap.entries()).map(([code, name]) => ({ code, name })).sort((a, b) => a.name.localeCompare(b.name)),
     };
-  }, [transactions]);
+  }, [transactions, offerMappings]);
 
   // Entry options based on selection type
   const entryOptions = useMemo(() => {
@@ -231,7 +257,7 @@ export function AscensionAnalysis() {
     return `${value.toFixed(1)}%`;
   };
 
-  if (loadingTransactions) {
+  if (loadingTransactions || loadingOfferMappings) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -25,6 +25,8 @@ import LaunchDashboard from "./pages/LaunchDashboard";
 import AnaliseMensal from "./pages/AnaliseMensal";
 import AgencyDashboard from "./pages/AgencyDashboard";
 import CRM from "./pages/CRM";
+import CRMKanban from "./pages/CRMKanban";
+import CRMContactCard from "./pages/CRMContactCard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -116,6 +118,16 @@ const App = () => (
                 <Route path="/crm" element={
                   <ProtectedRoute>
                     <CRM />
+                  </ProtectedRoute>
+                } />
+                <Route path="/crm/kanban" element={
+                  <ProtectedRoute>
+                    <CRMKanban />
+                  </ProtectedRoute>
+                } />
+                <Route path="/crm/contact/:contactId" element={
+                  <ProtectedRoute>
+                    <CRMContactCard />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

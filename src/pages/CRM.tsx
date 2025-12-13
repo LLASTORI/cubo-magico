@@ -6,7 +6,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Settings, Loader2, Lock } from 'lucide-react';
+import { Users, Loader2, Lock, Kanban } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function CRM() {
@@ -92,11 +92,17 @@ export default function CRM() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl font-bold">CRM - Jornada do Cliente</h1>
-              <p className="text-muted-foreground">
-                Analise o comportamento de compra dos seus clientes e entenda o LTV por ponto de entrada
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">CRM - Jornada do Cliente</h1>
+                <p className="text-muted-foreground">
+                  Analise o comportamento de compra dos seus clientes e entenda o LTV por ponto de entrada
+                </p>
+              </div>
+              <Button onClick={() => navigate('/crm/kanban')}>
+                <Kanban className="h-4 w-4 mr-2" />
+                Pipeline Kanban
+              </Button>
             </div>
 
             <CustomerJourneyAnalysis />

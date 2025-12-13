@@ -177,6 +177,27 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
     },
   });
 
+  // Reorder phases
+  const reorderPhases = useMutation({
+    mutationFn: async (orderedPhases: { id: string; phase_order: number }[]) => {
+      const updates = orderedPhases.map(({ id, phase_order }) =>
+        supabase
+          .from('launch_phases')
+          .update({ phase_order })
+          .eq('id', id)
+      );
+      const results = await Promise.all(updates);
+      const error = results.find(r => r.error)?.error;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['launch-phases', projectId] });
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao reordenar fases: ' + error.message);
+    },
+  });
+
   // Link campaign to phase
   const linkCampaignToPhase = useMutation({
     mutationFn: async ({ phaseId, campaignId }: { phaseId: string; campaignId: string }) => {
@@ -272,6 +293,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
     createPhase,
     updatePhase,
     deletePhase,
+    reorderPhases,
     linkCampaignToPhase,
     unlinkCampaignFromPhase,
     createLaunchProduct,

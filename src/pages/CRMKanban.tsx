@@ -276,6 +276,10 @@ export default function CRMKanban() {
             filters={filters}
             onFiltersChange={setFilters}
             onSearchSelect={handleSearchSelect}
+            onCreateTag={(tag) => {
+              // Add tag to filter immediately
+              setFilters(prev => ({ ...prev, tags: [...prev.tags, tag] }));
+            }}
           />
         </div>
 

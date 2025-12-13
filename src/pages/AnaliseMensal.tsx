@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { TrendingUp, TrendingDown, DollarSign, Target, ShoppingCart, BarChart3, GitCompare, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MonthlyRevenueDetailDialog } from "@/components/analise/MonthlyRevenueDetailDialog";
+import { MonthlyInvestmentDetailDialog } from "@/components/analise/MonthlyInvestmentDetailDialog";
 import {
   ChartContainer,
   ChartTooltip,
@@ -70,9 +71,10 @@ interface MonthlyTableProps {
   year: number;
   projectId: string;
   onRevenueClick?: (month: string, monthLabel: string) => void;
+  onInvestmentClick?: (month: string, monthLabel: string) => void;
 }
 
-const MonthlyTable = ({ data, totals, title, showAgencyResult, year, projectId, onRevenueClick }: MonthlyTableProps) => {
+const MonthlyTable = ({ data, totals, title, showAgencyResult, year, projectId, onRevenueClick, onInvestmentClick }: MonthlyTableProps) => {
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-3">
@@ -103,7 +105,15 @@ const MonthlyTable = ({ data, totals, title, showAgencyResult, year, projectId, 
                   className={`hover:bg-muted/30 transition-colors ${row.revenue === 0 && row.investment === 0 ? 'opacity-50' : ''}`}
                 >
                   <TableCell className="font-medium capitalize">{row.monthLabel}</TableCell>
-                  <TableCell className="text-right text-blue-400">{formatCurrency(row.investment)}</TableCell>
+                  <TableCell className="text-right">
+                    <button
+                      onClick={() => onInvestmentClick?.(row.month, row.monthLabel)}
+                      className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer transition-colors font-medium"
+                      disabled={row.investment === 0}
+                    >
+                      {formatCurrency(row.investment)}
+                    </button>
+                  </TableCell>
                   <TableCell className="text-right">
                     <button
                       onClick={() => onRevenueClick?.(row.month, row.monthLabel)}
@@ -554,8 +564,19 @@ const AnaliseMensal = () => {
     monthLabel: string;
   }>({ open: false, month: '', monthLabel: '' });
 
+  // Dialog state for investment detail
+  const [investmentDetailDialog, setInvestmentDetailDialog] = useState<{
+    open: boolean;
+    month: string;
+    monthLabel: string;
+  }>({ open: false, month: '', monthLabel: '' });
+
   const handleRevenueClick = (month: string, monthLabel: string) => {
     setRevenueDetailDialog({ open: true, month, monthLabel });
+  };
+
+  const handleInvestmentClick = (month: string, monthLabel: string) => {
+    setInvestmentDetailDialog({ open: true, month, monthLabel });
   };
 
   const { 
@@ -773,6 +794,7 @@ const AnaliseMensal = () => {
                   year={selectedYear}
                   projectId={currentProject.id}
                   onRevenueClick={handleRevenueClick}
+                  onInvestmentClick={handleInvestmentClick}
                 />
               </div>
               <div className="xl:col-span-2 space-y-6">
@@ -814,6 +836,7 @@ const AnaliseMensal = () => {
                           year={selectedYear}
                           projectId={currentProject.id}
                           onRevenueClick={handleRevenueClick}
+                          onInvestmentClick={handleInvestmentClick}
                         />
                         <MonthlyChart 
                           data={funnel.months} 
@@ -836,6 +859,16 @@ const AnaliseMensal = () => {
         projectId={currentProject.id}
         month={revenueDetailDialog.month}
         monthLabel={revenueDetailDialog.monthLabel}
+        year={selectedYear}
+      />
+
+      {/* Investment Detail Dialog */}
+      <MonthlyInvestmentDetailDialog
+        open={investmentDetailDialog.open}
+        onOpenChange={(open) => setInvestmentDetailDialog(prev => ({ ...prev, open }))}
+        projectId={currentProject.id}
+        month={investmentDetailDialog.month}
+        monthLabel={investmentDetailDialog.monthLabel}
         year={selectedYear}
       />
     </div>

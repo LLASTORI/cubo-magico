@@ -13,8 +13,16 @@ const FIELD_ALIASES: Record<string, string> = {
   'nome_completo': 'name',
   'full_name': 'name',
   'fullname': 'name',
-  'first_name': 'name',
-  'firstname': 'name',
+  'first_name': 'first_name', // Keep separate to join later
+  'firstname': 'first_name',
+  'primeiro_nome': 'first_name',
+  
+  // Last name variations (will be joined with first_name)
+  'last_name': 'last_name',
+  'lastname': 'last_name',
+  'sobrenome': 'last_name',
+  'surname': 'last_name',
+  'segundo_nome': 'last_name',
   
   // Email variations
   'e-mail': 'email',
@@ -119,7 +127,7 @@ const FIELD_ALIASES: Record<string, string> = {
 
 // Standard fields that we accept
 const STANDARD_FIELDS = [
-  'email', 'name', 'phone', 'phone_ddd', 'document', 'instagram',
+  'email', 'name', 'first_name', 'last_name', 'phone', 'phone_ddd', 'document', 'instagram',
   'address', 'address_number', 'address_complement', 'neighborhood',
   'city', 'state', 'country', 'cep', 'tags', 'custom_fields',
   'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term',
@@ -129,6 +137,8 @@ const STANDARD_FIELDS = [
 interface NormalizedPayload {
   email?: string;
   name?: string;
+  first_name?: string;
+  last_name?: string;
   phone?: string;
   phone_ddd?: string;
   document?: string;
@@ -215,6 +225,18 @@ function normalizePayload(
       ...(normalized.custom_fields as Record<string, unknown> || {}),
       ...unmappedFields
     };
+  }
+
+  // Join first_name + last_name into name if name is not already set
+  if (!normalized.name && (normalized.first_name || normalized.last_name)) {
+    const parts = [
+      normalized.first_name as string,
+      normalized.last_name as string
+    ].filter(Boolean);
+    normalized.name = parts.join(' ').trim();
+    // Remove the separate fields after joining
+    delete normalized.first_name;
+    delete normalized.last_name;
   }
 
   return normalized as NormalizedPayload;

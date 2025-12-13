@@ -30,6 +30,7 @@ import CRMContactCard from "./pages/CRMContactCard";
 import CRMPipelineSettings from "./pages/CRMPipelineSettings";
 import CRMActivitiesDashboard from "./pages/CRMActivitiesDashboard";
 import CRMCadences from "./pages/CRMCadences";
+import CRMRecovery from "./pages/CRMRecovery";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -146,6 +147,11 @@ const App = () => (
                 <Route path="/crm/cadences" element={
                   <ProtectedRoute>
                     <CRMCadences />
+                  </ProtectedRoute>
+                } />
+                <Route path="/crm/recovery" element={
+                  <ProtectedRoute>
+                    <CRMRecovery />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -6,7 +6,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Loader2, Lock, Kanban } from 'lucide-react';
+import { Users, Loader2, Lock, Kanban, RefreshCcw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function CRM() {
@@ -105,6 +105,10 @@ export default function CRM() {
                 </Button>
                 <Button variant="outline" onClick={() => navigate('/crm/cadences')}>
                   Cadências
+                </Button>
+                <Button variant="outline" onClick={() => navigate('/crm/recovery')}>
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                  Recuperação
                 </Button>
                 <Button onClick={() => navigate('/crm/kanban')}>
                   <Kanban className="h-4 w-4 mr-2" />

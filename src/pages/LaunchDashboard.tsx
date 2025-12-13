@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
   RefreshCw, CalendarIcon, Rocket, TrendingUp, DollarSign, 
-  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings, Layers
+  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings, Layers, Calendar as CalendarIconFilled
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProject } from "@/contexts/ProjectContext";
@@ -17,7 +17,8 @@ import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
 import { LaunchConfigDialog } from "@/components/launch/LaunchConfigDialog";
 import { LaunchPhasesOverview } from "@/components/launch/LaunchPhasesOverview";
-import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { LaunchProductsSalesBreakdown } from "@/components/launch/LaunchProductsSalesBreakdown";
+import { format, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useLaunchData, LaunchMetrics } from "@/hooks/useLaunchData";
@@ -105,12 +106,24 @@ const LaunchDashboard = () => {
     toast.success('Dados atualizados');
   };
 
-  const toggleExpand = (funnelId: string) => {
+  const toggleExpand = (funnelId: string, launch?: LaunchMetrics) => {
     setExpandedFunnels(prev => {
       const newSet = new Set(prev);
       if (newSet.has(funnelId)) {
         newSet.delete(funnelId);
       } else {
+        // Auto-filter dates when expanding a launch with fixed dates
+        if (launch?.hasFixedDates && launch.launchStartDate && launch.launchEndDate) {
+          const launchStart = parseISO(launch.launchStartDate);
+          const launchEnd = parseISO(launch.launchEndDate);
+          if (isValid(launchStart) && isValid(launchEnd)) {
+            setStartDate(launchStart);
+            setEndDate(launchEnd);
+            setAppliedStartDate(launchStart);
+            setAppliedEndDate(launchEnd);
+            toast.info(`Período filtrado: ${format(launchStart, 'dd/MM/yyyy')} - ${format(launchEnd, 'dd/MM/yyyy')}`);
+          }
+        }
         newSet.add(funnelId);
       }
       return newSet;
@@ -338,7 +351,7 @@ const LaunchDashboard = () => {
                         <TableRow 
                           key={launch.funnelId}
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => toggleExpand(launch.funnelId)}
+                          onClick={() => toggleExpand(launch.funnelId, launch)}
                         >
                           <TableCell>
                             {isExpanded ? (
@@ -352,11 +365,19 @@ const LaunchDashboard = () => {
                               <Rocket className="w-4 h-4 text-primary" />
                               <div>
                                 <p className="font-medium">{launch.funnelName}</p>
-                                {launch.campaignPattern && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Padrão: {launch.campaignPattern}
-                                  </p>
-                                )}
+                                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                  {launch.hasFixedDates && launch.launchStartDate && launch.launchEndDate && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <CalendarIcon className="w-3 h-3" />
+                                      {format(parseISO(launch.launchStartDate), 'dd/MM/yy')} - {format(parseISO(launch.launchEndDate), 'dd/MM/yy')}
+                                    </span>
+                                  )}
+                                  {launch.campaignPattern && (
+                                    <span className="text-xs text-muted-foreground">
+                                      • Padrão: {launch.campaignPattern}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </TableCell>
@@ -427,6 +448,14 @@ const LaunchDashboard = () => {
                               <div className="space-y-6">
                                 {/* Phases Section */}
                                 <LaunchPhasesOverview
+                                  projectId={currentProject?.id || ""}
+                                  funnelId={launch.funnelId}
+                                  startDate={appliedStartDate}
+                                  endDate={appliedEndDate}
+                                />
+
+                                {/* Products/Lots Sales Breakdown */}
+                                <LaunchProductsSalesBreakdown
                                   projectId={currentProject?.id || ""}
                                   funnelId={launch.funnelId}
                                   startDate={appliedStartDate}

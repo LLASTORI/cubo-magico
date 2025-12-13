@@ -15,6 +15,9 @@ export interface LaunchMetrics {
   funnelName: string;
   campaignPattern: string | null;
   roasTarget: number;
+  launchStartDate: string | null;
+  launchEndDate: string | null;
+  hasFixedDates: boolean;
   totalRevenue: number;
   totalSales: number;
   avgTicket: number;
@@ -259,6 +262,9 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
         funnelName: funnel.name,
         campaignPattern: funnel.campaign_name_pattern,
         roasTarget: funnel.roas_target || 2,
+        launchStartDate: funnel.launch_start_date,
+        launchEndDate: funnel.launch_end_date,
+        hasFixedDates: funnel.has_fixed_dates || false,
         totalRevenue,
         totalSales: totalSalesCount,
         avgTicket,

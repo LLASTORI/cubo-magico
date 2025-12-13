@@ -42,6 +42,7 @@ export const PHASE_TYPES = [
   { value: 'distribuicao', label: 'Distribuição', metric: 'reach', description: 'Alcance e engajamento' },
   { value: 'captacao', label: 'Captação', metric: 'cpl', description: 'Custo por Lead (CPL)' },
   { value: 'aquecimento', label: 'Aquecimento', metric: 'views', description: 'Views e interações' },
+  { value: 'lembrete', label: 'Lembrete', metric: 'frequency', description: 'Alcance e frequência (ex: "é amanhã")' },
   { value: 'remarketing', label: 'Remarketing Aulas', metric: 'views', description: 'Views de replay' },
   { value: 'vendas', label: 'Vendas', metric: 'roas', description: 'CPA, ROAS, Receita' },
   { value: 'ultima_oportunidade', label: 'Última Oportunidade', metric: 'roas', description: 'CPA, ROAS' },

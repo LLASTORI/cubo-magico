@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { 
   RefreshCw, CalendarIcon, Rocket, TrendingUp, DollarSign, 
-  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings
+  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings, Layers
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProject } from "@/contexts/ProjectContext";
@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
 import { LaunchConfigDialog } from "@/components/launch/LaunchConfigDialog";
+import { LaunchPhasesOverview } from "@/components/launch/LaunchPhasesOverview";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
@@ -420,48 +421,61 @@ const LaunchDashboard = () => {
                         </TableRow>
                         
                         {/* Expanded Details */}
-                        {isExpanded && launch.positions.length > 0 && (
+                        {isExpanded && (
                           <TableRow className="bg-muted/30">
                             <TableCell colSpan={10} className="p-4">
-                              <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-foreground">
-                                  Detalhamento por Posição
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                  {launch.positions.map((pos, idx) => (
-                                    <Card key={idx} className="p-3 bg-card">
-                                      <div className="flex justify-between items-start mb-2">
-                                        <div>
-                                          <Badge variant="outline" className="text-xs">
-                                            {pos.tipo}
-                                          </Badge>
-                                          <p className="text-sm font-medium mt-1">{pos.nome}</p>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                          {formatNumber(pos.percentage, 1)}%
-                                        </span>
-                                      </div>
-                                      <div className="grid grid-cols-3 gap-2 text-xs">
-                                        <div>
-                                          <p className="text-muted-foreground">Receita</p>
-                                          <p className="font-semibold">{formatCurrency(pos.revenue)}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">Vendas</p>
-                                          <p className="font-semibold">{pos.sales}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">Ticket</p>
-                                          <p className="font-semibold">{formatCurrency(pos.avgTicket)}</p>
-                                        </div>
-                                      </div>
-                                      <Progress 
-                                        value={pos.percentage} 
-                                        className="h-1 mt-2"
-                                      />
-                                    </Card>
-                                  ))}
-                                </div>
+                              <div className="space-y-6">
+                                {/* Phases Section */}
+                                <LaunchPhasesOverview
+                                  projectId={currentProject?.id || ""}
+                                  funnelId={launch.funnelId}
+                                  startDate={appliedStartDate}
+                                  endDate={appliedEndDate}
+                                />
+
+                                {/* Positions Section */}
+                                {launch.positions.length > 0 && (
+                                  <div className="space-y-4 pt-4 border-t">
+                                    <h4 className="text-sm font-semibold text-foreground">
+                                      Detalhamento por Posição
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                      {launch.positions.map((pos, idx) => (
+                                        <Card key={idx} className="p-3 bg-card">
+                                          <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                              <Badge variant="outline" className="text-xs">
+                                                {pos.tipo}
+                                              </Badge>
+                                              <p className="text-sm font-medium mt-1">{pos.nome}</p>
+                                            </div>
+                                            <span className="text-xs text-muted-foreground">
+                                              {formatNumber(pos.percentage, 1)}%
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2 text-xs">
+                                            <div>
+                                              <p className="text-muted-foreground">Receita</p>
+                                              <p className="font-semibold">{formatCurrency(pos.revenue)}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-muted-foreground">Vendas</p>
+                                              <p className="font-semibold">{pos.sales}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-muted-foreground">Ticket</p>
+                                              <p className="font-semibold">{formatCurrency(pos.avgTicket)}</p>
+                                            </div>
+                                          </div>
+                                          <Progress 
+                                            value={pos.percentage} 
+                                            className="h-1 mt-2"
+                                          />
+                                        </Card>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>

@@ -359,6 +359,97 @@ export type Database = {
           },
         ]
       }
+      crm_contact_interactions: {
+        Row: {
+          contact_id: string
+          created_at: string
+          funnel_id: string | null
+          id: string
+          interacted_at: string
+          interaction_type: string
+          launch_tag: string | null
+          metadata: Json | null
+          page_name: string | null
+          page_url: string | null
+          project_id: string
+          utm_ad: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_creative: string | null
+          utm_medium: string | null
+          utm_placement: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          funnel_id?: string | null
+          id?: string
+          interacted_at?: string
+          interaction_type?: string
+          launch_tag?: string | null
+          metadata?: Json | null
+          page_name?: string | null
+          page_url?: string | null
+          project_id: string
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_creative?: string | null
+          utm_medium?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          funnel_id?: string | null
+          id?: string
+          interacted_at?: string
+          interaction_type?: string
+          launch_tag?: string | null
+          metadata?: Json | null
+          page_name?: string | null
+          page_url?: string | null
+          project_id?: string
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_creative?: string | null
+          utm_medium?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_interactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_interactions_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_interactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contacts: {
         Row: {
           address: string | null
@@ -906,6 +997,7 @@ export type Database = {
           id: string
           launch_end_date: string | null
           launch_start_date: string | null
+          launch_tag: string | null
           name: string
           project_id: string | null
           roas_target: number | null
@@ -919,6 +1011,7 @@ export type Database = {
           id?: string
           launch_end_date?: string | null
           launch_start_date?: string | null
+          launch_tag?: string | null
           name: string
           project_id?: string | null
           roas_target?: number | null
@@ -932,6 +1025,7 @@ export type Database = {
           id?: string
           launch_end_date?: string | null
           launch_start_date?: string | null
+          launch_tag?: string | null
           name?: string
           project_id?: string | null
           roas_target?: number | null

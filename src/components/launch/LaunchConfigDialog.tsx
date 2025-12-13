@@ -27,6 +27,7 @@ interface LaunchConfigDialogProps {
     launch_start_date?: string | null;
     launch_end_date?: string | null;
     has_fixed_dates?: boolean;
+    launch_tag?: string | null;
   };
   trigger?: React.ReactNode;
 }
@@ -40,6 +41,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
     funnel.launch_end_date ? new Date(funnel.launch_end_date) : undefined
   );
   const [hasFixedDates, setHasFixedDates] = useState(funnel.has_fixed_dates ?? true);
+  const [launchTag, setLaunchTag] = useState(funnel.launch_tag || '');
   
   const queryClient = useQueryClient();
   const projectId = funnel.project_id || '';
@@ -69,6 +71,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
           launch_start_date: startDate ? format(startDate, 'yyyy-MM-dd') : null,
           launch_end_date: endDate ? format(endDate, 'yyyy-MM-dd') : null,
           has_fixed_dates: hasFixedDates,
+          launch_tag: launchTag || null,
         })
         .eq('id', funnel.id);
       if (error) throw error;
@@ -196,9 +199,21 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                 </div>
               )}
 
+              <div className="space-y-2 pt-4 border-t">
+                <Label>Tag de Lançamento (para análise de conversão)</Label>
+                <Input
+                  placeholder="Ex: Lead Lançamento Jan 2025"
+                  value={launchTag}
+                  onChange={(e) => setLaunchTag(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Esta tag será usada para identificar leads deste lançamento no CRM e calcular conversão.
+                </p>
+              </div>
+
               <div className="flex justify-end">
                 <Button onClick={handleSaveDates} disabled={updateFunnelDates.isPending}>
-                  Salvar Período
+                  Salvar Configurações
                 </Button>
               </div>
             </Card>

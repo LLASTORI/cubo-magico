@@ -32,6 +32,7 @@ export interface LaunchProduct {
   offer_mapping_id: string;
   project_id: string;
   product_type: string;
+  lot_name: string | null;
   created_at: string;
 }
 
@@ -226,6 +227,26 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
     },
   });
 
+  // Update launch product
+  const updateLaunchProduct = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<LaunchProduct> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('launch_products')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['launch-products', projectId] });
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao atualizar produto: ' + error.message);
+    },
+  });
+
   // Delete launch product link
   const deleteLaunchProduct = useMutation({
     mutationFn: async (productId: string) => {
@@ -252,6 +273,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
     linkCampaignToPhase,
     unlinkCampaignFromPhase,
     createLaunchProduct,
+    updateLaunchProduct,
     deleteLaunchProduct,
   };
 };

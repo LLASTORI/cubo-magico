@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Dialog, 
   DialogContent, 
@@ -26,11 +27,43 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useCRMWebhookKeys, type CRMWebhookKey } from '@/hooks/useCRMWebhookKeys';
-import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, ExternalLink } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+// All accepted fields with descriptions
+const ACCEPTED_FIELDS = [
+  { name: 'email', required: true, description: 'Email do contato', aliases: ['e-mail', 'e_mail', 'mail', 'email_address'] },
+  { name: 'name', required: false, description: 'Nome completo', aliases: ['nome', 'nome_completo', 'full_name', 'fullname', 'first_name'] },
+  { name: 'phone', required: false, description: 'Telefone', aliases: ['telefone', 'celular', 'whatsapp', 'mobile', 'tel', 'fone'] },
+  { name: 'phone_ddd', required: false, description: 'DDD do telefone', aliases: ['ddd', 'area_code'] },
+  { name: 'document', required: false, description: 'CPF ou CNPJ', aliases: ['cpf', 'cnpj', 'cpf_cnpj', 'documento'] },
+  { name: 'instagram', required: false, description: 'Username do Instagram', aliases: ['insta', 'ig'] },
+  { name: 'tags', required: false, description: 'Tags/etiquetas (array ou string separada por vírgula)', aliases: ['tag', 'labels', 'etiquetas'] },
+  { name: 'page_name', required: false, description: 'Nome da página de cadastro', aliases: ['pagina', 'page', 'landing_page', 'lp', 'form_name', 'formulario'] },
+  { name: 'utm_source', required: false, description: 'Origem do tráfego', aliases: ['source', 'origem'] },
+  { name: 'utm_campaign', required: false, description: 'Nome da campanha', aliases: ['campaign', 'campanha'] },
+  { name: 'utm_medium', required: false, description: 'Mídia/canal', aliases: ['medium', 'midia'] },
+  { name: 'utm_content', required: false, description: 'Conteúdo do anúncio', aliases: ['content', 'conteudo'] },
+  { name: 'utm_term', required: false, description: 'Termo de busca', aliases: ['term', 'termo'] },
+  { name: 'address', required: false, description: 'Endereço/Rua', aliases: ['endereco', 'rua', 'logradouro', 'street'] },
+  { name: 'address_number', required: false, description: 'Número', aliases: ['numero', 'number', 'num'] },
+  { name: 'address_complement', required: false, description: 'Complemento', aliases: ['complemento', 'complement', 'apto'] },
+  { name: 'neighborhood', required: false, description: 'Bairro', aliases: ['bairro', 'district'] },
+  { name: 'city', required: false, description: 'Cidade', aliases: ['cidade', 'municipio'] },
+  { name: 'state', required: false, description: 'Estado/UF', aliases: ['estado', 'uf', 'province'] },
+  { name: 'country', required: false, description: 'País', aliases: ['pais'] },
+  { name: 'cep', required: false, description: 'CEP/Código Postal', aliases: ['zip', 'zipcode', 'zip_code', 'postal_code', 'codigo_postal'] },
+  { name: 'custom_fields', required: false, description: 'Campos extras (objeto JSON)', aliases: ['extras', 'dados_extras', 'metadata'] },
+];
 
 export function CRMWebhookKeysManager() {
   const { webhookKeys, isLoading, createKey, updateKey, deleteKey, isCreating } = useCRMWebhookKeys();
@@ -39,6 +72,10 @@ export function CRMWebhookKeysManager() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
+  const [selectedKeyForMapping, setSelectedKeyForMapping] = useState<CRMWebhookKey | null>(null);
+  const [newMappingFrom, setNewMappingFrom] = useState('');
+  const [newMappingTo, setNewMappingTo] = useState('');
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-webhook`;
 
@@ -76,6 +113,34 @@ export function CRMWebhookKeysManager() {
     }
   };
 
+  const handleCopyExample = async () => {
+    const example = `curl -X POST "${webhookUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: SUA_API_KEY" \\
+  -d '{
+    "email": "lead@exemplo.com",
+    "name": "Nome do Lead",
+    "phone": "11999999999",
+    "tags": ["campanha-x"],
+    "page_name": "LP Vendas",
+    "utm_source": "facebook",
+    "utm_campaign": "lancamento"
+  }'`;
+    try {
+      await navigator.clipboard.writeText(example);
+      toast({
+        title: 'Copiado!',
+        description: 'Exemplo copiado para a área de transferência.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível copiar o exemplo.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCreateKey = () => {
     if (!newKeyName.trim()) {
       toast({
@@ -98,6 +163,61 @@ export function CRMWebhookKeysManager() {
   const maskApiKey = (key: string) => {
     if (key.length <= 12) return key;
     return `${key.slice(0, 8)}${'•'.repeat(40)}${key.slice(-8)}`;
+  };
+
+  const openMappingDialog = (key: CRMWebhookKey) => {
+    setSelectedKeyForMapping(key);
+    setNewMappingFrom('');
+    setNewMappingTo('');
+    setMappingDialogOpen(true);
+  };
+
+  const handleAddMapping = () => {
+    if (!selectedKeyForMapping || !newMappingFrom.trim() || !newMappingTo.trim()) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha o campo de origem e destino.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const currentMappings = (selectedKeyForMapping.field_mappings as Record<string, string>) || {};
+    const updatedMappings = {
+      ...currentMappings,
+      [newMappingFrom.trim()]: newMappingTo.trim(),
+    };
+
+    updateKey({ 
+      id: selectedKeyForMapping.id, 
+      field_mappings: updatedMappings 
+    });
+
+    setNewMappingFrom('');
+    setNewMappingTo('');
+    
+    // Update local state
+    setSelectedKeyForMapping({
+      ...selectedKeyForMapping,
+      field_mappings: updatedMappings,
+    });
+  };
+
+  const handleRemoveMapping = (fieldFrom: string) => {
+    if (!selectedKeyForMapping) return;
+
+    const currentMappings = (selectedKeyForMapping.field_mappings as Record<string, string>) || {};
+    const { [fieldFrom]: _, ...updatedMappings } = currentMappings;
+
+    updateKey({ 
+      id: selectedKeyForMapping.id, 
+      field_mappings: updatedMappings 
+    });
+
+    setSelectedKeyForMapping({
+      ...selectedKeyForMapping,
+      field_mappings: updatedMappings,
+    });
   };
 
   if (isLoading) {
@@ -169,115 +289,143 @@ export function CRMWebhookKeysManager() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Webhook URL */}
-        <div className="p-4 rounded-lg bg-muted space-y-2">
-          <Label className="text-sm font-medium">URL do Webhook</Label>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 p-2 rounded bg-background text-sm font-mono break-all">
-              {webhookUrl}
-            </code>
-            <Button variant="outline" size="icon" onClick={handleCopyUrl}>
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Envie requisições POST para esta URL com a API Key no header <code className="bg-background px-1 rounded">x-api-key</code>
-          </p>
-        </div>
-
-        {/* API Keys list */}
-        {webhookKeys && webhookKeys.length > 0 ? (
-          <div className="space-y-3">
-            {webhookKeys.map((key) => (
-              <div
-                key={key.id}
-                className="p-4 rounded-lg border bg-card space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{key.name}</h4>
-                    <Badge variant={key.is_active ? 'default' : 'secondary'}>
-                      {key.is_active ? 'Ativa' : 'Inativa'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={key.is_active}
-                      onCheckedChange={(checked) => updateKey({ id: key.id, is_active: checked })}
-                    />
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir API Key?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. Todas as integrações que usam esta chave deixarão de funcionar.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteKey(key.id)}>
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-2 rounded bg-muted text-xs font-mono break-all">
-                    {showKey[key.id] ? key.api_key : maskApiKey(key.api_key)}
-                  </code>
-                  <Button variant="ghost" size="icon" onClick={() => toggleShowKey(key.id)}>
-                    {showKey[key.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => handleCopyKey(key.api_key, key.id)}
-                  >
-                    {copiedKey === key.id ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>Usos: {key.usage_count}</span>
-                  {key.last_used_at && (
-                    <span>
-                      Último uso: {formatDistanceToNow(new Date(key.last_used_at), { addSuffix: true, locale: ptBR })}
-                    </span>
-                  )}
-                  <span>
-                    Criada: {formatDistanceToNow(new Date(key.created_at), { addSuffix: true, locale: ptBR })}
-                  </span>
-                </div>
+        <Tabs defaultValue="keys" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="keys">API Keys</TabsTrigger>
+            <TabsTrigger value="docs">Documentação</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="keys" className="space-y-6 mt-4">
+            {/* Webhook URL */}
+            <div className="p-4 rounded-lg bg-muted space-y-2">
+              <Label className="text-sm font-medium">URL do Webhook</Label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-2 rounded bg-background text-sm font-mono break-all">
+                  {webhookUrl}
+                </code>
+                <Button variant="outline" size="icon" onClick={handleCopyUrl}>
+                  <Copy className="h-4 w-4" />
+                </Button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <Key className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhuma API Key criada</p>
-            <p className="text-sm">Crie uma chave para começar a receber leads.</p>
-          </div>
-        )}
+              <p className="text-xs text-muted-foreground">
+                Envie requisições POST para esta URL com a API Key no header <code className="bg-background px-1 rounded">x-api-key</code>
+              </p>
+            </div>
 
-        {/* Documentation link */}
-        <div className="p-4 rounded-lg border bg-muted/50">
-          <h5 className="font-medium mb-2">Como usar o Webhook</h5>
-          <p className="text-sm text-muted-foreground mb-2">
-            Envie um POST com os dados do lead no body:
-          </p>
-          <pre className="p-3 rounded bg-background text-xs overflow-x-auto">
+            {/* API Keys list */}
+            {webhookKeys && webhookKeys.length > 0 ? (
+              <div className="space-y-3">
+                {webhookKeys.map((key) => (
+                  <div
+                    key={key.id}
+                    className="p-4 rounded-lg border bg-card space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{key.name}</h4>
+                        <Badge variant={key.is_active ? 'default' : 'secondary'}>
+                          {key.is_active ? 'Ativa' : 'Inativa'}
+                        </Badge>
+                        {key.field_mappings && Object.keys(key.field_mappings as object).length > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            {Object.keys(key.field_mappings as object).length} mapeamentos
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openMappingDialog(key)}
+                          title="Configurar mapeamentos"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </Button>
+                        <Switch
+                          checked={key.is_active}
+                          onCheckedChange={(checked) => updateKey({ id: key.id, is_active: checked })}
+                        />
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir API Key?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita. Todas as integrações que usam esta chave deixarão de funcionar.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteKey(key.id)}>
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 p-2 rounded bg-muted text-xs font-mono break-all">
+                        {showKey[key.id] ? key.api_key : maskApiKey(key.api_key)}
+                      </code>
+                      <Button variant="ghost" size="icon" onClick={() => toggleShowKey(key.id)}>
+                        {showKey[key.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleCopyKey(key.api_key, key.id)}
+                      >
+                        {copiedKey === key.id ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>Usos: {key.usage_count}</span>
+                      {key.last_used_at && (
+                        <span>
+                          Último uso: {formatDistanceToNow(new Date(key.last_used_at), { addSuffix: true, locale: ptBR })}
+                        </span>
+                      )}
+                      <span>
+                        Criada: {formatDistanceToNow(new Date(key.created_at), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Key className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhuma API Key criada</p>
+                <p className="text-sm">Crie uma chave para começar a receber leads.</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="docs" className="space-y-6 mt-4">
+            {/* Quick example */}
+            <div className="p-4 rounded-lg border bg-muted/50">
+              <div className="flex items-center justify-between mb-2">
+                <h5 className="font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Exemplo de Requisição
+                </h5>
+                <Button variant="outline" size="sm" onClick={handleCopyExample}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar
+                </Button>
+              </div>
+              <pre className="p-3 rounded bg-background text-xs overflow-x-auto">
 {`curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: SUA_API_KEY" \\
@@ -286,11 +434,229 @@ export function CRMWebhookKeysManager() {
     "name": "Nome do Lead",
     "phone": "11999999999",
     "tags": ["campanha-x"],
+    "page_name": "LP Vendas",
     "utm_source": "facebook",
     "utm_campaign": "lancamento"
   }'`}
-          </pre>
-        </div>
+              </pre>
+            </div>
+
+            {/* Accepted fields */}
+            <div className="space-y-4">
+              <h5 className="font-medium">Campos Aceitos</h5>
+              <p className="text-sm text-muted-foreground">
+                O webhook aceita automaticamente variações de nomes de campos. Campos não reconhecidos são salvos em <code className="bg-muted px-1 rounded">custom_fields</code>.
+              </p>
+              
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="required">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      Campos Obrigatórios
+                      <Badge variant="destructive" className="text-xs">1</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2">
+                      {ACCEPTED_FIELDS.filter(f => f.required).map(field => (
+                        <div key={field.name} className="p-3 rounded bg-muted/50 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-semibold text-primary">{field.name}</code>
+                            <Badge variant="destructive" className="text-xs">obrigatório</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{field.description}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="text-xs text-muted-foreground">Aceita também:</span>
+                            {field.aliases.map(alias => (
+                              <code key={alias} className="text-xs bg-background px-1 rounded">{alias}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="contact">
+                  <AccordionTrigger className="text-sm">
+                    Dados do Contato
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2">
+                      {ACCEPTED_FIELDS.filter(f => !f.required && ['name', 'phone', 'phone_ddd', 'document', 'instagram'].includes(f.name)).map(field => (
+                        <div key={field.name} className="p-3 rounded bg-muted/50 space-y-1">
+                          <code className="text-sm font-semibold">{field.name}</code>
+                          <p className="text-sm text-muted-foreground">{field.description}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="text-xs text-muted-foreground">Aceita também:</span>
+                            {field.aliases.map(alias => (
+                              <code key={alias} className="text-xs bg-background px-1 rounded">{alias}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="tracking">
+                  <AccordionTrigger className="text-sm">
+                    Tracking (UTMs e Página)
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2">
+                      {ACCEPTED_FIELDS.filter(f => f.name.startsWith('utm_') || f.name === 'page_name' || f.name === 'tags').map(field => (
+                        <div key={field.name} className="p-3 rounded bg-muted/50 space-y-1">
+                          <code className="text-sm font-semibold">{field.name}</code>
+                          <p className="text-sm text-muted-foreground">{field.description}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="text-xs text-muted-foreground">Aceita também:</span>
+                            {field.aliases.map(alias => (
+                              <code key={alias} className="text-xs bg-background px-1 rounded">{alias}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="address">
+                  <AccordionTrigger className="text-sm">
+                    Endereço
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2">
+                      {ACCEPTED_FIELDS.filter(f => ['address', 'address_number', 'address_complement', 'neighborhood', 'city', 'state', 'country', 'cep'].includes(f.name)).map(field => (
+                        <div key={field.name} className="p-3 rounded bg-muted/50 space-y-1">
+                          <code className="text-sm font-semibold">{field.name}</code>
+                          <p className="text-sm text-muted-foreground">{field.description}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="text-xs text-muted-foreground">Aceita também:</span>
+                            {field.aliases.map(alias => (
+                              <code key={alias} className="text-xs bg-background px-1 rounded">{alias}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="custom">
+                  <AccordionTrigger className="text-sm">
+                    Campos Personalizados
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="p-3 rounded bg-muted/50 space-y-2">
+                      <code className="text-sm font-semibold">custom_fields</code>
+                      <p className="text-sm text-muted-foreground">
+                        Objeto JSON para armazenar dados extras. Campos não reconhecidos automaticamente são salvos aqui.
+                      </p>
+                      <pre className="text-xs bg-background p-2 rounded overflow-x-auto">
+{`{
+  "custom_fields": {
+    "interesse": "produto-x",
+    "origem_especifica": "webinar-maio"
+  }
+}`}
+                      </pre>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+
+            {/* Custom mappings info */}
+            <div className="p-4 rounded-lg border bg-blue-500/10 border-blue-500/20">
+              <h5 className="font-medium text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-2">
+                <Settings2 className="h-4 w-4" />
+                Mapeamento Customizado
+              </h5>
+              <p className="text-sm text-muted-foreground">
+                Se sua ferramenta usa nomes de campos diferentes, você pode configurar mapeamentos personalizados 
+                clicando no ícone <Settings2 className="h-3 w-3 inline" /> em cada API Key.
+              </p>
+              <div className="mt-2 text-sm">
+                <span className="text-muted-foreground">Exemplo:</span>
+                <code className="ml-2 bg-background px-2 py-1 rounded">
+                  "lead_email" <ArrowRight className="h-3 w-3 inline mx-1" /> "email"
+                </code>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Mapping Dialog */}
+        <Dialog open={mappingDialogOpen} onOpenChange={setMappingDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Mapeamento de Campos</DialogTitle>
+              <DialogDescription>
+                Configure mapeamentos personalizados para a API Key "{selectedKeyForMapping?.name}".
+                Campos não reconhecidos serão convertidos para os campos padrão do CRM.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {/* Current mappings */}
+              {selectedKeyForMapping?.field_mappings && Object.keys(selectedKeyForMapping.field_mappings as object).length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Mapeamentos Atuais</Label>
+                  <div className="space-y-1">
+                    {Object.entries(selectedKeyForMapping.field_mappings as Record<string, string>).map(([from, to]) => (
+                      <div key={from} className="flex items-center gap-2 p-2 rounded bg-muted">
+                        <code className="text-sm">{from}</code>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <code className="text-sm text-primary">{to}</code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 ml-auto text-destructive"
+                          onClick={() => handleRemoveMapping(from)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add new mapping */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Adicionar Mapeamento</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Campo de origem"
+                    value={newMappingFrom}
+                    onChange={(e) => setNewMappingFrom(e.target.value)}
+                    className="flex-1"
+                  />
+                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <Input
+                    placeholder="Campo destino"
+                    value={newMappingTo}
+                    onChange={(e) => setNewMappingTo(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button size="icon" onClick={handleAddMapping}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Ex: "lead_email" → "email", "telefone_celular" → "phone"
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setMappingDialogOpen(false)}>
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

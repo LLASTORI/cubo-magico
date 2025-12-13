@@ -1,18 +1,21 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CustomerJourneyAnalysis } from '@/components/crm/CustomerJourneyAnalysis';
+import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Loader2, Lock, Kanban, RefreshCcw } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Users, Loader2, Lock, Kanban, RefreshCcw, TrendingUp, Route } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function CRM() {
   const navigate = useNavigate();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
+  const [activeTab, setActiveTab] = useState('journey');
 
   const crmEnabled = isModuleEnabled('crm');
 
@@ -94,9 +97,9 @@ export default function CRM() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold">CRM - Jornada do Cliente</h1>
+                <h1 className="text-2xl font-bold">CRM - Análise de Clientes</h1>
                 <p className="text-muted-foreground">
-                  Analise o comportamento de compra dos seus clientes
+                  Analise o comportamento de compra e ascensão dos seus clientes
                 </p>
               </div>
               <div className="flex gap-2">
@@ -117,7 +120,26 @@ export default function CRM() {
               </div>
             </div>
 
-            <CustomerJourneyAnalysis />
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList>
+                <TabsTrigger value="journey" className="flex items-center gap-2">
+                  <Route className="h-4 w-4" />
+                  Jornada do Cliente
+                </TabsTrigger>
+                <TabsTrigger value="ascension" className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Análise de Ascensão
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="journey" className="mt-6">
+                <CustomerJourneyAnalysis />
+              </TabsContent>
+              
+              <TabsContent value="ascension" className="mt-6">
+                <AscensionAnalysis />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </main>

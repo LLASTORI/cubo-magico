@@ -147,6 +147,7 @@ export type Database = {
           custom_fields: Json | null
           document: string | null
           email: string
+          first_page_name: string | null
           first_purchase_at: string | null
           first_seen_at: string
           first_utm_ad: string | null
@@ -186,6 +187,7 @@ export type Database = {
           custom_fields?: Json | null
           document?: string | null
           email: string
+          first_page_name?: string | null
           first_purchase_at?: string | null
           first_seen_at?: string
           first_utm_ad?: string | null
@@ -225,6 +227,7 @@ export type Database = {
           custom_fields?: Json | null
           document?: string | null
           email?: string
+          first_page_name?: string | null
           first_purchase_at?: string | null
           first_seen_at?: string
           first_utm_ad?: string | null
@@ -410,6 +413,7 @@ export type Database = {
           api_key: string
           created_at: string
           default_tags: string[] | null
+          field_mappings: Json | null
           id: string
           is_active: boolean
           last_used_at: string | null
@@ -423,6 +427,7 @@ export type Database = {
           api_key?: string
           created_at?: string
           default_tags?: string[] | null
+          field_mappings?: Json | null
           id?: string
           is_active?: boolean
           last_used_at?: string | null
@@ -436,6 +441,7 @@ export type Database = {
           api_key?: string
           created_at?: string
           default_tags?: string[] | null
+          field_mappings?: Json | null
           id?: string
           is_active?: boolean
           last_used_at?: string | null

@@ -11,6 +11,7 @@ export interface CRMWebhookKey {
   is_active: boolean;
   allowed_sources: string[] | null;
   default_tags: string[] | null;
+  field_mappings: Record<string, string> | null;
   usage_count: number;
   last_used_at: string | null;
   created_at: string;

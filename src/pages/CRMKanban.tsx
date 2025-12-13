@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
+import { KanbanFiltersBar, KanbanFilters, defaultFilters, applyFilters } from '@/components/crm/KanbanFilters';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +43,7 @@ export default function CRMKanban() {
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { stages, isLoading: stagesLoading, createDefaultStages } = usePipelineStages();
+  const [filters, setFilters] = useState<KanbanFilters>(defaultFilters);
   const queryClient = useQueryClient();
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -123,8 +125,17 @@ export default function CRMKanban() {
     }).format(value);
   };
 
+  // Apply filters to contacts
+  const filteredContacts = useMemo(() => {
+    return applyFilters(contacts, filters);
+  }, [contacts, filters]);
+
   const getContactsByStage = (stageId: string | null) => {
-    return contacts.filter(c => c.pipeline_stage_id === stageId);
+    return filteredContacts.filter(c => c.pipeline_stage_id === stageId);
+  };
+
+  const handleSearchSelect = (contactId: string) => {
+    navigate(`/crm/contact/${contactId}`);
   };
 
   const toggleContactSelection = (contactId: string) => {
@@ -257,6 +268,23 @@ export default function CRMKanban() {
             </Button>
           </div>
         </div>
+
+        {/* Filters Bar */}
+        <div className="mb-4">
+          <KanbanFiltersBar
+            contacts={contacts}
+            filters={filters}
+            onFiltersChange={setFilters}
+            onSearchSelect={handleSearchSelect}
+          />
+        </div>
+
+        {/* Results count */}
+        {(filters.search || filters.tags.length > 0 || filters.revenueMin !== null || filters.revenueMax !== null || filters.lastActivityDays !== null || filters.dateFrom || filters.dateTo) && (
+          <p className="text-sm text-muted-foreground mb-4">
+            Mostrando {filteredContacts.length} de {contacts.length} contatos
+          </p>
+        )}
 
         <ScrollArea className="w-full pb-4">
           <div className="flex gap-4 min-w-max">

@@ -11,6 +11,17 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { 
   ArrowLeft, 
   User, 
@@ -39,7 +50,7 @@ import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 export default function CRMContactCard() {
   const { contactId } = useParams<{ contactId: string }>();
   const navigate = useNavigate();
-  const { contact, isLoading, updateContact, updateNotes, addTag, removeTag, updatePipelineStage } = useCRMContact(contactId);
+  const { contact, isLoading, updateContact, updateNotes, addTag, removeTag, updatePipelineStage, deleteContact } = useCRMContact(contactId);
   const { stages } = usePipelineStages();
   const [notes, setNotes] = useState('');
   const [newTag, setNewTag] = useState('');
@@ -135,6 +146,41 @@ export default function CRMContactCard() {
           <Badge variant={contact.status === 'customer' ? 'default' : 'secondary'}>
             {contact.status === 'customer' ? 'Cliente' : contact.status === 'prospect' ? 'Prospecto' : 'Lead'}
           </Badge>
+          
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-1" />
+                Excluir
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir contato?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação não pode ser desfeita. O contato "{contact.name || contact.email}" 
+                  e todos os dados relacionados serão excluídos permanentemente.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    deleteContact.mutate(undefined, {
+                      onSuccess: () => navigate('/crm/kanban')
+                    });
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deleteContact.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Excluir'
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

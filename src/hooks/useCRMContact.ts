@@ -165,6 +165,28 @@ export function useCRMContact(contactId?: string) {
     },
   });
 
+  const deleteContact = useMutation({
+    mutationFn: async () => {
+      if (!contactId) throw new Error('No contact ID');
+
+      const { error } = await supabase
+        .from('crm_contacts')
+        .delete()
+        .eq('id', contactId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-journey'] });
+      toast.success('Contato excluído');
+    },
+    onError: (error) => {
+      console.error('Error deleting contact:', error);
+      toast.error('Erro ao excluir contato');
+    },
+  });
+
   return {
     contact,
     isLoading,
@@ -174,5 +196,6 @@ export function useCRMContact(contactId?: string) {
     updateNotes,
     addTag,
     removeTag,
+    deleteContact,
   };
 }

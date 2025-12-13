@@ -187,6 +187,16 @@ export default function CRMKanban() {
               <Users className="h-4 w-4 mr-2" />
               Ver Lista
             </Button>
+            <Button variant="outline" onClick={() => navigate('/crm/activities')}>
+              Atividades
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/crm/cadences')}>
+              Cadências
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/crm/pipeline-settings')}>
+              <Settings className="h-4 w-4 mr-2" />
+              Configurar
+            </Button>
           </div>
         </div>
 

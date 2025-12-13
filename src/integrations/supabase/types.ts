@@ -201,6 +201,164 @@ export type Database = {
           },
         ]
       }
+      crm_cadence_steps: {
+        Row: {
+          activity_type: string
+          cadence_id: string
+          created_at: string
+          delay_days: number
+          delay_hours: number
+          description: string | null
+          id: string
+          priority: string
+          step_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          activity_type?: string
+          cadence_id: string
+          created_at?: string
+          delay_days?: number
+          delay_hours?: number
+          description?: string | null
+          id?: string
+          priority?: string
+          step_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          activity_type?: string
+          cadence_id?: string
+          created_at?: string
+          delay_days?: number
+          delay_hours?: number
+          description?: string | null
+          id?: string
+          priority?: string
+          step_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_cadence_steps_cadence_id_fkey"
+            columns: ["cadence_id"]
+            isOneToOne: false
+            referencedRelation: "crm_cadences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_cadences: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          project_id: string
+          trigger_on: string
+          trigger_stage_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          project_id: string
+          trigger_on?: string
+          trigger_stage_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          project_id?: string
+          trigger_on?: string
+          trigger_stage_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_cadences_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_cadences_trigger_stage_id_fkey"
+            columns: ["trigger_stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_cadences: {
+        Row: {
+          cadence_id: string
+          completed_at: string | null
+          contact_id: string
+          created_at: string
+          current_step: number
+          id: string
+          next_activity_at: string | null
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cadence_id: string
+          completed_at?: string | null
+          contact_id: string
+          created_at?: string
+          current_step?: number
+          id?: string
+          next_activity_at?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cadence_id?: string
+          completed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          current_step?: number
+          id?: string
+          next_activity_at?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_cadences_cadence_id_fkey"
+            columns: ["cadence_id"]
+            isOneToOne: false
+            referencedRelation: "crm_cadences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_cadences_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contacts: {
         Row: {
           address: string | null

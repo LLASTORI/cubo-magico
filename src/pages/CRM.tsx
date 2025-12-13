@@ -96,13 +96,21 @@ export default function CRM() {
               <div>
                 <h1 className="text-2xl font-bold">CRM - Jornada do Cliente</h1>
                 <p className="text-muted-foreground">
-                  Analise o comportamento de compra dos seus clientes e entenda o LTV por ponto de entrada
+                  Analise o comportamento de compra dos seus clientes
                 </p>
               </div>
-              <Button onClick={() => navigate('/crm/kanban')}>
-                <Kanban className="h-4 w-4 mr-2" />
-                Pipeline Kanban
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => navigate('/crm/activities')}>
+                  Atividades
+                </Button>
+                <Button variant="outline" onClick={() => navigate('/crm/cadences')}>
+                  Cadências
+                </Button>
+                <Button onClick={() => navigate('/crm/kanban')}>
+                  <Kanban className="h-4 w-4 mr-2" />
+                  Pipeline
+                </Button>
+              </div>
             </div>
 
             <CustomerJourneyAnalysis />

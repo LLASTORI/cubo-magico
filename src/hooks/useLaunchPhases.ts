@@ -14,6 +14,7 @@ export interface LaunchPhase {
   is_active: boolean;
   phase_order: number;
   notes: string | null;
+  campaign_name_pattern: string | null;
   created_at: string;
   updated_at: string;
 }

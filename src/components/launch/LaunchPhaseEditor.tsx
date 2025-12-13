@@ -86,6 +86,7 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName }: LaunchPha
       is_active: true,
       phase_order: phases.length,
       notes: newPhase.notes || null,
+      campaign_name_pattern: null,
     });
 
     setNewPhase({ phase_type: '', name: '', start_date: null, end_date: null, notes: '' });
@@ -325,8 +326,7 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName }: LaunchPha
                       <PhaseCampaignsManager
                         projectId={projectId}
                         funnelId={funnelId}
-                        phaseId={phase.id}
-                        phaseName={phase.name}
+                        phase={phase}
                         phaseCampaigns={phaseCampaigns}
                       />
                     </div>

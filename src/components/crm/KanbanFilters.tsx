@@ -68,6 +68,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
   const [filterOpen, setFilterOpen] = useState(false);
   const [dateFromOpen, setDateFromOpen] = useState(false);
   const [dateToOpen, setDateToOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
 
   // Extract all unique tags from contacts
   const allTags = useMemo(() => {
@@ -211,20 +212,31 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                 <Tag className="h-4 w-4" />
                 Tags
               </label>
-              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+              <Input
+                placeholder="Buscar tags..."
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
                 {allTags.length === 0 ? (
                   <span className="text-sm text-muted-foreground">Nenhuma tag disponível</span>
                 ) : (
-                  allTags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      variant={filters.tags.includes(tag) ? "default" : "outline"}
-                      className="cursor-pointer"
-                      onClick={() => handleTagToggle(tag)}
-                    >
-                      {tag}
-                    </Badge>
-                  ))
+                  allTags
+                    .filter(tag => tag.toLowerCase().includes(tagSearch.toLowerCase()))
+                    .map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant={filters.tags.includes(tag) ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => handleTagToggle(tag)}
+                      >
+                        {tag}
+                      </Badge>
+                    ))
+                )}
+                {tagSearch && allTags.filter(tag => tag.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
+                  <span className="text-sm text-muted-foreground">Nenhuma tag encontrada</span>
                 )}
               </div>
             </div>

@@ -81,7 +81,7 @@ const FIELD_ALIASES: Record<string, string> = {
   'labels': 'tags',
   'etiquetas': 'tags',
   
-  // UTM variations
+  // UTM variations (standard)
   'source': 'utm_source',
   'origem': 'utm_source',
   'campaign': 'utm_campaign',
@@ -99,6 +99,22 @@ const FIELD_ALIASES: Record<string, string> = {
   'creative': 'utm_creative',
   'criativo': 'utm_creative',
   'placement': 'utm_placement',
+  
+  // SCK variations (Hotmart format)
+  'sck': 'utm_source', // Hotmart uses sck as source
+  'sck_source': 'utm_source',
+  'sck_src': 'utm_source',
+  'src': 'utm_source',
+  'sck_campaign': 'utm_campaign',
+  'sck_campaign_id': 'utm_campaign',
+  'sck_medium': 'utm_medium',
+  'sck_content': 'utm_content',
+  'sck_term': 'utm_term',
+  'sck_adset': 'utm_adset',
+  'sck_adset_name': 'utm_adset',
+  'sck_ad': 'utm_ad',
+  'sck_creative': 'utm_creative',
+  'sck_placement': 'utm_placement',
   
   // Page name variations
   'pagina': 'page_name',

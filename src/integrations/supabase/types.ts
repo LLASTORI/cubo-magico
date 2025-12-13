@@ -1170,6 +1170,7 @@ export type Database = {
       }
       launch_phases: {
         Row: {
+          campaign_name_pattern: string | null
           created_at: string
           end_date: string | null
           funnel_id: string
@@ -1185,6 +1186,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          campaign_name_pattern?: string | null
           created_at?: string
           end_date?: string | null
           funnel_id: string
@@ -1200,6 +1202,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          campaign_name_pattern?: string | null
           created_at?: string
           end_date?: string | null
           funnel_id?: string

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
@@ -43,7 +44,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
   const queryClient = useQueryClient();
   const projectId = funnel.project_id || '';
   
-  const { launchProducts, createLaunchProduct, deleteLaunchProduct } = useLaunchPhases(projectId, funnel.id);
+  const { launchProducts, createLaunchProduct, updateLaunchProduct, deleteLaunchProduct } = useLaunchPhases(projectId, funnel.id);
 
   // Fetch offer mappings for this funnel
   const { data: offerMappings = [] } = useQuery({
@@ -85,18 +86,25 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
     updateFunnelDates.mutate();
   };
 
-  const handleAddProduct = (offerMappingId: string, productType: string) => {
+  const handleAddProduct = (offerMappingId: string, productType: string, lotName: string | null = null) => {
     createLaunchProduct.mutate({
       funnel_id: funnel.id,
       offer_mapping_id: offerMappingId,
       project_id: projectId,
       product_type: productType,
+      lot_name: lotName,
     });
   };
 
-  const getProductType = (offerMappingId: string) => {
-    const product = launchProducts.find(p => p.offer_mapping_id === offerMappingId);
-    return product?.product_type || null;
+  const handleUpdateLotName = (productId: string, lotName: string) => {
+    updateLaunchProduct.mutate({
+      id: productId,
+      lot_name: lotName || null,
+    });
+  };
+
+  const getProductInfo = (offerMappingId: string) => {
+    return launchProducts.find(p => p.offer_mapping_id === offerMappingId);
   };
 
   return (
@@ -221,54 +229,68 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                   Nenhuma oferta mapeada para este funil.
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {offerMappings.map((mapping) => {
-                    const currentType = getProductType(mapping.id);
-                    const linkedProduct = launchProducts.find(p => p.offer_mapping_id === mapping.id);
+                    const linkedProduct = getProductInfo(mapping.id);
+                    const currentType = linkedProduct?.product_type || null;
+                    const currentLot = linkedProduct?.lot_name || '';
                     
                     return (
                       <div 
                         key={mapping.id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                        className="p-3 rounded-lg border bg-card space-y-3"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-between">
                           <div>
                             <p className="font-medium">{mapping.nome_oferta || mapping.nome_produto}</p>
                             <p className="text-xs text-muted-foreground">
                               {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
                             </p>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={currentType || 'none'}
+                              onValueChange={(value) => {
+                                if (linkedProduct) {
+                                  deleteLaunchProduct.mutate(linkedProduct.id);
+                                }
+                                if (value && value !== 'none') {
+                                  handleAddProduct(mapping.id, value, currentLot || null);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-40">
+                                <SelectValue placeholder="Classificar" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sem classificação</SelectItem>
+                                {PRODUCT_TYPES.map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>
+                                    {type.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Select
-                            value={currentType || 'none'}
-                            onValueChange={(value) => {
-                              if (linkedProduct) {
-                                deleteLaunchProduct.mutate(linkedProduct.id);
-                              }
-                              if (value && value !== 'none') {
-                                handleAddProduct(mapping.id, value);
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="Classificar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Sem classificação</SelectItem>
-                              {PRODUCT_TYPES.map((type) => (
-                                <SelectItem key={type.value} value={type.value}>
-                                  {type.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {currentType && (
-                            <Badge variant="outline">
-                              {PRODUCT_TYPES.find(t => t.value === currentType)?.label}
-                            </Badge>
-                          )}
-                        </div>
+                        
+                        {/* Lot Name Field - only show when product is classified */}
+                        {linkedProduct && (
+                          <div className="flex items-center gap-2 pt-2 border-t">
+                            <Label className="text-sm text-muted-foreground whitespace-nowrap">Lote:</Label>
+                            <Input
+                              placeholder="Ex: Lote 1, Early Bird, VIP..."
+                              value={currentLot}
+                              onChange={(e) => handleUpdateLotName(linkedProduct.id, e.target.value)}
+                              className="h-8 text-sm"
+                            />
+                            {currentLot && (
+                              <Badge variant="secondary" className="whitespace-nowrap">
+                                {currentLot}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

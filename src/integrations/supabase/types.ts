@@ -1236,6 +1236,7 @@ export type Database = {
           created_at: string
           funnel_id: string
           id: string
+          lot_name: string | null
           offer_mapping_id: string
           product_type: string
           project_id: string
@@ -1244,6 +1245,7 @@ export type Database = {
           created_at?: string
           funnel_id: string
           id?: string
+          lot_name?: string | null
           offer_mapping_id: string
           product_type?: string
           project_id: string
@@ -1252,6 +1254,7 @@ export type Database = {
           created_at?: string
           funnel_id?: string
           id?: string
+          lot_name?: string | null
           offer_mapping_id?: string
           product_type?: string
           project_id?: string

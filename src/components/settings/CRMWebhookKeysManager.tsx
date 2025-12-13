@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { WebhookTestDashboard } from './WebhookTestDashboard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -366,8 +367,9 @@ export function CRMWebhookKeysManager() {
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs defaultValue="keys" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="keys">API Keys</TabsTrigger>
+            <TabsTrigger value="test">Testar Webhook</TabsTrigger>
             <TabsTrigger value="docs">Documentação</TabsTrigger>
           </TabsList>
           
@@ -493,6 +495,40 @@ export function CRMWebhookKeysManager() {
                 <Key className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhuma API Key criada</p>
                 <p className="text-sm">Crie uma chave para começar a receber leads.</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="test" className="mt-4">
+            {webhookKeys && webhookKeys.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Label>Selecione a API Key:</Label>
+                  <select
+                    className="border rounded px-3 py-1.5 text-sm bg-background"
+                    value={selectedKeyForTest?.id || ''}
+                    onChange={(e) => {
+                      const key = webhookKeys.find(k => k.id === e.target.value);
+                      setSelectedKeyForTest(key || null);
+                    }}
+                  >
+                    <option value="">Selecione...</option>
+                    {webhookKeys.filter(k => k.is_active).map(key => (
+                      <option key={key.id} value={key.id}>{key.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {selectedKeyForTest && (
+                  <WebhookTestDashboard 
+                    apiKey={selectedKeyForTest.api_key}
+                    webhookUrl={webhookUrl}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Key className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Crie uma API Key primeiro para testar o webhook.</p>
               </div>
             )}
           </TabsContent>

@@ -74,8 +74,16 @@ export function MonthlyInvestmentDetailDialog({
 
   // Parse month to get date range
   const dateRange = useMemo(() => {
+    if (!month || !month.includes('-')) {
+      return { start: '', end: '' };
+    }
     const [yearStr, monthStr] = month.split('-');
-    const date = new Date(parseInt(yearStr), parseInt(monthStr) - 1, 1);
+    const yearNum = parseInt(yearStr);
+    const monthNum = parseInt(monthStr);
+    if (isNaN(yearNum) || isNaN(monthNum)) {
+      return { start: '', end: '' };
+    }
+    const date = new Date(yearNum, monthNum - 1, 1);
     return {
       start: format(startOfMonth(date), 'yyyy-MM-dd'),
       end: format(endOfMonth(date), 'yyyy-MM-dd'),

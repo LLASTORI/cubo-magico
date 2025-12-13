@@ -135,6 +135,72 @@ export type Database = {
           },
         ]
       }
+      crm_activities_tasks: {
+        Row: {
+          activity_type: string
+          assigned_to: string | null
+          completed_at: string | null
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          priority: string
+          project_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          activity_type?: string
+          assigned_to?: string | null
+          completed_at?: string | null
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string
+          project_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          activity_type?: string
+          assigned_to?: string | null
+          completed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string
+          project_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activities_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_activities_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contacts: {
         Row: {
           address: string | null
@@ -165,8 +231,10 @@ export type Database = {
           last_purchase_at: string | null
           name: string | null
           neighborhood: string | null
+          notes: string | null
           phone: string | null
           phone_ddd: string | null
+          pipeline_stage_id: string | null
           project_id: string
           source: string
           state: string | null
@@ -205,8 +273,10 @@ export type Database = {
           last_purchase_at?: string | null
           name?: string | null
           neighborhood?: string | null
+          notes?: string | null
           phone?: string | null
           phone_ddd?: string | null
+          pipeline_stage_id?: string | null
           project_id: string
           source?: string
           state?: string | null
@@ -245,8 +315,10 @@ export type Database = {
           last_purchase_at?: string | null
           name?: string | null
           neighborhood?: string | null
+          notes?: string | null
           phone?: string | null
           phone_ddd?: string | null
+          pipeline_stage_id?: string | null
           project_id?: string
           source?: string
           state?: string | null
@@ -258,7 +330,61 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "crm_contacts_pipeline_stage_id_fkey"
+            columns: ["pipeline_stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "crm_contacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_pipeline_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_default: boolean
+          is_lost: boolean
+          is_won: boolean
+          name: string
+          position: number
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          is_lost?: boolean
+          is_won?: boolean
+          name: string
+          position?: number
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          is_lost?: boolean
+          is_won?: boolean
+          name?: string
+          position?: number
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_pipeline_stages_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1713,6 +1839,10 @@ export type Database = {
       can_user_create_project: { Args: { _user_id: string }; Returns: boolean }
       count_project_members: { Args: { _project_id: string }; Returns: number }
       count_user_projects: { Args: { _user_id: string }; Returns: number }
+      create_default_pipeline_stages: {
+        Args: { _project_id: string }
+        Returns: undefined
+      }
       get_user_email: { Args: { _user_id: string }; Returns: string }
       get_user_max_projects: { Args: { _user_id: string }; Returns: number }
       get_user_project_role: {

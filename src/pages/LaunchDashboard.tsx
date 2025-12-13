@@ -18,6 +18,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { LaunchConfigDialog } from "@/components/launch/LaunchConfigDialog";
 import { LaunchPhasesOverview } from "@/components/launch/LaunchPhasesOverview";
 import { LaunchProductsSalesBreakdown } from "@/components/launch/LaunchProductsSalesBreakdown";
+import { LaunchConversionAnalysis } from "@/components/launch/LaunchConversionAnalysis";
 import { format, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
@@ -461,6 +462,21 @@ const LaunchDashboard = () => {
                                   startDate={appliedStartDate}
                                   endDate={appliedEndDate}
                                 />
+
+                                {/* Lead to Buyer Conversion Analysis */}
+                                <div className="pt-4 border-t">
+                                  <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4" />
+                                    Análise de Conversão Lead → Comprador
+                                  </h4>
+                                  <LaunchConversionAnalysis
+                                    projectId={currentProject?.id}
+                                    funnelId={launch.funnelId}
+                                    launchTag={launch.launchTag}
+                                    startDate={appliedStartDate}
+                                    endDate={appliedEndDate}
+                                  />
+                                </div>
 
                                 {/* Positions Section */}
                                 {launch.positions.length > 0 && (

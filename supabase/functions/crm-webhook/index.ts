@@ -13,11 +13,9 @@ const FIELD_ALIASES: Record<string, string> = {
   'nome_completo': 'name',
   'full_name': 'name',
   'fullname': 'name',
-  'first_name': 'first_name', // Keep separate to join later
+  'first_name': 'first_name',
   'firstname': 'first_name',
   'primeiro_nome': 'first_name',
-  
-  // Last name variations (will be joined with first_name)
   'last_name': 'last_name',
   'lastname': 'last_name',
   'sobrenome': 'last_name',
@@ -38,8 +36,6 @@ const FIELD_ALIASES: Record<string, string> = {
   'phone_number': 'phone',
   'tel': 'phone',
   'fone': 'phone',
-  
-  // Phone DDD variations
   'ddd': 'phone_ddd',
   'area_code': 'phone_ddd',
   
@@ -58,35 +54,21 @@ const FIELD_ALIASES: Record<string, string> = {
   'rua': 'address',
   'logradouro': 'address',
   'street': 'address',
-  
-  // Address number variations
   'numero': 'address_number',
   'number': 'address_number',
   'num': 'address_number',
-  
-  // Complement variations
   'complemento': 'address_complement',
   'complement': 'address_complement',
   'apto': 'address_complement',
   'apartamento': 'address_complement',
-  
-  // Neighborhood variations
   'bairro': 'neighborhood',
   'district': 'neighborhood',
-  
-  // City variations
   'cidade': 'city',
   'municipio': 'city',
-  
-  // State variations
   'estado': 'state',
   'uf': 'state',
   'province': 'state',
-  
-  // Country variations
   'pais': 'country',
-  
-  // CEP variations
   'cep': 'cep',
   'zip': 'cep',
   'zipcode': 'cep',
@@ -110,6 +92,13 @@ const FIELD_ALIASES: Record<string, string> = {
   'conteudo': 'utm_content',
   'term': 'utm_term',
   'termo': 'utm_term',
+  'adset': 'utm_adset',
+  'conjunto': 'utm_adset',
+  'ad': 'utm_ad',
+  'anuncio': 'utm_ad',
+  'creative': 'utm_creative',
+  'criativo': 'utm_creative',
+  'placement': 'utm_placement',
   
   // Page name variations
   'pagina': 'page_name',
@@ -118,6 +107,19 @@ const FIELD_ALIASES: Record<string, string> = {
   'lp': 'page_name',
   'form_name': 'page_name',
   'formulario': 'page_name',
+  'page_url': 'page_url',
+  'url': 'page_url',
+  
+  // Launch tag variations
+  'launch_tag': 'launch_tag',
+  'tag_lancamento': 'launch_tag',
+  'lancamento': 'launch_tag',
+  
+  // Interaction type variations
+  'interaction_type': 'interaction_type',
+  'tipo_interacao': 'interaction_type',
+  'event_type': 'interaction_type',
+  'tipo_evento': 'interaction_type',
   
   // Custom fields variations
   'extras': 'custom_fields',
@@ -131,7 +133,8 @@ const STANDARD_FIELDS = [
   'address', 'address_number', 'address_complement', 'neighborhood',
   'city', 'state', 'country', 'cep', 'tags', 'custom_fields',
   'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term',
-  'page_name'
+  'utm_adset', 'utm_ad', 'utm_creative', 'utm_placement',
+  'page_name', 'page_url', 'launch_tag', 'interaction_type'
 ];
 
 interface NormalizedPayload {
@@ -158,7 +161,14 @@ interface NormalizedPayload {
   utm_medium?: string;
   utm_content?: string;
   utm_term?: string;
+  utm_adset?: string;
+  utm_ad?: string;
+  utm_creative?: string;
+  utm_placement?: string;
   page_name?: string;
+  page_url?: string;
+  launch_tag?: string;
+  interaction_type?: string;
 }
 
 // Normalize field names using aliases and custom mappings
@@ -234,7 +244,6 @@ function normalizePayload(
       normalized.last_name as string
     ].filter(Boolean);
     normalized.name = parts.join(' ').trim();
-    // Remove the separate fields after joining
     delete normalized.first_name;
     delete normalized.last_name;
   }
@@ -324,43 +333,70 @@ serve(async (req) => {
     const mergedTags = [
       ...(webhookKey.default_tags || []),
       ...(body.tags || [])
-    ].filter((tag, index, arr) => arr.indexOf(tag) === index); // Remove duplicates
+    ].filter((tag, index, arr) => arr.indexOf(tag) === index);
 
     const email = body.email.toLowerCase().trim();
     const now = new Date().toISOString();
 
+    // Check if contact already exists
+    const { data: existingContact } = await supabase
+      .from('crm_contacts')
+      .select('id, first_utm_source, tags')
+      .eq('project_id', webhookKey.project_id)
+      .eq('email', email)
+      .single();
+
+    const isNewContact = !existingContact;
+
+    // Build contact data - only set first_utm_* for new contacts
+    const contactData: Record<string, unknown> = {
+      project_id: webhookKey.project_id,
+      email,
+      name: body.name || null,
+      phone: body.phone || null,
+      phone_ddd: body.phone_ddd || null,
+      document: body.document || null,
+      instagram: body.instagram || null,
+      address: body.address || null,
+      address_number: body.address_number || null,
+      address_complement: body.address_complement || null,
+      neighborhood: body.neighborhood || null,
+      city: body.city || null,
+      state: body.state || null,
+      country: body.country || null,
+      cep: body.cep || null,
+      custom_fields: body.custom_fields || {},
+      source: 'webhook',
+      last_activity_at: now,
+    };
+
+    // Only set first_utm_* and first_seen_at for new contacts
+    if (isNewContact) {
+      contactData.status = 'lead';
+      contactData.first_utm_source = body.utm_source || null;
+      contactData.first_utm_campaign = body.utm_campaign || null;
+      contactData.first_utm_medium = body.utm_medium || null;
+      contactData.first_utm_content = body.utm_content || null;
+      contactData.first_utm_term = body.utm_term || null;
+      contactData.first_utm_adset = body.utm_adset || null;
+      contactData.first_utm_ad = body.utm_ad || null;
+      contactData.first_utm_creative = body.utm_creative || null;
+      contactData.first_utm_placement = body.utm_placement || null;
+      contactData.first_page_name = body.page_name || null;
+      contactData.first_seen_at = now;
+      contactData.tags = mergedTags.length > 0 ? mergedTags : null;
+    } else {
+      // For existing contacts, merge tags
+      const existingTags = existingContact.tags || [];
+      const allTags = [...existingTags, ...mergedTags]
+        .filter((tag, index, arr) => arr.indexOf(tag) === index);
+      contactData.tags = allTags.length > 0 ? allTags : null;
+    }
+
     // Upsert contact
     const { data: contact, error: upsertError } = await supabase
       .from('crm_contacts')
-      .upsert({
-        project_id: webhookKey.project_id,
-        email,
-        name: body.name || null,
-        phone: body.phone || null,
-        phone_ddd: body.phone_ddd || null,
-        document: body.document || null,
-        instagram: body.instagram || null,
-        address: body.address || null,
-        address_number: body.address_number || null,
-        address_complement: body.address_complement || null,
-        neighborhood: body.neighborhood || null,
-        city: body.city || null,
-        state: body.state || null,
-        country: body.country || null,
-        cep: body.cep || null,
-        tags: mergedTags.length > 0 ? mergedTags : null,
-        custom_fields: body.custom_fields || {},
-        source: 'webhook',
-        status: 'lead',
-        first_utm_source: body.utm_source || null,
-        first_utm_campaign: body.utm_campaign || null,
-        first_utm_medium: body.utm_medium || null,
-        first_utm_content: body.utm_content || null,
-        first_utm_term: body.utm_term || null,
-        first_page_name: body.page_name || null,
-        first_seen_at: now,
-        last_activity_at: now,
-      }, {
+      .upsert(contactData, {
         onConflict: 'project_id,email',
         ignoreDuplicates: false,
       })
@@ -375,6 +411,44 @@ serve(async (req) => {
       );
     }
 
+    // Always create an interaction record if we have UTM data
+    const hasUtmData = body.utm_source || body.utm_campaign || body.utm_medium || 
+                       body.utm_adset || body.utm_ad || body.utm_creative;
+    const hasInteractionData = body.page_name || body.page_url || body.launch_tag || body.interaction_type;
+    
+    if (hasUtmData || hasInteractionData) {
+      const interactionData = {
+        contact_id: contact.id,
+        project_id: webhookKey.project_id,
+        interaction_type: body.interaction_type || 'page_view',
+        page_name: body.page_name || null,
+        page_url: body.page_url || null,
+        utm_source: body.utm_source || null,
+        utm_campaign: body.utm_campaign || null,
+        utm_medium: body.utm_medium || null,
+        utm_content: body.utm_content || null,
+        utm_term: body.utm_term || null,
+        utm_adset: body.utm_adset || null,
+        utm_ad: body.utm_ad || null,
+        utm_creative: body.utm_creative || null,
+        utm_placement: body.utm_placement || null,
+        launch_tag: body.launch_tag || null,
+        metadata: body.custom_fields || {},
+        interacted_at: now,
+      };
+
+      const { error: interactionError } = await supabase
+        .from('crm_contact_interactions')
+        .insert(interactionData);
+
+      if (interactionError) {
+        console.error('[CRM Webhook] Error creating interaction:', interactionError);
+        // Don't fail the request, just log the error
+      } else {
+        console.log('[CRM Webhook] Interaction created for contact:', contact.id);
+      }
+    }
+
     // Update webhook key usage stats
     await supabase
       .from('crm_webhook_keys')
@@ -384,7 +458,7 @@ serve(async (req) => {
       })
       .eq('id', webhookKey.id);
 
-    console.log('[CRM Webhook] Contact saved:', contact.id);
+    console.log('[CRM Webhook] Contact saved:', contact.id, isNewContact ? '(new)' : '(updated)');
 
     return new Response(
       JSON.stringify({
@@ -396,6 +470,7 @@ serve(async (req) => {
           status: contact.status,
           tags: contact.tags,
           created_at: contact.created_at,
+          is_new: isNewContact,
         },
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

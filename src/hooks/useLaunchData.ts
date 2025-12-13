@@ -18,6 +18,7 @@ export interface LaunchMetrics {
   launchStartDate: string | null;
   launchEndDate: string | null;
   hasFixedDates: boolean;
+  launchTag: string | null;
   totalRevenue: number;
   totalSales: number;
   avgTicket: number;
@@ -265,6 +266,7 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
         launchStartDate: funnel.launch_start_date,
         launchEndDate: funnel.launch_end_date,
         hasFixedDates: funnel.has_fixed_dates || false,
+        launchTag: (funnel as any).launch_tag || null,
         totalRevenue,
         totalSales: totalSalesCount,
         avgTicket,

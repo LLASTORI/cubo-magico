@@ -241,12 +241,12 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                         </div>
                         <div className="flex items-center gap-2">
                           <Select
-                            value={currentType || ''}
+                            value={currentType || 'none'}
                             onValueChange={(value) => {
                               if (linkedProduct) {
                                 deleteLaunchProduct.mutate(linkedProduct.id);
                               }
-                              if (value) {
+                              if (value && value !== 'none') {
                                 handleAddProduct(mapping.id, value);
                               }
                             }}
@@ -255,7 +255,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                               <SelectValue placeholder="Classificar" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Sem classificação</SelectItem>
+                              <SelectItem value="none">Sem classificação</SelectItem>
                               {PRODUCT_TYPES.map((type) => (
                                 <SelectItem key={type.value} value={type.value}>
                                   {type.label}

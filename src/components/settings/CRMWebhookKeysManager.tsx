@@ -34,7 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useCRMWebhookKeys, type CRMWebhookKey } from '@/hooks/useCRMWebhookKeys';
-import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight, Play, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,7 +42,9 @@ import { ptBR } from 'date-fns/locale';
 // All accepted fields with descriptions
 const ACCEPTED_FIELDS = [
   { name: 'email', required: true, description: 'Email do contato', aliases: ['e-mail', 'e_mail', 'mail', 'email_address'] },
-  { name: 'name', required: false, description: 'Nome completo', aliases: ['nome', 'nome_completo', 'full_name', 'fullname', 'first_name'] },
+  { name: 'name', required: false, description: 'Nome completo (ou junta first_name + last_name)', aliases: ['nome', 'nome_completo', 'full_name', 'fullname'] },
+  { name: 'first_name', required: false, description: 'Primeiro nome (será juntado com last_name)', aliases: ['firstname', 'primeiro_nome'] },
+  { name: 'last_name', required: false, description: 'Sobrenome (será juntado com first_name)', aliases: ['lastname', 'sobrenome', 'surname', 'segundo_nome'] },
   { name: 'phone', required: false, description: 'Telefone', aliases: ['telefone', 'celular', 'whatsapp', 'mobile', 'tel', 'fone'] },
   { name: 'phone_ddd', required: false, description: 'DDD do telefone', aliases: ['ddd', 'area_code'] },
   { name: 'document', required: false, description: 'CPF ou CNPJ', aliases: ['cpf', 'cnpj', 'cpf_cnpj', 'documento'] },
@@ -76,6 +78,12 @@ export function CRMWebhookKeysManager() {
   const [selectedKeyForMapping, setSelectedKeyForMapping] = useState<CRMWebhookKey | null>(null);
   const [newMappingFrom, setNewMappingFrom] = useState('');
   const [newMappingTo, setNewMappingTo] = useState('');
+  
+  // Test webhook state
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [selectedKeyForTest, setSelectedKeyForTest] = useState<CRMWebhookKey | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; data?: any; error?: string } | null>(null);
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-webhook`;
 
@@ -220,6 +228,74 @@ export function CRMWebhookKeysManager() {
     });
   };
 
+  // Test webhook function
+  const openTestDialog = (key: CRMWebhookKey) => {
+    setSelectedKeyForTest(key);
+    setTestResult(null);
+    setTestDialogOpen(true);
+  };
+
+  const handleTestWebhook = async () => {
+    if (!selectedKeyForTest) return;
+    
+    setIsTesting(true);
+    setTestResult(null);
+    
+    // Generate random email to avoid duplicates
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const testPayload = {
+      // Using Portuguese field names to test aliases
+      email: `teste.webhook.${randomId}@exemplo.com`,
+      primeiro_nome: 'João',
+      sobrenome: 'da Silva',
+      telefone: '11999887766',
+      pagina: 'LP Teste Webhook',
+      utm_source: 'teste_interno',
+      utm_campaign: 'verificacao_aliases',
+      tags: ['teste', 'webhook-verificacao'],
+    };
+    
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': selectedKeyForTest.api_key,
+        },
+        body: JSON.stringify(testPayload),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setTestResult({ 
+          success: true, 
+          data: {
+            sent: testPayload,
+            received: data,
+          }
+        });
+        toast({
+          title: 'Teste bem-sucedido!',
+          description: `Lead "${data.contact?.name || data.contact?.email}" criado no CRM.`,
+        });
+      } else {
+        setTestResult({ 
+          success: false, 
+          error: data.error || 'Erro desconhecido',
+          data: { sent: testPayload, received: data }
+        });
+      }
+    } catch (error: any) {
+      setTestResult({ 
+        success: false, 
+        error: error.message || 'Erro de conexão' 
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -333,6 +409,15 @@ export function CRMWebhookKeysManager() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openTestDialog(key)}
+                          title="Testar webhook"
+                          disabled={!key.is_active}
+                        >
+                          <Play className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -483,7 +568,22 @@ export function CRMWebhookKeysManager() {
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2">
-                      {ACCEPTED_FIELDS.filter(f => !f.required && ['name', 'phone', 'phone_ddd', 'document', 'instagram'].includes(f.name)).map(field => (
+                      {/* Special note about name joining */}
+                      <div className="p-3 rounded bg-blue-500/10 border border-blue-500/20 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm font-semibold text-blue-700 dark:text-blue-400">first_name + last_name</code>
+                          <Badge variant="outline" className="text-xs text-blue-600">automático</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Se você enviar <code className="bg-background px-1 rounded">first_name</code> e <code className="bg-background px-1 rounded">last_name</code> separados, 
+                          eles serão automaticamente concatenados no campo <code className="bg-background px-1 rounded">name</code>.
+                        </p>
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          Ex: {`{ "primeiro_nome": "João", "sobrenome": "Silva" }`} → name: "João Silva"
+                        </div>
+                      </div>
+                      
+                      {ACCEPTED_FIELDS.filter(f => !f.required && ['name', 'first_name', 'last_name', 'phone', 'phone_ddd', 'document', 'instagram'].includes(f.name)).map(field => (
                         <div key={field.name} className="p-3 rounded bg-muted/50 space-y-1">
                           <code className="text-sm font-semibold">{field.name}</code>
                           <p className="text-sm text-muted-foreground">{field.description}</p>
@@ -653,6 +753,113 @@ export function CRMWebhookKeysManager() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setMappingDialogOpen(false)}>
                 Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Test Dialog */}
+        <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Play className="h-5 w-5" />
+                Testar Webhook
+              </DialogTitle>
+              <DialogDescription>
+                Enviar um lead de teste usando a API Key "{selectedKeyForTest?.name}" para verificar aliases e mapeamentos.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {/* Test payload preview */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Dados de Teste (usando campos em português)</Label>
+                <pre className="p-3 rounded bg-muted text-xs overflow-x-auto">
+{`{
+  "email": "teste.webhook.xxx@exemplo.com",
+  "primeiro_nome": "João",        // → name
+  "sobrenome": "da Silva",        // → name (concatenado)
+  "telefone": "11999887766",      // → phone
+  "pagina": "LP Teste Webhook",   // → page_name
+  "utm_source": "teste_interno",
+  "tags": ["teste", "webhook-verificacao"]
+}`}
+                </pre>
+                <p className="text-xs text-muted-foreground">
+                  O webhook vai converter automaticamente os campos em português para os campos padrão do CRM.
+                </p>
+              </div>
+
+              {/* Test result */}
+              {testResult && (
+                <div className={`p-4 rounded-lg border ${testResult.success ? 'bg-green-500/10 border-green-500/30' : 'bg-destructive/10 border-destructive/30'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {testResult.success ? (
+                      <>
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        <span className="font-medium text-green-700 dark:text-green-400">Teste bem-sucedido!</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-5 w-5 text-destructive" />
+                        <span className="font-medium text-destructive">Erro no teste</span>
+                      </>
+                    )}
+                  </div>
+                  
+                  {testResult.success && testResult.data?.received?.contact && (
+                    <div className="space-y-2">
+                      <p className="text-sm">
+                        <strong>Contato criado:</strong>
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Nome:</span>{' '}
+                          <code className="bg-background px-1 rounded">{testResult.data.received.contact.name}</code>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Email:</span>{' '}
+                          <code className="bg-background px-1 rounded">{testResult.data.received.contact.email}</code>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Status:</span>{' '}
+                          <code className="bg-background px-1 rounded">{testResult.data.received.contact.status}</code>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Tags:</span>{' '}
+                          <code className="bg-background px-1 rounded">{testResult.data.received.contact.tags?.join(', ') || '-'}</code>
+                        </div>
+                      </div>
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                        ✓ Os aliases funcionaram! "primeiro_nome" + "sobrenome" foram concatenados em "name".
+                      </p>
+                    </div>
+                  )}
+                  
+                  {!testResult.success && testResult.error && (
+                    <p className="text-sm text-destructive">{testResult.error}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTestDialogOpen(false)}>
+                Fechar
+              </Button>
+              <Button onClick={handleTestWebhook} disabled={isTesting}>
+                {isTesting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Enviar Lead de Teste
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

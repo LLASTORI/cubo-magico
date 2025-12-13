@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Package, Layers, Target, ShoppingBag, Globe, UserCheck, CreditCard } from 'lucide-react';
+import { Users, Package, Layers, Target, ShoppingBag, Globe, UserCheck, CreditCard, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -16,13 +16,16 @@ interface CRMSummaryCardsProps {
   productBreakdown: GenericBreakdown[];
   sourceBreakdown: GenericBreakdown[];
   contactStatusBreakdown: GenericBreakdown[];
+  pageBreakdown: GenericBreakdown[];
   isLoading: boolean;
   selectedStatuses: string[];
   selectedSources: string[];
   selectedContactStatuses: string[];
+  selectedPages: string[];
   onStatusToggle: (status: string) => void;
   onSourceToggle: (source: string) => void;
   onContactStatusToggle: (status: string) => void;
+  onPageToggle: (page: string) => void;
   onProductClick?: (product: string) => void;
   onFunnelClick?: (funnelId: string) => void;
   onOfferClick?: (offerCode: string) => void;
@@ -39,13 +42,16 @@ export function CRMSummaryCards({
   productBreakdown,
   sourceBreakdown,
   contactStatusBreakdown,
+  pageBreakdown,
   isLoading,
   selectedStatuses,
   selectedSources,
   selectedContactStatuses,
+  selectedPages,
   onStatusToggle,
   onSourceToggle,
   onContactStatusToggle,
+  onPageToggle,
   onProductClick,
   onFunnelClick,
   onOfferClick,
@@ -133,6 +139,16 @@ export function CRMSummaryCards({
       clickable: true,
       selected: selectedSources,
       onToggle: onSourceToggle,
+      labelPrefix: 'contatos'
+    },
+    { 
+      id: 'page', 
+      label: 'Página de Origem', 
+      icon: FileText, 
+      data: pageBreakdown, 
+      clickable: true,
+      selected: selectedPages,
+      onToggle: onPageToggle,
       labelPrefix: 'contatos'
     },
   ];

@@ -223,6 +223,7 @@ export function CustomerJourneyAnalysis() {
   const [statusFilter, setStatusFilter] = useState<string[]>(DEFAULT_STATUS_FILTER);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [contactStatusFilter, setContactStatusFilter] = useState<string[]>([]);
+  const [pageFilter, setPageFilter] = useState<string[]>([]);
 
   const entryFilter: EntryFilter | null = analysisMode === 'entry' && filterType && selectedValues.length > 0
     ? { type: filterType, values: selectedValues }
@@ -240,6 +241,7 @@ export function CustomerJourneyAnalysis() {
     transactionStatusFilter: statusFilter,
     sourceFilter,
     contactStatusFilter,
+    pageFilter,
   };
 
   const { 
@@ -256,6 +258,7 @@ export function CustomerJourneyAnalysis() {
     positionBreakdown,
     sourceBreakdown,
     contactStatusBreakdown,
+    pageBreakdown,
     isLoading,
     isLoadingBreakdown 
   } = useCRMJourneyData(filters);
@@ -302,6 +305,12 @@ export function CustomerJourneyAnalysis() {
     );
   };
 
+  const handlePageToggle = (page: string) => {
+    setPageFilter((prev) =>
+      prev.includes(page) ? prev.filter((p) => p !== page) : [...prev, page]
+    );
+  };
+
   const clearFilter = () => {
     setFilterType(null);
     setSelectedValues([]);
@@ -317,6 +326,7 @@ export function CustomerJourneyAnalysis() {
     setStatusFilter(DEFAULT_STATUS_FILTER);
     setSourceFilter([]);
     setContactStatusFilter([]);
+    setPageFilter([]);
   };
 
   const handleFilterTypeChange = (value: string) => {
@@ -333,7 +343,7 @@ export function CustomerJourneyAnalysis() {
     clearFilter();
   };
 
-  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate || sourceFilter.length > 0 || contactStatusFilter.length > 0;
+  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate || sourceFilter.length > 0 || contactStatusFilter.length > 0 || pageFilter.length > 0;
 
   if (isLoading) {
     return (
@@ -357,10 +367,12 @@ export function CustomerJourneyAnalysis() {
         productBreakdown={productBreakdown}
         sourceBreakdown={sourceBreakdown}
         contactStatusBreakdown={contactStatusBreakdown}
+        pageBreakdown={pageBreakdown}
         isLoading={isLoadingBreakdown}
         selectedStatuses={statusFilter}
         selectedSources={sourceFilter}
         selectedContactStatuses={contactStatusFilter}
+        selectedPages={pageFilter}
         onStatusToggle={(status) => {
           if (statusFilter.includes(status)) {
             setStatusFilter(statusFilter.filter(s => s !== status));
@@ -370,6 +382,7 @@ export function CustomerJourneyAnalysis() {
         }}
         onSourceToggle={handleSourceToggle}
         onContactStatusToggle={handleContactStatusToggle}
+        onPageToggle={handlePageToggle}
         onProductClick={handleProductCardClick}
         onFunnelClick={handleFunnelCardClick}
         onOfferClick={handleOfferCardClick}

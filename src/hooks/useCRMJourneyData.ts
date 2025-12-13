@@ -127,6 +127,7 @@ export interface CRMFilters {
   transactionStatusFilter: string[];
   sourceFilter: string[];
   contactStatusFilter: string[];
+  pageFilter: string[];
 }
 
 export const DEFAULT_STATUS_FILTER = ['APPROVED', 'COMPLETE'];
@@ -149,12 +150,13 @@ export function useCRMJourneyData(filters: CRMFilters) {
     dateFilter, 
     statusFilter,
     sourceFilter = [],
-    contactStatusFilter = []
+    contactStatusFilter = [],
+    pageFilter = []
   } = filters;
 
   // Fetch all contacts for the project
   const { data: contactsData, isLoading: loadingContacts } = useQuery({
-    queryKey: ['crm-contacts', projectId, sourceFilter, contactStatusFilter],
+    queryKey: ['crm-contacts', projectId, sourceFilter, contactStatusFilter, pageFilter],
     queryFn: async () => {
       if (!projectId) return [];
       
@@ -166,7 +168,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       while (hasMore) {
         let query = supabase
           .from('crm_contacts')
-          .select('id, email, name, source, status, tags, total_purchases, total_revenue, first_purchase_at, last_purchase_at, first_seen_at')
+          .select('id, email, name, source, status, tags, total_purchases, total_revenue, first_purchase_at, last_purchase_at, first_seen_at, first_page_name')
           .eq('project_id', projectId);
         
         if (sourceFilter.length > 0) {
@@ -175,6 +177,10 @@ export function useCRMJourneyData(filters: CRMFilters) {
         
         if (contactStatusFilter.length > 0) {
           query = query.in('status', contactStatusFilter);
+        }
+
+        if (pageFilter.length > 0) {
+          query = query.in('first_page_name', pageFilter);
         }
         
         const { data, error } = await query
@@ -282,7 +288,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
     queryFn: async () => {
       if (!projectId) return [];
       
-      const allContacts: { source: string; status: string; email: string }[] = [];
+      const allContacts: { source: string; status: string; email: string; first_page_name: string | null }[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
@@ -290,7 +296,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       while (hasMore) {
         const { data, error } = await supabase
           .from('crm_contacts')
-          .select('source, status, email')
+          .select('source, status, email, first_page_name')
           .eq('project_id', projectId)
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -445,6 +451,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       sourceBreakdown: [] as GenericBreakdown[],
       contactStatusBreakdown: [] as GenericBreakdown[],
       platformBreakdown: [] as GenericBreakdown[],
+      pageBreakdown: [] as GenericBreakdown[],
     };
 
     if (!allTransactionsForBreakdown || allTransactionsForBreakdown.length === 0) {
@@ -492,6 +499,10 @@ export function useCRMJourneyData(filters: CRMFilters) {
           contactStatusBreakdown: createContactBreakdown(
             (contact) => contact.status,
             (key) => contactStatusLabels[key] || key
+          ),
+          pageBreakdown: createContactBreakdown(
+            (contact) => contact.first_page_name,
+            (key) => key
           ),
         };
       }
@@ -576,7 +587,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
 
     // Contact-level breakdowns
     const createContactBreakdown = (
-      keyFn: (contact: { source: string; status: string; email: string }) => string | null,
+      keyFn: (contact: { source: string; status: string; email: string; first_page_name: string | null }) => string | null,
       labelFn: (key: string) => string
     ): GenericBreakdown[] => {
       if (!allContactsForBreakdown) return [];
@@ -620,6 +631,11 @@ export function useCRMJourneyData(filters: CRMFilters) {
       (key) => contactStatusLabels[key] || key
     );
 
+    const pageBreakdown = createContactBreakdown(
+      (contact) => contact.first_page_name,
+      (key) => key
+    );
+
     return {
       statusBreakdown,
       productBreakdown,
@@ -629,6 +645,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       sourceBreakdown,
       contactStatusBreakdown,
       platformBreakdown,
+      pageBreakdown,
     };
   }, [allTransactionsForBreakdown, allContactsForBreakdown, offerToFunnel, funnelNames, mappingsData]);
 
@@ -902,6 +919,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
     sourceBreakdown: breakdowns.sourceBreakdown,
     contactStatusBreakdown: breakdowns.contactStatusBreakdown,
     platformBreakdown: breakdowns.platformBreakdown,
+    pageBreakdown: breakdowns.pageBreakdown,
     isLoading: loadingContacts || loadingTransactions || loadingMappings || loadingFunnels,
     isLoadingBreakdown: loadingBreakdown || loadingContactsBreakdown,
   };

@@ -77,10 +77,12 @@ export function useProjectModules() {
       // Check if module record exists
       const { data: existing } = await supabase
         .from('project_modules')
-        .select('id')
+        .select('id, is_enabled')
         .eq('project_id', projectId)
         .eq('module_key', moduleKey)
         .maybeSingle();
+
+      const wasEnabled = existing?.is_enabled ?? false;
 
       if (existing) {
         // Update existing record
@@ -108,14 +110,44 @@ export function useProjectModules() {
 
         if (error) throw error;
       }
+
+      // If enabling CRM for the first time, migrate historical data from hotmart_sales
+      if (moduleKey === 'crm' && enabled && !wasEnabled) {
+        const { data: migrationResult, error: migrationError } = await supabase
+          .rpc('migrate_hotmart_to_crm');
+        
+        if (migrationError) {
+          console.error('Error migrating hotmart data to CRM:', migrationError);
+          // Don't throw - module is enabled, migration is best-effort
+        } else {
+          console.log('CRM migration completed:', migrationResult);
+        }
+        
+        return { moduleKey, enabled, migrationResult };
+      }
+
+      return { moduleKey, enabled };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['project-modules', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-ascension-transactions'] });
+      
       const moduleInfo = AVAILABLE_MODULES.find(m => m.key === variables.moduleKey);
-      toast({
-        title: variables.enabled ? 'Módulo ativado' : 'Módulo desativado',
-        description: `${moduleInfo?.name || variables.moduleKey} foi ${variables.enabled ? 'ativado' : 'desativado'} com sucesso.`,
-      });
+      
+      if (variables.moduleKey === 'crm' && variables.enabled && result?.migrationResult) {
+        const migration = result.migrationResult as { contacts_created: number; transactions_created: number }[];
+        const stats = migration[0] || { contacts_created: 0, transactions_created: 0 };
+        toast({
+          title: 'CRM ativado com sucesso',
+          description: `${stats.contacts_created} contatos e ${stats.transactions_created} transações foram migrados do histórico.`,
+        });
+      } else {
+        toast({
+          title: variables.enabled ? 'Módulo ativado' : 'Módulo desativado',
+          description: `${moduleInfo?.name || variables.moduleKey} foi ${variables.enabled ? 'ativado' : 'desativado'} com sucesso.`,
+        });
+      }
     },
     onError: (error: any) => {
       toast({

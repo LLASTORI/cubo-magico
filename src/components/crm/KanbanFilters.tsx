@@ -19,7 +19,8 @@ import {
   CalendarIcon,
   Tag,
   DollarSign,
-  Clock
+  Clock,
+  Plus
 } from 'lucide-react';
 import { format, subDays, isAfter, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -51,6 +52,7 @@ interface KanbanFiltersProps {
   filters: KanbanFilters;
   onFiltersChange: (filters: KanbanFilters) => void;
   onSearchSelect: (contactId: string) => void;
+  onCreateTag?: (tag: string) => void;
 }
 
 export const defaultFilters: KanbanFilters = {
@@ -63,7 +65,7 @@ export const defaultFilters: KanbanFilters = {
   dateTo: null,
 };
 
-export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchSelect }: KanbanFiltersProps) {
+export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchSelect, onCreateTag }: KanbanFiltersProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [dateFromOpen, setDateFromOpen] = useState(false);
@@ -82,7 +84,9 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
   }, [contacts]);
 
   const allTags = useMemo(() => {
-    return Array.from(tagCounts.keys()).sort();
+    return Array.from(tagCounts.entries())
+      .sort((a, b) => b[1] - a[1]) // Sort by count descending
+      .map(([tag]) => tag);
   }, [tagCounts]);
 
   // Filter contacts for search autocomplete
@@ -225,7 +229,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                 className="h-8 text-sm"
               />
               <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-                {allTags.length === 0 ? (
+                {allTags.length === 0 && !tagSearch ? (
                   <span className="text-sm text-muted-foreground">Nenhuma tag disponível</span>
                 ) : (
                   allTags
@@ -242,8 +246,25 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                       </Badge>
                     ))
                 )}
-                {tagSearch && allTags.filter(tag => tag.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
-                  <span className="text-sm text-muted-foreground">Nenhuma tag encontrada</span>
+                {tagSearch && 
+                  allTags.filter(tag => tag.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
+                  <div className="w-full space-y-2">
+                    <span className="text-sm text-muted-foreground block">Nenhuma tag encontrada</span>
+                    {onCreateTag && tagSearch.trim().length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          onCreateTag(tagSearch.trim());
+                          setTagSearch('');
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Criar tag "{tagSearch.trim()}"
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

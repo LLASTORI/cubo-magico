@@ -187,6 +187,67 @@ interface NormalizedPayload {
   interaction_type?: string;
 }
 
+// Extract Meta IDs from UTM fields (same logic as hotmart-api)
+function extractMetaIds(payload: NormalizedPayload): { campaignId: string | null; adsetId: string | null; adId: string | null } {
+  let campaignId: string | null = null;
+  let adsetId: string | null = null;
+  let adId: string | null = null;
+
+  // Try to extract from utm_campaign (often contains campaign ID)
+  if (payload.utm_campaign) {
+    // Pattern: could be just the ID or "campaignname_123456789"
+    const campaignMatch = payload.utm_campaign.match(/(\d{10,})/);
+    if (campaignMatch) {
+      campaignId = campaignMatch[1];
+    }
+  }
+
+  // Try to extract from utm_adset (may contain adset ID)
+  if (payload.utm_adset) {
+    const adsetMatch = payload.utm_adset.match(/(\d{10,})/);
+    if (adsetMatch) {
+      adsetId = adsetMatch[1];
+    }
+  }
+
+  // Try to extract from utm_ad (may contain ad ID)
+  if (payload.utm_ad) {
+    const adMatch = payload.utm_ad.match(/(\d{10,})/);
+    if (adMatch) {
+      adId = adMatch[1];
+    }
+  }
+
+  // Try to extract from utm_content (often contains ad ID or creative ID)
+  if (!adId && payload.utm_content) {
+    const adMatch = payload.utm_content.match(/(\d{10,})/);
+    if (adMatch) {
+      adId = adMatch[1];
+    }
+  }
+
+  // Try to extract from utm_creative (often contains creative/ad ID)
+  if (!adId && payload.utm_creative) {
+    const creativeMatch = payload.utm_creative.match(/(\d{10,})/);
+    if (creativeMatch) {
+      adId = creativeMatch[1];
+    }
+  }
+
+  // For SCK format: source_sck often has multiple IDs separated by special characters
+  // Pattern like: "fb|123456789012345|234567890123456|345678901234567"
+  if (payload.utm_source && payload.utm_source.includes('|')) {
+    const sckParts = payload.utm_source.split('|');
+    const numericIds = sckParts.filter(p => /^\d{10,}$/.test(p));
+    
+    if (numericIds.length >= 1 && !campaignId) campaignId = numericIds[0];
+    if (numericIds.length >= 2 && !adsetId) adsetId = numericIds[1];
+    if (numericIds.length >= 3 && !adId) adId = numericIds[2];
+  }
+
+  return { campaignId, adsetId, adId };
+}
+
 // Normalize field names using aliases and custom mappings
 function normalizePayload(
   body: Record<string, unknown>, 
@@ -386,6 +447,10 @@ serve(async (req) => {
       last_activity_at: now,
     };
 
+    // Extract Meta IDs from UTM data
+    const { campaignId, adsetId, adId } = extractMetaIds(body);
+    console.log('[CRM Webhook] Extracted Meta IDs:', { campaignId, adsetId, adId });
+
     // Only set first_utm_* and first_seen_at for new contacts
     if (isNewContact) {
       contactData.status = 'lead';
@@ -399,6 +464,9 @@ serve(async (req) => {
       contactData.first_utm_creative = body.utm_creative || null;
       contactData.first_utm_placement = body.utm_placement || null;
       contactData.first_page_name = body.page_name || null;
+      contactData.first_meta_campaign_id = campaignId;
+      contactData.first_meta_adset_id = adsetId;
+      contactData.first_meta_ad_id = adId;
       contactData.first_seen_at = now;
       contactData.tags = mergedTags.length > 0 ? mergedTags : null;
     } else {
@@ -449,6 +517,9 @@ serve(async (req) => {
         utm_creative: body.utm_creative || null,
         utm_placement: body.utm_placement || null,
         launch_tag: body.launch_tag || null,
+        meta_campaign_id: campaignId,
+        meta_adset_id: adsetId,
+        meta_ad_id: adId,
         metadata: body.custom_fields || {},
         interacted_at: now,
       };

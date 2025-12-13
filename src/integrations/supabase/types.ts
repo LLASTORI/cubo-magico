@@ -368,6 +368,9 @@ export type Database = {
           interacted_at: string
           interaction_type: string
           launch_tag: string | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
           metadata: Json | null
           page_name: string | null
           page_url: string | null
@@ -390,6 +393,9 @@ export type Database = {
           interacted_at?: string
           interaction_type?: string
           launch_tag?: string | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
           metadata?: Json | null
           page_name?: string | null
           page_url?: string | null
@@ -412,6 +418,9 @@ export type Database = {
           interacted_at?: string
           interaction_type?: string
           launch_tag?: string | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
           metadata?: Json | null
           page_name?: string | null
           page_url?: string | null
@@ -462,6 +471,9 @@ export type Database = {
           custom_fields: Json | null
           document: string | null
           email: string
+          first_meta_ad_id: string | null
+          first_meta_adset_id: string | null
+          first_meta_campaign_id: string | null
           first_page_name: string | null
           first_purchase_at: string | null
           first_seen_at: string
@@ -504,6 +516,9 @@ export type Database = {
           custom_fields?: Json | null
           document?: string | null
           email: string
+          first_meta_ad_id?: string | null
+          first_meta_adset_id?: string | null
+          first_meta_campaign_id?: string | null
           first_page_name?: string | null
           first_purchase_at?: string | null
           first_seen_at?: string
@@ -546,6 +561,9 @@ export type Database = {
           custom_fields?: Json | null
           document?: string | null
           email?: string
+          first_meta_ad_id?: string | null
+          first_meta_adset_id?: string | null
+          first_meta_campaign_id?: string | null
           first_page_name?: string | null
           first_purchase_at?: string | null
           first_seen_at?: string

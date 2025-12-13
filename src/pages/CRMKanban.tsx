@@ -4,27 +4,26 @@ import { AppHeader } from '@/components/AppHeader';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
   Loader2, 
   Lock, 
   Users, 
-  Plus, 
   Settings,
   GripVertical,
   Mail,
   Phone,
-  DollarSign
+  DollarSign,
+  CheckSquare,
+  Square
 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 interface KanbanContact {
   id: string;
@@ -44,6 +43,8 @@ export default function CRMKanban() {
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { stages, isLoading: stagesLoading, createDefaultStages } = usePipelineStages();
   const queryClient = useQueryClient();
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const crmEnabled = isModuleEnabled('crm');
 
@@ -72,6 +73,13 @@ export default function CRMKanban() {
     }
   }, [stagesLoading, stages.length, currentProject?.id, crmEnabled]);
 
+  // Clear selection when exiting selection mode
+  useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedContacts(new Set());
+    }
+  }, [isSelectionMode]);
+
   // Update contact stage
   const updateContactStage = useMutation({
     mutationFn: async ({ contactId, stageId }: { contactId: string; stageId: string | null }) => {
@@ -88,6 +96,10 @@ export default function CRMKanban() {
   });
 
   const handleDragStart = (e: React.DragEvent, contactId: string) => {
+    if (isSelectionMode) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData('contactId', contactId);
   };
 
@@ -113,6 +125,34 @@ export default function CRMKanban() {
 
   const getContactsByStage = (stageId: string | null) => {
     return contacts.filter(c => c.pipeline_stage_id === stageId);
+  };
+
+  const toggleContactSelection = (contactId: string) => {
+    const newSelected = new Set(selectedContacts);
+    if (newSelected.has(contactId)) {
+      newSelected.delete(contactId);
+    } else {
+      newSelected.add(contactId);
+    }
+    setSelectedContacts(newSelected);
+  };
+
+  const toggleSelectAllInStage = (stageId: string | null) => {
+    const stageContacts = getContactsByStage(stageId);
+    const allSelected = stageContacts.every(c => selectedContacts.has(c.id));
+    
+    const newSelected = new Set(selectedContacts);
+    if (allSelected) {
+      stageContacts.forEach(c => newSelected.delete(c.id));
+    } else {
+      stageContacts.forEach(c => newSelected.add(c.id));
+    }
+    setSelectedContacts(newSelected);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedContacts(new Set());
+    setIsSelectionMode(false);
   };
 
   const isLoading = modulesLoading || stagesLoading || contactsLoading;
@@ -174,15 +214,33 @@ export default function CRMKanban() {
     <div className="min-h-screen bg-background">
       <AppHeader pageSubtitle="CRM - Pipeline" />
       
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 py-8 pb-24">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
             <p className="text-muted-foreground">
-              Arraste os leads entre as etapas para atualizar o status
+              {isSelectionMode 
+                ? 'Clique nos cards para selecionar' 
+                : 'Arraste os leads entre as etapas para atualizar o status'}
             </p>
           </div>
           <div className="flex gap-2">
+            <Button 
+              variant={isSelectionMode ? "default" : "outline"} 
+              onClick={() => setIsSelectionMode(!isSelectionMode)}
+            >
+              {isSelectionMode ? (
+                <>
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  Selecionando
+                </>
+              ) : (
+                <>
+                  <Square className="h-4 w-4 mr-2" />
+                  Selecionar
+                </>
+              )}
+            </Button>
             <Button variant="outline" onClick={() => navigate('/crm')}>
               <Users className="h-4 w-4 mr-2" />
               Ver Lista
@@ -212,6 +270,12 @@ export default function CRMKanban() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      {isSelectionMode && (
+                        <Checkbox
+                          checked={unstagedContacts.length > 0 && unstagedContacts.every(c => selectedContacts.has(c.id))}
+                          onCheckedChange={() => toggleSelectAllInStage(null)}
+                        />
+                      )}
                       <div className="w-3 h-3 rounded-full bg-gray-400" />
                       Sem etapa
                     </CardTitle>
@@ -223,8 +287,16 @@ export default function CRMKanban() {
                     <KanbanCard 
                       key={contact.id} 
                       contact={contact}
+                      isSelected={selectedContacts.has(contact.id)}
+                      isSelectionMode={isSelectionMode}
                       onDragStart={handleDragStart}
-                      onClick={() => navigate(`/crm/contact/${contact.id}`)}
+                      onClick={() => {
+                        if (isSelectionMode) {
+                          toggleContactSelection(contact.id);
+                        } else {
+                          navigate(`/crm/contact/${contact.id}`);
+                        }
+                      }}
                       formatCurrency={formatCurrency}
                     />
                   ))}
@@ -253,6 +325,12 @@ export default function CRMKanban() {
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          {isSelectionMode && (
+                            <Checkbox
+                              checked={stageContacts.length > 0 && stageContacts.every(c => selectedContacts.has(c.id))}
+                              onCheckedChange={() => toggleSelectAllInStage(stage.id)}
+                            />
+                          )}
                           <div 
                             className="w-3 h-3 rounded-full" 
                             style={{ backgroundColor: stage.color }}
@@ -272,8 +350,16 @@ export default function CRMKanban() {
                         <KanbanCard 
                           key={contact.id} 
                           contact={contact}
+                          isSelected={selectedContacts.has(contact.id)}
+                          isSelectionMode={isSelectionMode}
                           onDragStart={handleDragStart}
-                          onClick={() => navigate(`/crm/contact/${contact.id}`)}
+                          onClick={() => {
+                            if (isSelectionMode) {
+                              toggleContactSelection(contact.id);
+                            } else {
+                              navigate(`/crm/contact/${contact.id}`);
+                            }
+                          }}
                           formatCurrency={formatCurrency}
                         />
                       ))}
@@ -291,28 +377,48 @@ export default function CRMKanban() {
           <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </main>
+
+      <BulkActionsBar
+        selectedCount={selectedContacts.size}
+        selectedIds={Array.from(selectedContacts)}
+        stages={stages}
+        onClearSelection={handleClearSelection}
+        projectId={currentProject.id}
+      />
     </div>
   );
 }
 
 interface KanbanCardProps {
   contact: KanbanContact;
+  isSelected: boolean;
+  isSelectionMode: boolean;
   onDragStart: (e: React.DragEvent, contactId: string) => void;
   onClick: () => void;
   formatCurrency: (value: number | null) => string;
 }
 
-function KanbanCard({ contact, onDragStart, onClick, formatCurrency }: KanbanCardProps) {
+function KanbanCard({ contact, isSelected, isSelectionMode, onDragStart, onClick, formatCurrency }: KanbanCardProps) {
   return (
     <Card
-      className="cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
-      draggable
+      className={`cursor-pointer hover:shadow-md transition-all ${
+        isSelectionMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+      } ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+      draggable={!isSelectionMode}
       onDragStart={(e) => onDragStart(e, contact.id)}
       onClick={onClick}
     >
       <CardContent className="p-3">
         <div className="flex items-start gap-2">
-          <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          {isSelectionMode ? (
+            <Checkbox 
+              checked={isSelected} 
+              className="mt-0.5 flex-shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          )}
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm truncate">
               {contact.name || contact.email.split('@')[0]}

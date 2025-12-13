@@ -12,6 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Search, 
   Filter, 
@@ -20,7 +30,8 @@ import {
   Tag,
   DollarSign,
   Clock,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { format, subDays, isAfter, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -53,6 +64,7 @@ interface KanbanFiltersProps {
   onFiltersChange: (filters: KanbanFilters) => void;
   onSearchSelect: (contactId: string) => void;
   onCreateTag?: (tag: string) => void;
+  onDeleteTag?: (tag: string) => Promise<void>;
 }
 
 export const defaultFilters: KanbanFilters = {
@@ -65,12 +77,14 @@ export const defaultFilters: KanbanFilters = {
   dateTo: null,
 };
 
-export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchSelect, onCreateTag }: KanbanFiltersProps) {
+export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchSelect, onCreateTag, onDeleteTag }: KanbanFiltersProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [dateFromOpen, setDateFromOpen] = useState(false);
   const [dateToOpen, setDateToOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
+  const [tagToDelete, setTagToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Extract all unique tags from contacts with counts
   const tagCounts = useMemo(() => {
@@ -238,11 +252,20 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                       <Badge
                         key={tag}
                         variant={filters.tags.includes(tag) ? "default" : "outline"}
-                        className="cursor-pointer"
+                        className="cursor-pointer group flex items-center gap-1"
                         onClick={() => handleTagToggle(tag)}
                       >
                         {tag}
-                        <span className="ml-1 opacity-70">({tagCounts.get(tag)})</span>
+                        <span className="opacity-70">({tagCounts.get(tag)})</span>
+                        {onDeleteTag && (
+                          <Trash2
+                            className="h-3 w-3 opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:text-destructive ml-0.5"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTagToDelete(tag);
+                            }}
+                          />
+                        )}
                       </Badge>
                     ))
                 )}
@@ -416,6 +439,41 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
           />
         </Badge>
       )}
+      {/* Delete Tag Confirmation Dialog */}
+      <AlertDialog open={!!tagToDelete} onOpenChange={(open) => !open && setTagToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deletar tag permanentemente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A tag <strong>"{tagToDelete}"</strong> será removida de todos os {tagCounts.get(tagToDelete || '') || 0} contatos que a possuem. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (tagToDelete && onDeleteTag) {
+                  setIsDeleting(true);
+                  try {
+                    await onDeleteTag(tagToDelete);
+                    // Remove from filters if it was selected
+                    if (filters.tags.includes(tagToDelete)) {
+                      onFiltersChange({ ...filters, tags: filters.tags.filter(t => t !== tagToDelete) });
+                    }
+                  } finally {
+                    setIsDeleting(false);
+                    setTagToDelete(null);
+                  }
+                }
+              }}
+            >
+              {isDeleting ? 'Deletando...' : 'Deletar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

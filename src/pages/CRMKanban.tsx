@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface KanbanContact {
   id: string;
@@ -279,6 +280,37 @@ export default function CRMKanban() {
             onCreateTag={(tag) => {
               // Add tag to filter immediately
               setFilters(prev => ({ ...prev, tags: [...prev.tags, tag] }));
+            }}
+            onDeleteTag={async (tag) => {
+              if (!currentProject?.id) return;
+              
+              // Get all contacts that have this tag
+              const contactsWithTag = contacts.filter(c => c.tags?.includes(tag));
+              
+              if (contactsWithTag.length === 0) {
+                toast.success(`Tag "${tag}" deletada`);
+                return;
+              }
+              
+              // Update each contact to remove the tag
+              const updates = contactsWithTag.map(contact => {
+                const newTags = (contact.tags || []).filter(t => t !== tag);
+                return supabase
+                  .from('crm_contacts')
+                  .update({ tags: newTags })
+                  .eq('id', contact.id);
+              });
+              
+              const results = await Promise.all(updates);
+              const errors = results.filter(r => r.error);
+              
+              if (errors.length > 0) {
+                toast.error('Erro ao deletar tag de alguns contatos');
+                console.error(errors);
+              } else {
+                toast.success(`Tag "${tag}" removida de ${contactsWithTag.length} contatos`);
+                queryClient.invalidateQueries({ queryKey: ['crm-kanban-contacts'] });
+              }
             }}
           />
         </div>

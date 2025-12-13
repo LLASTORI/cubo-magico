@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Plus, Trash2, GripVertical, Settings2 } from "lucide-react";
+import { CalendarIcon, Plus, Trash2, GripVertical, Settings2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useLaunchPhases, PHASE_TYPES, LaunchPhase } from "@/hooks/useLaunchPhases";
+import { PhaseCampaignsManager } from "./PhaseCampaignsManager";
 
 interface LaunchPhaseEditorProps {
   projectId: string;
@@ -39,6 +41,7 @@ const getPhaseColor = (phaseType: string) => {
 export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName }: LaunchPhaseEditorProps) => {
   const [showAddPhase, setShowAddPhase] = useState(false);
   const [editingPhase, setEditingPhase] = useState<LaunchPhase | null>(null);
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [newPhase, setNewPhase] = useState({
     phase_type: '',
     name: '',
@@ -49,11 +52,24 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName }: LaunchPha
 
   const { 
     phases, 
+    phaseCampaigns,
     isLoading, 
     createPhase, 
     updatePhase, 
     deletePhase 
   } = useLaunchPhases(projectId, funnelId);
+
+  const togglePhaseExpanded = (phaseId: string) => {
+    setExpandedPhases(prev => {
+      const next = new Set(prev);
+      if (next.has(phaseId)) {
+        next.delete(phaseId);
+      } else {
+        next.add(phaseId);
+      }
+      return next;
+    });
+  };
 
   const handleAddPhase = () => {
     if (!newPhase.phase_type || !newPhase.name) return;
@@ -123,168 +139,202 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName }: LaunchPha
             </p>
           </Card>
         ) : (
-          phases.map((phase, index) => (
-            <Card 
-              key={phase.id} 
-              className={cn(
-                "p-4 transition-all",
-                !phase.is_active && "opacity-50"
-              )}
-            >
-              <div className="flex items-center gap-4">
-                <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
-                
-                <div className="flex-1 grid grid-cols-12 gap-4 items-center">
-                  <div className="col-span-4 flex items-center gap-3">
-                    <Badge className={cn("border", getPhaseColor(phase.phase_type))}>
-                      {PHASE_TYPES.find(t => t.value === phase.phase_type)?.label || phase.phase_type}
-                    </Badge>
-                    <span className="font-medium">{phase.name}</span>
-                  </div>
+          phases.map((phase, index) => {
+            const isExpanded = expandedPhases.has(phase.id);
+            const phaseLinkedCampaigns = phaseCampaigns.filter(pc => pc.phase_id === phase.id);
+            
+            return (
+              <Collapsible
+                key={phase.id}
+                open={isExpanded}
+                onOpenChange={() => togglePhaseExpanded(phase.id)}
+              >
+                <Card 
+                  className={cn(
+                    "transition-all",
+                    !phase.is_active && "opacity-50"
+                  )}
+                >
+                  <CollapsibleTrigger asChild>
+                    <div className="flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/30">
+                      <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
+                      
+                      <div className="flex-1 grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-4 flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <Badge className={cn("border", getPhaseColor(phase.phase_type))}>
+                            {PHASE_TYPES.find(t => t.value === phase.phase_type)?.label || phase.phase_type}
+                          </Badge>
+                          <span className="font-medium">{phase.name}</span>
+                          {phaseLinkedCampaigns.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              {phaseLinkedCampaigns.length} campanha(s)
+                            </Badge>
+                          )}
+                        </div>
 
-                  <div className="col-span-3 text-sm text-muted-foreground">
-                    {phase.start_date && phase.end_date ? (
-                      <>
-                        {format(new Date(phase.start_date), 'dd/MM', { locale: ptBR })} -{' '}
-                        {format(new Date(phase.end_date), 'dd/MM', { locale: ptBR })}
-                      </>
-                    ) : phase.start_date ? (
-                      <>A partir de {format(new Date(phase.start_date), 'dd/MM', { locale: ptBR })}</>
-                    ) : (
-                      <span className="text-muted-foreground/50">Sem datas</span>
-                    )}
-                  </div>
+                        <div className="col-span-3 text-sm text-muted-foreground">
+                          {phase.start_date && phase.end_date ? (
+                            <>
+                              {format(new Date(phase.start_date), 'dd/MM', { locale: ptBR })} -{' '}
+                              {format(new Date(phase.end_date), 'dd/MM', { locale: ptBR })}
+                            </>
+                          ) : phase.start_date ? (
+                            <>A partir de {format(new Date(phase.start_date), 'dd/MM', { locale: ptBR })}</>
+                          ) : (
+                            <span className="text-muted-foreground/50">Sem datas</span>
+                          )}
+                        </div>
 
-                  <div className="col-span-2 text-sm">
-                    <Badge variant="outline" className="text-xs">
-                      {PHASE_TYPES.find(t => t.value === phase.phase_type)?.description || phase.primary_metric}
-                    </Badge>
-                  </div>
+                        <div className="col-span-2 text-sm">
+                          <Badge variant="outline" className="text-xs">
+                            {PHASE_TYPES.find(t => t.value === phase.phase_type)?.description || phase.primary_metric}
+                          </Badge>
+                        </div>
 
-                  <div className="col-span-2 flex items-center gap-2">
-                    <Switch
-                      checked={phase.is_active}
-                      onCheckedChange={(checked) => 
-                        updatePhase.mutate({ id: phase.id, is_active: checked })
-                      }
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {phase.is_active ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </div>
+                        <div className="col-span-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Switch
+                            checked={phase.is_active}
+                            onCheckedChange={(checked) => 
+                              updatePhase.mutate({ id: phase.id, is_active: checked })
+                            }
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {phase.is_active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </div>
 
-                  <div className="col-span-1 flex items-center justify-end gap-1">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8"
-                          onClick={() => setEditingPhase(phase)}
-                        >
-                          <Settings2 className="w-4 h-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Editar Fase</DialogTitle>
-                        </DialogHeader>
-                        {editingPhase && (
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label>Nome</Label>
-                              <Input
-                                value={editingPhase.name}
-                                onChange={(e) => setEditingPhase(prev => 
-                                  prev ? { ...prev, name: e.target.value } : null
-                                )}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label>Data Início</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start">
-                                      <CalendarIcon className="w-4 h-4 mr-2" />
-                                      {editingPhase.start_date 
-                                        ? format(new Date(editingPhase.start_date), 'dd/MM/yyyy', { locale: ptBR })
-                                        : 'Selecionar'
-                                      }
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                      mode="single"
-                                      selected={editingPhase.start_date ? new Date(editingPhase.start_date) : undefined}
-                                      onSelect={(date) => setEditingPhase(prev => 
-                                        prev ? { ...prev, start_date: date ? format(date, 'yyyy-MM-dd') : null } : null
-                                      )}
-                                      locale={ptBR}
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Data Fim</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start">
-                                      <CalendarIcon className="w-4 h-4 mr-2" />
-                                      {editingPhase.end_date 
-                                        ? format(new Date(editingPhase.end_date), 'dd/MM/yyyy', { locale: ptBR })
-                                        : 'Selecionar'
-                                      }
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                      mode="single"
-                                      selected={editingPhase.end_date ? new Date(editingPhase.end_date) : undefined}
-                                      onSelect={(date) => setEditingPhase(prev => 
-                                        prev ? { ...prev, end_date: date ? format(date, 'yyyy-MM-dd') : null } : null
-                                      )}
-                                      locale={ptBR}
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Observações</Label>
-                              <Textarea
-                                value={editingPhase.notes || ''}
-                                onChange={(e) => setEditingPhase(prev => 
-                                  prev ? { ...prev, notes: e.target.value } : null
-                                )}
-                                placeholder="Anotações sobre esta fase..."
-                              />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" onClick={() => setEditingPhase(null)}>
-                                Cancelar
+                        <div className="col-span-1 flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8"
+                                onClick={() => setEditingPhase(phase)}
+                              >
+                                <Settings2 className="w-4 h-4" />
                               </Button>
-                              <Button onClick={handleUpdatePhase}>
-                                Salvar
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </DialogContent>
-                    </Dialog>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => handleDeletePhase(phase.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Editar Fase</DialogTitle>
+                              </DialogHeader>
+                              {editingPhase && (
+                                <div className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Label>Nome</Label>
+                                    <Input
+                                      value={editingPhase.name}
+                                      onChange={(e) => setEditingPhase(prev => 
+                                        prev ? { ...prev, name: e.target.value } : null
+                                      )}
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <Label>Data Início</Label>
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <Button variant="outline" className="w-full justify-start">
+                                            <CalendarIcon className="w-4 h-4 mr-2" />
+                                            {editingPhase.start_date 
+                                              ? format(new Date(editingPhase.start_date), 'dd/MM/yyyy', { locale: ptBR })
+                                              : 'Selecionar'
+                                            }
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                          <Calendar
+                                            mode="single"
+                                            selected={editingPhase.start_date ? new Date(editingPhase.start_date) : undefined}
+                                            onSelect={(date) => setEditingPhase(prev => 
+                                              prev ? { ...prev, start_date: date ? format(date, 'yyyy-MM-dd') : null } : null
+                                            )}
+                                            locale={ptBR}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Data Fim</Label>
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <Button variant="outline" className="w-full justify-start">
+                                            <CalendarIcon className="w-4 h-4 mr-2" />
+                                            {editingPhase.end_date 
+                                              ? format(new Date(editingPhase.end_date), 'dd/MM/yyyy', { locale: ptBR })
+                                              : 'Selecionar'
+                                            }
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                          <Calendar
+                                            mode="single"
+                                            selected={editingPhase.end_date ? new Date(editingPhase.end_date) : undefined}
+                                            onSelect={(date) => setEditingPhase(prev => 
+                                              prev ? { ...prev, end_date: date ? format(date, 'yyyy-MM-dd') : null } : null
+                                            )}
+                                            locale={ptBR}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Observações</Label>
+                                    <Textarea
+                                      value={editingPhase.notes || ''}
+                                      onChange={(e) => setEditingPhase(prev => 
+                                        prev ? { ...prev, notes: e.target.value } : null
+                                      )}
+                                      placeholder="Anotações sobre esta fase..."
+                                    />
+                                  </div>
+                                  <div className="flex justify-end gap-2">
+                                    <Button variant="outline" onClick={() => setEditingPhase(null)}>
+                                      Cancelar
+                                    </Button>
+                                    <Button onClick={handleUpdatePhase}>
+                                      Salvar
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDeletePhase(phase.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent>
+                    <div className="px-4 pb-4 pt-2 border-t border-border/50 ml-12">
+                      <PhaseCampaignsManager
+                        projectId={projectId}
+                        funnelId={funnelId}
+                        phaseId={phase.id}
+                        phaseName={phase.name}
+                        phaseCampaigns={phaseCampaigns}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            );
+          })
         )}
       </div>
 

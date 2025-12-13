@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { TrendingUp, TrendingDown, DollarSign, Target, ShoppingCart, BarChart3, GitCompare, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { MonthlyRevenueDetailDialog } from "@/components/analise/MonthlyRevenueDetailDialog";
 import {
   ChartContainer,
   ChartTooltip,
@@ -66,9 +67,12 @@ interface MonthlyTableProps {
   };
   title: string;
   showAgencyResult?: boolean;
+  year: number;
+  projectId: string;
+  onRevenueClick?: (month: string, monthLabel: string) => void;
 }
 
-const MonthlyTable = ({ data, totals, title, showAgencyResult }: MonthlyTableProps) => {
+const MonthlyTable = ({ data, totals, title, showAgencyResult, year, projectId, onRevenueClick }: MonthlyTableProps) => {
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-3">
@@ -100,7 +104,15 @@ const MonthlyTable = ({ data, totals, title, showAgencyResult }: MonthlyTablePro
                 >
                   <TableCell className="font-medium capitalize">{row.monthLabel}</TableCell>
                   <TableCell className="text-right text-blue-400">{formatCurrency(row.investment)}</TableCell>
-                  <TableCell className="text-right text-orange-400">{formatCurrency(row.revenue)}</TableCell>
+                  <TableCell className="text-right">
+                    <button
+                      onClick={() => onRevenueClick?.(row.month, row.monthLabel)}
+                      className="text-orange-400 hover:text-orange-300 hover:underline cursor-pointer transition-colors font-medium"
+                      disabled={row.revenue === 0}
+                    >
+                      {formatCurrency(row.revenue)}
+                    </button>
+                  </TableCell>
                   <TableCell className={`text-right ${row.grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {formatCurrency(row.grossProfit)}
                   </TableCell>
@@ -534,6 +546,17 @@ const AnaliseMensal = () => {
   const [selectedFunnel, setSelectedFunnel] = useState<string>('all');
   const [compareMode, setCompareMode] = useState(false);
   const [comparisonYear, setComparisonYear] = useState<number>(new Date().getFullYear() - 1);
+  
+  // Dialog state for revenue detail
+  const [revenueDetailDialog, setRevenueDetailDialog] = useState<{
+    open: boolean;
+    month: string;
+    monthLabel: string;
+  }>({ open: false, month: '', monthLabel: '' });
+
+  const handleRevenueClick = (month: string, monthLabel: string) => {
+    setRevenueDetailDialog({ open: true, month, monthLabel });
+  };
 
   const { 
     generalMonthlyData, 
@@ -747,6 +770,9 @@ const AnaliseMensal = () => {
                   data={displayData} 
                   totals={displayTotals} 
                   title={selectedFunnel === 'all' ? 'Índices Gerais' : selectedFunnelData?.funnelName || 'Índices'}
+                  year={selectedYear}
+                  projectId={currentProject.id}
+                  onRevenueClick={handleRevenueClick}
                 />
               </div>
               <div className="xl:col-span-2 space-y-6">
@@ -785,6 +811,9 @@ const AnaliseMensal = () => {
                           data={funnel.months} 
                           totals={funnel.totals} 
                           title={funnel.funnelName}
+                          year={selectedYear}
+                          projectId={currentProject.id}
+                          onRevenueClick={handleRevenueClick}
                         />
                         <MonthlyChart 
                           data={funnel.months} 
@@ -799,6 +828,16 @@ const AnaliseMensal = () => {
           </>
         )}
       </main>
+
+      {/* Revenue Detail Dialog */}
+      <MonthlyRevenueDetailDialog
+        open={revenueDetailDialog.open}
+        onOpenChange={(open) => setRevenueDetailDialog(prev => ({ ...prev, open }))}
+        projectId={currentProject.id}
+        month={revenueDetailDialog.month}
+        monthLabel={revenueDetailDialog.monthLabel}
+        year={selectedYear}
+      />
     </div>
   );
 };

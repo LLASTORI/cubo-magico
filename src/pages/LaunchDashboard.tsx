@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { 
   RefreshCw, CalendarIcon, Rocket, TrendingUp, DollarSign, 
-  ShoppingCart, Target, Search, ChevronDown, ChevronUp
+  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProject } from "@/contexts/ProjectContext";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
+import { LaunchConfigDialog } from "@/components/launch/LaunchConfigDialog";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
@@ -322,6 +323,7 @@ const LaunchDashboard = () => {
                     <TableHead className="text-right">ROAS</TableHead>
                     <TableHead className="text-right">Lucro</TableHead>
                     <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -396,12 +398,31 @@ const LaunchDashboard = () => {
                               {status.label}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            <LaunchConfigDialog
+                              funnel={funnels.find(f => f.id === launch.funnelId) || { 
+                                id: launch.funnelId, 
+                                name: launch.funnelName, 
+                                project_id: currentProject?.id || null 
+                              }}
+                              trigger={
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Settings className="w-4 h-4" />
+                                </Button>
+                              }
+                            />
+                          </TableCell>
                         </TableRow>
                         
                         {/* Expanded Details */}
                         {isExpanded && launch.positions.length > 0 && (
                           <TableRow className="bg-muted/30">
-                            <TableCell colSpan={9} className="p-4">
+                            <TableCell colSpan={10} className="p-4">
                               <div className="space-y-4">
                                 <h4 className="text-sm font-semibold text-foreground">
                                   Detalhamento por Posição

@@ -902,7 +902,10 @@ export type Database = {
           campaign_name_pattern: string | null
           created_at: string
           funnel_type: string
+          has_fixed_dates: boolean | null
           id: string
+          launch_end_date: string | null
+          launch_start_date: string | null
           name: string
           project_id: string | null
           roas_target: number | null
@@ -912,7 +915,10 @@ export type Database = {
           campaign_name_pattern?: string | null
           created_at?: string
           funnel_type?: string
+          has_fixed_dates?: boolean | null
           id?: string
+          launch_end_date?: string | null
+          launch_start_date?: string | null
           name: string
           project_id?: string | null
           roas_target?: number | null
@@ -922,7 +928,10 @@ export type Database = {
           campaign_name_pattern?: string | null
           created_at?: string
           funnel_type?: string
+          has_fixed_dates?: boolean | null
           id?: string
+          launch_end_date?: string | null
+          launch_start_date?: string | null
           name?: string
           project_id?: string | null
           roas_target?: number | null
@@ -1152,6 +1161,118 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "hotmart_sales_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      launch_phases: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          funnel_id: string
+          id: string
+          is_active: boolean | null
+          name: string
+          notes: string | null
+          phase_order: number
+          phase_type: string
+          primary_metric: string
+          project_id: string
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          funnel_id: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          notes?: string | null
+          phase_order?: number
+          phase_type: string
+          primary_metric?: string
+          project_id: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          funnel_id?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          notes?: string | null
+          phase_order?: number
+          phase_type?: string
+          primary_metric?: string
+          project_id?: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "launch_phases_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "launch_phases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      launch_products: {
+        Row: {
+          created_at: string
+          funnel_id: string
+          id: string
+          offer_mapping_id: string
+          product_type: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          funnel_id: string
+          id?: string
+          offer_mapping_id: string
+          product_type?: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          funnel_id?: string
+          id?: string
+          offer_mapping_id?: string
+          product_type?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "launch_products_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "launch_products_offer_mapping_id_fkey"
+            columns: ["offer_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "offer_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "launch_products_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1611,6 +1732,45 @@ export type Database = {
           },
           {
             foreignKeyName: "offer_mappings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_campaigns: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          phase_id: string
+          project_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          phase_id: string
+          project_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          phase_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_campaigns_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "launch_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_campaigns_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

@@ -261,7 +261,7 @@ export default function CRMRecovery() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/crm')}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
@@ -274,27 +274,32 @@ export default function CRMRecovery() {
               </p>
             </div>
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => refetch()}
-                  disabled={isLoading || isFetching}
-                >
-                  <RefreshCcw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                  Atualizar
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs">
-                <p className="text-sm">
-                  Recarrega os dados do CRM. Para sincronizar novas vendas da Hotmart, use "Sincronizar Tudo" em Integrações.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => refetch()}
+                    disabled={isLoading || isFetching}
+                  >
+                    <RefreshCcw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                    Atualizar
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p className="text-sm">
+                    Recarrega os dados do CRM. Para sincronizar novas vendas da Hotmart, use "Sincronizar Tudo" em Integrações.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button className="gap-2" onClick={() => navigate('/crm/recovery/kanban')}>
+              Kanban de Recuperação
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (

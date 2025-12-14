@@ -497,6 +497,9 @@ export type Database = {
           phone_ddd: string | null
           pipeline_stage_id: string | null
           project_id: string
+          recovery_stage_id: string | null
+          recovery_started_at: string | null
+          recovery_updated_at: string | null
           source: string
           state: string | null
           status: string
@@ -542,6 +545,9 @@ export type Database = {
           phone_ddd?: string | null
           pipeline_stage_id?: string | null
           project_id: string
+          recovery_stage_id?: string | null
+          recovery_started_at?: string | null
+          recovery_updated_at?: string | null
           source?: string
           state?: string | null
           status?: string
@@ -587,6 +593,9 @@ export type Database = {
           phone_ddd?: string | null
           pipeline_stage_id?: string | null
           project_id?: string
+          recovery_stage_id?: string | null
+          recovery_started_at?: string | null
+          recovery_updated_at?: string | null
           source?: string
           state?: string | null
           status?: string
@@ -608,6 +617,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contacts_recovery_stage_id_fkey"
+            columns: ["recovery_stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_recovery_stages"
             referencedColumns: ["id"]
           },
         ]
@@ -652,6 +668,126 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_pipeline_stages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_recovery_activities: {
+        Row: {
+          channel: string
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          delivered_at: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          project_id: string
+          read_at: string | null
+          replied_at: string | null
+          sent_at: string | null
+          stage_id: string | null
+          status: string
+        }
+        Insert: {
+          channel?: string
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          project_id: string
+          read_at?: string | null
+          replied_at?: string | null
+          sent_at?: string | null
+          stage_id?: string | null
+          status?: string
+        }
+        Update: {
+          channel?: string
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          project_id?: string
+          read_at?: string | null
+          replied_at?: string | null
+          sent_at?: string | null
+          stage_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_recovery_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_recovery_activities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_recovery_activities_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_recovery_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_recovery_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_initial: boolean
+          is_lost: boolean
+          is_recovered: boolean
+          name: string
+          position: number
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_initial?: boolean
+          is_lost?: boolean
+          is_recovered?: boolean
+          name: string
+          position?: number
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_initial?: boolean
+          is_lost?: boolean
+          is_recovered?: boolean
+          name?: string
+          position?: number
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_recovery_stages_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -2276,6 +2412,10 @@ export type Database = {
       count_project_members: { Args: { _project_id: string }; Returns: number }
       count_user_projects: { Args: { _user_id: string }; Returns: number }
       create_default_pipeline_stages: {
+        Args: { _project_id: string }
+        Returns: undefined
+      }
+      create_default_recovery_stages: {
         Args: { _project_id: string }
         Returns: undefined
       }

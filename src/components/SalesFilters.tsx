@@ -87,15 +87,22 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
   const displayProducts = availableProducts.length > 0 ? availableProducts : mappedProducts;
   const displayOffers = availableOffers.length > 0 ? availableOffers : mappedOffers;
 
-  // Convert to MultiSelect options
+  // Convert to MultiSelect options - all statuses from Hotmart
   const statusOptions: MultiSelectOption[] = [
-    { value: "approved", label: "Aprovado" },
-    { value: "complete", label: "Completo" },
-    { value: "pending", label: "Pendente" },
-    { value: "refunded", label: "Reembolsado" },
-    { value: "cancelled", label: "Cancelado" },
-    { value: "chargeback", label: "Chargeback" },
-    { value: "blocked", label: "Bloqueado" },
+    { value: "approved", label: "Aprovada", description: "Pagamento confirmado e processado com sucesso" },
+    { value: "complete", label: "Completa", description: "Transação finalizada e entregue" },
+    { value: "pending", label: "Pendente", description: "Aguardando processamento do pagamento" },
+    { value: "waiting_payment", label: "Aguardando Pagamento", description: "Boleto ou PIX gerado, aguardando pagamento" },
+    { value: "billet_printed", label: "Boleto Gerado", description: "Boleto emitido e disponível para pagamento" },
+    { value: "started", label: "Iniciada", description: "Checkout iniciado pelo cliente" },
+    { value: "under_analysis", label: "Em Análise", description: "Pagamento em análise antifraude" },
+    { value: "refunded", label: "Reembolsada", description: "Valor devolvido ao cliente" },
+    { value: "cancelled", label: "Cancelada", description: "Transação cancelada antes da conclusão" },
+    { value: "chargeback", label: "Chargeback", description: "Contestação de cobrança pelo cliente" },
+    { value: "expired", label: "Expirada", description: "Prazo de pagamento vencido" },
+    { value: "overdue", label: "Vencida", description: "Pagamento não realizado no prazo" },
+    { value: "dispute", label: "Reclamada", description: "Cliente abriu disputa sobre a compra" },
+    { value: "blocked", label: "Bloqueada", description: "Transação bloqueada por segurança" },
   ];
 
   const funilOptions: MultiSelectOption[] = funis.map(funil => ({

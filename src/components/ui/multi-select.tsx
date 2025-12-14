@@ -20,6 +20,7 @@ import {
 export interface MultiSelectOption {
   value: string;
   label: string;
+  description?: string;
 }
 
 interface MultiSelectProps {
@@ -134,16 +135,25 @@ export function MultiSelect({
                   key={option.value}
                   value={option.value}
                   onSelect={() => handleSelect(option.value)}
+                  title={option.description}
+                  className="flex flex-col items-start gap-0.5"
                 >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      selected.includes(option.value)
-                        ? "opacity-100"
-                        : "opacity-0"
-                    )}
-                  />
-                  {option.label}
+                  <div className="flex items-center w-full">
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4 shrink-0",
+                        selected.includes(option.value)
+                          ? "opacity-100"
+                          : "opacity-0"
+                      )}
+                    />
+                    <span>{option.label}</span>
+                  </div>
+                  {option.description && (
+                    <span className="text-xs text-muted-foreground ml-6">
+                      {option.description}
+                    </span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>

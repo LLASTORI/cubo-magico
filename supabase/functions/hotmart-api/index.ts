@@ -347,12 +347,27 @@ async function fetchAllSales(
   return allSales;
 }
 
+// All statuses to fetch from Hotmart API
+const ALL_TRANSACTION_STATUSES = [
+  'APPROVED',      // Approved
+  'COMPLETE',      // Complete  
+  'CANCELLED',     // Cancelled
+  'REFUNDED',      // Refunded
+  'CHARGEBACK',    // Chargeback
+  'DISPUTE',       // Dispute
+  'EXPIRED',       // Expired (boleto/PIX not paid)
+  'OVERDUE',       // Overdue payment
+  'BLOCKED',       // Blocked transaction
+];
+
 // Sync sales to database - OPTIMIZED with batch upsert
+// Now fetches ALL statuses to ensure complete data
 async function syncSales(
   projectId: string,
   startDate: number,
   endDate: number,
-  status?: string
+  status?: string,
+  fetchAllStatuses: boolean = true
 ): Promise<{ synced: number; updated: number; errors: number; categoryStats: Record<string, number> }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -362,14 +377,43 @@ async function syncSales(
   const credentials = await getProjectCredentials(projectId);
   const token = await getHotmartToken(credentials);
   
-  // Fetch all sales from Hotmart
+  // Fetch sales from Hotmart
   console.log(`Syncing sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`);
-  const sales = await fetchAllSales(token, startDate, endDate, status);
-  console.log(`Total sales fetched: ${sales.length}`);
   
-  if (sales.length === 0) {
+  let allSales: HotmartSale[] = [];
+  
+  // If a specific status is requested OR we don't want to fetch all, just fetch that one
+  if (status || !fetchAllStatuses) {
+    allSales = await fetchAllSales(token, startDate, endDate, status);
+    console.log(`Sales fetched for status ${status || 'all'}: ${allSales.length}`);
+  } else {
+    // Fetch ALL statuses separately to ensure we get cancelled/chargeback/refunded
+    console.log('Fetching sales for all statuses...');
+    
+    for (const txStatus of ALL_TRANSACTION_STATUSES) {
+      try {
+        console.log(`  Fetching status: ${txStatus}...`);
+        const salesForStatus = await fetchAllSales(token, startDate, endDate, txStatus);
+        console.log(`    Found ${salesForStatus.length} sales with status ${txStatus}`);
+        allSales.push(...salesForStatus);
+      } catch (statusError) {
+        console.error(`  Error fetching status ${txStatus}:`, statusError);
+        // Continue with other statuses
+      }
+      
+      // Small delay between status calls to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    console.log(`Total sales fetched across all statuses: ${allSales.length}`);
+  }
+  
+  if (allSales.length === 0) {
     return { synced: 0, updated: 0, errors: 0, categoryStats: {} };
   }
+  
+  // Use allSales instead of sales
+  const sales = allSales;
   
   // Get offer mappings for attribution (one query)
   const { data: offerMappings } = await supabase

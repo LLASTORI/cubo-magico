@@ -31,6 +31,8 @@ import CRMPipelineSettings from "./pages/CRMPipelineSettings";
 import CRMActivitiesDashboard from "./pages/CRMActivitiesDashboard";
 import CRMCadences from "./pages/CRMCadences";
 import CRMRecovery from "./pages/CRMRecovery";
+import CRMRecoveryKanban from "./pages/CRMRecoveryKanban";
+import CRMRecoverySettings from "./pages/CRMRecoverySettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -152,6 +154,16 @@ const App = () => (
                 <Route path="/crm/recovery" element={
                   <ProtectedRoute>
                     <CRMRecovery />
+                  </ProtectedRoute>
+                } />
+                <Route path="/crm/recovery/kanban" element={
+                  <ProtectedRoute>
+                    <CRMRecoveryKanban />
+                  </ProtectedRoute>
+                } />
+                <Route path="/crm/recovery/settings" element={
+                  <ProtectedRoute>
+                    <CRMRecoverySettings />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

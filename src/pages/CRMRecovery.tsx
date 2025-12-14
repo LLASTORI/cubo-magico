@@ -44,20 +44,28 @@ interface RecoveryContact {
   first_purchase_at: string | null;
 }
 
-const RECOVERY_TAGS = ['Cancelado', 'Chargeback', 'Reembolsado'];
+const RECOVERY_STATUS_MAP = {
+  CANCELLED: 'Cancelado',
+  CHARGEBACK: 'Chargeback',
+  REFUNDED: 'Reembolsado',
+} as const;
 
-const TAG_CONFIG = {
-  'Cancelado': { 
+const RECOVERY_TAGS = Object.values(RECOVERY_STATUS_MAP);
+
+type RecoveryTag = (typeof RECOVERY_TAGS)[number];
+
+const TAG_CONFIG: Record<RecoveryTag, { icon: typeof AlertTriangle; color: string; description: string }> = {
+  Cancelado: { 
     icon: XCircle, 
     color: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
     description: 'Clientes que cancelaram assinaturas ou compras'
   },
-  'Chargeback': { 
+  Chargeback: { 
     icon: AlertTriangle, 
     color: 'bg-red-500/10 text-red-500 border-red-500/20',
     description: 'Clientes que solicitaram chargeback'
   },
-  'Reembolsado': { 
+  Reembolsado: { 
     icon: RotateCcw, 
     color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
     description: 'Clientes que pediram reembolso'
@@ -71,21 +79,65 @@ export default function CRMRecovery() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all');
 
-  // Fetch contacts with recovery tags
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
+  // Buscar contatos com base no status das transações (Cancelado, Chargeback, Reembolsado)
+  const { data: contacts = [], isLoading: contactsLoading, isFetching, refetch } = useQuery({
     queryKey: ['crm-recovery-contacts', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return [];
       
-      const { data, error } = await supabase
-        .from('crm_contacts')
-        .select('id, name, email, phone, tags, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
-        .eq('project_id', currentProject.id)
-        .overlaps('tags', RECOVERY_TAGS)
-        .order('total_revenue', { ascending: false, nullsFirst: false });
+      const recoveryStatuses = Object.keys(RECOVERY_STATUS_MAP);
       
-      if (error) throw error;
-      return data as RecoveryContact[];
+      // 1) Buscar transações de recuperação
+      const { data: transactions, error: txError } = await supabase
+        .from('crm_transactions')
+        .select('contact_id, status, transaction_date')
+        .eq('project_id', currentProject.id)
+        .in('status', recoveryStatuses);
+      
+      if (txError) throw txError;
+      if (!transactions || transactions.length === 0) return [];
+      
+      // 2) Mapear contatos envolvidos e suas tags de recuperação
+      const contactMap = new Map<string, { tags: Set<RecoveryTag>; lastTxAt: string | null }>();
+      
+      for (const tx of transactions) {
+        const tagLabel = RECOVERY_STATUS_MAP[tx.status as keyof typeof RECOVERY_STATUS_MAP];
+        if (!tagLabel) continue;
+        
+        const entry = contactMap.get(tx.contact_id) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
+        entry.tags.add(tagLabel as RecoveryTag);
+        if (!entry.lastTxAt || (tx.transaction_date && tx.transaction_date > entry.lastTxAt)) {
+          entry.lastTxAt = tx.transaction_date;
+        }
+        contactMap.set(tx.contact_id, entry);
+      }
+      
+      const contactIds = Array.from(contactMap.keys());
+      if (contactIds.length === 0) return [];
+      
+      // 3) Buscar dados dos contatos
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('crm_contacts')
+        .select('id, name, email, phone, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
+        .eq('project_id', currentProject.id)
+        .in('id', contactIds);
+      
+      if (contactsError) throw contactsError;
+      if (!contactsData) return [];
+      
+      const contactsWithTags: RecoveryContact[] = contactsData.map((c) => {
+        const meta = contactMap.get(c.id);
+        return {
+          ...c,
+          tags: meta ? Array.from(meta.tags) : [],
+          last_activity_at: meta?.lastTxAt || c.last_activity_at,
+        };
+      });
+      
+      // Ordenar por maior receita histórica
+      contactsWithTags.sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
+      
+      return contactsWithTags;
     },
     enabled: !!currentProject?.id,
   });
@@ -169,6 +221,16 @@ export default function CRMRecovery() {
               </p>
             </div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => refetch()}
+            disabled={isLoading || isFetching}
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Atualizar
+          </Button>
         </div>
 
         {isLoading ? (
@@ -314,9 +376,11 @@ export default function CRMRecovery() {
                                     {contact.name || contact.email.split('@')[0]}
                                   </h3>
                                   <div className="flex gap-1">
-                                    {contact.tags?.filter(t => RECOVERY_TAGS.includes(t)).map(tag => {
-                                      const config = TAG_CONFIG[tag as keyof typeof TAG_CONFIG];
-                                      const Icon = config?.icon || XCircle;
+                                    {contact.tags
+                                      ?.filter((t): t is RecoveryTag => RECOVERY_TAGS.includes(t as RecoveryTag))
+                                      .map((tag) => {
+                                        const config = TAG_CONFIG[tag];
+                                        const Icon = config?.icon || XCircle;
                                       return (
                                         <Badge 
                                           key={tag} 

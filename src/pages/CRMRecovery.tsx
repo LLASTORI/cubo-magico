@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Loader2, 
   Lock, 
@@ -24,11 +25,12 @@ import {
   Calendar,
   TrendingDown,
   ArrowLeft,
-  ExternalLink
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface RecoveryContact {
@@ -42,6 +44,7 @@ interface RecoveryContact {
   last_activity_at: string;
   last_purchase_at: string | null;
   first_purchase_at: string | null;
+  last_recovery_date: string | null;
 }
 
 const RECOVERY_STATUS_MAP = {
@@ -78,29 +81,58 @@ export default function CRMRecovery() {
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all');
+  
+  // Date filter state - default to last 30 days
+  const [startDate, setStartDate] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   // Buscar contatos com base no status das transações (Cancelado, Chargeback, Reembolsado)
   const { data: contacts = [], isLoading: contactsLoading, isFetching, refetch } = useQuery({
-    queryKey: ['crm-recovery-contacts', currentProject?.id],
+    queryKey: ['crm-recovery-contacts', currentProject?.id, startDate, endDate],
     queryFn: async () => {
       if (!currentProject?.id) return [];
       
       const recoveryStatuses = Object.keys(RECOVERY_STATUS_MAP);
       
-      // 1) Buscar transações de recuperação
-      const { data: transactions, error: txError } = await supabase
-        .from('crm_transactions')
-        .select('contact_id, status, transaction_date')
-        .eq('project_id', currentProject.id)
-        .in('status', recoveryStatuses);
+      // Parse dates for filtering
+      const startDateTime = startOfDay(new Date(startDate)).toISOString();
+      const endDateTime = endOfDay(new Date(endDate)).toISOString();
       
-      if (txError) throw txError;
-      if (!transactions || transactions.length === 0) return [];
+      // 1) Buscar transações de recuperação NO PERÍODO SELECIONADO
+      // Fetch in batches to avoid the 1000 row limit
+      let allTransactions: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data: transactions, error: txError } = await supabase
+          .from('crm_transactions')
+          .select('contact_id, status, transaction_date')
+          .eq('project_id', currentProject.id)
+          .in('status', recoveryStatuses)
+          .gte('transaction_date', startDateTime)
+          .lte('transaction_date', endDateTime)
+          .order('transaction_date', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (txError) throw txError;
+        
+        if (transactions && transactions.length > 0) {
+          allTransactions = [...allTransactions, ...transactions];
+          hasMore = transactions.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      if (allTransactions.length === 0) return [];
       
       // 2) Mapear contatos envolvidos e suas tags de recuperação
       const contactMap = new Map<string, { tags: Set<RecoveryTag>; lastTxAt: string | null }>();
       
-      for (const tx of transactions) {
+      for (const tx of allTransactions) {
         const tagLabel = RECOVERY_STATUS_MAP[tx.status as keyof typeof RECOVERY_STATUS_MAP];
         if (!tagLabel) continue;
         
@@ -115,27 +147,42 @@ export default function CRMRecovery() {
       const contactIds = Array.from(contactMap.keys());
       if (contactIds.length === 0) return [];
       
-      // 3) Buscar dados dos contatos
-      const { data: contactsData, error: contactsError } = await supabase
-        .from('crm_contacts')
-        .select('id, name, email, phone, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
-        .eq('project_id', currentProject.id)
-        .in('id', contactIds);
+      // 3) Buscar dados dos contatos - also in batches
+      let allContactsData: any[] = [];
+      const contactBatchSize = 100; // Supabase IN clause limit
       
-      if (contactsError) throw contactsError;
-      if (!contactsData) return [];
+      for (let i = 0; i < contactIds.length; i += contactBatchSize) {
+        const batchIds = contactIds.slice(i, i + contactBatchSize);
+        const { data: contactsData, error: contactsError } = await supabase
+          .from('crm_contacts')
+          .select('id, name, email, phone, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
+          .eq('project_id', currentProject.id)
+          .in('id', batchIds);
+        
+        if (contactsError) throw contactsError;
+        if (contactsData) {
+          allContactsData = [...allContactsData, ...contactsData];
+        }
+      }
       
-      const contactsWithTags: RecoveryContact[] = contactsData.map((c) => {
+      if (allContactsData.length === 0) return [];
+      
+      const contactsWithTags: RecoveryContact[] = allContactsData.map((c) => {
         const meta = contactMap.get(c.id);
         return {
           ...c,
           tags: meta ? Array.from(meta.tags) : [],
-          last_activity_at: meta?.lastTxAt || c.last_activity_at,
+          last_activity_at: c.last_activity_at,
+          last_recovery_date: meta?.lastTxAt || null,
         };
       });
       
-      // Ordenar por maior receita histórica
-      contactsWithTags.sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
+      // Ordenar por data mais recente da transação de recuperação
+      contactsWithTags.sort((a, b) => {
+        const dateA = a.last_recovery_date ? new Date(a.last_recovery_date).getTime() : 0;
+        const dateB = b.last_recovery_date ? new Date(b.last_recovery_date).getTime() : 0;
+        return dateB - dateA;
+      });
       
       return contactsWithTags;
     },
@@ -176,6 +223,12 @@ export default function CRMRecovery() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  // Quick date filters
+  const handleQuickFilter = (days: number) => {
+    setStartDate(format(subDays(new Date(), days), 'yyyy-MM-dd'));
+    setEndDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
   const isLoading = modulesLoading || contactsLoading;
@@ -221,16 +274,27 @@ export default function CRMRecovery() {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => refetch()}
-            disabled={isLoading || isFetching}
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Atualizar
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => refetch()}
+                  disabled={isLoading || isFetching}
+                >
+                  <RefreshCcw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="text-sm">
+                  Recarrega os dados do CRM. Para sincronizar novas vendas da Hotmart, use "Sincronizar Tudo" em Integrações.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {isLoading ? (
@@ -239,6 +303,51 @@ export default function CRMRecovery() {
           </div>
         ) : (
           <>
+            {/* Date Filters */}
+            <Card className="mb-6">
+              <CardContent className="pt-6">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Período:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-40"
+                    />
+                    <span className="text-muted-foreground">até</span>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-40"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleQuickFilter(7)}>
+                      7 dias
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickFilter(30)}>
+                      30 dias
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickFilter(90)}>
+                      90 dias
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickFilter(365)}>
+                      1 ano
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Info className="h-3 w-3" />
+                    <span>Filtra pela data da transação de cancelamento/reembolso/chargeback</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               <Card>
@@ -263,7 +372,7 @@ export default function CRMRecovery() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold">{formatCurrency(stats.totalRevenueLost)}</p>
-                      <p className="text-sm text-muted-foreground">Receita em risco</p>
+                      <p className="text-sm text-muted-foreground">Receita histórica</p>
                     </div>
                   </div>
                 </CardContent>
@@ -355,12 +464,15 @@ export default function CRMRecovery() {
                       <p className="text-muted-foreground">
                         {search 
                           ? 'Nenhum resultado encontrado para sua busca.'
-                          : 'Não há clientes com tags de recuperação nesta categoria.'}
+                          : 'Não há clientes com transações de recuperação no período selecionado.'}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Tente ampliar o período de datas ou sincronize as vendas em Integrações.
                       </p>
                     </CardContent>
                   </Card>
                 ) : (
-                  <ScrollArea className="h-[calc(100vh-450px)]">
+                  <ScrollArea className="h-[calc(100vh-550px)]">
                     <div className="grid gap-3">
                       {filteredContacts.map((contact) => (
                         <Card 
@@ -423,13 +535,13 @@ export default function CRMRecovery() {
                                 <div className="text-right">
                                   <div className="flex items-center gap-1 text-muted-foreground">
                                     <Calendar className="h-3 w-3" />
-                                    Última atividade
+                                    Data da perda
                                   </div>
                                   <p className="font-medium">
-                                    {formatDistanceToNow(new Date(contact.last_activity_at), { 
-                                      addSuffix: true, 
-                                      locale: ptBR 
-                                    })}
+                                    {contact.last_recovery_date 
+                                      ? format(new Date(contact.last_recovery_date), 'dd/MM/yyyy', { locale: ptBR })
+                                      : '-'
+                                    }
                                   </p>
                                 </div>
                                 

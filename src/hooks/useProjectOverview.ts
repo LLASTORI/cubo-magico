@@ -41,22 +41,56 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const useProjectOverview = ({ projectId, startDate, endDate }: UseProjectOverviewProps) => {
-  // Fetch sales data
+  // Fetch sales data with proper timezone handling (Brazil UTC-3)
   const { data: sales, isLoading: salesLoading } = useQuery({
     queryKey: ['project-overview-sales', projectId, startDate, endDate],
     queryFn: async () => {
       if (!projectId) return [];
       
-      const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('*')
-        .eq('project_id', projectId)
-        .gte('sale_date', `${startDate}T00:00:00`)
-        .lte('sale_date', `${endDate}T23:59:59`)
-        .in('status', ['APPROVED', 'COMPLETE', 'approved', 'complete']);
+      // IMPORTANT: Sales are stored in UTC. To filter by Brazil timezone (UTC-3),
+      // we need to adjust the timestamps. When user selects a date in Brazil:
+      // - Start: YYYY-MM-DD 00:00:00 Brazil = YYYY-MM-DD 03:00:00 UTC
+      // - End: YYYY-MM-DD 23:59:59 Brazil = next day 02:59:59 UTC
+      const startTimestamp = `${startDate}T03:00:00.000Z`; // 00:00 Brazil = 03:00 UTC
       
-      if (error) throw error;
-      return data || [];
+      // Adjust end date to next day for the UTC conversion
+      const endDateObj = new Date(endDate);
+      endDateObj.setDate(endDateObj.getDate() + 1);
+      const adjustedEndDate = endDateObj.toISOString().split('T')[0];
+      const adjustedEndTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
+      
+      console.log(`[ProjectOverview] Sales query: Brazil ${startDate} to ${endDate} => UTC ${startTimestamp} to ${adjustedEndTimestamp}`);
+      
+      // Fetch ALL sales with pagination
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let page = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('hotmart_sales')
+          .select('*')
+          .eq('project_id', projectId)
+          .gte('sale_date', startTimestamp)
+          .lte('sale_date', adjustedEndTimestamp)
+          .in('status', ['APPROVED', 'COMPLETE', 'approved', 'complete'])
+          .order('transaction_id', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[ProjectOverview] Sales loaded: ${allData.length}, total revenue: R$${allData.reduce((s: number, sale: any) => s + (sale.total_price_brl || sale.total_price || 0), 0).toFixed(2)}`);
+      return allData;
     },
     enabled: !!projectId,
     staleTime: 0,

@@ -2438,6 +2438,12 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      migrate_auto_recoveries: {
+        Args: never
+        Returns: {
+          contacts_recovered: number
+        }[]
+      }
       migrate_hotmart_to_crm: {
         Args: never
         Returns: {

@@ -265,16 +265,39 @@ export default function CRMRecoveryKanban() {
   // Move contact to stage mutation
   const moveContact = useMutation({
     mutationFn: async ({ contactId, stageId }: { contactId: string; stageId: string | null }) => {
+      // Check if target stage is "Recuperado" (is_recovered = true)
+      const targetStage = stages.find(s => s.id === stageId);
+      const isRecoveredStage = targetStage?.is_recovered === true;
+      
+      // Get current contact data to update tags
+      const { data: currentContact } = await supabase
+        .from('crm_contacts')
+        .select('tags')
+        .eq('id', contactId)
+        .single();
+      
+      let updatedTags = currentContact?.tags || [];
+      
+      // If moving to recovered stage, add "Recuperado (manual)" tag
+      if (isRecoveredStage && !updatedTags.includes('Recuperado (manual)') && !updatedTags.includes('Recuperado (auto)')) {
+        updatedTags = [...updatedTags, 'Recuperado (manual)'];
+      }
+      
       const { error } = await supabase
         .from('crm_contacts')
         .update({
           recovery_stage_id: stageId,
           recovery_started_at: stageId ? new Date().toISOString() : null,
           recovery_updated_at: new Date().toISOString(),
+          tags: updatedTags,
         })
         .eq('id', contactId);
 
       if (error) throw error;
+      
+      if (isRecoveredStage) {
+        toast.success('Cliente marcado como recuperado!');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recovery-kanban-contacts', currentProject?.id] });

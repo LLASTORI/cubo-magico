@@ -57,7 +57,9 @@ const RECOVERY_TAGS = Object.values(RECOVERY_STATUS_MAP);
 
 type RecoveryTag = (typeof RECOVERY_TAGS)[number];
 
-const TAG_CONFIG: Record<RecoveryTag, { icon: typeof AlertTriangle; color: string; description: string }> = {
+type TagConfigKey = RecoveryTag | 'Recuperado (auto)' | 'Recuperado (manual)';
+
+const TAG_CONFIG: Record<TagConfigKey, { icon: typeof AlertTriangle; color: string; description: string }> = {
   Cancelado: { 
     icon: XCircle, 
     color: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
@@ -72,6 +74,16 @@ const TAG_CONFIG: Record<RecoveryTag, { icon: typeof AlertTriangle; color: strin
     icon: RotateCcw, 
     color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
     description: 'Clientes que pediram reembolso'
+  },
+  'Recuperado (auto)': { 
+    icon: RefreshCcw, 
+    color: 'bg-green-500/10 text-green-500 border-green-500/20',
+    description: 'Clientes recuperados automaticamente por nova compra'
+  },
+  'Recuperado (manual)': { 
+    icon: RefreshCcw, 
+    color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+    description: 'Clientes recuperados manualmente pelo time'
   }
 };
 
@@ -153,9 +165,9 @@ export default function CRMRecovery() {
       
       for (let i = 0; i < contactIds.length; i += contactBatchSize) {
         const batchIds = contactIds.slice(i, i + contactBatchSize);
-        const { data: contactsData, error: contactsError } = await supabase
+      const { data: contactsData, error: contactsError } = await supabase
           .from('crm_contacts')
-          .select('id, name, email, phone, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
+          .select('id, name, email, phone, tags, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
           .eq('project_id', currentProject.id)
           .in('id', batchIds);
         
@@ -169,9 +181,16 @@ export default function CRMRecovery() {
       
       const contactsWithTags: RecoveryContact[] = allContactsData.map((c) => {
         const meta = contactMap.get(c.id);
+        // Merge recovery tags from transactions with existing contact tags
+        const recoveryTags = meta ? Array.from(meta.tags) : [];
+        const contactTags = c.tags || [];
+        // Keep recovery-related tags from contact (Recuperado auto/manual)
+        const recoveredTags = contactTags.filter((t: string) => 
+          t === 'Recuperado (auto)' || t === 'Recuperado (manual)'
+        );
         return {
           ...c,
-          tags: meta ? Array.from(meta.tags) : [],
+          tags: [...recoveryTags, ...recoveredTags],
           last_activity_at: c.last_activity_at,
           last_recovery_date: meta?.lastTxAt || null,
         };
@@ -217,8 +236,10 @@ export default function CRMRecovery() {
     const cancelados = contacts.filter(c => c.tags?.includes('Cancelado')).length;
     const chargebacks = contacts.filter(c => c.tags?.includes('Chargeback')).length;
     const reembolsados = contacts.filter(c => c.tags?.includes('Reembolsado')).length;
+    const recuperadosAuto = contacts.filter(c => c.tags?.includes('Recuperado (auto)')).length;
+    const recuperadosManual = contacts.filter(c => c.tags?.includes('Recuperado (manual)')).length;
     
-    return { totalRevenueLost, cancelados, chargebacks, reembolsados, total: contacts.length };
+    return { totalRevenueLost, cancelados, chargebacks, reembolsados, recuperadosAuto, recuperadosManual, total: contacts.length };
   }, [contacts]);
 
   const formatCurrency = (value: number) => {
@@ -457,6 +478,14 @@ export default function CRMRecovery() {
                 <TabsTrigger value="Reembolsado" className="gap-2">
                   <RotateCcw className="h-4 w-4" />
                   Reembolsados ({stats.reembolsados})
+                </TabsTrigger>
+                <TabsTrigger value="Recuperado (auto)" className="gap-2">
+                  <RefreshCcw className="h-4 w-4 text-green-500" />
+                  Recuperados Auto ({stats.recuperadosAuto})
+                </TabsTrigger>
+                <TabsTrigger value="Recuperado (manual)" className="gap-2">
+                  <RefreshCcw className="h-4 w-4 text-emerald-500" />
+                  Recuperados Manual ({stats.recuperadosManual})
                 </TabsTrigger>
               </TabsList>
 

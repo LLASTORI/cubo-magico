@@ -26,8 +26,10 @@ import {
   TrendingDown,
   ArrowLeft,
   ExternalLink,
-  Info
+  Info,
+  BarChart3
 } from 'lucide-react';
+import { RecoveryAnalytics } from '@/components/crm/RecoveryAnalytics';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -462,7 +464,7 @@ export default function CRMRecovery() {
 
             {/* Tabs and Content */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="mb-4">
+              <TabsList className="mb-4 flex-wrap h-auto gap-1">
                 <TabsTrigger value="all" className="gap-2">
                   <Users className="h-4 w-4" />
                   Todos ({stats.total})
@@ -487,111 +489,123 @@ export default function CRMRecovery() {
                   <RefreshCcw className="h-4 w-4 text-emerald-500" />
                   Recuperados Manual ({stats.recuperadosManual})
                 </TabsTrigger>
+                <TabsTrigger value="analytics" className="gap-2 bg-primary/10">
+                  <BarChart3 className="h-4 w-4" />
+                  Análise
+                </TabsTrigger>
               </TabsList>
 
-              <TabsContent value={activeTab} className="mt-0">
-                {filteredContacts.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <RefreshCcw className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-medium mb-2">Nenhum cliente para recuperar</h3>
-                      <p className="text-muted-foreground">
-                        {search 
-                          ? 'Nenhum resultado encontrado para sua busca.'
-                          : 'Não há clientes com transações de recuperação no período selecionado.'}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Tente ampliar o período de datas ou sincronize as vendas em Integrações.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <ScrollArea className="h-[calc(100vh-550px)]">
-                    <div className="grid gap-3">
-                      {filteredContacts.map((contact) => (
-                        <Card 
-                          key={contact.id} 
-                          className="hover:bg-muted/50 transition-colors cursor-pointer"
-                          onClick={() => navigate(`/crm/contact/${contact.id}`)}
-                        >
-                          <CardContent className="py-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <h3 className="font-medium truncate">
-                                    {contact.name || contact.email.split('@')[0]}
-                                  </h3>
-                                  <div className="flex gap-1">
-                                    {contact.tags
-                                      ?.filter((t): t is RecoveryTag => RECOVERY_TAGS.includes(t as RecoveryTag))
-                                      .map((tag) => {
-                                        const config = TAG_CONFIG[tag];
-                                        const Icon = config?.icon || XCircle;
-                                      return (
-                                        <Badge 
-                                          key={tag} 
-                                          variant="outline"
-                                          className={config?.color}
-                                        >
-                                          <Icon className="h-3 w-3 mr-1" />
-                                          {tag}
-                                        </Badge>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                                
-                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                  <span className="flex items-center gap-1">
-                                    <Mail className="h-3 w-3" />
-                                    {contact.email}
-                                  </span>
-                                  {contact.phone && (
-                                    <span className="flex items-center gap-1">
-                                      <Phone className="h-3 w-3" />
-                                      {contact.phone}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center gap-6 text-sm">
-                                <div className="text-right">
-                                  <div className="flex items-center gap-1 text-muted-foreground">
-                                    <DollarSign className="h-3 w-3" />
-                                    Receita histórica
-                                  </div>
-                                  <p className="font-medium">
-                                    {formatCurrency(contact.total_revenue || 0)}
-                                  </p>
-                                </div>
-                                
-                                <div className="text-right">
-                                  <div className="flex items-center gap-1 text-muted-foreground">
-                                    <Calendar className="h-3 w-3" />
-                                    Data da perda
-                                  </div>
-                                  <p className="font-medium">
-                                    {contact.last_recovery_date 
-                                      ? format(new Date(contact.last_recovery_date), 'dd/MM/yyyy', { locale: ptBR })
-                                      : '-'
-                                    }
-                                  </p>
-                                </div>
-                                
-                                <Button variant="outline" size="sm" className="gap-2">
-                                  <ExternalLink className="h-3 w-3" />
-                                  Ver perfil
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
+              {/* Analytics Tab */}
+              <TabsContent value="analytics" className="mt-0">
+                <RecoveryAnalytics startDate={startDate} endDate={endDate} />
               </TabsContent>
+
+              {/* Contact List Tabs */}
+              {activeTab !== 'analytics' && (
+                <TabsContent value={activeTab} className="mt-0">
+                  {filteredContacts.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-12 text-center">
+                        <RefreshCcw className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-medium mb-2">Nenhum cliente para recuperar</h3>
+                        <p className="text-muted-foreground">
+                          {search 
+                            ? 'Nenhum resultado encontrado para sua busca.'
+                            : 'Não há clientes com transações de recuperação no período selecionado.'}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Tente ampliar o período de datas ou sincronize as vendas em Integrações.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <ScrollArea className="h-[calc(100vh-550px)]">
+                      <div className="grid gap-3">
+                        {filteredContacts.map((contact) => (
+                          <Card 
+                            key={contact.id} 
+                            className="hover:bg-muted/50 transition-colors cursor-pointer"
+                            onClick={() => navigate(`/crm/contact/${contact.id}`)}
+                          >
+                            <CardContent className="py-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="font-medium truncate">
+                                      {contact.name || contact.email.split('@')[0]}
+                                    </h3>
+                                    <div className="flex gap-1">
+                                      {contact.tags
+                                        ?.filter((t): t is RecoveryTag => RECOVERY_TAGS.includes(t as RecoveryTag))
+                                        .map((tag) => {
+                                          const config = TAG_CONFIG[tag];
+                                          const Icon = config?.icon || XCircle;
+                                        return (
+                                          <Badge 
+                                            key={tag} 
+                                            variant="outline"
+                                            className={config?.color}
+                                          >
+                                            <Icon className="h-3 w-3 mr-1" />
+                                            {tag}
+                                          </Badge>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <Mail className="h-3 w-3" />
+                                      {contact.email}
+                                    </span>
+                                    {contact.phone && (
+                                      <span className="flex items-center gap-1">
+                                        <Phone className="h-3 w-3" />
+                                        {contact.phone}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-6 text-sm">
+                                  <div className="text-right">
+                                    <div className="flex items-center gap-1 text-muted-foreground">
+                                      <DollarSign className="h-3 w-3" />
+                                      Receita histórica
+                                    </div>
+                                    <p className="font-medium">
+                                      {formatCurrency(contact.total_revenue || 0)}
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="text-right">
+                                    <div className="flex items-center gap-1 text-muted-foreground">
+                                      <Calendar className="h-3 w-3" />
+                                      Data da perda
+                                    </div>
+                                    <p className="font-medium">
+                                      {contact.last_recovery_date 
+                                        ? format(new Date(contact.last_recovery_date), 'dd/MM/yyyy', { locale: ptBR })
+                                        : '-'
+                                      }
+                                    </p>
+                                  </div>
+                                  
+                                  <Button variant="outline" size="sm" className="gap-2">
+                                    <ExternalLink className="h-3 w-3" />
+                                    Ver perfil
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </TabsContent>
+              )}
             </Tabs>
           </>
         )}

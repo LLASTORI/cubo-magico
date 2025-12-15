@@ -668,10 +668,12 @@ export function useCRMJourneyData(filters: CRMFilters) {
     contactsData.forEach((contact) => {
       const transactions = transactionsByContact.get(contact.id) || [];
       
-      // Sort transactions by date
-      const sortedTransactions = [...transactions].sort((a, b) => 
-        new Date(a.transaction_date || 0).getTime() - new Date(b.transaction_date || 0).getTime()
-      );
+      // Sort transactions by date (oldest first for chronological history)
+      const sortedTransactions = [...transactions].sort((a, b) => {
+        const dateA = a.transaction_date ? new Date(a.transaction_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const dateB = b.transaction_date ? new Date(b.transaction_date).getTime() : Number.MAX_SAFE_INTEGER;
+        return dateA - dateB;
+      });
 
       const firstTransaction = sortedTransactions[0];
       const entryFunnelId = firstTransaction?.offer_code ? offerToFunnel.get(firstTransaction.offer_code) || null : null;

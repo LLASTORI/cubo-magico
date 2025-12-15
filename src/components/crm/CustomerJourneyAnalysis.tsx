@@ -771,20 +771,20 @@ export function CustomerJourneyAnalysis() {
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
-            <Table>
+            <Table className="w-full table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[40px]"></TableHead>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="w-[25%]">Contato</TableHead>
+                  <TableHead className="w-[20%]">
                     {analysisMode === 'entry' ? 'Produto de Entrada' : 'Produto Alvo'}
                   </TableHead>
-                  <TableHead className="text-center">Compras</TableHead>
-                  <TableHead className="text-right">LTV</TableHead>
-                  <TableHead className="text-center">
+                  <TableHead className="w-20 text-center">Compras</TableHead>
+                  <TableHead className="w-28 text-right">LTV</TableHead>
+                  <TableHead className="w-24 text-center">
                     {analysisMode === 'entry' ? 'Evolução' : 'Origem'}
                   </TableHead>
-                  <TableHead className="text-right">Primeira Compra</TableHead>
+                  <TableHead className="w-28 text-right">Primeira Compra</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

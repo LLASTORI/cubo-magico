@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -22,6 +22,7 @@ import { SubscriptionsManager } from '@/components/admin/SubscriptionsManager';
 import { NotificationSettingsManager } from '@/components/admin/NotificationSettingsManager';
 import { ProjectsManager } from '@/components/admin/ProjectsManager';
 import { ModulesManager } from '@/components/admin/ModulesManager';
+import { TermsAcceptancesManager } from '@/components/admin/TermsAcceptancesManager';
 
 interface UserProfile {
   id: string;
@@ -261,6 +262,12 @@ const Admin = () => {
               <TabsTrigger value="notifications" className="gap-2">
                 <Bell className="h-4 w-4" />
                 Notificações
+              </TabsTrigger>
+            )}
+            {isSuperAdmin && (
+              <TabsTrigger value="terms" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Termos de Uso
               </TabsTrigger>
             )}
           </TabsList>
@@ -516,6 +523,12 @@ const Admin = () => {
           {isSuperAdmin && (
             <TabsContent value="notifications">
               <NotificationSettingsManager />
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="terms">
+              <TermsAcceptancesManager />
             </TabsContent>
           )}
         </Tabs>

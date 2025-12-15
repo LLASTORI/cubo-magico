@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MFAVerification } from '@/components/MFAVerification';
+import { TermsDialog } from '@/components/TermsDialog';
 import { z } from 'zod';
 
 const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9]).{8,}$/;
@@ -28,6 +30,9 @@ const signupSchema = z.object({
     .min(8, 'Senha deve ter pelo menos 8 caracteres')
     .regex(passwordRegex, 'Senha deve conter letras e números'),
   confirmPassword: z.string(),
+  acceptTerms: z.boolean().refine(val => val === true, {
+    message: 'Você deve aceitar os termos de uso',
+  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As senhas não conferem',
   path: ['confirmPassword'],
@@ -45,9 +50,11 @@ const Auth = () => {
     fullName: '', 
     email: '', 
     password: '', 
-    confirmPassword: '' 
+    confirmPassword: '',
+    acceptTerms: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showTerms, setShowTerms] = useState(false);
   
   // MFA state
   const [showMFA, setShowMFA] = useState(false);
@@ -168,7 +175,7 @@ const Auth = () => {
     setLoading(true);
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email: signupData.email,
       password: signupData.password,
       options: {
@@ -178,9 +185,9 @@ const Auth = () => {
         },
       },
     });
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       if (error.message.includes('already registered')) {
         toast({
           title: 'Email já cadastrado',
@@ -194,13 +201,30 @@ const Auth = () => {
           variant: 'destructive',
         });
       }
-    } else {
-      toast({
-        title: 'Conta criada!',
-        description: 'Você foi autenticado automaticamente.',
-      });
-      navigate('/projects');
+      return;
     }
+
+    // Record terms acceptance after successful signup
+    if (signUpData.user) {
+      try {
+        await supabase.from('terms_acceptances').insert({
+          user_id: signUpData.user.id,
+          terms_version: '1.0',
+          ip_address: null, // Could be obtained from a service if needed
+          user_agent: navigator.userAgent,
+        });
+      } catch (termsError) {
+        console.error('Failed to record terms acceptance:', termsError);
+        // Don't block signup if terms recording fails
+      }
+    }
+
+    setLoading(false);
+    toast({
+      title: 'Conta criada!',
+      description: 'Você foi autenticado automaticamente.',
+    });
+    navigate('/projects');
   };
 
   const handleMFASuccess = () => {
@@ -376,6 +400,30 @@ const Auth = () => {
                   {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword}</p>}
                 </div>
 
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="accept-terms"
+                    checked={signupData.acceptTerms}
+                    onCheckedChange={(checked) => setSignupData({ ...signupData, acceptTerms: checked === true })}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="accept-terms"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Li e aceito os{' '}
+                      <button
+                        type="button"
+                        onClick={() => setShowTerms(true)}
+                        className="text-primary hover:underline"
+                      >
+                        Termos de Uso e Política de Privacidade
+                      </button>
+                    </label>
+                    {errors.acceptTerms && <p className="text-sm text-destructive">{errors.acceptTerms}</p>}
+                  </div>
+                </div>
+
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Criar Conta
@@ -385,6 +433,8 @@ const Auth = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      <TermsDialog open={showTerms} onOpenChange={setShowTerms} />
     </div>
   );
 };

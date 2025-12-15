@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,8 @@ import {
   CalendarIcon,
   RotateCcw,
   Search,
-  SlidersHorizontal
+  SlidersHorizontal,
+  ExternalLink
 } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { 
@@ -115,17 +117,30 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
           </Button>
         </TableCell>
         <TableCell>
-          <div>
-            <p className="font-medium">{highlightText(journey.buyerName)}</p>
-            <p className="text-xs text-muted-foreground">{highlightText(journey.buyerEmail)}</p>
-            <div className="flex gap-1 mt-1">
-              <Badge variant="outline" className="text-xs">
-                {sourceLabels[journey.contactSource] || journey.contactSource}
-              </Badge>
-              <Badge variant={journey.contactStatus === 'customer' ? 'default' : 'secondary'} className="text-xs">
-                {statusLabels[journey.contactStatus] || journey.contactStatus}
-              </Badge>
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">{highlightText(journey.buyerName)}</p>
+              <p className="text-xs text-muted-foreground truncate">{highlightText(journey.buyerEmail)}</p>
+              <div className="flex gap-1 mt-1">
+                <Badge variant="outline" className="text-xs">
+                  {sourceLabels[journey.contactSource] || journey.contactSource}
+                </Badge>
+                <Badge variant={journey.contactStatus === 'customer' ? 'default' : 'secondary'} className="text-xs">
+                  {statusLabels[journey.contactStatus] || journey.contactStatus}
+                </Badge>
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 flex-shrink-0"
+              asChild
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Link to={`/crm/contact/${journey.contactId}`} title="Ver cartão do contato">
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            </Button>
           </div>
         </TableCell>
         <TableCell>
@@ -802,7 +817,7 @@ export function CustomerJourneyAnalysis() {
               <TableBody>
                 {filteredJourneys.slice(0, 50).map((journey) => (
                   <CustomerRow 
-                    key={journey.buyerEmail} 
+                    key={journey.contactId} 
                     journey={journey}
                     showOrigin={analysisMode === 'origin'}
                     searchTerm={searchTerm}

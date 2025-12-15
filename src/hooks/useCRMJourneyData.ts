@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
 
 export interface CustomerJourney {
+  contactId: string;
   buyerEmail: string;
   buyerName: string;
   firstPurchaseDate: Date;
@@ -777,6 +778,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
         : (firstTransaction ? new Date(firstTransaction.transaction_date || 0) : new Date(contact.first_seen_at));
 
       journeys.push({
+        contactId: contact.id,
         buyerEmail: contact.email,
         buyerName: contact.name || contact.email.split('@')[0],
         firstPurchaseDate,

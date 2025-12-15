@@ -160,67 +160,71 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
         </TableCell>
       </TableRow>
       <CollapsibleContent asChild>
-        <TableRow className="bg-muted/30">
-          <TableCell colSpan={7} className="p-4">
-            <div className="space-y-3">
-              <div className="flex items-center gap-4">
-                <h4 className="font-medium text-sm">Histórico de Compras</h4>
-                {journey.tags.length > 0 && (
-                  <div className="flex gap-1">
-                    {journey.tags.map((tag, i) => (
-                      <Badge key={i} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
+        <TableRow className="bg-muted/30 border-t-0">
+          <TableCell colSpan={7} className="p-0">
+            <div className="px-4 py-4 ml-8 border-l-2 border-primary/20">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <h4 className="font-medium text-sm">Histórico de Compras</h4>
+                    {journey.tags.length > 0 && (
+                      <div className="flex gap-1">
+                        {journey.tags.map((tag, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              {journey.purchases.length > 0 ? (
-                <div className="flex flex-wrap gap-2 items-center">
-                  {journey.purchases.map((purchase, index) => (
-                    <div key={purchase.transactionId} className="flex items-center gap-2">
-                      <div className={cn(
-                        "px-3 py-2 rounded-lg border",
-                        purchase.isEntry && "bg-primary/10 border-primary/30",
-                        purchase.isTarget && "bg-orange-500/10 border-orange-500/30",
-                        !purchase.isEntry && !purchase.isTarget && "bg-card border-border"
-                      )}>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm">{purchase.productName}</p>
-                          {purchase.isEntry && (
-                            <Badge variant="outline" className="text-xs">Entrada</Badge>
-                          )}
-                          {purchase.isTarget && (
-                            <Badge variant="outline" className="text-xs bg-orange-500/20">Alvo</Badge>
+                  {journey.avgTimeBetweenPurchases && (
+                    <p className="text-xs text-muted-foreground">
+                      Tempo médio entre compras: {Math.round(journey.avgTimeBetweenPurchases)} dias
+                    </p>
+                  )}
+                </div>
+                {journey.purchases.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {[...journey.purchases].reverse().map((purchase, index, arr) => (
+                      <div key={purchase.transactionId} className="flex items-center gap-2">
+                        <div className={cn(
+                          "px-3 py-2 rounded-lg border transition-colors",
+                          purchase.isEntry && "bg-primary/10 border-primary/30",
+                          purchase.isTarget && "bg-orange-500/10 border-orange-500/30",
+                          !purchase.isEntry && !purchase.isTarget && "bg-card border-border hover:border-muted-foreground/30"
+                        )}>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm">{purchase.productName}</p>
+                            {purchase.isEntry && (
+                              <Badge variant="outline" className="text-xs">Entrada</Badge>
+                            )}
+                            {purchase.isTarget && (
+                              <Badge variant="outline" className="text-xs bg-orange-500/20">Alvo</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <span>{formatDate(purchase.saleDate)}</span>
+                            <span>•</span>
+                            <span>{formatCurrency(purchase.totalPrice)}</span>
+                            <span>•</span>
+                            <span className="capitalize">{purchase.platform}</span>
+                          </div>
+                          {purchase.funnelName && (
+                            <p className="text-xs text-primary mt-1">Funil: {purchase.funnelName}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{formatDate(purchase.saleDate)}</span>
-                          <span>•</span>
-                          <span>{formatCurrency(purchase.totalPrice)}</span>
-                          <span>•</span>
-                          <span className="capitalize">{purchase.platform}</span>
-                        </div>
-                        {purchase.funnelName && (
-                          <p className="text-xs text-primary mt-1">Funil: {purchase.funnelName}</p>
+                        {index < arr.length - 1 && (
+                          <ArrowLeft className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         )}
                       </div>
-                      {index < journey.purchases.length - 1 && (
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Este contato ainda não realizou compras (Lead/Prospect)
-                </p>
-              )}
-              {journey.avgTimeBetweenPurchases && (
-                <p className="text-xs text-muted-foreground">
-                  Tempo médio entre compras: {Math.round(journey.avgTimeBetweenPurchases)} dias
-                </p>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Este contato ainda não realizou compras (Lead/Prospect)
+                  </p>
+                )}
+              </div>
             </div>
           </TableCell>
         </TableRow>

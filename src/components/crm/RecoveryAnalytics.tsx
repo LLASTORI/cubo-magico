@@ -649,8 +649,14 @@ export function RecoveryAnalytics({ startDate, endDate }: RecoveryAnalyticsProps
                         <TooltipTrigger asChild>
                           <span className="cursor-help">Taxa de Perda</span>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Percentual de transações negativas em relação ao total do produto</p>
+                        <TooltipContent className="max-w-xs">
+                          <p className="font-semibold mb-1">Taxa de Perda do Produto</p>
+                          <p className="text-xs text-muted-foreground">
+                            Fórmula: (Cancelamentos + Reembolsos + Chargebacks) ÷ Total de Vendas deste produto × 100
+                          </p>
+                          <p className="text-xs mt-1">
+                            Exemplo: Se um produto teve 10 vendas aprovadas e 2 cancelamentos, a taxa é 16,7% (2÷12×100)
+                          </p>
                         </TooltipContent>
                       </Tooltip>
                     </TableHead>

@@ -11,17 +11,17 @@ import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, TrendingUp, Users, Target, CalendarIcon, ArrowRight, Package, Tag } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Target, CalendarIcon, ArrowRight, Package, Tag, Filter } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 
-type SelectionType = 'product' | 'offer';
+type SelectionType = 'product' | 'offer' | 'funnel';
 
 interface AscensionResult {
   entryName: string;
-  entryType: 'product' | 'offer';
+  entryType: 'product' | 'offer' | 'funnel';
   totalBuyers: number;
   ascendedBuyers: number;
   ascensionRate: number;
@@ -51,7 +51,7 @@ export function AscensionAnalysis() {
       
       const { data, error } = await supabase
         .from('crm_transactions')
-        .select('contact_id, product_name, product_code, offer_code, offer_name, status, transaction_date')
+        .select('contact_id, product_name, product_code, offer_code, offer_name, status, transaction_date, funnel_id')
         .eq('project_id', projectId)
         .in('status', ['APPROVED', 'COMPLETE']);
 
@@ -69,7 +69,24 @@ export function AscensionAnalysis() {
       
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('codigo_oferta, nome_oferta, nome_produto, id_produto')
+        .select('codigo_oferta, nome_oferta, nome_produto, id_produto, funnel_id, id_funil')
+        .eq('project_id', projectId);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  // Fetch funnels
+  const { data: funnels = [], isLoading: loadingFunnels } = useQuery({
+    queryKey: ['crm-ascension-funnels', projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name')
         .eq('project_id', projectId);
 
       if (error) throw error;
@@ -107,21 +124,42 @@ export function AscensionAnalysis() {
     };
   }, [transactions, offerMappings]);
 
+  // Build funnel-to-offer mapping for funnel-based filtering
+  const funnelOfferMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    offerMappings.forEach(m => {
+      const funnelId = m.funnel_id;
+      if (funnelId && m.codigo_oferta) {
+        if (!map.has(funnelId)) {
+          map.set(funnelId, new Set());
+        }
+        map.get(funnelId)!.add(m.codigo_oferta);
+      }
+    });
+    return map;
+  }, [offerMappings]);
+
   // Entry options based on selection type
   const entryOptions = useMemo(() => {
     if (entryType === 'product') {
       return products.map(p => ({ value: p, label: p }));
     }
+    if (entryType === 'funnel') {
+      return funnels.map(f => ({ value: f.id, label: f.name }));
+    }
     return offers.map(o => ({ value: o.code, label: o.name }));
-  }, [entryType, products, offers]);
+  }, [entryType, products, offers, funnels]);
 
   // Target options based on selection type
   const targetOptions = useMemo(() => {
     if (targetType === 'product') {
       return products.map(p => ({ value: p, label: p }));
     }
+    if (targetType === 'funnel') {
+      return funnels.map(f => ({ value: f.id, label: f.name }));
+    }
     return offers.map(o => ({ value: o.code, label: o.name }));
-  }, [targetType, products, offers]);
+  }, [targetType, products, offers, funnels]);
 
   // Calculate ascension metrics
   const ascensionResults = useMemo(() => {
@@ -154,6 +192,13 @@ export function AscensionAnalysis() {
       if (entryType === 'product') {
         return selectedEntryItems.includes(t.product_name || '');
       }
+      if (entryType === 'funnel') {
+        // Match if offer_code belongs to any of the selected funnels
+        return selectedEntryItems.some(funnelId => {
+          const offerCodes = funnelOfferMap.get(funnelId);
+          return offerCodes && t.offer_code && offerCodes.has(t.offer_code);
+        });
+      }
       return selectedEntryItems.includes(t.offer_code || '');
     };
 
@@ -161,6 +206,13 @@ export function AscensionAnalysis() {
     const matchesTarget = (t: typeof transactions[0]) => {
       if (targetType === 'product') {
         return selectedTargetItems.includes(t.product_name || '');
+      }
+      if (targetType === 'funnel') {
+        // Match if offer_code belongs to any of the selected funnels
+        return selectedTargetItems.some(funnelId => {
+          const offerCodes = funnelOfferMap.get(funnelId);
+          return offerCodes && t.offer_code && offerCodes.has(t.offer_code);
+        });
       }
       return selectedTargetItems.includes(t.offer_code || '');
     };
@@ -179,6 +231,10 @@ export function AscensionAnalysis() {
           if (entryType === 'product') {
             return t.product_name === entryItem;
           }
+          if (entryType === 'funnel') {
+            const offerCodes = funnelOfferMap.get(entryItem);
+            return offerCodes && t.offer_code && offerCodes.has(t.offer_code);
+          }
           return t.offer_code === entryItem;
         });
 
@@ -192,7 +248,21 @@ export function AscensionAnalysis() {
             
             // Count per target item
             targetTxs.forEach(t => {
-              const targetKey = targetType === 'product' ? t.product_name : t.offer_code;
+              let targetKey: string | null = null;
+              if (targetType === 'product') {
+                targetKey = t.product_name;
+              } else if (targetType === 'funnel') {
+                // For funnel, find which selected funnel this transaction belongs to
+                for (const funnelId of selectedTargetItems) {
+                  const offerCodes = funnelOfferMap.get(funnelId);
+                  if (offerCodes && t.offer_code && offerCodes.has(t.offer_code)) {
+                    targetKey = funnelId;
+                    break;
+                  }
+                }
+              } else {
+                targetKey = t.offer_code;
+              }
               if (targetKey && selectedTargetItems.includes(targetKey)) {
                 targetBreakdown.set(targetKey, (targetBreakdown.get(targetKey) || 0) + 1);
               }
@@ -201,9 +271,14 @@ export function AscensionAnalysis() {
         }
       });
 
-      const entryName = entryType === 'product' 
-        ? entryItem 
-        : offers.find(o => o.code === entryItem)?.name || entryItem;
+      let entryName: string;
+      if (entryType === 'product') {
+        entryName = entryItem;
+      } else if (entryType === 'funnel') {
+        entryName = funnels.find(f => f.id === entryItem)?.name || entryItem;
+      } else {
+        entryName = offers.find(o => o.code === entryItem)?.name || entryItem;
+      }
 
       results.push({
         entryName,
@@ -213,9 +288,14 @@ export function AscensionAnalysis() {
         ascensionRate: entryBuyers.size > 0 ? (ascendedBuyers.size / entryBuyers.size) * 100 : 0,
         targetBreakdown: Array.from(targetBreakdown.entries())
           .map(([name, count]) => {
-            const displayName = targetType === 'product' 
-              ? name 
-              : offers.find(o => o.code === name)?.name || name;
+            let displayName: string;
+            if (targetType === 'product') {
+              displayName = name;
+            } else if (targetType === 'funnel') {
+              displayName = funnels.find(f => f.id === name)?.name || name;
+            } else {
+              displayName = offers.find(o => o.code === name)?.name || name;
+            }
             return { name: displayName, count };
           })
           .sort((a, b) => b.count - a.count),
@@ -251,13 +331,13 @@ export function AscensionAnalysis() {
           : 0,
       },
     };
-  }, [transactions, selectedEntryItems, selectedTargetItems, entryType, targetType, dateRange, offers]);
+  }, [transactions, selectedEntryItems, selectedTargetItems, entryType, targetType, dateRange, offers, funnels, funnelOfferMap]);
 
   const formatPercent = (value: number) => {
     return `${value.toFixed(1)}%`;
   };
 
-  if (loadingTransactions || loadingOfferMappings) {
+  if (loadingTransactions || loadingOfferMappings || loadingFunnels) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -291,6 +371,7 @@ export function AscensionAnalysis() {
                   <TabsList className="h-8">
                     <TabsTrigger value="product" className="text-xs px-2">Produto</TabsTrigger>
                     <TabsTrigger value="offer" className="text-xs px-2">Oferta</TabsTrigger>
+                    <TabsTrigger value="funnel" className="text-xs px-2">Funil</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
@@ -298,7 +379,7 @@ export function AscensionAnalysis() {
                 options={entryOptions}
                 selected={selectedEntryItems}
                 onChange={setSelectedEntryItems}
-                placeholder={`Selecione ${entryType === 'product' ? 'produtos' : 'ofertas'} de entrada...`}
+                placeholder={`Selecione ${entryType === 'product' ? 'produtos' : entryType === 'funnel' ? 'funis' : 'ofertas'} de entrada...`}
               />
             </div>
 
@@ -313,6 +394,7 @@ export function AscensionAnalysis() {
                   <TabsList className="h-8">
                     <TabsTrigger value="product" className="text-xs px-2">Produto</TabsTrigger>
                     <TabsTrigger value="offer" className="text-xs px-2">Oferta</TabsTrigger>
+                    <TabsTrigger value="funnel" className="text-xs px-2">Funil</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
@@ -320,7 +402,7 @@ export function AscensionAnalysis() {
                 options={targetOptions}
                 selected={selectedTargetItems}
                 onChange={setSelectedTargetItems}
-                placeholder={`Selecione ${targetType === 'product' ? 'produtos' : 'ofertas'} alvo...`}
+                placeholder={`Selecione ${targetType === 'product' ? 'produtos' : targetType === 'funnel' ? 'funis' : 'ofertas'} alvo...`}
               />
             </div>
           </div>
@@ -425,14 +507,14 @@ export function AscensionAnalysis() {
             <CardHeader>
               <CardTitle>Detalhamento por Produto de Entrada</CardTitle>
               <CardDescription>
-                Taxa de ascensão individual para cada {entryType === 'product' ? 'produto' : 'oferta'} de entrada
+                Taxa de ascensão individual para cada {entryType === 'product' ? 'produto' : entryType === 'funnel' ? 'funil' : 'oferta'} de entrada
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{entryType === 'product' ? 'Produto' : 'Oferta'} de Entrada</TableHead>
+                    <TableHead>{entryType === 'product' ? 'Produto' : entryType === 'funnel' ? 'Funil' : 'Oferta'} de Entrada</TableHead>
                     <TableHead className="text-center">Compradores</TableHead>
                     <TableHead className="text-center">Ascenderam</TableHead>
                     <TableHead className="text-center">Taxa de Ascensão</TableHead>
@@ -446,6 +528,8 @@ export function AscensionAnalysis() {
                         <div className="flex items-center gap-2">
                           {result.entryType === 'product' ? (
                             <Package className="h-4 w-4 text-muted-foreground" />
+                          ) : result.entryType === 'funnel' ? (
+                            <Filter className="h-4 w-4 text-muted-foreground" />
                           ) : (
                             <Tag className="h-4 w-4 text-muted-foreground" />
                           )}

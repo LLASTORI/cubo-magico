@@ -1,17 +1,25 @@
 import { useState } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
+import { RefreshCw, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { format, subMonths, subDays } from 'date-fns';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 interface QuickSyncButtonProps {
   variant?: 'default' | 'outline' | 'ghost';
@@ -26,6 +34,7 @@ export function QuickSyncButton({
 }: QuickSyncButtonProps) {
   const { currentProject } = useProject();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
 
@@ -82,22 +91,22 @@ export function QuickSyncButton({
   const hasHotmartConnection = !!(hotmartCredentials?.client_id && hotmartCredentials?.client_secret);
   const hasAnyConnection = hasMetaConnection || hasHotmartConnection;
 
-  const handleQuickSync = async () => {
+  const handleSync = async (forceRefresh: boolean = false, days: number = 90) => {
     if (!projectId || !hasAnyConnection || isSyncing) return;
 
     setIsSyncing(true);
     setJustCompleted(false);
 
     const endDate = new Date();
-    const startDate = subMonths(endDate, 3); // Last 3 months for quick sync
+    const startDate = subDays(endDate, days);
     let syncedSomething = false;
 
     try {
       // Sync Meta if connected
       if (hasMetaConnection) {
         toast({
-          title: 'Sincronizando...',
-          description: 'Atualizando dados do Meta Ads',
+          title: forceRefresh ? 'Resync forçado...' : 'Sincronizando...',
+          description: `Atualizando dados do Meta Ads (últimos ${days} dias)${forceRefresh ? ' - ignorando cache' : ''}`,
         });
 
         const accountIds = metaAccounts!.map(a => a.account_id);
@@ -109,7 +118,7 @@ export function QuickSyncButton({
             accountIds,
             dateStart: format(startDate, 'yyyy-MM-dd'),
             dateStop: format(endDate, 'yyyy-MM-dd'),
-            forceRefresh: false,
+            forceRefresh,
           },
         });
         syncedSomething = true;
@@ -135,15 +144,22 @@ export function QuickSyncButton({
 
       if (syncedSomething) {
         toast({
-          title: 'Sincronização iniciada',
-          description: 'Os dados serão atualizados em alguns instantes.',
+          title: forceRefresh ? 'Resync forçado iniciado' : 'Sincronização iniciada',
+          description: `Os dados dos últimos ${days} dias serão atualizados em alguns instantes.${forceRefresh ? ' Isso pode levar alguns minutos.' : ''}`,
         });
         setJustCompleted(true);
+        
+        // Invalidate queries to refresh data after a delay
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['project-overview'] });
+          queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+        }, 5000);
+        
         setTimeout(() => setJustCompleted(false), 3000);
       }
 
     } catch (error: any) {
-      console.error('Quick sync error:', error);
+      console.error('Sync error:', error);
       toast({
         title: 'Erro na sincronização',
         description: error.message || 'Não foi possível sincronizar os dados',
@@ -158,43 +174,55 @@ export function QuickSyncButton({
     return null;
   }
 
-  const buttonContent = (
-    <Button
-      onClick={handleQuickSync}
-      disabled={isSyncing}
-      variant={variant}
-      size={size}
-      className={justCompleted ? 'text-green-600 border-green-600' : ''}
-    >
-      {isSyncing ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : justCompleted ? (
-        <CheckCircle2 className="h-4 w-4" />
-      ) : (
-        <RefreshCw className="h-4 w-4" />
-      )}
-      {showLabel && (
-        <span className="ml-2">
-          {isSyncing ? 'Sincronizando...' : justCompleted ? 'Atualizado!' : 'Atualizar'}
-        </span>
-      )}
-    </Button>
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          disabled={isSyncing}
+          variant={variant}
+          size={size}
+          className={justCompleted ? 'text-green-600 border-green-600' : ''}
+        >
+          {isSyncing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : justCompleted ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {showLabel && (
+            <span className="ml-2">
+              {isSyncing ? 'Sincronizando...' : justCompleted ? 'Iniciado!' : 'Sincronizar'}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>Sincronização Rápida</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => handleSync(false, 30)}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Últimos 30 dias
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSync(false, 90)}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Últimos 90 dias
+        </DropdownMenuItem>
+        
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-orange-500">Resync Forçado (ignora cache)</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => handleSync(true, 30)} className="text-orange-600">
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Forçar 30 dias
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSync(true, 60)} className="text-orange-600">
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Forçar 60 dias
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSync(true, 90)} className="text-orange-600">
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Forçar 90 dias
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
-
-  if (!showLabel) {
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {buttonContent}
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Atualizar dados (últimos 3 meses)</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-
-  return buttonContent;
 }

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,7 +21,9 @@ import {
   Filter,
   X,
   CalendarIcon,
-  RotateCcw
+  RotateCcw,
+  Search,
+  SlidersHorizontal
 } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { 
@@ -59,9 +62,10 @@ const formatDate = (date: Date) => {
 interface CustomerRowProps {
   journey: CustomerJourney;
   showOrigin?: boolean;
+  searchTerm?: string;
 }
 
-function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
+function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const sourceLabels: Record<string, string> = {
@@ -80,6 +84,16 @@ function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
     'inactive': 'Inativo',
   };
 
+  // Highlight search term in text
+  const highlightText = (text: string) => {
+    if (!searchTerm || !text) return text;
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    const parts = text.split(regex);
+    return parts.map((part, i) => 
+      regex.test(part) ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">{part}</mark> : part
+    );
+  };
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <TableRow className="cursor-pointer hover:bg-muted/50">
@@ -92,8 +106,8 @@ function CustomerRow({ journey, showOrigin }: CustomerRowProps) {
         </TableCell>
         <TableCell>
           <div>
-            <p className="font-medium">{journey.buyerName}</p>
-            <p className="text-xs text-muted-foreground">{journey.buyerEmail}</p>
+            <p className="font-medium">{highlightText(journey.buyerName)}</p>
+            <p className="text-xs text-muted-foreground">{highlightText(journey.buyerEmail)}</p>
             <div className="flex gap-1 mt-1">
               <Badge variant="outline" className="text-xs">
                 {sourceLabels[journey.contactSource] || journey.contactSource}
@@ -224,6 +238,8 @@ export function CustomerJourneyAnalysis() {
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [contactStatusFilter, setContactStatusFilter] = useState<string[]>([]);
   const [pageFilter, setPageFilter] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const entryFilter: EntryFilter | null = analysisMode === 'entry' && filterType && selectedValues.length > 0
     ? { type: filterType, values: selectedValues }
@@ -262,6 +278,17 @@ export function CustomerJourneyAnalysis() {
     isLoading,
     isLoadingBreakdown 
   } = useCRMJourneyData(filters);
+
+  // Filter journeys by search term
+  const filteredJourneys = useMemo(() => {
+    if (!searchTerm.trim()) return customerJourneys;
+    
+    const term = searchTerm.toLowerCase().trim();
+    return customerJourneys.filter(journey => 
+      journey.buyerName.toLowerCase().includes(term) ||
+      journey.buyerEmail.toLowerCase().includes(term)
+    );
+  }, [customerJourneys, searchTerm]);
 
   const offerOptions = offerBreakdown.map((offer) => ({
     value: offer.key,
@@ -327,6 +354,7 @@ export function CustomerJourneyAnalysis() {
     setSourceFilter([]);
     setContactStatusFilter([]);
     setPageFilter([]);
+    setSearchTerm('');
   };
 
   const handleFilterTypeChange = (value: string) => {
@@ -343,7 +371,14 @@ export function CustomerJourneyAnalysis() {
     clearFilter();
   };
 
-  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate || sourceFilter.length > 0 || contactStatusFilter.length > 0 || pageFilter.length > 0;
+  const hasActiveFilters = entryFilter || targetFilter || dateFilter.startDate || dateFilter.endDate || sourceFilter.length > 0 || contactStatusFilter.length > 0 || pageFilter.length > 0 || searchTerm.trim();
+  const activeFilterCount = [
+    entryFilter || targetFilter ? 1 : 0,
+    dateFilter.startDate || dateFilter.endDate ? 1 : 0,
+    sourceFilter.length > 0 ? 1 : 0,
+    contactStatusFilter.length > 0 ? 1 : 0,
+    pageFilter.length > 0 ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   if (isLoading) {
     return (
@@ -390,191 +425,6 @@ export function CustomerJourneyAnalysis() {
         selectedFunnels={selectedFunnelsFromCards}
         selectedOffers={selectedOffersFromCards}
       />
-
-      {/* Analysis Mode Toggle */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Modo de Análise</CardTitle>
-          <CardDescription>
-            Escolha como deseja analisar a jornada dos clientes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <Button
-              variant={analysisMode === 'entry' ? 'default' : 'outline'}
-              onClick={() => handleModeChange('entry')}
-              className="gap-2"
-            >
-              <ArrowRight className="h-4 w-4" />
-              Por Entrada
-              <span className="text-xs opacity-70">(O que compraram depois?)</span>
-            </Button>
-            <Button
-              variant={analysisMode === 'origin' ? 'default' : 'outline'}
-              onClick={() => handleModeChange('origin')}
-              className="gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Por Destino
-              <span className="text-xs opacity-70">(De onde vieram?)</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                {analysisMode === 'entry' ? 'Filtro de Entrada' : 'Filtro de Destino'}
-              </CardTitle>
-              <CardDescription>
-                {analysisMode === 'entry' 
-                  ? 'Selecione o produto ou funil de entrada para ver o que os clientes compraram depois'
-                  : 'Selecione o produto ou funil de destino para ver de onde os clientes vieram'
-                }
-              </CardDescription>
-            </div>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-2">
-                <RotateCcw className="h-4 w-4" />
-                Limpar Tudo
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4 items-end">
-            {/* Date Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {analysisMode === 'entry' ? 'Data da Primeira Compra' : 'Período'}
-              </label>
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn(
-                      "w-[140px] justify-start text-left font-normal",
-                      !dateFilter.startDate && "text-muted-foreground"
-                    )}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFilter.startDate ? format(dateFilter.startDate, "dd/MM/yyyy") : "Início"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateFilter.startDate || undefined}
-                      onSelect={(date) => setDateFilter(prev => ({ ...prev, startDate: date || null }))}
-                      locale={ptBR}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn(
-                      "w-[140px] justify-start text-left font-normal",
-                      !dateFilter.endDate && "text-muted-foreground"
-                    )}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFilter.endDate ? format(dateFilter.endDate, "dd/MM/yyyy") : "Fim"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateFilter.endDate || undefined}
-                      onSelect={(date) => setDateFilter(prev => ({ ...prev, endDate: date || null }))}
-                      locale={ptBR}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                {(dateFilter.startDate || dateFilter.endDate) && (
-                  <Button variant="ghost" size="icon" onClick={clearDateFilter}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo de Filtro</label>
-              <Select value={filterType || 'all'} onValueChange={handleFilterTypeChange}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os Clientes</SelectItem>
-                  <SelectItem value="product">Por Produto</SelectItem>
-                  <SelectItem value="funnel">Por Funil</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {filterType === 'product' && (
-              <div className="space-y-2 flex-1 min-w-[300px]">
-                <label className="text-sm font-medium">
-                  {analysisMode === 'entry' ? 'Produtos de Entrada' : 'Produtos de Destino'}
-                </label>
-                <MultiSelect
-                  options={uniqueProducts.map(p => ({ value: p, label: p }))}
-                  selected={selectedValues}
-                  onChange={setSelectedValues}
-                  placeholder="Selecione os produtos..."
-                />
-              </div>
-            )}
-
-            {filterType === 'funnel' && (
-              <div className="space-y-2 flex-1 min-w-[300px]">
-                <label className="text-sm font-medium">
-                  {analysisMode === 'entry' ? 'Funis de Entrada' : 'Funis de Destino'}
-                </label>
-                <MultiSelect
-                  options={uniqueFunnels.map(f => ({ value: f.id, label: f.name }))}
-                  selected={selectedValues}
-                  onChange={setSelectedValues}
-                  placeholder="Selecione os funis..."
-                />
-              </div>
-            )}
-
-            {(filterType && selectedValues.length > 0) && (
-              <Button variant="ghost" size="icon" onClick={clearFilter}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          {/* Active filter badges */}
-          {(sourceFilter.length > 0 || contactStatusFilter.length > 0) && (
-            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
-              {sourceFilter.map(source => (
-                <Badge key={source} variant="secondary" className="gap-1">
-                  Fonte: {source}
-                  <button onClick={() => handleSourceToggle(source)}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              {contactStatusFilter.map(status => (
-                <Badge key={status} variant="secondary" className="gap-1">
-                  Status: {status}
-                  <button onClick={() => handleContactStatusToggle(status)}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Metrics Summary */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -631,13 +481,220 @@ export function CustomerJourneyAnalysis() {
         </Card>
       </div>
 
+      {/* Analysis Controls */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg">Análise de Jornada</CardTitle>
+              <CardDescription>
+                Analise a jornada dos clientes por entrada ou destino
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={analysisMode === 'entry' ? 'default' : 'outline'}
+                onClick={() => handleModeChange('entry')}
+                size="sm"
+                className="gap-2"
+              >
+                <ArrowRight className="h-4 w-4" />
+                Por Entrada
+              </Button>
+              <Button
+                variant={analysisMode === 'origin' ? 'default' : 'outline'}
+                onClick={() => handleModeChange('origin')}
+                size="sm"
+                className="gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Por Destino
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search and Filter Toggle */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou email do cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Limpar
+              </Button>
+            )}
+          </div>
+
+          {/* Advanced Filters (Collapsible) */}
+          <Collapsible open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+            <CollapsibleContent>
+              <div className="pt-4 border-t space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Date Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Período</label>
+                    <div className="flex gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className={cn(
+                            "flex-1 justify-start text-left font-normal",
+                            !dateFilter.startDate && "text-muted-foreground"
+                          )}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateFilter.startDate ? format(dateFilter.startDate, "dd/MM/yy") : "Início"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={dateFilter.startDate || undefined}
+                            onSelect={(date) => setDateFilter(prev => ({ ...prev, startDate: date || null }))}
+                            locale={ptBR}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className={cn(
+                            "flex-1 justify-start text-left font-normal",
+                            !dateFilter.endDate && "text-muted-foreground"
+                          )}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateFilter.endDate ? format(dateFilter.endDate, "dd/MM/yy") : "Fim"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={dateFilter.endDate || undefined}
+                            onSelect={(date) => setDateFilter(prev => ({ ...prev, endDate: date || null }))}
+                            locale={ptBR}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+
+                  {/* Filter Type */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Tipo de Filtro</label>
+                    <Select value={filterType || 'all'} onValueChange={handleFilterTypeChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="product">Por Produto</SelectItem>
+                        <SelectItem value="funnel">Por Funil</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Product/Funnel Selection */}
+                  {filterType === 'product' && (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">
+                        {analysisMode === 'entry' ? 'Produtos de Entrada' : 'Produtos de Destino'}
+                      </label>
+                      <MultiSelect
+                        options={uniqueProducts.map(p => ({ value: p, label: p }))}
+                        selected={selectedValues}
+                        onChange={setSelectedValues}
+                        placeholder="Selecione os produtos..."
+                      />
+                    </div>
+                  )}
+
+                  {filterType === 'funnel' && (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">
+                        {analysisMode === 'entry' ? 'Funis de Entrada' : 'Funis de Destino'}
+                      </label>
+                      <MultiSelect
+                        options={uniqueFunnels.map(f => ({ value: f.id, label: f.name }))}
+                        selected={selectedValues}
+                        onChange={setSelectedValues}
+                        placeholder="Selecione os funis..."
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Active filter badges */}
+                {(sourceFilter.length > 0 || contactStatusFilter.length > 0 || pageFilter.length > 0) && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {sourceFilter.map(source => (
+                      <Badge key={source} variant="secondary" className="gap-1">
+                        Fonte: {source}
+                        <button onClick={() => handleSourceToggle(source)}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {contactStatusFilter.map(status => (
+                      <Badge key={status} variant="secondary" className="gap-1">
+                        Status: {status}
+                        <button onClick={() => handleContactStatusToggle(status)}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {pageFilter.map(page => (
+                      <Badge key={page} variant="secondary" className="gap-1">
+                        Página: {page}
+                        <button onClick={() => handlePageToggle(page)}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </CardContent>
+      </Card>
+
       {/* Flow Chart */}
-      {customerJourneys.length > 0 && (
-        <CustomerFlowChart journeys={customerJourneys} />
+      {filteredJourneys.length > 0 && !searchTerm && (
+        <CustomerFlowChart journeys={filteredJourneys} />
       )}
 
-      {/* Cohort Analysis */}
-      {journeyMetrics.cohortMetrics.length > 0 && (
+      {/* Cohort Analysis - Only show when not searching */}
+      {journeyMetrics.cohortMetrics.length > 0 && !searchTerm && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Análise por Ponto de Entrada</CardTitle>
@@ -646,44 +703,46 @@ export function CustomerJourneyAnalysis() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Produto de Entrada</TableHead>
-                  <TableHead>Funil</TableHead>
-                  <TableHead className="text-center">Clientes</TableHead>
-                  <TableHead className="text-right">LTV Médio</TableHead>
-                  <TableHead className="text-center">Compras Médias</TableHead>
-                  <TableHead className="text-center">Taxa Recompra</TableHead>
-                  <TableHead className="text-right">Receita Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {journeyMetrics.cohortMetrics.slice(0, 10).map((cohort, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{cohort.entryProduct}</TableCell>
-                    <TableCell>
-                      {cohort.entryFunnel ? (
-                        <Badge variant="outline">{cohort.entryFunnel}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">{cohort.customerCount}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(cohort.avgLTV)}</TableCell>
-                    <TableCell className="text-center">{cohort.avgPurchases.toFixed(2)}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={cohort.repeatRate > 20 ? "default" : "secondary"}>
-                        {cohort.repeatRate.toFixed(1)}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(cohort.totalRevenue)}
-                    </TableCell>
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produto de Entrada</TableHead>
+                    <TableHead>Funil</TableHead>
+                    <TableHead className="text-center">Clientes</TableHead>
+                    <TableHead className="text-right">LTV Médio</TableHead>
+                    <TableHead className="text-center">Compras Médias</TableHead>
+                    <TableHead className="text-center">Taxa Recompra</TableHead>
+                    <TableHead className="text-right">Receita Total</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {journeyMetrics.cohortMetrics.slice(0, 10).map((cohort, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{cohort.entryProduct}</TableCell>
+                      <TableCell>
+                        {cohort.entryFunnel ? (
+                          <Badge variant="outline">{cohort.entryFunnel}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">{cohort.customerCount}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(cohort.avgLTV)}</TableCell>
+                      <TableCell className="text-center">{cohort.avgPurchases.toFixed(2)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={cohort.repeatRate > 20 ? "default" : "secondary"}>
+                          {cohort.repeatRate.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(cohort.totalRevenue)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -691,13 +750,23 @@ export function CustomerJourneyAnalysis() {
       {/* Customer List */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Lista de Contatos</CardTitle>
-          <CardDescription>
-            {customerJourneys.length} contatos encontrados
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Lista de Contatos</CardTitle>
+              <CardDescription>
+                {searchTerm ? (
+                  <>
+                    {filteredJourneys.length} resultado{filteredJourneys.length !== 1 ? 's' : ''} para "{searchTerm}"
+                  </>
+                ) : (
+                  <>{filteredJourneys.length} contatos encontrados</>
+                )}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -715,26 +784,31 @@ export function CustomerJourneyAnalysis() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customerJourneys.slice(0, 50).map((journey) => (
+                {filteredJourneys.slice(0, 50).map((journey) => (
                   <CustomerRow 
                     key={journey.buyerEmail} 
                     journey={journey}
                     showOrigin={analysisMode === 'origin'}
+                    searchTerm={searchTerm}
                   />
                 ))}
-                {customerJourneys.length === 0 && (
+                {filteredJourneys.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Nenhum contato encontrado com os filtros aplicados
+                      {searchTerm ? (
+                        <>Nenhum cliente encontrado com "{searchTerm}"</>
+                      ) : (
+                        <>Nenhum contato encontrado com os filtros aplicados</>
+                      )}
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
-          {customerJourneys.length > 50 && (
+          {filteredJourneys.length > 50 && (
             <p className="text-sm text-muted-foreground mt-4 text-center">
-              Exibindo 50 de {customerJourneys.length} contatos. Use os filtros para refinar a busca.
+              Exibindo 50 de {filteredJourneys.length} contatos. {searchTerm ? 'Refine a busca' : 'Use os filtros'} para ver mais resultados.
             </p>
           )}
         </CardContent>

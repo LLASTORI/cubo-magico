@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { updateLastLogin, logActivityStandalone } from '@/hooks/useActivityLog';
 
 interface AuthContextType {
   user: User | null;
@@ -39,10 +40,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    // Update last login and log activity after successful login
+    if (!error && data.user) {
+      setTimeout(() => {
+        updateLastLogin();
+        logActivityStandalone(data.user.id, {
+          action: 'login',
+          entityType: 'session',
+          entityName: email,
+        });
+      }, 0);
+    }
+    
     return { error };
   };
 
@@ -63,6 +77,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
+    // Log logout activity before signing out
+    if (user) {
+      await logActivityStandalone(user.id, {
+        action: 'logout',
+        entityType: 'session',
+        entityName: user.email || '',
+      });
+    }
     await supabase.auth.signOut();
   };
 

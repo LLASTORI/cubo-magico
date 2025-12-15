@@ -2074,6 +2074,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean | null
+          last_login_at: string | null
           max_projects: number | null
           updated_at: string
         }
@@ -2085,6 +2086,7 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean | null
+          last_login_at?: string | null
           max_projects?: number | null
           updated_at?: string
         }
@@ -2096,6 +2098,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean | null
+          last_login_at?: string | null
           max_projects?: number | null
           updated_at?: string
         }
@@ -2381,6 +2384,56 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_name: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          project_id: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_name?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          project_id?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_name?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          project_id?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_activity_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -2485,6 +2538,7 @@ export type Database = {
           transactions_created: number
         }[]
       }
+      update_last_login: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user" | "super_admin"

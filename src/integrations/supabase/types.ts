@@ -2351,6 +2351,36 @@ export type Database = {
           },
         ]
       }
+      terms_acceptances: {
+        Row: {
+          accepted_at: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          terms_version: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          terms_version?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          terms_version?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -2424,6 +2454,10 @@ export type Database = {
       get_user_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["project_role"]
+      }
+      has_accepted_terms: {
+        Args: { _user_id: string; _version?: string }
+        Returns: boolean
       }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
       has_project_access: {

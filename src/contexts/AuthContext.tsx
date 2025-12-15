@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { updateLastLogin, logActivityStandalone } from '@/hooks/useActivityLog';
@@ -18,16 +18,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const loginLoggedRef = useRef(false);
 
   useEffect(() => {
     // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+      setLoading(false);
+
+      if (event === 'SIGNED_OUT') {
+        loginLoggedRef.current = false;
+        return;
       }
-    );
+
+      // Register login only once per session, and only after MFA is fully verified (when applicable)
+      if (!newSession?.user || loginLoggedRef.current) return;
+      if (!(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) return;
+
+      void (async () => {
+        try {
+          const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+          const shouldLog = aalError ? event === 'SIGNED_IN' : aal.currentLevel === aal.nextLevel;
+          if (!shouldLog) return;
+
+          loginLoggedRef.current = true;
+
+          await updateLastLogin();
+          await logActivityStandalone(newSession.user.id, {
+            action: 'login',
+            entityType: 'session',
+            entityName: newSession.user.email || '',
+          });
+        } catch (err) {
+          console.error('Failed to register login activity:', err);
+        }
+      })();
+    });
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -40,23 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    
-    // Update last login and log activity after successful login
-    if (!error && data.user) {
-      setTimeout(() => {
-        updateLastLogin();
-        logActivityStandalone(data.user.id, {
-          action: 'login',
-          entityType: 'session',
-          entityName: email,
-        });
-      }, 0);
-    }
-    
+
     return { error };
   };
 

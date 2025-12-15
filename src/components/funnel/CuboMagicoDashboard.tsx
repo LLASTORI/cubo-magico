@@ -84,7 +84,7 @@ interface FunnelMetrics {
     vendas: number;
     receita: number;
     taxaConversao: number;
-    produtos: Array<{ nome_produto: string; nome_oferta: string | null; codigo_oferta: string | null }>;
+    produtos: Array<{ nome_produto: string; nome_oferta: string | null; codigo_oferta: string | null; vendas: number; receita: number }>;
   }>;
   // New conversion metrics
   connectRate: number; // landing_page_view / link_click
@@ -406,7 +406,7 @@ export function CuboMagicoDashboard({
       
       // Count products by position
       const productsByPosition: Record<string, number> = {};
-      const positionDetails: Record<string, { vendas: number; receita: number; ordem: number; produtos: Array<{ nome_produto: string; nome_oferta: string | null; codigo_oferta: string | null }> }> = {};
+      const positionDetails: Record<string, { vendas: number; receita: number; ordem: number; produtos: Array<{ nome_produto: string; nome_oferta: string | null; codigo_oferta: string | null; vendas: number; receita: number }> }> = {};
       
       funnelOffers.forEach(offer => {
         const pos = offer.tipo_posicao || 'OTHER';
@@ -426,7 +426,9 @@ export function CuboMagicoDashboard({
         positionDetails[posKey].produtos.push({
           nome_produto: offer.nome_produto,
           nome_oferta: offer.nome_oferta,
-          codigo_oferta: offer.codigo_oferta
+          codigo_oferta: offer.codigo_oferta,
+          vendas: salesCount,
+          receita: salesRevenue
         });
       });
 
@@ -1790,17 +1792,38 @@ export function CuboMagicoDashboard({
                                               {/* Product/Offer Info */}
                                               {pos.produtos && pos.produtos.length > 0 && (
                                                 <div className="mt-2 pt-2 border-t border-border/50">
-                                                  <p className="text-xs text-muted-foreground mb-1">Produto(s) associado(s):</p>
-                                                  <div className="space-y-1">
+                                                  <p className="text-xs text-muted-foreground mb-1">
+                                                    {pos.produtos.length > 1 ? 'Produtos associados:' : 'Produto associado:'}
+                                                  </p>
+                                                  <div className="space-y-1.5">
                                                     {pos.produtos.map((p, idx) => (
-                                                      <div key={idx} className="text-xs">
-                                                        <span className="font-medium text-foreground">{p.nome_produto}</span>
-                                                        {p.nome_oferta && (
-                                                          <span className="text-muted-foreground"> — {p.nome_oferta}</span>
+                                                      <div key={idx} className="text-xs space-y-0.5">
+                                                        <div>
+                                                          <span className="font-medium text-foreground">{p.nome_produto}</span>
+                                                          {p.nome_oferta && (
+                                                            <span className="text-muted-foreground"> — {p.nome_oferta}</span>
+                                                          )}
+                                                        </div>
+                                                        {p.codigo_oferta && (
+                                                          <div className="text-[10px] text-muted-foreground font-mono">
+                                                            Código: {p.codigo_oferta}
+                                                          </div>
+                                                        )}
+                                                        {pos.produtos.length > 1 && (
+                                                          <div className="text-[10px] text-muted-foreground">
+                                                            {p.vendas} vendas • {formatCurrency(p.receita)}
+                                                          </div>
                                                         )}
                                                       </div>
                                                     ))}
                                                   </div>
+                                                  {pos.produtos.length > 1 && (
+                                                    <div className="mt-2 pt-1 border-t border-border/30">
+                                                      <div className="text-xs font-medium text-foreground">
+                                                        Total fase: {pos.vendas} vendas • {formatCurrency(pos.receita)}
+                                                      </div>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               )}
                                               

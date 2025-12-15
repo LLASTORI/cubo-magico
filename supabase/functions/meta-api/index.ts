@@ -985,43 +985,48 @@ async function syncAds(
 }
 
 // Get insights with DAILY granularity and PAGINATION support
-async function getInsightsForAccount(
-  accessToken: string, 
+// IMPORTANT: Meta may return "reduce the amount of data" (error code 1) even for 15-day chunks on accounts with many ads.
+// We handle this by adaptively splitting the date range until it succeeds.
+async function getInsightsForAccountOnce(
+  accessToken: string,
   accountId: string,
-  dateStart: string, 
+  dateStart: string,
   dateStop: string,
   level: string
-) {
+): Promise<{ insights: any[]; errorCode?: number; errorMessage?: string }> {
   const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type'
-  
+
   const allInsights: any[] = []
-  
-  // Initial request
+
   const params = new URLSearchParams({
     fields,
     time_range: JSON.stringify({ since: dateStart, until: dateStop }),
-    time_increment: '1', // DAILY granularity - one record per day
+    time_increment: '1',
     level,
-    limit: '500', // Max limit per page
+    limit: '500',
     access_token: accessToken,
   })
 
   let url: string | null = `${GRAPH_API_BASE}/${accountId}/insights?${params}`
   let pageCount = 0
-  const maxPages = 50 // Safety limit
+  const maxPages = 50
 
   while (url && pageCount < maxPages) {
     pageCount++
     console.log(`Fetching insights page ${pageCount} for ${accountId}...`)
-    
+
     const data = await fetchWithRetry(url, `Insights page ${pageCount} for ${accountId}`)
 
-    if (data.error) {
+    if (data?.error) {
       console.error(`Insights error for ${accountId}:`, data.error)
-      break
+      return {
+        insights: [],
+        errorCode: data.error.code,
+        errorMessage: data.error.message,
+      }
     }
 
-    if (data.data && data.data.length > 0) {
+    if (data?.data && data.data.length > 0) {
       const pageInsights = data.data.map((i: any) => ({
         ...i,
         ad_account_id: accountId,
@@ -1030,17 +1035,99 @@ async function getInsightsForAccount(
       console.log(`Got ${data.data.length} insights from page ${pageCount}, total: ${allInsights.length}`)
     }
 
-    // Check for next page
-    url = data.paging?.next || null
-    
-    // Optimized delay between pages
+    url = data?.paging?.next || null
+
     if (url) {
       await delay(DELAY_BETWEEN_PAGES_MS)
     }
   }
 
   console.log(`Account ${accountId}: Total ${allInsights.length} insights across ${pageCount} pages`)
-  return allInsights
+  return { insights: allInsights }
+}
+
+function formatDateOnly(date: Date) {
+  return date.toISOString().split('T')[0]
+}
+
+function diffDaysInclusive(dateStart: string, dateStop: string) {
+  const start = new Date(dateStart)
+  const end = new Date(dateStop)
+  const msDay = 1000 * 60 * 60 * 24
+  return Math.floor((end.getTime() - start.getTime()) / msDay) + 1
+}
+
+async function getInsightsForAccountAdaptive(
+  accessToken: string,
+  accountId: string,
+  dateStart: string,
+  dateStop: string,
+  level: string,
+  depth: number = 0
+): Promise<any[]> {
+  const res = await getInsightsForAccountOnce(accessToken, accountId, dateStart, dateStop, level)
+
+  // Success
+  if (!res.errorCode) return res.insights
+
+  // Meta "reduce data" error → split date range and retry
+  if (res.errorCode === 1) {
+    const totalDays = diffDaysInclusive(dateStart, dateStop)
+
+    // Can't split further
+    if (totalDays <= 1 || depth >= 12) {
+      console.warn(
+        `Unable to reduce further for ${accountId} (${dateStart}..${dateStop}) at level=${level}. Returning empty.`
+      )
+      return []
+    }
+
+    const start = new Date(dateStart)
+    const leftDays = Math.floor(totalDays / 2)
+    const leftEnd = new Date(start)
+    leftEnd.setDate(leftEnd.getDate() + Math.max(0, leftDays - 1))
+
+    const rightStart = new Date(leftEnd)
+    rightStart.setDate(rightStart.getDate() + 1)
+
+    const leftStartStr = formatDateOnly(start)
+    const leftEndStr = formatDateOnly(leftEnd)
+    const rightStartStr = formatDateOnly(rightStart)
+    const rightEndStr = dateStop
+
+    console.log(
+      `Splitting chunk due to code 1: ${dateStart}..${dateStop} → [${leftStartStr}..${leftEndStr}] + [${rightStartStr}..${rightEndStr}] (depth=${depth})`
+    )
+
+    // Sequential split to reduce pressure on the API
+    const left = await getInsightsForAccountAdaptive(
+      accessToken,
+      accountId,
+      leftStartStr,
+      leftEndStr,
+      level,
+      depth + 1
+    )
+
+    await delay(250)
+
+    const right = await getInsightsForAccountAdaptive(
+      accessToken,
+      accountId,
+      rightStartStr,
+      rightEndStr,
+      level,
+      depth + 1
+    )
+
+    return [...left, ...right]
+  }
+
+  // Other errors: log and move on
+  console.warn(
+    `Skipping insights for ${accountId} ${dateStart}..${dateStop} (code=${res.errorCode}): ${res.errorMessage || 'unknown error'}`
+  )
+  return []
 }
 
 // Helper to process a single chunk (for parallel execution)
@@ -1060,7 +1147,7 @@ async function processChunk(
   // Process accounts sequentially to avoid rate limiting per account
   for (let i = 0; i < accountIds.length; i++) {
     const accountId = accountIds[i]
-    const insights = await getInsightsForAccount(accessToken, accountId, chunk.start, chunk.stop, level)
+    const insights = await getInsightsForAccountAdaptive(accessToken, accountId, chunk.start, chunk.stop, level)
     chunkInsights.push(...insights)
     
     // Reduced delay between accounts

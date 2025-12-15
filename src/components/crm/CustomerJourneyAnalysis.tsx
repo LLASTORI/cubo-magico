@@ -25,7 +25,10 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
-  ExternalLink
+  ExternalLink,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { 
@@ -271,6 +274,10 @@ export function CustomerJourneyAnalysis() {
   const [pageFilter, setPageFilter] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{
+    key: 'name' | 'product' | 'purchases' | 'ltv' | 'evolution' | 'date';
+    direction: 'asc' | 'desc';
+  } | null>(null);
 
   const entryFilter: EntryFilter | null = analysisMode === 'entry' && filterType && selectedValues.length > 0
     ? { type: filterType, values: selectedValues }
@@ -310,16 +317,94 @@ export function CustomerJourneyAnalysis() {
     isLoadingBreakdown 
   } = useCRMJourneyData(filters);
 
-  // Filter journeys by search term
+  // Filter and sort journeys
   const filteredJourneys = useMemo(() => {
-    if (!searchTerm.trim()) return customerJourneys;
+    let result = customerJourneys;
     
-    const term = searchTerm.toLowerCase().trim();
-    return customerJourneys.filter(journey => 
-      journey.buyerName.toLowerCase().includes(term) ||
-      journey.buyerEmail.toLowerCase().includes(term)
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      result = result.filter(journey => 
+        journey.buyerName.toLowerCase().includes(term) ||
+        journey.buyerEmail.toLowerCase().includes(term)
+      );
+    }
+    
+    // Apply sorting
+    if (sortConfig) {
+      result = [...result].sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortConfig.key) {
+          case 'name':
+            comparison = a.buyerName.localeCompare(b.buyerName);
+            break;
+          case 'product':
+            comparison = a.entryProduct.localeCompare(b.entryProduct);
+            break;
+          case 'purchases':
+            comparison = a.totalPurchases - b.totalPurchases;
+            break;
+          case 'ltv':
+            comparison = a.totalSpent - b.totalSpent;
+            break;
+          case 'evolution':
+            comparison = a.subsequentProducts.length - b.subsequentProducts.length;
+            break;
+          case 'date':
+            comparison = a.firstPurchaseDate.getTime() - b.firstPurchaseDate.getTime();
+            break;
+        }
+        
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+    }
+    
+    return result;
+  }, [customerJourneys, searchTerm, sortConfig]);
+
+  const handleSort = (key: typeof sortConfig extends null ? never : NonNullable<typeof sortConfig>['key']) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        if (current.direction === 'asc') {
+          return { key, direction: 'desc' };
+        }
+        return null; // Remove sort on third click
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const SortableHeader = ({ 
+    children, 
+    sortKey, 
+    className = '' 
+  }: { 
+    children: React.ReactNode; 
+    sortKey: NonNullable<typeof sortConfig>['key']; 
+    className?: string;
+  }) => {
+    const isActive = sortConfig?.key === sortKey;
+    return (
+      <TableHead 
+        className={cn("cursor-pointer hover:bg-muted/50 select-none transition-colors", className)}
+        onClick={() => handleSort(sortKey)}
+      >
+        <div className="flex items-center gap-1">
+          {children}
+          {isActive ? (
+            sortConfig.direction === 'asc' ? (
+              <ArrowUp className="h-3 w-3" />
+            ) : (
+              <ArrowDown className="h-3 w-3" />
+            )
+          ) : (
+            <ArrowUpDown className="h-3 w-3 opacity-30" />
+          )}
+        </div>
+      </TableHead>
     );
-  }, [customerJourneys, searchTerm]);
+  };
 
   const offerOptions = offerBreakdown.map((offer) => ({
     value: offer.key,
@@ -802,16 +887,16 @@ export function CustomerJourneyAnalysis() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10"></TableHead>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>
+                  <SortableHeader sortKey="name">Contato</SortableHeader>
+                  <SortableHeader sortKey="product">
                     {analysisMode === 'entry' ? 'Produto de Entrada' : 'Produto Alvo'}
-                  </TableHead>
-                  <TableHead className="text-center w-20">Compras</TableHead>
-                  <TableHead className="text-right w-28">LTV</TableHead>
-                  <TableHead className="text-center w-24">
+                  </SortableHeader>
+                  <SortableHeader sortKey="purchases" className="text-center w-20">Compras</SortableHeader>
+                  <SortableHeader sortKey="ltv" className="text-right w-28">LTV</SortableHeader>
+                  <SortableHeader sortKey="evolution" className="text-center w-24">
                     {analysisMode === 'entry' ? 'Evolução' : 'Origem'}
-                  </TableHead>
-                  <TableHead className="text-right w-28">Primeira Compra</TableHead>
+                  </SortableHeader>
+                  <SortableHeader sortKey="date" className="text-right w-28">Primeira Compra</SortableHeader>
                 </TableRow>
               </TableHeader>
               <TableBody>

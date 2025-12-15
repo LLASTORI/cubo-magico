@@ -99,6 +99,33 @@ const Auth = () => {
     }
   };
 
+  const finalizeLogin = async (emailHint?: string) => {
+    try {
+      const getSessionOnce = async () => {
+        const { data } = await supabase.auth.getSession();
+        return data.session;
+      };
+
+      let session = await getSessionOnce();
+      if (!session) {
+        await new Promise((r) => setTimeout(r, 150));
+        session = await getSessionOnce();
+      }
+
+      const currentUser = session?.user;
+      if (!currentUser) return;
+
+      await updateLastLogin();
+      await logActivityStandalone(currentUser.id, {
+        action: 'login',
+        entityType: 'session',
+        entityName: currentUser.email || emailHint || '',
+      });
+    } catch (err) {
+      console.error('Failed to finalize login:', err);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -148,13 +175,7 @@ const Auth = () => {
         }
       }
 
-      // Log activity and update last login for non-MFA users
-      updateLastLogin();
-      logActivityStandalone(data.user.id, {
-        action: 'login',
-        entityType: 'session',
-        entityName: loginData.email,
-      });
+      await finalizeLogin(loginData.email);
 
       toast({
         title: 'Login realizado!',
@@ -240,17 +261,8 @@ const Auth = () => {
     setShowMFA(false);
     setMfaFactorId(null);
     
-    // Get the current user and log activity after MFA verification
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (currentUser) {
-      updateLastLogin();
-      logActivityStandalone(currentUser.id, {
-        action: 'login',
-        entityType: 'session',
-        entityName: currentUser.email || '',
-      });
-    }
-    
+    await finalizeLogin(loginData.email);
+
     toast({
       title: 'Login realizado!',
       description: 'Verificação 2FA concluída.',

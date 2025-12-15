@@ -14,6 +14,7 @@ import { CuboBrand } from '@/components/CuboLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MFAVerification } from '@/components/MFAVerification';
 import { TermsDialog } from '@/components/TermsDialog';
+import { logActivityStandalone, updateLastLogin } from '@/hooks/useActivityLog';
 import { z } from 'zod';
 
 const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9]).{8,}$/;
@@ -135,7 +136,7 @@ const Auth = () => {
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       
       if (aalData?.currentLevel === 'aal1' && aalData?.nextLevel === 'aal2') {
-        // Need MFA verification
+        // Need MFA verification - activity will be logged after MFA success
         const factorsData = await supabase.auth.mfa.listFactors();
         if (factorsData.data?.totp && factorsData.data.totp.length > 0) {
           const verifiedFactor = factorsData.data.totp.find(f => f.status === 'verified');
@@ -146,6 +147,14 @@ const Auth = () => {
           }
         }
       }
+
+      // Log activity and update last login for non-MFA users
+      updateLastLogin();
+      logActivityStandalone(data.user.id, {
+        action: 'login',
+        entityType: 'session',
+        entityName: loginData.email,
+      });
 
       toast({
         title: 'Login realizado!',
@@ -227,9 +236,21 @@ const Auth = () => {
     navigate('/projects');
   };
 
-  const handleMFASuccess = () => {
+  const handleMFASuccess = async () => {
     setShowMFA(false);
     setMfaFactorId(null);
+    
+    // Get the current user and log activity after MFA verification
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      updateLastLogin();
+      logActivityStandalone(currentUser.id, {
+        action: 'login',
+        entityType: 'session',
+        entityName: currentUser.email || '',
+      });
+    }
+    
     toast({
       title: 'Login realizado!',
       description: 'Verificação 2FA concluída.',

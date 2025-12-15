@@ -271,70 +271,79 @@ const Admin = () => {
                 Termos de Uso
               </TabsTrigger>
             )}
-            {isSuperAdmin && (
-              <TabsTrigger value="activity" className="gap-2">
-                <History className="h-4 w-4" />
-                Atividade
-              </TabsTrigger>
-            )}
           </TabsList>
 
           <TabsContent value="users" className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <Users className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{stats.total}</p>
-                      <p className="text-xs text-muted-foreground">Total de Usuários</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-500/10 rounded-lg">
-                      <Activity className="w-5 h-5 text-green-500" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{stats.active}</p>
-                      <p className="text-xs text-muted-foreground">Usuários Ativos</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-500/10 rounded-lg">
-                      <Shield className="w-5 h-5 text-amber-500" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{stats.admins}</p>
-                      <p className="text-xs text-muted-foreground">Administradores</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-500/10 rounded-lg">
-                      <UserCog className="w-5 h-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{stats.canCreate}</p>
-                      <p className="text-xs text-muted-foreground">Podem Criar Projetos</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <Tabs defaultValue="list" className="space-y-6">
+              <TabsList>
+                <TabsTrigger value="list" className="gap-2">
+                  <Users className="h-4 w-4" />
+                  Lista de Usuários
+                </TabsTrigger>
+                {isSuperAdmin && (
+                  <TabsTrigger value="activity" className="gap-2">
+                    <History className="h-4 w-4" />
+                    Atividade
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              <TabsContent value="list" className="space-y-6">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <Users className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{stats.total}</p>
+                          <p className="text-xs text-muted-foreground">Total de Usuários</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-500/10 rounded-lg">
+                          <Activity className="w-5 h-5 text-green-500" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{stats.active}</p>
+                          <p className="text-xs text-muted-foreground">Usuários Ativos</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-500/10 rounded-lg">
+                          <Shield className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{stats.admins}</p>
+                          <p className="text-xs text-muted-foreground">Administradores</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/10 rounded-lg">
+                          <UserCog className="w-5 h-5 text-blue-500" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{stats.canCreate}</p>
+                          <p className="text-xs text-muted-foreground">Podem Criar Projetos</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
         {/* Users Table */}
         <Card>
@@ -509,6 +518,14 @@ const Admin = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+              </TabsContent>
+
+              {isSuperAdmin && (
+                <TabsContent value="activity">
+                  <UserActivityManager />
+                </TabsContent>
+              )}
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="subscriptions">
@@ -539,11 +556,6 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          {isSuperAdmin && (
-            <TabsContent value="activity">
-              <UserActivityManager />
-            </TabsContent>
-          )}
         </Tabs>
       </main>
     </div>

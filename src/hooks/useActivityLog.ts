@@ -52,23 +52,22 @@ export const useActivityLog = () => {
 };
 
 // Standalone function for use outside of React components (like in AuthContext)
+// Uses SECURITY DEFINER RPC function to bypass RLS timing issues
 export const logActivityStandalone = async (
   userId: string,
   params: Omit<LogActivityParams, 'projectId'> & { projectId?: string }
 ) => {
   try {
-    const { error } = await supabase
-      .from('user_activity_logs')
-      .insert({
-        user_id: userId,
-        project_id: params.projectId || null,
-        action: params.action,
-        entity_type: params.entityType,
-        entity_id: params.entityId || null,
-        entity_name: params.entityName || null,
-        details: params.details || {},
-        user_agent: navigator.userAgent,
-      });
+    const { error } = await supabase.rpc('log_user_activity', {
+      p_user_id: userId,
+      p_action: params.action,
+      p_entity_type: params.entityType,
+      p_entity_id: params.entityId || null,
+      p_entity_name: params.entityName || null,
+      p_project_id: params.projectId || null,
+      p_details: params.details || {},
+      p_user_agent: navigator.userAgent,
+    });
 
     if (error) {
       console.error('Error logging activity:', error);

@@ -2525,6 +2525,19 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      log_user_activity: {
+        Args: {
+          p_action: string
+          p_details?: Json
+          p_entity_id?: string
+          p_entity_name?: string
+          p_entity_type: string
+          p_project_id?: string
+          p_user_agent?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       migrate_auto_recoveries: {
         Args: never
         Returns: {

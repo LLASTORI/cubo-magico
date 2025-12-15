@@ -271,9 +271,21 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
           .map(c => c.campaign_id);
 
         // Calculate spend from insights for these campaigns
-        funnelSpend = metaInsights
-          .filter(insight => insight.campaign_id && matchingCampaignIds.includes(insight.campaign_id))
-          .reduce((sum, insight) => sum + (insight.spend || 0), 0);
+        // IMPORTANT: Deduplicate by ad_id + date to avoid double counting
+        const matchingInsights = metaInsights.filter(
+          insight => insight.campaign_id && matchingCampaignIds.includes(insight.campaign_id)
+        );
+        
+        const uniqueSpend = new Map<string, number>();
+        matchingInsights.forEach(insight => {
+          if (insight.spend && insight.ad_id) {
+            const key = `${insight.ad_id}_${insight.date_start}`;
+            if (!uniqueSpend.has(key)) {
+              uniqueSpend.set(key, insight.spend);
+            }
+          }
+        });
+        funnelSpend = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
       }
 
       console.log(`[ProjectOverview] Funnel "${funnel.name}": pattern="${funnel.campaign_name_pattern}", campaigns=${matchingCampaignIds.length}, offers=${funnelOfferCodes.length}, revenue=${funnelRevenue.toFixed(2)}, spend=${funnelSpend.toFixed(2)}`);
@@ -292,9 +304,21 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
   }, [funnels, sales, metaInsights, offerMappings, metaCampaigns]);
 
   // Calculate general ROAS (all sales vs all spend)
+  // IMPORTANT: Deduplicate spend by ad_id + date to avoid double counting
   const generalROAS = useMemo(() => {
     const totalRevenue = sales?.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0) || 0;
-    const totalSpend = metaInsights?.reduce((sum, insight) => sum + (insight.spend || 0), 0) || 0;
+    
+    // Deduplicate spend
+    const uniqueSpend = new Map<string, number>();
+    metaInsights?.forEach(insight => {
+      if (insight.spend && insight.ad_id) {
+        const key = `${insight.ad_id}_${insight.date_start}`;
+        if (!uniqueSpend.has(key)) {
+          uniqueSpend.set(key, insight.spend);
+        }
+      }
+    });
+    const totalSpend = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
     
     return {
       revenue: totalRevenue,
@@ -304,10 +328,14 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
   }, [sales, metaInsights]);
 
   // Calculate monthly balance
+  // IMPORTANT: Deduplicate spend by ad_id + date to avoid double counting
   const monthlyBalance = useMemo((): MonthlyBalance[] => {
     if (!sales || !metaInsights) return [];
 
     const monthlyData: Record<string, { revenue: number; spend: number }> = {};
+    
+    // Track unique spend entries
+    const uniqueSpendEntries = new Map<string, { month: string; spend: number }>();
 
     // Group sales by month
     sales.forEach(sale => {
@@ -319,14 +347,22 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
       monthlyData[month].revenue += sale.total_price_brl || sale.total_price || 0;
     });
 
-    // Group spend by month
+    // Group spend by month (deduplicated)
     metaInsights.forEach(insight => {
-      if (!insight.date_start) return;
-      const month = format(new Date(insight.date_start), 'yyyy-MM');
+      if (!insight.date_start || !insight.ad_id || !insight.spend) return;
+      const key = `${insight.ad_id}_${insight.date_start}`;
+      if (!uniqueSpendEntries.has(key)) {
+        const month = format(new Date(insight.date_start), 'yyyy-MM');
+        uniqueSpendEntries.set(key, { month, spend: insight.spend });
+      }
+    });
+    
+    // Add unique spend to monthly data
+    uniqueSpendEntries.forEach(({ month, spend }) => {
       if (!monthlyData[month]) {
         monthlyData[month] = { revenue: 0, spend: 0 };
       }
-      monthlyData[month].spend += insight.spend || 0;
+      monthlyData[month].spend += spend;
     });
 
     // Convert to array and calculate accumulated profit
@@ -349,9 +385,22 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
   }, [sales, metaInsights]);
 
   // Summary metrics
+  // IMPORTANT: Deduplicate spend by ad_id + date to avoid double counting
   const summaryMetrics = useMemo(() => {
     const totalRevenue = sales?.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0) || 0;
-    const totalSpend = metaInsights?.reduce((sum, insight) => sum + (insight.spend || 0), 0) || 0;
+    
+    // Deduplicate spend
+    const uniqueSpend = new Map<string, number>();
+    metaInsights?.forEach(insight => {
+      if (insight.spend && insight.ad_id) {
+        const key = `${insight.ad_id}_${insight.date_start}`;
+        if (!uniqueSpend.has(key)) {
+          uniqueSpend.set(key, insight.spend);
+        }
+      }
+    });
+    const totalSpend = Array.from(uniqueSpend.values()).reduce((sum, s) => sum + s, 0);
+    
     const totalSales = sales?.length || 0;
     const profit = totalRevenue - totalSpend;
 

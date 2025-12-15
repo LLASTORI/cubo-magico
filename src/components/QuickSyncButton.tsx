@@ -151,9 +151,10 @@ export function QuickSyncButton({
         
         // Invalidate queries to refresh data after a delay
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['project-overview'] });
-          queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
-        }, 5000);
+          // The app uses several distinct query keys (e.g. "project-overview-sales", "project-overview-insights").
+          // Invalidate broadly to ensure the UI picks up the newly-synced backend data.
+          queryClient.invalidateQueries();
+        }, 1500);
         
         setTimeout(() => setJustCompleted(false), 3000);
       }

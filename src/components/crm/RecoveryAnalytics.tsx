@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Table, 
   TableBody, 
@@ -26,16 +27,13 @@ import { useQuery } from '@tanstack/react-query';
 import { format, differenceInDays, startOfMonth, eachMonthOfInterval, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
-  AreaChart, 
-  Area, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
+  Tooltip as RechartsTooltip, 
   ResponsiveContainer,
   BarChart,
   Bar,
-  Cell,
   Legend
 } from 'recharts';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -301,133 +299,180 @@ export function RecoveryAnalytics({ startDate, endDate }: RecoveryAnalyticsProps
   }
 
   return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-destructive/10">
-                <DollarSign className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{formatCurrency(totals.totalLost)}</p>
-                <p className="text-sm text-muted-foreground">Valor total perdido</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Percent className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totals.overallRate}%</p>
-                <p className="text-sm text-muted-foreground">Taxa geral de perda</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-yellow-500/10">
-                <Clock className="h-5 w-5 text-yellow-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {statusStats.refundAvgDays !== null ? `${statusStats.refundAvgDays} dias` : 'N/A'}
-                </p>
-                <p className="text-sm text-muted-foreground">Tempo médio até reembolso</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-muted">
-                <Package className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{productRanking.length}</p>
-                <p className="text-sm text-muted-foreground">Produtos com perdas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Status Breakdown - Clickable */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* All statuses option */}
-        <Card 
-          className={`cursor-pointer transition-all hover:ring-2 hover:ring-primary/50 ${
-            statusFilter === 'ALL' ? 'ring-2 ring-primary' : ''
-          }`}
-          onClick={() => setStatusFilter('ALL')}
-        >
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-muted">
-                  <TrendingDown className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium">Todos</p>
-                  <p className="text-2xl font-bold">{totals.totalNegative}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Valor</p>
-                <p className="font-semibold">{formatCurrency(totals.totalLost)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {(Object.keys(STATUS_CONFIG) as NegativeStatus[]).map(status => {
-          const config = STATUS_CONFIG[status];
-          const stats = statusStats[status];
-          const Icon = config.icon;
-          
-          return (
-            <Card 
-              key={status}
-              className={`cursor-pointer transition-all hover:ring-2 hover:ring-primary/50 ${
-                statusFilter === status ? 'ring-2 ring-primary' : ''
-              }`}
-              onClick={() => setStatusFilter(status)}
-            >
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card>
+                <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
-                    <div 
-                      className="p-2 rounded-lg" 
-                      style={{ backgroundColor: `${config.color}20` }}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: config.color }} />
+                    <div className="p-2 rounded-lg bg-destructive/10">
+                      <DollarSign className="h-5 w-5 text-destructive" />
                     </div>
                     <div>
-                      <p className="font-medium">{config.label}</p>
-                      <p className="text-2xl font-bold">{stats.count}</p>
+                      <p className="text-2xl font-bold">{formatCurrency(totals.totalLost)}</p>
+                      <p className="text-sm text-muted-foreground">Valor total perdido</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Valor</p>
-                    <p className="font-semibold">{formatCurrency(stats.value)}</p>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Soma de todos os valores de reembolsos, cancelamentos e chargebacks no período</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Percent className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{totals.overallRate}%</p>
+                      <p className="text-sm text-muted-foreground">Taxa geral de perda</p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Percentual de transações negativas em relação ao total de transações</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-yellow-500/10">
+                      <Clock className="h-5 w-5 text-yellow-500" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">
+                        {statusStats.refundAvgDays !== null ? `${statusStats.refundAvgDays} dias` : 'N/A'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Tempo médio até reembolso</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Média de dias entre a compra e o reembolso</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-muted">
+                      <Package className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{productRanking.length}</p>
+                      <p className="text-sm text-muted-foreground">Produtos com perdas</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Quantidade de produtos distintos que tiveram transações negativas</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Status Breakdown - Clickable */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* All statuses option */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card 
+                className={`cursor-pointer transition-all hover:ring-2 hover:ring-primary/50 ${
+                  statusFilter === 'ALL' ? 'ring-2 ring-primary' : ''
+                }`}
+                onClick={() => setStatusFilter('ALL')}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-muted">
+                        <TrendingDown className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Todos</p>
+                        <p className="text-2xl font-bold">{totals.totalNegative}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Valor</p>
+                      <p className="font-semibold">{formatCurrency(totals.totalLost)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Clique para ver todos os status na tabela</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {(Object.keys(STATUS_CONFIG) as NegativeStatus[]).map(status => {
+            const config = STATUS_CONFIG[status];
+            const stats = statusStats[status];
+            const Icon = config.icon;
+            const tooltipTexts: Record<NegativeStatus, string> = {
+              REFUNDED: 'Clique para filtrar apenas reembolsos na tabela',
+              CANCELLED: 'Clique para filtrar apenas cancelamentos na tabela',
+              CHARGEBACK: 'Clique para filtrar apenas chargebacks na tabela',
+            };
+            
+            return (
+              <Tooltip key={status}>
+                <TooltipTrigger asChild>
+                  <Card 
+                    className={`cursor-pointer transition-all hover:ring-2 hover:ring-primary/50 ${
+                      statusFilter === status ? 'ring-2 ring-primary' : ''
+                    }`}
+                    onClick={() => setStatusFilter(status)}
+                  >
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="p-2 rounded-lg" 
+                            style={{ backgroundColor: `${config.color}20` }}
+                          >
+                            <Icon className="h-5 w-5" style={{ color: config.color }} />
+                          </div>
+                          <div>
+                            <p className="font-medium">{config.label}</p>
+                            <p className="text-2xl font-bold">{stats.count}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Valor</p>
+                          <p className="font-semibold">{formatCurrency(stats.value)}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{tooltipTexts[status]}</p>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
 
       {/* Temporal Evolution Chart */}
       <Card>
@@ -447,7 +492,7 @@ export function RecoveryAnalytics({ startDate, endDate }: RecoveryAnalyticsProps
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="month" className="text-xs" />
                 <YAxis className="text-xs" />
-                <Tooltip 
+                <RechartsTooltip 
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
@@ -547,33 +592,90 @@ export function RecoveryAnalytics({ startDate, endDate }: RecoveryAnalyticsProps
                     {statusFilter === 'ALL' ? (
                       <>
                         <TableHead className="text-center">
-                          <span className="flex items-center justify-center gap-1">
-                            <RotateCcw className="h-3 w-3 text-yellow-500" />
-                            Reemb.
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-center gap-1 cursor-help">
+                                <RotateCcw className="h-3 w-3 text-yellow-500" />
+                                Reemb.
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Quantidade de reembolsos solicitados pelo cliente</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </TableHead>
                         <TableHead className="text-center">
-                          <span className="flex items-center justify-center gap-1">
-                            <XCircle className="h-3 w-3 text-orange-500" />
-                            Cancel.
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-center gap-1 cursor-help">
+                                <XCircle className="h-3 w-3 text-orange-500" />
+                                Cancel.
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Quantidade de cancelamentos de compra</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </TableHead>
                         <TableHead className="text-center">
-                          <span className="flex items-center justify-center gap-1">
-                            <AlertTriangle className="h-3 w-3 text-red-500" />
-                            Chargebacks
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-center gap-1 cursor-help">
+                                <AlertTriangle className="h-3 w-3 text-red-500" />
+                                Chargebacks
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Contestações de cobrança junto ao cartão de crédito</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </TableHead>
-                        <TableHead className="text-center">Total Negativo</TableHead>
+                        <TableHead className="text-center">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help">Total Negativo</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Soma de todos os status negativos (reembolsos + cancelamentos + chargebacks)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TableHead>
                       </>
                     ) : (
                       <TableHead className="text-center">Quantidade</TableHead>
                     )}
-                    <TableHead className="text-center">Taxa de Perda</TableHead>
+                    <TableHead className="text-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help">Taxa de Perda</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Percentual de transações negativas em relação ao total do produto</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableHead>
                     {(statusFilter === 'ALL' || statusFilter === 'REFUNDED') && (
-                      <TableHead className="text-center">Tempo Médio</TableHead>
+                      <TableHead className="text-center">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help">Tempo Médio</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Média de dias entre a compra e o reembolso</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableHead>
                     )}
-                    <TableHead className="text-right">Valor Perdido</TableHead>
+                    <TableHead className="text-right">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help">Valor Perdido</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Soma total dos valores das transações negativas</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -653,6 +755,7 @@ export function RecoveryAnalytics({ startDate, endDate }: RecoveryAnalyticsProps
           })()}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

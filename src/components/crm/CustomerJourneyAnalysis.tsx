@@ -35,11 +35,6 @@ import {
   type CRMFilters,
   DEFAULT_STATUS_FILTER
 } from '@/hooks/useCRMJourneyData';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { cn } from '@/lib/utils';
 import { CustomerFlowChart } from './CustomerFlowChart';
 import { CRMSummaryCards } from './CRMSummaryCards';
@@ -95,14 +90,25 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <TableRow className="cursor-pointer hover:bg-muted/50">
-        <TableCell>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="p-0 h-auto">
-              {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-          </CollapsibleTrigger>
+    <>
+      <TableRow
+        className="cursor-pointer hover:bg-muted/50"
+        onClick={() => setIsOpen((v) => !v)}
+      >
+        <TableCell className="w-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-auto"
+            aria-label={isOpen ? 'Recolher histórico' : 'Expandir histórico'}
+            aria-expanded={isOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen((v) => !v);
+            }}
+          >
+            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
         </TableCell>
         <TableCell>
           <div>
@@ -127,7 +133,7 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
           </div>
         </TableCell>
         <TableCell className="text-center">
-          <Badge variant={journey.totalPurchases > 1 ? "default" : "secondary"}>
+          <Badge variant={journey.totalPurchases > 1 ? 'default' : 'secondary'}>
             {journey.totalPurchases}
           </Badge>
         </TableCell>
@@ -145,21 +151,20 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
                 Entrada direta
               </Badge>
             )
+          ) : journey.subsequentProducts.length > 0 ? (
+            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+              +{journey.subsequentProducts.length} produtos
+            </Badge>
           ) : (
-            journey.subsequentProducts.length > 0 ? (
-              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                +{journey.subsequentProducts.length} produtos
-              </Badge>
-            ) : (
-              <span className="text-muted-foreground text-sm">-</span>
-            )
+            <span className="text-muted-foreground text-sm">-</span>
           )}
         </TableCell>
         <TableCell className="text-right text-muted-foreground text-sm">
           {formatDate(journey.firstPurchaseDate)}
         </TableCell>
       </TableRow>
-      <CollapsibleContent asChild>
+
+      {isOpen && (
         <TableRow className="bg-muted/30 border-t-0">
           <TableCell colSpan={7} className="p-0">
             <div className="px-4 py-4 ml-8 border-l-2 border-primary/20">
@@ -183,16 +188,19 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
                     </p>
                   )}
                 </div>
+
                 {journey.purchases.length > 0 ? (
                   <div className="flex flex-wrap gap-2 items-center">
                     {[...journey.purchases].reverse().map((purchase, index, arr) => (
                       <div key={purchase.transactionId} className="flex items-center gap-2">
-                        <div className={cn(
-                          "px-3 py-2 rounded-lg border transition-colors",
-                          purchase.isEntry && "bg-primary/10 border-primary/30",
-                          purchase.isTarget && "bg-orange-500/10 border-orange-500/30",
-                          !purchase.isEntry && !purchase.isTarget && "bg-card border-border hover:border-muted-foreground/30"
-                        )}>
+                        <div
+                          className={cn(
+                            'px-3 py-2 rounded-lg border transition-colors',
+                            purchase.isEntry && 'bg-primary/10 border-primary/30',
+                            purchase.isTarget && 'bg-orange-500/10 border-orange-500/30',
+                            !purchase.isEntry && !purchase.isTarget && 'bg-card border-border hover:border-muted-foreground/30',
+                          )}
+                        >
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-sm">{purchase.productName}</p>
                             {purchase.isEntry && (
@@ -228,8 +236,8 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
             </div>
           </TableCell>
         </TableRow>
-      </CollapsibleContent>
-    </Collapsible>
+      )}
+    </>
   );
 }
 

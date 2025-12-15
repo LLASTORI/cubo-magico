@@ -35,6 +35,10 @@ import {
   type CRMFilters,
   DEFAULT_STATUS_FILTER
 } from '@/hooks/useCRMJourneyData';
+import {
+  Collapsible,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import { cn } from '@/lib/utils';
 import { CustomerFlowChart } from './CustomerFlowChart';
 import { CRMSummaryCards } from './CRMSummaryCards';

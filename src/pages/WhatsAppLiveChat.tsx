@@ -90,6 +90,13 @@ export default function WhatsAppLiveChat() {
     doSync();
   }, [needsSync, connectedNumber, syncInstance, queryClient, isSyncing]);
 
+  // Keep selectedConversation in sync when conversations refetch (prevents stale phone/DDD display)
+  useEffect(() => {
+    if (!selectedConversation?.id || !conversations) return;
+    const latest = conversations.find(c => c.id === selectedConversation.id);
+    if (latest) setSelectedConversation(latest);
+  }, [conversations, selectedConversation?.id]);
+
   const handleSelectConversation = (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);
   };

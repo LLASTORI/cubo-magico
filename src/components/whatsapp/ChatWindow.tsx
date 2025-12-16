@@ -30,7 +30,7 @@ import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessage
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { formatPhoneForDisplay } from '@/components/ui/international-phone-input';
+import { formatPhoneForDisplay, getFullPhoneNumber } from '@/components/ui/international-phone-input';
 
 interface ChatWindowProps {
   conversation: WhatsAppConversation | null;
@@ -68,11 +68,20 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
   const handleSend = () => {
     if (!newMessage.trim() || !conversation || !instanceName) return;
 
+    const contact = conversation.contact;
+    const remoteJid = contact?.phone
+      ? `${getFullPhoneNumber(
+          contact.phone_country_code || '55',
+          contact.phone_ddd || '',
+          contact.phone
+        )}@s.whatsapp.net`
+      : conversation.remote_jid;
+
     sendMessage({
       conversationId: conversation.id,
       content: newMessage.trim(),
       instanceName,
-      remoteJid: conversation.remote_jid,
+      remoteJid,
     });
     
     setNewMessage('');

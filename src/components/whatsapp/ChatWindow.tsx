@@ -11,6 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { 
   Send, 
   MoreVertical, 
@@ -27,7 +32,9 @@ import {
   FileText,
   Download,
   ChevronsUp,
-  ChevronsDown
+  ChevronsDown,
+  Paperclip,
+  X
 } from 'lucide-react';
 import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessages';
@@ -35,6 +42,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { formatPhoneForDisplay, getFullPhoneNumber } from '@/components/ui/international-phone-input';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ChatWindowProps {
   conversation: WhatsAppConversation | null;
@@ -43,17 +52,29 @@ interface ChatWindowProps {
   onClose?: () => void;
 }
 
+interface SelectedFile {
+  file: File;
+  preview: string;
+  type: 'image' | 'audio' | 'video' | 'document';
+}
+
 export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: ChatWindowProps) {
   const [newMessage, setNewMessage] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { 
     messages, 
     isLoading, 
     sendMessage, 
+    sendMediaMessage,
     markAsRead,
-    isSending 
+    isSending,
+    isSendingMedia
   } = useWhatsAppMessages(conversation?.id || null);
 
   const scrollToBottom = useCallback(() => {
@@ -88,6 +109,60 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     }
   }, [conversation?.id, conversation?.unread_count, markAsRead]);
 
+  // Cleanup file preview on unmount
+  useEffect(() => {
+    return () => {
+      if (selectedFile?.preview) {
+        URL.revokeObjectURL(selectedFile.preview);
+      }
+    };
+  }, [selectedFile]);
+
+  const getMediaType = (file: File): 'image' | 'audio' | 'video' | 'document' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('audio/')) return 'audio';
+    if (file.type.startsWith('video/')) return 'video';
+    return 'document';
+  };
+
+  const handleFileSelect = (acceptType: string) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = acceptType;
+      fileInputRef.current.click();
+    }
+    setAttachMenuOpen(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (max 16MB for WhatsApp)
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo: 16MB');
+      return;
+    }
+
+    const type = getMediaType(file);
+    const preview = type === 'image' || type === 'video' 
+      ? URL.createObjectURL(file) 
+      : '';
+
+    setSelectedFile({ file, preview, type });
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const clearSelectedFile = () => {
+    if (selectedFile?.preview) {
+      URL.revokeObjectURL(selectedFile.preview);
+    }
+    setSelectedFile(null);
+  };
+
   const handleSend = () => {
     if (!newMessage.trim() || !conversation || !instanceName) return;
 
@@ -110,10 +185,76 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     setNewMessage('');
   };
 
+  const handleSendMedia = async () => {
+    if (!selectedFile || !conversation || !instanceName) return;
+
+    setIsUploading(true);
+    
+    try {
+      const contact = conversation.contact;
+      const remoteJid = contact?.phone
+        ? `${getFullPhoneNumber(
+            contact.phone_country_code || '55',
+            contact.phone_ddd || '',
+            contact.phone
+          )}@s.whatsapp.net`
+        : conversation.remote_jid;
+
+      // Upload file to Supabase Storage
+      const fileExt = selectedFile.file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `whatsapp-media/${conversation.project_id}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('whatsapp-media')
+        .upload(filePath, selectedFile.file, {
+          contentType: selectedFile.file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast.error('Erro ao fazer upload do arquivo');
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('whatsapp-media')
+        .getPublicUrl(filePath);
+
+      const mediaUrl = urlData.publicUrl;
+
+      // Send media message
+      sendMediaMessage({
+        conversationId: conversation.id,
+        instanceName,
+        remoteJid,
+        mediaType: selectedFile.type,
+        mediaUrl,
+        caption: newMessage.trim() || undefined,
+        fileName: selectedFile.file.name,
+        mimetype: selectedFile.file.type,
+      });
+
+      clearSelectedFile();
+      setNewMessage('');
+    } catch (error) {
+      console.error('Error sending media:', error);
+      toast.error('Erro ao enviar mídia');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (selectedFile) {
+        handleSendMedia();
+      } else {
+        handleSend();
+      }
     }
   };
 
@@ -236,6 +377,14 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between bg-background">
         <div className="flex items-center gap-3">
@@ -408,6 +557,50 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
         )}
       </div>
 
+      {/* Selected file preview */}
+      {selectedFile && (
+        <div className="p-4 border-t bg-muted/50">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              {selectedFile.type === 'image' && selectedFile.preview ? (
+                <img 
+                  src={selectedFile.preview} 
+                  alt="Preview" 
+                  className="h-20 w-20 object-cover rounded-lg"
+                />
+              ) : selectedFile.type === 'video' && selectedFile.preview ? (
+                <video 
+                  src={selectedFile.preview} 
+                  className="h-20 w-20 object-cover rounded-lg"
+                />
+              ) : selectedFile.type === 'audio' ? (
+                <div className="h-20 w-20 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <FileAudio className="h-8 w-8 text-primary" />
+                </div>
+              ) : (
+                <div className="h-20 w-20 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <FileText className="h-8 w-8 text-primary" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{selectedFile.file.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {(selectedFile.file.size / 1024 / 1024).toFixed(2)} MB
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={clearSelectedFile}
+              className="flex-shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 border-t bg-background">
         {!instanceName && (
@@ -416,22 +609,77 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
           </p>
         )}
         <div className="flex gap-2">
+          {/* Attachment button */}
+          <Popover open={attachMenuOpen} onOpenChange={setAttachMenuOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon"
+                disabled={!instanceName || isUploading || isSendingMedia}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" side="top" align="start">
+              <div className="space-y-1">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2"
+                  onClick={() => handleFileSelect('image/*')}
+                >
+                  <ImageIcon className="h-4 w-4 text-green-500" />
+                  Imagem
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2"
+                  onClick={() => handleFileSelect('video/*')}
+                >
+                  <FileVideo className="h-4 w-4 text-blue-500" />
+                  Vídeo
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2"
+                  onClick={() => handleFileSelect('audio/*')}
+                >
+                  <FileAudio className="h-4 w-4 text-orange-500" />
+                  Áudio
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2"
+                  onClick={() => handleFileSelect('.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt')}
+                >
+                  <FileText className="h-4 w-4 text-red-500" />
+                  Documento
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
           <Input
-            placeholder="Digite uma mensagem..."
+            placeholder={selectedFile ? "Adicionar legenda..." : "Digite uma mensagem..."}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={isSending || !instanceName}
+            disabled={isSending || isSendingMedia || isUploading || !instanceName}
             className="flex-1"
           />
           <Tooltip>
             <TooltipTrigger asChild>
               <span>
                 <Button 
-                  onClick={handleSend} 
-                  disabled={!newMessage.trim() || isSending || !instanceName}
+                  onClick={selectedFile ? handleSendMedia : handleSend} 
+                  disabled={
+                    (!newMessage.trim() && !selectedFile) || 
+                    isSending || 
+                    isSendingMedia || 
+                    isUploading || 
+                    !instanceName
+                  }
                 >
-                  {isSending ? (
+                  {isSending || isSendingMedia || isUploading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />

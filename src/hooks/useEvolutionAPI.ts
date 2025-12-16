@@ -70,6 +70,26 @@ export function useEvolutionAPI() {
     return callEvolutionAPI('send_message', { instanceName, number, text });
   };
 
+  const sendMedia = async (
+    instanceName: string, 
+    number: string, 
+    mediaType: 'image' | 'audio' | 'video' | 'document',
+    mediaUrl: string,
+    caption?: string,
+    fileName?: string,
+    mimetype?: string
+  ) => {
+    return callEvolutionAPI('send_media', { 
+      instanceName, 
+      number, 
+      mediaType,
+      mediaUrl,
+      caption,
+      fileName,
+      mimetype,
+    });
+  };
+
   const fetchInstances = async () => {
     return callEvolutionAPI('fetch_instances');
   };
@@ -94,6 +114,7 @@ export function useEvolutionAPI() {
     disconnect,
     deleteInstance,
     sendMessage,
+    sendMedia,
     fetchInstances,
     syncInstance,
     configureWebhook,

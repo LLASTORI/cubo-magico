@@ -34,7 +34,9 @@ import {
   ChevronsUp,
   ChevronsDown,
   Paperclip,
-  X
+  X,
+  Mic,
+  Square
 } from 'lucide-react';
 import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessages';
@@ -64,8 +66,13 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const { 
     messages, 
@@ -115,8 +122,160 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       if (selectedFile?.preview) {
         URL.revokeObjectURL(selectedFile.preview);
       }
+      // Cleanup recording
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
     };
-  }, [selectedFile]);
+  }, [selectedFile, isRecording]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+          ? 'audio/webm;codecs=opus' 
+          : 'audio/webm'
+      });
+      
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { 
+            type: 'audio/webm' 
+          });
+          
+          // Send the audio
+          await sendRecordedAudio(audioFile);
+        }
+        
+        audioChunksRef.current = [];
+      };
+      
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(100); // Collect data every 100ms
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Start timer
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      toast.error('Erro ao acessar o microfone. Verifique as permissões.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      audioChunksRef.current = [];
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const sendRecordedAudio = async (audioFile: File) => {
+    if (!conversation || !instanceName) return;
+
+    setIsUploading(true);
+    
+    try {
+      const contact = conversation.contact;
+      const remoteJid = contact?.phone
+        ? `${getFullPhoneNumber(
+            contact.phone_country_code || '55',
+            contact.phone_ddd || '',
+            contact.phone
+          )}@s.whatsapp.net`
+        : conversation.remote_jid;
+
+      // Upload file to Supabase Storage
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webm`;
+      const filePath = `whatsapp-media/${conversation.project_id}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('whatsapp-media')
+        .upload(filePath, audioFile, {
+          contentType: 'audio/webm',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast.error('Erro ao fazer upload do áudio');
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('whatsapp-media')
+        .getPublicUrl(filePath);
+
+      const mediaUrl = urlData.publicUrl;
+
+      // Send media message
+      sendMediaMessage({
+        conversationId: conversation.id,
+        instanceName,
+        remoteJid,
+        mediaType: 'audio',
+        mediaUrl,
+        fileName: audioFile.name,
+        mimetype: 'audio/webm',
+      });
+
+    } catch (error) {
+      console.error('Error sending audio:', error);
+      toast.error('Erro ao enviar áudio');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const getMediaType = (file: File): 'image' | 'audio' | 'video' | 'document' => {
     if (file.type.startsWith('image/')) return 'image';
@@ -608,92 +767,140 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
             Nenhum número WhatsApp conectado. Configure nas Configurações.
           </p>
         )}
-        <div className="flex gap-2">
-          {/* Attachment button */}
-          <Popover open={attachMenuOpen} onOpenChange={setAttachMenuOpen}>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                size="icon"
-                disabled={!instanceName || isUploading || isSendingMedia}
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" side="top" align="start">
-              <div className="space-y-1">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleFileSelect('image/*')}
-                >
-                  <ImageIcon className="h-4 w-4 text-green-500" />
-                  Imagem
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleFileSelect('video/*')}
-                >
-                  <FileVideo className="h-4 w-4 text-blue-500" />
-                  Vídeo
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleFileSelect('audio/*')}
-                >
-                  <FileAudio className="h-4 w-4 text-orange-500" />
-                  Áudio
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleFileSelect('.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt')}
-                >
-                  <FileText className="h-4 w-4 text-red-500" />
-                  Documento
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Input
-            placeholder={selectedFile ? "Adicionar legenda..." : "Digite uma mensagem..."}
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isSending || isSendingMedia || isUploading || !instanceName}
-            className="flex-1"
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button 
-                  onClick={selectedFile ? handleSendMedia : handleSend} 
-                  disabled={
-                    (!newMessage.trim() && !selectedFile) || 
-                    isSending || 
-                    isSendingMedia || 
-                    isUploading || 
-                    !instanceName
-                  }
-                >
-                  {isSending || isSendingMedia || isUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+        
+        {/* Recording UI */}
+        {isRecording ? (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={cancelRecording}
+              className="text-destructive hover:text-destructive"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+            
+            <div className="flex-1 flex items-center gap-3 bg-destructive/10 rounded-full px-4 py-2">
+              <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
+              <span className="text-sm font-medium text-destructive">
+                Gravando... {formatRecordingTime(recordingTime)}
               </span>
-            </TooltipTrigger>
-            {!instanceName && (
-              <TooltipContent>
-                Conecte um número WhatsApp primeiro
-              </TooltipContent>
+            </div>
+            
+            <Button
+              onClick={stopRecording}
+              className="bg-destructive hover:bg-destructive/90"
+              size="icon"
+            >
+              <Square className="h-4 w-4 fill-current" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            {/* Attachment button */}
+            <Popover open={attachMenuOpen} onOpenChange={setAttachMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  disabled={!instanceName || isUploading || isSendingMedia}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" side="top" align="start">
+                <div className="space-y-1">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => handleFileSelect('image/*')}
+                  >
+                    <ImageIcon className="h-4 w-4 text-green-500" />
+                    Imagem
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => handleFileSelect('video/*')}
+                  >
+                    <FileVideo className="h-4 w-4 text-blue-500" />
+                    Vídeo
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => handleFileSelect('audio/*')}
+                  >
+                    <FileAudio className="h-4 w-4 text-orange-500" />
+                    Áudio
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => handleFileSelect('.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt')}
+                  >
+                    <FileText className="h-4 w-4 text-red-500" />
+                    Documento
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Input
+              placeholder={selectedFile ? "Adicionar legenda..." : "Digite uma mensagem..."}
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isSending || isSendingMedia || isUploading || !instanceName}
+              className="flex-1"
+            />
+            
+            {/* Show mic button when no text or file selected */}
+            {!newMessage.trim() && !selectedFile ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={startRecording}
+                    variant="outline"
+                    size="icon"
+                    disabled={isSending || isSendingMedia || isUploading || !instanceName}
+                  >
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Gravar áudio</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button 
+                      onClick={selectedFile ? handleSendMedia : handleSend} 
+                      disabled={
+                        (!newMessage.trim() && !selectedFile) || 
+                        isSending || 
+                        isSendingMedia || 
+                        isUploading || 
+                        !instanceName
+                      }
+                    >
+                      {isSending || isSendingMedia || isUploading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!instanceName && (
+                  <TooltipContent>
+                    Conecte um número WhatsApp primeiro
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
-          </Tooltip>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

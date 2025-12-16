@@ -30,18 +30,20 @@ import {
   WifiOff,
   Loader2
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
 import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function WhatsAppLiveChat() {
   const { currentProject } = useProject();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState<WhatsAppConversation | null>(null);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferDepartment, setTransferDepartment] = useState<string>('');
   const [transferAgent, setTransferAgent] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [initialConversationSet, setInitialConversationSet] = useState(false);
 
   const { 
     conversations, 
@@ -117,6 +119,23 @@ export default function WhatsAppLiveChat() {
     const latest = conversations.find(c => c.id === selectedConversation.id);
     if (latest) setSelectedConversation(latest);
   }, [conversations, selectedConversation?.id]);
+
+  // Auto-select conversation from URL parameter
+  useEffect(() => {
+    if (initialConversationSet || !conversations || conversations.length === 0) return;
+    
+    const conversationId = searchParams.get('conversation');
+    if (conversationId) {
+      const targetConversation = conversations.find(c => c.id === conversationId);
+      if (targetConversation) {
+        setSelectedConversation(targetConversation);
+        // Clear the URL param after selecting
+        searchParams.delete('conversation');
+        setSearchParams(searchParams, { replace: true });
+      }
+      setInitialConversationSet(true);
+    }
+  }, [conversations, searchParams, setSearchParams, initialConversationSet]);
 
   const handleSelectConversation = (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);

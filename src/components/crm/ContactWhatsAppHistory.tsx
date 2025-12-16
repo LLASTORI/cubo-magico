@@ -127,7 +127,11 @@ export function ContactWhatsAppHistory({ contactId }: ContactWhatsAppHistoryProp
         <div className="text-sm text-muted-foreground">
           {conversations.length} conversa{conversations.length !== 1 ? 's' : ''} • {totalMessages} mensagen{totalMessages !== 1 ? 's' : ''}
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/whatsapp')}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => navigate(`/whatsapp?conversation=${conversations[0].id}`)}
+        >
           <MessageCircle className="h-4 w-4 mr-2" />
           Abrir Chat
           <ArrowRight className="h-4 w-4 ml-2" />

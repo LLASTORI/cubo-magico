@@ -22,7 +22,8 @@ import {
   DollarSign,
   CheckSquare,
   Square,
-  Plus
+  Plus,
+  MessageCircle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -269,6 +270,10 @@ export default function CRMKanban() {
             </Button>
             <Button variant="outline" onClick={() => navigate('/crm/cadences')}>
               Cadências
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/whatsapp')}>
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Chat ao Vivo
             </Button>
             <Button variant="outline" onClick={() => navigate('/crm/pipeline-settings')}>
               <Settings className="h-4 w-4 mr-2" />

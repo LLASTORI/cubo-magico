@@ -179,6 +179,94 @@ export function useWhatsAppNumbers() {
     return numbers?.filter(n => n.status === 'active') || [];
   };
 
+  // Failover: obter próximo número disponível
+  const getNextAvailableNumber = (): WhatsAppNumber | undefined => {
+    if (!numbers || numbers.length === 0) return undefined;
+    
+    // Ordenar por prioridade
+    const sortedNumbers = [...numbers].sort((a, b) => a.priority - b.priority);
+    
+    // Primeiro: buscar número conectado e ativo
+    const connected = sortedNumbers.find(
+      n => n.instance?.status === 'connected' && n.status === 'active'
+    );
+    if (connected) return connected;
+    
+    // Segundo: buscar número ativo (pode estar desconectado temporariamente)
+    const active = sortedNumbers.find(n => n.status === 'active');
+    if (active) return active;
+    
+    // Terceiro: buscar número pendente (reserva)
+    const pending = sortedNumbers.find(n => n.status === 'pending');
+    return pending;
+  };
+
+  // Promover número reserva para ativo
+  const promoteNumber = useMutation({
+    mutationFn: async (numberId: string) => {
+      const { data, error } = await supabase
+        .from('whatsapp_numbers')
+        .update({ status: 'active' })
+        .eq('id', numberId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers', projectId] });
+      toast({
+        title: 'Número promovido',
+        description: 'O número reserva foi ativado.',
+      });
+    },
+  });
+
+  // Desativar número com problema
+  const disableNumber = useMutation({
+    mutationFn: async (numberId: string) => {
+      const { data, error } = await supabase
+        .from('whatsapp_numbers')
+        .update({ status: 'offline' })
+        .eq('id', numberId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers', projectId] });
+      toast({
+        title: 'Número desativado',
+        description: 'O número foi marcado como offline.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Reordenar prioridades
+  const reorderPriorities = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      const updates = orderedIds.map((id, index) => 
+        supabase
+          .from('whatsapp_numbers')
+          .update({ priority: index })
+          .eq('id', id)
+      );
+      
+      await Promise.all(updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers', projectId] });
+      toast({
+        title: 'Prioridades atualizadas',
+        description: 'A ordem dos números foi salva.',
+      });
+    },
+  });
+
   return {
     numbers,
     isLoading,
@@ -186,10 +274,14 @@ export function useWhatsAppNumbers() {
     createNumber: createNumber.mutate,
     updateNumber: updateNumber.mutate,
     deleteNumber: deleteNumber.mutate,
+    promoteNumber: promoteNumber.mutate,
+    disableNumber: disableNumber.mutate,
+    reorderPriorities: reorderPriorities.mutate,
     isCreating: createNumber.isPending,
     isUpdating: updateNumber.isPending,
     isDeleting: deleteNumber.isPending,
     getPrimaryNumber,
     getActiveNumbers,
+    getNextAvailableNumber,
   };
 }

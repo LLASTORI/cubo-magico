@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useWhatsAppConversations, WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
+import { useEvolutionAPI } from '@/hooks/useEvolutionAPI';
 import { ConversationList } from '@/components/whatsapp/ConversationList';
 import { ChatWindow } from '@/components/whatsapp/ChatWindow';
 import { ContactPanel } from '@/components/whatsapp/ContactPanel';
@@ -26,11 +27,13 @@ import {
   Settings, 
   Users,
   Wifi,
-  WifiOff
+  WifiOff,
+  Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
 import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function WhatsAppLiveChat() {
   const { currentProject } = useProject();
@@ -38,6 +41,7 @@ export default function WhatsAppLiveChat() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferDepartment, setTransferDepartment] = useState<string>('');
   const [transferAgent, setTransferAgent] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { 
     conversations, 
@@ -50,14 +54,41 @@ export default function WhatsAppLiveChat() {
   const { numbers } = useWhatsAppNumbers();
   const { agents } = useWhatsAppAgents();
   const { departments } = useWhatsAppDepartments();
+  const { syncInstance } = useEvolutionAPI();
+  const queryClient = useQueryClient();
 
   // Get the connected instance name - fallback to active number if no instance record
   const connectedNumber = numbers?.find(n => n.instance?.status === 'connected') 
     || numbers?.find(n => n.status === 'active');
   
+  // Check if we need to sync (active number but no instance record)
+  const needsSync = connectedNumber?.status === 'active' && !connectedNumber?.instance;
+  
   // Generate instance name from number ID (same pattern used in WhatsAppSettings)
   const instanceName = connectedNumber?.instance?.instance_name 
     || (connectedNumber ? `cubo_${connectedNumber.id.slice(0, 8)}` : undefined);
+
+  // Auto-sync instance when needed
+  useEffect(() => {
+    if (!needsSync || !connectedNumber || isSyncing) return;
+
+    const doSync = async () => {
+      setIsSyncing(true);
+      const instanceNameToSync = `cubo_${connectedNumber.id.slice(0, 8)}`;
+      console.log('Auto-syncing instance:', instanceNameToSync);
+      
+      const result = await syncInstance(instanceNameToSync, connectedNumber.id);
+      
+      if (result.success && result.data?.synced) {
+        // Refresh the numbers list to get the updated instance
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers'] });
+      }
+      
+      setIsSyncing(false);
+    };
+
+    doSync();
+  }, [needsSync, connectedNumber, syncInstance, queryClient, isSyncing]);
 
   const handleSelectConversation = (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);
@@ -135,17 +166,20 @@ export default function WhatsAppLiveChat() {
 
           <div className="flex items-center gap-3">
             {/* Connection status */}
-            {connectedNumber ? (
+            {isSyncing ? (
+              <Badge variant="outline" className="gap-1 text-blue-600 border-blue-600">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Sincronizando...
+              </Badge>
+            ) : connectedNumber ? (
               <Badge 
                 variant="outline" 
                 className={connectedNumber.instance?.status === 'connected' 
                   ? "gap-1 text-green-600 border-green-600" 
-                  : "gap-1 text-yellow-600 border-yellow-600"}
+                  : "gap-1 text-green-600 border-green-600"}
               >
                 <Wifi className="h-3 w-3" />
-                {connectedNumber.instance?.status === 'connected' 
-                  ? `Conectado: ${connectedNumber.label}`
-                  : `${connectedNumber.label} (verificar conexão)`}
+                Conectado: {connectedNumber.label}
               </Badge>
             ) : (
               <Badge variant="outline" className="gap-1 text-muted-foreground">

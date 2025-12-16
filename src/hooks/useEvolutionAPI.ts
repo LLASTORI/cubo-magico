@@ -74,6 +74,10 @@ export function useEvolutionAPI() {
     return callEvolutionAPI('fetch_instances');
   };
 
+  const syncInstance = async (instanceName: string, whatsappNumberId: string) => {
+    return callEvolutionAPI('sync_instance', { instanceName, whatsappNumberId });
+  };
+
   return {
     isLoading,
     createInstance,
@@ -83,5 +87,6 @@ export function useEvolutionAPI() {
     deleteInstance,
     sendMessage,
     fetchInstances,
+    syncInstance,
   };
 }

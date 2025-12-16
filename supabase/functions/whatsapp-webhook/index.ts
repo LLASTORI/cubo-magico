@@ -36,12 +36,48 @@ interface EvolutionWebhookPayload {
   apikey?: string;
 }
 
+function normalizeRemoteJid(input: string): string {
+  const raw = String(input || '').trim();
+  if (!raw) return raw;
+
+  // Convert common variants to the expected format
+  if (raw.includes('@c.us')) return raw.replace('@c.us', '@s.whatsapp.net');
+  if (raw.includes('@s.whatsapp.net') || raw.includes('@g.us')) return raw;
+
+  // If it's digits only, assume a user JID
+  const digits = raw.replace(/\D/g, '');
+  if (digits) return `${digits}@s.whatsapp.net`;
+
+  return raw;
+}
+
+function parseBrazilNumber(digits: string): { cc: string; ddd: string; local: string } | null {
+  const clean = digits.replace(/\D/g, '');
+  if (!clean.startsWith('55')) return null;
+  if (clean.length < 12) return null;
+  const cc = '55';
+  const ddd = clean.slice(2, 4);
+  const local = clean.slice(4);
+  if (!ddd || !local) return null;
+  return { cc, ddd, local };
+}
+
 serve(async (req) => {
   const startTime = Date.now();
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Optional: if Evolution sends an API key header, validate it (prevents spoofed webhooks)
+  const expectedEvolutionKey = Deno.env.get('EVOLUTION_API_KEY');
+  const receivedEvolutionKey = req.headers.get('apikey') ?? req.headers.get('x-api-key');
+  if (expectedEvolutionKey && receivedEvolutionKey && receivedEvolutionKey !== expectedEvolutionKey) {
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized webhook' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   // Create Supabase client with service role
@@ -148,14 +184,15 @@ async function handleIncomingMessage(
     return;
   }
 
-  const remoteJid = data.key.remoteJid;
+  const rawRemoteJid = data.key.remoteJid;
+  const remoteJid = normalizeRemoteJid(rawRemoteJid);
   const messageId = data.key.id;
   const pushName = data.pushName || null;
 
   // Extract message content and type
   const { content, contentType } = extractMessageContent(data.message);
   
-  console.log('[WhatsApp Webhook] Processing message from:', remoteJid, 'Type:', contentType);
+  console.log('[WhatsApp Webhook] Processing message from:', remoteJid, '(raw:', rawRemoteJid, ') Type:', contentType);
 
   // Find or create conversation
   let conversation = await findOrCreateConversation(
@@ -209,46 +246,71 @@ async function findOrCreateConversation(
   remoteJid: string,
   pushName: string | null
 ) {
+  const normalizedRemoteJid = normalizeRemoteJid(remoteJid);
+  const remoteJidCandidates = Array.from(new Set([
+    normalizedRemoteJid,
+    normalizedRemoteJid.replace('@s.whatsapp.net', ''),
+    remoteJid,
+  ].filter(Boolean)));
+
   // Try to find existing conversation
   const { data: existingConv } = await supabase
     .from('whatsapp_conversations')
     .select('*')
     .eq('project_id', projectId)
-    .eq('remote_jid', remoteJid)
+    .in('remote_jid', remoteJidCandidates)
     .in('status', ['open', 'pending'])
-    .single();
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (existingConv) {
     return existingConv;
   }
 
   // Find or create CRM contact
-  const phone = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+  const digits = normalizedRemoteJid.replace(/@.*$/, '').replace(/\D/g, '');
+  const br = parseBrazilNumber(digits);
+
   let contactId: string | null = null;
 
-  // Try to find contact by phone
+  // Try to find contact by (country+ddd+local) OR fallback to raw digits
+  const contactOrFilter = br
+    ? `and(phone.eq.${br.local},phone_ddd.eq.${br.ddd},phone_country_code.eq.${br.cc}),phone.eq.${digits}`
+    : `phone.eq.${digits}`;
+
   const { data: existingContact } = await supabase
     .from('crm_contacts')
     .select('id')
     .eq('project_id', projectId)
-    .eq('phone', phone)
-    .single();
+    .or(contactOrFilter)
+    .limit(1)
+    .maybeSingle();
 
   if (existingContact) {
     contactId = existingContact.id;
   } else {
     // Create new contact
+    const insertPayload: Record<string, any> = {
+      project_id: projectId,
+      email: `${digits}@whatsapp.temp`,
+      name: pushName,
+      source: 'whatsapp',
+      status: 'lead',
+      tags: ['WhatsApp'],
+    };
+
+    if (br) {
+      insertPayload.phone_country_code = br.cc;
+      insertPayload.phone_ddd = br.ddd;
+      insertPayload.phone = br.local;
+    } else {
+      insertPayload.phone = digits;
+    }
+
     const { data: newContact, error: contactError } = await supabase
       .from('crm_contacts')
-      .insert({
-        project_id: projectId,
-        email: `${phone}@whatsapp.temp`,
-        phone: phone,
-        name: pushName,
-        source: 'whatsapp',
-        status: 'lead',
-        tags: ['WhatsApp'],
-      })
+      .insert(insertPayload)
       .select('id')
       .single();
 
@@ -290,7 +352,7 @@ async function findOrCreateConversation(
       project_id: projectId,
       contact_id: contactId,
       whatsapp_number_id: whatsappNumberId,
-      remote_jid: remoteJid,
+      remote_jid: normalizedRemoteJid,
       status: status,
       assigned_to: assignedTo,
       queue_position: queuePosition,

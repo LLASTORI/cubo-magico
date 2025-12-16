@@ -78,6 +78,10 @@ export function useEvolutionAPI() {
     return callEvolutionAPI('sync_instance', { instanceName, whatsappNumberId });
   };
 
+  const configureWebhook = async (instanceName: string) => {
+    return callEvolutionAPI('configure_webhook', { instanceName });
+  };
+
   return {
     isLoading,
     createInstance,
@@ -88,5 +92,6 @@ export function useEvolutionAPI() {
     sendMessage,
     fetchInstances,
     syncInstance,
+    configureWebhook,
   };
 }

@@ -14,16 +14,18 @@ import {
 import { 
   Send, 
   MoreVertical, 
-  Phone, 
-  Video, 
-  UserPlus, 
   ArrowRightLeft,
   CheckCheck,
   Check,
   Clock,
   AlertCircle,
   Loader2,
-  MessageCircle
+  MessageCircle,
+  Image as ImageIcon,
+  FileAudio,
+  FileVideo,
+  FileText,
+  Download
 } from 'lucide-react';
 import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessages';
@@ -102,6 +104,102 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       case 'read': return <CheckCheck className="h-3 w-3 text-blue-500" />;
       case 'failed': return <AlertCircle className="h-3 w-3 text-destructive" />;
       default: return null;
+    }
+  };
+
+  const renderMessageContent = (message: WhatsAppMessage) => {
+    const isOutbound = message.direction === 'outbound';
+    
+    switch (message.content_type) {
+      case 'image':
+        return (
+          <div className="space-y-2">
+            {message.media_url ? (
+              <img 
+                src={message.media_url} 
+                alt="Imagem" 
+                className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
+                onClick={() => window.open(message.media_url!, '_blank')}
+              />
+            ) : (
+              <div className="flex items-center gap-2 text-sm opacity-70">
+                <ImageIcon className="h-4 w-4" />
+                <span>[Imagem]</span>
+              </div>
+            )}
+            {message.content && message.content !== '[Imagem]' && (
+              <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+            )}
+          </div>
+        );
+      
+      case 'audio':
+        return (
+          <div className="space-y-2">
+            {message.media_url ? (
+              <audio controls className="max-w-full">
+                <source src={message.media_url} type={message.media_mime_type || 'audio/ogg'} />
+                Seu navegador não suporta áudio.
+              </audio>
+            ) : (
+              <div className="flex items-center gap-2 text-sm opacity-70">
+                <FileAudio className="h-4 w-4" />
+                <span>[Áudio]</span>
+              </div>
+            )}
+          </div>
+        );
+      
+      case 'video':
+        return (
+          <div className="space-y-2">
+            {message.media_url ? (
+              <video controls className="max-w-full rounded-lg max-h-64">
+                <source src={message.media_url} type={message.media_mime_type || 'video/mp4'} />
+                Seu navegador não suporta vídeo.
+              </video>
+            ) : (
+              <div className="flex items-center gap-2 text-sm opacity-70">
+                <FileVideo className="h-4 w-4" />
+                <span>[Vídeo]</span>
+              </div>
+            )}
+            {message.content && message.content !== '[Vídeo]' && (
+              <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+            )}
+          </div>
+        );
+      
+      case 'document':
+        return (
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            <span className="text-sm">{message.content || '[Documento]'}</span>
+            {message.media_url && (
+              <a href={message.media_url} target="_blank" rel="noopener noreferrer">
+                <Download className="h-4 w-4 hover:text-primary" />
+              </a>
+            )}
+          </div>
+        );
+      
+      case 'sticker':
+        return message.media_url ? (
+          <img 
+            src={message.media_url} 
+            alt="Sticker" 
+            className="max-w-24 max-h-24"
+          />
+        ) : (
+          <span className="text-sm opacity-70">[Sticker]</span>
+        );
+      
+      default:
+        return (
+          <p className="text-sm whitespace-pre-wrap break-words">
+            {message.content}
+          </p>
+        );
     }
   };
 
@@ -213,9 +311,7 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
                         ? "bg-primary text-primary-foreground" 
                         : "bg-muted"
                     )}>
-                      <p className="text-sm whitespace-pre-wrap break-words">
-                        {message.content}
-                      </p>
+                      {renderMessageContent(message)}
                       <div className={cn(
                         "flex items-center gap-1 mt-1",
                         isOutbound ? "justify-end" : "justify-start"

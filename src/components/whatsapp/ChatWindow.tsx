@@ -214,7 +214,7 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between bg-background">
         <div className="flex items-center gap-3">

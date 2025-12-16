@@ -167,7 +167,7 @@ export default function WhatsAppLiveChat() {
   const pendingConversations = conversations?.filter(c => c.status === 'pending').length || 0;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <AppHeader />
       
       {/* Sub-header */}

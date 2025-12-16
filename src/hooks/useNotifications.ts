@@ -68,11 +68,13 @@ export const useNotifications = () => {
           setNotifications((prev) => [newNotification, ...prev].slice(0, 20));
           setUnreadCount((prev) => prev + 1);
           
-          // Show toast for new notification
-          toast({
-            title: newNotification.title,
-            description: newNotification.message,
-          });
+          // Show toast only for non-WhatsApp notifications (WhatsApp uses subtle badge only)
+          if (newNotification.type !== 'whatsapp') {
+            toast({
+              title: newNotification.title,
+              description: newNotification.message,
+            });
+          }
         }
       )
       .subscribe();

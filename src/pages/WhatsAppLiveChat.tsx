@@ -1,0 +1,244 @@
+import { useState } from 'react';
+import { useProject } from '@/contexts/ProjectContext';
+import { useWhatsAppConversations, WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
+import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
+import { ConversationList } from '@/components/whatsapp/ConversationList';
+import { ChatWindow } from '@/components/whatsapp/ChatWindow';
+import { ContactPanel } from '@/components/whatsapp/ContactPanel';
+import { AppHeader } from '@/components/AppHeader';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  MessageCircle, 
+  Settings, 
+  Users,
+  Wifi,
+  WifiOff
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
+import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
+
+export default function WhatsAppLiveChat() {
+  const { currentProject } = useProject();
+  const [selectedConversation, setSelectedConversation] = useState<WhatsAppConversation | null>(null);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferDepartment, setTransferDepartment] = useState<string>('');
+  const [transferAgent, setTransferAgent] = useState<string>('');
+
+  const { 
+    conversations, 
+    isLoading, 
+    assignConversation,
+    updateConversationStatus,
+    transferConversation 
+  } = useWhatsAppConversations();
+  
+  const { numbers } = useWhatsAppNumbers();
+  const { agents } = useWhatsAppAgents();
+  const { departments } = useWhatsAppDepartments();
+
+  // Get the connected instance name
+  const connectedNumber = numbers?.find(n => n.instance?.status === 'connected');
+  const instanceName = connectedNumber?.instance?.instance_name;
+
+  const handleSelectConversation = (conversation: WhatsAppConversation) => {
+    setSelectedConversation(conversation);
+  };
+
+  const handleAssign = (agentId: string | null) => {
+    if (selectedConversation) {
+      assignConversation({ 
+        conversationId: selectedConversation.id, 
+        agentId 
+      });
+    }
+  };
+
+  const handleTransferDepartment = (departmentId: string) => {
+    if (selectedConversation) {
+      transferConversation({
+        conversationId: selectedConversation.id,
+        departmentId: departmentId || undefined,
+      });
+    }
+  };
+
+  const handleCloseConversation = () => {
+    if (selectedConversation) {
+      updateConversationStatus({
+        conversationId: selectedConversation.id,
+        status: 'closed',
+      });
+      setSelectedConversation(null);
+    }
+  };
+
+  const handleTransferConfirm = () => {
+    if (selectedConversation) {
+      transferConversation({
+        conversationId: selectedConversation.id,
+        departmentId: transferDepartment || undefined,
+        agentId: transferAgent || undefined,
+      });
+      setShowTransferDialog(false);
+      setTransferDepartment('');
+      setTransferAgent('');
+    }
+  };
+
+  const openConversations = conversations?.filter(c => c.status === 'open').length || 0;
+  const pendingConversations = conversations?.filter(c => c.status === 'pending').length || 0;
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <AppHeader />
+      
+      {/* Sub-header */}
+      <div className="border-b bg-background px-6 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-primary" />
+              <h1 className="text-lg font-semibold">Central de Atendimento</h1>
+            </div>
+            
+            {/* Status badges */}
+            <div className="flex items-center gap-2">
+              <Badge variant="default" className="gap-1">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                {openConversations} abertas
+              </Badge>
+              <Badge variant="secondary" className="gap-1">
+                <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                {pendingConversations} aguardando
+              </Badge>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Connection status */}
+            {connectedNumber ? (
+              <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                <Wifi className="h-3 w-3" />
+                Conectado: {connectedNumber.label}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="gap-1 text-muted-foreground">
+                <WifiOff className="h-3 w-3" />
+                Desconectado
+              </Badge>
+            )}
+
+            <Link to="/settings">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Settings className="h-4 w-4" />
+                Configurações
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Conversation list */}
+        <div className="w-96 border-r flex flex-col">
+          <ConversationList
+            conversations={conversations || []}
+            selectedId={selectedConversation?.id || null}
+            onSelect={handleSelectConversation}
+            isLoading={isLoading}
+          />
+        </div>
+
+        {/* Chat window */}
+        <ChatWindow
+          conversation={selectedConversation}
+          instanceName={instanceName}
+          onTransfer={() => setShowTransferDialog(true)}
+          onClose={handleCloseConversation}
+        />
+
+        {/* Contact panel */}
+        <ContactPanel
+          conversation={selectedConversation}
+          onAssign={handleAssign}
+          onTransfer={handleTransferDepartment}
+        />
+      </div>
+
+      {/* Transfer dialog */}
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transferir Conversa</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Departamento</label>
+              <Select value={transferDepartment} onValueChange={setTransferDepartment}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments?.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="h-3 w-3 rounded-full" 
+                          style={{ backgroundColor: dept.color }}
+                        />
+                        {dept.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Atendente (opcional)</label>
+              <Select value={transferAgent} onValueChange={setTransferAgent}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar atendente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Próximo disponível</SelectItem>
+                  {agents?.filter(a => a.is_active && a.status === 'online').map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.display_name || 'Atendente'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleTransferConfirm}>
+                Transferir
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

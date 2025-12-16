@@ -55,28 +55,32 @@ serve(async (req) => {
     const setWebhookForInstance = async (instanceName: string) => {
       if (!webhookUrl) return;
 
+      // Evolution API v2 expects the config inside a "webhook" property
+      const webhookPayload = {
+        webhook: {
+          enabled: true,
+          url: webhookUrl,
+          webhookByEvents: true,
+          webhookBase64: true,
+          events: webhookEvents,
+        },
+      };
+
       const response = await fetch(`${EVOLUTION_API_URL}/webhook/set/${instanceName}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': EVOLUTION_API_KEY,
         },
-        body: JSON.stringify({
-          enabled: true,
-          url: webhookUrl,
-          webhookByEvents: true,
-          webhookBase64: true,
-          events: webhookEvents,
-          // Some Evolution deployments also accept custom headers here.
-          // If ignored, it's fine (we still accept webhooks without this header).
-          headers: { apikey: EVOLUTION_API_KEY },
-        }),
+        body: JSON.stringify(webhookPayload),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Evolution API webhook error:', errorText);
-        throw new Error(`Erro ao configurar webhook: ${response.status}`);
+        // Non-blocking: some Evolution versions may not support this endpoint
+        console.warn('Webhook configuration failed, inbound messages may not work');
+        return null;
       }
 
       try {

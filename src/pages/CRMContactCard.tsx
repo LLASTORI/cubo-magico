@@ -47,6 +47,7 @@ import { ptBR } from 'date-fns/locale';
 import { useState, useEffect } from 'react';
 import { ContactActivitiesList } from '@/components/crm/ContactActivitiesList';
 import { ContactTransactionsList } from '@/components/crm/ContactTransactionsList';
+import { ContactWhatsAppHistory } from '@/components/crm/ContactWhatsAppHistory';
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
@@ -348,11 +349,12 @@ export default function CRMContactCard() {
               </CardContent>
             </Card>
 
-            {/* Tabs for Activities, Transactions, Notes */}
+            {/* Tabs for Activities, Transactions, WhatsApp, Notes */}
             <Tabs defaultValue="activities">
               <TabsList className="w-full">
                 <TabsTrigger value="activities" className="flex-1">Atividades</TabsTrigger>
                 <TabsTrigger value="transactions" className="flex-1">Transações</TabsTrigger>
+                <TabsTrigger value="whatsapp" className="flex-1">WhatsApp</TabsTrigger>
                 <TabsTrigger value="notes" className="flex-1">Anotações</TabsTrigger>
               </TabsList>
 
@@ -380,6 +382,20 @@ export default function CRMContactCard() {
                   </CardHeader>
                   <CardContent>
                     <ContactTransactionsList contactId={contactId!} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="whatsapp" className="mt-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      Histórico de WhatsApp
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ContactWhatsAppHistory contactId={contactId!} />
                   </CardContent>
                 </Card>
               </TabsContent>

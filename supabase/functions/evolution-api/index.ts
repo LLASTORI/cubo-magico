@@ -292,6 +292,87 @@ serve(async (req) => {
         break;
       }
 
+      case 'send_media': {
+        const { instanceName, number, mediaType, mediaUrl, caption, fileName, mimetype } = params;
+
+        // Clean the phone number
+        let cleanNumber = number.replace(/@.*$/, '').replace(/\D/g, '');
+        
+        console.log(`Sending ${mediaType} to:`, cleanNumber);
+
+        let endpoint = '';
+        let body: Record<string, unknown> = {
+          number: cleanNumber,
+        };
+
+        switch (mediaType) {
+          case 'image':
+            endpoint = `${EVOLUTION_API_URL}/message/sendMedia/${instanceName}`;
+            body = {
+              number: cleanNumber,
+              mediatype: 'image',
+              media: mediaUrl,
+              caption: caption || '',
+            };
+            break;
+          
+          case 'audio':
+            endpoint = `${EVOLUTION_API_URL}/message/sendWhatsAppAudio/${instanceName}`;
+            body = {
+              number: cleanNumber,
+              audio: mediaUrl,
+            };
+            break;
+          
+          case 'video':
+            endpoint = `${EVOLUTION_API_URL}/message/sendMedia/${instanceName}`;
+            body = {
+              number: cleanNumber,
+              mediatype: 'video',
+              media: mediaUrl,
+              caption: caption || '',
+            };
+            break;
+          
+          case 'document':
+            endpoint = `${EVOLUTION_API_URL}/message/sendMedia/${instanceName}`;
+            body = {
+              number: cleanNumber,
+              mediatype: 'document',
+              media: mediaUrl,
+              caption: caption || '',
+              fileName: fileName || 'document',
+              mimetype: mimetype || 'application/octet-stream',
+            };
+            break;
+          
+          default:
+            throw new Error(`Tipo de mídia não suportado: ${mediaType}`);
+        }
+
+        console.log('Sending media to endpoint:', endpoint);
+        console.log('Request body:', JSON.stringify(body));
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': EVOLUTION_API_KEY,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Evolution API media error:', errorText);
+          throw new Error(`Erro ao enviar mídia: ${response.status} - ${errorText}`);
+        }
+
+        result = await response.json();
+        console.log('Media sent:', result);
+        break;
+      }
+
       case 'fetch_instances': {
         const response = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
           method: 'GET',

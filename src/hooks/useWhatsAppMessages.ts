@@ -25,7 +25,7 @@ export interface WhatsAppMessage {
 export function useWhatsAppMessages(conversationId: string | null) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { sendMessage: sendEvolutionMessage } = useEvolutionAPI();
+  const { sendMessage: sendEvolutionMessage, sendMedia: sendEvolutionMedia } = useEvolutionAPI();
 
   const { data: messages, isLoading, error } = useQuery({
     queryKey: ['whatsapp-messages', conversationId],
@@ -151,6 +151,97 @@ export function useWhatsAppMessages(conversationId: string | null) {
     },
   });
 
+  const sendMediaMessage = useMutation({
+    mutationFn: async ({ 
+      conversationId, 
+      instanceName,
+      remoteJid,
+      mediaType,
+      mediaUrl,
+      caption,
+      fileName,
+      mimetype,
+    }: { 
+      conversationId: string; 
+      instanceName: string;
+      remoteJid: string;
+      mediaType: 'image' | 'audio' | 'video' | 'document';
+      mediaUrl: string;
+      caption?: string;
+      fileName?: string;
+      mimetype?: string;
+    }) => {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Determine display content based on media type
+      const displayContent = caption || `[${mediaType === 'image' ? 'Imagem' : mediaType === 'audio' ? 'Áudio' : mediaType === 'video' ? 'Vídeo' : 'Documento'}]`;
+      
+      // Insert message in DB first (optimistic)
+      const { data: message, error: insertError } = await supabase
+        .from('whatsapp_messages')
+        .insert({
+          conversation_id: conversationId,
+          direction: 'outbound',
+          content_type: mediaType,
+          content: displayContent,
+          media_url: mediaUrl,
+          media_mime_type: mimetype,
+          status: 'pending',
+          sent_by: user?.id,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Send via Evolution API
+      const result = await sendEvolutionMedia(
+        instanceName, 
+        remoteJid, 
+        mediaType,
+        mediaUrl,
+        caption,
+        fileName,
+        mimetype
+      );
+      
+      if (!result.success) {
+        // Update message status to failed
+        await supabase
+          .from('whatsapp_messages')
+          .update({ status: 'failed', error_message: result.error })
+          .eq('id', message.id);
+        throw new Error(result.error);
+      }
+
+      // Update message status to sent
+      await supabase
+        .from('whatsapp_messages')
+        .update({ status: 'sent', external_id: result.data?.key?.id })
+        .eq('id', message.id);
+
+      // Update conversation last_message_at
+      await supabase
+        .from('whatsapp_conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', conversationId);
+
+      return message;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao enviar mídia',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const markAsRead = useMutation({
     mutationFn: async (conversationId: string) => {
       const { error } = await supabase
@@ -170,7 +261,9 @@ export function useWhatsAppMessages(conversationId: string | null) {
     isLoading,
     error,
     sendMessage: sendMessage.mutate,
+    sendMediaMessage: sendMediaMessage.mutate,
     markAsRead: markAsRead.mutate,
     isSending: sendMessage.isPending,
+    isSendingMedia: sendMediaMessage.isPending,
   };
 }

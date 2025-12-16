@@ -68,10 +68,19 @@ export function WhatsAppMetricsDashboard() {
     activeConversations: 0,
     queuedConversations: 0,
     onlineAgents: 0,
-    totalAgents: 0
+    totalAgents: 0,
+    webhooksPerHour: 0
   });
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [webhookTrend, setWebhookTrend] = useState<any[]>([]);
+
+  // Estimated capacity limits (conservative estimates)
+  const CAPACITY_LIMITS = {
+    webhooksPerHour: 500, // Conservative limit for edge functions
+    avgProcessingTimeMs: 2000, // Threshold for slow processing
+    queuedConversations: 20, // Max recommended queue size
+    activeConversations: 100 // Per project recommended max
+  };
 
   const fetchMetrics = async () => {
     try {
@@ -239,6 +248,10 @@ export function WhatsAppMetricsDashboard() {
         return severityOrder[a.severity] - severityOrder[b.severity];
       }));
 
+      // Calculate webhooks per hour
+      const hours = parseInt(timeRange);
+      const webhooksPerHour = hours > 0 ? globalTotalWebhooks / hours : globalTotalWebhooks;
+
       setGlobalStats({
         totalWebhooks: globalTotalWebhooks,
         successRate: globalTotalWebhooks > 0 ? (globalSuccessCount / globalTotalWebhooks) * 100 : 100,
@@ -246,7 +259,8 @@ export function WhatsAppMetricsDashboard() {
         activeConversations: globalActiveConversations,
         queuedConversations: globalQueuedConversations,
         onlineAgents: globalOnlineAgents,
-        totalAgents: globalTotalAgents
+        totalAgents: globalTotalAgents,
+        webhooksPerHour
       });
 
       // Calculate webhook trend (hourly)
@@ -376,6 +390,123 @@ export function WhatsAppMetricsDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* System Capacity Card */}
+      {(() => {
+        const webhooksUsage = (globalStats.webhooksPerHour / CAPACITY_LIMITS.webhooksPerHour) * 100;
+        const processingUsage = (globalStats.avgProcessingTime / CAPACITY_LIMITS.avgProcessingTimeMs) * 100;
+        const queueUsage = (globalStats.queuedConversations / CAPACITY_LIMITS.queuedConversations) * 100;
+        
+        const getUsageColor = (usage: number) => {
+          if (usage < 50) return 'text-green-500';
+          if (usage < 75) return 'text-amber-500';
+          return 'text-destructive';
+        };
+        
+        const getProgressColor = (usage: number) => {
+          if (usage < 50) return '[&>div]:bg-green-500';
+          if (usage < 75) return '[&>div]:bg-amber-500';
+          return '[&>div]:bg-destructive';
+        };
+
+        const overallHealth = Math.max(webhooksUsage, processingUsage, queueUsage);
+        const healthStatus = overallHealth < 50 ? 'Saudável' : overallHealth < 75 ? 'Atenção' : 'Crítico';
+        const healthColor = overallHealth < 50 ? 'bg-green-500' : overallHealth < 75 ? 'bg-amber-500' : 'bg-destructive';
+        
+        return (
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  Capacidade do Sistema
+                </CardTitle>
+                <Badge className={`${healthColor} text-white`}>
+                  {healthStatus}
+                </Badge>
+              </div>
+              <CardDescription>
+                Uso atual vs limites estimados da infraestrutura
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Webhooks/hora */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Webhooks/hora
+                    </span>
+                    <span className={getUsageColor(webhooksUsage)}>
+                      {globalStats.webhooksPerHour.toFixed(0)} / {CAPACITY_LIMITS.webhooksPerHour}
+                    </span>
+                  </div>
+                  <Progress value={Math.min(webhooksUsage, 100)} className={`h-2 ${getProgressColor(webhooksUsage)}`} />
+                  <p className="text-xs text-muted-foreground">
+                    {webhooksUsage < 50 ? '✓ Uso baixo - sistema tranquilo' : 
+                     webhooksUsage < 75 ? '⚠ Uso moderado - monitore' : 
+                     '⚠ Uso alto - considere otimizar'}
+                  </p>
+                </div>
+
+                {/* Tempo de processamento */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Tempo médio
+                    </span>
+                    <span className={getUsageColor(processingUsage)}>
+                      {globalStats.avgProcessingTime.toFixed(0)}ms / {CAPACITY_LIMITS.avgProcessingTimeMs}ms
+                    </span>
+                  </div>
+                  <Progress value={Math.min(processingUsage, 100)} className={`h-2 ${getProgressColor(processingUsage)}`} />
+                  <p className="text-xs text-muted-foreground">
+                    {processingUsage < 50 ? '✓ Resposta rápida' : 
+                     processingUsage < 75 ? '⚠ Ligeira lentidão' : 
+                     '⚠ Lento - verifique logs'}
+                  </p>
+                </div>
+
+                {/* Fila */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <Server className="w-4 h-4" />
+                      Fila de espera
+                    </span>
+                    <span className={getUsageColor(queueUsage)}>
+                      {globalStats.queuedConversations} / {CAPACITY_LIMITS.queuedConversations}
+                    </span>
+                  </div>
+                  <Progress value={Math.min(queueUsage, 100)} className={`h-2 ${getProgressColor(queueUsage)}`} />
+                  <p className="text-xs text-muted-foreground">
+                    {queueUsage < 50 ? '✓ Fila controlada' : 
+                     queueUsage < 75 ? '⚠ Fila crescendo' : 
+                     '⚠ Fila alta - mais atendentes'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Cost estimate */}
+              <div className="mt-6 pt-4 border-t border-border">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Custo estimado mensal (baseado no uso atual)
+                  </span>
+                  <span className="font-medium">
+                    ~${((globalStats.webhooksPerHour * 24 * 30 * 0.00001) + 5).toFixed(2)}/mês
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Inclui: Edge Functions + Database (estimativa conservadora)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Global Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">

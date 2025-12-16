@@ -58,13 +58,19 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
     }
   }, []);
 
   const scrollToTop = useCallback(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
+      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTop = 0;
+      }
     }
   }, []);
 

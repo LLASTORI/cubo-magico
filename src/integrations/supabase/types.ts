@@ -2485,6 +2485,47 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_metrics: {
+        Row: {
+          error_message: string | null
+          id: string
+          payload_size: number | null
+          processed_at: string
+          processing_time_ms: number | null
+          project_id: string
+          success: boolean
+          webhook_type: string
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          payload_size?: number | null
+          processed_at?: string
+          processing_time_ms?: number | null
+          project_id: string
+          success?: boolean
+          webhook_type: string
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          payload_size?: number | null
+          processed_at?: string
+          processing_time_ms?: number | null
+          project_id?: string
+          success?: boolean
+          webhook_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_metrics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_agent_departments: {
         Row: {
           agent_id: string
@@ -2880,6 +2921,7 @@ export type Database = {
     Functions: {
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
       can_user_create_project: { Args: { _user_id: string }; Returns: boolean }
+      cleanup_old_webhook_metrics: { Args: never; Returns: undefined }
       count_project_members: { Args: { _project_id: string }; Returns: number }
       count_user_projects: { Args: { _user_id: string }; Returns: number }
       create_default_pipeline_stages: {
@@ -2890,11 +2932,30 @@ export type Database = {
         Args: { _project_id: string }
         Returns: undefined
       }
+      get_next_available_agent: {
+        Args: { p_department_id?: string; p_project_id: string }
+        Returns: string
+      }
+      get_queue_position: {
+        Args: { p_department_id?: string; p_project_id: string }
+        Returns: number
+      }
       get_user_email: { Args: { _user_id: string }; Returns: string }
       get_user_max_projects: { Args: { _user_id: string }; Returns: number }
       get_user_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["project_role"]
+      }
+      get_webhook_stats: {
+        Args: { p_hours?: number; p_project_id: string }
+        Returns: {
+          avg_processing_time_ms: number
+          error_count: number
+          requests_per_minute: number
+          success_count: number
+          total_count: number
+          webhook_type: string
+        }[]
       }
       has_accepted_terms: {
         Args: { _user_id: string; _version?: string }

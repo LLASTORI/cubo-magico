@@ -13,6 +13,7 @@ export interface CRMContact {
   phone_ddd: string | null;
   document: string | null;
   instagram: string | null;
+  avatar_url: string | null;
   address: string | null;
   address_number: string | null;
   address_complement: string | null;

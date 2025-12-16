@@ -61,15 +61,23 @@ export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPane
         <div className="p-4 space-y-6">
           {/* Contact Info */}
           <div className="text-center">
-            <div 
-              className="h-20 w-20 rounded-full flex items-center justify-center text-2xl font-medium mx-auto mb-3"
-              style={{ 
-                backgroundColor: conversation.department?.color || 'hsl(var(--primary))',
-                color: 'white'
-              }}
-            >
-              {contact?.name?.charAt(0).toUpperCase() || '?'}
-            </div>
+            {contact?.avatar_url ? (
+              <img 
+                src={contact.avatar_url} 
+                alt={contact?.name || 'Contato'}
+                className="h-20 w-20 rounded-full object-cover mx-auto mb-3"
+              />
+            ) : (
+              <div 
+                className="h-20 w-20 rounded-full flex items-center justify-center text-2xl font-medium mx-auto mb-3"
+                style={{ 
+                  backgroundColor: conversation.department?.color || 'hsl(var(--primary))',
+                  color: 'white'
+                }}
+              >
+                {contact?.name?.charAt(0).toUpperCase() || '?'}
+              </div>
+            )}
             <h3 className="font-semibold text-lg">
               {contact?.name || 'Contato'}
             </h3>

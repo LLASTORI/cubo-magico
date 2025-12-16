@@ -223,6 +223,20 @@ export default function CRMContactCard() {
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
+          
+          {/* Avatar */}
+          {contact.avatar_url ? (
+            <img 
+              src={contact.avatar_url} 
+              alt={contact.name || 'Contato'}
+              className="h-14 w-14 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-14 w-14 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xl font-medium">
+              {(contact.name || contact.email).charAt(0).toUpperCase()}
+            </div>
+          )}
+          
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{contact.name || contact.email}</h1>
             <p className="text-muted-foreground">{contact.email}</p>

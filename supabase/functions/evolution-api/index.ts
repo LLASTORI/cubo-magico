@@ -50,7 +50,9 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const webhookUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/whatsapp-webhook` : '';
-    const webhookEvents = ['messages.upsert', 'messages.update', 'connection.update', 'qrcode.updated'];
+
+    // Evolution expects specific event enum values (UPPER_SNAKE_CASE)
+    const webhookEvents = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'];
 
     const setWebhookForInstance = async (instanceName: string) => {
       if (!webhookUrl) return;
@@ -101,14 +103,12 @@ serve(async (req) => {
         };
 
         if (webhookUrl) {
+          // Keep the same format used by /webhook/set for better compatibility
           createBody.webhook = {
+            enabled: true,
             url: webhookUrl,
-            byEvents: true,
-            base64: true,
-            headers: {
-              apikey: EVOLUTION_API_KEY,
-              'Content-Type': 'application/json',
-            },
+            webhookByEvents: true,
+            webhookBase64: true,
             events: webhookEvents,
           };
         }
@@ -163,7 +163,17 @@ serve(async (req) => {
 
       case 'configure_webhook': {
         const { instanceName } = params;
-        result = await setWebhookForInstance(instanceName);
+
+        // Never fail the whole call for webhook setup; return a warning instead.
+        try {
+          const response = await setWebhookForInstance(instanceName);
+          result = { configured: Boolean(response), response };
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error('configure_webhook failed (non-blocking):', msg);
+          result = { configured: false, error: msg };
+        }
+
         break;
       }
 

@@ -185,14 +185,21 @@ async function handleIncomingMessage(
   }
 
   const rawRemoteJid = data.key.remoteJid;
+  
+  // Skip group messages (ending with @g.us)
+  if (rawRemoteJid.endsWith('@g.us')) {
+    console.log('[WhatsApp Webhook] Skipping group message from:', rawRemoteJid);
+    return;
+  }
+
   const remoteJid = normalizeRemoteJid(rawRemoteJid);
   const messageId = data.key.id;
   const pushName = data.pushName || null;
 
-  // Extract message content and type
-  const { content, contentType } = extractMessageContent(data.message);
+  // Extract message content, type and media URL
+  const { content, contentType, mediaUrl, mediaMimeType } = extractMessageContent(data.message, data as any);
   
-  console.log('[WhatsApp Webhook] Processing message from:', remoteJid, '(raw:', rawRemoteJid, ') Type:', contentType);
+  console.log('[WhatsApp Webhook] Processing message from:', remoteJid, '(raw:', rawRemoteJid, ') Type:', contentType, 'MediaUrl:', mediaUrl ? 'yes' : 'no');
 
   // Find or create conversation
   let conversation = await findOrCreateConversation(
@@ -212,6 +219,8 @@ async function handleIncomingMessage(
       direction: 'inbound',
       content_type: contentType,
       content: content,
+      media_url: mediaUrl,
+      media_mime_type: mediaMimeType,
       external_id: messageId,
       status: 'delivered',
       metadata: {
@@ -371,40 +380,73 @@ async function findOrCreateConversation(
   return newConv;
 }
 
-function extractMessageContent(message: any): { content: string | null; contentType: string } {
+function extractMessageContent(message: any, data?: any): { content: string | null; contentType: string; mediaUrl: string | null; mediaMimeType: string | null } {
   if (!message) {
-    return { content: null, contentType: 'text' };
+    return { content: null, contentType: 'text', mediaUrl: null, mediaMimeType: null };
   }
 
+  // Evolution API often provides media URL in different places
+  const mediaUrl = data?.media?.url || data?.mediaUrl || message?.mediaUrl || null;
+
   if (message.conversation) {
-    return { content: message.conversation, contentType: 'text' };
+    return { content: message.conversation, contentType: 'text', mediaUrl: null, mediaMimeType: null };
   }
   
   if (message.extendedTextMessage?.text) {
-    return { content: message.extendedTextMessage.text, contentType: 'text' };
+    return { content: message.extendedTextMessage.text, contentType: 'text', mediaUrl: null, mediaMimeType: null };
   }
   
   if (message.imageMessage) {
-    return { content: message.imageMessage.caption || '[Imagem]', contentType: 'image' };
+    const url = mediaUrl || message.imageMessage.url || null;
+    return { 
+      content: message.imageMessage.caption || '[Imagem]', 
+      contentType: 'image',
+      mediaUrl: url,
+      mediaMimeType: message.imageMessage.mimetype || 'image/jpeg'
+    };
   }
   
   if (message.audioMessage) {
-    return { content: '[Áudio]', contentType: 'audio' };
+    const url = mediaUrl || message.audioMessage.url || null;
+    return { 
+      content: '[Áudio]', 
+      contentType: 'audio',
+      mediaUrl: url,
+      mediaMimeType: message.audioMessage.mimetype || 'audio/ogg'
+    };
   }
   
   if (message.videoMessage) {
-    return { content: message.videoMessage.caption || '[Vídeo]', contentType: 'video' };
+    const url = mediaUrl || message.videoMessage.url || null;
+    return { 
+      content: message.videoMessage.caption || '[Vídeo]', 
+      contentType: 'video',
+      mediaUrl: url,
+      mediaMimeType: message.videoMessage.mimetype || 'video/mp4'
+    };
   }
   
   if (message.documentMessage) {
-    return { content: message.documentMessage.fileName || '[Documento]', contentType: 'document' };
+    const url = mediaUrl || message.documentMessage.url || null;
+    return { 
+      content: message.documentMessage.fileName || '[Documento]', 
+      contentType: 'document',
+      mediaUrl: url,
+      mediaMimeType: message.documentMessage.mimetype || 'application/octet-stream'
+    };
   }
   
   if (message.stickerMessage) {
-    return { content: '[Sticker]', contentType: 'sticker' };
+    const url = mediaUrl || message.stickerMessage.url || null;
+    return { 
+      content: '[Sticker]', 
+      contentType: 'sticker',
+      mediaUrl: url,
+      mediaMimeType: message.stickerMessage.mimetype || 'image/webp'
+    };
   }
 
-  return { content: '[Mensagem não suportada]', contentType: 'text' };
+  return { content: '[Mensagem não suportada]', contentType: 'text', mediaUrl: null, mediaMimeType: null };
 }
 
 async function handleMessageUpdate(supabase: any, payload: EvolutionWebhookPayload) {

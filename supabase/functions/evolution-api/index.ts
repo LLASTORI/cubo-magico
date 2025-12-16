@@ -184,6 +184,11 @@ serve(async (req) => {
       case 'send_message': {
         const { instanceName, number, text } = params;
 
+        // Clean the phone number - remove @s.whatsapp.net suffix and any non-digits
+        let cleanNumber = number.replace(/@.*$/, '').replace(/\D/g, '');
+        
+        console.log('Sending message to cleaned number:', cleanNumber);
+
         const response = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
           method: 'POST',
           headers: {
@@ -191,7 +196,7 @@ serve(async (req) => {
             'apikey': EVOLUTION_API_KEY,
           },
           body: JSON.stringify({
-            number,
+            number: cleanNumber,
             text,
           }),
         });

@@ -13,12 +13,17 @@ serve(async (req) => {
   }
 
   try {
-    const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
+    let EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
     const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
 
     if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
       console.error('Missing Evolution API configuration');
       throw new Error('Evolution API não configurada');
+    }
+
+    // Ensure URL has protocol
+    if (!EVOLUTION_API_URL.startsWith('http://') && !EVOLUTION_API_URL.startsWith('https://')) {
+      EVOLUTION_API_URL = `https://${EVOLUTION_API_URL}`;
     }
 
     // Get the authorization header to verify the user

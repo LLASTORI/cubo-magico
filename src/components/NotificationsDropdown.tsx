@@ -1,4 +1,4 @@
-import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Info, AlertTriangle, AlertCircle, CheckCircle, History } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Info, AlertTriangle, AlertCircle, CheckCircle, History, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,8 @@ const getNotificationIcon = (type: Notification['type']) => {
       return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
     case 'error':
       return <AlertCircle className="h-4 w-4 text-red-500" />;
+    case 'whatsapp':
+      return <MessageCircle className="h-4 w-4 text-green-500" />;
     default:
       return <Info className="h-4 w-4 text-blue-500" />;
   }
@@ -84,6 +86,10 @@ const NotificationsDropdown = () => {
                 onClick={() => {
                   if (!notification.is_read) {
                     markAsRead(notification.id);
+                  }
+                  // Navigate to WhatsApp if it's a WhatsApp notification
+                  if (notification.type === 'whatsapp') {
+                    navigate('/whatsapp');
                   }
                 }}
               >

@@ -245,7 +245,63 @@ async function handleIncomingMessage(
     })
     .eq('id', conversation.id);
 
+  // Send notifications to project members
+  await sendWhatsAppNotification(supabase, projectId, pushName, content, conversation.id);
+
   console.log('[WhatsApp Webhook] Message processed successfully');
+}
+
+async function sendWhatsAppNotification(
+  supabase: any,
+  projectId: string,
+  senderName: string | null,
+  messageContent: string | null,
+  conversationId: string
+) {
+  try {
+    // Get all project members
+    const { data: members, error: membersError } = await supabase
+      .from('project_members')
+      .select('user_id')
+      .eq('project_id', projectId);
+
+    if (membersError || !members || members.length === 0) {
+      console.log('[WhatsApp Webhook] No project members to notify');
+      return;
+    }
+
+    const title = senderName 
+      ? `Nova mensagem de ${senderName}` 
+      : 'Nova mensagem no WhatsApp';
+    
+    const message = messageContent 
+      ? (messageContent.length > 100 ? messageContent.substring(0, 100) + '...' : messageContent)
+      : 'Você recebeu uma nova mensagem';
+
+    // Create notifications for all project members
+    const notifications = members.map((member: { user_id: string }) => ({
+      user_id: member.user_id,
+      title,
+      message,
+      type: 'whatsapp',
+      metadata: {
+        conversation_id: conversationId,
+        project_id: projectId,
+      },
+    }));
+
+    const { error: notifyError } = await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    if (notifyError) {
+      console.error('[WhatsApp Webhook] Error creating notifications:', notifyError);
+    } else {
+      console.log('[WhatsApp Webhook] Notifications sent to', members.length, 'members');
+    }
+  } catch (error) {
+    console.error('[WhatsApp Webhook] Error sending notifications:', error);
+  }
 }
 
 async function findOrCreateConversation(

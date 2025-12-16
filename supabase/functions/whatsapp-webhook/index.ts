@@ -236,6 +236,8 @@ async function handleIncomingMessage(
   }
 
   // Update conversation
+  const isNewConversation = conversation.unread_count === 0;
+  
   await supabase
     .from('whatsapp_conversations')
     .update({
@@ -245,8 +247,16 @@ async function handleIncomingMessage(
     })
     .eq('id', conversation.id);
 
-  // Send notifications to project members
-  await sendWhatsAppNotification(supabase, projectId, pushName, content, conversation.id);
+  // Send smart notifications (only for new conversations or to assigned agent)
+  await sendWhatsAppNotification(
+    supabase, 
+    projectId, 
+    pushName, 
+    content, 
+    conversation.id,
+    isNewConversation,
+    conversation.assigned_to
+  );
 
   console.log('[WhatsApp Webhook] Message processed successfully');
 }
@@ -256,37 +266,60 @@ async function sendWhatsAppNotification(
   projectId: string,
   senderName: string | null,
   messageContent: string | null,
-  conversationId: string
+  conversationId: string,
+  isNewConversation: boolean,
+  assignedTo: string | null
 ) {
   try {
-    // Get all project members
-    const { data: members, error: membersError } = await supabase
-      .from('project_members')
-      .select('user_id')
-      .eq('project_id', projectId);
+    let usersToNotify: string[] = [];
 
-    if (membersError || !members || members.length === 0) {
-      console.log('[WhatsApp Webhook] No project members to notify');
+    if (isNewConversation) {
+      // New conversation: notify all project members
+      const { data: members } = await supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', projectId);
+      
+      usersToNotify = members?.map((m: { user_id: string }) => m.user_id) || [];
+      console.log('[WhatsApp Webhook] New conversation - notifying all members:', usersToNotify.length);
+    } else if (assignedTo) {
+      // Existing conversation with assigned agent: notify only them
+      usersToNotify = [assignedTo];
+      console.log('[WhatsApp Webhook] Existing conversation - notifying assigned agent:', assignedTo);
+    } else {
+      // Existing conversation without agent: notify all (so someone picks it up)
+      const { data: members } = await supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', projectId);
+      
+      usersToNotify = members?.map((m: { user_id: string }) => m.user_id) || [];
+      console.log('[WhatsApp Webhook] Unassigned conversation - notifying all members:', usersToNotify.length);
+    }
+
+    if (usersToNotify.length === 0) {
+      console.log('[WhatsApp Webhook] No users to notify');
       return;
     }
 
-    const title = senderName 
-      ? `Nova mensagem de ${senderName}` 
-      : 'Nova mensagem no WhatsApp';
+    const title = isNewConversation
+      ? (senderName ? `Nova conversa de ${senderName}` : 'Nova conversa no WhatsApp')
+      : (senderName ? `Mensagem de ${senderName}` : 'Nova mensagem no WhatsApp');
     
     const message = messageContent 
-      ? (messageContent.length > 100 ? messageContent.substring(0, 100) + '...' : messageContent)
+      ? (messageContent.length > 80 ? messageContent.substring(0, 80) + '...' : messageContent)
       : 'Você recebeu uma nova mensagem';
 
-    // Create notifications for all project members
-    const notifications = members.map((member: { user_id: string }) => ({
-      user_id: member.user_id,
+    // Create notifications
+    const notifications = usersToNotify.map((userId: string) => ({
+      user_id: userId,
       title,
       message,
       type: 'whatsapp',
       metadata: {
         conversation_id: conversationId,
         project_id: projectId,
+        is_new_conversation: isNewConversation,
       },
     }));
 
@@ -297,7 +330,7 @@ async function sendWhatsAppNotification(
     if (notifyError) {
       console.error('[WhatsApp Webhook] Error creating notifications:', notifyError);
     } else {
-      console.log('[WhatsApp Webhook] Notifications sent to', members.length, 'members');
+      console.log('[WhatsApp Webhook] Notifications sent to', usersToNotify.length, 'users');
     }
   } catch (error) {
     console.error('[WhatsApp Webhook] Error sending notifications:', error);

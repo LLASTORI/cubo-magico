@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -24,6 +24,7 @@ import { ProjectsManager } from '@/components/admin/ProjectsManager';
 import { ModulesManager } from '@/components/admin/ModulesManager';
 import { TermsAcceptancesManager } from '@/components/admin/TermsAcceptancesManager';
 import { UserActivityManager } from '@/components/admin/UserActivityManager';
+import { WhatsAppMetricsDashboard } from '@/components/admin/WhatsAppMetricsDashboard';
 
 interface UserProfile {
   id: string;
@@ -269,6 +270,12 @@ const Admin = () => {
               <TabsTrigger value="terms" className="gap-2">
                 <FileText className="h-4 w-4" />
                 Termos de Uso
+              </TabsTrigger>
+            )}
+            {isSuperAdmin && (
+              <TabsTrigger value="whatsapp" className="gap-2">
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
               </TabsTrigger>
             )}
           </TabsList>
@@ -553,6 +560,12 @@ const Admin = () => {
           {isSuperAdmin && (
             <TabsContent value="terms">
               <TermsAcceptancesManager />
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="whatsapp">
+              <WhatsAppMetricsDashboard />
             </TabsContent>
           )}
 

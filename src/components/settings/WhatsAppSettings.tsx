@@ -25,7 +25,7 @@ export function WhatsAppSettings() {
   const { currentProject } = useProject();
   const { isModuleEnabled } = useProjectModules();
   const { numbers, isLoading, createNumber, deleteNumber, updateNumber, reorderPriorities, promoteNumber, disableNumber, isCreating, isDeleting } = useWhatsAppNumbers();
-  const { createInstance, getQRCode, getStatus, disconnect, sendMessage, isLoading: isEvolutionLoading } = useEvolutionAPI();
+  const { createInstance, getQRCode, getStatus, disconnect, sendMessage, configureWebhook, isLoading: isEvolutionLoading } = useEvolutionAPI();
   const { toast } = useToast();
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -55,6 +55,9 @@ export function WhatsAppSettings() {
         setConnectionStatus(state);
         
         if (state === 'open' || state === 'connected') {
+          // Ensure inbound webhooks are configured
+          await configureWebhook(instanceName);
+
           // Update the number status to active
           updateNumber({ id: selectedNumber.id, status: 'active' });
           setIsQRDialogOpen(false);
@@ -125,6 +128,9 @@ export function WhatsAppSettings() {
       
       // Create instance and get QR code
       const result = await createInstance(instanceName, num.id, currentProject.id);
+
+      // Configure webhook (so inbound messages arrive in the CRM)
+      await configureWebhook(instanceName);
       
       if (result.success && result.data) {
         // Try to get QR code from the response

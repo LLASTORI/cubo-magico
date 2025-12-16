@@ -54,8 +54,9 @@ export default function WhatsAppLiveChat() {
   const { numbers } = useWhatsAppNumbers();
   const { agents } = useWhatsAppAgents();
   const { departments } = useWhatsAppDepartments();
-  const { syncInstance } = useEvolutionAPI();
+  const { syncInstance, configureWebhook } = useEvolutionAPI();
   const queryClient = useQueryClient();
+  const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false);
 
   // Get the connected instance name - fallback to active number if no instance record
   const connectedNumber = numbers?.find(n => n.instance?.status === 'connected') 
@@ -76,19 +77,39 @@ export default function WhatsAppLiveChat() {
       setIsSyncing(true);
       const instanceNameToSync = `cubo_${connectedNumber.id.slice(0, 8)}`;
       console.log('Auto-syncing instance:', instanceNameToSync);
-      
+
       const result = await syncInstance(instanceNameToSync, connectedNumber.id);
-      
+
       if (result.success && result.data?.synced) {
         // Refresh the numbers list to get the updated instance
         queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers'] });
       }
-      
+
       setIsSyncing(false);
     };
 
     doSync();
   }, [needsSync, connectedNumber, syncInstance, queryClient, isSyncing]);
+
+  // Ensure webhook is configured (required for inbound messages to appear)
+  useEffect(() => {
+    if (!connectedNumber || !instanceName || isConfiguringWebhook) return;
+
+    // Only attempt when we have a connected instance (or an active number)
+    const canConfigure = connectedNumber.instance?.status === 'connected' || connectedNumber.status === 'active';
+    if (!canConfigure) return;
+
+    const run = async () => {
+      setIsConfiguringWebhook(true);
+      const res = await configureWebhook(instanceName);
+      if (res.success) {
+        // no-op; webhook is now set server-side
+      }
+      setIsConfiguringWebhook(false);
+    };
+
+    run();
+  }, [connectedNumber?.id, connectedNumber?.status, connectedNumber?.instance?.status, instanceName, configureWebhook, isConfiguringWebhook]);
 
   // Keep selectedConversation in sync when conversations refetch (prevents stale phone/DDD display)
   useEffect(() => {

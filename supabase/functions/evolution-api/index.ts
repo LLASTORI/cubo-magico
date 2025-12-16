@@ -48,10 +48,67 @@ serve(async (req) => {
 
     let result;
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const webhookUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/whatsapp-webhook` : '';
+    const webhookEvents = ['messages.upsert', 'messages.update', 'connection.update', 'qrcode.updated'];
+
+    const setWebhookForInstance = async (instanceName: string) => {
+      if (!webhookUrl) return;
+
+      const response = await fetch(`${EVOLUTION_API_URL}/webhook/set/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': EVOLUTION_API_KEY,
+        },
+        body: JSON.stringify({
+          enabled: true,
+          url: webhookUrl,
+          webhookByEvents: true,
+          webhookBase64: true,
+          events: webhookEvents,
+          // Some Evolution deployments also accept custom headers here.
+          // If ignored, it's fine (we still accept webhooks without this header).
+          headers: { apikey: EVOLUTION_API_KEY },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Evolution API webhook error:', errorText);
+        throw new Error(`Erro ao configurar webhook: ${response.status}`);
+      }
+
+      try {
+        return await response.json();
+      } catch {
+        return null;
+      }
+    };
+
     switch (action) {
       case 'create_instance': {
-        const { instanceName, projectId, phoneNumber } = params;
-        
+        const { instanceName } = params;
+
+        const createBody: Record<string, unknown> = {
+          instanceName,
+          qrcode: true,
+          integration: 'WHATSAPP-BAILEYS',
+        };
+
+        if (webhookUrl) {
+          createBody.webhook = {
+            url: webhookUrl,
+            byEvents: true,
+            base64: true,
+            headers: {
+              apikey: EVOLUTION_API_KEY,
+              'Content-Type': 'application/json',
+            },
+            events: webhookEvents,
+          };
+        }
+
         // Create instance on Evolution API
         const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
           method: 'POST',
@@ -59,11 +116,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
             'apikey': EVOLUTION_API_KEY,
           },
-          body: JSON.stringify({
-            instanceName,
-            qrcode: true,
-            integration: 'WHATSAPP-BAILEYS',
-          }),
+          body: JSON.stringify(createBody),
         });
 
         if (!response.ok) {
@@ -74,6 +127,13 @@ serve(async (req) => {
 
         result = await response.json();
         console.log('Instance created:', result);
+
+        // Best-effort: ensure webhook is configured for this instance (critical for inbound messages)
+        try {
+          await setWebhookForInstance(instanceName);
+        } catch (e) {
+          console.error('Webhook configuration failed (non-blocking):', e);
+        }
 
         // Save instance to database
         const { error: dbError } = await supabaseClient
@@ -94,6 +154,12 @@ serve(async (req) => {
           console.error('Database error:', dbError);
         }
 
+        break;
+      }
+
+      case 'configure_webhook': {
+        const { instanceName } = params;
+        result = await setWebhookForInstance(instanceName);
         break;
       }
 

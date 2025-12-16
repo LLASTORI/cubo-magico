@@ -2485,14 +2485,110 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_agent_departments: {
+        Row: {
+          agent_id: string
+          created_at: string
+          department_id: string
+          id: string
+          is_primary: boolean
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          department_id: string
+          id?: string
+          is_primary?: boolean
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          department_id?: string
+          id?: string
+          is_primary?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_agent_departments_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_agent_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_agents: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          is_active: boolean
+          is_supervisor: boolean
+          last_activity_at: string | null
+          max_concurrent_chats: number
+          project_id: string
+          status: Database["public"]["Enums"]["agent_status"]
+          updated_at: string
+          user_id: string
+          work_hours: Json | null
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean
+          is_supervisor?: boolean
+          last_activity_at?: string | null
+          max_concurrent_chats?: number
+          project_id: string
+          status?: Database["public"]["Enums"]["agent_status"]
+          updated_at?: string
+          user_id: string
+          work_hours?: Json | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean
+          is_supervisor?: boolean
+          last_activity_at?: string | null
+          max_concurrent_chats?: number
+          project_id?: string
+          status?: Database["public"]["Enums"]["agent_status"]
+          updated_at?: string
+          user_id?: string
+          work_hours?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_agents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_conversations: {
         Row: {
           assigned_to: string | null
           contact_id: string
           created_at: string
+          department_id: string | null
+          first_response_at: string | null
           id: string
           last_message_at: string | null
           project_id: string
+          queue_position: number | null
+          queued_at: string | null
           remote_jid: string
           status: string
           unread_count: number | null
@@ -2503,9 +2599,13 @@ export type Database = {
           assigned_to?: string | null
           contact_id: string
           created_at?: string
+          department_id?: string | null
+          first_response_at?: string | null
           id?: string
           last_message_at?: string | null
           project_id: string
+          queue_position?: number | null
+          queued_at?: string | null
           remote_jid: string
           status?: string
           unread_count?: number | null
@@ -2516,9 +2616,13 @@ export type Database = {
           assigned_to?: string | null
           contact_id?: string
           created_at?: string
+          department_id?: string | null
+          first_response_at?: string | null
           id?: string
           last_message_at?: string | null
           project_id?: string
+          queue_position?: number | null
+          queued_at?: string | null
           remote_jid?: string
           status?: string
           unread_count?: number | null
@@ -2534,6 +2638,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "whatsapp_conversations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_departments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "whatsapp_conversations_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -2545,6 +2656,47 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_departments: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_departments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -2790,6 +2942,7 @@ export type Database = {
       update_last_login: { Args: never; Returns: undefined }
     }
     Enums: {
+      agent_status: "online" | "away" | "offline" | "busy"
       app_role: "admin" | "user" | "super_admin"
       invite_status: "pending" | "accepted" | "rejected" | "expired"
       project_role: "owner" | "manager" | "operator"
@@ -2926,6 +3079,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      agent_status: ["online", "away", "offline", "busy"],
       app_role: ["admin", "user", "super_admin"],
       invite_status: ["pending", "accepted", "rejected", "expired"],
       project_role: ["owner", "manager", "operator"],

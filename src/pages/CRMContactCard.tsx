@@ -51,6 +51,7 @@ import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
+import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
 import { toast } from 'sonner';
@@ -71,7 +72,7 @@ export default function CRMContactCard() {
   const [isStartingChat, setIsStartingChat] = useState(false);
 
   // Verifica se contato tem número de telefone válido para WhatsApp
-  const hasWhatsAppNumber = contact?.phone && contact.phone.length >= 8;
+  const hasWhatsAppNumber = !!(contact?.phone && (contact.phone_country_code || '55') && (contact.phone_ddd || '').length >= 0 && contact.phone.length >= 8);
   
   // Verifica se já existe conversa com este contato
   const existingConversation = conversations?.find(c => c.contact_id === contactId);
@@ -109,11 +110,13 @@ export default function CRMContactCard() {
     // Se não existe, criar nova conversa
     setIsStartingChat(true);
     try {
-      const phoneNumber = contact.phone_ddd 
-        ? `55${contact.phone_ddd}${contact.phone}` 
-        : `55${contact.phone}`;
+      const phoneNumber = getFullPhoneNumber(
+        contact.phone_country_code || '55',
+        contact.phone_ddd || '',
+        contact.phone || ''
+      );
       
-      const remoteJid = `${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`;
+      const remoteJid = `${phoneNumber}@s.whatsapp.net`;
 
       const { data, error } = await supabase
         .from('whatsapp_conversations')

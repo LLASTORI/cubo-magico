@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useWhatsAppNumbers, WhatsAppNumber } from '@/hooks/useWhatsAppNumbers';
 import { useProjectModules } from '@/hooks/useProjectModules';
-import { MessageCircle, Plus, Trash2, QrCode, Wifi, WifiOff, AlertTriangle, Phone, Settings } from 'lucide-react';
+import { useEvolutionAPI } from '@/hooks/useEvolutionAPI';
+import { useProject } from '@/contexts/ProjectContext';
+import { MessageCircle, Plus, Trash2, QrCode, Wifi, WifiOff, AlertTriangle, Phone, Settings, Loader2, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 const statusConfig: Record<WhatsAppNumber['status'], { label: string; color: string; icon: React.ReactNode }> = {
   pending: { label: 'Pendente', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: <Settings className="h-3 w-3" /> },
@@ -18,13 +20,46 @@ const statusConfig: Record<WhatsAppNumber['status'], { label: string; color: str
 };
 
 export function WhatsAppSettings() {
+  const { currentProject } = useProject();
   const { isModuleEnabled } = useProjectModules();
-  const { numbers, isLoading, createNumber, deleteNumber, isCreating, isDeleting } = useWhatsAppNumbers();
+  const { numbers, isLoading, createNumber, deleteNumber, updateNumber, isCreating, isDeleting } = useWhatsAppNumbers();
+  const { createInstance, getQRCode, getStatus, disconnect, isLoading: isEvolutionLoading } = useEvolutionAPI();
+  
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isQRDialogOpen, setIsQRDialogOpen] = useState(false);
   const [newNumber, setNewNumber] = useState({ phone_number: '', label: '' });
+  const [selectedNumber, setSelectedNumber] = useState<WhatsAppNumber | null>(null);
+  const [qrCodeData, setQRCodeData] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<string>('');
 
   const isCRMEnabled = isModuleEnabled('crm');
   const isWhatsAppEnabled = isModuleEnabled('whatsapp');
+
+  // Check connection status periodically when QR dialog is open
+  useEffect(() => {
+    if (!isQRDialogOpen || !selectedNumber) return;
+
+    const checkStatus = async () => {
+      const instanceName = `cubo_${selectedNumber.id.slice(0, 8)}`;
+      const result = await getStatus(instanceName);
+      
+      if (result.success && result.data) {
+        const state = result.data.instance?.state || result.data.state;
+        setConnectionStatus(state);
+        
+        if (state === 'open' || state === 'connected') {
+          // Update the number status to active
+          updateNumber({ id: selectedNumber.id, status: 'active' });
+          setIsQRDialogOpen(false);
+          setQRCodeData(null);
+        }
+      }
+    };
+
+    const interval = setInterval(checkStatus, 3000);
+    return () => clearInterval(interval);
+  }, [isQRDialogOpen, selectedNumber, getStatus, updateNumber]);
 
   if (!isCRMEnabled) {
     return (
@@ -68,6 +103,66 @@ export function WhatsAppSettings() {
     
     setNewNumber({ phone_number: '', label: '' });
     setIsAddDialogOpen(false);
+  };
+
+  const handleConnect = async (num: WhatsAppNumber) => {
+    if (!currentProject) return;
+    
+    setSelectedNumber(num);
+    setIsConnecting(true);
+    setIsQRDialogOpen(true);
+    setQRCodeData(null);
+    setConnectionStatus('');
+
+    try {
+      const instanceName = `cubo_${num.id.slice(0, 8)}`;
+      
+      // Create instance and get QR code
+      const result = await createInstance(instanceName, num.id, currentProject.id);
+      
+      if (result.success && result.data) {
+        // Try to get QR code from the response
+        const qr = result.data.qrcode?.base64 || result.data.base64;
+        if (qr) {
+          setQRCodeData(qr);
+        } else {
+          // If no QR in create response, fetch it
+          const qrResult = await getQRCode(instanceName);
+          if (qrResult.success && qrResult.data) {
+            setQRCodeData(qrResult.data.base64 || qrResult.data.qrcode?.base64);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error connecting:', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRefreshQR = async () => {
+    if (!selectedNumber) return;
+    
+    setIsConnecting(true);
+    const instanceName = `cubo_${selectedNumber.id.slice(0, 8)}`;
+    
+    try {
+      const result = await getQRCode(instanceName);
+      if (result.success && result.data) {
+        setQRCodeData(result.data.base64 || result.data.qrcode?.base64);
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async (num: WhatsAppNumber) => {
+    const instanceName = `cubo_${num.id.slice(0, 8)}`;
+    const result = await disconnect(instanceName);
+    
+    if (result.success) {
+      updateNumber({ id: num.id, status: 'offline' });
+    }
   };
 
   return (
@@ -176,10 +271,25 @@ export function WhatsAppSettings() {
                       <span className="ml-1">{status.label}</span>
                     </Badge>
                     
-                    {num.status === 'pending' && (
-                      <Button variant="outline" size="sm" disabled>
+                    {num.status === 'pending' || num.status === 'offline' ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleConnect(num)}
+                        disabled={isEvolutionLoading}
+                      >
                         <QrCode className="h-4 w-4 mr-2" />
                         Conectar
+                      </Button>
+                    ) : num.status === 'active' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDisconnect(num)}
+                        disabled={isEvolutionLoading}
+                      >
+                        <WifiOff className="h-4 w-4 mr-2" />
+                        Desconectar
                       </Button>
                     )}
                     
@@ -214,14 +324,79 @@ export function WhatsAppSettings() {
           </div>
         )}
         
-        <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-dashed">
-          <h4 className="font-medium text-sm mb-2">Próximos passos</h4>
+        <div className="mt-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <h4 className="font-medium text-sm text-green-500">Evolution API Conectada</h4>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Para conectar um número, você precisará configurar a Evolution API. 
-            O botão "Conectar" ficará disponível após a configuração.
+            A Evolution API está configurada. Adicione um número e clique em "Conectar" para escanear o QR Code.
           </p>
         </div>
       </CardContent>
+
+      {/* QR Code Dialog */}
+      <Dialog open={isQRDialogOpen} onOpenChange={setIsQRDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Conectar WhatsApp</DialogTitle>
+            <DialogDescription>
+              Escaneie o QR Code com seu WhatsApp para conectar
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center py-6">
+            {isConnecting ? (
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Gerando QR Code...</p>
+              </div>
+            ) : qrCodeData ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="bg-white p-4 rounded-lg">
+                  <img 
+                    src={qrCodeData.startsWith('data:') ? qrCodeData : `data:image/png;base64,${qrCodeData}`}
+                    alt="QR Code" 
+                    className="w-64 h-64"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {connectionStatus === 'open' || connectionStatus === 'connected' ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span className="text-green-500">Conectado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Aguardando conexão...</span>
+                    </>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" onClick={handleRefreshQR} disabled={isConnecting}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Atualizar QR Code
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                <AlertTriangle className="h-12 w-12 text-yellow-500" />
+                <p className="text-sm text-muted-foreground">Não foi possível gerar o QR Code</p>
+                <Button variant="outline" size="sm" onClick={handleRefreshQR}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Tentar Novamente
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsQRDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -22,3 +22,6 @@ max_duration = 540
 
 [functions.crm-webhook]
 verify_jwt = false
+
+[functions.evolution-api]
+verify_jwt = true

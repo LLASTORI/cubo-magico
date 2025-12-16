@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp';
 
 export interface ProjectModule {
   id: string;
@@ -22,6 +22,7 @@ export interface ModuleInfo {
   name: string;
   description: string;
   icon: string;
+  requiresModule?: ModuleKey; // Módulo pai necessário
 }
 
 export const AVAILABLE_MODULES: ModuleInfo[] = [
@@ -30,6 +31,13 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'CRM',
     description: 'Gestão de contatos, jornada do cliente e entrada de leads via webhook',
     icon: 'users',
+  },
+  {
+    key: 'whatsapp',
+    name: 'WhatsApp',
+    description: 'Atendimento via WhatsApp integrado ao CRM com múltiplos números',
+    icon: 'message-circle',
+    requiresModule: 'crm',
   },
   {
     key: 'meta_ads',

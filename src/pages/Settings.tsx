@@ -27,6 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { ProjectModulesManager } from '@/components/settings/ProjectModulesManager';
 import { HotmartSettings } from '@/components/settings/HotmartSettings';
+import { WhatsAppSettings } from '@/components/settings/WhatsAppSettings';
 
 const META_APP_ID = '845927421602166';
 
@@ -837,6 +838,9 @@ const Settings = () => {
 
               {/* Hotmart Integration */}
               <HotmartSettings />
+
+              {/* WhatsApp Integration */}
+              <WhatsAppSettings />
             </div>
           </TabsContent>
 

@@ -10,6 +10,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { InternationalPhoneInput, parsePhoneNumber } from '@/components/ui/international-phone-input';
 
 interface CreateContactDialogProps {
   open: boolean;
@@ -21,10 +22,12 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
   const { currentProject } = useProject();
   const queryClient = useQueryClient();
   const [isPending, setIsPending] = useState(false);
+  const [fullPhone, setFullPhone] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone_country_code: '55',
     phone_ddd: '',
     phone: '',
     document: '',
@@ -47,6 +50,7 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
     setFormData({
       name: '',
       email: '',
+      phone_country_code: '55',
       phone_ddd: '',
       phone: '',
       document: '',
@@ -58,6 +62,21 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
       notes: '',
       tags: '',
     });
+    setFullPhone('');
+  };
+
+  const handlePhoneChange = (phone: string, countryCode: string) => {
+    setFullPhone(phone);
+    
+    const cleanPhone = phone.replace(/\D/g, '');
+    const parsed = parsePhoneNumber(cleanPhone);
+    
+    setFormData(prev => ({
+      ...prev,
+      phone_country_code: parsed.countryCode || countryCode,
+      phone_ddd: parsed.areaCode,
+      phone: parsed.localNumber
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,6 +121,7 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
           project_id: currentProject.id,
           name: formData.name.trim() || null,
           email: formData.email.toLowerCase().trim(),
+          phone_country_code: formData.phone_country_code || '55',
           phone_ddd: formData.phone_ddd || null,
           phone: formData.phone || null,
           document: formData.document || null,
@@ -168,25 +188,17 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
               />
             </div>
 
-            <div>
-              <Label htmlFor="phone_ddd">DDD</Label>
-              <Input
-                id="phone_ddd"
-                value={formData.phone_ddd}
-                onChange={(e) => setFormData({ ...formData, phone_ddd: e.target.value.replace(/\D/g, '').slice(0, 2) })}
-                placeholder="11"
-                maxLength={2}
-              />
-            </div>
-
-            <div>
+            <div className="col-span-2">
               <Label htmlFor="phone">Telefone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
-                placeholder="999999999"
+              <InternationalPhoneInput
+                value={fullPhone}
+                onChange={handlePhoneChange}
+                defaultCountry="br"
+                placeholder="Telefone com código do país"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Selecione o país e digite o número completo
+              </p>
             </div>
 
             <div>

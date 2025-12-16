@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { CRMContact } from '@/hooks/useCRMContact';
+import { InternationalPhoneInput, parsePhoneNumber, getFullPhoneNumber } from '@/components/ui/international-phone-input';
 
 interface EditContactDialogProps {
   open: boolean;
@@ -19,6 +20,7 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone_country_code: '55',
     phone_ddd: '',
     phone: '',
     document: '',
@@ -34,11 +36,16 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
     status: 'lead',
   });
 
+  // Build full phone for the international input
+  const [fullPhone, setFullPhone] = useState('');
+
   useEffect(() => {
     if (contact) {
+      const countryCode = (contact as any).phone_country_code || '55';
       setFormData({
         name: contact.name || '',
         email: contact.email || '',
+        phone_country_code: countryCode,
         phone_ddd: contact.phone_ddd || '',
         phone: contact.phone || '',
         document: contact.document || '',
@@ -53,8 +60,27 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
         cep: contact.cep || '',
         status: contact.status || 'lead',
       });
+      
+      // Build E.164 phone for the input
+      const phone = `+${countryCode}${contact.phone_ddd || ''}${contact.phone || ''}`;
+      setFullPhone(phone.length > 3 ? phone : '');
     }
   }, [contact]);
+
+  const handlePhoneChange = (phone: string, countryCode: string) => {
+    setFullPhone(phone);
+    
+    // Parse the phone number to extract components
+    const cleanPhone = phone.replace(/\D/g, '');
+    const parsed = parsePhoneNumber(cleanPhone);
+    
+    setFormData(prev => ({
+      ...prev,
+      phone_country_code: parsed.countryCode || countryCode,
+      phone_ddd: parsed.areaCode,
+      phone: parsed.localNumber
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,25 +125,17 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
               />
             </div>
 
-            <div>
-              <Label htmlFor="phone_ddd">DDD</Label>
-              <Input
-                id="phone_ddd"
-                value={formData.phone_ddd}
-                onChange={(e) => setFormData({ ...formData, phone_ddd: e.target.value.replace(/\D/g, '').slice(0, 2) })}
-                placeholder="11"
-                maxLength={2}
-              />
-            </div>
-
-            <div>
+            <div className="col-span-2">
               <Label htmlFor="phone">Telefone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
-                placeholder="999999999"
+              <InternationalPhoneInput
+                value={fullPhone}
+                onChange={handlePhoneChange}
+                defaultCountry="br"
+                placeholder="Telefone com código do país"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Selecione o país e digite o número completo. Ex: 🇧🇷 11 999999999
+              </p>
             </div>
 
             <div>

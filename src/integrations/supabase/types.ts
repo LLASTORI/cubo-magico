@@ -494,6 +494,7 @@ export type Database = {
           neighborhood: string | null
           notes: string | null
           phone: string | null
+          phone_country_code: string | null
           phone_ddd: string | null
           pipeline_stage_id: string | null
           project_id: string
@@ -542,6 +543,7 @@ export type Database = {
           neighborhood?: string | null
           notes?: string | null
           phone?: string | null
+          phone_country_code?: string | null
           phone_ddd?: string | null
           pipeline_stage_id?: string | null
           project_id: string
@@ -590,6 +592,7 @@ export type Database = {
           neighborhood?: string | null
           notes?: string | null
           phone?: string | null
+          phone_country_code?: string | null
           phone_ddd?: string | null
           pipeline_stage_id?: string | null
           project_id?: string
@@ -1211,6 +1214,7 @@ export type Database = {
           buyer_name: string | null
           buyer_neighborhood: string | null
           buyer_phone: string | null
+          buyer_phone_country_code: string | null
           buyer_phone_ddd: string | null
           buyer_state: string | null
           checkout_origin: string | null
@@ -1281,6 +1285,7 @@ export type Database = {
           buyer_name?: string | null
           buyer_neighborhood?: string | null
           buyer_phone?: string | null
+          buyer_phone_country_code?: string | null
           buyer_phone_ddd?: string | null
           buyer_state?: string | null
           checkout_origin?: string | null
@@ -1351,6 +1356,7 @@ export type Database = {
           buyer_name?: string | null
           buyer_neighborhood?: string | null
           buyer_phone?: string | null
+          buyer_phone_country_code?: string | null
           buyer_phone_ddd?: string | null
           buyer_state?: string | null
           checkout_origin?: string | null

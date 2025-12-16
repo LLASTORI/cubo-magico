@@ -33,6 +33,7 @@ import CRMCadences from "./pages/CRMCadences";
 import CRMRecovery from "./pages/CRMRecovery";
 import CRMRecoveryKanban from "./pages/CRMRecoveryKanban";
 import CRMRecoverySettings from "./pages/CRMRecoverySettings";
+import WhatsAppLiveChat from "./pages/WhatsAppLiveChat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -164,6 +165,11 @@ const App = () => (
                 <Route path="/crm/recovery/settings" element={
                   <ProtectedRoute>
                     <CRMRecoverySettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/whatsapp" element={
+                  <ProtectedRoute>
+                    <WhatsAppLiveChat />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

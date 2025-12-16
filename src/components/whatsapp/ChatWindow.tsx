@@ -1,0 +1,248 @@
+import { useState, useRef, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { 
+  Send, 
+  MoreVertical, 
+  Phone, 
+  Video, 
+  UserPlus, 
+  ArrowRightLeft,
+  CheckCheck,
+  Check,
+  Clock,
+  AlertCircle,
+  Loader2,
+  MessageCircle
+} from 'lucide-react';
+import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
+import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessages';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+
+interface ChatWindowProps {
+  conversation: WhatsAppConversation | null;
+  instanceName?: string;
+  onTransfer?: () => void;
+  onClose?: () => void;
+}
+
+export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: ChatWindowProps) {
+  const [newMessage, setNewMessage] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const { 
+    messages, 
+    isLoading, 
+    sendMessage, 
+    markAsRead,
+    isSending 
+  } = useWhatsAppMessages(conversation?.id || null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Mark as read when conversation is opened
+  useEffect(() => {
+    if (conversation?.id && conversation.unread_count > 0) {
+      markAsRead(conversation.id);
+    }
+  }, [conversation?.id, conversation?.unread_count, markAsRead]);
+
+  const handleSend = () => {
+    if (!newMessage.trim() || !conversation || !instanceName) return;
+
+    sendMessage({
+      conversationId: conversation.id,
+      content: newMessage.trim(),
+      instanceName,
+      remoteJid: conversation.remote_jid,
+    });
+    
+    setNewMessage('');
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return <Clock className="h-3 w-3 text-muted-foreground" />;
+      case 'sent': return <Check className="h-3 w-3 text-muted-foreground" />;
+      case 'delivered': return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
+      case 'read': return <CheckCheck className="h-3 w-3 text-blue-500" />;
+      case 'failed': return <AlertCircle className="h-3 w-3 text-destructive" />;
+      default: return null;
+    }
+  };
+
+  if (!conversation) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-muted/30">
+        <MessageCircle className="h-16 w-16 mb-4 opacity-50" />
+        <p className="text-lg font-medium">Selecione uma conversa</p>
+        <p className="text-sm">Escolha uma conversa na lista para começar</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col h-full">
+      {/* Header */}
+      <div className="p-4 border-b flex items-center justify-between bg-background">
+        <div className="flex items-center gap-3">
+          <div 
+            className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium"
+            style={{ 
+              backgroundColor: conversation.department?.color || 'hsl(var(--primary))',
+              color: 'white'
+            }}
+          >
+            {conversation.contact?.name?.charAt(0).toUpperCase() || '?'}
+          </div>
+          <div>
+            <p className="font-medium">{conversation.contact?.name || conversation.remote_jid}</p>
+            <p className="text-sm text-muted-foreground">
+              {conversation.contact?.phone || conversation.remote_jid}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {conversation.department && (
+            <Badge 
+              variant="outline"
+              style={{ borderColor: conversation.department.color, color: conversation.department.color }}
+            >
+              {conversation.department.name}
+            </Badge>
+          )}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onTransfer}>
+                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                Transferir conversa
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onClose}>
+                <CheckCheck className="h-4 w-4 mr-2" />
+                Encerrar conversa
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages?.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <MessageCircle className="h-12 w-12 mb-2 opacity-50" />
+            <p>Nenhuma mensagem ainda</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages?.map((message, index) => {
+              const isOutbound = message.direction === 'outbound';
+              const showDate = index === 0 || 
+                format(new Date(message.created_at), 'yyyy-MM-dd') !== 
+                format(new Date(messages[index - 1].created_at), 'yyyy-MM-dd');
+
+              return (
+                <div key={message.id}>
+                  {showDate && (
+                    <div className="flex justify-center my-4">
+                      <Badge variant="secondary" className="text-xs">
+                        {format(new Date(message.created_at), "d 'de' MMMM", { locale: ptBR })}
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  <div className={cn(
+                    "flex",
+                    isOutbound ? "justify-end" : "justify-start"
+                  )}>
+                    <div className={cn(
+                      "max-w-[70%] rounded-lg p-3",
+                      isOutbound 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-muted"
+                    )}>
+                      <p className="text-sm whitespace-pre-wrap break-words">
+                        {message.content}
+                      </p>
+                      <div className={cn(
+                        "flex items-center gap-1 mt-1",
+                        isOutbound ? "justify-end" : "justify-start"
+                      )}>
+                        <span className={cn(
+                          "text-xs",
+                          isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+                        )}>
+                          {format(new Date(message.created_at), 'HH:mm')}
+                        </span>
+                        {isOutbound && getStatusIcon(message.status)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </ScrollArea>
+
+      {/* Input */}
+      <div className="p-4 border-t bg-background">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Digite uma mensagem..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isSending}
+            className="flex-1"
+          />
+          <Button 
+            onClick={handleSend} 
+            disabled={!newMessage.trim() || isSending || !instanceName}
+          >
+            {isSending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

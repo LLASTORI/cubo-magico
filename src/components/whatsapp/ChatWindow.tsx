@@ -30,6 +30,7 @@ import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessage
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatPhoneForDisplay } from '@/components/ui/international-phone-input';
 
 interface ChatWindowProps {
   conversation: WhatsAppConversation | null;
@@ -122,7 +123,13 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
           <div>
             <p className="font-medium">{conversation.contact?.name || conversation.remote_jid}</p>
             <p className="text-sm text-muted-foreground">
-              {conversation.contact?.phone || conversation.remote_jid}
+              {conversation.contact?.phone 
+                ? formatPhoneForDisplay(
+                    conversation.contact.phone_country_code || '55',
+                    conversation.contact.phone_ddd || '',
+                    conversation.contact.phone
+                  )
+                : conversation.remote_jid}
             </p>
           </div>
         </div>

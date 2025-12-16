@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -222,25 +223,41 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
 
       {/* Input */}
       <div className="p-4 border-t bg-background">
+        {!instanceName && (
+          <p className="text-sm text-destructive mb-2 text-center">
+            Nenhum número WhatsApp conectado. Configure nas Configurações.
+          </p>
+        )}
         <div className="flex gap-2">
           <Input
             placeholder="Digite uma mensagem..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={isSending}
+            disabled={isSending || !instanceName}
             className="flex-1"
           />
-          <Button 
-            onClick={handleSend} 
-            disabled={!newMessage.trim() || isSending || !instanceName}
-          >
-            {isSending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button 
+                  onClick={handleSend} 
+                  disabled={!newMessage.trim() || isSending || !instanceName}
+                >
+                  {isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!instanceName && (
+              <TooltipContent>
+                Conecte um número WhatsApp primeiro
+              </TooltipContent>
             )}
-          </Button>
+          </Tooltip>
         </div>
       </div>
     </div>

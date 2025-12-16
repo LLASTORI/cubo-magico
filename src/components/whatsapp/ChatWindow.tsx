@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -25,7 +25,9 @@ import {
   FileAudio,
   FileVideo,
   FileText,
-  Download
+  Download,
+  ChevronsUp,
+  ChevronsDown
 } from 'lucide-react';
 import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { WhatsAppMessage, useWhatsAppMessages } from '@/hooks/useWhatsAppMessages';
@@ -43,6 +45,7 @@ interface ChatWindowProps {
 
 export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: ChatWindowProps) {
   const [newMessage, setNewMessage] = useState('');
+  const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const { 
@@ -53,12 +56,24 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     isSending 
   } = useWhatsAppMessages(conversation?.id || null);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
+  const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive (if autoScroll is enabled)
+  useEffect(() => {
+    if (autoScroll) {
+      scrollToBottom();
+    }
+  }, [messages, autoScroll, scrollToBottom]);
 
   // Mark as read when conversation is opened
   useEffect(() => {
@@ -273,65 +288,105 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : messages?.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <MessageCircle className="h-12 w-12 mb-2 opacity-50" />
-            <p>Nenhuma mensagem ainda</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {messages?.map((message, index) => {
-              const isOutbound = message.direction === 'outbound';
-              const showDate = index === 0 || 
-                format(new Date(message.created_at), 'yyyy-MM-dd') !== 
-                format(new Date(messages[index - 1].created_at), 'yyyy-MM-dd');
+      <div className="flex-1 relative min-h-0">
+        <ScrollArea className="h-full p-4" ref={scrollRef}>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : messages?.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <MessageCircle className="h-12 w-12 mb-2 opacity-50" />
+              <p>Nenhuma mensagem ainda</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages?.map((message, index) => {
+                const isOutbound = message.direction === 'outbound';
+                const showDate = index === 0 || 
+                  format(new Date(message.created_at), 'yyyy-MM-dd') !== 
+                  format(new Date(messages[index - 1].created_at), 'yyyy-MM-dd');
 
-              return (
-                <div key={message.id}>
-                  {showDate && (
-                    <div className="flex justify-center my-4">
-                      <Badge variant="secondary" className="text-xs">
-                        {format(new Date(message.created_at), "d 'de' MMMM", { locale: ptBR })}
-                      </Badge>
-                    </div>
-                  )}
-                  
-                  <div className={cn(
-                    "flex",
-                    isOutbound ? "justify-end" : "justify-start"
-                  )}>
+                return (
+                  <div key={message.id}>
+                    {showDate && (
+                      <div className="flex justify-center my-4">
+                        <Badge variant="secondary" className="text-xs">
+                          {format(new Date(message.created_at), "d 'de' MMMM", { locale: ptBR })}
+                        </Badge>
+                      </div>
+                    )}
+                    
                     <div className={cn(
-                      "max-w-[70%] rounded-lg p-3",
-                      isOutbound 
-                        ? "bg-primary text-primary-foreground" 
-                        : "bg-muted"
+                      "flex",
+                      isOutbound ? "justify-end" : "justify-start"
                     )}>
-                      {renderMessageContent(message)}
                       <div className={cn(
-                        "flex items-center gap-1 mt-1",
-                        isOutbound ? "justify-end" : "justify-start"
+                        "max-w-[70%] rounded-lg p-3",
+                        isOutbound 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-muted"
                       )}>
-                        <span className={cn(
-                          "text-xs",
-                          isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+                        {renderMessageContent(message)}
+                        <div className={cn(
+                          "flex items-center gap-1 mt-1",
+                          isOutbound ? "justify-end" : "justify-start"
                         )}>
-                          {format(new Date(message.created_at), 'HH:mm')}
-                        </span>
-                        {isOutbound && getStatusIcon(message.status)}
+                          <span className={cn(
+                            "text-xs",
+                            isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+                          )}>
+                            {format(new Date(message.created_at), 'HH:mm')}
+                          </span>
+                          {isOutbound && getStatusIcon(message.status)}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+        </ScrollArea>
+
+        {/* Navigation buttons */}
+        {messages && messages.length > 0 && (
+          <div className="absolute right-6 bottom-4 flex flex-col gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="secondary" 
+                  size="icon" 
+                  className="h-8 w-8 rounded-full shadow-md"
+                  onClick={scrollToTop}
+                >
+                  <ChevronsUp className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Ir para o início</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={autoScroll ? "default" : "secondary"}
+                  size="icon" 
+                  className="h-8 w-8 rounded-full shadow-md"
+                  onClick={() => {
+                    setAutoScroll(!autoScroll);
+                    if (!autoScroll) scrollToBottom();
+                  }}
+                >
+                  <ChevronsDown className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {autoScroll ? 'Auto-rolagem ativa' : 'Ir para o final'}
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
-      </ScrollArea>
+      </div>
 
       {/* Input */}
       <div className="p-4 border-t bg-background">

@@ -38,7 +38,8 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
-  Instagram
+  Instagram,
+  MessageCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,16 +47,91 @@ import { useState, useEffect } from 'react';
 import { ContactActivitiesList } from '@/components/crm/ContactActivitiesList';
 import { ContactTransactionsList } from '@/components/crm/ContactTransactionsList';
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
+import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
+import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
+import { supabase } from '@/integrations/supabase/client';
+import { useProject } from '@/contexts/ProjectContext';
 
 export default function CRMContactCard() {
   const { contactId } = useParams<{ contactId: string }>();
   const navigate = useNavigate();
+  const { currentProject } = useProject();
   const { contact, isLoading, updateContact, updateNotes, addTag, removeTag, updatePipelineStage, deleteContact } = useCRMContact(contactId);
   const { stages } = usePipelineStages();
+  const { numbers, getPrimaryNumber } = useWhatsAppNumbers();
+  const { conversations } = useWhatsAppConversations();
   const [notes, setNotes] = useState('');
   const [newTag, setNewTag] = useState('');
   const [notesChanged, setNotesChanged] = useState(false);
   const [showActivityDialog, setShowActivityDialog] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
+  // Verifica se contato tem número de telefone válido para WhatsApp
+  const hasWhatsAppNumber = contact?.phone && contact.phone.length >= 8;
+  
+  // Verifica se já existe conversa com este contato
+  const existingConversation = conversations?.find(c => c.contact_id === contactId);
+  
+  // Obter número ativo (com failover)
+  const getActiveNumber = () => {
+    if (!numbers || numbers.length === 0) return null;
+    
+    // Ordenar por prioridade e pegar o primeiro conectado
+    const sortedNumbers = [...numbers].sort((a, b) => a.priority - b.priority);
+    
+    for (const num of sortedNumbers) {
+      if (num.instance?.status === 'connected' && num.status === 'active') {
+        return num;
+      }
+    }
+    
+    // Se nenhum conectado, retornar o primeiro ativo
+    return sortedNumbers.find(n => n.status === 'active') || null;
+  };
+
+  const activeNumber = getActiveNumber();
+  const canStartWhatsApp = hasWhatsAppNumber && activeNumber;
+
+  // Função para iniciar/abrir conversa WhatsApp
+  const handleOpenWhatsApp = async () => {
+    if (!contact || !contactId || !currentProject?.id) return;
+    
+    // Se já existe conversa, navegar direto
+    if (existingConversation) {
+      navigate('/whatsapp');
+      return;
+    }
+
+    // Se não existe, criar nova conversa
+    setIsStartingChat(true);
+    try {
+      const phoneNumber = contact.phone_ddd 
+        ? `55${contact.phone_ddd}${contact.phone}` 
+        : `55${contact.phone}`;
+      
+      const remoteJid = `${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`;
+
+      const { data, error } = await supabase
+        .from('whatsapp_conversations')
+        .insert({
+          project_id: currentProject.id,
+          contact_id: contactId,
+          remote_jid: remoteJid,
+          whatsapp_number_id: activeNumber?.id,
+          status: 'open',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      navigate('/whatsapp');
+    } catch (error: any) {
+      console.error('Erro ao iniciar conversa:', error);
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   useEffect(() => {
     if (contact?.notes) {
@@ -146,6 +222,24 @@ export default function CRMContactCard() {
           <Badge variant={contact.status === 'customer' ? 'default' : 'secondary'}>
             {contact.status === 'customer' ? 'Cliente' : contact.status === 'prospect' ? 'Prospecto' : 'Lead'}
           </Badge>
+
+          {/* Botão WhatsApp */}
+          {canStartWhatsApp && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2 text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+              onClick={handleOpenWhatsApp}
+              disabled={isStartingChat}
+            >
+              {isStartingChat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircle className="h-4 w-4" />
+              )}
+              {existingConversation ? 'Abrir Chat' : 'Iniciar Chat'}
+            </Button>
+          )}
           
           {/* Only show delete button if not a customer */}
           {contact.status !== 'customer' && !(contact.tags || []).includes('Cliente') ? (

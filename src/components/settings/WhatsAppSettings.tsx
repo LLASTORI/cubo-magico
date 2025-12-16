@@ -12,10 +12,10 @@ import { useProjectModules } from '@/hooks/useProjectModules';
 import { useEvolutionAPI } from '@/hooks/useEvolutionAPI';
 import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/hooks/use-toast';
-import { MessageCircle, Plus, Trash2, QrCode, Wifi, WifiOff, AlertTriangle, Phone, Settings, Loader2, RefreshCw, CheckCircle2, Send } from 'lucide-react';
+import { MessageCircle, Plus, Trash2, QrCode, Wifi, WifiOff, AlertTriangle, Phone, Settings, Loader2, RefreshCw, CheckCircle2, Send, GripVertical, ArrowUp, ArrowDown, Shield } from 'lucide-react';
 
 const statusConfig: Record<WhatsAppNumber['status'], { label: string; color: string; icon: React.ReactNode }> = {
-  pending: { label: 'Pendente', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: <Settings className="h-3 w-3" /> },
+  pending: { label: 'Reserva', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20', icon: <Shield className="h-3 w-3" /> },
   active: { label: 'Conectado', color: 'bg-green-500/10 text-green-500 border-green-500/20', icon: <Wifi className="h-3 w-3" /> },
   offline: { label: 'Offline', color: 'bg-muted text-muted-foreground border-border', icon: <WifiOff className="h-3 w-3" /> },
   banned: { label: 'Banido', color: 'bg-red-500/10 text-red-500 border-red-500/20', icon: <AlertTriangle className="h-3 w-3" /> },
@@ -24,7 +24,7 @@ const statusConfig: Record<WhatsAppNumber['status'], { label: string; color: str
 export function WhatsAppSettings() {
   const { currentProject } = useProject();
   const { isModuleEnabled } = useProjectModules();
-  const { numbers, isLoading, createNumber, deleteNumber, updateNumber, isCreating, isDeleting } = useWhatsAppNumbers();
+  const { numbers, isLoading, createNumber, deleteNumber, updateNumber, reorderPriorities, promoteNumber, disableNumber, isCreating, isDeleting } = useWhatsAppNumbers();
   const { createInstance, getQRCode, getStatus, disconnect, sendMessage, isLoading: isEvolutionLoading } = useEvolutionAPI();
   const { toast } = useToast();
   
@@ -285,20 +285,74 @@ export function WhatsAppSettings() {
           </div>
         ) : (
           <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-4 p-3 bg-muted/50 rounded-lg">
+              <Shield className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">
+                <strong>Failover automático:</strong> Se o número principal cair, o próximo na fila assume automaticamente.
+              </span>
+            </div>
+            
             {numbers?.map((num, index) => {
               const status = statusConfig[num.status];
+              const isFirst = index === 0;
+              const isLast = numbers && index === numbers.length - 1;
+              
+              const handleMoveUp = () => {
+                if (!numbers || isFirst) return;
+                const newOrder = [...numbers];
+                [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+                reorderPriorities(newOrder.map(n => n.id));
+              };
+              
+              const handleMoveDown = () => {
+                if (!numbers || isLast) return;
+                const newOrder = [...numbers];
+                [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+                reorderPriorities(newOrder.map(n => n.id));
+              };
+              
               return (
                 <div
                   key={num.id}
                   className="flex items-center justify-between p-4 rounded-lg border bg-card"
                 >
                   <div className="flex items-center gap-4">
+                    {/* Priority controls */}
+                    <div className="flex flex-col gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6" 
+                        onClick={handleMoveUp}
+                        disabled={isFirst}
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6" 
+                        onClick={handleMoveDown}
+                        disabled={isLast}
+                      >
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          #{index + 1}
+                        </span>
                         <span className="font-medium">{num.label}</span>
                         {index === 0 && (
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="default" className="text-xs">
                             Principal
+                          </Badge>
+                        )}
+                        {index > 0 && num.status === 'pending' && (
+                          <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/30">
+                            Reserva
                           </Badge>
                         )}
                       </div>
@@ -333,7 +387,7 @@ export function WhatsAppSettings() {
                           disabled={isEvolutionLoading}
                         >
                           <Send className="h-4 w-4 mr-2" />
-                          Enviar Teste
+                          Testar
                         </Button>
                         <Button 
                           variant="outline" 

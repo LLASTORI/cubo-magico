@@ -375,6 +375,7 @@ async function handleConnectionUpdate(supabase: any, payload: EvolutionWebhookPa
   else if (data.state === 'connecting') status = 'connecting';
   else if (data.state === 'close') status = 'disconnected';
 
+  // Update instance status
   await supabase
     .from('whatsapp_instances')
     .update({ 
@@ -385,6 +386,73 @@ async function handleConnectionUpdate(supabase: any, payload: EvolutionWebhookPa
     .eq('id', instanceId);
 
   console.log('[WhatsApp Webhook] Connection updated:', status);
+
+  // If disconnected, implement failover
+  if (status === 'disconnected') {
+    await handleFailover(supabase, instanceId);
+  }
+}
+
+async function handleFailover(supabase: any, instanceId: string) {
+  console.log('[WhatsApp Webhook] Initiating failover for instance:', instanceId);
+
+  // Get the current number info
+  const { data: instance } = await supabase
+    .from('whatsapp_instances')
+    .select('whatsapp_number_id, whatsapp_numbers!inner(id, project_id, priority)')
+    .eq('id', instanceId)
+    .single();
+
+  if (!instance) {
+    console.log('[WhatsApp Webhook] Instance not found for failover');
+    return;
+  }
+
+  const projectId = (instance.whatsapp_numbers as any).project_id;
+  const currentPriority = (instance.whatsapp_numbers as any).priority;
+
+  // Mark current number as offline
+  await supabase
+    .from('whatsapp_numbers')
+    .update({ status: 'offline' })
+    .eq('id', instance.whatsapp_number_id);
+
+  console.log('[WhatsApp Webhook] Marked number as offline:', instance.whatsapp_number_id);
+
+  // Find next available number in priority order
+  const { data: nextNumbers } = await supabase
+    .from('whatsapp_numbers')
+    .select(`
+      id, 
+      priority, 
+      status,
+      instance:whatsapp_instances(status)
+    `)
+    .eq('project_id', projectId)
+    .in('status', ['pending', 'active'])
+    .gt('priority', currentPriority)
+    .order('priority', { ascending: true })
+    .limit(1);
+
+  if (nextNumbers && nextNumbers.length > 0) {
+    const nextNumber = nextNumbers[0];
+    
+    // If the next number has a connected instance, promote it
+    const instanceStatus = nextNumber.instance?.[0]?.status;
+    
+    if (instanceStatus === 'connected') {
+      await supabase
+        .from('whatsapp_numbers')
+        .update({ status: 'active' })
+        .eq('id', nextNumber.id);
+      
+      console.log('[WhatsApp Webhook] Failover: Promoted number', nextNumber.id, 'to active');
+    } else {
+      console.log('[WhatsApp Webhook] Failover: Next number', nextNumber.id, 'not connected yet');
+    }
+  } else {
+    console.log('[WhatsApp Webhook] Failover: No backup numbers available');
+  }
 }
 
 async function handleQRCodeUpdate(supabase: any, payload: EvolutionWebhookPayload, instanceId: string) {

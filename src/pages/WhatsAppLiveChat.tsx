@@ -51,9 +51,13 @@ export default function WhatsAppLiveChat() {
   const { agents } = useWhatsAppAgents();
   const { departments } = useWhatsAppDepartments();
 
-  // Get the connected instance name
-  const connectedNumber = numbers?.find(n => n.instance?.status === 'connected');
-  const instanceName = connectedNumber?.instance?.instance_name;
+  // Get the connected instance name - fallback to active number if no instance record
+  const connectedNumber = numbers?.find(n => n.instance?.status === 'connected') 
+    || numbers?.find(n => n.status === 'active');
+  
+  // Generate instance name from number ID (same pattern used in WhatsAppSettings)
+  const instanceName = connectedNumber?.instance?.instance_name 
+    || (connectedNumber ? `cubo_${connectedNumber.id.slice(0, 8)}` : undefined);
 
   const handleSelectConversation = (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);
@@ -132,9 +136,16 @@ export default function WhatsAppLiveChat() {
           <div className="flex items-center gap-3">
             {/* Connection status */}
             {connectedNumber ? (
-              <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+              <Badge 
+                variant="outline" 
+                className={connectedNumber.instance?.status === 'connected' 
+                  ? "gap-1 text-green-600 border-green-600" 
+                  : "gap-1 text-yellow-600 border-yellow-600"}
+              >
                 <Wifi className="h-3 w-3" />
-                Conectado: {connectedNumber.label}
+                {connectedNumber.instance?.status === 'connected' 
+                  ? `Conectado: ${connectedNumber.label}`
+                  : `${connectedNumber.label} (verificar conexão)`}
               </Badge>
             ) : (
               <Badge variant="outline" className="gap-1 text-muted-foreground">

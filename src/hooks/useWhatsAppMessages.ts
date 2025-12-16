@@ -130,10 +130,13 @@ export function useWhatsAppMessages(conversationId: string | null) {
         .update({ status: 'sent', external_id: result.data?.key?.id })
         .eq('id', message.id);
 
-      // Update conversation last_message_at
+      // Update conversation last_message_at and status to 'open' (remove from pending/waiting)
       await supabase
         .from('whatsapp_conversations')
-        .update({ last_message_at: new Date().toISOString() })
+        .update({ 
+          last_message_at: new Date().toISOString(),
+          status: 'open'
+        })
         .eq('id', conversationId);
 
       return message;
@@ -221,10 +224,13 @@ export function useWhatsAppMessages(conversationId: string | null) {
         .update({ status: 'sent', external_id: result.data?.key?.id })
         .eq('id', message.id);
 
-      // Update conversation last_message_at
+      // Update conversation last_message_at and status to 'open' (remove from pending/waiting)
       await supabase
         .from('whatsapp_conversations')
-        .update({ last_message_at: new Date().toISOString() })
+        .update({ 
+          last_message_at: new Date().toISOString(),
+          status: 'open'
+        })
         .eq('id', conversationId);
 
       return message;

@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useWhatsAppNumbers, WhatsAppNumber } from '@/hooks/useWhatsAppNumbers';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useEvolutionAPI } from '@/hooks/useEvolutionAPI';
 import { useProject } from '@/contexts/ProjectContext';
-import { MessageCircle, Plus, Trash2, QrCode, Wifi, WifiOff, AlertTriangle, Phone, Settings, Loader2, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { MessageCircle, Plus, Trash2, QrCode, Wifi, WifiOff, AlertTriangle, Phone, Settings, Loader2, RefreshCw, CheckCircle2, Send } from 'lucide-react';
 
 const statusConfig: Record<WhatsAppNumber['status'], { label: string; color: string; icon: React.ReactNode }> = {
   pending: { label: 'Pendente', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: <Settings className="h-3 w-3" /> },
@@ -23,15 +25,19 @@ export function WhatsAppSettings() {
   const { currentProject } = useProject();
   const { isModuleEnabled } = useProjectModules();
   const { numbers, isLoading, createNumber, deleteNumber, updateNumber, isCreating, isDeleting } = useWhatsAppNumbers();
-  const { createInstance, getQRCode, getStatus, disconnect, isLoading: isEvolutionLoading } = useEvolutionAPI();
+  const { createInstance, getQRCode, getStatus, disconnect, sendMessage, isLoading: isEvolutionLoading } = useEvolutionAPI();
+  const { toast } = useToast();
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isQRDialogOpen, setIsQRDialogOpen] = useState(false);
+  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [newNumber, setNewNumber] = useState({ phone_number: '', label: '' });
   const [selectedNumber, setSelectedNumber] = useState<WhatsAppNumber | null>(null);
   const [qrCodeData, setQRCodeData] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>('');
+  const [testMessage, setTestMessage] = useState({ phone: '', text: 'Olá! Esta é uma mensagem de teste do CRM.' });
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   const isCRMEnabled = isModuleEnabled('crm');
   const isWhatsAppEnabled = isModuleEnabled('whatsapp');
@@ -165,6 +171,43 @@ export function WhatsAppSettings() {
     }
   };
 
+  const handleOpenTestDialog = (num: WhatsAppNumber) => {
+    setSelectedNumber(num);
+    setTestMessage({ phone: '', text: 'Olá! Esta é uma mensagem de teste do CRM.' });
+    setIsTestDialogOpen(true);
+  };
+
+  const handleSendTestMessage = async () => {
+    if (!selectedNumber || !testMessage.phone.trim() || !testMessage.text.trim()) return;
+    
+    setIsSendingTest(true);
+    const instanceName = `cubo_${selectedNumber.id.slice(0, 8)}`;
+    
+    // Format phone number - remove non-digits and ensure country code
+    let formattedPhone = testMessage.phone.replace(/\D/g, '');
+    if (!formattedPhone.startsWith('55')) {
+      formattedPhone = '55' + formattedPhone;
+    }
+    
+    const result = await sendMessage(instanceName, formattedPhone, testMessage.text);
+    
+    if (result.success) {
+      toast({
+        title: 'Mensagem enviada!',
+        description: `Mensagem de teste enviada para +${formattedPhone}`,
+      });
+      setIsTestDialogOpen(false);
+    } else {
+      toast({
+        title: 'Erro ao enviar',
+        description: result.error || 'Não foi possível enviar a mensagem de teste',
+        variant: 'destructive',
+      });
+    }
+    
+    setIsSendingTest(false);
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -282,15 +325,26 @@ export function WhatsAppSettings() {
                         Conectar
                       </Button>
                     ) : num.status === 'active' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleDisconnect(num)}
-                        disabled={isEvolutionLoading}
-                      >
-                        <WifiOff className="h-4 w-4 mr-2" />
-                        Desconectar
-                      </Button>
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleOpenTestDialog(num)}
+                          disabled={isEvolutionLoading}
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Enviar Teste
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleDisconnect(num)}
+                          disabled={isEvolutionLoading}
+                        >
+                          <WifiOff className="h-4 w-4 mr-2" />
+                          Desconectar
+                        </Button>
+                      </>
                     )}
                     
                     <AlertDialog>
@@ -393,6 +447,65 @@ export function WhatsAppSettings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsQRDialogOpen(false)}>
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Message Dialog */}
+      <Dialog open={isTestDialogOpen} onOpenChange={setIsTestDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar Mensagem de Teste</DialogTitle>
+            <DialogDescription>
+              Envie uma mensagem de teste para verificar a conexão
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="test-phone">Número de destino</Label>
+              <Input
+                id="test-phone"
+                placeholder="11999999999"
+                value={testMessage.phone}
+                onChange={(e) => setTestMessage(prev => ({ ...prev, phone: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                DDD + número (o código do país 55 será adicionado automaticamente)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="test-text">Mensagem</Label>
+              <Textarea
+                id="test-text"
+                placeholder="Digite sua mensagem..."
+                value={testMessage.text}
+                onChange={(e) => setTestMessage(prev => ({ ...prev, text: e.target.value }))}
+                rows={3}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTestDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSendTestMessage} 
+              disabled={isSendingTest || !testMessage.phone.trim() || !testMessage.text.trim()}
+            >
+              {isSendingTest ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Enviar
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -8,7 +8,7 @@ import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, Kanban, RefreshCcw, TrendingUp, Route, Plus } from 'lucide-react';
+import { Users, Loader2, Lock, Kanban, RefreshCcw, TrendingUp, Route, Plus, MessageCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
@@ -122,6 +122,10 @@ export default function CRM() {
                 <Button variant="outline" onClick={() => navigate('/crm/kanban')}>
                   <Kanban className="h-4 w-4 mr-2" />
                   Pipeline
+                </Button>
+                <Button variant="outline" onClick={() => navigate('/whatsapp')}>
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Chat ao Vivo
                 </Button>
               </div>
             </div>

@@ -102,9 +102,9 @@ export default function CRMContactCard() {
   const handleOpenWhatsApp = async () => {
     if (!contact || !contactId || !currentProject?.id) return;
     
-    // Se já existe conversa, navegar direto
+    // Se já existe conversa, navegar direto para ela
     if (existingConversation) {
-      navigate('/whatsapp');
+      navigate(`/whatsapp?conversation=${existingConversation.id}`);
       return;
     }
 
@@ -133,7 +133,8 @@ export default function CRMContactCard() {
 
       if (error) throw error;
       
-      navigate('/whatsapp');
+      // Navegar para a conversa recém-criada
+      navigate(`/whatsapp?conversation=${data.id}`);
     } catch (error: any) {
       console.error('Erro ao iniciar conversa:', error);
     } finally {

@@ -299,6 +299,42 @@ async function findOrCreateConversation(
   if (existingContact) {
     contactId = existingContact.id;
   } else {
+    // Fetch profile picture from Evolution API (best-effort)
+    let avatarUrl: string | null = null;
+    try {
+      const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL') || '';
+      const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY') || '';
+      
+      if (EVOLUTION_API_URL && EVOLUTION_API_KEY) {
+        // Get instance name from whatsapp_instances
+        const { data: instanceData } = await supabase
+          .from('whatsapp_instances')
+          .select('instance_name')
+          .eq('whatsapp_number_id', whatsappNumberId)
+          .single();
+
+        if (instanceData?.instance_name) {
+          const apiUrl = EVOLUTION_API_URL.startsWith('http') ? EVOLUTION_API_URL : `https://${EVOLUTION_API_URL}`;
+          const profileRes = await fetch(`${apiUrl}/chat/fetchProfilePictureUrl/${instanceData.instance_name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': EVOLUTION_API_KEY,
+            },
+            body: JSON.stringify({ number: digits }),
+          });
+
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            avatarUrl = profileData.profilePictureUrl || profileData.url || null;
+            console.log('[WhatsApp Webhook] Profile picture fetched:', avatarUrl ? 'yes' : 'no');
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[WhatsApp Webhook] Could not fetch profile picture:', e);
+    }
+
     // Create new contact
     const insertPayload: Record<string, any> = {
       project_id: projectId,
@@ -307,6 +343,7 @@ async function findOrCreateConversation(
       source: 'whatsapp',
       status: 'lead',
       tags: ['WhatsApp'],
+      avatar_url: avatarUrl,
     };
 
     if (br) {

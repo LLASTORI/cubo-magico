@@ -112,8 +112,23 @@ export function ConversationList({
               >
                 <div className="flex gap-3">
                   {/* Avatar */}
+                  {conversation.contact?.avatar_url ? (
+                    <img 
+                      src={conversation.contact.avatar_url}
+                      alt={conversation.contact?.name || 'Avatar'}
+                      className="h-12 w-12 rounded-full object-cover shrink-0"
+                      onError={(e) => {
+                        // Fallback to initials on error
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
                   <div 
-                    className="h-12 w-12 rounded-full flex items-center justify-center text-sm font-medium shrink-0"
+                    className={cn(
+                      "h-12 w-12 rounded-full flex items-center justify-center text-sm font-medium shrink-0",
+                      conversation.contact?.avatar_url && "hidden"
+                    )}
                     style={{ 
                       backgroundColor: conversation.department?.color || 'hsl(var(--primary))',
                       color: 'white'

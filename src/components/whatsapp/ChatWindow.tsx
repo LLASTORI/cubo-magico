@@ -239,8 +239,22 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between bg-background">
         <div className="flex items-center gap-3">
+          {conversation.contact?.avatar_url ? (
+            <img 
+              src={conversation.contact.avatar_url}
+              alt={conversation.contact?.name || 'Avatar'}
+              className="h-10 w-10 rounded-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+          ) : null}
           <div 
-            className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium"
+            className={cn(
+              "h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium",
+              conversation.contact?.avatar_url && "hidden"
+            )}
             style={{ 
               backgroundColor: conversation.department?.color || 'hsl(var(--primary))',
               color: 'white'

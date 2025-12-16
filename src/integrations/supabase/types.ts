@@ -464,6 +464,7 @@ export type Database = {
           address: string | null
           address_complement: string | null
           address_number: string | null
+          avatar_url: string | null
           cep: string | null
           city: string | null
           country: string | null
@@ -513,6 +514,7 @@ export type Database = {
           address?: string | null
           address_complement?: string | null
           address_number?: string | null
+          avatar_url?: string | null
           cep?: string | null
           city?: string | null
           country?: string | null
@@ -562,6 +564,7 @@ export type Database = {
           address?: string | null
           address_complement?: string | null
           address_number?: string | null
+          avatar_url?: string | null
           cep?: string | null
           city?: string | null
           country?: string | null

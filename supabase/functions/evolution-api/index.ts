@@ -311,6 +311,37 @@ serve(async (req) => {
         break;
       }
 
+      case 'get_profile_picture': {
+        const { instanceName, number } = params;
+
+        // Clean the phone number
+        const cleanNumber = number.replace(/@.*$/, '').replace(/\D/g, '');
+
+        try {
+          const response = await fetch(`${EVOLUTION_API_URL}/chat/fetchProfilePictureUrl/${instanceName}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': EVOLUTION_API_KEY,
+            },
+            body: JSON.stringify({ number: cleanNumber }),
+          });
+
+          if (!response.ok) {
+            console.log('Profile picture not available:', response.status);
+            result = { profilePictureUrl: null };
+            break;
+          }
+
+          const data = await response.json();
+          result = { profilePictureUrl: data.profilePictureUrl || data.url || null };
+        } catch (e) {
+          console.log('Error fetching profile picture:', e);
+          result = { profilePictureUrl: null };
+        }
+        break;
+      }
+
       case 'sync_instance': {
         // Sync instance from Evolution API to database
         const { instanceName, whatsappNumberId } = params;

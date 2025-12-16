@@ -82,6 +82,10 @@ export function useEvolutionAPI() {
     return callEvolutionAPI('configure_webhook', { instanceName });
   };
 
+  const getProfilePicture = async (instanceName: string, number: string) => {
+    return callEvolutionAPI('get_profile_picture', { instanceName, number });
+  };
+
   return {
     isLoading,
     createInstance,
@@ -93,5 +97,6 @@ export function useEvolutionAPI() {
     fetchInstances,
     syncInstance,
     configureWebhook,
+    getProfilePicture,
   };
 }

@@ -226,6 +226,53 @@ serve(async (req) => {
         break;
       }
 
+      case 'sync_instance': {
+        // Sync instance from Evolution API to database
+        const { instanceName, whatsappNumberId } = params;
+
+        // Check if instance exists in Evolution API
+        const statusResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, {
+          method: 'GET',
+          headers: {
+            'apikey': EVOLUTION_API_KEY,
+          },
+        });
+
+        if (!statusResponse.ok) {
+          throw new Error('Instância não encontrada na Evolution API');
+        }
+
+        const statusResult = await statusResponse.json();
+        const state = statusResult.instance?.state || statusResult.state;
+        const isConnected = state === 'open' || state === 'connected';
+
+        if (isConnected) {
+          // Create or update the instance record in database
+          const { error: dbError } = await supabaseClient
+            .from('whatsapp_instances')
+            .upsert({
+              whatsapp_number_id: whatsappNumberId,
+              instance_name: instanceName,
+              api_url: EVOLUTION_API_URL,
+              status: 'connected',
+            }, {
+              onConflict: 'whatsapp_number_id',
+            });
+
+          if (dbError) {
+            console.error('Database error on sync:', dbError);
+            throw new Error('Erro ao sincronizar instância no banco');
+          }
+
+          result = { synced: true, status: 'connected' };
+        } else {
+          result = { synced: false, status: state };
+        }
+        
+        console.log('Instance sync result:', result);
+        break;
+      }
+
       default:
         throw new Error(`Ação não suportada: ${action}`);
     }

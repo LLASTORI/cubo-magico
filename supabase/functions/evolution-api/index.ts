@@ -247,21 +247,43 @@ serve(async (req) => {
         const isConnected = state === 'open' || state === 'connected';
 
         if (isConnected) {
-          // Create or update the instance record in database
-          const { error: dbError } = await supabaseClient
+          // First check if instance already exists
+          const { data: existingInstance } = await supabaseClient
             .from('whatsapp_instances')
-            .upsert({
-              whatsapp_number_id: whatsappNumberId,
-              instance_name: instanceName,
-              api_url: EVOLUTION_API_URL,
-              status: 'connected',
-            }, {
-              onConflict: 'whatsapp_number_id',
-            });
+            .select('id')
+            .eq('whatsapp_number_id', whatsappNumberId)
+            .maybeSingle();
 
-          if (dbError) {
-            console.error('Database error on sync:', dbError);
-            throw new Error('Erro ao sincronizar instância no banco');
+          if (existingInstance) {
+            // Update existing instance
+            const { error: updateError } = await supabaseClient
+              .from('whatsapp_instances')
+              .update({
+                instance_name: instanceName,
+                api_url: EVOLUTION_API_URL,
+                status: 'connected',
+              })
+              .eq('id', existingInstance.id);
+
+            if (updateError) {
+              console.error('Database update error on sync:', updateError);
+              throw new Error('Erro ao atualizar instância no banco');
+            }
+          } else {
+            // Insert new instance
+            const { error: insertError } = await supabaseClient
+              .from('whatsapp_instances')
+              .insert({
+                whatsapp_number_id: whatsappNumberId,
+                instance_name: instanceName,
+                api_url: EVOLUTION_API_URL,
+                status: 'connected',
+              });
+
+            if (insertError) {
+              console.error('Database insert error on sync:', insertError);
+              throw new Error('Erro ao inserir instância no banco');
+            }
           }
 
           result = { synced: true, status: 'connected' };

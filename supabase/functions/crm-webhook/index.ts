@@ -38,6 +38,9 @@ const FIELD_ALIASES: Record<string, string> = {
   'fone': 'phone',
   'ddd': 'phone_ddd',
   'area_code': 'phone_ddd',
+  'country_code': 'phone_country_code',
+  'codigo_pais': 'phone_country_code',
+  'ddi': 'phone_country_code',
   
   // Document variations
   'cpf': 'document',
@@ -145,7 +148,7 @@ const FIELD_ALIASES: Record<string, string> = {
 
 // Standard fields that we accept
 const STANDARD_FIELDS = [
-  'email', 'name', 'first_name', 'last_name', 'phone', 'phone_ddd', 'document', 'instagram',
+  'email', 'name', 'first_name', 'last_name', 'phone', 'phone_ddd', 'phone_country_code', 'document', 'instagram',
   'address', 'address_number', 'address_complement', 'neighborhood',
   'city', 'state', 'country', 'cep', 'tags', 'custom_fields',
   'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term',
@@ -160,6 +163,7 @@ interface NormalizedPayload {
   last_name?: string;
   phone?: string;
   phone_ddd?: string;
+  phone_country_code?: string;
   document?: string;
   instagram?: string;
   address?: string;
@@ -185,6 +189,31 @@ interface NormalizedPayload {
   page_url?: string;
   launch_tag?: string;
   interaction_type?: string;
+}
+
+// Helper function to get phone country code from country name
+function getCountryCode(country: string): string {
+  const countryMap: Record<string, string> = {
+    'brasil': '55', 'brazil': '55', 'br': '55',
+    'portugal': '351', 'pt': '351',
+    'united states': '1', 'usa': '1', 'us': '1', 'estados unidos': '1',
+    'spain': '34', 'españa': '34', 'es': '34', 'espanha': '34',
+    'argentina': '54', 'ar': '54',
+    'mexico': '52', 'méxico': '52', 'mx': '52',
+    'chile': '56', 'cl': '56',
+    'colombia': '57', 'co': '57',
+    'peru': '51', 'perú': '51', 'pe': '51',
+    'uruguay': '598', 'uy': '598',
+    'paraguay': '595', 'py': '595',
+    'bolivia': '591', 'bo': '591',
+    'ecuador': '593', 'ec': '593',
+    'venezuela': '58', 've': '58',
+    'united kingdom': '44', 'uk': '44', 'gb': '44',
+    'germany': '49', 'de': '49', 'alemania': '49', 'alemanha': '49',
+    'france': '33', 'fr': '33', 'francia': '33', 'frança': '33',
+    'italy': '39', 'it': '39', 'italia': '39', 'itália': '39',
+  };
+  return countryMap[country.toLowerCase().trim()] || '55';
 }
 
 // Extract Meta IDs from UTM fields (same logic as hotmart-api)
@@ -432,6 +461,7 @@ serve(async (req) => {
       name: body.name || null,
       phone: body.phone || null,
       phone_ddd: body.phone_ddd || null,
+      phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
       document: body.document || null,
       instagram: body.instagram || null,
       address: body.address || null,

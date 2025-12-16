@@ -39,7 +39,8 @@ import {
   Loader2,
   ExternalLink,
   Instagram,
-  MessageCircle
+  MessageCircle,
+  Pencil
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -47,10 +48,12 @@ import { useState, useEffect } from 'react';
 import { ContactActivitiesList } from '@/components/crm/ContactActivitiesList';
 import { ContactTransactionsList } from '@/components/crm/ContactTransactionsList';
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
+import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
+import { toast } from 'sonner';
 
 export default function CRMContactCard() {
   const { contactId } = useParams<{ contactId: string }>();
@@ -64,6 +67,7 @@ export default function CRMContactCard() {
   const [newTag, setNewTag] = useState('');
   const [notesChanged, setNotesChanged] = useState(false);
   const [showActivityDialog, setShowActivityDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [isStartingChat, setIsStartingChat] = useState(false);
 
   // Verifica se contato tem número de telefone válido para WhatsApp
@@ -222,6 +226,17 @@ export default function CRMContactCard() {
           <Badge variant={contact.status === 'customer' ? 'default' : 'secondary'}>
             {contact.status === 'customer' ? 'Cliente' : contact.status === 'prospect' ? 'Prospecto' : 'Lead'}
           </Badge>
+
+          {/* Botão Editar */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+            onClick={() => setShowEditDialog(true)}
+          >
+            <Pencil className="h-4 w-4" />
+            Editar
+          </Button>
 
           {/* Botão WhatsApp */}
           {canStartWhatsApp && (
@@ -584,6 +599,22 @@ export default function CRMContactCard() {
         onOpenChange={setShowActivityDialog}
         contactId={contactId!}
       />
+
+      {contact && (
+        <EditContactDialog
+          open={showEditDialog}
+          onOpenChange={setShowEditDialog}
+          contact={contact}
+          onSave={(data) => {
+            updateContact.mutate(data, {
+              onSuccess: () => {
+                setShowEditDialog(false);
+              }
+            });
+          }}
+          isPending={updateContact.isPending}
+        />
+      )}
     </div>
   );
 }

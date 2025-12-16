@@ -21,11 +21,13 @@ import {
   Phone,
   DollarSign,
   CheckSquare,
-  Square
+  Square,
+  Plus
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
 interface KanbanContact {
   id: string;
@@ -48,6 +50,7 @@ export default function CRMKanban() {
   const queryClient = useQueryClient();
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const crmEnabled = isModuleEnabled('crm');
 
@@ -253,6 +256,10 @@ export default function CRMKanban() {
                 </>
               )}
             </Button>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Contato
+            </Button>
             <Button variant="outline" onClick={() => navigate('/crm')}>
               <Users className="h-4 w-4 mr-2" />
               Ver Lista
@@ -448,6 +455,14 @@ export default function CRMKanban() {
         stages={stages}
         onClearSelection={handleClearSelection}
         projectId={currentProject.id}
+      />
+
+      <CreateContactDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={(contactId) => {
+          navigate(`/crm/contact/${contactId}`);
+        }}
       />
     </div>
   );

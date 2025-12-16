@@ -8,14 +8,16 @@ import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, Kanban, RefreshCcw, TrendingUp, Route } from 'lucide-react';
+import { Users, Loader2, Lock, Kanban, RefreshCcw, TrendingUp, Route, Plus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
 export default function CRM() {
   const navigate = useNavigate();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
   const [activeTab, setActiveTab] = useState('journey');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const crmEnabled = isModuleEnabled('crm');
 
@@ -103,6 +105,10 @@ export default function CRM() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Contato
+                </Button>
                 <Button variant="outline" onClick={() => navigate('/crm/activities')}>
                   Atividades
                 </Button>
@@ -113,7 +119,7 @@ export default function CRM() {
                   <RefreshCcw className="h-4 w-4 mr-2" />
                   Recuperação
                 </Button>
-                <Button onClick={() => navigate('/crm/kanban')}>
+                <Button variant="outline" onClick={() => navigate('/crm/kanban')}>
                   <Kanban className="h-4 w-4 mr-2" />
                   Pipeline
                 </Button>
@@ -143,6 +149,14 @@ export default function CRM() {
           </div>
         )}
       </main>
+
+      <CreateContactDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={(contactId) => {
+          navigate(`/crm/contact/${contactId}`);
+        }}
+      />
     </div>
   );
 }

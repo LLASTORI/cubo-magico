@@ -25,6 +25,7 @@ import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
+import { formatPhoneForDisplay } from '@/components/ui/international-phone-input';
 
 interface ContactPanelProps {
   conversation: WhatsAppConversation | null;
@@ -99,7 +100,13 @@ export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPane
             {contact?.phone && (
               <div className="flex items-center gap-3 text-sm">
                 <Phone className="h-4 w-4 text-muted-foreground" />
-                <span>{contact.phone}</span>
+                <span>
+                  {formatPhoneForDisplay(
+                    contact.phone_country_code || '55',
+                    contact.phone_ddd || '',
+                    contact.phone
+                  )}
+                </span>
               </div>
             )}
             

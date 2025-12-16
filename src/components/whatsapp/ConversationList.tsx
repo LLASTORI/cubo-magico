@@ -8,6 +8,7 @@ import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatPhoneForDisplay } from '@/components/ui/international-phone-input';
 
 interface ConversationListProps {
   conversations: WhatsAppConversation[];
@@ -139,7 +140,13 @@ export function ConversationList({
 
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm text-muted-foreground truncate flex-1">
-                        {conversation.contact?.phone || conversation.remote_jid}
+                        {conversation.contact?.phone 
+                          ? formatPhoneForDisplay(
+                              conversation.contact.phone_country_code || '55',
+                              conversation.contact.phone_ddd || '',
+                              conversation.contact.phone
+                            )
+                          : conversation.remote_jid}
                       </span>
                       
                       {conversation.unread_count > 0 && (

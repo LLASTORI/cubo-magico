@@ -26,6 +26,8 @@ export interface WhatsAppConversation {
     name: string | null;
     email: string;
     phone: string | null;
+    phone_ddd: string | null;
+    phone_country_code: string | null;
     tags: string[] | null;
   };
   assigned_agent?: {
@@ -64,7 +66,7 @@ export function useWhatsAppConversations(filters?: {
         .from('whatsapp_conversations')
         .select(`
           *,
-          contact:crm_contacts(id, name, email, phone, tags),
+          contact:crm_contacts(id, name, email, phone, phone_ddd, phone_country_code, tags),
           department:whatsapp_departments(id, name, color)
         `)
         .eq('project_id', projectId)

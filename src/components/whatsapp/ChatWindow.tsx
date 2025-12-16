@@ -36,6 +36,10 @@ import {
   Paperclip,
   X,
   Mic,
+  Pause,
+  Play,
+  Trash2,
+  Send as SendIcon,
   Square
 } from 'lucide-react';
 import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
@@ -67,12 +71,18 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
   const [isUploading, setIsUploading] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedAudio, setRecordedAudio] = useState<{ blob: Blob; url: string } | null>(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isCancelledRef = useRef(false);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
   
   const { 
     messages, 
@@ -116,24 +126,38 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     }
   }, [conversation?.id, conversation?.unread_count, markAsRead]);
 
-  // Cleanup file preview on unmount
+  // Cleanup file preview and audio on unmount
   useEffect(() => {
     return () => {
       if (selectedFile?.preview) {
         URL.revokeObjectURL(selectedFile.preview);
       }
+      if (recordedAudio?.url) {
+        URL.revokeObjectURL(recordedAudio.url);
+      }
       // Cleanup recording
       if (mediaRecorderRef.current && isRecording) {
         mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
     };
-  }, [selectedFile, isRecording]);
+  }, [selectedFile, recordedAudio, isRecording]);
 
   const startRecording = async () => {
     try {
+      // Clear any previous recorded audio
+      if (recordedAudio?.url) {
+        URL.revokeObjectURL(recordedAudio.url);
+        setRecordedAudio(null);
+      }
+      
+      isCancelledRef.current = false;
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -141,6 +165,8 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
           autoGainControl: true
         } 
       });
+      
+      streamRef.current = stream;
       
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
@@ -156,17 +182,18 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
         }
       };
       
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(track => track.stop());
+      mediaRecorder.onstop = () => {
+        // Stop the stream tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
         
-        if (audioChunksRef.current.length > 0) {
+        // Only create preview if not cancelled
+        if (!isCancelledRef.current && audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { 
-            type: 'audio/webm' 
-          });
-          
-          // Send the audio
-          await sendRecordedAudio(audioFile);
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setRecordedAudio({ blob: audioBlob, url: audioUrl });
         }
         
         audioChunksRef.current = [];
@@ -175,6 +202,7 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(100); // Collect data every 100ms
       setIsRecording(true);
+      setIsPaused(false);
       setRecordingTime(0);
       
       // Start timer
@@ -188,10 +216,35 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     }
   };
 
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.pause();
+      setIsPaused(true);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+      mediaRecorderRef.current.resume();
+      setIsPaused(false);
+      
+      // Resume timer
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    }
+  };
+
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      setIsPaused(false);
       
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
@@ -201,24 +254,68 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
   };
 
   const cancelRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      audioChunksRef.current = [];
-      setIsRecording(false);
-      
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-        recordingIntervalRef.current = null;
-      }
+    isCancelledRef.current = true;
+    
+    if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
+      mediaRecorderRef.current.stop();
+    }
+    
+    // Stop stream tracks
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    audioChunksRef.current = [];
+    setIsRecording(false);
+    setIsPaused(false);
+    setRecordingTime(0);
+    
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
     }
   };
 
-  const sendRecordedAudio = async (audioFile: File) => {
-    if (!conversation || !instanceName) return;
+  const discardRecordedAudio = () => {
+    if (recordedAudio?.url) {
+      URL.revokeObjectURL(recordedAudio.url);
+    }
+    setRecordedAudio(null);
+    setRecordingTime(0);
+    setIsPlayingPreview(false);
+    if (audioPreviewRef.current) {
+      audioPreviewRef.current.pause();
+      audioPreviewRef.current = null;
+    }
+  };
+
+  const toggleAudioPreview = () => {
+    if (!recordedAudio) return;
+    
+    if (isPlayingPreview && audioPreviewRef.current) {
+      audioPreviewRef.current.pause();
+      setIsPlayingPreview(false);
+    } else {
+      if (!audioPreviewRef.current) {
+        audioPreviewRef.current = new Audio(recordedAudio.url);
+        audioPreviewRef.current.onended = () => setIsPlayingPreview(false);
+      }
+      audioPreviewRef.current.play();
+      setIsPlayingPreview(true);
+    }
+  };
+
+  const sendFinalAudio = async () => {
+    if (!recordedAudio || !conversation || !instanceName) return;
 
     setIsUploading(true);
     
     try {
+      const audioFile = new File([recordedAudio.blob], `audio_${Date.now()}.webm`, { 
+        type: 'audio/webm' 
+      });
+      
       const contact = conversation.contact;
       const remoteJid = contact?.phone
         ? `${getFullPhoneNumber(
@@ -232,7 +329,7 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webm`;
       const filePath = `whatsapp-media/${conversation.project_id}/${fileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('whatsapp-media')
         .upload(filePath, audioFile, {
           contentType: 'audio/webm',
@@ -263,6 +360,9 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
         mimetype: 'audio/webm',
       });
 
+      // Clear the recorded audio
+      discardRecordedAudio();
+
     } catch (error) {
       console.error('Error sending audio:', error);
       toast.error('Erro ao enviar áudio');
@@ -270,6 +370,7 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       setIsUploading(false);
     }
   };
+
 
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -768,32 +869,157 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
           </p>
         )}
         
-        {/* Recording UI */}
+        {/* Recording UI - WhatsApp style */}
         {isRecording ? (
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={cancelRecording}
-              className="text-destructive hover:text-destructive"
-            >
-              <X className="h-5 w-5" />
-            </Button>
+          <div className="flex items-center gap-2">
+            {/* Trash/Cancel button on the left */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={cancelRecording}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Cancelar gravação</TooltipContent>
+            </Tooltip>
             
-            <div className="flex-1 flex items-center gap-3 bg-destructive/10 rounded-full px-4 py-2">
-              <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
-              <span className="text-sm font-medium text-destructive">
-                Gravando... {formatRecordingTime(recordingTime)}
+            {/* Recording indicator and timer */}
+            <div className="flex-1 flex items-center gap-3 bg-muted rounded-full px-4 py-2">
+              <div className={cn(
+                "w-3 h-3 rounded-full",
+                isPaused ? "bg-muted-foreground" : "bg-destructive animate-pulse"
+              )} />
+              <span className="text-sm font-medium">
+                {formatRecordingTime(recordingTime)}
               </span>
+              {/* Simple waveform visualization */}
+              <div className="flex-1 flex items-center justify-center gap-[2px]">
+                {[...Array(20)].map((_, i) => (
+                  <div 
+                    key={i}
+                    className={cn(
+                      "w-1 bg-primary/60 rounded-full transition-all",
+                      isPaused ? "h-1" : "animate-pulse"
+                    )}
+                    style={{ 
+                      height: isPaused ? '4px' : `${Math.random() * 16 + 4}px`,
+                      animationDelay: `${i * 50}ms`
+                    }}
+                  />
+                ))}
+              </div>
             </div>
             
-            <Button
-              onClick={stopRecording}
-              className="bg-destructive hover:bg-destructive/90"
-              size="icon"
-            >
-              <Square className="h-4 w-4 fill-current" />
-            </Button>
+            {/* Pause/Resume button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={isPaused ? resumeRecording : pauseRecording}
+                  className="rounded-full"
+                >
+                  {isPaused ? (
+                    <Mic className="h-4 w-4" />
+                  ) : (
+                    <Pause className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isPaused ? 'Continuar' : 'Pausar'}</TooltipContent>
+            </Tooltip>
+            
+            {/* Stop and prepare to send */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={stopRecording}
+                  size="icon"
+                  className="rounded-full bg-primary hover:bg-primary/90"
+                >
+                  <Square className="h-4 w-4 fill-current" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Finalizar gravação</TooltipContent>
+            </Tooltip>
+          </div>
+        ) : recordedAudio ? (
+          /* Audio Preview UI - WhatsApp style */
+          <div className="flex items-center gap-2">
+            {/* Trash/Discard button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={discardRecordedAudio}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Descartar áudio</TooltipContent>
+            </Tooltip>
+            
+            {/* Audio preview with play/pause */}
+            <div className="flex-1 flex items-center gap-3 bg-muted rounded-full px-4 py-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleAudioPreview}
+                className="h-8 w-8 rounded-full"
+              >
+                {isPlayingPreview ? (
+                  <Pause className="h-4 w-4" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </Button>
+              
+              <span className="text-sm font-medium">
+                {formatRecordingTime(recordingTime)}
+              </span>
+              
+              {/* Simple waveform visualization for preview */}
+              <div className="flex-1 flex items-center justify-center gap-[2px]">
+                {[...Array(20)].map((_, i) => (
+                  <div 
+                    key={i}
+                    className={cn(
+                      "w-1 bg-primary/60 rounded-full",
+                      isPlayingPreview && "animate-pulse"
+                    )}
+                    style={{ 
+                      height: `${Math.sin(i * 0.5) * 8 + 10}px`,
+                      animationDelay: `${i * 50}ms`
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            {/* Send button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={sendFinalAudio}
+                  size="icon"
+                  className="rounded-full bg-primary hover:bg-primary/90"
+                  disabled={isUploading || isSendingMedia}
+                >
+                  {isUploading || isSendingMedia ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Enviar áudio</TooltipContent>
+            </Tooltip>
           </div>
         ) : (
           <div className="flex gap-2">

@@ -9,6 +9,7 @@ export interface CRMContact {
   email: string;
   name: string | null;
   phone: string | null;
+  phone_country_code: string | null;
   phone_ddd: string | null;
   document: string | null;
   instagram: string | null;
@@ -70,17 +71,43 @@ export function useCRMContact(contactId?: string) {
     mutationFn: async (updates: Partial<CRMContact>) => {
       if (!contactId) throw new Error('No contact ID');
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('crm_contacts')
         .update(updates)
-        .eq('id', contactId);
+        .eq('id', contactId)
+        .select('*')
+        .single();
 
       if (error) throw error;
+      return data as CRMContact;
     },
-    onSuccess: () => {
+    onSuccess: async (updatedContact) => {
       queryClient.invalidateQueries({ queryKey: ['crm-contact', contactId] });
       queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
       queryClient.invalidateQueries({ queryKey: ['crm-journey'] });
+      // Ensure WhatsApp UI (conversations list/chat panels) stays in sync after contact edits
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+
+      // If there is an existing WhatsApp conversation for this contact, keep remote_jid aligned
+      // so sending messages doesn't break when the phone/DDI/DDD changes.
+      try {
+        if (updatedContact.phone) {
+          const digits = `${updatedContact.phone_country_code || '55'}${updatedContact.phone_ddd || ''}${updatedContact.phone}`
+            .replace(/\D/g, '');
+
+          if (digits.length >= 10) {
+            const remoteJid = `${digits}@s.whatsapp.net`;
+            await supabase
+              .from('whatsapp_conversations')
+              .update({ remote_jid: remoteJid })
+              .eq('project_id', updatedContact.project_id)
+              .eq('contact_id', updatedContact.id);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not sync WhatsApp remote_jid for contact update', e);
+      }
+
       toast.success('Contato atualizado');
     },
     onError: (error) => {

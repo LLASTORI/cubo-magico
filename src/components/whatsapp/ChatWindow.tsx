@@ -126,18 +126,18 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     }
   }, [conversation?.id, conversation?.unread_count, markAsRead]);
 
-  // Cleanup file preview and audio on unmount
+  // Cleanup file preview on unmount only
   useEffect(() => {
     return () => {
-      if (selectedFile?.preview) {
-        URL.revokeObjectURL(selectedFile.preview);
-      }
-      if (recordedAudio?.url) {
-        URL.revokeObjectURL(recordedAudio.url);
-      }
-      // Cleanup recording
-      if (mediaRecorderRef.current && isRecording) {
-        mediaRecorderRef.current.stop();
+      // Cleanup recording on unmount
+      if (mediaRecorderRef.current) {
+        try {
+          if (mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+        } catch (e) {
+          // Ignore errors on cleanup
+        }
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -145,8 +145,28 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
     };
-  }, [selectedFile, recordedAudio, isRecording]);
+  }, []);
+
+  // Cleanup URLs when files change
+  useEffect(() => {
+    return () => {
+      if (selectedFile?.preview) {
+        URL.revokeObjectURL(selectedFile.preview);
+      }
+    };
+  }, [selectedFile]);
+
+  useEffect(() => {
+    return () => {
+      if (recordedAudio?.url) {
+        URL.revokeObjectURL(recordedAudio.url);
+      }
+    };
+  }, [recordedAudio]);
 
   const startRecording = async () => {
     try {

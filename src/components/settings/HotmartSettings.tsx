@@ -21,10 +21,28 @@ import {
   RefreshCw, 
   Lock, 
   Database,
-  Calendar
+  Calendar,
+  Copy,
+  Webhook,
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const WEBHOOK_EVENTS = [
+  { event: 'PURCHASE_APPROVED', description: 'Compra aprovada', required: true },
+  { event: 'PURCHASE_COMPLETE', description: 'Compra concluída', required: true },
+  { event: 'PURCHASE_CANCELED', description: 'Compra cancelada', required: true },
+  { event: 'PURCHASE_REFUNDED', description: 'Compra reembolsada', required: true },
+  { event: 'PURCHASE_CHARGEBACK', description: 'Chargeback', required: true },
+  { event: 'PURCHASE_BILLET_PRINTED', description: 'Boleto impresso', required: false },
+  { event: 'PURCHASE_PROTEST', description: 'Compra protestada', required: false },
+  { event: 'PURCHASE_EXPIRED', description: 'Compra expirada', required: false },
+  { event: 'PURCHASE_DELAYED', description: 'Compra atrasada', required: false },
+  { event: 'PURCHASE_OUT_OF_SHOPPING_CART', description: 'Abandono de carrinho', required: true, highlight: true },
+  { event: 'PURCHASE_RECURRENCE_CANCELLATION', description: 'Cancelamento de assinatura', required: false },
+];
 
 export const HotmartSettings = () => {
   const { currentProject } = useProject();
@@ -43,8 +61,14 @@ export const HotmartSettings = () => {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncMessage, setSyncMessage] = useState('');
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const projectId = currentProject?.id;
+
+  // Generate unique webhook URL for this project
+  const webhookUrl = projectId 
+    ? `https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-webhook/${projectId}`
+    : '';
 
   const { data: hotmartCredentials, isLoading } = useQuery({
     queryKey: ['hotmart_credentials', projectId],
@@ -87,10 +111,18 @@ export const HotmartSettings = () => {
         .order('sale_date', { ascending: false })
         .limit(1);
 
+      // Count abandoned carts
+      const { count: abandonedCount } = await supabase
+        .from('hotmart_sales')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .eq('status', 'ABANDONED');
+
       return {
         count: hotmartCount || 0,
         minDate: hotmartDatesMin?.[0]?.sale_date,
         maxDate: hotmartDatesMax?.[0]?.sale_date,
+        abandonedCount: abandonedCount || 0,
       };
     },
     enabled: !!projectId,
@@ -208,7 +240,6 @@ export const HotmartSettings = () => {
       const endDate = new Date();
       const hotmartStartDate = subMonths(endDate, 24);
 
-      // Split 24 months into smaller chunks (3 months each)
       const chunks: { start: number; end: number }[] = [];
       let chunkStart = new Date(hotmartStartDate);
       
@@ -316,6 +347,24 @@ export const HotmartSettings = () => {
     },
   });
 
+  const handleCopyWebhookUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopiedUrl(true);
+      toast({
+        title: 'URL copiada!',
+        description: 'Cole no painel da Hotmart.',
+      });
+      setTimeout(() => setCopiedUrl(false), 2000);
+    } catch {
+      toast({
+        title: 'Erro ao copiar',
+        description: 'Tente selecionar e copiar manualmente.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const isConfigured = hotmartCredentials?.is_configured;
   const isValidated = hotmartCredentials?.is_validated;
 
@@ -380,8 +429,123 @@ export const HotmartSettings = () => {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Webhook Section - ALWAYS SHOW FOR CONFIGURED PROJECTS */}
+            {projectId && (
+              <>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Webhook className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Webhook (Tempo Real)</h3>
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
+                      Recomendado
+                    </Badge>
+                  </div>
+
+                  <div className="p-4 rounded-lg border bg-card space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">URL do Webhook (única para este projeto)</Label>
+                      <div className="flex gap-2">
+                        <Input 
+                          value={webhookUrl} 
+                          readOnly 
+                          className="font-mono text-xs bg-muted"
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="icon"
+                          onClick={handleCopyWebhookUrl}
+                          className="shrink-0"
+                        >
+                          {copiedUrl ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Eventos Recomendados</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {WEBHOOK_EVENTS.map((item) => (
+                          <div 
+                            key={item.event}
+                            className={`flex items-center gap-2 p-2 rounded text-xs ${
+                              item.highlight 
+                                ? 'bg-orange-500/10 border border-orange-500/30' 
+                                : item.required 
+                                  ? 'bg-primary/5' 
+                                  : 'bg-muted/50'
+                            }`}
+                          >
+                            {item.required ? (
+                              <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                            ) : (
+                              <div className="h-3 w-3 rounded-full border border-muted-foreground/30 shrink-0" />
+                            )}
+                            <span className="font-mono">{item.event}</span>
+                            {item.highlight && (
+                              <Badge variant="outline" className="ml-auto text-[10px] px-1 py-0 bg-orange-500/10 text-orange-600 border-orange-500/30">
+                                Recuperação
+                              </Badge>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3" />
+                        Eventos com ✓ são obrigatórios para o funcionamento correto.
+                      </p>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Como configurar na Hotmart:</Label>
+                      <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                        <li>Acesse o painel da Hotmart → <strong>Ferramentas</strong> → <strong>Webhooks</strong></li>
+                        <li>Clique em <strong>"Configuração de Webhook"</strong></li>
+                        <li>Cole a URL acima no campo <strong>"URL de destino"</strong></li>
+                        <li>Selecione a versão <strong>2.0.0</strong></li>
+                        <li>Marque os eventos listados acima (especialmente os obrigatórios)</li>
+                        <li>Clique em <strong>"Salvar"</strong></li>
+                      </ol>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => window.open('https://app-vlc.hotmart.com/tools/webhook', '_blank')}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Abrir Configuração de Webhooks na Hotmart
+                    </Button>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-4 w-4 text-orange-600 mt-0.5 shrink-0" />
+                      <div className="text-xs text-orange-700 dark:text-orange-400">
+                        <strong>Importante:</strong> O webhook captura dados em tempo real, incluindo <strong>telefone do comprador</strong> e <strong>abandono de carrinho</strong>. 
+                        Configure primeiro o webhook antes de sincronizar dados históricos.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+              </>
+            )}
+
             {/* Credentials Section */}
             <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">Credenciais da API (Sincronização em Lote)</h3>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="client_id">Client ID</Label>
                 <Input
@@ -481,7 +645,7 @@ export const HotmartSettings = () => {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Database className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Sincronização de Dados</h3>
+                    <h3 className="font-semibold">Sincronização de Dados Históricos</h3>
                   </div>
 
                   {/* Stats */}
@@ -490,6 +654,12 @@ export const HotmartSettings = () => {
                       <span className="text-muted-foreground">Vendas sincronizadas:</span>
                       <span className="font-medium">{dataStats?.count?.toLocaleString() || 0}</span>
                     </div>
+                    {dataStats?.abandonedCount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Abandonos de carrinho:</span>
+                        <span className="font-medium text-orange-600">{dataStats.abandonedCount.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Período disponível:</span>
                       <span className="font-medium">
@@ -534,16 +704,20 @@ export const HotmartSettings = () => {
                       </>
                     )}
                   </Button>
+
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Nota:</strong> A sincronização em lote via API não inclui telefone. Use o webhook para capturar telefones em tempo real.
+                  </p>
                 </div>
               </>
             )}
 
             {/* Help Section */}
             <div className="p-4 rounded-lg bg-muted">
-              <p className="text-sm font-medium mb-2">Como obter as credenciais:</p>
+              <p className="text-sm font-medium mb-2">Como obter as credenciais da API:</p>
               <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                 <li>Acesse o painel da Hotmart</li>
-                <li>Vá em Configurações → Credenciais de API</li>
+                <li>Vá em <strong>Ferramentas</strong> → <strong>Credenciais de API</strong></li>
                 <li>Copie o Client ID e Client Secret</li>
               </ol>
             </div>

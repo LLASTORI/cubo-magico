@@ -114,6 +114,40 @@ interface HotmartWebhookPayload {
   };
 }
 
+// Map all Hotmart events to internal status
+const eventStatusMap: Record<string, string> = {
+  'PURCHASE_APPROVED': 'APPROVED',
+  'PURCHASE_COMPLETE': 'COMPLETE',
+  'PURCHASE_CANCELED': 'CANCELLED',
+  'PURCHASE_BILLET_PRINTED': 'PRINTED_BILLET',
+  'PURCHASE_PROTEST': 'PROTESTED',
+  'PURCHASE_REFUNDED': 'REFUNDED',
+  'PURCHASE_CHARGEBACK': 'CHARGEBACK',
+  'PURCHASE_EXPIRED': 'EXPIRED',
+  'PURCHASE_DELAYED': 'DELAYED',
+  'PURCHASE_OUT_OF_SHOPPING_CART': 'ABANDONED',
+  'PURCHASE_RECURRENCE_CANCELLATION': 'SUBSCRIPTION_CANCELLED',
+  'SWITCH_PLAN': 'PLAN_CHANGED',
+  'UPDATE_SUBSCRIPTION_CHARGE_DATE': 'CHARGE_DATE_UPDATED',
+  'CLUB_FIRST_ACCESS': 'FIRST_ACCESS',
+  'CLUB_MODULE_COMPLETED': 'MODULE_COMPLETED',
+};
+
+// Events that should create/update sales records
+const saleEvents = [
+  'PURCHASE_APPROVED',
+  'PURCHASE_COMPLETE',
+  'PURCHASE_CANCELED',
+  'PURCHASE_BILLET_PRINTED',
+  'PURCHASE_PROTEST',
+  'PURCHASE_REFUNDED',
+  'PURCHASE_CHARGEBACK',
+  'PURCHASE_EXPIRED',
+  'PURCHASE_DELAYED',
+  'PURCHASE_OUT_OF_SHOPPING_CART',
+  'PURCHASE_RECURRENCE_CANCELLATION',
+];
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -121,29 +155,78 @@ serve(async (req) => {
   }
 
   try {
-    // Get hottok from header for validation
+    // Extract project_id from URL path: /hotmart-webhook/:project_id
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    
+    // The project_id should be the last part of the path
+    // URL format: /hotmart-webhook/PROJECT_ID
+    let projectId: string | null = null;
+    
+    if (pathParts.length >= 2) {
+      projectId = pathParts[pathParts.length - 1];
+    }
+    
+    // Validate project_id format (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!projectId || !uuidRegex.test(projectId)) {
+      console.error('Invalid or missing project_id in URL:', url.pathname);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Invalid webhook URL. Project ID is required.',
+        hint: 'URL format should be: /hotmart-webhook/YOUR_PROJECT_ID'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Get hottok from header for additional validation (optional)
     const hottok = req.headers.get('x-hotmart-hottok');
     
     // Parse the webhook payload
     const payload: HotmartWebhookPayload = await req.json();
     
     console.log('=== HOTMART WEBHOOK RECEIVED ===');
+    console.log('Project ID:', projectId);
     console.log('Event:', payload.event);
     console.log('Transaction:', payload.data?.purchase?.transaction);
     console.log('Hottok present:', !!hottok);
-    
-    // Log buyer phone data for debugging
-    if (payload.data?.buyer) {
-      console.log('=== BUYER PHONE DATA ===');
-      console.log('checkout_phone:', payload.data.buyer.checkout_phone);
-      console.log('checkout_phone_code:', payload.data.buyer.checkout_phone_code);
-      console.log('Full buyer object:', JSON.stringify(payload.data.buyer, null, 2));
-    }
+    console.log('Webhook version:', payload.version);
     
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Validate project exists and has Hotmart configured
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id, name')
+      .eq('id', projectId)
+      .single();
+    
+    if (projectError || !project) {
+      console.error('Project not found:', projectId);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Project not found'
+      }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    console.log('Project validated:', project.name);
+    
+    // Update last webhook received timestamp in project_credentials
+    await supabase
+      .from('project_credentials')
+      .update({ 
+        updated_at: new Date().toISOString()
+      })
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart');
     
     // Extract data from payload
     const { data, event } = payload;
@@ -153,28 +236,32 @@ serve(async (req) => {
     const affiliates = data?.affiliates;
     const subscription = data?.subscription;
     
-    // Skip if no transaction
-    if (!purchase?.transaction) {
-      console.log('No transaction ID, skipping');
-      return new Response(JSON.stringify({ success: true, message: 'No transaction to process' }), {
+    // Log buyer phone data for debugging
+    if (buyer) {
+      console.log('=== BUYER DATA ===');
+      console.log('Email:', buyer.email);
+      console.log('Name:', buyer.name);
+      console.log('checkout_phone:', buyer.checkout_phone);
+      console.log('checkout_phone_code:', buyer.checkout_phone_code);
+    }
+    
+    // Get status from event
+    const status = eventStatusMap[event] || purchase?.status || 'UNKNOWN';
+    
+    // Check if this is a sale event that should be recorded
+    if (!saleEvents.includes(event)) {
+      console.log(`Event ${event} is not a sale event, skipping sale record creation`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: `Event ${event} received but not a sale event`,
+        project: project.name
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
-    // Map event to status
-    const statusMap: Record<string, string> = {
-      'PURCHASE_APPROVED': 'APPROVED',
-      'PURCHASE_COMPLETE': 'COMPLETE',
-      'PURCHASE_CANCELED': 'CANCELLED',
-      'PURCHASE_BILLET_PRINTED': 'PRINTED_BILLET',
-      'PURCHASE_PROTEST': 'PROTESTED',
-      'PURCHASE_REFUNDED': 'REFUNDED',
-      'PURCHASE_CHARGEBACK': 'CHARGEBACK',
-      'PURCHASE_EXPIRED': 'EXPIRED',
-      'PURCHASE_DELAYED': 'DELAYED',
-    };
-    
-    const status = statusMap[event] || purchase?.status || 'UNKNOWN';
+    // For abandoned carts, we might not have a transaction ID
+    const transactionId = purchase?.transaction || `abandoned_${payload.id}`;
     
     // Parse phone data from webhook
     let buyerPhone: string | null = null;
@@ -194,26 +281,21 @@ serve(async (req) => {
         buyerPhoneCountryCode = '55'; // Brazil
       } else {
         // International buyer: checkout_phone includes area code
-        // Try to parse the full number
         const cleanPhone = fullPhone.replace(/\D/g, '');
         
         // Check for common country codes
         if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
-          // Brazil: 55 + DDD(2) + number(8-9)
           buyerPhoneCountryCode = '55';
           buyerPhoneDDD = cleanPhone.substring(2, 4);
           buyerPhone = cleanPhone.substring(4);
         } else if (cleanPhone.startsWith('1') && cleanPhone.length >= 11) {
-          // USA/Canada: 1 + area(3) + number(7)
           buyerPhoneCountryCode = '1';
           buyerPhoneDDD = cleanPhone.substring(1, 4);
           buyerPhone = cleanPhone.substring(4);
         } else if (cleanPhone.startsWith('351') && cleanPhone.length >= 12) {
-          // Portugal: 351 + number(9)
           buyerPhoneCountryCode = '351';
           buyerPhone = cleanPhone.substring(3);
         } else {
-          // Generic: store the full number as phone
           buyerPhone = cleanPhone;
           
           // Try to detect country from checkout_country
@@ -256,15 +338,13 @@ serve(async (req) => {
     if (sck) {
       checkoutOrigin = sck;
       
-      // Parse Meta Ads data from sck (format: Meta-Ads|ADSET_ID|CAMPAIGN_ID|PLACEMENT|AD_ID)
+      // Parse Meta Ads data from sck
       if (sck.includes('Meta-Ads') || sck.includes('|')) {
         const parts = sck.split('|');
         if (parts.length >= 2) {
-          // Extract IDs that look like Meta Ads IDs (numeric strings)
           for (const part of parts) {
             const cleanPart = part.trim();
             if (/^\d{10,}$/.test(cleanPart)) {
-              // Long numeric ID - could be campaign, adset, or ad
               if (!metaAdIdExtracted) metaAdIdExtracted = cleanPart;
               else if (!metaAdsetIdExtracted) metaAdsetIdExtracted = cleanPart;
               else if (!metaCampaignIdExtracted) metaCampaignIdExtracted = cleanPart;
@@ -274,139 +354,127 @@ serve(async (req) => {
       }
     }
     
-    // Find project by hottok or by matching credentials
-    // For now, we'll need to find projects that have Hotmart configured
-    const { data: projects, error: projectsError } = await supabase
-      .from('project_credentials')
-      .select('project_id')
-      .eq('provider', 'hotmart')
-      .eq('is_validated', true);
+    // Prepare sale data
+    const saleDate = purchase?.order_date 
+      ? new Date(purchase.order_date).toISOString()
+      : new Date(payload.creation_date).toISOString();
     
-    if (projectsError || !projects?.length) {
-      console.error('No validated Hotmart projects found:', projectsError);
-      return new Response(JSON.stringify({ success: false, error: 'No project configured' }), {
-        status: 200, // Return 200 to prevent Hotmart retries
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const confirmationDate = purchase?.approved_date
+      ? new Date(purchase.approved_date).toISOString()
+      : null;
     
-    console.log(`Found ${projects.length} Hotmart-configured projects`);
+    const affiliate = affiliates?.[0];
     
-    // Process for each project (in a multi-tenant scenario)
-    // For now, we'll try to find existing sale or insert to all configured projects
-    let processedCount = 0;
+    const saleData = {
+      project_id: projectId,
+      transaction_id: transactionId,
+      product_code: product?.id?.toString() || null,
+      product_name: product?.name || 'Unknown Product',
+      offer_code: purchase?.offer?.code || null,
+      product_price: purchase?.original_offer_price?.value || null,
+      offer_price: purchase?.price?.value || null,
+      total_price: purchase?.price?.value || null,
+      total_price_brl: purchase?.full_price?.value || null,
+      status,
+      sale_date: saleDate,
+      confirmation_date: confirmationDate,
+      payment_method: purchase?.payment?.type || null,
+      payment_type: purchase?.payment?.type || null,
+      installment_number: purchase?.payment?.installments_number || 1,
+      coupon: purchase?.offer?.coupon_code || null,
+      recurrence: purchase?.recurrence_number || null,
+      subscriber_code: subscription?.subscriber?.code || null,
+      // Sale category based on event
+      sale_category: event === 'PURCHASE_OUT_OF_SHOPPING_CART' ? 'abandoned_cart' : 'purchase',
+      // Buyer data
+      buyer_name: buyer?.name || null,
+      buyer_email: buyer?.email || null,
+      buyer_phone: buyerPhone,
+      buyer_phone_ddd: buyerPhoneDDD,
+      buyer_phone_country_code: buyerPhoneCountryCode,
+      buyer_document: buyer?.document || null,
+      buyer_address: buyer?.address?.street || null,
+      buyer_address_number: buyer?.address?.number || null,
+      buyer_address_complement: buyer?.address?.complement || null,
+      buyer_neighborhood: buyer?.address?.neighborhood || null,
+      buyer_city: buyer?.address?.city || null,
+      buyer_state: buyer?.address?.state || null,
+      buyer_country: buyer?.address?.country || purchase?.checkout_country?.name || null,
+      buyer_cep: buyer?.address?.zipcode || null,
+      // Affiliate
+      affiliate_code: affiliate?.affiliate_code || null,
+      affiliate_name: affiliate?.name || null,
+      // UTM/Origin
+      checkout_origin: checkoutOrigin,
+      utm_source: utmSource,
+      utm_campaign_id: utmCampaignId,
+      utm_adset_name: utmAdsetName,
+      utm_creative: utmCreative,
+      utm_placement: utmPlacement,
+      meta_campaign_id_extracted: metaCampaignIdExtracted,
+      meta_adset_id_extracted: metaAdsetIdExtracted,
+      meta_ad_id_extracted: metaAdIdExtracted,
+      // Metadata
+      last_synced_at: new Date().toISOString(),
+    };
     
-    for (const proj of projects) {
-      const projectId = proj.project_id;
-      
-      // Check if transaction already exists for this project
-      const { data: existingSale } = await supabase
+    // Check if transaction already exists
+    const { data: existingSale } = await supabase
+      .from('hotmart_sales')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('transaction_id', transactionId)
+      .single();
+    
+    let operation = 'none';
+    
+    if (existingSale) {
+      // Update existing sale
+      const { error: updateError } = await supabase
         .from('hotmart_sales')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('transaction_id', purchase.transaction)
-        .single();
+        .update({
+          ...saleData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingSale.id);
       
-      const saleDate = purchase?.order_date 
-        ? new Date(purchase.order_date).toISOString()
-        : new Date(payload.creation_date).toISOString();
-      
-      const confirmationDate = purchase?.approved_date
-        ? new Date(purchase.approved_date).toISOString()
-        : null;
-      
-      const affiliate = affiliates?.[0];
-      
-      const saleData = {
-        project_id: projectId,
-        transaction_id: purchase.transaction,
-        product_code: product?.id?.toString() || null,
-        product_name: product?.name || 'Unknown Product',
-        offer_code: purchase?.offer?.code || null,
-        product_price: purchase?.original_offer_price?.value || null,
-        offer_price: purchase?.price?.value || null,
-        total_price: purchase?.price?.value || null,
-        total_price_brl: purchase?.full_price?.value || null,
-        status,
-        sale_date: saleDate,
-        confirmation_date: confirmationDate,
-        payment_method: purchase?.payment?.type || null,
-        payment_type: purchase?.payment?.type || null,
-        installment_number: purchase?.payment?.installments_number || 1,
-        coupon: purchase?.offer?.coupon_code || null,
-        recurrence: purchase?.recurrence_number || null,
-        subscriber_code: subscription?.subscriber?.code || null,
-        // Buyer data
-        buyer_name: buyer?.name || null,
-        buyer_email: buyer?.email || null,
-        buyer_phone: buyerPhone,
-        buyer_phone_ddd: buyerPhoneDDD,
-        buyer_phone_country_code: buyerPhoneCountryCode,
-        buyer_document: buyer?.document || null,
-        buyer_address: buyer?.address?.street || null,
-        buyer_address_number: buyer?.address?.number || null,
-        buyer_address_complement: buyer?.address?.complement || null,
-        buyer_neighborhood: buyer?.address?.neighborhood || null,
-        buyer_city: buyer?.address?.city || null,
-        buyer_state: buyer?.address?.state || null,
-        buyer_country: buyer?.address?.country || purchase?.checkout_country?.name || null,
-        buyer_cep: buyer?.address?.zipcode || null,
-        // Affiliate
-        affiliate_code: affiliate?.affiliate_code || null,
-        affiliate_name: affiliate?.name || null,
-        // UTM/Origin
-        checkout_origin: checkoutOrigin,
-        utm_source: utmSource,
-        utm_campaign_id: utmCampaignId,
-        utm_adset_name: utmAdsetName,
-        utm_creative: utmCreative,
-        utm_placement: utmPlacement,
-        meta_campaign_id_extracted: metaCampaignIdExtracted,
-        meta_adset_id_extracted: metaAdsetIdExtracted,
-        meta_ad_id_extracted: metaAdIdExtracted,
-        // Metadata
-        last_synced_at: new Date().toISOString(),
-      };
-      
-      if (existingSale) {
-        // Update existing sale
-        const { error: updateError } = await supabase
-          .from('hotmart_sales')
-          .update({
-            ...saleData,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingSale.id);
-        
-        if (updateError) {
-          console.error(`Error updating sale for project ${projectId}:`, updateError);
-        } else {
-          console.log(`Updated sale ${purchase.transaction} for project ${projectId}`);
-          processedCount++;
-        }
-      } else {
-        // Insert new sale
-        const { error: insertError } = await supabase
-          .from('hotmart_sales')
-          .insert(saleData);
-        
-        if (insertError) {
-          console.error(`Error inserting sale for project ${projectId}:`, insertError);
-        } else {
-          console.log(`Inserted sale ${purchase.transaction} for project ${projectId}`);
-          processedCount++;
-        }
+      if (updateError) {
+        console.error('Error updating sale:', updateError);
+        throw updateError;
       }
+      
+      operation = 'updated';
+      console.log(`Updated sale ${transactionId}`);
+    } else {
+      // Insert new sale
+      const { error: insertError } = await supabase
+        .from('hotmart_sales')
+        .insert(saleData);
+      
+      if (insertError) {
+        console.error('Error inserting sale:', insertError);
+        throw insertError;
+      }
+      
+      operation = 'created';
+      console.log(`Created sale ${transactionId}`);
     }
     
-    console.log(`=== WEBHOOK PROCESSED: ${processedCount} projects ===`);
+    console.log('=== WEBHOOK PROCESSED SUCCESSFULLY ===');
+    console.log('Project:', project.name);
+    console.log('Event:', event);
+    console.log('Status:', status);
+    console.log('Operation:', operation);
+    console.log('Phone captured:', !!buyerPhone);
     
     return new Response(JSON.stringify({ 
       success: true, 
-      message: `Processed ${processedCount} projects`,
-      transaction: purchase.transaction,
+      message: `Sale ${operation} for project ${project.name}`,
+      transaction: transactionId,
       event,
+      status,
       phone_captured: !!buyerPhone,
+      is_abandoned_cart: event === 'PURCHASE_OUT_OF_SHOPPING_CART',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

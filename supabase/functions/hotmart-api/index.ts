@@ -65,7 +65,26 @@ interface HotmartSale {
     phone?: {
       local_code?: string;
       number?: string;
-    };
+      country_code?: string;
+      ddi?: string;
+    } | string;
+    phones?: Array<{
+      local_code?: string;
+      number?: string;
+      phone?: string;
+      ddd?: string;
+      area_code?: string;
+      country_code?: string;
+      ddi?: string;
+    }>;
+    checkout_phone?: string;
+    ddd?: string;
+    area_code?: string;
+    phone_number?: string;
+    cellphone?: string;
+    mobile?: string;
+    country_code?: string;
+    ddi?: string;
     address?: {
       country?: string;
       state?: string;
@@ -76,6 +95,7 @@ interface HotmartSale {
       number?: string;
       complement?: string;
     };
+    [key: string]: unknown; // Allow any other properties for debugging
   };
   producer?: {
     name?: string;
@@ -547,6 +567,17 @@ async function syncSales(
   }
   
   // Prepare all sales data
+  // Log first sale's buyer structure for debugging (only once per sync)
+  if (sales.length > 0) {
+    const sampleBuyer = sales[0].buyer;
+    console.log('=== BUYER STRUCTURE DEBUG ===');
+    console.log('Full buyer object:', JSON.stringify(sampleBuyer, null, 2));
+    console.log('buyer.phone:', JSON.stringify(sampleBuyer?.phone, null, 2));
+    console.log('buyer.checkout_phone:', sampleBuyer?.checkout_phone);
+    console.log('buyer.phones:', JSON.stringify(sampleBuyer?.phones, null, 2));
+    console.log('=== END BUYER DEBUG ===');
+  }
+
   const salesData = sales.map(sale => {
     const tracking = sale.purchase.tracking;
     const { campaignId, adsetId, adId } = extractMetaIds(tracking);
@@ -578,6 +609,78 @@ async function syncSales(
     
     const totalPriceBrl = totalPrice * rate;
 
+    // Extract phone data - try multiple possible structures from Hotmart API
+    let phoneCountryCode: string | null = null;
+    let phoneDdd: string | null = null;
+    let phoneNumber: string | null = null;
+    
+    const buyer = sale.buyer;
+    const phoneObj = buyer?.phone && typeof buyer.phone === 'object' ? buyer.phone : null;
+    
+    // Try structure 1: buyer.phone object with local_code and number
+    if (phoneObj && (phoneObj.local_code || phoneObj.number)) {
+      phoneDdd = phoneObj.local_code || null;
+      phoneNumber = phoneObj.number || null;
+      phoneCountryCode = phoneObj.country_code || phoneObj.ddi || '55';
+    }
+    // Try structure 2: buyer.checkout_phone as full string (e.g., "5511999999999")
+    else if (buyer?.checkout_phone) {
+      const fullPhone = String(buyer.checkout_phone).replace(/\D/g, '');
+      if (fullPhone.length >= 10) {
+        // Check if starts with country code (55 for Brazil)
+        if (fullPhone.startsWith('55') && fullPhone.length >= 12) {
+          phoneCountryCode = '55';
+          phoneDdd = fullPhone.substring(2, 4);
+          phoneNumber = fullPhone.substring(4);
+        } else if (fullPhone.length === 11) {
+          // Brazilian format without country code: DDD + 9 digits
+          phoneCountryCode = '55';
+          phoneDdd = fullPhone.substring(0, 2);
+          phoneNumber = fullPhone.substring(2);
+        } else if (fullPhone.length === 10) {
+          // Brazilian format without country code: DDD + 8 digits (landline)
+          phoneCountryCode = '55';
+          phoneDdd = fullPhone.substring(0, 2);
+          phoneNumber = fullPhone.substring(2);
+        } else {
+          // Unknown format, store as is
+          phoneNumber = fullPhone;
+          phoneCountryCode = '55';
+        }
+      }
+    }
+    // Try structure 3: buyer.phones array
+    else if (buyer?.phones && Array.isArray(buyer.phones) && buyer.phones.length > 0) {
+      const firstPhone = buyer.phones[0];
+      phoneDdd = firstPhone.local_code || firstPhone.ddd || firstPhone.area_code || null;
+      phoneNumber = firstPhone.number || firstPhone.phone || null;
+      phoneCountryCode = firstPhone.country_code || firstPhone.ddi || '55';
+    }
+    // Try structure 4: buyer.phone as string directly
+    else if (buyer?.phone && typeof buyer.phone === 'string') {
+      const fullPhone = String(buyer.phone).replace(/\D/g, '');
+      if (fullPhone.length >= 10) {
+        if (fullPhone.startsWith('55') && fullPhone.length >= 12) {
+          phoneCountryCode = '55';
+          phoneDdd = fullPhone.substring(2, 4);
+          phoneNumber = fullPhone.substring(4);
+        } else if (fullPhone.length === 11 || fullPhone.length === 10) {
+          phoneCountryCode = '55';
+          phoneDdd = fullPhone.substring(0, 2);
+          phoneNumber = fullPhone.substring(2);
+        } else {
+          phoneNumber = fullPhone;
+          phoneCountryCode = '55';
+        }
+      }
+    }
+    // Try structure 5: separate ddd and phone fields at buyer level
+    else if (buyer?.ddd || buyer?.phone_number || buyer?.cellphone) {
+      phoneDdd = buyer.ddd || buyer.area_code || null;
+      phoneNumber = buyer.phone_number || buyer.cellphone || buyer.mobile || null;
+      phoneCountryCode = buyer.country_code || buyer.ddi || '55';
+    }
+
     return {
       project_id: projectId,
       transaction_id: sale.purchase.transaction,
@@ -597,8 +700,9 @@ async function syncSales(
       buyer_name: sale.buyer?.name || null,
       buyer_email: sale.buyer?.email || null,
       buyer_document: sale.buyer?.document || null,
-      buyer_phone_ddd: sale.buyer?.phone?.local_code || null,
-      buyer_phone: sale.buyer?.phone?.number || null,
+      buyer_phone_country_code: phoneCountryCode,
+      buyer_phone_ddd: phoneDdd,
+      buyer_phone: phoneNumber,
       buyer_country: sale.buyer?.address?.country || null,
       buyer_state: sale.buyer?.address?.state || null,
       buyer_city: sale.buyer?.address?.city || null,

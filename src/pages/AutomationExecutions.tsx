@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectModules } from '@/hooks/useProjectModules';
 import { useAutomationExecutions } from '@/hooks/useAutomationExecutions';
 import { useAutomationFlows } from '@/hooks/useAutomationFlows';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +48,7 @@ import {
   Users,
   Zap,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -62,14 +64,19 @@ const statusConfig = {
 export default function AutomationExecutions() {
   const navigate = useNavigate();
   const { currentProject } = useProject();
+  const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { flows } = useAutomationFlows();
   const [selectedFlow, setSelectedFlow] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedExecution, setSelectedExecution] = useState<any>(null);
 
-  const { executions, stats, isLoading, cancelExecution, retryExecution } = 
+  const crmEnabled = isModuleEnabled('crm');
+
+  const { executions, stats, isLoading: executionsLoading, cancelExecution, retryExecution } = 
     useAutomationExecutions(selectedFlow !== 'all' ? selectedFlow : undefined);
+
+  const isLoading = modulesLoading || executionsLoading;
 
   const filteredExecutions = executions.filter(exec => {
     const matchesStatus = statusFilter === 'all' || exec.status === statusFilter;
@@ -87,6 +94,27 @@ export default function AutomationExecutions() {
         <main className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!crmEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader pageSubtitle="Execuções de Automação" />
+        <main className="container mx-auto px-6 py-8">
+          <div className="flex items-center justify-center py-12">
+            <Card className="max-w-md border-muted">
+              <CardHeader className="text-center pb-4">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                  <Lock className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <CardTitle>Módulo CRM</CardTitle>
+                <CardDescription>Este módulo não está habilitado para o projeto atual.</CardDescription>
+              </CardHeader>
+            </Card>
           </div>
         </main>
       </div>

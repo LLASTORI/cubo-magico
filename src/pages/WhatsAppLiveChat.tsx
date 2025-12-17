@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useWhatsAppConversations, WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
@@ -109,24 +109,26 @@ export default function WhatsAppLiveChat() {
   }, [needsSync, connectedNumber, syncInstance, queryClient, isSyncing]);
 
   // Ensure webhook is configured (required for inbound messages to appear)
+  // Only run once per instance
+  const webhookConfiguredRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!connectedNumber || !instanceName || isConfiguringWebhook) return;
+    if (!connectedNumber || !instanceName) return;
+    if (webhookConfiguredRef.current === instanceName) return; // Already configured for this instance
 
     // Only attempt when we have a connected instance (or an active number)
     const canConfigure = connectedNumber.instance?.status === 'connected' || connectedNumber.status === 'active';
     if (!canConfigure) return;
 
+    webhookConfiguredRef.current = instanceName;
+    
     const run = async () => {
       setIsConfiguringWebhook(true);
-      const res = await configureWebhook(instanceName);
-      if (res.success) {
-        // no-op; webhook is now set server-side
-      }
+      await configureWebhook(instanceName);
       setIsConfiguringWebhook(false);
     };
 
     run();
-  }, [connectedNumber?.id, connectedNumber?.status, connectedNumber?.instance?.status, instanceName, configureWebhook, isConfiguringWebhook]);
+  }, [connectedNumber?.id, instanceName]); // Simplified dependencies
 
   // Keep selectedConversation in sync when conversations refetch (prevents stale phone/DDD display)
   useEffect(() => {

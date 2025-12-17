@@ -34,6 +34,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
 import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function WhatsAppLiveChat() {
   const { currentProject } = useProject();
@@ -54,11 +55,16 @@ export default function WhatsAppLiveChat() {
   } = useWhatsAppConversations();
   
   const { numbers } = useWhatsAppNumbers();
-  const { agents } = useWhatsAppAgents();
+  const { agents, getCurrentAgentByUserId } = useWhatsAppAgents();
   const { departments } = useWhatsAppDepartments();
   const { syncInstance, configureWebhook } = useEvolutionAPI();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false);
+
+  // Get current user's agent ID
+  const currentAgent = user ? getCurrentAgentByUserId(user.id) : null;
+  const currentAgentId = currentAgent?.id || null;
 
   // Get the connected instance name - fallback to active number if no instance record
   const connectedNumber = numbers?.find(n => n.instance?.status === 'connected') 
@@ -254,6 +260,7 @@ export default function WhatsAppLiveChat() {
             selectedId={selectedConversation?.id || null}
             onSelect={handleSelectConversation}
             isLoading={isLoading}
+            currentAgentId={currentAgentId}
           />
         </div>
 
@@ -263,6 +270,7 @@ export default function WhatsAppLiveChat() {
           instanceName={instanceName}
           onTransfer={() => setShowTransferDialog(true)}
           onClose={handleCloseConversation}
+          agents={agents?.map(a => ({ id: a.id, user_id: a.user_id, display_name: a.display_name }))}
         />
 
         {/* Contact panel */}

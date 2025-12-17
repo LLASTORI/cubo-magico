@@ -56,6 +56,7 @@ interface ChatWindowProps {
   instanceName?: string;
   onTransfer?: () => void;
   onClose?: () => void;
+  agents?: { id: string; user_id: string; display_name: string | null }[];
 }
 
 interface SelectedFile {
@@ -64,7 +65,7 @@ interface SelectedFile {
   type: 'image' | 'audio' | 'video' | 'document';
 }
 
-export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: ChatWindowProps) {
+export function ChatWindow({ conversation, instanceName, onTransfer, onClose, agents }: ChatWindowProps) {
   const [newMessage, setNewMessage] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
@@ -549,6 +550,12 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
     }
   };
 
+  const getAgentDisplayName = (sentBy: string | null): string | null => {
+    if (!sentBy || !agents) return null;
+    const agent = agents.find(a => a.user_id === sentBy);
+    return agent?.display_name || null;
+  };
+
   const renderMessageContent = (message: WhatsAppMessage) => {
     const isOutbound = message.direction === 'outbound';
     
@@ -755,45 +762,56 @@ export function ChatWindow({ conversation, instanceName, onTransfer, onClose }: 
                 const showDate = index === 0 || 
                   format(new Date(message.created_at), 'yyyy-MM-dd') !== 
                   format(new Date(messages[index - 1].created_at), 'yyyy-MM-dd');
-
-                return (
-                  <div key={message.id}>
-                    {showDate && (
-                      <div className="flex justify-center my-4">
-                        <Badge variant="secondary" className="text-xs">
-                          {format(new Date(message.created_at), "d 'de' MMMM", { locale: ptBR })}
-                        </Badge>
-                      </div>
-                    )}
-                    
+              const messages_data = messages || [];
+              return (
+                <div key={message.id}>
+                  {showDate && (
+                    <div className="flex justify-center my-4">
+                      <Badge variant="secondary" className="text-xs">
+                        {format(new Date(message.created_at), "d 'de' MMMM", { locale: ptBR })}
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  <div className={cn(
+                    "flex",
+                    isOutbound ? "justify-end" : "justify-start"
+                  )}>
                     <div className={cn(
-                      "flex",
-                      isOutbound ? "justify-end" : "justify-start"
+                      "max-w-[70%] rounded-lg p-3",
+                      isOutbound 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-muted"
                     )}>
+                      {/* Show agent display name for outbound messages */}
+                      {isOutbound && message.sent_by && (
+                        (() => {
+                          const agentName = getAgentDisplayName(message.sent_by);
+                          return agentName ? (
+                            <p className="text-xs font-medium text-primary-foreground/80 mb-1">
+                              {agentName}
+                            </p>
+                          ) : null;
+                        })()
+                      )}
+                      {renderMessageContent(message)}
                       <div className={cn(
-                        "max-w-[70%] rounded-lg p-3",
-                        isOutbound 
-                          ? "bg-primary text-primary-foreground" 
-                          : "bg-muted"
+                        "flex items-center gap-1 mt-1",
+                        isOutbound ? "justify-end" : "justify-start"
                       )}>
-                        {renderMessageContent(message)}
-                        <div className={cn(
-                          "flex items-center gap-1 mt-1",
-                          isOutbound ? "justify-end" : "justify-start"
+                        <span className={cn(
+                          "text-xs",
+                          isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
                         )}>
-                          <span className={cn(
-                            "text-xs",
-                            isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
-                          )}>
-                            {format(new Date(message.created_at), 'HH:mm')}
-                          </span>
-                          {isOutbound && getStatusIcon(message.status)}
-                        </div>
+                          {format(new Date(message.created_at), 'HH:mm')}
+                        </span>
+                        {isOutbound && getStatusIcon(message.status)}
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
             </div>
           )}
         </ScrollArea>

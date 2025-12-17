@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation';
 
 export interface ProjectModule {
   id: string;
@@ -50,6 +50,13 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'Hotmart',
     description: 'Sincronização de vendas, produtos e métricas de faturamento',
     icon: 'shopping-cart',
+  },
+  {
+    key: 'automation',
+    name: 'Automações',
+    description: 'Fluxos de automação para WhatsApp com editor visual',
+    icon: 'workflow',
+    requiresModule: 'whatsapp',
   },
 ];
 

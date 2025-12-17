@@ -84,7 +84,7 @@ export default function AutomationFlows() {
   const [folderId, setFolderId] = useState<string>('');
   const [folderName, setFolderName] = useState('');
 
-  const crmEnabled = isModuleEnabled('crm');
+  const automationEnabled = isModuleEnabled('automation');
   const isLoading = modulesLoading || flowsLoading;
 
   const filteredFlows = flows.filter(flow => {
@@ -144,7 +144,7 @@ export default function AutomationFlows() {
     );
   }
 
-  if (!crmEnabled) {
+  if (!automationEnabled) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Fluxos de Automação" />
@@ -155,7 +155,7 @@ export default function AutomationFlows() {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                   <Lock className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <CardTitle>Módulo CRM</CardTitle>
+                <CardTitle>Módulo de Automações</CardTitle>
                 <CardDescription>Este módulo não está habilitado para o projeto atual.</CardDescription>
               </CardHeader>
             </Card>

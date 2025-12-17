@@ -18,8 +18,9 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image } from 'lucide-react';
+import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { Badge } from '@/components/ui/badge';
 
 interface NodeConfigPanelProps {
   node: Node | null;
@@ -35,6 +36,10 @@ const nodeIcons: Record<string, React.ReactNode> = {
   condition: <GitBranch className="h-5 w-5" />,
   action: <Tag className="h-5 w-5" />,
   media: <Image className="h-5 w-5" />,
+  http_request: <Globe className="h-5 w-5" />,
+  split: <GitFork className="h-5 w-5" />,
+  wait_reply: <MessageCircle className="h-5 w-5" />,
+  tag: <Tag className="h-5 w-5" />,
 };
 
 const nodeLabels: Record<string, string> = {
@@ -44,6 +49,10 @@ const nodeLabels: Record<string, string> = {
   condition: 'Condição',
   action: 'Ação CRM',
   media: 'Mídia',
+  http_request: 'HTTP Request',
+  split: 'Split Test',
+  wait_reply: 'Aguardar Resposta',
+  tag: 'Tag Rápida',
 };
 
 export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: NodeConfigPanelProps) {
@@ -101,6 +110,26 @@ export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: 
           {/* Media Node */}
           {nodeType === 'media' && (
             <MediaNodeConfig config={config} setConfig={setConfig} />
+          )}
+
+          {/* HTTP Request Node */}
+          {nodeType === 'http_request' && (
+            <HttpRequestNodeConfig config={config} setConfig={setConfig} />
+          )}
+
+          {/* Split Test Node */}
+          {nodeType === 'split' && (
+            <SplitNodeConfig config={config} setConfig={setConfig} />
+          )}
+
+          {/* Wait Reply Node */}
+          {nodeType === 'wait_reply' && (
+            <WaitReplyNodeConfig config={config} setConfig={setConfig} />
+          )}
+
+          {/* Tag Node */}
+          {nodeType === 'tag' && (
+            <TagNodeConfig config={config} setConfig={setConfig} />
           )}
 
           {/* Start Node */}
@@ -358,6 +387,218 @@ function MediaNodeConfig({ config, setConfig }: { config: any; setConfig: (c: an
           onChange={(e) => setConfig({ ...config, caption: e.target.value })}
           className="min-h-[80px]"
         />
+      </div>
+    </div>
+  );
+}
+
+// HTTP Request Config
+function HttpRequestNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Método HTTP</Label>
+        <Select value={config.method || 'GET'} onValueChange={(v) => setConfig({ ...config, method: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="GET">GET</SelectItem>
+            <SelectItem value="POST">POST</SelectItem>
+            <SelectItem value="PUT">PUT</SelectItem>
+            <SelectItem value="PATCH">PATCH</SelectItem>
+            <SelectItem value="DELETE">DELETE</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>URL</Label>
+        <Input
+          placeholder="https://api.exemplo.com/endpoint"
+          value={config.url || ''}
+          onChange={(e) => setConfig({ ...config, url: e.target.value })}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Headers (JSON)</Label>
+        <Textarea
+          placeholder='{"Authorization": "Bearer token"}'
+          value={config.headers || ''}
+          onChange={(e) => setConfig({ ...config, headers: e.target.value })}
+          className="min-h-[60px] font-mono text-xs"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Body (JSON)</Label>
+        <Textarea
+          placeholder='{"key": "value"}'
+          value={config.body || ''}
+          onChange={(e) => setConfig({ ...config, body: e.target.value })}
+          className="min-h-[80px] font-mono text-xs"
+        />
+      </div>
+
+      <div className="p-3 bg-muted/50 rounded-lg">
+        <p className="text-xs text-muted-foreground">
+          Use variáveis do contato: {'{{nome}}'}, {'{{email}}'}, {'{{telefone}}'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Split Test Config
+function SplitNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Tipo de split</Label>
+        <Select value={config.splitType || 'percentage'} onValueChange={(v) => setConfig({ ...config, splitType: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="percentage">Por porcentagem</SelectItem>
+            <SelectItem value="random">Aleatório 50/50</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {config.splitType === 'percentage' && (
+        <div className="space-y-4">
+          <Label>Distribuição: {config.splitPercentage || 50}% / {100 - (config.splitPercentage || 50)}%</Label>
+          <Slider
+            value={[config.splitPercentage || 50]}
+            onValueChange={([v]) => setConfig({ ...config, splitPercentage: v })}
+            min={10}
+            max={90}
+            step={5}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span className="text-green-600">Variante A</span>
+            <span className="text-blue-600">Variante B</span>
+          </div>
+        </div>
+      )}
+
+      <div className="p-3 bg-muted/50 rounded-lg">
+        <p className="text-xs text-muted-foreground">
+          Conecte cada saída (A/B) a diferentes caminhos do fluxo para testar variações.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Wait Reply Config
+function WaitReplyNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Tempo de espera</Label>
+        <Input
+          type="number"
+          min={1}
+          placeholder="Ex: 30"
+          value={config.timeout || ''}
+          onChange={(e) => setConfig({ ...config, timeout: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Unidade</Label>
+        <Select value={config.timeoutUnit || 'minutes'} onValueChange={(v) => setConfig({ ...config, timeoutUnit: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="minutes">Minutos</SelectItem>
+            <SelectItem value="hours">Horas</SelectItem>
+            <SelectItem value="days">Dias</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+        <p className="text-xs font-medium">Saídas:</p>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">
+            Respondeu
+          </Badge>
+          <span className="text-xs text-muted-foreground">Quando o cliente responde</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200">
+            Timeout
+          </Badge>
+          <span className="text-xs text-muted-foreground">Quando o tempo expira</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tag Config
+function TagNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const [tagInput, setTagInput] = useState('');
+
+  const handleAddTag = () => {
+    if (tagInput.trim()) {
+      const currentTags = config.tags || [];
+      setConfig({ ...config, tags: [...currentTags, tagInput.trim()] });
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (index: number) => {
+    const currentTags = [...(config.tags || [])];
+    currentTags.splice(index, 1);
+    setConfig({ ...config, tags: currentTags });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Ação</Label>
+        <Select value={config.action || 'add'} onValueChange={(v) => setConfig({ ...config, action: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="add">Adicionar tags</SelectItem>
+            <SelectItem value="remove">Remover tags</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Tags</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Nome da tag"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+          />
+          <Button type="button" onClick={handleAddTag}>Adicionar</Button>
+        </div>
+        {(config.tags || []).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(config.tags || []).map((tag: string, index: number) => (
+              <Badge 
+                key={index} 
+                variant="secondary" 
+                className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => handleRemoveTag(index)}
+              >
+                {tag} ×
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -34,6 +34,8 @@ import CRMRecovery from "./pages/CRMRecovery";
 import CRMRecoveryKanban from "./pages/CRMRecoveryKanban";
 import CRMRecoverySettings from "./pages/CRMRecoverySettings";
 import WhatsAppLiveChat from "./pages/WhatsAppLiveChat";
+import AutomationFlows from "./pages/AutomationFlows";
+import AutomationFlowEditor from "./pages/AutomationFlowEditor";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -170,6 +172,16 @@ const App = () => (
                 <Route path="/whatsapp" element={
                   <ProtectedRoute>
                     <WhatsAppLiveChat />
+                  </ProtectedRoute>
+                } />
+                <Route path="/automations" element={
+                  <ProtectedRoute>
+                    <AutomationFlows />
+                  </ProtectedRoute>
+                } />
+                <Route path="/automations/:flowId" element={
+                  <ProtectedRoute>
+                    <AutomationFlowEditor />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -45,7 +45,8 @@ import {
   Zap,
   MessageSquare,
   Clock,
-  GitBranch
+  GitBranch,
+  Activity
 } from 'lucide-react';
 
 const triggerTypes = [
@@ -179,6 +180,10 @@ export default function AutomationFlows() {
               Crie fluxos automatizados para WhatsApp com editor visual
             </p>
           </div>
+          <Button variant="outline" onClick={() => navigate('/automations/executions')}>
+            <Activity className="h-4 w-4 mr-2" />
+            Execuções
+          </Button>
           <Button variant="outline" onClick={() => setShowFolderDialog(true)}>
             <FolderPlus className="h-4 w-4 mr-2" />
             Nova Pasta

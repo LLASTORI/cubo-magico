@@ -258,6 +258,11 @@ async function handleIncomingMessage(
     conversation.assigned_to
   );
 
+  // Trigger automation flows for keyword matches (non-blocking)
+  if (content && contentType === 'text') {
+    triggerAutomations(projectId, conversation.contact_id, conversation.id, content, whatsappNumberId);
+  }
+
   console.log('[WhatsApp Webhook] Message processed successfully');
 }
 
@@ -723,4 +728,48 @@ async function logWebhookMetrics(
   } catch (e) {
     console.error('[WhatsApp Webhook] Error logging metrics:', e);
   }
+}
+
+// Trigger automation flows (non-blocking background task)
+function triggerAutomations(
+  projectId: string,
+  contactId: string,
+  conversationId: string,
+  message: string,
+  whatsappNumberId: string
+) {
+  // Use EdgeRuntime.waitUntil for background processing
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  
+  if (!supabaseUrl) {
+    console.log('[WhatsApp Webhook] No SUPABASE_URL, skipping automation trigger');
+    return;
+  }
+
+  const automationUrl = `${supabaseUrl}/functions/v1/automation-engine`;
+
+  // Fire and forget - don't await
+  fetch(automationUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+    },
+    body: JSON.stringify({
+      action: 'trigger_keyword',
+      projectId,
+      contactId,
+      conversationId,
+      message,
+      whatsappNumberId,
+    }),
+  }).then(res => {
+    if (res.ok) {
+      console.log('[WhatsApp Webhook] Automation trigger sent successfully');
+    } else {
+      console.log('[WhatsApp Webhook] Automation trigger returned:', res.status);
+    }
+  }).catch(err => {
+    console.error('[WhatsApp Webhook] Error triggering automations:', err);
+  });
 }

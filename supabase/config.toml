@@ -28,3 +28,7 @@ verify_jwt = true
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+[functions.automation-engine]
+verify_jwt = false
+max_duration = 300

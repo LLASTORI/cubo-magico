@@ -1039,7 +1039,28 @@ async function sendWhatsAppMessage(supabase: any, context: ExecutionContext, tex
     metadata: { source: 'automation' },
   });
 
-  console.log('[Automation Engine] Message sent successfully');
+  // Update conversation: remove from "pending/aguardando" status and update timestamps
+  const updateData: Record<string, unknown> = {
+    last_message_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  
+  // Only change status if it's pending (waiting for response)
+  if (conversation.status === 'pending') {
+    updateData.status = 'open';
+  }
+  
+  // Set first_response_at if not already set (first automated response)
+  if (!conversation.first_response_at) {
+    updateData.first_response_at = new Date().toISOString();
+  }
+  
+  await supabase
+    .from('whatsapp_conversations')
+    .update(updateData)
+    .eq('id', conversation.id);
+
+  console.log('[Automation Engine] Message sent successfully, conversation updated');
 }
 
 // Send WhatsApp media via Evolution API
@@ -1126,7 +1147,28 @@ async function sendWhatsAppMedia(
     metadata: { source: 'automation' },
   });
 
-  console.log('[Automation Engine] Media sent successfully');
+  // Update conversation: remove from "pending/aguardando" status and update timestamps
+  const updateData: Record<string, unknown> = {
+    last_message_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  
+  // Only change status if it's pending (waiting for response)
+  if (conversation.status === 'pending') {
+    updateData.status = 'open';
+  }
+  
+  // Set first_response_at if not already set (first automated response)
+  if (!conversation.first_response_at) {
+    updateData.first_response_at = new Date().toISOString();
+  }
+  
+  await supabase
+    .from('whatsapp_conversations')
+    .update(updateData)
+    .eq('id', conversation.id);
+
+  console.log('[Automation Engine] Media sent successfully, conversation updated');
 }
 
 // Replace variables in text

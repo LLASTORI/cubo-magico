@@ -837,6 +837,7 @@ export type Database = {
           created_at: string
           custom_fields: Json | null
           document: string | null
+          document_encrypted: string | null
           email: string
           first_meta_ad_id: string | null
           first_meta_adset_id: string | null
@@ -887,6 +888,7 @@ export type Database = {
           created_at?: string
           custom_fields?: Json | null
           document?: string | null
+          document_encrypted?: string | null
           email: string
           first_meta_ad_id?: string | null
           first_meta_adset_id?: string | null
@@ -937,6 +939,7 @@ export type Database = {
           created_at?: string
           custom_fields?: Json | null
           document?: string | null
+          document_encrypted?: string | null
           email?: string
           first_meta_ad_id?: string | null
           first_meta_adset_id?: string | null
@@ -1360,6 +1363,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      encryption_keys: {
+        Row: {
+          created_at: string
+          id: string
+          key_name: string
+          key_value: string
+          rotated_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key_name: string
+          key_value: string
+          rotated_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key_name?: string
+          key_value?: string
+          rotated_at?: string | null
+        }
+        Relationships: []
       }
       funnel_changes: {
         Row: {
@@ -2482,8 +2509,10 @@ export type Database = {
       project_credentials: {
         Row: {
           basic_auth: string | null
+          basic_auth_encrypted: string | null
           client_id: string | null
           client_secret: string | null
+          client_secret_encrypted: string | null
           created_at: string
           id: string
           is_configured: boolean | null
@@ -2495,8 +2524,10 @@ export type Database = {
         }
         Insert: {
           basic_auth?: string | null
+          basic_auth_encrypted?: string | null
           client_id?: string | null
           client_secret?: string | null
+          client_secret_encrypted?: string | null
           created_at?: string
           id?: string
           is_configured?: boolean | null
@@ -2508,8 +2539,10 @@ export type Database = {
         }
         Update: {
           basic_auth?: string | null
+          basic_auth_encrypted?: string | null
           client_id?: string | null
           client_secret?: string | null
+          client_secret_encrypted?: string | null
           created_at?: string
           id?: string
           is_configured?: boolean | null
@@ -3431,7 +3464,56 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      project_credentials_secure: {
+        Row: {
+          basic_auth: string | null
+          client_id: string | null
+          client_secret: string | null
+          created_at: string | null
+          id: string | null
+          is_configured: boolean | null
+          is_validated: boolean | null
+          project_id: string | null
+          provider: string | null
+          updated_at: string | null
+          validated_at: string | null
+        }
+        Insert: {
+          basic_auth?: never
+          client_id?: string | null
+          client_secret?: never
+          created_at?: string | null
+          id?: string | null
+          is_configured?: boolean | null
+          is_validated?: boolean | null
+          project_id?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          validated_at?: string | null
+        }
+        Update: {
+          basic_auth?: never
+          client_id?: string | null
+          client_secret?: never
+          created_at?: string | null
+          id?: string | null
+          is_configured?: boolean | null
+          is_validated?: boolean | null
+          project_id?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          validated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_credentials_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
@@ -3447,6 +3529,13 @@ export type Database = {
         Args: { _project_id: string }
         Returns: undefined
       }
+      decrypt_sensitive: { Args: { p_encrypted_data: string }; Returns: string }
+      encrypt_sensitive: { Args: { p_data: string }; Returns: string }
+      get_contact_document: {
+        Args: { p_contact_id: string; p_project_id: string }
+        Returns: string
+      }
+      get_encryption_key: { Args: { p_key_name?: string }; Returns: string }
       get_next_available_agent: {
         Args: { p_department_id?: string; p_project_id: string }
         Returns: string

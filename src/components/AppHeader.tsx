@@ -13,7 +13,10 @@ import {
   LogOut,
   CalendarDays,
   Building2,
-  Users
+  Users,
+  Workflow,
+  MessageCircle,
+  Route
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -56,6 +59,7 @@ export const AppHeader = ({
   // Check if current page is in the "Busca Rápida" dropdown
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
   const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard';
+  const isInCRM = currentPath === '/crm' || currentPath.startsWith('/crm/') || currentPath === '/automations' || currentPath.startsWith('/automations/') || currentPath === '/whatsapp';
   
   const handleLogout = async () => {
     await signOut();
@@ -212,25 +216,55 @@ export const AppHeader = ({
                   A Definir
                 </Button>
 
-                {/* CRM - show with lock if disabled */}
+                {/* CRM Dropdown */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span>
-                        <Button
-                          onClick={() => isCRMEnabled && navigate('/crm')}
-                          variant={currentPath === '/crm' ? "default" : "outline"}
-                          className={`gap-2 ${!isCRMEnabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          disabled={!isCRMEnabled}
-                        >
-                          {isCRMEnabled ? (
-                            <Users className="w-4 h-4" />
-                          ) : (
+                        {isCRMEnabled ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant={isInCRM ? "default" : "outline"} className="gap-2">
+                                <Users className="w-4 h-4" />
+                                CRM
+                                <ChevronDown className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48">
+                              <DropdownMenuItem 
+                                onClick={() => navigate('/crm')} 
+                                className={`gap-2 cursor-pointer ${currentPath === '/crm' ? 'bg-muted' : ''}`}
+                              >
+                                <Route className="w-4 h-4" />
+                                Jornada do Cliente
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => navigate('/automations')} 
+                                className={`gap-2 cursor-pointer ${currentPath === '/automations' || currentPath.startsWith('/automations/') ? 'bg-muted' : ''}`}
+                              >
+                                <Workflow className="w-4 h-4" />
+                                Automações
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => navigate('/whatsapp')} 
+                                className={`gap-2 cursor-pointer ${currentPath === '/whatsapp' ? 'bg-muted' : ''}`}
+                              >
+                                <MessageCircle className="w-4 h-4" />
+                                Chat ao Vivo
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            className="gap-2 opacity-60 cursor-not-allowed"
+                            disabled
+                          >
                             <Lock className="w-4 h-4" />
-                          )}
-                          CRM
-                          {!isCRMEnabled && <Lock className="w-3 h-3" />}
-                        </Button>
+                            CRM
+                            <Lock className="w-3 h-3" />
+                          </Button>
+                        )}
                       </span>
                     </TooltipTrigger>
                     {!isCRMEnabled && (

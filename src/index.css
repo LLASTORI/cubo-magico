@@ -183,3 +183,47 @@
       linear-gradient(hsl(220 15% 20% / 0.5) 1px, transparent 1px);
   }
 }
+
+/* React Flow Custom Styles */
+.react-flow__node {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.react-flow__node.selected {
+  z-index: 10 !important;
+}
+
+.react-flow__handle {
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.3);
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.react-flow__connection-line {
+  stroke: hsl(var(--primary));
+  stroke-width: 2px;
+}
+
+.react-flow__controls {
+  box-shadow: var(--shadow-card);
+}
+
+.react-flow__controls-button {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.react-flow__controls-button:hover {
+  background: hsl(var(--accent));
+}
+
+.react-flow__minimap {
+  box-shadow: var(--shadow-card);
+}

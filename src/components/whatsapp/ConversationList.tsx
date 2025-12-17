@@ -3,7 +3,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, MessageCircle, Clock, CheckCheck, Archive } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Search, MessageCircle, Clock, CheckCheck, Archive, User, Users, UserX } from 'lucide-react';
 import { WhatsAppConversation } from '@/hooks/useWhatsAppConversations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,16 +22,19 @@ interface ConversationListProps {
   selectedId: string | null;
   onSelect: (conversation: WhatsAppConversation) => void;
   isLoading?: boolean;
+  currentAgentId?: string | null;
 }
 
 export function ConversationList({ 
   conversations, 
   selectedId, 
   onSelect,
-  isLoading 
+  isLoading,
+  currentAgentId
 }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<string>('all');
 
   const filteredConversations = conversations.filter(conv => {
     const matchesSearch = !search || 
@@ -35,7 +45,15 @@ export function ConversationList({
 
     const matchesStatus = statusFilter === 'all' || conv.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    // Assignment filter
+    let matchesAssignment = true;
+    if (assignmentFilter === 'mine' && currentAgentId) {
+      matchesAssignment = conv.assigned_to === currentAgentId;
+    } else if (assignmentFilter === 'unassigned') {
+      matchesAssignment = !conv.assigned_to;
+    }
+
+    return matchesSearch && matchesStatus && matchesAssignment;
   });
 
   const getStatusIcon = (status: string) => {
@@ -90,6 +108,33 @@ export function ConversationList({
             <TabsTrigger value="closed" className="flex-1 text-xs">Fechadas</TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Assignment filter */}
+        <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="Filtrar por atribuição" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Todos
+              </div>
+            </SelectItem>
+            <SelectItem value="mine">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Meus chats
+              </div>
+            </SelectItem>
+            <SelectItem value="unassigned">
+              <div className="flex items-center gap-2">
+                <UserX className="h-4 w-4" />
+                Não atribuídos
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Conversation list */}

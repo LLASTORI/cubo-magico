@@ -174,12 +174,16 @@ async function handleKeywordTrigger(
         .eq('id', contactId)
         .single();
 
-      // Get conversation data
+      // Get conversation data with instance name
       const { data: conversation } = await supabase
         .from('whatsapp_conversations')
-        .select('*, whatsapp_numbers(instance_name:whatsapp_instances(instance_name))')
+        .select('*, whatsapp_numbers(*, whatsapp_instances(instance_name))')
         .eq('id', conversationId)
         .single();
+
+      // Extract instance name from the nested relationship
+      const instanceName = conversation?.whatsapp_numbers?.whatsapp_instances?.[0]?.instance_name;
+      console.log('[Automation Engine] Conversation instance_name:', instanceName, 'remote_jid:', conversation?.remote_jid);
 
       // Start execution
       await startFlowExecution(supabase, flow, {
@@ -188,7 +192,7 @@ async function handleKeywordTrigger(
         message,
         variables: {
           whatsapp_number_id: whatsappNumberId,
-          instance_name: conversation?.whatsapp_numbers?.instance_name?.instance_name,
+          instance_name: instanceName,
         },
       });
 
@@ -693,20 +697,23 @@ async function resumeExecution(supabase: any, execution: any) {
 
   // Get conversation if exists
   let conversation = null;
+  let instanceName = null;
   if (execution.conversation_id) {
     const { data: conv } = await supabase
       .from('whatsapp_conversations')
-      .select('*, whatsapp_numbers(instance_name:whatsapp_instances(instance_name))')
+      .select('*, whatsapp_numbers(*, whatsapp_instances(instance_name))')
       .eq('id', execution.conversation_id)
       .single();
     conversation = conv;
+    instanceName = conv?.whatsapp_numbers?.whatsapp_instances?.[0]?.instance_name;
+    console.log('[Automation Engine] Resume - instance_name:', instanceName);
   }
 
   const context: ExecutionContext = {
     contact: contact || { id: execution.contact_id },
     conversation,
     variables: {
-      instance_name: conversation?.whatsapp_numbers?.instance_name?.instance_name,
+      instance_name: instanceName,
     },
   };
 

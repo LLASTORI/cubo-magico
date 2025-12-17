@@ -103,7 +103,6 @@ serve(async (req) => {
         };
 
         if (webhookUrl) {
-          // Keep the same format used by /webhook/set for better compatibility
           createBody.webhook = {
             enabled: true,
             url: webhookUrl,
@@ -126,13 +125,77 @@ serve(async (req) => {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Evolution API error:', errorText);
+          
+          // Check if instance already exists - try to sync instead
+          if (response.status === 403 && errorText.includes('already in use')) {
+            console.log('Instance already exists, attempting to sync...');
+            
+            // Check instance status
+            const statusResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, {
+              method: 'GET',
+              headers: { 'apikey': EVOLUTION_API_KEY },
+            });
+            
+            let instanceStatus = 'disconnected';
+            let qrCode = null;
+            
+            if (statusResponse.ok) {
+              const statusResult = await statusResponse.json();
+              const state = statusResult.instance?.state || statusResult.state;
+              instanceStatus = (state === 'open' || state === 'connected') ? 'connected' : 'disconnected';
+            }
+            
+            // If not connected, get QR code
+            if (instanceStatus !== 'connected') {
+              const qrResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+                method: 'GET',
+                headers: { 'apikey': EVOLUTION_API_KEY },
+              });
+              
+              if (qrResponse.ok) {
+                const qrResult = await qrResponse.json();
+                qrCode = qrResult.base64 || qrResult.qrcode?.base64 || null;
+                instanceStatus = 'qr_pending';
+              }
+            }
+            
+            // Configure webhook
+            try {
+              await setWebhookForInstance(instanceName);
+            } catch (e) {
+              console.error('Webhook configuration failed (non-blocking):', e);
+            }
+            
+            // Save to database
+            const { error: dbError } = await supabaseClient
+              .from('whatsapp_instances')
+              .upsert({
+                whatsapp_number_id: params.whatsappNumberId,
+                instance_name: instanceName,
+                api_url: EVOLUTION_API_URL,
+                status: instanceStatus,
+                qr_code: qrCode,
+                qr_expires_at: qrCode ? new Date(Date.now() + 60000).toISOString() : null,
+              }, {
+                onConflict: 'whatsapp_number_id',
+              });
+            
+            if (dbError) {
+              console.error('Database error on sync:', dbError);
+            }
+            
+            result = { synced: true, status: instanceStatus, qrcode: qrCode ? { base64: qrCode } : null };
+            console.log('Instance synced from existing:', result);
+            break;
+          }
+          
           throw new Error(`Erro ao criar instância: ${response.status}`);
         }
 
         result = await response.json();
         console.log('Instance created:', result);
 
-        // Best-effort: ensure webhook is configured for this instance (critical for inbound messages)
+        // Best-effort: ensure webhook is configured
         try {
           await setWebhookForInstance(instanceName);
         } catch (e) {

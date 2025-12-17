@@ -8,6 +8,7 @@ import { HttpRequestNode } from './HttpRequestNode';
 import { SplitNode } from './SplitNode';
 import { WaitReplyNode } from './WaitReplyNode';
 import { TagNode } from './TagNode';
+import { MenuNode } from './MenuNode';
 
 export const nodeTypes = {
   start: StartNode,
@@ -20,6 +21,7 @@ export const nodeTypes = {
   split: SplitNode,
   wait_reply: WaitReplyNode,
   tag: TagNode,
+  menu: MenuNode,
 };
 
 export { 
@@ -33,4 +35,5 @@ export {
   SplitNode,
   WaitReplyNode,
   TagNode,
+  MenuNode,
 };

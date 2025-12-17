@@ -19,7 +19,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle, Users } from 'lucide-react';
+import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle, Users, ListOrdered, Plus, X } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { useProjectMembers } from '@/hooks/useProjectMembers';
@@ -44,6 +44,7 @@ const nodeIcons: Record<string, React.ReactNode> = {
   split: <GitFork className="h-5 w-5" />,
   wait_reply: <MessageCircle className="h-5 w-5" />,
   tag: <Tag className="h-5 w-5" />,
+  menu: <ListOrdered className="h-5 w-5" />,
 };
 
 const nodeLabels: Record<string, string> = {
@@ -57,6 +58,7 @@ const nodeLabels: Record<string, string> = {
   split: 'Split Test',
   wait_reply: 'Aguardar Resposta',
   tag: 'Tag Rápida',
+  menu: 'Menu de Escolhas',
 };
 
 export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: NodeConfigPanelProps) {
@@ -134,6 +136,11 @@ export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: 
           {/* Tag Node */}
           {nodeType === 'tag' && (
             <TagNodeConfig config={config} setConfig={setConfig} />
+          )}
+
+          {/* Menu Node */}
+          {nodeType === 'menu' && (
+            <MenuNodeConfig config={config} setConfig={setConfig} />
           )}
 
           {/* Start Node */}
@@ -896,6 +903,163 @@ function TagNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any)
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Menu Node Config
+function MenuNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const [optionInput, setOptionInput] = useState('');
+
+  const contactVariables = [
+    { key: '{{nome}}', label: 'Nome' },
+    { key: '{{email}}', label: 'Email' },
+    { key: '{{telefone}}', label: 'Telefone' },
+  ];
+
+  const options = config.options || [];
+
+  const handleAddOption = () => {
+    if (optionInput.trim()) {
+      const newOptions = [...options, { text: optionInput.trim(), value: String(options.length + 1) }];
+      setConfig({ ...config, options: newOptions });
+      setOptionInput('');
+    }
+  };
+
+  const handleRemoveOption = (index: number) => {
+    const newOptions = options.filter((_: any, i: number) => i !== index);
+    // Reindex values
+    const reindexed = newOptions.map((opt: any, i: number) => ({ ...opt, value: String(i + 1) }));
+    setConfig({ ...config, options: reindexed });
+  };
+
+  const handleUpdateOptionText = (index: number, text: string) => {
+    const newOptions = [...options];
+    newOptions[index] = { ...newOptions[index], text };
+    setConfig({ ...config, options: newOptions });
+  };
+
+  const insertVariable = (variable: string) => {
+    const currentValue = config.message || '';
+    setConfig({ ...config, message: currentValue + ' ' + variable });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-800">
+        <p className="text-sm text-teal-800 dark:text-teal-200">
+          O cliente receberá uma mensagem com opções numeradas e poderá responder com o número da escolha.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Mensagem do menu</Label>
+        <Textarea
+          className="min-h-[100px] resize-none"
+          placeholder="Ex: Olá! Como posso te ajudar hoje? Escolha uma opção abaixo:"
+          value={config.message || ''}
+          onChange={(e) => setConfig({ ...config, message: e.target.value })}
+        />
+        <div className="flex flex-wrap gap-1">
+          {contactVariables.map((v) => (
+            <code
+              key={v.key}
+              onClick={() => insertVariable(v.key)}
+              className="px-2 py-1 bg-primary/10 text-primary text-xs rounded cursor-pointer hover:bg-primary/20"
+            >
+              {v.key}
+            </code>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Opções de escolha (máx. 6)</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Ex: Já sou aluno(a)"
+            value={optionInput}
+            onChange={(e) => setOptionInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddOption()}
+            disabled={options.length >= 6}
+          />
+          <Button 
+            type="button" 
+            onClick={handleAddOption}
+            disabled={options.length >= 6 || !optionInput.trim()}
+            size="icon"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        {options.length > 0 && (
+          <div className="space-y-2 mt-3">
+            {options.map((opt: { text: string; value: string }, index: number) => (
+              <div key={index} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                  {index + 1}
+                </div>
+                <Input
+                  className="flex-1"
+                  value={opt.text}
+                  onChange={(e) => handleUpdateOptionText(index, e.target.value)}
+                />
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => handleRemoveOption(index)}
+                >
+                  <X className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {options.length === 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Adicione pelo menos 2 opções para criar o menu
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (opcional)</Label>
+        <div className="flex gap-2 items-center">
+          <Input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={config.timeout_minutes || ''}
+            onChange={(e) => setConfig({ ...config, timeout_minutes: parseInt(e.target.value) || 0 })}
+            className="w-24"
+          />
+          <span className="text-sm text-muted-foreground">minutos</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Se o cliente não responder dentro do tempo, seguirá pela saída de timeout (lado direito). Deixe 0 para esperar indefinidamente.
+        </p>
+      </div>
+
+      {/* Preview */}
+      {config.message && options.length > 0 && (
+        <div className="p-3 bg-muted rounded-lg space-y-2">
+          <p className="text-xs font-medium">Prévia da mensagem:</p>
+          <div className="text-sm whitespace-pre-wrap">
+            {config.message}
+            {'\n\n'}
+            {options.map((opt: { text: string; value: string }, index: number) => (
+              <span key={index}>
+                {index + 1}️⃣ {opt.text}
+                {'\n'}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   Globe,
   GitFork,
   MessageCircle,
+  ListOrdered,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,6 +61,14 @@ const nodeDefinitions: NodeDefinition[] = [
     description: 'Tags, etapas, etc.',
     icon: <Tag className="h-5 w-5" />,
     color: 'bg-orange-500',
+    category: 'basic',
+  },
+  {
+    type: 'menu',
+    label: 'Menu de Escolhas',
+    description: 'Opções para o cliente',
+    icon: <ListOrdered className="h-5 w-5" />,
+    color: 'bg-teal-500',
     category: 'basic',
   },
   // Advanced Nodes

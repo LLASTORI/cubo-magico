@@ -28,7 +28,8 @@ import {
   Users,
   Wifi,
   WifiOff,
-  Loader2
+  Loader2,
+  Shield
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
@@ -62,9 +63,10 @@ export default function WhatsAppLiveChat() {
   const { user } = useAuth();
   const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false);
 
-  // Get current user's agent ID
+  // Get current user's agent info
   const currentAgent = user ? getCurrentAgentByUserId(user.id) : null;
   const currentAgentId = currentAgent?.id || null;
+  const isSupervisor = currentAgent?.is_supervisor || false;
 
   // Get the connected instance name - fallback to active number if no instance record
   const connectedNumber = numbers?.find(n => n.instance?.status === 'connected') 
@@ -206,6 +208,12 @@ export default function WhatsAppLiveChat() {
             
             {/* Status badges */}
             <div className="flex items-center gap-2">
+              {isSupervisor && (
+                <Badge variant="outline" className="gap-1 text-primary border-primary">
+                  <Shield className="h-3 w-3" />
+                  Supervisor
+                </Badge>
+              )}
               <Badge variant="default" className="gap-1">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
                 {openConversations} abertas
@@ -261,6 +269,7 @@ export default function WhatsAppLiveChat() {
             onSelect={handleSelectConversation}
             isLoading={isLoading}
             currentAgentId={currentAgentId}
+            isSupervisor={isSupervisor}
           />
         </div>
 

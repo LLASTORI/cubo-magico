@@ -23,6 +23,7 @@ interface ConversationListProps {
   onSelect: (conversation: WhatsAppConversation) => void;
   isLoading?: boolean;
   currentAgentId?: string | null;
+  isSupervisor?: boolean;
 }
 
 export function ConversationList({ 
@@ -30,7 +31,8 @@ export function ConversationList({
   selectedId, 
   onSelect,
   isLoading,
-  currentAgentId
+  currentAgentId,
+  isSupervisor = false
 }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');

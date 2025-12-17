@@ -118,6 +118,13 @@ async function handleKeywordTrigger(
   
   const messageLower = message.toLowerCase().trim();
 
+  // First, check if there's an active menu waiting for this contact
+  const menuResult = await handleMenuReply(supabase, projectId, contactId, conversationId, messageLower, whatsappNumberId);
+  if (menuResult.handled) {
+    console.log('[Automation Engine] Message handled by menu reply');
+    return { triggered: 1, type: 'menu_reply' };
+  }
+
   // Find active flows with keyword trigger for this project
   const { data: flows, error: flowsError } = await supabase
     .from('automation_flows')
@@ -203,7 +210,148 @@ async function handleKeywordTrigger(
   return { triggered: triggeredCount };
 }
 
-// Handle new contact trigger
+// Handle menu reply - check if the message is a response to a pending menu
+async function handleMenuReply(
+  supabase: any,
+  projectId: string,
+  contactId: string,
+  conversationId: string,
+  message: string,
+  whatsappNumberId: string
+): Promise<{ handled: boolean }> {
+  // Look for active executions waiting for menu reply for this contact
+  const { data: executions, error } = await supabase
+    .from('automation_executions')
+    .select('*, automation_flow_nodes(*)')
+    .eq('contact_id', contactId)
+    .eq('status', 'waiting_menu')
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error || !executions || executions.length === 0) {
+    return { handled: false };
+  }
+
+  const execution = executions[0];
+  const node = execution.automation_flow_nodes;
+  
+  if (!node || !node.config || !node.config.options) {
+    return { handled: false };
+  }
+
+  const options = node.config.options as { text: string; value: string }[];
+  
+  // Try to match the user's reply to an option
+  // Accept both the number and the exact text
+  const messageClean = message.trim();
+  let matchedIndex = -1;
+
+  // Check if it's a number response (1, 2, 3, etc.)
+  const numberMatch = messageClean.match(/^(\d+)$/);
+  if (numberMatch) {
+    const num = parseInt(numberMatch[1], 10);
+    if (num >= 1 && num <= options.length) {
+      matchedIndex = num - 1;
+    }
+  }
+
+  // If not a number, try to match exact text
+  if (matchedIndex === -1) {
+    matchedIndex = options.findIndex(
+      (opt) => opt.text.toLowerCase().trim() === messageClean.toLowerCase()
+    );
+  }
+
+  if (matchedIndex === -1) {
+    // No match - could send "invalid option" message but for now just return
+    console.log(`[Automation Engine] Menu reply "${message}" did not match any option`);
+    return { handled: false };
+  }
+
+  console.log(`[Automation Engine] Menu reply matched option ${matchedIndex + 1}: ${options[matchedIndex].text}`);
+
+  // Get flow data
+  const { data: nodes } = await supabase
+    .from('automation_flow_nodes')
+    .select('*')
+    .eq('flow_id', execution.flow_id);
+
+  const { data: edges } = await supabase
+    .from('automation_flow_edges')
+    .select('*')
+    .eq('flow_id', execution.flow_id);
+
+  // Find the edge for this option
+  const optionHandle = `option-${matchedIndex}`;
+  const nextEdge = edges?.find(
+    (e: FlowEdge) => e.source_node_id === node.id && e.source_handle === optionHandle
+  );
+
+  if (!nextEdge) {
+    console.log(`[Automation Engine] No edge found for handle: ${optionHandle}`);
+    await completeExecution(supabase, execution.id, 'completed', 'Menu option has no connected node');
+    return { handled: true };
+  }
+
+  const nextNode = nodes?.find((n: FlowNode) => n.id === nextEdge.target_node_id);
+  
+  if (!nextNode) {
+    await completeExecution(supabase, execution.id, 'completed', 'Next node not found');
+    return { handled: true };
+  }
+
+  // Get contact and conversation data
+  const { data: contact } = await supabase
+    .from('crm_contacts')
+    .select('*')
+    .eq('id', contactId)
+    .single();
+
+  let conversation = null;
+  let instanceName = null;
+  if (conversationId) {
+    const { data: conv } = await supabase
+      .from('whatsapp_conversations')
+      .select('*, whatsapp_numbers(*, whatsapp_instances(instance_name))')
+      .eq('id', conversationId)
+      .single();
+    conversation = conv;
+    instanceName = conv?.whatsapp_numbers?.whatsapp_instances?.[0]?.instance_name;
+  }
+
+  const context: ExecutionContext = {
+    contact: contact || { id: contactId },
+    conversation,
+    message,
+    variables: {
+      menu_choice: options[matchedIndex].text,
+      menu_choice_number: matchedIndex + 1,
+      instance_name: instanceName,
+    },
+  };
+
+  // Update execution to running
+  await supabase
+    .from('automation_executions')
+    .update({
+      status: 'running',
+      next_execution_at: null,
+      execution_log: [...(execution.execution_log || []), {
+        timestamp: new Date().toISOString(),
+        event: 'menu_reply_received',
+        option_index: matchedIndex,
+        option_text: options[matchedIndex].text,
+        user_message: message,
+      }],
+    })
+    .eq('id', execution.id);
+
+  // Continue execution from next node
+  await executeNode(supabase, execution, nextNode, nodes, edges, context);
+
+  return { handled: true };
+}
+
 async function handleNewContactTrigger(supabase: any, projectId: string, contactId: string) {
   console.log('[Automation Engine] Checking new_contact triggers for project:', projectId);
 
@@ -401,6 +549,10 @@ async function executeNode(
         await executeActionNode(supabase, node, context);
         break;
 
+      case 'menu':
+        await executeMenuNode(supabase, execution, node, allNodes, allEdges, context);
+        return; // Menu node waits for user reply
+
       default:
         console.log(`[Automation Engine] Unknown node type: ${node.node_type}`);
     }
@@ -505,7 +657,58 @@ async function executeDelayNode(
     .eq('id', execution.id);
 }
 
-// Execute condition node
+// Execute menu node - sends options and waits for user choice
+async function executeMenuNode(
+  supabase: any,
+  execution: any,
+  node: FlowNode,
+  allNodes: FlowNode[],
+  allEdges: FlowEdge[],
+  context: ExecutionContext
+) {
+  const { message, options, timeout_minutes } = node.config;
+
+  if (!message || !options || options.length < 2) {
+    console.log('[Automation Engine] Menu node not properly configured');
+    await completeExecution(supabase, execution.id, 'failed', 'Menu node not configured');
+    return;
+  }
+
+  // Build menu message with numbered options
+  const optionTexts = options.map((opt: { text: string; value: string }, index: number) => {
+    return `${index + 1}️⃣ ${opt.text}`;
+  });
+
+  const fullMessage = `${replaceVariables(message, context)}\n\n${optionTexts.join('\n')}`;
+
+  // Send the menu message
+  await sendWhatsAppMessage(supabase, context, fullMessage);
+  
+  console.log(`[Automation Engine] Menu sent with ${options.length} options`);
+
+  // Calculate timeout if set
+  const nextExecutionAt = timeout_minutes && timeout_minutes > 0
+    ? new Date(Date.now() + timeout_minutes * 60 * 1000)
+    : null;
+
+  // Update execution to waiting for menu reply
+  await supabase
+    .from('automation_executions')
+    .update({
+      status: 'waiting_menu',
+      current_node_id: node.id,
+      next_execution_at: nextExecutionAt?.toISOString() || null,
+      execution_log: [...(execution.execution_log || []), {
+        timestamp: new Date().toISOString(),
+        event: 'menu_sent',
+        node_id: node.id,
+        options_count: options.length,
+        timeout_minutes: timeout_minutes || null,
+      }],
+    })
+    .eq('id', execution.id);
+}
+
 async function executeConditionNode(node: FlowNode, context: ExecutionContext): Promise<string> {
   const { field, operator, value } = node.config;
   
@@ -630,7 +833,7 @@ async function processDelayedExecutions(supabase: any) {
   const { data: executions, error } = await supabase
     .from('automation_executions')
     .select('*, automation_flows(*)')
-    .eq('status', 'waiting')
+    .in('status', ['waiting', 'waiting_menu'])
     .lte('next_execution_at', new Date().toISOString())
     .limit(50);
 

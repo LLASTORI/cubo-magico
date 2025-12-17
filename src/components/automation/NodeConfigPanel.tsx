@@ -651,29 +651,46 @@ function MediaNodeConfig({ config, setConfig }: { config: any; setConfig: (c: an
                 {mediaList.map((media) => (
                   <div
                     key={media.id}
-                    onClick={() => handleSelectFromLibrary(media)}
                     className={`
-                      p-2 border rounded-lg cursor-pointer transition-all
+                      group relative p-2 border rounded-lg transition-all
                       ${config.media_url === media.public_url 
                         ? 'border-primary bg-primary/5' 
                         : 'hover:border-primary/50'}
                     `}
                   >
-                    {getMediaTypeFromMime(media.mime_type) === 'image' ? (
-                      <img 
-                        src={media.public_url} 
-                        alt={media.file_name}
-                        className="w-full h-16 object-cover rounded mb-1"
-                      />
-                    ) : (
-                      <div className="w-full h-16 bg-muted rounded mb-1 flex items-center justify-center">
-                        {getMediaIcon(media.mime_type)}
-                      </div>
-                    )}
-                    <p className="text-xs truncate">{media.file_name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {formatFileSize(media.file_size)}
-                    </p>
+                    <div 
+                      onClick={() => handleSelectFromLibrary(media)}
+                      className="cursor-pointer"
+                    >
+                      {getMediaTypeFromMime(media.mime_type) === 'image' ? (
+                        <img 
+                          src={media.public_url} 
+                          alt={media.file_name}
+                          className="w-full h-16 object-cover rounded mb-1"
+                        />
+                      ) : (
+                        <div className="w-full h-16 bg-muted rounded mb-1 flex items-center justify-center">
+                          {getMediaIcon(media.mime_type)}
+                        </div>
+                      )}
+                      <p className="text-xs truncate">{media.file_name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatFileSize(media.file_size)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Excluir esta mídia?')) {
+                          deleteMedia.mutate(media);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 ))}
               </div>

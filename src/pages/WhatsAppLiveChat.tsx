@@ -65,7 +65,8 @@ export default function WhatsAppLiveChat() {
 
   // Get current user's agent info
   const currentAgent = user ? getCurrentAgentByUserId(user.id) : null;
-  const currentAgentId = currentAgent?.id || null;
+  // Use user_id for filtering since assigned_to stores user_id (not agent.id)
+  const currentAgentId = currentAgent?.user_id || null;
   const isSupervisor = currentAgent?.is_supervisor || false;
 
   // Auto-set agent to online when entering the chat page

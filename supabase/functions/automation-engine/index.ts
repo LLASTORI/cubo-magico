@@ -520,7 +520,7 @@ async function executeConditionNode(node: FlowNode, context: ExecutionContext): 
 
 // Execute action node
 async function executeActionNode(supabase: any, node: FlowNode, context: ExecutionContext) {
-  const { action_type, action_value } = node.config;
+  const { action_type, action_value, notify_members } = node.config;
   
   if (!action_type) {
     console.log('[Automation Engine] Action node has no type');
@@ -571,23 +571,45 @@ async function executeActionNode(supabase: any, node: FlowNode, context: Executi
     }
 
     case 'notify_team': {
-      // Create notification for project members
-      const { data: members } = await supabase
-        .from('project_members')
-        .select('user_id')
-        .eq('project_id', context.contact.project_id);
+      // Replace variables in notification message
+      const processedMessage = action_value 
+        ? replaceVariables(action_value, context)
+        : `Automação acionada para ${context.contact.name || context.contact.email}`;
 
-      if (members && members.length > 0) {
-        const notifications = members.map((m: { user_id: string }) => ({
-          user_id: m.user_id,
+      let memberIds: string[] = [];
+      
+      // If specific members are selected, use them; otherwise notify all project members
+      if (notify_members && Array.isArray(notify_members) && notify_members.length > 0) {
+        memberIds = notify_members;
+        console.log(`[Automation Engine] Notifying ${memberIds.length} specific members`);
+      } else {
+        // Fallback to all project members
+        const { data: members } = await supabase
+          .from('project_members')
+          .select('user_id')
+          .eq('project_id', context.contact.project_id);
+        
+        if (members && members.length > 0) {
+          memberIds = members.map((m: { user_id: string }) => m.user_id);
+        }
+        console.log(`[Automation Engine] Notifying all ${memberIds.length} team members`);
+      }
+
+      if (memberIds.length > 0) {
+        const notifications = memberIds.map((userId: string) => ({
+          user_id: userId,
           title: 'Notificação de Automação',
-          message: action_value || `Automação acionada para ${context.contact.name || context.contact.email}`,
+          message: processedMessage,
           type: 'automation',
-          metadata: { contact_id: contactId },
+          metadata: { 
+            contact_id: contactId,
+            contact_name: context.contact.name,
+            contact_email: context.contact.email,
+          },
         }));
 
         await supabase.from('notifications').insert(notifications);
-        console.log(`[Automation Engine] Notified ${members.length} team members`);
+        console.log(`[Automation Engine] Notified ${memberIds.length} members`);
       }
       break;
     }
@@ -901,12 +923,28 @@ async function sendWhatsAppMedia(
 function replaceVariables(text: string, context: ExecutionContext): string {
   let result = text;
   
+  const contact = context.contact;
+  
   const replacements: Record<string, string> = {
-    '{{nome}}': context.contact.name || '',
-    '{{email}}': context.contact.email || '',
-    '{{telefone}}': context.contact.phone || '',
-    '{{cidade}}': context.contact.city || '',
-    '{{estado}}': context.contact.state || '',
+    '{{nome}}': contact.name || '',
+    '{{email}}': contact.email || '',
+    '{{telefone}}': contact.phone || '',
+    '{{cidade}}': contact.city || '',
+    '{{estado}}': contact.state || '',
+    '{{pais}}': contact.country || '',
+    '{{cep}}': contact.cep || '',
+    '{{documento}}': contact.document || '',
+    '{{instagram}}': contact.instagram || '',
+    '{{status}}': contact.status || '',
+    '{{total_compras}}': String(contact.total_purchases || 0),
+    '{{receita_total}}': contact.total_revenue ? `R$ ${Number(contact.total_revenue).toFixed(2)}` : 'R$ 0,00',
+    '{{tags}}': Array.isArray(contact.tags) ? contact.tags.join(', ') : '',
+    '{{utm_source}}': contact.first_utm_source || '',
+    '{{utm_campaign}}': contact.first_utm_campaign || '',
+    '{{utm_medium}}': contact.first_utm_medium || '',
+    '{{primeira_compra}}': contact.first_purchase_at ? new Date(contact.first_purchase_at).toLocaleDateString('pt-BR') : '',
+    '{{ultima_compra}}': contact.last_purchase_at ? new Date(contact.last_purchase_at).toLocaleDateString('pt-BR') : '',
+    '{{notas}}': contact.notes || '',
     '{{mensagem}}': context.message || '',
   };
 

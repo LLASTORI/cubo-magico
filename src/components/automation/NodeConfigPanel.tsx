@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -18,9 +19,12 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle } from 'lucide-react';
+import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle, Users } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { useProjectMembers } from '@/hooks/useProjectMembers';
+import { useProject } from '@/contexts/ProjectContext';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface NodeConfigPanelProps {
   node: Node | null;
@@ -161,6 +165,29 @@ export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: 
 
 // Message Config
 function MessageNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const contactVariables = [
+    { key: '{{nome}}', label: 'Nome' },
+    { key: '{{email}}', label: 'Email' },
+    { key: '{{telefone}}', label: 'Telefone' },
+    { key: '{{cidade}}', label: 'Cidade' },
+    { key: '{{estado}}', label: 'Estado' },
+    { key: '{{pais}}', label: 'País' },
+    { key: '{{documento}}', label: 'Documento' },
+    { key: '{{instagram}}', label: 'Instagram' },
+    { key: '{{status}}', label: 'Status' },
+    { key: '{{total_compras}}', label: 'Total Compras' },
+    { key: '{{receita_total}}', label: 'Receita Total' },
+    { key: '{{tags}}', label: 'Tags' },
+    { key: '{{utm_source}}', label: 'UTM Source' },
+    { key: '{{utm_campaign}}', label: 'UTM Campaign' },
+    { key: '{{notas}}', label: 'Notas' },
+  ];
+
+  const insertVariable = (variable: string) => {
+    const currentValue = config.content || '';
+    setConfig({ ...config, content: currentValue + ' ' + variable });
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -172,19 +199,23 @@ function MessageNodeConfig({ config, setConfig }: { config: any; setConfig: (c: 
           onChange={(e) => setConfig({ ...config, content: e.target.value })}
         />
       </div>
-      <div className="p-3 bg-muted/50 rounded-lg">
-        <p className="text-xs font-medium mb-2">Variáveis disponíveis:</p>
-        <div className="flex flex-wrap gap-1.5">
-          {['{{nome}}', '{{email}}', '{{telefone}}', '{{cidade}}'].map((v) => (
-            <code
-              key={v}
-              onClick={() => setConfig({ ...config, content: (config.content || '') + ' ' + v })}
-              className="px-2 py-1 bg-primary/10 text-primary text-xs rounded cursor-pointer hover:bg-primary/20"
-            >
-              {v}
-            </code>
-          ))}
-        </div>
+      <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+        <p className="text-xs font-medium">Variáveis do contato:</p>
+        <ScrollArea className="h-[80px]">
+          <div className="flex flex-wrap gap-1.5">
+            {contactVariables.map((v) => (
+              <code
+                key={v.key}
+                onClick={() => insertVariable(v.key)}
+                className="px-2 py-1 bg-primary/10 text-primary text-xs rounded cursor-pointer hover:bg-primary/20"
+                title={v.label}
+              >
+                {v.key}
+              </code>
+            ))}
+          </div>
+        </ScrollArea>
+        <p className="text-xs text-muted-foreground">Clique para inserir</p>
       </div>
     </div>
   );
@@ -307,11 +338,66 @@ function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c
 
 // Action Config
 function ActionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const { currentProject } = useProject();
+  const { members, loading: membersLoading } = useProjectMembers(currentProject?.id || null);
+  
+  // Contact field variables for templates
+  const contactVariables = [
+    { key: '{{nome}}', label: 'Nome' },
+    { key: '{{email}}', label: 'Email' },
+    { key: '{{telefone}}', label: 'Telefone' },
+    { key: '{{cidade}}', label: 'Cidade' },
+    { key: '{{estado}}', label: 'Estado' },
+    { key: '{{pais}}', label: 'País' },
+    { key: '{{cep}}', label: 'CEP' },
+    { key: '{{documento}}', label: 'Documento' },
+    { key: '{{instagram}}', label: 'Instagram' },
+    { key: '{{status}}', label: 'Status' },
+    { key: '{{total_compras}}', label: 'Total Compras' },
+    { key: '{{receita_total}}', label: 'Receita Total' },
+    { key: '{{tags}}', label: 'Tags' },
+    { key: '{{utm_source}}', label: 'UTM Source' },
+    { key: '{{utm_campaign}}', label: 'UTM Campaign' },
+    { key: '{{utm_medium}}', label: 'UTM Medium' },
+    { key: '{{primeira_compra}}', label: 'Data Primeira Compra' },
+    { key: '{{ultima_compra}}', label: 'Data Última Compra' },
+    { key: '{{notas}}', label: 'Notas' },
+  ];
+
+  const handleToggleMember = (memberId: string) => {
+    const currentMembers = config.notify_members || [];
+    if (currentMembers.includes(memberId)) {
+      setConfig({ 
+        ...config, 
+        notify_members: currentMembers.filter((id: string) => id !== memberId) 
+      });
+    } else {
+      setConfig({ 
+        ...config, 
+        notify_members: [...currentMembers, memberId] 
+      });
+    }
+  };
+
+  const handleSelectAllMembers = () => {
+    const allMemberIds = members.map(m => m.user_id);
+    setConfig({ ...config, notify_members: allMemberIds });
+  };
+
+  const handleClearMembers = () => {
+    setConfig({ ...config, notify_members: [] });
+  };
+
+  const insertVariable = (variable: string) => {
+    const currentValue = config.action_value || '';
+    setConfig({ ...config, action_value: currentValue + ' ' + variable });
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Tipo de ação</Label>
-        <Select value={config.action_type || ''} onValueChange={(v) => setConfig({ ...config, action_type: v })}>
+        <Select value={config.action_type || ''} onValueChange={(v) => setConfig({ ...config, action_type: v, notify_members: [], action_value: '' })}>
           <SelectTrigger>
             <SelectValue placeholder="Selecione a ação" />
           </SelectTrigger>
@@ -320,18 +406,111 @@ function ActionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: a
             <SelectItem value="remove_tag">Remover tag</SelectItem>
             <SelectItem value="change_stage">Mudar etapa do pipeline</SelectItem>
             <SelectItem value="change_recovery_stage">Mudar etapa de recuperação</SelectItem>
-            <SelectItem value="notify_team">Notificar equipe</SelectItem>
+            <SelectItem value="notify_team">Notificar membro(s)</SelectItem>
             <SelectItem value="update_contact">Atualizar campo do contato</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {config.action_type && (
+      {/* Notify Team - Member Selection */}
+      {config.action_type === 'notify_team' && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Selecionar membros
+              </Label>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={handleSelectAllMembers}>
+                  Todos
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={handleClearMembers}>
+                  Limpar
+                </Button>
+              </div>
+            </div>
+            
+            {membersLoading ? (
+              <p className="text-sm text-muted-foreground">Carregando membros...</p>
+            ) : members.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum membro encontrado</p>
+            ) : (
+              <ScrollArea className="h-[150px] border rounded-md p-2">
+                <div className="space-y-2">
+                  {members.map((member) => (
+                    <div 
+                      key={member.user_id} 
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleToggleMember(member.user_id)}
+                    >
+                      <Checkbox 
+                        checked={(config.notify_members || []).includes(member.user_id)}
+                        onCheckedChange={() => handleToggleMember(member.user_id)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {member.profile?.full_name || member.profile?.email || 'Usuário'}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {member.profile?.email}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {member.role === 'owner' ? 'Dono' : member.role === 'manager' ? 'Gerente' : 'Operador'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+            
+            {(config.notify_members || []).length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {(config.notify_members || []).length} membro(s) selecionado(s)
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Mensagem da notificação</Label>
+            <Textarea
+              className="min-h-[120px] resize-none"
+              placeholder="Digite a mensagem para notificar os membros selecionados..."
+              value={config.action_value || ''}
+              onChange={(e) => setConfig({ ...config, action_value: e.target.value })}
+            />
+          </div>
+
+          <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+            <p className="text-xs font-medium">Variáveis do contato:</p>
+            <ScrollArea className="h-[100px]">
+              <div className="flex flex-wrap gap-1.5">
+                {contactVariables.map((v) => (
+                  <code
+                    key={v.key}
+                    onClick={() => insertVariable(v.key)}
+                    className="px-2 py-1 bg-primary/10 text-primary text-xs rounded cursor-pointer hover:bg-primary/20"
+                    title={v.label}
+                  >
+                    {v.key}
+                  </code>
+                ))}
+              </div>
+            </ScrollArea>
+            <p className="text-xs text-muted-foreground mt-2">
+              Clique para inserir variáveis na mensagem
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Other action types */}
+      {config.action_type && config.action_type !== 'notify_team' && (
         <div className="space-y-2">
           <Label>
             {config.action_type?.includes('tag') ? 'Nome da tag' : 
-             config.action_type?.includes('stage') ? 'ID da etapa' : 
-             config.action_type === 'notify_team' ? 'Mensagem' : 'Valor'}
+             config.action_type?.includes('stage') ? 'ID da etapa' : 'Valor'}
           </Label>
           <Input
             placeholder={
@@ -441,10 +620,19 @@ function HttpRequestNodeConfig({ config, setConfig }: { config: any; setConfig: 
         />
       </div>
 
-      <div className="p-3 bg-muted/50 rounded-lg">
-        <p className="text-xs text-muted-foreground">
-          Use variáveis do contato: {'{{nome}}'}, {'{{email}}'}, {'{{telefone}}'}
-        </p>
+      <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+        <p className="text-xs font-medium">Variáveis do contato:</p>
+        <div className="flex flex-wrap gap-1.5">
+          {['{{nome}}', '{{email}}', '{{telefone}}', '{{cidade}}', '{{estado}}', '{{documento}}'].map((v) => (
+            <code
+              key={v}
+              onClick={() => setConfig({ ...config, body: (config.body || '') + ' ' + v })}
+              className="px-2 py-1 bg-primary/10 text-primary text-xs rounded cursor-pointer hover:bg-primary/20"
+            >
+              {v}
+            </code>
+          ))}
+        </div>
       </div>
     </div>
   );

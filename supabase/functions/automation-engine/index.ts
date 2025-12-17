@@ -1,0 +1,953 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface AutomationFlow {
+  id: string;
+  project_id: string;
+  name: string;
+  is_active: boolean;
+  trigger_type: string;
+  trigger_config: Record<string, any>;
+}
+
+interface FlowNode {
+  id: string;
+  flow_id: string;
+  node_type: string;
+  config: Record<string, any>;
+}
+
+interface FlowEdge {
+  id: string;
+  source_node_id: string;
+  target_node_id: string;
+  source_handle: string | null;
+}
+
+interface ExecutionContext {
+  contact: Record<string, any>;
+  conversation?: Record<string, any>;
+  message?: string;
+  variables: Record<string, any>;
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  try {
+    const { action, ...params } = await req.json();
+    console.log(`[Automation Engine] Action: ${action}`, JSON.stringify(params).substring(0, 200));
+
+    let result;
+
+    switch (action) {
+      case 'trigger_keyword': {
+        // Triggered when a keyword message is received
+        const { projectId, contactId, conversationId, message, whatsappNumberId } = params;
+        result = await handleKeywordTrigger(supabase, projectId, contactId, conversationId, message, whatsappNumberId);
+        break;
+      }
+
+      case 'trigger_new_contact': {
+        // Triggered when a new contact is created
+        const { projectId, contactId } = params;
+        result = await handleNewContactTrigger(supabase, projectId, contactId);
+        break;
+      }
+
+      case 'trigger_tag_added': {
+        // Triggered when a tag is added to a contact
+        const { projectId, contactId, tag } = params;
+        result = await handleTagAddedTrigger(supabase, projectId, contactId, tag);
+        break;
+      }
+
+      case 'process_delayed': {
+        // Process executions that have reached their delay time
+        result = await processDelayedExecutions(supabase);
+        break;
+      }
+
+      case 'execute_node': {
+        // Execute a specific node (for testing/manual execution)
+        const { executionId, nodeId } = params;
+        result = await executeNodeById(supabase, executionId, nodeId);
+        break;
+      }
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+
+    return new Response(JSON.stringify({ success: true, result }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Automation Engine] Error:', errorMessage);
+    
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+// Handle keyword trigger
+async function handleKeywordTrigger(
+  supabase: any,
+  projectId: string,
+  contactId: string,
+  conversationId: string,
+  message: string,
+  whatsappNumberId: string
+) {
+  console.log('[Automation Engine] Checking keyword triggers for project:', projectId);
+  
+  const messageLower = message.toLowerCase().trim();
+
+  // Find active flows with keyword trigger for this project
+  const { data: flows, error: flowsError } = await supabase
+    .from('automation_flows')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .eq('trigger_type', 'keyword');
+
+  if (flowsError) {
+    console.error('[Automation Engine] Error fetching flows:', flowsError);
+    throw flowsError;
+  }
+
+  if (!flows || flows.length === 0) {
+    console.log('[Automation Engine] No active keyword flows found');
+    return { triggered: 0 };
+  }
+
+  let triggeredCount = 0;
+
+  for (const flow of flows) {
+    const keywords: string[] = flow.trigger_config?.keywords || [];
+    const matchMode = flow.trigger_config?.match_mode || 'contains'; // exact, contains, starts_with
+
+    let matched = false;
+
+    for (const keyword of keywords) {
+      const keywordLower = keyword.toLowerCase().trim();
+      
+      switch (matchMode) {
+        case 'exact':
+          matched = messageLower === keywordLower;
+          break;
+        case 'starts_with':
+          matched = messageLower.startsWith(keywordLower);
+          break;
+        case 'contains':
+        default:
+          matched = messageLower.includes(keywordLower);
+          break;
+      }
+
+      if (matched) {
+        console.log(`[Automation Engine] Keyword "${keyword}" matched for flow "${flow.name}"`);
+        break;
+      }
+    }
+
+    if (matched) {
+      // Get contact data
+      const { data: contact } = await supabase
+        .from('crm_contacts')
+        .select('*')
+        .eq('id', contactId)
+        .single();
+
+      // Get conversation data
+      const { data: conversation } = await supabase
+        .from('whatsapp_conversations')
+        .select('*, whatsapp_numbers(instance_name:whatsapp_instances(instance_name))')
+        .eq('id', conversationId)
+        .single();
+
+      // Start execution
+      await startFlowExecution(supabase, flow, {
+        contact: contact || { id: contactId },
+        conversation: conversation || { id: conversationId },
+        message,
+        variables: {
+          whatsapp_number_id: whatsappNumberId,
+          instance_name: conversation?.whatsapp_numbers?.instance_name?.instance_name,
+        },
+      });
+
+      triggeredCount++;
+    }
+  }
+
+  return { triggered: triggeredCount };
+}
+
+// Handle new contact trigger
+async function handleNewContactTrigger(supabase: any, projectId: string, contactId: string) {
+  console.log('[Automation Engine] Checking new_contact triggers for project:', projectId);
+
+  const { data: flows } = await supabase
+    .from('automation_flows')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .eq('trigger_type', 'new_contact');
+
+  if (!flows || flows.length === 0) {
+    return { triggered: 0 };
+  }
+
+  const { data: contact } = await supabase
+    .from('crm_contacts')
+    .select('*')
+    .eq('id', contactId)
+    .single();
+
+  let triggeredCount = 0;
+
+  for (const flow of flows) {
+    await startFlowExecution(supabase, flow, {
+      contact: contact || { id: contactId },
+      variables: {},
+    });
+    triggeredCount++;
+  }
+
+  return { triggered: triggeredCount };
+}
+
+// Handle tag added trigger
+async function handleTagAddedTrigger(supabase: any, projectId: string, contactId: string, tag: string) {
+  console.log('[Automation Engine] Checking tag_added triggers for tag:', tag);
+
+  const { data: flows } = await supabase
+    .from('automation_flows')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .eq('trigger_type', 'tag_added');
+
+  if (!flows || flows.length === 0) {
+    return { triggered: 0 };
+  }
+
+  const { data: contact } = await supabase
+    .from('crm_contacts')
+    .select('*')
+    .eq('id', contactId)
+    .single();
+
+  let triggeredCount = 0;
+
+  for (const flow of flows) {
+    const triggerTags: string[] = flow.trigger_config?.tags || [];
+    
+    if (triggerTags.length === 0 || triggerTags.includes(tag)) {
+      await startFlowExecution(supabase, flow, {
+        contact: contact || { id: contactId },
+        variables: { triggered_tag: tag },
+      });
+      triggeredCount++;
+    }
+  }
+
+  return { triggered: triggeredCount };
+}
+
+// Start flow execution
+async function startFlowExecution(
+  supabase: any,
+  flow: AutomationFlow,
+  context: ExecutionContext
+) {
+  console.log(`[Automation Engine] Starting execution of flow: ${flow.name}`);
+
+  // Get start node
+  const { data: nodes } = await supabase
+    .from('automation_flow_nodes')
+    .select('*')
+    .eq('flow_id', flow.id);
+
+  const startNode = nodes?.find((n: FlowNode) => n.node_type === 'start');
+  
+  if (!startNode) {
+    console.error('[Automation Engine] No start node found for flow:', flow.id);
+    return null;
+  }
+
+  // Get edges
+  const { data: edges } = await supabase
+    .from('automation_flow_edges')
+    .select('*')
+    .eq('flow_id', flow.id);
+
+  // Create execution record
+  const { data: execution, error: execError } = await supabase
+    .from('automation_executions')
+    .insert({
+      flow_id: flow.id,
+      contact_id: context.contact.id,
+      conversation_id: context.conversation?.id,
+      status: 'running',
+      current_node_id: startNode.id,
+      execution_log: [{
+        timestamp: new Date().toISOString(),
+        event: 'started',
+        node_id: startNode.id,
+        context: {
+          contact_name: context.contact.name,
+          message: context.message,
+        },
+      }],
+    })
+    .select()
+    .single();
+
+  if (execError) {
+    console.error('[Automation Engine] Error creating execution:', execError);
+    throw execError;
+  }
+
+  console.log(`[Automation Engine] Created execution: ${execution.id}`);
+
+  // Find next node after start
+  const nextEdge = edges?.find((e: FlowEdge) => e.source_node_id === startNode.id);
+  
+  if (!nextEdge) {
+    await completeExecution(supabase, execution.id, 'completed', 'No nodes after start');
+    return execution;
+  }
+
+  const nextNode = nodes?.find((n: FlowNode) => n.id === nextEdge.target_node_id);
+  
+  if (!nextNode) {
+    await completeExecution(supabase, execution.id, 'completed', 'Next node not found');
+    return execution;
+  }
+
+  // Execute the next node
+  await executeNode(supabase, execution, nextNode, nodes, edges, context);
+
+  return execution;
+}
+
+// Execute a node
+async function executeNode(
+  supabase: any,
+  execution: any,
+  node: FlowNode,
+  allNodes: FlowNode[],
+  allEdges: FlowEdge[],
+  context: ExecutionContext
+) {
+  console.log(`[Automation Engine] Executing node: ${node.node_type} (${node.id})`);
+
+  // Update current node
+  await supabase
+    .from('automation_executions')
+    .update({
+      current_node_id: node.id,
+      execution_log: [...(execution.execution_log || []), {
+        timestamp: new Date().toISOString(),
+        event: 'executing',
+        node_id: node.id,
+        node_type: node.node_type,
+      }],
+    })
+    .eq('id', execution.id);
+
+  try {
+    let nextHandle: string | null = null;
+
+    switch (node.node_type) {
+      case 'message':
+        await executeMessageNode(supabase, node, context);
+        break;
+
+      case 'media':
+        await executeMediaNode(supabase, node, context);
+        break;
+
+      case 'delay':
+        await executeDelayNode(supabase, execution, node, allNodes, allEdges, context);
+        return; // Delay node schedules next execution
+
+      case 'condition':
+        nextHandle = await executeConditionNode(node, context);
+        break;
+
+      case 'action':
+        await executeActionNode(supabase, node, context);
+        break;
+
+      default:
+        console.log(`[Automation Engine] Unknown node type: ${node.node_type}`);
+    }
+
+    // Find and execute next node
+    const nextEdge = allEdges.find((e: FlowEdge) => 
+      e.source_node_id === node.id && 
+      (nextHandle === null || e.source_handle === nextHandle)
+    );
+
+    if (!nextEdge) {
+      await completeExecution(supabase, execution.id, 'completed', 'Flow completed successfully');
+      return;
+    }
+
+    const nextNode = allNodes.find((n: FlowNode) => n.id === nextEdge.target_node_id);
+    
+    if (!nextNode) {
+      await completeExecution(supabase, execution.id, 'completed', 'Next node not found');
+      return;
+    }
+
+    // Small delay between nodes to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Execute next node
+    await executeNode(supabase, execution, nextNode, allNodes, allEdges, context);
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Automation Engine] Node execution error:`, errorMessage);
+    
+    await completeExecution(supabase, execution.id, 'failed', errorMessage);
+  }
+}
+
+// Execute message node
+async function executeMessageNode(supabase: any, node: FlowNode, context: ExecutionContext) {
+  const content = node.config.content || '';
+  
+  if (!content) {
+    console.log('[Automation Engine] Message node has no content');
+    return;
+  }
+
+  // Replace variables
+  const processedContent = replaceVariables(content, context);
+  
+  // Send via Evolution API
+  await sendWhatsAppMessage(supabase, context, processedContent);
+  
+  console.log(`[Automation Engine] Message sent: ${processedContent.substring(0, 50)}...`);
+}
+
+// Execute media node
+async function executeMediaNode(supabase: any, node: FlowNode, context: ExecutionContext) {
+  const { media_type, media_url, caption } = node.config;
+  
+  if (!media_url) {
+    console.log('[Automation Engine] Media node has no URL');
+    return;
+  }
+
+  const processedCaption = caption ? replaceVariables(caption, context) : '';
+  
+  await sendWhatsAppMedia(supabase, context, media_type, media_url, processedCaption);
+  
+  console.log(`[Automation Engine] Media sent: ${media_type}`);
+}
+
+// Execute delay node
+async function executeDelayNode(
+  supabase: any,
+  execution: any,
+  node: FlowNode,
+  allNodes: FlowNode[],
+  allEdges: FlowEdge[],
+  context: ExecutionContext
+) {
+  const delayMinutes = node.config.delay_minutes || 1;
+  const nextExecutionAt = new Date(Date.now() + delayMinutes * 60 * 1000);
+
+  console.log(`[Automation Engine] Scheduling delay: ${delayMinutes} minutes, next at: ${nextExecutionAt.toISOString()}`);
+
+  // Find next node
+  const nextEdge = allEdges.find((e: FlowEdge) => e.source_node_id === node.id);
+  
+  // Update execution with scheduled time
+  await supabase
+    .from('automation_executions')
+    .update({
+      status: 'waiting',
+      next_execution_at: nextExecutionAt.toISOString(),
+      current_node_id: nextEdge?.target_node_id || null,
+      execution_log: [...(execution.execution_log || []), {
+        timestamp: new Date().toISOString(),
+        event: 'delay_scheduled',
+        delay_minutes: delayMinutes,
+        resume_at: nextExecutionAt.toISOString(),
+      }],
+    })
+    .eq('id', execution.id);
+}
+
+// Execute condition node
+async function executeConditionNode(node: FlowNode, context: ExecutionContext): Promise<string> {
+  const { field, operator, value } = node.config;
+  
+  if (!field) {
+    console.log('[Automation Engine] Condition node has no field');
+    return 'no';
+  }
+
+  const contactValue = getNestedValue(context.contact, field);
+  const result = evaluateCondition(contactValue, operator, value);
+
+  console.log(`[Automation Engine] Condition: ${field} ${operator} ${value} = ${result} (actual: ${contactValue})`);
+
+  return result ? 'yes' : 'no';
+}
+
+// Execute action node
+async function executeActionNode(supabase: any, node: FlowNode, context: ExecutionContext) {
+  const { action_type, action_value } = node.config;
+  
+  if (!action_type) {
+    console.log('[Automation Engine] Action node has no type');
+    return;
+  }
+
+  const contactId = context.contact.id;
+
+  switch (action_type) {
+    case 'add_tag': {
+      const currentTags = context.contact.tags || [];
+      if (!currentTags.includes(action_value)) {
+        await supabase
+          .from('crm_contacts')
+          .update({ tags: [...currentTags, action_value] })
+          .eq('id', contactId);
+        console.log(`[Automation Engine] Added tag: ${action_value}`);
+      }
+      break;
+    }
+
+    case 'remove_tag': {
+      const currentTags = context.contact.tags || [];
+      await supabase
+        .from('crm_contacts')
+        .update({ tags: currentTags.filter((t: string) => t !== action_value) })
+        .eq('id', contactId);
+      console.log(`[Automation Engine] Removed tag: ${action_value}`);
+      break;
+    }
+
+    case 'change_stage': {
+      await supabase
+        .from('crm_contacts')
+        .update({ pipeline_stage_id: action_value })
+        .eq('id', contactId);
+      console.log(`[Automation Engine] Changed pipeline stage: ${action_value}`);
+      break;
+    }
+
+    case 'change_recovery_stage': {
+      await supabase
+        .from('crm_contacts')
+        .update({ recovery_stage_id: action_value })
+        .eq('id', contactId);
+      console.log(`[Automation Engine] Changed recovery stage: ${action_value}`);
+      break;
+    }
+
+    case 'notify_team': {
+      // Create notification for project members
+      const { data: members } = await supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', context.contact.project_id);
+
+      if (members && members.length > 0) {
+        const notifications = members.map((m: { user_id: string }) => ({
+          user_id: m.user_id,
+          title: 'Notificação de Automação',
+          message: action_value || `Automação acionada para ${context.contact.name || context.contact.email}`,
+          type: 'automation',
+          metadata: { contact_id: contactId },
+        }));
+
+        await supabase.from('notifications').insert(notifications);
+        console.log(`[Automation Engine] Notified ${members.length} team members`);
+      }
+      break;
+    }
+
+    default:
+      console.log(`[Automation Engine] Unknown action type: ${action_type}`);
+  }
+}
+
+// Process delayed executions
+async function processDelayedExecutions(supabase: any) {
+  console.log('[Automation Engine] Processing delayed executions...');
+
+  const { data: executions, error } = await supabase
+    .from('automation_executions')
+    .select('*, automation_flows(*)')
+    .eq('status', 'waiting')
+    .lte('next_execution_at', new Date().toISOString())
+    .limit(50);
+
+  if (error) {
+    console.error('[Automation Engine] Error fetching delayed executions:', error);
+    throw error;
+  }
+
+  if (!executions || executions.length === 0) {
+    console.log('[Automation Engine] No delayed executions to process');
+    return { processed: 0 };
+  }
+
+  console.log(`[Automation Engine] Found ${executions.length} delayed executions`);
+
+  let processed = 0;
+
+  for (const execution of executions) {
+    try {
+      await resumeExecution(supabase, execution);
+      processed++;
+    } catch (e) {
+      console.error(`[Automation Engine] Error resuming execution ${execution.id}:`, e);
+    }
+  }
+
+  return { processed };
+}
+
+// Resume a paused execution
+async function resumeExecution(supabase: any, execution: any) {
+  console.log(`[Automation Engine] Resuming execution: ${execution.id}`);
+
+  // Update status
+  await supabase
+    .from('automation_executions')
+    .update({
+      status: 'running',
+      next_execution_at: null,
+      execution_log: [...(execution.execution_log || []), {
+        timestamp: new Date().toISOString(),
+        event: 'resumed',
+      }],
+    })
+    .eq('id', execution.id);
+
+  // Get flow data
+  const { data: nodes } = await supabase
+    .from('automation_flow_nodes')
+    .select('*')
+    .eq('flow_id', execution.flow_id);
+
+  const { data: edges } = await supabase
+    .from('automation_flow_edges')
+    .select('*')
+    .eq('flow_id', execution.flow_id);
+
+  // Get contact
+  const { data: contact } = await supabase
+    .from('crm_contacts')
+    .select('*')
+    .eq('id', execution.contact_id)
+    .single();
+
+  // Get conversation if exists
+  let conversation = null;
+  if (execution.conversation_id) {
+    const { data: conv } = await supabase
+      .from('whatsapp_conversations')
+      .select('*, whatsapp_numbers(instance_name:whatsapp_instances(instance_name))')
+      .eq('id', execution.conversation_id)
+      .single();
+    conversation = conv;
+  }
+
+  const context: ExecutionContext = {
+    contact: contact || { id: execution.contact_id },
+    conversation,
+    variables: {
+      instance_name: conversation?.whatsapp_numbers?.instance_name?.instance_name,
+    },
+  };
+
+  // Find current node
+  const currentNode = nodes?.find((n: FlowNode) => n.id === execution.current_node_id);
+  
+  if (!currentNode) {
+    await completeExecution(supabase, execution.id, 'completed', 'No current node found');
+    return;
+  }
+
+  // Continue execution
+  await executeNode(supabase, execution, currentNode, nodes, edges, context);
+}
+
+// Execute node by ID (for manual/test execution)
+async function executeNodeById(supabase: any, executionId: string, nodeId: string) {
+  const { data: execution } = await supabase
+    .from('automation_executions')
+    .select('*')
+    .eq('id', executionId)
+    .single();
+
+  if (!execution) {
+    throw new Error('Execution not found');
+  }
+
+  const { data: nodes } = await supabase
+    .from('automation_flow_nodes')
+    .select('*')
+    .eq('flow_id', execution.flow_id);
+
+  const { data: edges } = await supabase
+    .from('automation_flow_edges')
+    .select('*')
+    .eq('flow_id', execution.flow_id);
+
+  const { data: contact } = await supabase
+    .from('crm_contacts')
+    .select('*')
+    .eq('id', execution.contact_id)
+    .single();
+
+  const node = nodes?.find((n: FlowNode) => n.id === nodeId);
+  
+  if (!node) {
+    throw new Error('Node not found');
+  }
+
+  await executeNode(supabase, execution, node, nodes, edges, { contact, variables: {} });
+
+  return { executed: true };
+}
+
+// Complete execution
+async function completeExecution(supabase: any, executionId: string, status: string, message: string) {
+  console.log(`[Automation Engine] Completing execution ${executionId}: ${status} - ${message}`);
+
+  await supabase
+    .from('automation_executions')
+    .update({
+      status,
+      completed_at: new Date().toISOString(),
+      error_message: status === 'failed' ? message : null,
+    })
+    .eq('id', executionId);
+}
+
+// Send WhatsApp message via Evolution API
+async function sendWhatsAppMessage(supabase: any, context: ExecutionContext, text: string) {
+  const conversation = context.conversation;
+  
+  if (!conversation) {
+    console.log('[Automation Engine] No conversation context, skipping message');
+    return;
+  }
+
+  const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
+  const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
+
+  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+    console.error('[Automation Engine] Evolution API not configured');
+    return;
+  }
+
+  const instanceName = context.variables.instance_name;
+  const remoteJid = conversation.remote_jid;
+
+  if (!instanceName || !remoteJid) {
+    console.error('[Automation Engine] Missing instance or remote_jid');
+    return;
+  }
+
+  const cleanNumber = remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
+  const apiUrl = EVOLUTION_API_URL.startsWith('http') ? EVOLUTION_API_URL : `https://${EVOLUTION_API_URL}`;
+
+  const response = await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': EVOLUTION_API_KEY,
+    },
+    body: JSON.stringify({ number: cleanNumber, text }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[Automation Engine] Error sending message:', errorText);
+    throw new Error(`Failed to send message: ${response.status}`);
+  }
+
+  // Save message to database
+  await supabase.from('whatsapp_messages').insert({
+    conversation_id: conversation.id,
+    whatsapp_number_id: conversation.whatsapp_number_id,
+    direction: 'outbound',
+    content_type: 'text',
+    content: text,
+    status: 'sent',
+    metadata: { source: 'automation' },
+  });
+
+  console.log('[Automation Engine] Message sent successfully');
+}
+
+// Send WhatsApp media via Evolution API
+async function sendWhatsAppMedia(
+  supabase: any,
+  context: ExecutionContext,
+  mediaType: string,
+  mediaUrl: string,
+  caption: string
+) {
+  const conversation = context.conversation;
+  
+  if (!conversation) {
+    console.log('[Automation Engine] No conversation context, skipping media');
+    return;
+  }
+
+  const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
+  const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
+
+  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+    console.error('[Automation Engine] Evolution API not configured');
+    return;
+  }
+
+  const instanceName = context.variables.instance_name;
+  const remoteJid = conversation.remote_jid;
+
+  if (!instanceName || !remoteJid) {
+    console.error('[Automation Engine] Missing instance or remote_jid');
+    return;
+  }
+
+  const cleanNumber = remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
+  const apiUrl = EVOLUTION_API_URL.startsWith('http') ? EVOLUTION_API_URL : `https://${EVOLUTION_API_URL}`;
+
+  let endpoint = '';
+  let body: Record<string, unknown> = { number: cleanNumber };
+
+  switch (mediaType) {
+    case 'image':
+    case 'video':
+    case 'document':
+      endpoint = `${apiUrl}/message/sendMedia/${instanceName}`;
+      body = {
+        number: cleanNumber,
+        mediatype: mediaType,
+        media: mediaUrl,
+        caption: caption || '',
+      };
+      break;
+    case 'audio':
+      endpoint = `${apiUrl}/message/sendWhatsAppAudio/${instanceName}`;
+      body = { number: cleanNumber, audio: mediaUrl };
+      break;
+    default:
+      throw new Error(`Unsupported media type: ${mediaType}`);
+  }
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': EVOLUTION_API_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[Automation Engine] Error sending media:', errorText);
+    throw new Error(`Failed to send media: ${response.status}`);
+  }
+
+  // Save message to database
+  await supabase.from('whatsapp_messages').insert({
+    conversation_id: conversation.id,
+    whatsapp_number_id: conversation.whatsapp_number_id,
+    direction: 'outbound',
+    content_type: mediaType,
+    media_url: mediaUrl,
+    content: caption || null,
+    status: 'sent',
+    metadata: { source: 'automation' },
+  });
+
+  console.log('[Automation Engine] Media sent successfully');
+}
+
+// Replace variables in text
+function replaceVariables(text: string, context: ExecutionContext): string {
+  let result = text;
+  
+  const replacements: Record<string, string> = {
+    '{{nome}}': context.contact.name || '',
+    '{{email}}': context.contact.email || '',
+    '{{telefone}}': context.contact.phone || '',
+    '{{cidade}}': context.contact.city || '',
+    '{{estado}}': context.contact.state || '',
+    '{{mensagem}}': context.message || '',
+  };
+
+  for (const [variable, value] of Object.entries(replacements)) {
+    result = result.replace(new RegExp(variable, 'gi'), value);
+  }
+
+  return result;
+}
+
+// Get nested value from object
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+
+// Evaluate condition
+function evaluateCondition(value: any, operator: string, compareValue: string): boolean {
+  switch (operator) {
+    case 'equals':
+      return String(value).toLowerCase() === String(compareValue).toLowerCase();
+    case 'not_equals':
+      return String(value).toLowerCase() !== String(compareValue).toLowerCase();
+    case 'contains':
+      if (Array.isArray(value)) {
+        return value.some(v => String(v).toLowerCase().includes(String(compareValue).toLowerCase()));
+      }
+      return String(value).toLowerCase().includes(String(compareValue).toLowerCase());
+    case 'not_contains':
+      if (Array.isArray(value)) {
+        return !value.some(v => String(v).toLowerCase().includes(String(compareValue).toLowerCase()));
+      }
+      return !String(value).toLowerCase().includes(String(compareValue).toLowerCase());
+    case 'greater_than':
+      return Number(value) > Number(compareValue);
+    case 'less_than':
+      return Number(value) < Number(compareValue);
+    case 'is_empty':
+      return !value || (Array.isArray(value) && value.length === 0);
+    case 'is_not_empty':
+      return !!value && (!Array.isArray(value) || value.length > 0);
+    default:
+      return false;
+  }
+}

@@ -56,7 +56,7 @@ export default function WhatsAppLiveChat() {
   } = useWhatsAppConversations();
   
   const { numbers } = useWhatsAppNumbers();
-  const { agents, getCurrentAgentByUserId } = useWhatsAppAgents();
+  const { agents, getCurrentAgentByUserId, updateMyStatus } = useWhatsAppAgents();
   const { departments } = useWhatsAppDepartments();
   const { syncInstance, configureWebhook } = useEvolutionAPI();
   const queryClient = useQueryClient();
@@ -149,11 +149,11 @@ export default function WhatsAppLiveChat() {
     setSelectedConversation(conversation);
   };
 
-  const handleAssign = (agentId: string | null) => {
+  const handleAssign = (userId: string | null) => {
     if (selectedConversation) {
       assignConversation({ 
         conversationId: selectedConversation.id, 
-        agentId 
+        agentId: userId 
       });
     }
   };
@@ -226,6 +226,47 @@ export default function WhatsAppLiveChat() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Agent status selector */}
+            {currentAgent && (
+              <Select
+                value={currentAgent.status}
+                onValueChange={(value) => {
+                  const status = value as 'online' | 'away' | 'busy' | 'offline';
+                  updateMyStatus(status);
+                }}
+              >
+                <SelectTrigger className="w-32 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="online">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                      Online
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="away">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-yellow-500" />
+                      Ausente
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="busy">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-orange-500" />
+                      Ocupado
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="offline">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-gray-400" />
+                      Offline
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
             {/* Connection status */}
             {isSyncing ? (
               <Badge variant="outline" className="gap-1 text-blue-600 border-blue-600">
@@ -328,9 +369,16 @@ export default function WhatsAppLiveChat() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Próximo disponível</SelectItem>
-                  {agents?.filter(a => a.is_active && a.status === 'online').map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.display_name || 'Atendente'}
+                  {agents?.filter(a => a.is_active).map((agent) => (
+                    <SelectItem key={agent.id} value={agent.user_id}>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2 w-2 rounded-full ${
+                          agent.status === 'online' ? 'bg-green-500' : 
+                          agent.status === 'away' ? 'bg-yellow-500' :
+                          agent.status === 'busy' ? 'bg-orange-500' : 'bg-gray-400'
+                        }`} />
+                        {agent.display_name || agent.user_name || 'Atendente'}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

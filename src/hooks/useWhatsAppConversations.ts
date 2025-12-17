@@ -87,7 +87,7 @@ export function useWhatsAppConversations(filters?: {
 
       if (error) throw error;
 
-      // Fetch assigned agents separately if needed
+      // Fetch assigned agents separately if needed (assigned_to stores user_id)
       const conversationsWithAgents = await Promise.all(
         (data || []).map(async (conv) => {
           let assigned_agent = null;
@@ -95,7 +95,8 @@ export function useWhatsAppConversations(filters?: {
             const { data: agentData } = await supabase
               .from('whatsapp_agents')
               .select('id, display_name, user_id')
-              .eq('id', conv.assigned_to)
+              .eq('user_id', conv.assigned_to)
+              .eq('project_id', projectId)
               .single();
             assigned_agent = agentData;
           }

@@ -77,6 +77,328 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_executions: {
+        Row: {
+          completed_at: string | null
+          contact_id: string
+          conversation_id: string | null
+          created_at: string
+          current_node_id: string | null
+          error_message: string | null
+          execution_log: Json
+          flow_id: string
+          id: string
+          next_execution_at: string | null
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          contact_id: string
+          conversation_id?: string | null
+          created_at?: string
+          current_node_id?: string | null
+          error_message?: string | null
+          execution_log?: Json
+          flow_id: string
+          id?: string
+          next_execution_at?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          contact_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          current_node_id?: string | null
+          error_message?: string | null
+          execution_log?: Json
+          flow_id?: string
+          id?: string
+          next_execution_at?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_executions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_current_node_id_fkey"
+            columns: ["current_node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flow_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_flow_edges: {
+        Row: {
+          created_at: string
+          flow_id: string
+          id: string
+          label: string | null
+          source_handle: string | null
+          source_node_id: string
+          target_handle: string | null
+          target_node_id: string
+        }
+        Insert: {
+          created_at?: string
+          flow_id: string
+          id?: string
+          label?: string | null
+          source_handle?: string | null
+          source_node_id: string
+          target_handle?: string | null
+          target_node_id: string
+        }
+        Update: {
+          created_at?: string
+          flow_id?: string
+          id?: string
+          label?: string | null
+          source_handle?: string | null
+          source_node_id?: string
+          target_handle?: string | null
+          target_node_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flow_edges_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flow_edges_source_node_id_fkey"
+            columns: ["source_node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flow_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flow_edges_target_node_id_fkey"
+            columns: ["target_node_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flow_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_flow_nodes: {
+        Row: {
+          config: Json
+          created_at: string
+          flow_id: string
+          id: string
+          node_type: string
+          position_x: number
+          position_y: number
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          flow_id: string
+          id?: string
+          node_type: string
+          position_x?: number
+          position_y?: number
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          flow_id?: string
+          id?: string
+          node_type?: string
+          position_x?: number
+          position_y?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flow_nodes_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_flows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          folder_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          project_id: string
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+          viewport: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          project_id: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          viewport?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          project_id?: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          viewport?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flows_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "automation_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "automation_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_message_templates: {
+        Row: {
+          content: string | null
+          content_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          media_url: string | null
+          name: string
+          project_id: string
+          updated_at: string
+          variables: string[]
+        }
+        Insert: {
+          content?: string | null
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_url?: string | null
+          name: string
+          project_id: string
+          updated_at?: string
+          variables?: string[]
+        }
+        Update: {
+          content?: string | null
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_url?: string | null
+          name?: string
+          project_id?: string
+          updated_at?: string
+          variables?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_message_templates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_activities: {
         Row: {
           activity_type: string

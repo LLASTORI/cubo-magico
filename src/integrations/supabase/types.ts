@@ -2492,6 +2492,33 @@ export type Database = {
           expires_at: string
           id: string
           invited_by: string
+          permissions_analise:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_automacoes:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_chat_ao_vivo:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_configuracoes:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_crm:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_dashboard:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_lancamentos:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_meta_ads:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_ofertas:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           project_id: string
           responded_at: string | null
           role: Database["public"]["Enums"]["project_role"]
@@ -2503,6 +2530,33 @@ export type Database = {
           expires_at?: string
           id?: string
           invited_by: string
+          permissions_analise?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_automacoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_chat_ao_vivo?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_configuracoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_crm?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_dashboard?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_lancamentos?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_meta_ads?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_ofertas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           project_id: string
           responded_at?: string | null
           role?: Database["public"]["Enums"]["project_role"]
@@ -2514,6 +2568,33 @@ export type Database = {
           expires_at?: string
           id?: string
           invited_by?: string
+          permissions_analise?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_automacoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_chat_ao_vivo?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_configuracoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_crm?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_dashboard?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_lancamentos?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_meta_ads?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_ofertas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           project_id?: string
           responded_at?: string | null
           role?: Database["public"]["Enums"]["project_role"]
@@ -2522,6 +2603,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_invites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_member_permissions: {
+        Row: {
+          analise: Database["public"]["Enums"]["permission_level"]
+          automacoes: Database["public"]["Enums"]["permission_level"]
+          chat_ao_vivo: Database["public"]["Enums"]["permission_level"]
+          configuracoes: Database["public"]["Enums"]["permission_level"]
+          created_at: string
+          crm: Database["public"]["Enums"]["permission_level"]
+          dashboard: Database["public"]["Enums"]["permission_level"]
+          id: string
+          lancamentos: Database["public"]["Enums"]["permission_level"]
+          meta_ads: Database["public"]["Enums"]["permission_level"]
+          ofertas: Database["public"]["Enums"]["permission_level"]
+          project_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analise?: Database["public"]["Enums"]["permission_level"]
+          automacoes?: Database["public"]["Enums"]["permission_level"]
+          chat_ao_vivo?: Database["public"]["Enums"]["permission_level"]
+          configuracoes?: Database["public"]["Enums"]["permission_level"]
+          created_at?: string
+          crm?: Database["public"]["Enums"]["permission_level"]
+          dashboard?: Database["public"]["Enums"]["permission_level"]
+          id?: string
+          lancamentos?: Database["public"]["Enums"]["permission_level"]
+          meta_ads?: Database["public"]["Enums"]["permission_level"]
+          ofertas?: Database["public"]["Enums"]["permission_level"]
+          project_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analise?: Database["public"]["Enums"]["permission_level"]
+          automacoes?: Database["public"]["Enums"]["permission_level"]
+          chat_ao_vivo?: Database["public"]["Enums"]["permission_level"]
+          configuracoes?: Database["public"]["Enums"]["permission_level"]
+          created_at?: string
+          crm?: Database["public"]["Enums"]["permission_level"]
+          dashboard?: Database["public"]["Enums"]["permission_level"]
+          id?: string
+          lancamentos?: Database["public"]["Enums"]["permission_level"]
+          meta_ads?: Database["public"]["Enums"]["permission_level"]
+          ofertas?: Database["public"]["Enums"]["permission_level"]
+          project_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_member_permissions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3293,6 +3433,15 @@ export type Database = {
         Returns: boolean
       }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
+      has_area_permission: {
+        Args: {
+          _area: string
+          _min_level?: Database["public"]["Enums"]["permission_level"]
+          _project_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_project_access: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
@@ -3337,6 +3486,7 @@ export type Database = {
       agent_status: "online" | "away" | "offline" | "busy"
       app_role: "admin" | "user" | "super_admin"
       invite_status: "pending" | "accepted" | "rejected" | "expired"
+      permission_level: "none" | "view" | "edit" | "admin"
       project_role: "owner" | "manager" | "operator"
       subscription_status:
         | "active"
@@ -3474,6 +3624,7 @@ export const Constants = {
       agent_status: ["online", "away", "offline", "busy"],
       app_role: ["admin", "user", "super_admin"],
       invite_status: ["pending", "accepted", "rejected", "expired"],
+      permission_level: ["none", "view", "edit", "admin"],
       project_role: ["owner", "manager", "operator"],
       subscription_status: [
         "active",

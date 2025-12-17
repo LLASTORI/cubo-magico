@@ -364,6 +364,42 @@ export const useMyInvites = () => {
 
     if (memberError) return { error: memberError };
 
+    // Get full invite data with permissions
+    const { data: fullInvite } = await supabase
+      .from('project_invites')
+      .select('*')
+      .eq('id', invite.id)
+      .single();
+
+    // Apply permissions from invite if they exist
+    if (fullInvite) {
+      const permissionsData: Record<string, any> = {
+        project_id: invite.project_id,
+        user_id: user.id,
+      };
+
+      // Copy permission fields from invite
+      const permissionFields = [
+        'permissions_dashboard', 'permissions_analise', 'permissions_crm',
+        'permissions_automacoes', 'permissions_chat_ao_vivo', 'permissions_meta_ads',
+        'permissions_ofertas', 'permissions_lancamentos', 'permissions_configuracoes'
+      ];
+
+      permissionFields.forEach(field => {
+        const areaName = field.replace('permissions_', '');
+        if (fullInvite[field]) {
+          permissionsData[areaName] = fullInvite[field];
+        }
+      });
+
+      // Update permissions (the trigger already created the record with defaults)
+      await supabase
+        .from('project_member_permissions')
+        .update(permissionsData)
+        .eq('project_id', invite.project_id)
+        .eq('user_id', user.id);
+    }
+
     await fetchInvites();
     return { error: null };
   };

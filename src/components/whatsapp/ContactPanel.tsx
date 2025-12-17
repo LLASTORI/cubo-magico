@@ -30,7 +30,7 @@ import { formatPhoneForDisplay } from '@/components/ui/international-phone-input
 
 interface ContactPanelProps {
   conversation: WhatsAppConversation | null;
-  onAssign?: (agentId: string | null) => void;
+  onAssign?: (userId: string | null) => void;
   onTransfer?: (departmentId: string) => void;
 }
 
@@ -191,7 +191,7 @@ export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPane
                 <SelectContent>
                   <SelectItem value="none">Não atribuído</SelectItem>
                   {availableAgents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
+                    <SelectItem key={agent.id} value={agent.user_id}>
                       <div className="flex items-center gap-2">
                         <div className={cn(
                           "h-2 w-2 rounded-full",

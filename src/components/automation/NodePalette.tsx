@@ -73,8 +73,8 @@ const nodeDefinitions: NodeDefinition[] = [
   },
   {
     type: 'split',
-    label: 'Split Test',
-    description: 'Teste A/B',
+    label: 'Randomizar',
+    description: 'Split A/B/C/D/E',
     icon: <GitFork className="h-5 w-5" />,
     color: 'bg-pink-500',
     category: 'advanced',

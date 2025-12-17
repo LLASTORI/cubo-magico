@@ -449,44 +449,152 @@ function HttpRequestNodeConfig({ config, setConfig }: { config: any; setConfig: 
     </div>
   );
 }
-
-// Split Test Config
+// Split Test Config (Randomizar)
 function SplitNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const defaultVariants = [
+    { name: 'A', percentage: 50 },
+    { name: 'B', percentage: 50 }
+  ];
+  
+  const variants = config.variants || defaultVariants;
+  const variantNames = ['A', 'B', 'C', 'D', 'E'];
+  const variantColors = ['text-green-600', 'text-blue-600', 'text-purple-600', 'text-orange-600', 'text-pink-600'];
+  
+  const totalPercentage = variants.reduce((sum: number, v: { percentage: number }) => sum + v.percentage, 0);
+  const isValid = totalPercentage === 100;
+
+  const handleAddVariant = () => {
+    if (variants.length < 5) {
+      const newVariants = [...variants];
+      const newName = variantNames[newVariants.length];
+      // Redistribute percentages evenly
+      const evenPercentage = Math.floor(100 / (newVariants.length + 1));
+      const remainder = 100 - (evenPercentage * (newVariants.length + 1));
+      
+      newVariants.forEach((v: { name: string; percentage: number }, i: number) => {
+        v.percentage = evenPercentage + (i === 0 ? remainder : 0);
+      });
+      newVariants.push({ name: newName, percentage: evenPercentage });
+      
+      setConfig({ ...config, variants: newVariants });
+    }
+  };
+
+  const handleRemoveVariant = (index: number) => {
+    if (variants.length > 2) {
+      const newVariants = variants.filter((_: any, i: number) => i !== index);
+      // Rename variants sequentially
+      newVariants.forEach((v: { name: string; percentage: number }, i: number) => {
+        v.name = variantNames[i];
+      });
+      // Redistribute removed percentage
+      const removedPercentage = variants[index].percentage;
+      const perVariant = Math.floor(removedPercentage / newVariants.length);
+      const remainder = removedPercentage - (perVariant * newVariants.length);
+      newVariants.forEach((v: { name: string; percentage: number }, i: number) => {
+        v.percentage += perVariant + (i === 0 ? remainder : 0);
+      });
+      setConfig({ ...config, variants: newVariants });
+    }
+  };
+
+  const handlePercentageChange = (index: number, value: number) => {
+    const newVariants = [...variants];
+    newVariants[index] = { ...newVariants[index], percentage: value };
+    setConfig({ ...config, variants: newVariants });
+  };
+
+  const handleDistributeEvenly = () => {
+    const count = variants.length;
+    const evenPercentage = Math.floor(100 / count);
+    const remainder = 100 - (evenPercentage * count);
+    
+    const newVariants = variants.map((v: { name: string; percentage: number }, i: number) => ({
+      ...v,
+      percentage: evenPercentage + (i === 0 ? remainder : 0)
+    }));
+    setConfig({ ...config, variants: newVariants });
+  };
+
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Tipo de split</Label>
-        <Select value={config.splitType || 'percentage'} onValueChange={(v) => setConfig({ ...config, splitType: v })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="percentage">Por porcentagem</SelectItem>
-            <SelectItem value="random">Aleatório 50/50</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex items-center justify-between">
+        <Label>Variantes ({variants.length}/5)</Label>
+        <div className="flex gap-2">
+          <Button 
+            type="button" 
+            variant="outline" 
+            size="sm"
+            onClick={handleDistributeEvenly}
+          >
+            Distribuir igual
+          </Button>
+          {variants.length < 5 && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={handleAddVariant}
+            >
+              + Variante
+            </Button>
+          )}
+        </div>
       </div>
 
-      {config.splitType === 'percentage' && (
-        <div className="space-y-4">
-          <Label>Distribuição: {config.splitPercentage || 50}% / {100 - (config.splitPercentage || 50)}%</Label>
-          <Slider
-            value={[config.splitPercentage || 50]}
-            onValueChange={([v]) => setConfig({ ...config, splitPercentage: v })}
-            min={10}
-            max={90}
-            step={5}
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span className="text-green-600">Variante A</span>
-            <span className="text-blue-600">Variante B</span>
+      <div className="space-y-3">
+        {variants.map((variant: { name: string; percentage: number }, index: number) => (
+          <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <span className={`font-bold ${variantColors[index]}`}>
+              {variant.name}
+            </span>
+            <div className="flex-1">
+              <Slider
+                value={[variant.percentage]}
+                onValueChange={([v]) => handlePercentageChange(index, v)}
+                min={5}
+                max={95}
+                step={5}
+              />
+            </div>
+            <span className="w-12 text-right text-sm font-medium">
+              {variant.percentage}%
+            </span>
+            {variants.length > 2 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                onClick={() => handleRemoveVariant(index)}
+              >
+                ×
+              </Button>
+            )}
           </div>
+        ))}
+      </div>
+
+      {!isValid && (
+        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-xs text-destructive font-medium">
+            Total: {totalPercentage}% — deve ser exatamente 100%
+          </p>
+        </div>
+      )}
+
+      {isValid && (
+        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+          <p className="text-xs text-green-600 font-medium">
+            ✓ Distribuição válida (100%)
+          </p>
         </div>
       )}
 
       <div className="p-3 bg-muted/50 rounded-lg">
         <p className="text-xs text-muted-foreground">
-          Conecte cada saída (A/B) a diferentes caminhos do fluxo para testar variações.
+          Conecte cada saída a diferentes caminhos do fluxo para testar variações. 
+          Os contatos serão distribuídos aleatoriamente conforme as porcentagens definidas.
         </p>
       </div>
     </div>

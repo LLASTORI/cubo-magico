@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Blocks, Users } from 'lucide-react';
+import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Blocks, Users, HardDrive } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -24,6 +24,7 @@ import { ProjectModulesManager } from '@/components/settings/ProjectModulesManag
 import { HotmartSettings } from '@/components/settings/HotmartSettings';
 import { WhatsAppFullSettings } from '@/components/settings/WhatsAppFullSettings';
 import { TeamPermissionsManager } from '@/components/settings/TeamPermissionsManager';
+import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
 
 const META_APP_ID = '845927421602166';
 
@@ -388,7 +389,7 @@ const Settings = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className={`grid w-full max-w-3xl ${isSuperAdmin ? 'grid-cols-7' : 'grid-cols-6'}`}>
+          <TabsList className={`grid w-full max-w-4xl ${isSuperAdmin ? 'grid-cols-8' : 'grid-cols-7'}`}>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Perfil</span>
@@ -404,6 +405,10 @@ const Settings = () => {
             <TabsTrigger value="modules" className="flex items-center gap-2">
               <Blocks className="h-4 w-4" />
               <span className="hidden sm:inline">Módulos</span>
+            </TabsTrigger>
+            <TabsTrigger value="media" className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4" />
+              <span className="hidden sm:inline">Mídias</span>
             </TabsTrigger>
             <TabsTrigger value="integrations" className="flex items-center gap-2">
               <Link2 className="h-4 w-4" />
@@ -629,6 +634,11 @@ const Settings = () => {
           {/* Modules Tab */}
           <TabsContent value="modules">
             <ProjectModulesManager />
+          </TabsContent>
+
+          {/* Media Tab */}
+          <TabsContent value="media">
+            <MediaLibraryManager />
           </TabsContent>
 
           {/* Integrations Tab */}

@@ -121,16 +121,13 @@ function FlowEditor() {
   }, []);
 
   const onEdgeClick = useCallback(async (_: any, edge: Edge) => {
-    // Show confirmation before deleting
-    if (window.confirm('Deseja remover esta conexão?')) {
-      try {
-        await deleteDbEdge.mutateAsync(edge.id);
-        setEdges((eds) => eds.filter(e => e.id !== edge.id));
-        toast.success('Conexão removida');
-      } catch (error) {
-        console.error('Error deleting edge:', error);
-        toast.error('Erro ao remover conexão');
-      }
+    try {
+      await deleteDbEdge.mutateAsync(edge.id);
+      setEdges((eds) => eds.filter(e => e.id !== edge.id));
+      toast.success('Conexão removida');
+    } catch (error) {
+      console.error('Error deleting edge:', error);
+      toast.error('Erro ao remover conexão');
     }
   }, [deleteDbEdge, setEdges]);
 

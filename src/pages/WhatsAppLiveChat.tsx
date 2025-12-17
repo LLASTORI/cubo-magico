@@ -68,6 +68,13 @@ export default function WhatsAppLiveChat() {
   const currentAgentId = currentAgent?.id || null;
   const isSupervisor = currentAgent?.is_supervisor || false;
 
+  // Auto-set agent to online when entering the chat page
+  useEffect(() => {
+    if (currentAgent && currentAgent.status === 'offline') {
+      updateMyStatus('online');
+    }
+  }, [currentAgent?.id]); // Only run when agent is first loaded
+
   // Get the connected instance name - fallback to active number if no instance record
   const connectedNumber = numbers?.find(n => n.instance?.status === 'connected') 
     || numbers?.find(n => n.status === 'active');

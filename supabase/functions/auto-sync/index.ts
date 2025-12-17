@@ -524,15 +524,19 @@ Deno.serve(async (req) => {
         // Small delay between Meta and Hotmart
         await delay(1000)
 
-        // Check Hotmart credentials
+        // Check Hotmart credentials (including encrypted columns)
         const { data: hotmartCreds } = await supabase
           .from('project_credentials')
-          .select('client_id, client_secret')
+          .select('client_id, client_secret, client_secret_encrypted')
           .eq('project_id', project.id)
           .eq('provider', 'hotmart')
           .maybeSingle()
+        
+        // Check if credentials are configured (either in encrypted or plain columns)
+        const hasCredentials = hotmartCreds?.client_id && 
+          (hotmartCreds?.client_secret || hotmartCreds?.client_secret_encrypted)
 
-        if (hotmartCreds?.client_id && hotmartCreds?.client_secret) {
+        if (hasCredentials) {
           console.log(`  🛒 Syncing Hotmart...`)
           
           const hotmartStartDate = subMonths(endDate, 3) // Sync last 3 months

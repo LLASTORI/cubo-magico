@@ -17,10 +17,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useAutomationFlowDetails, useAutomationFlows } from '@/hooks/useAutomationFlows';
+import { useProjectModules } from '@/hooks/useProjectModules';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, ArrowLeft, Play, Pause, Settings2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, ArrowLeft, Play, Pause, Settings2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { nodeTypes } from '@/components/automation/nodes';
 import { NodePalette } from '@/components/automation/NodePalette';
@@ -32,6 +34,7 @@ function FlowEditor() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
   
+  const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { flow, nodes: dbNodes, edges: dbEdges, isLoading, addNode, updateNode, deleteNode, addEdge: addDbEdge, saveViewport } = useAutomationFlowDetails(flowId);
   const { toggleFlow } = useAutomationFlows();
   
@@ -39,6 +42,8 @@ function FlowEditor() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
+
+  const crmEnabled = isModuleEnabled('crm');
 
   // Convert DB nodes/edges to React Flow format
   useEffect(() => {
@@ -213,10 +218,38 @@ function FlowEditor() {
     [reactFlowInstance, handleAddNode]
   );
 
-  if (isLoading) {
+  if (modulesLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!crmEnabled) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="border-b bg-card px-4 py-3">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/automations')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="font-semibold">Editor de Fluxo</h1>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Card className="max-w-md border-muted">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <Lock className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <CardTitle>Módulo CRM</CardTitle>
+              <CardDescription>Este módulo não está habilitado para o projeto atual.</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
       </div>
     );
   }

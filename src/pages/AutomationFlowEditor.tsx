@@ -43,7 +43,7 @@ function FlowEditor() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
 
-  const crmEnabled = isModuleEnabled('crm');
+  const automationEnabled = isModuleEnabled('automation');
 
   // Convert DB nodes/edges to React Flow format
   useEffect(() => {
@@ -239,7 +239,7 @@ function FlowEditor() {
     );
   }
 
-  if (!crmEnabled) {
+  if (!automationEnabled) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="border-b bg-card px-4 py-3">
@@ -258,7 +258,7 @@ function FlowEditor() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                 <Lock className="h-8 w-8 text-muted-foreground" />
               </div>
-              <CardTitle>Módulo CRM</CardTitle>
+              <CardTitle>Módulo de Automações</CardTitle>
               <CardDescription>Este módulo não está habilitado para o projeto atual.</CardDescription>
             </CardHeader>
           </Card>

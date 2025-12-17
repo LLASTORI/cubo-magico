@@ -19,7 +19,8 @@ import {
   BarChart3,
   FolderKanban,
   ShoppingCart,
-  MessageCircle
+  MessageCircle,
+  Workflow
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,6 +43,7 @@ const MODULE_ICONS: Record<ModuleKey, React.ReactNode> = {
   whatsapp: <MessageCircle className="w-4 h-4" />,
   meta_ads: <Facebook className="w-4 h-4" />,
   hotmart: <ShoppingCart className="w-4 h-4" />,
+  automation: <Workflow className="w-4 h-4" />,
 };
 
 export const ModulesManager = () => {

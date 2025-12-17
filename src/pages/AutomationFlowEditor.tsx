@@ -35,7 +35,7 @@ function FlowEditor() {
   const reactFlowInstance = useReactFlow();
   
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
-  const { flow, nodes: dbNodes, edges: dbEdges, isLoading, addNode, updateNode, deleteNode, addEdge: addDbEdge, saveViewport } = useAutomationFlowDetails(flowId);
+  const { flow, nodes: dbNodes, edges: dbEdges, isLoading, addNode, updateNode, deleteNode, addEdge: addDbEdge, deleteEdge: deleteDbEdge, saveViewport } = useAutomationFlowDetails(flowId);
   const { toggleFlow } = useAutomationFlows();
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -71,8 +71,9 @@ function FlowEditor() {
         targetHandle: e.target_handle || undefined,
         label: e.label || undefined,
         animated: true,
-        style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
+        style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, cursor: 'pointer' },
         type: 'smoothstep',
+        interactionWidth: 20,
       }));
       setEdges(rfEdges);
     }
@@ -93,8 +94,9 @@ function FlowEditor() {
         ...params,
         id: result.id,
         animated: true,
-        style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
+        style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, cursor: 'pointer' },
         type: 'smoothstep',
+        interactionWidth: 20,
       }, eds));
     } catch (error) {
       console.error('Error adding edge:', error);
@@ -117,6 +119,20 @@ function FlowEditor() {
     setSelectedNode(null);
     setShowConfigPanel(false);
   }, []);
+
+  const onEdgeClick = useCallback(async (_: any, edge: Edge) => {
+    // Show confirmation before deleting
+    if (window.confirm('Deseja remover esta conexão?')) {
+      try {
+        await deleteDbEdge.mutateAsync(edge.id);
+        setEdges((eds) => eds.filter(e => e.id !== edge.id));
+        toast.success('Conexão removida');
+      } catch (error) {
+        console.error('Error deleting edge:', error);
+        toast.error('Erro ao remover conexão');
+      }
+    }
+  }, [deleteDbEdge, setEdges]);
 
   const handleAddNode = async (type: string, position?: { x: number; y: number }) => {
     // Calculate position
@@ -312,6 +328,7 @@ function FlowEditor() {
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={onNodeClick}
+            onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onDragOver={onDragOver}
             onDrop={onDrop}

@@ -3464,56 +3464,7 @@ export type Database = {
       }
     }
     Views: {
-      project_credentials_secure: {
-        Row: {
-          basic_auth: string | null
-          client_id: string | null
-          client_secret: string | null
-          created_at: string | null
-          id: string | null
-          is_configured: boolean | null
-          is_validated: boolean | null
-          project_id: string | null
-          provider: string | null
-          updated_at: string | null
-          validated_at: string | null
-        }
-        Insert: {
-          basic_auth?: never
-          client_id?: string | null
-          client_secret?: never
-          created_at?: string | null
-          id?: string | null
-          is_configured?: boolean | null
-          is_validated?: boolean | null
-          project_id?: string | null
-          provider?: string | null
-          updated_at?: string | null
-          validated_at?: string | null
-        }
-        Update: {
-          basic_auth?: never
-          client_id?: string | null
-          client_secret?: never
-          created_at?: string | null
-          id?: string | null
-          is_configured?: boolean | null
-          is_validated?: boolean | null
-          project_id?: string | null
-          provider?: string | null
-          updated_at?: string | null
-          validated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_credentials_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
@@ -3539,6 +3490,22 @@ export type Database = {
       get_next_available_agent: {
         Args: { p_department_id?: string; p_project_id: string }
         Returns: string
+      }
+      get_project_credentials_secure: {
+        Args: { p_project_id: string }
+        Returns: {
+          basic_auth: string
+          client_id: string
+          client_secret: string
+          created_at: string
+          id: string
+          is_configured: boolean
+          is_validated: boolean
+          project_id: string
+          provider: string
+          updated_at: string
+          validated_at: string
+        }[]
       }
       get_queue_position: {
         Args: { p_department_id?: string; p_project_id: string }

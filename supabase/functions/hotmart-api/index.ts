@@ -229,9 +229,10 @@ async function getProjectCredentials(projectId: string): Promise<ProjectCredenti
   
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
+  // Fetch credentials including encrypted columns
   const { data, error } = await supabase
     .from('project_credentials')
-    .select('client_id, client_secret, basic_auth')
+    .select('client_id, client_secret, client_secret_encrypted, basic_auth, basic_auth_encrypted')
     .eq('project_id', projectId)
     .eq('provider', 'hotmart')
     .maybeSingle();
@@ -245,7 +246,29 @@ async function getProjectCredentials(projectId: string): Promise<ProjectCredenti
     throw new Error('Project credentials not configured. Please configure Hotmart credentials in project settings.');
   }
   
-  return data;
+  // If encrypted columns exist, decrypt them using RPC
+  let clientSecret = data.client_secret;
+  let basicAuth = data.basic_auth;
+  
+  if (data.client_secret_encrypted) {
+    const { data: decrypted } = await supabase.rpc('decrypt_sensitive', { 
+      p_encrypted_data: data.client_secret_encrypted 
+    });
+    if (decrypted) clientSecret = decrypted;
+  }
+  
+  if (data.basic_auth_encrypted) {
+    const { data: decrypted } = await supabase.rpc('decrypt_sensitive', { 
+      p_encrypted_data: data.basic_auth_encrypted 
+    });
+    if (decrypted) basicAuth = decrypted;
+  }
+  
+  return {
+    client_id: data.client_id,
+    client_secret: clientSecret,
+    basic_auth: basicAuth
+  };
 }
 
 async function getHotmartToken(credentials: ProjectCredentials): Promise<string> {

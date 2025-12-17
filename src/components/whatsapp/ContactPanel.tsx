@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -46,7 +47,7 @@ export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPane
   }
 
   const contact = conversation.contact;
-  const onlineAgents = agents?.filter(a => a.status === 'online' && a.is_active) || [];
+  const availableAgents = agents?.filter(a => a.is_active) || [];
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -189,11 +190,22 @@ export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPane
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Não atribuído</SelectItem>
-                  {onlineAgents.map((agent) => (
+                  {availableAgents.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id}>
                       <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-green-500" />
-                        {agent.display_name || 'Atendente'}
+                        <div className={cn(
+                          "h-2 w-2 rounded-full",
+                          agent.status === 'online' ? 'bg-green-500' : 
+                          agent.status === 'away' ? 'bg-yellow-500' :
+                          agent.status === 'busy' ? 'bg-orange-500' : 'bg-gray-400'
+                        )} />
+                        {agent.display_name || agent.user_name || 'Atendente'}
+                        {agent.status !== 'online' && (
+                          <span className="text-xs text-muted-foreground">
+                            ({agent.status === 'away' ? 'ausente' : 
+                              agent.status === 'busy' ? 'ocupado' : 'offline'})
+                          </span>
+                        )}
                       </div>
                     </SelectItem>
                   ))}

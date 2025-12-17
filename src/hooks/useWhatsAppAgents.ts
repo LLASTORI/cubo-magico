@@ -55,20 +55,28 @@ export function useWhatsAppAgents() {
     queryFn: async () => {
       if (!projectId) return [];
 
-      // Get agents with user info
+      // Get agents
       const { data: agentsData, error: agentsError } = await supabase
         .from('whatsapp_agents')
-        .select(`
-          *,
-          profiles:user_id (
-            email,
-            full_name
-          )
-        `)
+        .select('*')
         .eq('project_id', projectId)
         .order('created_at');
 
       if (agentsError) throw agentsError;
+
+      // Get user profiles separately
+      const userIds = agentsData.map(a => a.user_id);
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      const profilesMap: Record<string, { email: string; full_name: string | null }> = {};
+      profilesData?.forEach(p => {
+        profilesMap[p.id] = { email: p.email, full_name: p.full_name };
+      });
 
       // Get department associations
       const agentIds = agentsData.map(a => a.id);
@@ -137,8 +145,8 @@ export function useWhatsAppAgents() {
         last_activity_at: agent.last_activity_at,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
-        user_email: (agent.profiles as any)?.email,
-        user_name: (agent.profiles as any)?.full_name,
+        user_email: profilesMap[agent.user_id]?.email,
+        user_name: profilesMap[agent.user_id]?.full_name,
         departments: deptMap[agent.id] || [],
         active_chats_count: chatCountMap[agent.user_id] || 0,
       })) as WhatsAppAgent[];

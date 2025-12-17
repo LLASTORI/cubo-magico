@@ -81,7 +81,7 @@ export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[400px] sm:w-[540px]">
+      <SheetContent className="w-[400px] sm:w-[540px] flex flex-col h-full">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             {nodeIcons[nodeType]}
@@ -92,78 +92,80 @@ export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: 
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
-          {/* Message Node */}
-          {nodeType === 'message' && (
-            <MessageNodeConfig config={config} setConfig={setConfig} />
-          )}
+        <ScrollArea className="flex-1 mt-6 -mr-4 pr-4">
+          <div className="space-y-6 pb-4">
+            {/* Message Node */}
+            {nodeType === 'message' && (
+              <MessageNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Delay Node */}
-          {nodeType === 'delay' && (
-            <DelayNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Delay Node */}
+            {nodeType === 'delay' && (
+              <DelayNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Condition Node */}
-          {nodeType === 'condition' && (
-            <ConditionNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Condition Node */}
+            {nodeType === 'condition' && (
+              <ConditionNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Action Node */}
-          {nodeType === 'action' && (
-            <ActionNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Action Node */}
+            {nodeType === 'action' && (
+              <ActionNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Media Node */}
-          {nodeType === 'media' && (
-            <MediaNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Media Node */}
+            {nodeType === 'media' && (
+              <MediaNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* HTTP Request Node */}
-          {nodeType === 'http_request' && (
-            <HttpRequestNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* HTTP Request Node */}
+            {nodeType === 'http_request' && (
+              <HttpRequestNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Split Test Node */}
-          {nodeType === 'split' && (
-            <SplitNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Split Test Node */}
+            {nodeType === 'split' && (
+              <SplitNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Wait Reply Node */}
-          {nodeType === 'wait_reply' && (
-            <WaitReplyNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Wait Reply Node */}
+            {nodeType === 'wait_reply' && (
+              <WaitReplyNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Tag Node */}
-          {nodeType === 'tag' && (
-            <TagNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Tag Node */}
+            {nodeType === 'tag' && (
+              <TagNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Menu Node */}
-          {nodeType === 'menu' && (
-            <MenuNodeConfig config={config} setConfig={setConfig} />
-          )}
+            {/* Menu Node */}
+            {nodeType === 'menu' && (
+              <MenuNodeConfig config={config} setConfig={setConfig} />
+            )}
 
-          {/* Start Node */}
-          {nodeType === 'start' && (
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                As configurações de gatilho são definidas nas propriedades do fluxo.
-              </p>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-4 border-t">
-            <Button onClick={handleSave} className="flex-1">
-              <Save className="h-4 w-4 mr-2" />
-              Salvar
-            </Button>
-            {nodeType !== 'start' && (
-              <Button variant="destructive" size="icon" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+            {/* Start Node */}
+            {nodeType === 'start' && (
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  As configurações de gatilho são definidas nas propriedades do fluxo.
+                </p>
+              </div>
             )}
           </div>
+        </ScrollArea>
+
+        {/* Actions - Fixed at bottom */}
+        <div className="flex gap-2 pt-4 border-t mt-auto">
+          <Button onClick={handleSave} className="flex-1">
+            <Save className="h-4 w-4 mr-2" />
+            Salvar
+          </Button>
+          {nodeType !== 'start' && (
+            <Button variant="destructive" size="icon" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </SheetContent>
     </Sheet>

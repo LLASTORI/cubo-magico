@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Node } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,12 +19,14 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
-import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle, Users, ListOrdered, Plus, X } from 'lucide-react';
+import { Save, Trash2, MessageSquare, Clock, GitBranch, Tag, Image, Globe, GitFork, MessageCircle, Users, ListOrdered, Plus, X, Upload, Loader2, FileImage, FileVideo, FileAudio, FileText, FolderOpen } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { useProjectMembers } from '@/hooks/useProjectMembers';
 import { useProject } from '@/contexts/ProjectContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAutomationMedia, getMediaTypeFromMime, formatFileSize } from '@/hooks/useAutomationMedia';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface NodeConfigPanelProps {
   node: Node | null;
@@ -538,6 +540,47 @@ function ActionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: a
 
 // Media Config
 function MediaNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mediaList, isLoading, uploadMedia, deleteMedia, maxFileSize, allowedTypes } = useAutomationMedia();
+  const [activeTab, setActiveTab] = useState<string>(config.media_url ? 'url' : 'upload');
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const result = await uploadMedia.mutateAsync(file);
+    if (result) {
+      setConfig({ 
+        ...config, 
+        media_url: result.public_url,
+        media_type: getMediaTypeFromMime(result.mime_type),
+      });
+    }
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSelectFromLibrary = (media: typeof mediaList[0]) => {
+    setConfig({
+      ...config,
+      media_url: media.public_url,
+      media_type: getMediaTypeFromMime(media.mime_type),
+    });
+  };
+
+  const getMediaIcon = (mimeType: string) => {
+    const type = getMediaTypeFromMime(mimeType);
+    switch (type) {
+      case 'image': return <FileImage className="h-4 w-4" />;
+      case 'video': return <FileVideo className="h-4 w-4" />;
+      case 'audio': return <FileAudio className="h-4 w-4" />;
+      default: return <FileText className="h-4 w-4" />;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -555,17 +598,137 @@ function MediaNodeConfig({ config, setConfig }: { config: any; setConfig: (c: an
         </Select>
       </div>
 
-      <div className="space-y-2">
-        <Label>URL da mídia</Label>
-        <Input
-          placeholder="https://..."
-          value={config.media_url || ''}
-          onChange={(e) => setConfig({ ...config, media_url: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">
-          Cole o link direto da mídia ou faça upload no storage
-        </p>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="upload">Upload</TabsTrigger>
+          <TabsTrigger value="library">Biblioteca</TabsTrigger>
+          <TabsTrigger value="url">URL</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="upload" className="space-y-3">
+          <div 
+            className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={allowedTypes.join(',')}
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            {uploadMedia.isPending ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Enviando...</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm font-medium">Clique para enviar</p>
+                <p className="text-xs text-muted-foreground">
+                  Máx. {maxFileSize / 1024 / 1024}MB • JPG, PNG, GIF, MP4, MP3, PDF
+                </p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="library" className="space-y-3">
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : mediaList.length === 0 ? (
+            <div className="text-center py-4 text-muted-foreground">
+              <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhuma mídia na biblioteca</p>
+              <p className="text-xs">Faça upload para começar</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-[200px]">
+              <div className="grid grid-cols-2 gap-2">
+                {mediaList.map((media) => (
+                  <div
+                    key={media.id}
+                    onClick={() => handleSelectFromLibrary(media)}
+                    className={`
+                      p-2 border rounded-lg cursor-pointer transition-all
+                      ${config.media_url === media.public_url 
+                        ? 'border-primary bg-primary/5' 
+                        : 'hover:border-primary/50'}
+                    `}
+                  >
+                    {getMediaTypeFromMime(media.mime_type) === 'image' ? (
+                      <img 
+                        src={media.public_url} 
+                        alt={media.file_name}
+                        className="w-full h-16 object-cover rounded mb-1"
+                      />
+                    ) : (
+                      <div className="w-full h-16 bg-muted rounded mb-1 flex items-center justify-center">
+                        {getMediaIcon(media.mime_type)}
+                      </div>
+                    )}
+                    <p className="text-xs truncate">{media.file_name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {formatFileSize(media.file_size)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </TabsContent>
+
+        <TabsContent value="url" className="space-y-3">
+          <div className="space-y-2">
+            <Label>URL da mídia</Label>
+            <Input
+              placeholder="https://..."
+              value={config.media_url || ''}
+              onChange={(e) => setConfig({ ...config, media_url: e.target.value })}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Preview */}
+      {config.media_url && (
+        <div className="space-y-2">
+          <Label>Preview</Label>
+          <div className="border rounded-lg p-2">
+            {config.media_type === 'image' ? (
+              <img 
+                src={config.media_url} 
+                alt="Preview" 
+                className="max-h-32 mx-auto rounded"
+              />
+            ) : config.media_type === 'video' ? (
+              <video 
+                src={config.media_url} 
+                controls 
+                className="max-h-32 mx-auto rounded"
+              />
+            ) : config.media_type === 'audio' ? (
+              <audio src={config.media_url} controls className="w-full" />
+            ) : (
+              <div className="flex items-center gap-2 justify-center py-2">
+                <FileText className="h-5 w-5" />
+                <span className="text-sm">Documento</span>
+              </div>
+            )}
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="w-full text-destructive"
+            onClick={() => setConfig({ ...config, media_url: '' })}
+          >
+            Remover mídia
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Legenda (opcional)</Label>
@@ -573,7 +736,7 @@ function MediaNodeConfig({ config, setConfig }: { config: any; setConfig: (c: an
           placeholder="Descrição da mídia..."
           value={config.caption || ''}
           onChange={(e) => setConfig({ ...config, caption: e.target.value })}
-          className="min-h-[80px]"
+          className="min-h-[60px]"
         />
       </div>
     </div>

@@ -352,6 +352,50 @@ export type Database = {
           },
         ]
       }
+      automation_media: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          mime_type: string
+          project_id: string
+          public_url: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size: number
+          id?: string
+          mime_type: string
+          project_id: string
+          public_url: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          mime_type?: string
+          project_id?: string
+          public_url?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_media_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_message_templates: {
         Row: {
           content: string | null

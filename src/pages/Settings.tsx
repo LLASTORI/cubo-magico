@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Blocks, Users, HardDrive } from 'lucide-react';
+import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Users, HardDrive } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -20,7 +20,6 @@ import { FullDataSync } from '@/components/FullDataSync';
 import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useTheme } from 'next-themes';
-import { ProjectModulesManager } from '@/components/settings/ProjectModulesManager';
 import { HotmartSettings } from '@/components/settings/HotmartSettings';
 import { WhatsAppFullSettings } from '@/components/settings/WhatsAppFullSettings';
 import { TeamPermissionsManager } from '@/components/settings/TeamPermissionsManager';
@@ -389,7 +388,7 @@ const Settings = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className={`grid w-full max-w-4xl ${isSuperAdmin ? 'grid-cols-8' : 'grid-cols-7'}`}>
+          <TabsList className={`grid w-full max-w-4xl ${isSuperAdmin ? 'grid-cols-7' : 'grid-cols-6'}`}>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Perfil</span>
@@ -401,10 +400,6 @@ const Settings = () => {
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <span className="hidden sm:inline">Notificações</span>
-            </TabsTrigger>
-            <TabsTrigger value="modules" className="flex items-center gap-2">
-              <Blocks className="h-4 w-4" />
-              <span className="hidden sm:inline">Módulos</span>
             </TabsTrigger>
             <TabsTrigger value="media" className="flex items-center gap-2">
               <HardDrive className="h-4 w-4" />
@@ -629,11 +624,6 @@ const Settings = () => {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Modules Tab */}
-          <TabsContent value="modules">
-            <ProjectModulesManager />
           </TabsContent>
 
           {/* Media Tab */}

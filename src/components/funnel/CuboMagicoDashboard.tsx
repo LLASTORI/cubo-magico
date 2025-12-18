@@ -2359,143 +2359,146 @@ export function CuboMagicoDashboard({
                                       );
                                     })()}
 
-                                    {/* Health Metrics - Inline with Meta Ads */}
-                                    {(() => {
-                                      const funnelHealth = healthMetrics.find(h => h.funnelId === metrics.funnel.id);
-                                      if (!funnelHealth || (funnelHealth.totalAbandonos === 0 && funnelHealth.totalReembolsos === 0 && funnelHealth.totalChargebacks === 0)) {
-                                        return null;
-                                      }
-
-                                      // Helper functions for status
-                                      const getAbandonosStatus = (count: number) => {
-                                        if (count >= 20) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
-                                        if (count >= 10) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
-                                        if (count >= 5) return { borderClass: 'ring-2 ring-orange-400 ring-offset-2 ring-offset-background', color: 'orange' };
-                                        return { borderClass: '', color: 'green' };
-                                      };
-                                      
-                                      const getRecuperadosStatus = (rate: number) => {
-                                        if (rate >= 30) return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
-                                        if (rate >= 15) return { borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background', color: 'blue' };
-                                        return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
-                                      };
-                                      
-                                      const getReembolsoStatus = (rate: number) => {
-                                        if (rate > 10) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
-                                        if (rate > 5) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
-                                        return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
-                                      };
-                                      
-                                      const getChargebackStatus = (rate: number) => {
-                                        if (rate > 2) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
-                                        if (rate > 1) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
-                                        return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
-                                      };
-
-                                      const abandonosStatus = getAbandonosStatus(funnelHealth.totalAbandonos);
-                                      const recuperadosStatus = getRecuperadosStatus(funnelHealth.taxaRecuperacao);
-                                      const reembolsoStatus = getReembolsoStatus(funnelHealth.taxaReembolso);
-                                      const chargebackStatus = getChargebackStatus(funnelHealth.taxaChargeback);
-
-                                      return (
-                                        <>
-                                          <div className="flex items-center mx-2">
-                                            <div className="w-px h-12 bg-border/50" />
-                                          </div>
-                                          {/* Abandonos */}
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <div className={cn(
-                                                "flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
-                                                abandonosStatus.borderClass
-                                              )}>
-                                                <span className="text-[10px] text-orange-600 font-medium uppercase">Abandonos</span>
-                                                <span className="text-xl font-bold">{funnelHealth.totalAbandonos}</span>
-                                                <span className="text-[9px] text-orange-500">Carrinhos</span>
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="bottom" className="max-w-[220px]">
-                                              <p className="font-semibold">Carrinhos Abandonados</p>
-                                              <p className="text-xs text-muted-foreground mt-1">Clientes que iniciaram checkout mas não finalizaram.</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          
-                                          {/* Recuperados */}
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <div className={cn(
-                                                "flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
-                                                recuperadosStatus.borderClass
-                                              )}>
-                                                <span className="text-[10px] text-green-600 font-medium uppercase">Recuperados</span>
-                                                <div className="flex items-baseline gap-0.5">
-                                                  <span className="text-xl font-bold">{funnelHealth.abandonosRecuperados}</span>
-                                                  <span className={cn(
-                                                    "text-[10px]",
-                                                    funnelHealth.taxaRecuperacao >= 30 ? "text-green-600" : funnelHealth.taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600"
-                                                  )}>{funnelHealth.taxaRecuperacao.toFixed(0)}%</span>
-                                                </div>
-                                                <span className="text-[9px] text-green-500">Convertidos</span>
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="bottom" className="max-w-[220px]">
-                                              <p className="font-semibold">Abandonos Recuperados</p>
-                                              <p className="text-xs text-muted-foreground mt-1">Clientes que abandonaram mas depois compraram.</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          
-                                          {/* Reembolsos */}
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <div className={cn(
-                                                "flex flex-col items-center p-3 bg-blue-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
-                                                reembolsoStatus.borderClass
-                                              )}>
-                                                <span className="text-[10px] text-blue-600 font-medium uppercase">Reembolsos</span>
-                                                <div className="flex items-baseline gap-0.5">
-                                                  <span className="text-xl font-bold">{funnelHealth.totalReembolsos}</span>
-                                                  <span className={cn(
-                                                    "text-[10px]",
-                                                    funnelHealth.taxaReembolso < 5 ? "text-green-600" : funnelHealth.taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600"
-                                                  )}>{funnelHealth.taxaReembolso.toFixed(1)}%</span>
-                                                </div>
-                                                <span className="text-[9px] text-blue-500">Devolvidos</span>
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="bottom" className="max-w-[220px]">
-                                              <p className="font-semibold">Reembolsos</p>
-                                              <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorReembolsado)} em reembolsos</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          
-                                          {/* Chargebacks */}
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <div className={cn(
-                                                "flex flex-col items-center p-3 bg-red-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
-                                                chargebackStatus.borderClass
-                                              )}>
-                                                <span className="text-[10px] text-red-600 font-medium uppercase">Chargebacks</span>
-                                                <div className="flex items-baseline gap-0.5">
-                                                  <span className="text-xl font-bold">{funnelHealth.totalChargebacks}</span>
-                                                  <span className={cn(
-                                                    "text-[10px]",
-                                                    funnelHealth.taxaChargeback < 1 ? "text-green-600" : funnelHealth.taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600"
-                                                  )}>{funnelHealth.taxaChargeback.toFixed(1)}%</span>
-                                                </div>
-                                                <span className="text-[9px] text-red-500">Contestados</span>
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="bottom" className="max-w-[220px]">
-                                              <p className="font-semibold">Chargebacks</p>
-                                              <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorChargeback)} em contestações</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </>
-                                      );
-                                    })()}
                                   </div>
                                 </div>
+                                  );
+                                })()}
+
+                                {/* Health Metrics - Separate Section */}
+                                {(() => {
+                                  const funnelHealth = healthMetrics.find(h => h.funnelId === metrics.funnel.id);
+                                  if (!funnelHealth || (funnelHealth.totalAbandonos === 0 && funnelHealth.totalReembolsos === 0 && funnelHealth.totalChargebacks === 0)) {
+                                    return null;
+                                  }
+
+                                  // Helper functions for status
+                                  const getAbandonosStatus = (count: number) => {
+                                    if (count >= 20) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
+                                    if (count >= 10) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                    if (count >= 5) return { borderClass: 'ring-2 ring-orange-400 ring-offset-2 ring-offset-background', color: 'orange' };
+                                    return { borderClass: '', color: 'green' };
+                                  };
+                                  
+                                  const getRecuperadosStatus = (rate: number) => {
+                                    if (rate >= 30) return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
+                                    if (rate >= 15) return { borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background', color: 'blue' };
+                                    return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                  };
+                                  
+                                  const getReembolsoStatus = (rate: number) => {
+                                    if (rate > 10) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
+                                    if (rate > 5) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                    return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
+                                  };
+                                  
+                                  const getChargebackStatus = (rate: number) => {
+                                    if (rate > 2) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
+                                    if (rate > 1) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                    return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
+                                  };
+
+                                  const abandonosStatus = getAbandonosStatus(funnelHealth.totalAbandonos);
+                                  const recuperadosStatus = getRecuperadosStatus(funnelHealth.taxaRecuperacao);
+                                  const reembolsoStatus = getReembolsoStatus(funnelHealth.taxaReembolso);
+                                  const chargebackStatus = getChargebackStatus(funnelHealth.taxaChargeback);
+
+                                  return (
+                                    <div className="pt-6 mt-4 border-t border-border/50">
+                                      <h4 className="text-sm font-semibold mb-4 text-muted-foreground">
+                                        Saúde do Funil — <span className="text-foreground">{metrics.funnel.name}</span>
+                                      </h4>
+                                      <div className="flex flex-wrap items-center gap-3">
+                                        {/* Abandonos */}
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={cn(
+                                              "flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                              abandonosStatus.borderClass
+                                            )}>
+                                              <span className="text-[10px] text-orange-600 font-medium uppercase">Abandonos</span>
+                                              <span className="text-xl font-bold">{funnelHealth.totalAbandonos}</span>
+                                              <span className="text-[9px] text-orange-500">Carrinhos</span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[220px]">
+                                            <p className="font-semibold">Carrinhos Abandonados</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Clientes que iniciaram checkout mas não finalizaram.</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                        
+                                        {/* Recuperados */}
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={cn(
+                                              "flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                              recuperadosStatus.borderClass
+                                            )}>
+                                              <span className="text-[10px] text-green-600 font-medium uppercase">Recuperados</span>
+                                              <div className="flex items-baseline gap-0.5">
+                                                <span className="text-xl font-bold">{funnelHealth.abandonosRecuperados}</span>
+                                                <span className={cn(
+                                                  "text-[10px]",
+                                                  funnelHealth.taxaRecuperacao >= 30 ? "text-green-600" : funnelHealth.taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600"
+                                                )}>{funnelHealth.taxaRecuperacao.toFixed(0)}%</span>
+                                              </div>
+                                              <span className="text-[9px] text-green-500">Convertidos</span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[220px]">
+                                            <p className="font-semibold">Abandonos Recuperados</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Clientes que abandonaram mas depois compraram.</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                        
+                                        {/* Reembolsos */}
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={cn(
+                                              "flex flex-col items-center p-3 bg-blue-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                              reembolsoStatus.borderClass
+                                            )}>
+                                              <span className="text-[10px] text-blue-600 font-medium uppercase">Reembolsos</span>
+                                              <div className="flex items-baseline gap-0.5">
+                                                <span className="text-xl font-bold">{funnelHealth.totalReembolsos}</span>
+                                                <span className={cn(
+                                                  "text-[10px]",
+                                                  funnelHealth.taxaReembolso < 5 ? "text-green-600" : funnelHealth.taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600"
+                                                )}>{funnelHealth.taxaReembolso.toFixed(1)}%</span>
+                                              </div>
+                                              <span className="text-[9px] text-blue-500">Devolvidos</span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[220px]">
+                                            <p className="font-semibold">Reembolsos</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorReembolsado)} em reembolsos</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                        
+                                        {/* Chargebacks */}
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={cn(
+                                              "flex flex-col items-center p-3 bg-red-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
+                                              chargebackStatus.borderClass
+                                            )}>
+                                              <span className="text-[10px] text-red-600 font-medium uppercase">Chargebacks</span>
+                                              <div className="flex items-baseline gap-0.5">
+                                                <span className="text-xl font-bold">{funnelHealth.totalChargebacks}</span>
+                                                <span className={cn(
+                                                  "text-[10px]",
+                                                  funnelHealth.taxaChargeback < 1 ? "text-green-600" : funnelHealth.taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600"
+                                                )}>{funnelHealth.taxaChargeback.toFixed(1)}%</span>
+                                              </div>
+                                              <span className="text-[9px] text-red-500">Contestados</span>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[220px]">
+                                            <p className="font-semibold">Chargebacks</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorChargeback)} em contestações</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </div>
+                                    </div>
                                   );
                                 })()}
                               </div>

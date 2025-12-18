@@ -484,54 +484,29 @@ async function syncSales(
     other_origin: 0,
   };
   
-  // Fallback exchange rates (conservative estimates for BRL conversion)
-  // These are used when real-time rates cannot be fetched
-  const fallbackRates: Record<string, number> = {
+  // STANDARDIZED exchange rates - MUST match webhook rates exactly
+  // Using fixed rates to ensure consistency between webhook and API
+  const exchangeRates: Record<string, number> = {
     'BRL': 1,
     'USD': 5.50,
     'EUR': 6.00,
     'GBP': 7.00,
-    'PYG': 0.00075,    // Guarani Paraguaio ~7500 PYG = 1 BRL
-    'UYU': 0.14,       // Peso Uruguaio ~43 UYU = 1 BRL
+    'PYG': 0.00075,
+    'UYU': 0.14,
     'AUD': 3.60,
     'CHF': 6.20,
     'CAD': 4.00,
     'MXN': 0.28,
-    'ARS': 0.005,      // Peso Argentino ~1200 ARS = 1 BRL
-    'CLP': 0.006,      // Peso Chileno ~950 CLP = 1 BRL
-    'COP': 0.0013,     // Peso Colombiano ~4200 COP = 1 BRL
+    'ARS': 0.005,
+    'CLP': 0.006,
+    'COP': 0.0013,
     'PEN': 1.45,
-    'JPY': 0.037,      // Iene Japonês ~154 JPY = 1 BRL
-    'BOB': 0.79,       // Boliviano
-    'VES': 0.15,       // Bolívar Venezuelano
+    'JPY': 0.037,
+    'BOB': 0.79,
+    'VES': 0.15,
   };
   
-  let exchangeRates: Record<string, number> = { ...fallbackRates };
-  
-  try {
-    console.log('Fetching real-time exchange rates from Frankfurter API...');
-    
-    // Fetch common currencies
-    const currencies = ['USD', 'EUR', 'GBP', 'AUD', 'CHF', 'CAD', 'MXN', 'JPY'];
-    for (const curr of currencies) {
-      try {
-        const resp = await fetch(`https://api.frankfurter.app/latest?from=${curr}&to=BRL`);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.rates?.BRL) {
-            exchangeRates[curr] = data.rates.BRL;
-          }
-        }
-      } catch (e) {
-        console.log(`Could not fetch rate for ${curr}, using fallback: ${fallbackRates[curr]}`);
-      }
-    }
-    
-    console.log('Exchange rates loaded:', exchangeRates);
-  } catch (rateError) {
-    console.error('Error fetching exchange rates, using fallback rates:', rateError);
-    exchangeRates = { ...fallbackRates };
-  }
+  console.log('Using standardized exchange rates (matching webhook):', exchangeRates);
 
   // Log first sale's full purchase for debugging source_sck and checkout_origin
   if (sales.length > 0) {

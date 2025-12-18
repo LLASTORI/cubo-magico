@@ -1167,7 +1167,10 @@ export function CuboMagicoDashboard({
             )}
           </TooltipContent>
         </Tooltip>
+      </div>
 
+      {/* Second Row: ROAS + Health Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
@@ -1218,169 +1221,117 @@ export function CuboMagicoDashboard({
             )}
           </TooltipContent>
         </Tooltip>
+
+        {/* Health Summary Cards - Compact */}
+        {(() => {
+          const healthTotals = healthMetrics.reduce((acc, h) => ({
+            totalAbandonos: acc.totalAbandonos + h.totalAbandonos,
+            abandonosRecuperados: acc.abandonosRecuperados + h.abandonosRecuperados,
+            totalReembolsos: acc.totalReembolsos + h.totalReembolsos,
+            valorReembolsado: acc.valorReembolsado + h.valorReembolsado,
+            totalChargebacks: acc.totalChargebacks + h.totalChargebacks,
+            valorChargeback: acc.valorChargeback + h.valorChargeback,
+            vendasAprovadas: acc.vendasAprovadas + h.vendasAprovadas,
+          }), {
+            totalAbandonos: 0, abandonosRecuperados: 0, totalReembolsos: 0,
+            valorReembolsado: 0, totalChargebacks: 0, valorChargeback: 0, vendasAprovadas: 0,
+          });
+          
+          const taxaRecuperacao = healthTotals.totalAbandonos > 0 ? (healthTotals.abandonosRecuperados / healthTotals.totalAbandonos) * 100 : 0;
+          const taxaReembolso = healthTotals.vendasAprovadas > 0 ? (healthTotals.totalReembolsos / healthTotals.vendasAprovadas) * 100 : 0;
+          const taxaChargeback = healthTotals.vendasAprovadas > 0 ? (healthTotals.totalChargebacks / healthTotals.vendasAprovadas) * 100 : 0;
+          const hasHealthData = healthTotals.totalAbandonos > 0 || healthTotals.totalReembolsos > 0 || healthTotals.totalChargebacks > 0;
+
+          if (!hasHealthData) return null;
+
+          return (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="p-3 cursor-help hover:border-orange-500/50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-md bg-orange-500/10">
+                        <ShoppingCart className="w-4 h-4 text-orange-500" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Abandonos</p>
+                        <p className="text-lg font-bold text-orange-500">{healthTotals.totalAbandonos}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent><p className="font-semibold">Total de Carrinhos Abandonados</p></TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="p-3 cursor-help hover:border-green-500/50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-md bg-green-500/10">
+                        <RefreshCw className="w-4 h-4 text-green-500" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Recuperados</p>
+                        <div className="flex items-baseline gap-1">
+                          <p className="text-lg font-bold text-green-500">{healthTotals.abandonosRecuperados}</p>
+                          <span className={cn("text-[10px]", taxaRecuperacao >= 30 ? "text-green-600" : taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600")}>
+                            {taxaRecuperacao.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent><p className="font-semibold">Abandonos Recuperados</p></TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="p-3 cursor-help hover:border-blue-500/50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-md bg-blue-500/10">
+                        <CreditCard className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Reembolsos</p>
+                        <div className="flex items-baseline gap-1">
+                          <p className="text-lg font-bold text-blue-500">{healthTotals.totalReembolsos}</p>
+                          <span className={cn("text-[10px]", taxaReembolso < 5 ? "text-green-600" : taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600")}>
+                            {taxaReembolso.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent><p className="font-semibold">Total de Reembolsos</p><p className="text-xs text-muted-foreground">{formatCurrency(healthTotals.valorReembolsado)}</p></TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="p-3 cursor-help hover:border-red-500/50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-md bg-red-500/10">
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Chargebacks</p>
+                        <div className="flex items-baseline gap-1">
+                          <p className="text-lg font-bold text-red-500">{healthTotals.totalChargebacks}</p>
+                          <span className={cn("text-[10px]", taxaChargeback < 1 ? "text-green-600" : taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600")}>
+                            {taxaChargeback.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent><p className="font-semibold">Total de Chargebacks</p><p className="text-xs text-muted-foreground">{formatCurrency(healthTotals.valorChargeback)}</p></TooltipContent>
+              </Tooltip>
+            </>
+          );
+        })()}
       </div>
-
-      {/* Health Summary Cards */}
-      {(() => {
-        // Calculate totals from all funnel health data
-        const healthTotals = healthMetrics.reduce((acc, h) => ({
-          totalAbandonos: acc.totalAbandonos + h.totalAbandonos,
-          abandonosRecuperados: acc.abandonosRecuperados + h.abandonosRecuperados,
-          totalReembolsos: acc.totalReembolsos + h.totalReembolsos,
-          valorReembolsado: acc.valorReembolsado + h.valorReembolsado,
-          totalChargebacks: acc.totalChargebacks + h.totalChargebacks,
-          valorChargeback: acc.valorChargeback + h.valorChargeback,
-          vendasAprovadas: acc.vendasAprovadas + h.vendasAprovadas,
-        }), {
-          totalAbandonos: 0,
-          abandonosRecuperados: 0,
-          totalReembolsos: 0,
-          valorReembolsado: 0,
-          totalChargebacks: 0,
-          valorChargeback: 0,
-          vendasAprovadas: 0,
-        });
-        
-        const taxaRecuperacao = healthTotals.totalAbandonos > 0 
-          ? (healthTotals.abandonosRecuperados / healthTotals.totalAbandonos) * 100 : 0;
-        const taxaReembolso = healthTotals.vendasAprovadas > 0 
-          ? (healthTotals.totalReembolsos / healthTotals.vendasAprovadas) * 100 : 0;
-        const taxaChargeback = healthTotals.vendasAprovadas > 0 
-          ? (healthTotals.totalChargebacks / healthTotals.vendasAprovadas) * 100 : 0;
-
-        const hasHealthData = healthTotals.totalAbandonos > 0 || healthTotals.totalReembolsos > 0 || healthTotals.totalChargebacks > 0;
-
-        if (!hasHealthData) return null;
-
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Total Abandonos */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="p-4 cursor-help hover:border-orange-500/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-orange-500/10">
-                      <ShoppingCart className="w-5 h-5 text-orange-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Abandonos</p>
-                      <p className="text-xl font-bold text-orange-500">{healthTotals.totalAbandonos}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {unattributedAbandonments.length > 0 && `${unattributedAbandonments.length} não atribuídos`}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[250px]">
-                <p className="font-semibold">Total de Carrinhos Abandonados</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Soma de todos os carrinhos abandonados dos funis no período.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Total Recuperados */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="p-4 cursor-help hover:border-green-500/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-green-500/10">
-                      <RefreshCw className="w-5 h-5 text-green-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Recuperados</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-xl font-bold text-green-500">{healthTotals.abandonosRecuperados}</p>
-                        <Badge variant="outline" className={cn(
-                          "text-xs px-1.5",
-                          taxaRecuperacao >= 30 ? "text-green-600" : taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600"
-                        )}>
-                          {taxaRecuperacao.toFixed(1)}%
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[250px]">
-                <p className="font-semibold">Total de Abandonos Recuperados</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Clientes que abandonaram o carrinho mas depois finalizaram a compra.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Total Reembolsos */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="p-4 cursor-help hover:border-blue-500/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-500/10">
-                      <CreditCard className="w-5 h-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Reembolsos</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-xl font-bold text-blue-500">{healthTotals.totalReembolsos}</p>
-                        <Badge variant="outline" className={cn(
-                          "text-xs px-1.5",
-                          taxaReembolso < 5 ? "text-green-600" : taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600"
-                        )}>
-                          {taxaReembolso.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(healthTotals.valorReembolsado)}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[250px]">
-                <p className="font-semibold">Total de Reembolsos</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Soma de todas as vendas reembolsadas dos funis no período.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Total Chargebacks */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="p-4 cursor-help hover:border-red-500/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-red-500/10">
-                      <AlertTriangle className="w-5 h-5 text-red-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Chargebacks</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-xl font-bold text-red-500">{healthTotals.totalChargebacks}</p>
-                        <Badge variant="outline" className={cn(
-                          "text-xs px-1.5",
-                          taxaChargeback < 1 ? "text-green-600" : taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600"
-                        )}>
-                          {taxaChargeback.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(healthTotals.valorChargeback)}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[250px]">
-                <p className="font-semibold">Total de Chargebacks</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Soma de todas as contestações de compra dos funis no período.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        );
-      })()}
 
       {/* Funnel Table with Drill-down */}
       <Card>

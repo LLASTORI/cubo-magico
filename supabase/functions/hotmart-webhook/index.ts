@@ -416,49 +416,38 @@ serve(async (req) => {
       meta_ad_id_extracted: metaAdIdExtracted,
       // Metadata
       last_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
     
-    // Check if transaction already exists
-    const { data: existingSale } = await supabase
+    // Use atomic UPSERT to prevent race conditions with concurrent webhooks
+    // This handles duplicates gracefully without SELECT + INSERT/UPDATE pattern
+    const { data: upsertResult, error: upsertError } = await supabase
       .from('hotmart_sales')
+      .upsert(saleData, {
+        onConflict: 'project_id,transaction_id',
+        ignoreDuplicates: false, // Update on conflict
+      })
       .select('id')
-      .eq('project_id', projectId)
-      .eq('transaction_id', transactionId)
       .single();
     
-    let operation = 'none';
-    
-    if (existingSale) {
-      // Update existing sale
-      const { error: updateError } = await supabase
-        .from('hotmart_sales')
-        .update({
-          ...saleData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingSale.id);
-      
-      if (updateError) {
-        console.error('Error updating sale:', updateError);
-        throw updateError;
+    if (upsertError) {
+      // Handle unique constraint violation gracefully (concurrent request)
+      if (upsertError.code === '23505') {
+        console.log(`Duplicate webhook for transaction ${transactionId}, ignoring`);
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Duplicate event, already processed',
+          transaction: transactionId,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
-      
-      operation = 'updated';
-      console.log(`Updated sale ${transactionId}`);
-    } else {
-      // Insert new sale
-      const { error: insertError } = await supabase
-        .from('hotmart_sales')
-        .insert(saleData);
-      
-      if (insertError) {
-        console.error('Error inserting sale:', insertError);
-        throw insertError;
-      }
-      
-      operation = 'created';
-      console.log(`Created sale ${transactionId}`);
+      console.error('Error upserting sale:', upsertError);
+      throw upsertError;
     }
+    
+    const operation = upsertResult ? 'upserted' : 'processed';
+    console.log(`${operation} sale ${transactionId}`);
     
     console.log('=== WEBHOOK PROCESSED SUCCESSFULLY ===');
     console.log('Project:', project.name);

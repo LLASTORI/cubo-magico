@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -194,6 +195,7 @@ interface ImportResult {
 
 export const HotmartCSVImport = () => {
   const { currentProject } = useProject();
+  const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -207,6 +209,7 @@ export const HotmartCSVImport = () => {
   const [parseError, setParseError] = useState<string | null>(null);
   
   const projectId = currentProject?.id;
+  const userId = user?.id;
 
   const normalizeColumnName = (col: string): string => {
     return col.toLowerCase()
@@ -483,6 +486,23 @@ export const HotmartCSVImport = () => {
       setProgress(100);
       setProgressMessage('Importação concluída!');
       setImportResult(result);
+
+      // Log import activity
+      if (userId && projectId) {
+        await supabase.from('user_activity_logs').insert({
+          user_id: userId,
+          project_id: projectId,
+          action: 'csv_import',
+          entity_type: 'hotmart_sales',
+          entity_name: file?.name || 'CSV Import',
+          details: {
+            records_processed: result.updated,
+            errors_count: result.errors.length,
+            file_name: file?.name,
+            file_size: file?.size,
+          },
+        });
+      }
 
       toast({
         title: 'Importação concluída!',

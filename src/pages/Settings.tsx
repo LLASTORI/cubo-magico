@@ -16,14 +16,12 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { FullDataSync } from '@/components/FullDataSync';
 import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useTheme } from 'next-themes';
-import { HotmartSettings } from '@/components/settings/HotmartSettings';
-import { WhatsAppFullSettings } from '@/components/settings/WhatsAppFullSettings';
 import { TeamPermissionsManager } from '@/components/settings/TeamPermissionsManager';
 import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
+import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
 
 const META_APP_ID = '845927421602166';
 
@@ -633,121 +631,7 @@ const Settings = () => {
 
           {/* Integrations Tab */}
           <TabsContent value="integrations">
-            <div className="space-y-6">
-              {/* Full Data Sync */}
-              <FullDataSync />
-              {/* Meta Ads Integration */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/10">
-                        <Facebook className="h-6 w-6 text-blue-500" />
-                      </div>
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          Meta Ads
-                          {metaCredentials && !isMetaExpired && (
-                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Conectado
-                            </Badge>
-                          )}
-                          {metaCredentials && isMetaExpired && (
-                            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              Token Expirado
-                            </Badge>
-                          )}
-                        </CardTitle>
-                        <CardDescription>
-                          Conecte suas contas de anúncios do Facebook e Instagram.
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {!currentProject ? (
-                    <div className="p-4 rounded-lg bg-muted">
-                      <p className="text-sm text-muted-foreground">
-                        Selecione um projeto primeiro para conectar o Meta Ads.
-                      </p>
-                    </div>
-                  ) : metaCredentials && !isMetaExpired ? (
-                    <div className="space-y-4">
-                      <div className="p-4 rounded-lg bg-muted space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Usuário conectado:</span>
-                          <span className="text-sm font-medium">{metaCredentials.user_name || 'N/A'}</span>
-                        </div>
-                        {metaCredentials.user_id && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">ID da conta Meta:</span>
-                            <span className="text-sm font-medium font-mono">{metaCredentials.user_id}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Projeto:</span>
-                          <span className="text-sm font-medium">{currentProject.name}</span>
-                        </div>
-                        {metaCredentials.expires_at && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Token expira em:</span>
-                            <span className="text-sm font-medium">
-                              {new Date(metaCredentials.expires_at).toLocaleDateString('pt-BR')}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={handleConnectMeta}
-                          className="flex-1"
-                        >
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Reconectar
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={() => disconnectMetaMutation.mutate()}
-                          disabled={disconnectMetaMutation.isPending}
-                        >
-                          {disconnectMetaMutation.isPending ? 'Desconectando...' : 'Desconectar'}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="p-4 rounded-lg bg-muted">
-                        <p className="text-sm text-muted-foreground">
-                          {isMetaExpired 
-                            ? 'Seu token do Meta expirou. Reconecte para continuar importando dados.'
-                            : 'Conecte sua conta Meta para importar dados de gastos com anúncios e cruzar com seus dados de vendas.'
-                          }
-                        </p>
-                      </div>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Importe gastos por campanha, conjunto e anúncio</li>
-                        <li>• Analise ROI e ROAS por funil</li>
-                        <li>• Cruze dados de investimento x faturamento</li>
-                      </ul>
-                      <Button onClick={handleConnectMeta} className="w-full">
-                        <Facebook className="h-4 w-4 mr-2" />
-                        Conectar com Facebook
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Hotmart Integration */}
-              <HotmartSettings />
-
-              {/* WhatsApp Integration */}
-              <WhatsAppFullSettings />
-            </div>
+            <IntegrationsSettings />
           </TabsContent>
 
           {/* Security Tab */}

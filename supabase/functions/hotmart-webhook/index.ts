@@ -364,6 +364,50 @@ serve(async (req) => {
       : null;
     
     const affiliate = affiliates?.[0];
+    const commissions = data?.commissions;
+    
+    // Get currency from price object (matches API structure)
+    const currencyCode = purchase?.price?.currency_value || purchase?.full_price?.currency_value || 'BRL';
+    const totalPrice = purchase?.price?.value || null;
+    
+    // Exchange rates for BRL conversion (same as API)
+    const exchangeRates: Record<string, number> = {
+      'BRL': 1,
+      'USD': 5.50,
+      'EUR': 6.00,
+      'GBP': 7.00,
+      'PYG': 0.00075,
+      'UYU': 0.14,
+      'AUD': 3.60,
+      'CHF': 6.20,
+      'CAD': 4.00,
+      'MXN': 0.28,
+      'ARS': 0.005,
+      'CLP': 0.006,
+      'COP': 0.0013,
+      'PEN': 1.45,
+      'JPY': 0.037,
+    };
+    
+    // Calculate total_price_brl with proper conversion (matching API logic)
+    let totalPriceBrl: number | null = null;
+    let exchangeRateUsed: number | null = null;
+    
+    if (totalPrice !== null) {
+      if (currencyCode === 'BRL') {
+        // For BRL, use full_price if available (includes fees), otherwise use price
+        totalPriceBrl = purchase?.full_price?.value || totalPrice;
+      } else {
+        // For other currencies, convert to BRL
+        const rate = exchangeRates[currencyCode] || 1;
+        totalPriceBrl = totalPrice * rate;
+        exchangeRateUsed = rate;
+        console.log(`Currency conversion: ${totalPrice} ${currencyCode} -> ${totalPriceBrl} BRL (rate: ${rate})`);
+      }
+    }
+    
+    // Get net_revenue from commissions (matching API logic)
+    const netRevenue = commissions?.[0]?.value || null;
     
     const saleData = {
       project_id: projectId,
@@ -373,8 +417,11 @@ serve(async (req) => {
       offer_code: purchase?.offer?.code || null,
       product_price: purchase?.original_offer_price?.value || null,
       offer_price: purchase?.price?.value || null,
-      total_price: purchase?.price?.value || null,
-      total_price_brl: purchase?.full_price?.value || null,
+      offer_currency: currencyCode,
+      total_price: totalPrice,
+      total_price_brl: totalPriceBrl,
+      exchange_rate_used: exchangeRateUsed,
+      net_revenue: netRevenue,
       status,
       sale_date: saleDate,
       confirmation_date: confirmationDate,

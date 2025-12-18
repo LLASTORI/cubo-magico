@@ -391,6 +391,7 @@ async function fetchAllSales(
 }
 
 // All statuses to fetch from Hotmart API
+// IMPORTANT: Must include ALL statuses that webhook can create
 const ALL_TRANSACTION_STATUSES = [
   'APPROVED',      // Approved
   'COMPLETE',      // Complete  
@@ -401,6 +402,14 @@ const ALL_TRANSACTION_STATUSES = [
   'EXPIRED',       // Expired (boleto/PIX not paid)
   'OVERDUE',       // Overdue payment
   'BLOCKED',       // Blocked transaction
+  'PRINTED_BILLET', // Boleto generated but not paid
+  'DELAYED',       // Delayed payment
+  'PROTESTED',     // Protested
+  'WAITING_PAYMENT', // Waiting for payment (PIX/boleto)
+  'STARTED',       // Purchase started
+  'NO_FUNDS',      // Declined - no funds
+  'UNDER_ANALYSIS', // Under analysis by payment processor
+  'PARTIALLY_REFUNDED', // Partially refunded
 ];
 
 // Sync sales to database - OPTIMIZED with batch upsert

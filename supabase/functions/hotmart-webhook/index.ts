@@ -366,11 +366,14 @@ serve(async (req) => {
     const affiliate = affiliates?.[0];
     const commissions = data?.commissions;
     
-    // Get currency from price object (matches API structure)
-    const currencyCode = purchase?.price?.currency_value || purchase?.full_price?.currency_value || 'BRL';
+    // Get currency from price object - check both currency_value (webhook) and currency_code (API) for compatibility
+    const currencyCode = purchase?.price?.currency_value || (purchase?.price as any)?.currency_code || 
+                         purchase?.full_price?.currency_value || (purchase?.full_price as any)?.currency_code || 'BRL';
     const totalPrice = purchase?.price?.value || null;
+    console.log(`Currency detected: ${currencyCode}, Total price: ${totalPrice}`);
     
-    // Exchange rates for BRL conversion (same as API)
+    // STANDARDIZED exchange rates - MUST match API rates exactly
+    // Using fixed rates to ensure consistency between webhook and API
     const exchangeRates: Record<string, number> = {
       'BRL': 1,
       'USD': 5.50,
@@ -387,6 +390,8 @@ serve(async (req) => {
       'COP': 0.0013,
       'PEN': 1.45,
       'JPY': 0.037,
+      'BOB': 0.79,
+      'VES': 0.15,
     };
     
     // Calculate total_price_brl with proper conversion (matching API logic)

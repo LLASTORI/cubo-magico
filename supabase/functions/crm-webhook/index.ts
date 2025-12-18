@@ -454,75 +454,128 @@ serve(async (req) => {
 
     const isNewContact = !existingContact;
 
-    // Build contact data - only set first_utm_* for new contacts
-    const contactData: Record<string, unknown> = {
-      project_id: webhookKey.project_id,
-      email,
-      name: body.name || null,
-      phone: body.phone || null,
-      phone_ddd: body.phone_ddd || null,
-      phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
-      document: body.document || null,
-      instagram: body.instagram || null,
-      address: body.address || null,
-      address_number: body.address_number || null,
-      address_complement: body.address_complement || null,
-      neighborhood: body.neighborhood || null,
-      city: body.city || null,
-      state: body.state || null,
-      country: body.country || null,
-      cep: body.cep || null,
-      custom_fields: body.custom_fields || {},
-      source: 'webhook',
-      last_activity_at: now,
-    };
-
     // Extract Meta IDs from UTM data
     const { campaignId, adsetId, adId } = extractMetaIds(body);
     console.log('[CRM Webhook] Extracted Meta IDs:', { campaignId, adsetId, adId });
 
-    // Only set first_utm_* and first_seen_at for new contacts
+    let contact;
+
     if (isNewContact) {
-      contactData.status = 'lead';
-      contactData.first_utm_source = body.utm_source || null;
-      contactData.first_utm_campaign = body.utm_campaign || null;
-      contactData.first_utm_medium = body.utm_medium || null;
-      contactData.first_utm_content = body.utm_content || null;
-      contactData.first_utm_term = body.utm_term || null;
-      contactData.first_utm_adset = body.utm_adset || null;
-      contactData.first_utm_ad = body.utm_ad || null;
-      contactData.first_utm_creative = body.utm_creative || null;
-      contactData.first_utm_placement = body.utm_placement || null;
-      contactData.first_page_name = body.page_name || null;
-      contactData.first_meta_campaign_id = campaignId;
-      contactData.first_meta_adset_id = adsetId;
-      contactData.first_meta_ad_id = adId;
-      contactData.first_seen_at = now;
-      contactData.tags = mergedTags.length > 0 ? mergedTags : null;
+      // For new contacts, insert with all data
+      const insertData = {
+        project_id: webhookKey.project_id,
+        email,
+        name: body.name || null,
+        phone: body.phone || null,
+        phone_ddd: body.phone_ddd || null,
+        phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
+        document: body.document || null,
+        instagram: body.instagram || null,
+        address: body.address || null,
+        address_number: body.address_number || null,
+        address_complement: body.address_complement || null,
+        neighborhood: body.neighborhood || null,
+        city: body.city || null,
+        state: body.state || null,
+        country: body.country || null,
+        cep: body.cep || null,
+        custom_fields: body.custom_fields || {},
+        source: 'webhook',
+        status: 'lead',
+        tags: mergedTags.length > 0 ? mergedTags : null,
+        first_utm_source: body.utm_source || null,
+        first_utm_campaign: body.utm_campaign || null,
+        first_utm_medium: body.utm_medium || null,
+        first_utm_content: body.utm_content || null,
+        first_utm_term: body.utm_term || null,
+        first_utm_adset: body.utm_adset || null,
+        first_utm_ad: body.utm_ad || null,
+        first_utm_creative: body.utm_creative || null,
+        first_utm_placement: body.utm_placement || null,
+        first_page_name: body.page_name || null,
+        first_meta_campaign_id: campaignId,
+        first_meta_adset_id: adsetId,
+        first_meta_ad_id: adId,
+        first_seen_at: now,
+        last_activity_at: now,
+      };
+
+      const { data: insertedContact, error: insertError } = await supabase
+        .from('crm_contacts')
+        .insert(insertData)
+        .select('id, email, name, status, tags, created_at')
+        .single();
+
+      if (insertError) {
+        console.error('[CRM Webhook] Error inserting contact:', insertError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to save contact', details: insertError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      contact = insertedContact;
     } else {
-      // For existing contacts, merge tags
+      // For existing contacts, use COALESCE logic to preserve existing data
+      // Only update fields if new value is provided (not null/undefined/empty)
+      const updateFields: Record<string, unknown> = {
+        last_activity_at: now,
+      };
+
+      // Only update if new value is provided and not empty
+      if (body.name) updateFields.name = body.name;
+      if (body.phone) updateFields.phone = body.phone;
+      if (body.phone_ddd) updateFields.phone_ddd = body.phone_ddd;
+      if (body.phone_country_code || body.country) {
+        updateFields.phone_country_code = body.phone_country_code || getCountryCode(body.country!);
+      }
+      if (body.document) updateFields.document = body.document;
+      if (body.instagram) updateFields.instagram = body.instagram;
+      if (body.address) updateFields.address = body.address;
+      if (body.address_number) updateFields.address_number = body.address_number;
+      if (body.address_complement) updateFields.address_complement = body.address_complement;
+      if (body.neighborhood) updateFields.neighborhood = body.neighborhood;
+      if (body.city) updateFields.city = body.city;
+      if (body.state) updateFields.state = body.state;
+      if (body.country) updateFields.country = body.country;
+      if (body.cep) updateFields.cep = body.cep;
+
+      // Merge custom fields with existing
+      if (body.custom_fields && Object.keys(body.custom_fields).length > 0) {
+        const { data: currentContact } = await supabase
+          .from('crm_contacts')
+          .select('custom_fields')
+          .eq('id', existingContact.id)
+          .single();
+        
+        updateFields.custom_fields = {
+          ...(currentContact?.custom_fields as Record<string, unknown> || {}),
+          ...body.custom_fields
+        };
+      }
+
+      // Merge tags (don't replace, add new ones)
       const existingTags = existingContact.tags || [];
       const allTags = [...existingTags, ...mergedTags]
         .filter((tag, index, arr) => arr.indexOf(tag) === index);
-      contactData.tags = allTags.length > 0 ? allTags : null;
-    }
+      if (allTags.length > 0) {
+        updateFields.tags = allTags;
+      }
 
-    // Upsert contact
-    const { data: contact, error: upsertError } = await supabase
-      .from('crm_contacts')
-      .upsert(contactData, {
-        onConflict: 'project_id,email',
-        ignoreDuplicates: false,
-      })
-      .select('id, email, name, status, tags, created_at')
-      .single();
+      const { data: updatedContact, error: updateError } = await supabase
+        .from('crm_contacts')
+        .update(updateFields)
+        .eq('id', existingContact.id)
+        .select('id, email, name, status, tags, created_at')
+        .single();
 
-    if (upsertError) {
-      console.error('[CRM Webhook] Error upserting contact:', upsertError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to save contact', details: upsertError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (updateError) {
+        console.error('[CRM Webhook] Error updating contact:', updateError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to update contact', details: updateError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      contact = updatedContact;
     }
 
     // Always create an interaction record if we have UTM data

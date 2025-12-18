@@ -25,8 +25,10 @@ import {
   Copy,
   Webhook,
   ExternalLink,
-  Info
+  Info,
+  FileSpreadsheet
 } from 'lucide-react';
+import { HotmartCSVImport } from './HotmartCSVImport';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -676,6 +678,10 @@ export const HotmartSettings = () => {
                     <strong>Nota:</strong> A sincronização em lote via API não inclui telefone. Use o webhook para capturar telefones em tempo real.
                   </p>
                 </div>
+
+                {/* CSV Import Section */}
+                <Separator />
+                <HotmartCSVImport />
               </>
             )}
 

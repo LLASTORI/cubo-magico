@@ -14,7 +14,7 @@ import {
   CalendarIcon, RefreshCw, TrendingUp, TrendingDown, Target, 
   DollarSign, ShoppingCart, Users, AlertTriangle, CheckCircle2, XCircle,
   ChevronDown, ChevronRight, Percent, ArrowRight, Megaphone, LineChart, 
-  GitCompare, Tag, CreditCard, UsersRound, Coins, History, Lock, HeartPulse
+  GitCompare, Tag, CreditCard, UsersRound, Coins, History, Lock
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,7 +29,6 @@ import UTMAnalysis from '@/components/funnel/UTMAnalysis';
 import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
 import LTVAnalysis from '@/components/funnel/LTVAnalysis';
 import FunnelChangelog from '@/components/funnel/FunnelChangelog';
-import { FunnelHealthMetrics } from '@/components/funnel/FunnelHealthMetrics';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { useFunnelHealthMetrics } from '@/hooks/useFunnelHealthMetrics';
 
@@ -1453,10 +1452,6 @@ export function CuboMagicoDashboard({
                                 <History className="w-3 h-3" />
                                 Histórico
                               </TabsTrigger>
-                              <TabsTrigger value="health" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
-                                <HeartPulse className="w-3 h-3" />
-                                Saúde
-                              </TabsTrigger>
                             </TabsList>
                             </TooltipProvider>
 
@@ -2254,6 +2249,101 @@ export function CuboMagicoDashboard({
                                 </div>
                                   );
                                 })()}
+
+                                {/* Health Metrics Section - inline in overview */}
+                                {(() => {
+                                  const funnelHealth = healthMetrics.find(h => h.funnelId === metrics.funnel.id);
+                                  if (!funnelHealth || (funnelHealth.totalAbandonos === 0 && funnelHealth.totalReembolsos === 0 && funnelHealth.totalChargebacks === 0)) {
+                                    return null;
+                                  }
+                                  
+                                  const getRefundStatus = (rate: number) => {
+                                    if (rate > 5) return 'text-red-600';
+                                    if (rate > 3) return 'text-yellow-600';
+                                    return 'text-green-600';
+                                  };
+                                  
+                                  const getChargebackStatus = (rate: number) => {
+                                    if (rate > 1) return 'text-red-600';
+                                    if (rate > 0.5) return 'text-yellow-600';
+                                    return 'text-green-600';
+                                  };
+                                  
+                                  const getRecoveryStatus = (rate: number) => {
+                                    if (rate >= 30) return 'text-green-600';
+                                    if (rate >= 15) return 'text-blue-600';
+                                    return 'text-yellow-600';
+                                  };
+                                  
+                                  return (
+                                    <div className="mt-6">
+                                      <h4 className="text-sm font-semibold mb-3 text-muted-foreground">
+                                        Saúde do Funil — <span className="text-foreground">{metrics.funnel.name}</span>
+                                      </h4>
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {/* Abandonos */}
+                                        <div className="bg-background/50 rounded-lg p-3 border">
+                                          <div className="flex items-center gap-2 text-orange-500 mb-1">
+                                            <ShoppingCart className="w-3.5 h-3.5" />
+                                            <span className="text-[10px] font-medium uppercase">Abandonos</span>
+                                          </div>
+                                          <p className="text-xl font-bold">{funnelHealth.totalAbandonos}</p>
+                                          <p className="text-[10px] text-muted-foreground">
+                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorAbandonos)}
+                                          </p>
+                                        </div>
+                                        
+                                        {/* Recuperados */}
+                                        <div className="bg-background/50 rounded-lg p-3 border">
+                                          <div className="flex items-center gap-2 text-green-500 mb-1">
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            <span className="text-[10px] font-medium uppercase">Recuperados</span>
+                                          </div>
+                                          <div className="flex items-baseline gap-2">
+                                            <p className="text-xl font-bold">{funnelHealth.abandonosRecuperados}</p>
+                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", getRecoveryStatus(funnelHealth.taxaRecuperacao))}>
+                                              {funnelHealth.taxaRecuperacao.toFixed(1)}%
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Reembolsos */}
+                                        <div className="bg-background/50 rounded-lg p-3 border">
+                                          <div className="flex items-center gap-2 text-blue-500 mb-1">
+                                            <CreditCard className="w-3.5 h-3.5" />
+                                            <span className="text-[10px] font-medium uppercase">Reembolsos</span>
+                                          </div>
+                                          <div className="flex items-baseline gap-2">
+                                            <p className="text-xl font-bold">{funnelHealth.totalReembolsos}</p>
+                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", getRefundStatus(funnelHealth.taxaReembolso))}>
+                                              {funnelHealth.taxaReembolso.toFixed(1)}%
+                                            </Badge>
+                                          </div>
+                                          <p className="text-[10px] text-muted-foreground">
+                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorReembolsado)}
+                                          </p>
+                                        </div>
+                                        
+                                        {/* Chargebacks */}
+                                        <div className="bg-background/50 rounded-lg p-3 border">
+                                          <div className="flex items-center gap-2 text-red-500 mb-1">
+                                            <AlertTriangle className="w-3.5 h-3.5" />
+                                            <span className="text-[10px] font-medium uppercase">Chargebacks</span>
+                                          </div>
+                                          <div className="flex items-baseline gap-2">
+                                            <p className="text-xl font-bold">{funnelHealth.totalChargebacks}</p>
+                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", getChargebackStatus(funnelHealth.taxaChargeback))}>
+                                              {funnelHealth.taxaChargeback.toFixed(1)}%
+                                            </Badge>
+                                          </div>
+                                          <p className="text-[10px] text-muted-foreground">
+                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorChargeback)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </TabsContent>
 
@@ -2340,12 +2430,6 @@ export function CuboMagicoDashboard({
                               <FunnelChangelog
                                 selectedFunnel={metrics.funnel.name}
                                 offerOptions={getOfferOptionsForFunnel(metrics.funnel.id, metrics.funnel.name)}
-                              />
-                            </TabsContent>
-
-                            <TabsContent value="health" className="mt-0">
-                              <FunnelHealthMetrics
-                                healthData={healthMetrics.find(h => h.funnelId === metrics.funnel.id)}
                               />
                             </TabsContent>
                           </Tabs>

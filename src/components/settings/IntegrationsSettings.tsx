@@ -15,6 +15,7 @@ import { useCRMWebhookKeys } from '@/hooks/useCRMWebhookKeys';
 
 const META_APP_ID = '845927421602166';
 
+// Integration settings component for managing external connections
 export function IntegrationsSettings() {
   const { currentProject } = useProject();
   const { toast } = useToast();

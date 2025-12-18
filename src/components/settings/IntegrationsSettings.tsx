@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useProject } from '@/contexts/ProjectContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Facebook, ShoppingCart, MessageCircle, CheckCircle, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Facebook, ShoppingCart, MessageCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { HotmartSettings } from './HotmartSettings';
 import { WhatsAppFullSettings } from './WhatsAppFullSettings';
 import { FullDataSync } from '@/components/FullDataSync';
@@ -19,7 +18,8 @@ export function IntegrationsSettings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: metaCredentials, isLoading: metaLoading } = useQuery({
+  // Meta credentials query
+  const { data: metaCredentials } = useQuery({
     queryKey: ['meta_credentials', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return null;
@@ -34,9 +34,42 @@ export function IntegrationsSettings() {
     enabled: !!currentProject?.id,
   });
 
+  // Hotmart credentials query
+  const { data: hotmartCredentials } = useQuery({
+    queryKey: ['hotmart_credentials_status', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return null;
+      const { data } = await supabase
+        .from('hotmart_credentials' as any)
+        .select('is_validated')
+        .eq('project_id', currentProject.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentProject?.id,
+  });
+
+  // WhatsApp numbers query
+  const { data: whatsappNumbers } = useQuery({
+    queryKey: ['whatsapp-numbers-status', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return [];
+      const { data, error } = await supabase
+        .from('whatsapp_numbers')
+        .select('status')
+        .eq('project_id', currentProject.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id,
+  });
+
   const isMetaExpired = metaCredentials?.expires_at 
     ? new Date(metaCredentials.expires_at) < new Date()
     : false;
+  
+  const isHotmartConnected = (hotmartCredentials as any)?.is_validated === true;
+  const hasActiveWhatsApp = whatsappNumbers?.some((n: any) => n.status === 'active') ?? false;
 
   const handleConnectMeta = async () => {
     if (!currentProject?.id) {
@@ -120,6 +153,9 @@ export function IntegrationsSettings() {
           <TabsTrigger value="hotmart" className="flex items-center gap-2">
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Hotmart</span>
+            {isHotmartConnected && (
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+            )}
           </TabsTrigger>
           <TabsTrigger value="meta" className="flex items-center gap-2">
             <Facebook className="h-4 w-4" />
@@ -134,6 +170,9 @@ export function IntegrationsSettings() {
           <TabsTrigger value="whatsapp" className="flex items-center gap-2">
             <MessageCircle className="h-4 w-4" />
             <span className="hidden sm:inline">WhatsApp</span>
+            {hasActiveWhatsApp && (
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+            )}
           </TabsTrigger>
         </TabsList>
 

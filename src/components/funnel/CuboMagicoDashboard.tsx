@@ -2400,17 +2400,18 @@ export function CuboMagicoDashboard({
                                       return (
                                         <>
                                           <div className="flex items-center mx-2">
-                                            <div className="w-px h-10 bg-border/50" />
+                                            <div className="w-px h-12 bg-border/50" />
                                           </div>
                                           {/* Abandonos */}
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <div className={cn(
-                                                "flex flex-col items-center p-2 bg-orange-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                "flex flex-col items-center p-3 bg-orange-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
                                                 abandonosStatus.borderClass
                                               )}>
-                                                <span className="text-[8px] text-orange-600 font-medium uppercase">Abandonos</span>
-                                                <span className="text-base font-bold">{funnelHealth.totalAbandonos}</span>
+                                                <span className="text-[10px] text-orange-600 font-medium uppercase">Abandonos</span>
+                                                <span className="text-xl font-bold">{funnelHealth.totalAbandonos}</span>
+                                                <span className="text-[9px] text-orange-500">Carrinhos</span>
                                               </div>
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom" className="max-w-[220px]">
@@ -2423,17 +2424,18 @@ export function CuboMagicoDashboard({
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <div className={cn(
-                                                "flex flex-col items-center p-2 bg-green-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                "flex flex-col items-center p-3 bg-green-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
                                                 recuperadosStatus.borderClass
                                               )}>
-                                                <span className="text-[8px] text-green-600 font-medium uppercase">Recuperados</span>
+                                                <span className="text-[10px] text-green-600 font-medium uppercase">Recuperados</span>
                                                 <div className="flex items-baseline gap-0.5">
-                                                  <span className="text-base font-bold">{funnelHealth.abandonosRecuperados}</span>
+                                                  <span className="text-xl font-bold">{funnelHealth.abandonosRecuperados}</span>
                                                   <span className={cn(
-                                                    "text-[9px]",
+                                                    "text-[10px]",
                                                     funnelHealth.taxaRecuperacao >= 30 ? "text-green-600" : funnelHealth.taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600"
                                                   )}>{funnelHealth.taxaRecuperacao.toFixed(0)}%</span>
                                                 </div>
+                                                <span className="text-[9px] text-green-500">Convertidos</span>
                                               </div>
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom" className="max-w-[220px]">
@@ -2446,17 +2448,18 @@ export function CuboMagicoDashboard({
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <div className={cn(
-                                                "flex flex-col items-center p-2 bg-blue-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                "flex flex-col items-center p-3 bg-blue-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
                                                 reembolsoStatus.borderClass
                                               )}>
-                                                <span className="text-[8px] text-blue-600 font-medium uppercase">Reembolsos</span>
+                                                <span className="text-[10px] text-blue-600 font-medium uppercase">Reembolsos</span>
                                                 <div className="flex items-baseline gap-0.5">
-                                                  <span className="text-base font-bold">{funnelHealth.totalReembolsos}</span>
+                                                  <span className="text-xl font-bold">{funnelHealth.totalReembolsos}</span>
                                                   <span className={cn(
-                                                    "text-[9px]",
+                                                    "text-[10px]",
                                                     funnelHealth.taxaReembolso < 5 ? "text-green-600" : funnelHealth.taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600"
                                                   )}>{funnelHealth.taxaReembolso.toFixed(1)}%</span>
                                                 </div>
+                                                <span className="text-[9px] text-blue-500">Devolvidos</span>
                                               </div>
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom" className="max-w-[220px]">
@@ -2469,17 +2472,18 @@ export function CuboMagicoDashboard({
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <div className={cn(
-                                                "flex flex-col items-center p-2 bg-red-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                "flex flex-col items-center p-3 bg-red-500/10 rounded-lg min-w-[100px] cursor-help transition-all",
                                                 chargebackStatus.borderClass
                                               )}>
-                                                <span className="text-[8px] text-red-600 font-medium uppercase">Chargebacks</span>
+                                                <span className="text-[10px] text-red-600 font-medium uppercase">Chargebacks</span>
                                                 <div className="flex items-baseline gap-0.5">
-                                                  <span className="text-base font-bold">{funnelHealth.totalChargebacks}</span>
+                                                  <span className="text-xl font-bold">{funnelHealth.totalChargebacks}</span>
                                                   <span className={cn(
-                                                    "text-[9px]",
+                                                    "text-[10px]",
                                                     funnelHealth.taxaChargeback < 1 ? "text-green-600" : funnelHealth.taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600"
                                                   )}>{funnelHealth.taxaChargeback.toFixed(1)}%</span>
                                                 </div>
+                                                <span className="text-[9px] text-red-500">Contestados</span>
                                               </div>
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom" className="max-w-[220px]">

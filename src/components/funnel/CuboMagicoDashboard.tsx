@@ -14,7 +14,7 @@ import {
   CalendarIcon, RefreshCw, TrendingUp, TrendingDown, Target, 
   DollarSign, ShoppingCart, Users, AlertTriangle, CheckCircle2, XCircle,
   ChevronDown, ChevronRight, Percent, ArrowRight, Megaphone, LineChart, 
-  GitCompare, Tag, CreditCard, UsersRound, Coins, History, Lock
+  GitCompare, Tag, CreditCard, UsersRound, Coins, History, Lock, HeartPulse
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,7 +29,9 @@ import UTMAnalysis from '@/components/funnel/UTMAnalysis';
 import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
 import LTVAnalysis from '@/components/funnel/LTVAnalysis';
 import FunnelChangelog from '@/components/funnel/FunnelChangelog';
+import { FunnelHealthMetrics } from '@/components/funnel/FunnelHealthMetrics';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
+import { useFunnelHealthMetrics } from '@/hooks/useFunnelHealthMetrics';
 
 // Define unified sales type that matches FunnelAnalysis query
 interface UnifiedSale {
@@ -122,6 +124,13 @@ export function CuboMagicoDashboard({
   // Convert dates to strings for consistent query keys
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
+
+  // Fetch funnel health metrics (abandonments, refunds, chargebacks)
+  const { healthMetrics, unattributedAbandonments } = useFunnelHealthMetrics({
+    projectId,
+    startDate,
+    endDate,
+  });
 
   // Fetch funnels with config - ONLY perpetuo funnels (exclude 'A Definir' and 'Lançamento')
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
@@ -1444,6 +1453,10 @@ export function CuboMagicoDashboard({
                                 <History className="w-3 h-3" />
                                 Histórico
                               </TabsTrigger>
+                              <TabsTrigger value="health" className="text-xs gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
+                                <HeartPulse className="w-3 h-3" />
+                                Saúde
+                              </TabsTrigger>
                             </TabsList>
                             </TooltipProvider>
 
@@ -2327,6 +2340,12 @@ export function CuboMagicoDashboard({
                               <FunnelChangelog
                                 selectedFunnel={metrics.funnel.name}
                                 offerOptions={getOfferOptionsForFunnel(metrics.funnel.id, metrics.funnel.name)}
+                              />
+                            </TabsContent>
+
+                            <TabsContent value="health" className="mt-0">
+                              <FunnelHealthMetrics
+                                healthData={healthMetrics.find(h => h.funnelId === metrics.funnel.id)}
                               />
                             </TabsContent>
                           </Tabs>

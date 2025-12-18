@@ -16,7 +16,8 @@ import {
   Users,
   Workflow,
   MessageCircle,
-  Route
+  Route,
+  Kanban
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -59,7 +60,7 @@ export const AppHeader = ({
   // Check if current page is in the "Busca Rápida" dropdown
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
   const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard';
-  const isInCRM = currentPath === '/crm' || currentPath.startsWith('/crm/') || currentPath === '/automations' || currentPath.startsWith('/automations/') || currentPath === '/whatsapp';
+  const isInCRM = currentPath === '/crm' || currentPath.startsWith('/crm/') || currentPath === '/automations' || currentPath.startsWith('/automations/') || currentPath === '/whatsapp' || currentPath === '/crm/kanban';
   
   const handleLogout = async () => {
     await signOut();
@@ -237,6 +238,13 @@ export const AppHeader = ({
                               >
                                 <Route className="w-4 h-4" />
                                 Jornada do Cliente
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => navigate('/crm/kanban')} 
+                                className={`gap-2 cursor-pointer ${currentPath === '/crm/kanban' ? 'bg-muted' : ''}`}
+                              >
+                                <Kanban className="w-4 h-4" />
+                                Pipeline de Vendas
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={() => navigate('/automations')} 

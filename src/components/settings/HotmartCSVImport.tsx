@@ -525,14 +525,16 @@ export const HotmartCSVImport = () => {
               if (row.buyer_instagram) updateData.buyer_instagram = row.buyer_instagram;
               if (row.buyer_document) updateData.buyer_document = row.buyer_document;
 
-              const { error: updateError } = await supabase
+              const { data: updatedData, error: updateError } = await supabase
                 .from('hotmart_sales')
                 .update(updateData)
-                .eq('id', existing.id);
+                .eq('project_id', projectId)
+                .eq('transaction_id', row.transaction_id)
+                .select('id');
 
               if (updateError) {
                 result.errors.push(`Erro ao atualizar ${row.transaction_id}: ${updateError.message}`);
-              } else {
+              } else if (updatedData && updatedData.length > 0) {
                 result.updated++;
               }
             } else {

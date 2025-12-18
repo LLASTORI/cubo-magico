@@ -391,25 +391,26 @@ async function fetchAllSales(
 }
 
 // All statuses to fetch from Hotmart API
-// IMPORTANT: Must include ALL statuses that webhook can create
+// IMPORTANT: the Sales History endpoint only returns APPROVED/COMPLETE if you don't filter by status.
+// Source (docs): /payments/api/v1/sales/history → transaction_status possible values.
 const ALL_TRANSACTION_STATUSES = [
-  'APPROVED',      // Approved
-  'COMPLETE',      // Complete  
-  'CANCELLED',     // Cancelled
-  'REFUNDED',      // Refunded
-  'CHARGEBACK',    // Chargeback
-  'DISPUTE',       // Dispute
-  'EXPIRED',       // Expired (boleto/PIX not paid)
-  'OVERDUE',       // Overdue payment
-  'BLOCKED',       // Blocked transaction
-  'PRINTED_BILLET', // Boleto generated but not paid
-  'DELAYED',       // Delayed payment
-  'PROTESTED',     // Protested
-  'WAITING_PAYMENT', // Waiting for payment (PIX/boleto)
-  'STARTED',       // Purchase started
-  'NO_FUNDS',      // Declined - no funds
-  'UNDER_ANALYSIS', // Under analysis by payment processor
-  'PARTIALLY_REFUNDED', // Partially refunded
+  'APPROVED',
+  'BLOCKED',
+  'CANCELLED',
+  'CHARGEBACK',
+  'COMPLETE',
+  'EXPIRED',
+  'NO_FUNDS',
+  'OVERDUE',
+  'PARTIALLY_REFUNDED',
+  'PRE_ORDER',
+  'PRINTED_BILLET',
+  'PROCESSING_TRANSACTION',
+  'PROTESTED',
+  'REFUNDED',
+  'STARTED',
+  'UNDER_ANALISYS',
+  'WAITING_PAYMENT',
 ];
 
 // Sync sales to database - OPTIMIZED with batch upsert

@@ -509,8 +509,8 @@ export const HotmartCSVImport = () => {
           // Check cancellation inside batch loop too
           if (cancelImportRef.current) break;
           try {
-            // Check if transaction exists
-            const { data: existing, error: selectError } = await supabase
+            // Check if transaction exists in hotmart_sales
+            const { data: existingSale, error: selectError } = await supabase
               .from('hotmart_sales')
               .select('id')
               .eq('project_id', projectId)
@@ -522,8 +522,8 @@ export const HotmartCSVImport = () => {
               continue;
             }
 
-            if (existing) {
-              // Update ONLY contact fields
+            if (existingSale) {
+              // Update ONLY contact fields in hotmart_sales
               const updateData: Record<string, any> = {
                 updated_at: new Date().toISOString(),
               };
@@ -549,8 +549,50 @@ export const HotmartCSVImport = () => {
                 result.updated++;
               }
             } else {
-              // Transaction not found - skip (don't create new)
-              result.notFound++;
+              // Transaction not found in hotmart_sales - try to find contact by email in crm_contacts
+              if (row.buyer_email) {
+                const { data: existingContact, error: contactSelectError } = await supabase
+                  .from('crm_contacts')
+                  .select('id')
+                  .eq('project_id', projectId)
+                  .eq('email', row.buyer_email.toLowerCase().trim())
+                  .maybeSingle();
+
+                if (contactSelectError) {
+                  result.errors.push(`Erro ao buscar contato ${row.buyer_email}: ${contactSelectError.message}`);
+                  continue;
+                }
+
+                if (existingContact) {
+                  // Update contact fields directly in crm_contacts
+                  const contactUpdateData: Record<string, any> = {
+                    updated_at: new Date().toISOString(),
+                  };
+
+                  if (row.buyer_name) contactUpdateData.name = row.buyer_name;
+                  if (row.buyer_phone_ddd) contactUpdateData.phone_ddd = row.buyer_phone_ddd;
+                  if (row.buyer_phone) contactUpdateData.phone = row.buyer_phone;
+                  if (row.buyer_instagram) contactUpdateData.instagram = row.buyer_instagram;
+                  if (row.buyer_document) contactUpdateData.document = row.buyer_document;
+
+                  const { error: contactUpdateError } = await supabase
+                    .from('crm_contacts')
+                    .update(contactUpdateData)
+                    .eq('id', existingContact.id);
+
+                  if (contactUpdateError) {
+                    result.errors.push(`Erro ao atualizar contato ${row.buyer_email}: ${contactUpdateError.message}`);
+                  } else {
+                    result.updated++;
+                  }
+                } else {
+                  // Neither transaction nor contact found
+                  result.notFound++;
+                }
+              } else {
+                // No email to search for contact
+                result.notFound++;
+              }
             }
           } catch (err: any) {
             result.errors.push(`Erro em ${row.transaction_id}: ${err.message}`);
@@ -590,7 +632,7 @@ export const HotmartCSVImport = () => {
 
       toast({
         title: 'Importação concluída!',
-        description: `${result.updated} contatos atualizados. ${result.notFound > 0 ? `${result.notFound} transações não encontradas.` : ''}`,
+        description: `${result.updated} contatos atualizados. ${result.notFound > 0 ? `${result.notFound} não encontrados (nem venda nem contato).` : ''}`,
         variant: result.errors.length > 0 ? 'destructive' : 'default',
       });
 

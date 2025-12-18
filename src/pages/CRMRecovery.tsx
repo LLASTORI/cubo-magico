@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,9 +25,9 @@ import {
   DollarSign,
   Calendar,
   TrendingDown,
-  ArrowLeft,
   ExternalLink,
   Info,
+  Kanban,
   BarChart3
 } from 'lucide-react';
 import { RecoveryAnalytics } from '@/components/crm/RecoveryAnalytics';
@@ -278,26 +279,13 @@ export default function CRMRecovery() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <AppHeader />
+      <AppHeader pageSubtitle="CRM - Recuperação" />
       
-      <main className="flex-1 container py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <RefreshCcw className="h-6 w-6 text-primary" />
-                Recuperação de Clientes
-              </h1>
-              <p className="text-muted-foreground">
-                Dashboard para ações de win-back com clientes perdidos
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <CRMSubNav 
+        showSettings
+        settingsPath="/crm/recovery/settings"
+        rightContent={
+          <>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -314,15 +302,25 @@ export default function CRMRecovery() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs">
                   <p className="text-sm">
-                    Recarrega os dados do CRM. Para sincronizar novas vendas da Hotmart, use "Sincronizar Tudo" em Integrações.
+                    Recarrega os dados do CRM.
                   </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button className="gap-2" onClick={() => navigate('/crm/recovery/kanban')}>
-              Kanban de Recuperação
+            <Button size="sm" onClick={() => navigate('/crm/recovery/kanban')}>
+              <Kanban className="h-4 w-4 mr-2" />
+              Kanban
             </Button>
-          </div>
+          </>
+        }
+      />
+      
+      <main className="flex-1 container px-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Recuperação de Clientes</h1>
+          <p className="text-muted-foreground">
+            Dashboard para ações de win-back com clientes perdidos
+          </p>
         </div>
 
         {isLoading ? (

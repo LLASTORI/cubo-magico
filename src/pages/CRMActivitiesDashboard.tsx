@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useCRMActivities } from '@/hooks/useCRMActivities';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Loader2, 
   Lock, 
-  ArrowLeft,
   Clock,
   AlertTriangle,
   CheckCircle,
@@ -24,7 +23,8 @@ import {
   CheckSquare,
   Check,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  ListTodo
 } from 'lucide-react';
 import { format, isToday, isTomorrow, isPast, isThisWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -189,19 +189,27 @@ export default function CRMActivitiesDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader pageSubtitle="Dashboard de Atividades" />
+      <AppHeader pageSubtitle="CRM - Atividades" />
       
-      <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
+      <CRMSubNav 
+        rightContent={
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => navigate('/crm/cadences')}
+          >
+            <ListTodo className="h-4 w-4 mr-2" />
+            Cadências
           </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">Dashboard de Atividades</h1>
-            <p className="text-muted-foreground">
-              Gerencie todas as atividades pendentes do CRM
-            </p>
-          </div>
+        }
+      />
+      
+      <main className="container mx-auto px-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Dashboard de Atividades</h1>
+          <p className="text-muted-foreground">
+            Gerencie todas as atividades pendentes do CRM
+          </p>
         </div>
 
         {/* Stats Cards */}

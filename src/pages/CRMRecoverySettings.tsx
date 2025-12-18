@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useRecoveryStages, RecoveryStage } from '@/hooks/useRecoveryStages';
@@ -31,7 +32,6 @@ import {
 import {
   Loader2,
   Lock,
-  ArrowLeft,
   Plus,
   Pencil,
   Trash2,
@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   XCircle,
   Flag,
+  Kanban,
 } from 'lucide-react';
 
 const COLORS = [
@@ -160,24 +161,27 @@ export default function CRMRecoverySettings() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <AppHeader />
+      <AppHeader pageSubtitle="CRM - Configurar Recuperação" />
 
-      <main className="flex-1 container py-6 max-w-4xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
+      <CRMSubNav 
+        rightContent={
+          <>
+            <Button variant="outline" size="sm" onClick={() => navigate('/crm/recovery/kanban')}>
+              <Kanban className="h-4 w-4 mr-2" />
+              Ver Kanban
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold">Configurar Etapas de Recuperação</h1>
-              <p className="text-muted-foreground">Personalize as etapas do fluxo de recuperação de clientes</p>
-            </div>
-          </div>
-          <Button className="gap-2" onClick={handleOpenCreate}>
-            <Plus className="h-4 w-4" />
-            Nova Etapa
-          </Button>
+            <Button size="sm" onClick={handleOpenCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Etapa
+            </Button>
+          </>
+        }
+      />
+
+      <main className="flex-1 container px-6 max-w-4xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Configurar Etapas de Recuperação</h1>
+          <p className="text-muted-foreground">Personalize as etapas do fluxo de recuperação de clientes</p>
         </div>
 
         {isLoading ? (

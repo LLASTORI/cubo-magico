@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { CustomerJourneyAnalysis } from '@/components/crm/CustomerJourneyAnalysis';
 import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, Kanban, RefreshCcw, TrendingUp, Route, Plus, MessageCircle, Workflow } from 'lucide-react';
+import { Users, Loader2, Lock, TrendingUp, Route } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
@@ -21,17 +21,10 @@ export default function CRM() {
 
   const crmEnabled = isModuleEnabled('crm');
 
-  // Redirect if CRM module is not enabled
-  useEffect(() => {
-    if (!isLoading && currentProject && !crmEnabled) {
-      // Don't redirect immediately, show a message first
-    }
-  }, [isLoading, currentProject, crmEnabled]);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader pageSubtitle="CRM - Jornada do Cliente" />
+        <AppHeader pageSubtitle="CRM - Análises" />
         <main className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
@@ -46,10 +39,10 @@ export default function CRM() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader pageSubtitle="CRM - Jornada do Cliente" />
+      <AppHeader pageSubtitle="CRM - Análises" />
       
-      <main className="container mx-auto px-6 py-8">
-        {!currentProject ? (
+      {!currentProject ? (
+        <main className="container mx-auto px-6 py-8">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -66,7 +59,9 @@ export default function CRM() {
               </p>
             </CardContent>
           </Card>
-        ) : !crmEnabled ? (
+        </main>
+      ) : !crmEnabled ? (
+        <main className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-center py-12">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -95,43 +90,20 @@ export default function CRM() {
               </TooltipContent>
             </Tooltip>
           </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">CRM - Análise de Clientes</h1>
-                <p className="text-muted-foreground">
-                  Analise o comportamento de compra e ascensão dos seus clientes
-                </p>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button onClick={() => setShowCreateDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Novo Contato
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/crm/activities')}>
-                  Atividades
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/crm/cadences')}>
-                  Cadências
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/crm/recovery')}>
-                  <RefreshCcw className="h-4 w-4 mr-2" />
-                  Recuperação
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/crm/kanban')}>
-                  <Kanban className="h-4 w-4 mr-2" />
-                  Pipeline
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/automations')}>
-                  <Workflow className="h-4 w-4 mr-2" />
-                  Automações
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/whatsapp')}>
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Chat ao Vivo
-                </Button>
-              </div>
+        </main>
+      ) : (
+        <>
+          <CRMSubNav 
+            showNewContact 
+            onNewContact={() => setShowCreateDialog(true)}
+          />
+          
+          <main className="container mx-auto px-6">
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold">Análise de Clientes</h1>
+              <p className="text-muted-foreground">
+                Analise o comportamento de compra e ascensão dos seus clientes
+              </p>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -154,9 +126,9 @@ export default function CRM() {
                 <AscensionAnalysis />
               </TabsContent>
             </Tabs>
-          </div>
-        )}
-      </main>
+          </main>
+        </>
+      )}
 
       <CreateContactDialog
         open={showCreateDialog}

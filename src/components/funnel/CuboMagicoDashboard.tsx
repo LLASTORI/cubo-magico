@@ -2282,64 +2282,120 @@ export function CuboMagicoDashboard({
                                       </h4>
                                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         {/* Abandonos */}
-                                        <div className="bg-background/50 rounded-lg p-3 border">
-                                          <div className="flex items-center gap-2 text-orange-500 mb-1">
-                                            <ShoppingCart className="w-3.5 h-3.5" />
-                                            <span className="text-[10px] font-medium uppercase">Abandonos</span>
-                                          </div>
-                                          <p className="text-xl font-bold">{funnelHealth.totalAbandonos}</p>
-                                          <p className="text-[10px] text-muted-foreground">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorAbandonos)}
-                                          </p>
-                                        </div>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="bg-background/50 rounded-lg p-3 border cursor-help hover:border-orange-500/50 transition-colors">
+                                              <div className="flex items-center gap-2 text-orange-500 mb-1">
+                                                <ShoppingCart className="w-3.5 h-3.5" />
+                                                <span className="text-[10px] font-medium uppercase">Abandonos</span>
+                                              </div>
+                                              <p className="text-xl font-bold">{funnelHealth.totalAbandonos}</p>
+                                              <p className="text-[10px] text-muted-foreground">carrinhos</p>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[250px]">
+                                            <p className="font-semibold">Carrinhos Abandonados</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              Clientes que iniciaram o checkout mas não finalizaram a compra no período.
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border/50">
+                                              Atribuído via código do produto FRONT exclusivo deste funil.
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
                                         
                                         {/* Recuperados */}
-                                        <div className="bg-background/50 rounded-lg p-3 border">
-                                          <div className="flex items-center gap-2 text-green-500 mb-1">
-                                            <RefreshCw className="w-3.5 h-3.5" />
-                                            <span className="text-[10px] font-medium uppercase">Recuperados</span>
-                                          </div>
-                                          <div className="flex items-baseline gap-2">
-                                            <p className="text-xl font-bold">{funnelHealth.abandonosRecuperados}</p>
-                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", getRecoveryStatus(funnelHealth.taxaRecuperacao))}>
-                                              {funnelHealth.taxaRecuperacao.toFixed(1)}%
-                                            </Badge>
-                                          </div>
-                                        </div>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="bg-background/50 rounded-lg p-3 border cursor-help hover:border-green-500/50 transition-colors">
+                                              <div className="flex items-center gap-2 text-green-500 mb-1">
+                                                <RefreshCw className="w-3.5 h-3.5" />
+                                                <span className="text-[10px] font-medium uppercase">Recuperados</span>
+                                              </div>
+                                              <div className="flex items-baseline gap-2">
+                                                <p className="text-xl font-bold">{funnelHealth.abandonosRecuperados}</p>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5", getRecoveryStatus(funnelHealth.taxaRecuperacao))}>
+                                                  {funnelHealth.taxaRecuperacao.toFixed(1)}%
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[250px]">
+                                            <p className="font-semibold">Abandonos Recuperados</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              Clientes que abandonaram o carrinho mas depois finalizaram a compra do mesmo produto.
+                                            </p>
+                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground space-y-1">
+                                              <p>• <strong className="text-green-500">≥30%:</strong> Excelente recuperação</p>
+                                              <p>• <strong className="text-blue-500">15-30%:</strong> Boa recuperação</p>
+                                              <p>• <strong className="text-yellow-500">&lt;15%:</strong> Pode melhorar</p>
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
                                         
                                         {/* Reembolsos */}
-                                        <div className="bg-background/50 rounded-lg p-3 border">
-                                          <div className="flex items-center gap-2 text-blue-500 mb-1">
-                                            <CreditCard className="w-3.5 h-3.5" />
-                                            <span className="text-[10px] font-medium uppercase">Reembolsos</span>
-                                          </div>
-                                          <div className="flex items-baseline gap-2">
-                                            <p className="text-xl font-bold">{funnelHealth.totalReembolsos}</p>
-                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", getRefundStatus(funnelHealth.taxaReembolso))}>
-                                              {funnelHealth.taxaReembolso.toFixed(1)}%
-                                            </Badge>
-                                          </div>
-                                          <p className="text-[10px] text-muted-foreground">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorReembolsado)}
-                                          </p>
-                                        </div>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="bg-background/50 rounded-lg p-3 border cursor-help hover:border-blue-500/50 transition-colors">
+                                              <div className="flex items-center gap-2 text-blue-500 mb-1">
+                                                <CreditCard className="w-3.5 h-3.5" />
+                                                <span className="text-[10px] font-medium uppercase">Reembolsos</span>
+                                              </div>
+                                              <div className="flex items-baseline gap-2">
+                                                <p className="text-xl font-bold">{funnelHealth.totalReembolsos}</p>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5", getRefundStatus(funnelHealth.taxaReembolso))}>
+                                                  {funnelHealth.taxaReembolso.toFixed(1)}%
+                                                </Badge>
+                                              </div>
+                                              <p className="text-[10px] text-muted-foreground">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorReembolsado)}
+                                              </p>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[250px]">
+                                            <p className="font-semibold">Reembolsos</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              Vendas que foram reembolsadas ao cliente no período. Taxa calculada sobre vendas aprovadas.
+                                            </p>
+                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground space-y-1">
+                                              <p>• <strong className="text-green-500">&lt;5%:</strong> Taxa saudável</p>
+                                              <p>• <strong className="text-yellow-500">5-10%:</strong> Atenção</p>
+                                              <p>• <strong className="text-red-500">&gt;10%:</strong> Crítico</p>
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
                                         
                                         {/* Chargebacks */}
-                                        <div className="bg-background/50 rounded-lg p-3 border">
-                                          <div className="flex items-center gap-2 text-red-500 mb-1">
-                                            <AlertTriangle className="w-3.5 h-3.5" />
-                                            <span className="text-[10px] font-medium uppercase">Chargebacks</span>
-                                          </div>
-                                          <div className="flex items-baseline gap-2">
-                                            <p className="text-xl font-bold">{funnelHealth.totalChargebacks}</p>
-                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", getChargebackStatus(funnelHealth.taxaChargeback))}>
-                                              {funnelHealth.taxaChargeback.toFixed(1)}%
-                                            </Badge>
-                                          </div>
-                                          <p className="text-[10px] text-muted-foreground">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorChargeback)}
-                                          </p>
-                                        </div>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="bg-background/50 rounded-lg p-3 border cursor-help hover:border-red-500/50 transition-colors">
+                                              <div className="flex items-center gap-2 text-red-500 mb-1">
+                                                <AlertTriangle className="w-3.5 h-3.5" />
+                                                <span className="text-[10px] font-medium uppercase">Chargebacks</span>
+                                              </div>
+                                              <div className="flex items-baseline gap-2">
+                                                <p className="text-xl font-bold">{funnelHealth.totalChargebacks}</p>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5", getChargebackStatus(funnelHealth.taxaChargeback))}>
+                                                  {funnelHealth.taxaChargeback.toFixed(1)}%
+                                                </Badge>
+                                              </div>
+                                              <p className="text-[10px] text-muted-foreground">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(funnelHealth.valorChargeback)}
+                                              </p>
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="max-w-[250px]">
+                                            <p className="font-semibold">Chargebacks</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              Contestações de compra junto à operadora do cartão. Taxas altas podem resultar em penalidades.
+                                            </p>
+                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground space-y-1">
+                                              <p>• <strong className="text-green-500">&lt;1%:</strong> Taxa saudável</p>
+                                              <p>• <strong className="text-yellow-500">1-2%:</strong> Atenção</p>
+                                              <p>• <strong className="text-red-500">&gt;2%:</strong> Crítico - risco de penalidades</p>
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
                                       </div>
                                     </div>
                                   );

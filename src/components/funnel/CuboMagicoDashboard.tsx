@@ -2358,144 +2358,140 @@ export function CuboMagicoDashboard({
                                         </Tooltip>
                                       );
                                     })()}
+
+                                    {/* Health Metrics - Inline with Meta Ads */}
+                                    {(() => {
+                                      const funnelHealth = healthMetrics.find(h => h.funnelId === metrics.funnel.id);
+                                      if (!funnelHealth || (funnelHealth.totalAbandonos === 0 && funnelHealth.totalReembolsos === 0 && funnelHealth.totalChargebacks === 0)) {
+                                        return null;
+                                      }
+
+                                      // Helper functions for status
+                                      const getAbandonosStatus = (count: number) => {
+                                        if (count >= 20) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
+                                        if (count >= 10) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                        if (count >= 5) return { borderClass: 'ring-2 ring-orange-400 ring-offset-2 ring-offset-background', color: 'orange' };
+                                        return { borderClass: '', color: 'green' };
+                                      };
+                                      
+                                      const getRecuperadosStatus = (rate: number) => {
+                                        if (rate >= 30) return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
+                                        if (rate >= 15) return { borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background', color: 'blue' };
+                                        return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                      };
+                                      
+                                      const getReembolsoStatus = (rate: number) => {
+                                        if (rate > 10) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
+                                        if (rate > 5) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                        return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
+                                      };
+                                      
+                                      const getChargebackStatus = (rate: number) => {
+                                        if (rate > 2) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
+                                        if (rate > 1) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
+                                        return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
+                                      };
+
+                                      const abandonosStatus = getAbandonosStatus(funnelHealth.totalAbandonos);
+                                      const recuperadosStatus = getRecuperadosStatus(funnelHealth.taxaRecuperacao);
+                                      const reembolsoStatus = getReembolsoStatus(funnelHealth.taxaReembolso);
+                                      const chargebackStatus = getChargebackStatus(funnelHealth.taxaChargeback);
+
+                                      return (
+                                        <>
+                                          <div className="flex items-center mx-2">
+                                            <div className="w-px h-10 bg-border/50" />
+                                          </div>
+                                          {/* Abandonos */}
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className={cn(
+                                                "flex flex-col items-center p-2 bg-orange-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                abandonosStatus.borderClass
+                                              )}>
+                                                <span className="text-[8px] text-orange-600 font-medium uppercase">Abandonos</span>
+                                                <span className="text-base font-bold">{funnelHealth.totalAbandonos}</span>
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[220px]">
+                                              <p className="font-semibold">Carrinhos Abandonados</p>
+                                              <p className="text-xs text-muted-foreground mt-1">Clientes que iniciaram checkout mas não finalizaram.</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          
+                                          {/* Recuperados */}
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className={cn(
+                                                "flex flex-col items-center p-2 bg-green-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                recuperadosStatus.borderClass
+                                              )}>
+                                                <span className="text-[8px] text-green-600 font-medium uppercase">Recuperados</span>
+                                                <div className="flex items-baseline gap-0.5">
+                                                  <span className="text-base font-bold">{funnelHealth.abandonosRecuperados}</span>
+                                                  <span className={cn(
+                                                    "text-[9px]",
+                                                    funnelHealth.taxaRecuperacao >= 30 ? "text-green-600" : funnelHealth.taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600"
+                                                  )}>{funnelHealth.taxaRecuperacao.toFixed(0)}%</span>
+                                                </div>
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[220px]">
+                                              <p className="font-semibold">Abandonos Recuperados</p>
+                                              <p className="text-xs text-muted-foreground mt-1">Clientes que abandonaram mas depois compraram.</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          
+                                          {/* Reembolsos */}
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className={cn(
+                                                "flex flex-col items-center p-2 bg-blue-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                reembolsoStatus.borderClass
+                                              )}>
+                                                <span className="text-[8px] text-blue-600 font-medium uppercase">Reembolsos</span>
+                                                <div className="flex items-baseline gap-0.5">
+                                                  <span className="text-base font-bold">{funnelHealth.totalReembolsos}</span>
+                                                  <span className={cn(
+                                                    "text-[9px]",
+                                                    funnelHealth.taxaReembolso < 5 ? "text-green-600" : funnelHealth.taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600"
+                                                  )}>{funnelHealth.taxaReembolso.toFixed(1)}%</span>
+                                                </div>
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[220px]">
+                                              <p className="font-semibold">Reembolsos</p>
+                                              <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorReembolsado)} em reembolsos</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          
+                                          {/* Chargebacks */}
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className={cn(
+                                                "flex flex-col items-center p-2 bg-red-500/10 rounded-lg min-w-[65px] cursor-help transition-all",
+                                                chargebackStatus.borderClass
+                                              )}>
+                                                <span className="text-[8px] text-red-600 font-medium uppercase">Chargebacks</span>
+                                                <div className="flex items-baseline gap-0.5">
+                                                  <span className="text-base font-bold">{funnelHealth.totalChargebacks}</span>
+                                                  <span className={cn(
+                                                    "text-[9px]",
+                                                    funnelHealth.taxaChargeback < 1 ? "text-green-600" : funnelHealth.taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600"
+                                                  )}>{funnelHealth.taxaChargeback.toFixed(1)}%</span>
+                                                </div>
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[220px]">
+                                              <p className="font-semibold">Chargebacks</p>
+                                              <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorChargeback)} em contestações</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
-                                  );
-                                })()}
-
-                                {/* Health Metrics - Compact inline */}
-                                {(() => {
-                                  const funnelHealth = healthMetrics.find(h => h.funnelId === metrics.funnel.id);
-                                  if (!funnelHealth || (funnelHealth.totalAbandonos === 0 && funnelHealth.totalReembolsos === 0 && funnelHealth.totalChargebacks === 0)) {
-                                    return null;
-                                  }
-
-                                  return (
-                                    <div className="pt-4 border-t border-border/50">
-                                      <h4 className="text-sm font-semibold mb-3 text-muted-foreground">
-                                        Saúde do Funil — <span className="text-foreground">{metrics.funnel.name}</span>
-                                      </h4>
-                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                        {/* Abandonos */}
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className={cn(
-                                              "bg-background/50 rounded-lg p-2.5 border cursor-help transition-colors",
-                                              "hover:border-orange-500/50",
-                                              funnelHealth.totalAbandonos > 10 && "border-orange-500/30"
-                                            )}>
-                                              <div className="flex items-center gap-1.5 text-orange-500 mb-0.5">
-                                                <ShoppingCart className="w-3 h-3" />
-                                                <span className="text-[9px] font-medium uppercase">Abandonos</span>
-                                              </div>
-                                              <p className="text-lg font-bold">{funnelHealth.totalAbandonos}</p>
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="bottom" className="max-w-[220px]">
-                                            <p className="font-semibold">Carrinhos Abandonados</p>
-                                            <p className="text-xs text-muted-foreground mt-1">Clientes que iniciaram checkout mas não finalizaram.</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                        
-                                        {/* Recuperados */}
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className={cn(
-                                              "bg-background/50 rounded-lg p-2.5 border cursor-help transition-colors",
-                                              "hover:border-green-500/50",
-                                              funnelHealth.taxaRecuperacao >= 30 && "border-green-500/30"
-                                            )}>
-                                              <div className="flex items-center gap-1.5 text-green-500 mb-0.5">
-                                                <RefreshCw className="w-3 h-3" />
-                                                <span className="text-[9px] font-medium uppercase">Recuperados</span>
-                                              </div>
-                                              <div className="flex items-baseline gap-1">
-                                                <p className="text-lg font-bold">{funnelHealth.abandonosRecuperados}</p>
-                                                <span className={cn(
-                                                  "text-[10px]",
-                                                  funnelHealth.taxaRecuperacao >= 30 ? "text-green-600" : funnelHealth.taxaRecuperacao >= 15 ? "text-blue-600" : "text-yellow-600"
-                                                )}>{funnelHealth.taxaRecuperacao.toFixed(0)}%</span>
-                                              </div>
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="bottom" className="max-w-[220px]">
-                                            <p className="font-semibold">Abandonos Recuperados</p>
-                                            <p className="text-xs text-muted-foreground mt-1">Clientes que abandonaram mas depois compraram.</p>
-                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
-                                              <p>• <strong className="text-green-500">≥30%:</strong> Excelente</p>
-                                              <p>• <strong className="text-blue-500">15-30%:</strong> Bom</p>
-                                              <p>• <strong className="text-yellow-500">&lt;15%:</strong> Melhorar</p>
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                        
-                                        {/* Reembolsos */}
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className={cn(
-                                              "bg-background/50 rounded-lg p-2.5 border cursor-help transition-colors",
-                                              "hover:border-blue-500/50",
-                                              funnelHealth.taxaReembolso > 5 && "border-red-500/30",
-                                              funnelHealth.taxaReembolso > 3 && funnelHealth.taxaReembolso <= 5 && "border-yellow-500/30"
-                                            )}>
-                                              <div className="flex items-center gap-1.5 text-blue-500 mb-0.5">
-                                                <CreditCard className="w-3 h-3" />
-                                                <span className="text-[9px] font-medium uppercase">Reembolsos</span>
-                                              </div>
-                                              <div className="flex items-baseline gap-1">
-                                                <p className="text-lg font-bold">{funnelHealth.totalReembolsos}</p>
-                                                <span className={cn(
-                                                  "text-[10px]",
-                                                  funnelHealth.taxaReembolso < 5 ? "text-green-600" : funnelHealth.taxaReembolso <= 10 ? "text-yellow-600" : "text-red-600"
-                                                )}>{funnelHealth.taxaReembolso.toFixed(1)}%</span>
-                                              </div>
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="bottom" className="max-w-[220px]">
-                                            <p className="font-semibold">Reembolsos</p>
-                                            <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorReembolsado)} em reembolsos</p>
-                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
-                                              <p>• <strong className="text-green-500">&lt;5%:</strong> Saudável</p>
-                                              <p>• <strong className="text-yellow-500">5-10%:</strong> Atenção</p>
-                                              <p>• <strong className="text-red-500">&gt;10%:</strong> Crítico</p>
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                        
-                                        {/* Chargebacks */}
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className={cn(
-                                              "bg-background/50 rounded-lg p-2.5 border cursor-help transition-colors",
-                                              "hover:border-red-500/50",
-                                              funnelHealth.taxaChargeback > 1 && "border-red-500/30",
-                                              funnelHealth.taxaChargeback > 0.5 && funnelHealth.taxaChargeback <= 1 && "border-yellow-500/30"
-                                            )}>
-                                              <div className="flex items-center gap-1.5 text-red-500 mb-0.5">
-                                                <AlertTriangle className="w-3 h-3" />
-                                                <span className="text-[9px] font-medium uppercase">Chargebacks</span>
-                                              </div>
-                                              <div className="flex items-baseline gap-1">
-                                                <p className="text-lg font-bold">{funnelHealth.totalChargebacks}</p>
-                                                <span className={cn(
-                                                  "text-[10px]",
-                                                  funnelHealth.taxaChargeback < 1 ? "text-green-600" : funnelHealth.taxaChargeback <= 2 ? "text-yellow-600" : "text-red-600"
-                                                )}>{funnelHealth.taxaChargeback.toFixed(1)}%</span>
-                                              </div>
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="bottom" className="max-w-[220px]">
-                                            <p className="font-semibold">Chargebacks</p>
-                                            <p className="text-xs text-muted-foreground mt-1">{formatCurrency(funnelHealth.valorChargeback)} em contestações</p>
-                                            <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
-                                              <p>• <strong className="text-green-500">&lt;1%:</strong> Saudável</p>
-                                              <p>• <strong className="text-yellow-500">1-2%:</strong> Atenção</p>
-                                              <p>• <strong className="text-red-500">&gt;2%:</strong> Risco</p>
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </div>
-                                    </div>
                                   );
                                 })()}
                               </div>

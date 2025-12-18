@@ -5,11 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { useProject } from '@/contexts/ProjectContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Facebook, ShoppingCart, MessageCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Facebook, ShoppingCart, MessageCircle, CheckCircle, AlertCircle, RefreshCw, Webhook } from 'lucide-react';
 import { HotmartSettings } from './HotmartSettings';
 import { WhatsAppFullSettings } from './WhatsAppFullSettings';
+import { CRMWebhookKeysManager } from './CRMWebhookKeysManager';
 import { FullDataSync } from '@/components/FullDataSync';
 import { useToast } from '@/hooks/use-toast';
+import { useCRMWebhookKeys } from '@/hooks/useCRMWebhookKeys';
 
 const META_APP_ID = '845927421602166';
 
@@ -70,6 +72,10 @@ export function IntegrationsSettings() {
   
   const isHotmartConnected = (hotmartCredentials as any)?.is_validated === true;
   const hasActiveWhatsApp = whatsappNumbers?.some((n: any) => n.status === 'active') ?? false;
+
+  // Webhook keys
+  const { webhookKeys } = useCRMWebhookKeys();
+  const hasWebhookKeys = (webhookKeys?.length ?? 0) > 0;
 
   const handleConnectMeta = async () => {
     if (!currentProject?.id) {
@@ -149,7 +155,7 @@ export function IntegrationsSettings() {
 
       {/* Integrations Tabs */}
       <Tabs defaultValue="hotmart" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="hotmart" className="flex items-center gap-2">
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Hotmart</span>
@@ -171,6 +177,13 @@ export function IntegrationsSettings() {
             <MessageCircle className="h-4 w-4" />
             <span className="hidden sm:inline">WhatsApp</span>
             {hasActiveWhatsApp && (
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="webhooks" className="flex items-center gap-2">
+            <Webhook className="h-4 w-4" />
+            <span className="hidden sm:inline">Webhooks</span>
+            {hasWebhookKeys && (
               <span className="h-2 w-2 rounded-full bg-green-500" />
             )}
           </TabsTrigger>
@@ -292,6 +305,11 @@ export function IntegrationsSettings() {
         {/* WhatsApp Tab */}
         <TabsContent value="whatsapp" className="mt-6">
           <WhatsAppFullSettings />
+        </TabsContent>
+
+        {/* Webhooks Tab */}
+        <TabsContent value="webhooks" className="mt-6">
+          <CRMWebhookKeysManager />
         </TabsContent>
       </Tabs>
     </div>

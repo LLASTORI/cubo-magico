@@ -268,6 +268,7 @@ interface ImportResult {
   skipped: number;
   notFound: number;
   errors: string[];
+  notFoundList: { transaction_id: string; email: string }[];
 }
 
 export const HotmartCSVImport = () => {
@@ -480,6 +481,7 @@ export const HotmartCSVImport = () => {
       skipped: 0,
       notFound: 0,
       errors: [],
+      notFoundList: [],
     };
 
     try {
@@ -588,10 +590,18 @@ export const HotmartCSVImport = () => {
                 } else {
                   // Neither transaction nor contact found
                   result.notFound++;
+                  result.notFoundList.push({ 
+                    transaction_id: row.transaction_id, 
+                    email: row.buyer_email || '' 
+                  });
                 }
               } else {
                 // No email to search for contact
                 result.notFound++;
+                result.notFoundList.push({ 
+                  transaction_id: row.transaction_id, 
+                  email: '' 
+                });
               }
             }
           } catch (err: any) {
@@ -797,7 +807,32 @@ export const HotmartCSVImport = () => {
                 <AlertDescription className="space-y-1">
                   <p>✅ {importResult.updated} contatos atualizados</p>
                   {importResult.notFound > 0 && (
-                    <p className="text-muted-foreground">⏭️ {importResult.notFound} transações não encontradas (ignoradas)</p>
+                    <div className="space-y-2">
+                      <p className="text-muted-foreground">⏭️ {importResult.notFound} não encontradas (nem venda nem contato)</p>
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                          Ver lista de não encontrados
+                        </summary>
+                        <div className="mt-2 max-h-[200px] overflow-auto border rounded p-2 bg-muted/50">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left p-1">Transaction ID</th>
+                                <th className="text-left p-1">Email</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {importResult.notFoundList.map((item, i) => (
+                                <tr key={i} className="border-b border-muted">
+                                  <td className="p-1 font-mono">{item.transaction_id}</td>
+                                  <td className="p-1">{item.email || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    </div>
                   )}
                   {importResult.errors.length > 0 && (
                     <ul className="mt-2 text-xs list-disc list-inside">

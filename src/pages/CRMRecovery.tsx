@@ -219,16 +219,17 @@ export default function CRMRecovery() {
         
         const emailToContactId = new Map(existingContacts.map(c => [c.email.toLowerCase(), c.id]));
         
-        // 3.1) Buscar compras APROVADAS dos mesmos emails para verificar conversão
+        // 3.1) Buscar compras APROVADAS dos mesmos emails para verificar conversão por PRODUTO
         // Status de compra confirmada
         const approvedStatuses = ['APPROVED', 'COMPLETE'];
-        let approvedSalesByEmail = new Map<string, { lastApprovedDate: string }>();
+        // Map: email -> Map: product_code -> lastApprovedDate
+        let approvedSalesByEmailAndProduct = new Map<string, Map<string, string>>();
         
         for (let i = 0; i < abandonedEmails.length; i += emailBatchSize) {
           const batchEmails = abandonedEmails.slice(i, i + emailBatchSize);
           const { data: approvedSales, error: approvedError } = await supabase
             .from('hotmart_sales')
-            .select('buyer_email, sale_date, confirmation_date')
+            .select('buyer_email, sale_date, confirmation_date, product_code')
             .eq('project_id', currentProject.id)
             .in('status', approvedStatuses)
             .in('buyer_email', batchEmails)
@@ -239,19 +240,24 @@ export default function CRMRecovery() {
           if (approvedSales) {
             for (const sale of approvedSales) {
               const email = sale.buyer_email?.toLowerCase();
-              if (!email) continue;
+              const productCode = sale.product_code;
+              if (!email || !productCode) continue;
               
               const saleDate = sale.confirmation_date || sale.sale_date;
-              const existing = approvedSalesByEmail.get(email);
-              if (!existing || (saleDate && saleDate > existing.lastApprovedDate)) {
-                approvedSalesByEmail.set(email, { lastApprovedDate: saleDate });
+              if (!approvedSalesByEmailAndProduct.has(email)) {
+                approvedSalesByEmailAndProduct.set(email, new Map());
+              }
+              const productMap = approvedSalesByEmailAndProduct.get(email)!;
+              const existing = productMap.get(productCode);
+              if (!existing || (saleDate && saleDate > existing)) {
+                productMap.set(productCode, saleDate);
               }
             }
           }
         }
         
         // Agrupar abandonos por email para calcular valor total abandonado
-        // e verificar se houve conversão posterior
+        // e verificar se houve conversão posterior do MESMO PRODUTO
         const abandonedByEmail = new Map<string, { 
           lastDate: string; 
           totalValue: number;
@@ -260,6 +266,7 @@ export default function CRMRecovery() {
         
         for (const sale of allAbandonedSales) {
           const email = sale.buyer_email?.toLowerCase();
+          const productCode = sale.product_code;
           if (!email) continue;
           
           const existing = abandonedByEmail.get(email) || { 
@@ -274,10 +281,13 @@ export default function CRMRecovery() {
           }
           existing.totalValue += saleValue;
           
-          // Verificar se houve compra aprovada APÓS o abandono
-          const approvedData = approvedSalesByEmail.get(email);
-          if (approvedData && approvedData.lastApprovedDate > sale.sale_date) {
-            existing.wasConverted = true;
+          // Verificar se houve compra aprovada do MESMO PRODUTO após o abandono
+          if (productCode) {
+            const productMap = approvedSalesByEmailAndProduct.get(email);
+            const approvedDate = productMap?.get(productCode);
+            if (approvedDate && approvedDate > sale.sale_date) {
+              existing.wasConverted = true;
+            }
           }
           
           abandonedByEmail.set(email, existing);
@@ -290,7 +300,7 @@ export default function CRMRecovery() {
             const entry = contactMap.get(contactId) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
             
             if (data.wasConverted) {
-              // Carrinho foi convertido em compra - marcar como recuperado
+              // Carrinho foi convertido em compra do mesmo produto - marcar como recuperado
               entry.tags.add('Recuperado (auto)' as RecoveryTag);
             } else {
               // Carrinho ainda não foi convertido - manter como abandonado

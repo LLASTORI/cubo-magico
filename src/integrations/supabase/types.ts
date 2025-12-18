@@ -3580,6 +3580,7 @@ export type Database = {
           transactions_created: number
         }[]
       }
+      normalize_phone_number: { Args: { phone: string }; Returns: string }
       update_last_login: { Args: never; Returns: undefined }
     }
     Enums: {

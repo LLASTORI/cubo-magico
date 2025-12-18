@@ -176,7 +176,7 @@ export default function CRMRecovery() {
       while (hasMoreAbandoned) {
         const { data: abandonedSales, error: abandonedError } = await supabase
           .from('hotmart_sales')
-          .select('buyer_email, buyer_name, buyer_phone, sale_date, total_price, offer_price')
+          .select('buyer_email, buyer_name, buyer_phone, sale_date, total_price, offer_price, offer_code, product_code')
           .eq('project_id', currentProject.id)
           .eq('status', 'ABANDONED')
           .gte('sale_date', startDateTime)
@@ -219,31 +219,88 @@ export default function CRMRecovery() {
         
         const emailToContactId = new Map(existingContacts.map(c => [c.email.toLowerCase(), c.id]));
         
+        // 3.1) Buscar compras APROVADAS dos mesmos emails para verificar conversão
+        // Status de compra confirmada
+        const approvedStatuses = ['APPROVED', 'COMPLETE'];
+        let approvedSalesByEmail = new Map<string, { lastApprovedDate: string }>();
+        
+        for (let i = 0; i < abandonedEmails.length; i += emailBatchSize) {
+          const batchEmails = abandonedEmails.slice(i, i + emailBatchSize);
+          const { data: approvedSales, error: approvedError } = await supabase
+            .from('hotmart_sales')
+            .select('buyer_email, sale_date, confirmation_date')
+            .eq('project_id', currentProject.id)
+            .in('status', approvedStatuses)
+            .in('buyer_email', batchEmails)
+            .order('sale_date', { ascending: false });
+          
+          if (approvedError) throw approvedError;
+          
+          if (approvedSales) {
+            for (const sale of approvedSales) {
+              const email = sale.buyer_email?.toLowerCase();
+              if (!email) continue;
+              
+              const saleDate = sale.confirmation_date || sale.sale_date;
+              const existing = approvedSalesByEmail.get(email);
+              if (!existing || (saleDate && saleDate > existing.lastApprovedDate)) {
+                approvedSalesByEmail.set(email, { lastApprovedDate: saleDate });
+              }
+            }
+          }
+        }
+        
         // Agrupar abandonos por email para calcular valor total abandonado
-        const abandonedByEmail = new Map<string, { lastDate: string; totalValue: number }>();
+        // e verificar se houve conversão posterior
+        const abandonedByEmail = new Map<string, { 
+          lastDate: string; 
+          totalValue: number;
+          wasConverted: boolean;
+        }>();
+        
         for (const sale of allAbandonedSales) {
           const email = sale.buyer_email?.toLowerCase();
           if (!email) continue;
           
-          const existing = abandonedByEmail.get(email) || { lastDate: '', totalValue: 0 };
+          const existing = abandonedByEmail.get(email) || { 
+            lastDate: '', 
+            totalValue: 0,
+            wasConverted: false 
+          };
           const saleValue = sale.total_price || sale.offer_price || 0;
+          
           if (!existing.lastDate || sale.sale_date > existing.lastDate) {
             existing.lastDate = sale.sale_date;
           }
           existing.totalValue += saleValue;
+          
+          // Verificar se houve compra aprovada APÓS o abandono
+          const approvedData = approvedSalesByEmail.get(email);
+          if (approvedData && approvedData.lastApprovedDate > sale.sale_date) {
+            existing.wasConverted = true;
+          }
+          
           abandonedByEmail.set(email, existing);
         }
         
-        // Adicionar tag de Carrinho Abandonado para contatos existentes
+        // Adicionar tags apropriadas para contatos existentes
         for (const [email, data] of abandonedByEmail) {
           const contactId = emailToContactId.get(email);
           if (contactId) {
             const entry = contactMap.get(contactId) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
-            entry.tags.add('Carrinho Abandonado');
+            
+            if (data.wasConverted) {
+              // Carrinho foi convertido em compra - marcar como recuperado
+              entry.tags.add('Recuperado (auto)' as RecoveryTag);
+            } else {
+              // Carrinho ainda não foi convertido - manter como abandonado
+              entry.tags.add('Carrinho Abandonado');
+              entry.abandonedValue = data.totalValue;
+            }
+            
             if (!entry.lastTxAt || data.lastDate > entry.lastTxAt) {
               entry.lastTxAt = data.lastDate;
             }
-            entry.abandonedValue = data.totalValue;
             contactMap.set(contactId, entry);
           }
         }

@@ -28,7 +28,8 @@ import {
   ExternalLink,
   Info,
   Kanban,
-  BarChart3
+  BarChart3,
+  ShoppingCart
 } from 'lucide-react';
 import { RecoveryAnalytics } from '@/components/crm/RecoveryAnalytics';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,12 +49,14 @@ interface RecoveryContact {
   last_purchase_at: string | null;
   first_purchase_at: string | null;
   last_recovery_date: string | null;
+  abandoned_value?: number;
 }
 
 const RECOVERY_STATUS_MAP = {
   CANCELLED: 'Cancelado',
   CHARGEBACK: 'Chargeback',
   REFUNDED: 'Reembolsado',
+  ABANDONED: 'Carrinho Abandonado',
 } as const;
 
 const RECOVERY_TAGS = Object.values(RECOVERY_STATUS_MAP);
@@ -62,7 +65,12 @@ type RecoveryTag = (typeof RECOVERY_TAGS)[number];
 
 type TagConfigKey = RecoveryTag | 'Recuperado (auto)' | 'Recuperado (manual)';
 
-const TAG_CONFIG: Record<TagConfigKey, { icon: typeof AlertTriangle; color: string; description: string }> = {
+const TAG_CONFIG: Record<TagConfigKey, { icon: typeof AlertTriangle | typeof ShoppingCart; color: string; description: string }> = {
+  'Carrinho Abandonado': { 
+    icon: ShoppingCart, 
+    color: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+    description: 'Leads que abandonaram o carrinho antes de finalizar a compra'
+  },
   Cancelado: { 
     icon: XCircle, 
     color: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
@@ -101,7 +109,7 @@ export default function CRMRecovery() {
   const [startDate, setStartDate] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
-  // Buscar contatos com base no status das transações (Cancelado, Chargeback, Reembolsado)
+  // Buscar contatos com base no status das transações (Cancelado, Chargeback, Reembolsado, Carrinho Abandonado)
   const { data: contacts = [], isLoading: contactsLoading, isFetching, refetch } = useQuery({
     queryKey: ['crm-recovery-contacts', currentProject?.id, startDate, endDate],
     queryFn: async () => {
@@ -113,62 +121,144 @@ export default function CRMRecovery() {
       const startDateTime = startOfDay(new Date(startDate)).toISOString();
       const endDateTime = endOfDay(new Date(endDate)).toISOString();
       
-      // 1) Buscar transações de recuperação NO PERÍODO SELECIONADO
-      // Fetch in batches to avoid the 1000 row limit
-      let allTransactions: any[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
+      // Map to store contact data with tags
+      const contactMap = new Map<string, { tags: Set<RecoveryTag>; lastTxAt: string | null; abandonedValue?: number }>();
       
-      while (hasMore) {
-        const { data: transactions, error: txError } = await supabase
-          .from('crm_transactions')
-          .select('contact_id, status, transaction_date')
-          .eq('project_id', currentProject.id)
-          .in('status', recoveryStatuses)
-          .gte('transaction_date', startDateTime)
-          .lte('transaction_date', endDateTime)
-          .order('transaction_date', { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
+      // 1) Buscar transações de recuperação NO PERÍODO SELECIONADO (exceto ABANDONED que vem de hotmart_sales)
+      const crmRecoveryStatuses = recoveryStatuses.filter(s => s !== 'ABANDONED');
+      
+      if (crmRecoveryStatuses.length > 0) {
+        let allTransactions: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
         
-        if (txError) throw txError;
+        while (hasMore) {
+          const { data: transactions, error: txError } = await supabase
+            .from('crm_transactions')
+            .select('contact_id, status, transaction_date')
+            .eq('project_id', currentProject.id)
+            .in('status', crmRecoveryStatuses)
+            .gte('transaction_date', startDateTime)
+            .lte('transaction_date', endDateTime)
+            .order('transaction_date', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          
+          if (txError) throw txError;
+          
+          if (transactions && transactions.length > 0) {
+            allTransactions = [...allTransactions, ...transactions];
+            hasMore = transactions.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
+        }
         
-        if (transactions && transactions.length > 0) {
-          allTransactions = [...allTransactions, ...transactions];
-          hasMore = transactions.length === pageSize;
-          page++;
-        } else {
-          hasMore = false;
+        for (const tx of allTransactions) {
+          const tagLabel = RECOVERY_STATUS_MAP[tx.status as keyof typeof RECOVERY_STATUS_MAP];
+          if (!tagLabel) continue;
+          
+          const entry = contactMap.get(tx.contact_id) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
+          entry.tags.add(tagLabel as RecoveryTag);
+          if (!entry.lastTxAt || (tx.transaction_date && tx.transaction_date > entry.lastTxAt)) {
+            entry.lastTxAt = tx.transaction_date;
+          }
+          contactMap.set(tx.contact_id, entry);
         }
       }
       
-      if (allTransactions.length === 0) return [];
+      // 2) Buscar carrinhos abandonados de hotmart_sales
+      let allAbandonedSales: any[] = [];
+      let abandonedPage = 0;
+      let hasMoreAbandoned = true;
       
-      // 2) Mapear contatos envolvidos e suas tags de recuperação
-      const contactMap = new Map<string, { tags: Set<RecoveryTag>; lastTxAt: string | null }>();
-      
-      for (const tx of allTransactions) {
-        const tagLabel = RECOVERY_STATUS_MAP[tx.status as keyof typeof RECOVERY_STATUS_MAP];
-        if (!tagLabel) continue;
+      while (hasMoreAbandoned) {
+        const { data: abandonedSales, error: abandonedError } = await supabase
+          .from('hotmart_sales')
+          .select('buyer_email, buyer_name, buyer_phone, sale_date, total_price, offer_price')
+          .eq('project_id', currentProject.id)
+          .eq('status', 'ABANDONED')
+          .gte('sale_date', startDateTime)
+          .lte('sale_date', endDateTime)
+          .order('sale_date', { ascending: false })
+          .range(abandonedPage * 1000, (abandonedPage + 1) * 1000 - 1);
         
-        const entry = contactMap.get(tx.contact_id) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
-        entry.tags.add(tagLabel as RecoveryTag);
-        if (!entry.lastTxAt || (tx.transaction_date && tx.transaction_date > entry.lastTxAt)) {
-          entry.lastTxAt = tx.transaction_date;
+        if (abandonedError) throw abandonedError;
+        
+        if (abandonedSales && abandonedSales.length > 0) {
+          allAbandonedSales = [...allAbandonedSales, ...abandonedSales];
+          hasMoreAbandoned = abandonedSales.length === 1000;
+          abandonedPage++;
+        } else {
+          hasMoreAbandoned = false;
         }
-        contactMap.set(tx.contact_id, entry);
+      }
+      
+      // 3) Para carrinhos abandonados, buscar ou criar contato pelo email
+      const abandonedEmails = [...new Set(allAbandonedSales.map(s => s.buyer_email?.toLowerCase()).filter(Boolean))];
+      
+      if (abandonedEmails.length > 0) {
+        // Buscar contatos existentes por email
+        let existingContacts: any[] = [];
+        const emailBatchSize = 100;
+        
+        for (let i = 0; i < abandonedEmails.length; i += emailBatchSize) {
+          const batchEmails = abandonedEmails.slice(i, i + emailBatchSize);
+          const { data: contacts, error: contactsError } = await supabase
+            .from('crm_contacts')
+            .select('id, email')
+            .eq('project_id', currentProject.id)
+            .in('email', batchEmails);
+          
+          if (contactsError) throw contactsError;
+          if (contacts) {
+            existingContacts = [...existingContacts, ...contacts];
+          }
+        }
+        
+        const emailToContactId = new Map(existingContacts.map(c => [c.email.toLowerCase(), c.id]));
+        
+        // Agrupar abandonos por email para calcular valor total abandonado
+        const abandonedByEmail = new Map<string, { lastDate: string; totalValue: number }>();
+        for (const sale of allAbandonedSales) {
+          const email = sale.buyer_email?.toLowerCase();
+          if (!email) continue;
+          
+          const existing = abandonedByEmail.get(email) || { lastDate: '', totalValue: 0 };
+          const saleValue = sale.total_price || sale.offer_price || 0;
+          if (!existing.lastDate || sale.sale_date > existing.lastDate) {
+            existing.lastDate = sale.sale_date;
+          }
+          existing.totalValue += saleValue;
+          abandonedByEmail.set(email, existing);
+        }
+        
+        // Adicionar tag de Carrinho Abandonado para contatos existentes
+        for (const [email, data] of abandonedByEmail) {
+          const contactId = emailToContactId.get(email);
+          if (contactId) {
+            const entry = contactMap.get(contactId) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
+            entry.tags.add('Carrinho Abandonado');
+            if (!entry.lastTxAt || data.lastDate > entry.lastTxAt) {
+              entry.lastTxAt = data.lastDate;
+            }
+            entry.abandonedValue = data.totalValue;
+            contactMap.set(contactId, entry);
+          }
+        }
       }
       
       const contactIds = Array.from(contactMap.keys());
       if (contactIds.length === 0) return [];
       
-      // 3) Buscar dados dos contatos - also in batches
+      // 4) Buscar dados dos contatos - also in batches
       let allContactsData: any[] = [];
-      const contactBatchSize = 100; // Supabase IN clause limit
+      const contactBatchSize = 100;
       
       for (let i = 0; i < contactIds.length; i += contactBatchSize) {
         const batchIds = contactIds.slice(i, i + contactBatchSize);
-      const { data: contactsData, error: contactsError } = await supabase
+        const { data: contactsData, error: contactsError } = await supabase
           .from('crm_contacts')
           .select('id, name, email, phone, tags, total_revenue, total_purchases, last_activity_at, last_purchase_at, first_purchase_at')
           .eq('project_id', currentProject.id)
@@ -196,6 +286,7 @@ export default function CRMRecovery() {
           tags: [...recoveryTags, ...recoveredTags],
           last_activity_at: c.last_activity_at,
           last_recovery_date: meta?.lastTxAt || null,
+          abandoned_value: meta?.abandonedValue || 0,
         };
       });
       
@@ -239,10 +330,12 @@ export default function CRMRecovery() {
     const cancelados = contacts.filter(c => c.tags?.includes('Cancelado')).length;
     const chargebacks = contacts.filter(c => c.tags?.includes('Chargeback')).length;
     const reembolsados = contacts.filter(c => c.tags?.includes('Reembolsado')).length;
+    const abandonados = contacts.filter(c => c.tags?.includes('Carrinho Abandonado')).length;
+    const valorAbandonado = contacts.reduce((sum, c) => sum + (c.abandoned_value || 0), 0);
     const recuperadosAuto = contacts.filter(c => c.tags?.includes('Recuperado (auto)')).length;
     const recuperadosManual = contacts.filter(c => c.tags?.includes('Recuperado (manual)')).length;
     
-    return { totalRevenueLost, cancelados, chargebacks, reembolsados, recuperadosAuto, recuperadosManual, total: contacts.length };
+    return { totalRevenueLost, cancelados, chargebacks, reembolsados, abandonados, valorAbandonado, recuperadosAuto, recuperadosManual, total: contacts.length };
   }, [contacts]);
 
   const formatCurrency = (value: number) => {
@@ -368,14 +461,14 @@ export default function CRMRecovery() {
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Info className="h-3 w-3" />
-                    <span>Filtra pela data da transação de cancelamento/reembolso/chargeback</span>
+                    <span>Filtra pela data do evento (carrinho abandonado, cancelamento, reembolso ou chargeback)</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
               <Card>
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
@@ -390,15 +483,18 @@ export default function CRMRecovery() {
                 </CardContent>
               </Card>
               
-              <Card>
+              <Card className="border-purple-500/20">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-destructive/10">
-                      <TrendingDown className="h-5 w-5 text-destructive" />
+                    <div className="p-2 rounded-lg bg-purple-500/10">
+                      <ShoppingCart className="h-5 w-5 text-purple-500" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{formatCurrency(stats.totalRevenueLost)}</p>
-                      <p className="text-sm text-muted-foreground">Receita histórica</p>
+                      <p className="text-2xl font-bold">{stats.abandonados}</p>
+                      <p className="text-sm text-muted-foreground">Carrinhos Abandonados</p>
+                      {stats.valorAbandonado > 0 && (
+                        <p className="text-xs text-purple-500">{formatCurrency(stats.valorAbandonado)}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -445,6 +541,20 @@ export default function CRMRecovery() {
                   </div>
                 </CardContent>
               </Card>
+              
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-destructive/10">
+                      <TrendingDown className="h-5 w-5 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{formatCurrency(stats.totalRevenueLost)}</p>
+                      <p className="text-sm text-muted-foreground">Receita histórica</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Filters and Search */}
@@ -466,6 +576,10 @@ export default function CRMRecovery() {
                 <TabsTrigger value="all" className="gap-2">
                   <Users className="h-4 w-4" />
                   Todos ({stats.total})
+                </TabsTrigger>
+                <TabsTrigger value="Carrinho Abandonado" className="gap-2">
+                  <ShoppingCart className="h-4 w-4 text-purple-500" />
+                  Carrinhos ({stats.abandonados})
                 </TabsTrigger>
                 <TabsTrigger value="Cancelado" className="gap-2">
                   <XCircle className="h-4 w-4" />

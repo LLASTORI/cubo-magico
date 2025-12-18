@@ -275,6 +275,7 @@ export const HotmartCSVImport = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cancelImportRef = useRef(false);
   
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
@@ -468,6 +469,7 @@ export const HotmartCSVImport = () => {
   const handleImport = async () => {
     if (!projectId || parsedData.length === 0) return;
 
+    cancelImportRef.current = false; // Reset cancel flag
     setImporting(true);
     setProgress(0);
     setProgressMessage('Preparando importação segura...');
@@ -489,6 +491,13 @@ export const HotmartCSVImport = () => {
       }
 
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        // Check if import was cancelled
+        if (cancelImportRef.current) {
+          setProgressMessage('Importação cancelada pelo usuário');
+          result.errors.push('Importação cancelada pelo usuário');
+          break;
+        }
+
         const batch = batches[batchIndex];
         const batchProgress = ((batchIndex + 1) / batches.length) * 100;
         
@@ -497,6 +506,8 @@ export const HotmartCSVImport = () => {
 
         // Process each record individually to check if exists
         for (const row of batch) {
+          // Check cancellation inside batch loop too
+          if (cancelImportRef.current) break;
           try {
             // Check if transaction exists
             const { data: existing, error: selectError } = await supabase
@@ -762,9 +773,22 @@ export const HotmartCSVImport = () => {
 
             {/* Import button */}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleClear} disabled={importing}>
-                Cancelar
-              </Button>
+              {importing ? (
+                <Button 
+                  variant="destructive" 
+                  onClick={() => {
+                    cancelImportRef.current = true;
+                    setProgressMessage('Cancelando...');
+                  }}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Parar Importação
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={handleClear}>
+                  Limpar
+                </Button>
+              )}
               <Button onClick={handleImport} disabled={importing || !projectId}>
                 {importing ? (
                   <>

@@ -163,7 +163,8 @@ export function FullDataSync() {
   });
 
   const hasMetaConnection = !!metaCredentials?.access_token;
-  const hasHotmartConnection = !!(hotmartCredentials?.client_id && hotmartCredentials?.client_secret);
+  // Use is_configured/is_validated since client_secret is encrypted and returns null
+  const hasHotmartConnection = !!(hotmartCredentials?.is_configured || hotmartCredentials?.is_validated);
   const hasMetaAccounts = (metaAccounts?.length || 0) > 0;
 
   const handleSyncMeta = async () => {

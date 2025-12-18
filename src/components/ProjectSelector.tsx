@@ -37,6 +37,16 @@ const ProjectSelector = () => {
     // This ensures no stale data from previous project is shown
     queryClient.clear();
     
+    // CRITICAL: Clear URL params that reference project-specific data (like conversation IDs)
+    const currentUrl = new URL(window.location.href);
+    const hasProjectParams = currentUrl.searchParams.has('conversation') || 
+                             currentUrl.searchParams.has('contact');
+    if (hasProjectParams) {
+      currentUrl.searchParams.delete('conversation');
+      currentUrl.searchParams.delete('contact');
+      window.history.replaceState({}, '', currentUrl.pathname);
+    }
+    
     // Update the current project (this also saves to localStorage)
     setCurrentProject(project);
     

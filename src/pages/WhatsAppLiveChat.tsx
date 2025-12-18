@@ -46,6 +46,7 @@ export default function WhatsAppLiveChat() {
   const [transferAgent, setTransferAgent] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [initialConversationSet, setInitialConversationSet] = useState(false);
+  const previousProjectIdRef = useRef<string | null>(null);
 
   const { 
     conversations, 
@@ -62,6 +63,25 @@ export default function WhatsAppLiveChat() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false);
+
+  // CRITICAL: Clear selection and URL when project changes to prevent cross-project data leakage
+  useEffect(() => {
+    const currentProjectId = currentProject?.id || null;
+    
+    if (previousProjectIdRef.current !== null && previousProjectIdRef.current !== currentProjectId) {
+      console.log('[WhatsAppLiveChat] Project changed, clearing selection and URL params');
+      setSelectedConversation(null);
+      setInitialConversationSet(false);
+      
+      // Clear conversation param from URL
+      if (searchParams.has('conversation')) {
+        searchParams.delete('conversation');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+    
+    previousProjectIdRef.current = currentProjectId;
+  }, [currentProject?.id, searchParams, setSearchParams]);
 
   // Get current user's agent info
   const currentAgent = user ? getCurrentAgentByUserId(user.id) : null;
@@ -138,22 +158,25 @@ export default function WhatsAppLiveChat() {
     if (latest) setSelectedConversation(latest);
   }, [conversations, selectedConversation?.id]);
 
-  // Auto-select conversation from URL parameter
+  // Auto-select conversation from URL parameter - only if it belongs to current project
   useEffect(() => {
-    if (initialConversationSet || !conversations || conversations.length === 0) return;
+    if (initialConversationSet || !conversations || conversations.length === 0 || !currentProject) return;
     
     const conversationId = searchParams.get('conversation');
     if (conversationId) {
-      const targetConversation = conversations.find(c => c.id === conversationId);
+      // CRITICAL: Verify conversation belongs to current project before selecting
+      const targetConversation = conversations.find(c => c.id === conversationId && c.project_id === currentProject.id);
       if (targetConversation) {
         setSelectedConversation(targetConversation);
-        // Clear the URL param after selecting
-        searchParams.delete('conversation');
-        setSearchParams(searchParams, { replace: true });
+      } else {
+        console.warn('[WhatsAppLiveChat] Conversation not found or belongs to different project:', conversationId);
       }
+      // Clear the URL param after attempting to select
+      searchParams.delete('conversation');
+      setSearchParams(searchParams, { replace: true });
       setInitialConversationSet(true);
     }
-  }, [conversations, searchParams, setSearchParams, initialConversationSet]);
+  }, [conversations, searchParams, setSearchParams, initialConversationSet, currentProject]);
 
   const handleSelectConversation = (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);

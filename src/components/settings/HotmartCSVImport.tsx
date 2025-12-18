@@ -14,7 +14,8 @@ import {
   CheckCircle, 
   Loader2,
   X,
-  Info
+  Info,
+  ShieldCheck
 } from 'lucide-react';
 import {
   Table,
@@ -30,117 +31,179 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 
-// Hotmart CSV column mapping (Portuguese to our schema)
+// Hotmart CSV column mapping - EXACT column names from Hotmart export
 const HOTMART_COLUMN_MAP: Record<string, string> = {
-  // Transaction info
-  'codigo da transacao': 'transaction_id',
-  'código da transação': 'transaction_id',
+  // Transação (campo obrigatório para identificação)
+  'transacao': 'transaction_id',
+  'transação': 'transaction_id',
   'transaction': 'transaction_id',
   'transaction_id': 'transaction_id',
+  'codigo da transacao': 'transaction_id',
+  'código da transação': 'transaction_id',
   
-  // Dates
-  'data da compra': 'sale_date',
-  'data compra': 'sale_date',
-  'purchase_date': 'sale_date',
-  'data da confirmacao': 'confirmation_date',
-  'data da confirmação': 'confirmation_date',
-  'confirmation_date': 'confirmation_date',
-  
-  // Status
+  // Status (campo obrigatório)
   'status': 'status',
-  'status da transacao': 'status',
-  'status da transação': 'status',
   
-  // Buyer info
+  // Dados de Contato (campos que serão ATUALIZADOS)
+  'nome': 'buyer_name',
   'nome do comprador': 'buyer_name',
   'comprador': 'buyer_name',
   'buyer_name': 'buyer_name',
+  'email': 'buyer_email',
+  'e-mail': 'buyer_email',
   'e-mail do comprador': 'buyer_email',
   'email do comprador': 'buyer_email',
-  'email': 'buyer_email',
   'buyer_email': 'buyer_email',
+  'ddd': 'buyer_phone_ddd',
   'telefone': 'buyer_phone',
   'telefone do comprador': 'buyer_phone',
   'buyer_phone': 'buyer_phone',
-  'ddd': 'buyer_phone_ddd',
+  'instagram': 'buyer_instagram',
   'documento': 'buyer_document',
   'cpf': 'buyer_document',
   'buyer_document': 'buyer_document',
   
-  // Address
+  // Endereço (lidos para referência, não atualizados)
+  'cep': 'buyer_cep',
+  'zipcode': 'buyer_cep',
   'cidade': 'buyer_city',
   'city': 'buyer_city',
   'estado': 'buyer_state',
   'state': 'buyer_state',
+  'bairro': 'buyer_neighborhood',
   'pais': 'buyer_country',
   'país': 'buyer_country',
   'country': 'buyer_country',
-  'cep': 'buyer_cep',
-  'zipcode': 'buyer_cep',
+  'endereco': 'buyer_address',
+  'endereço': 'buyer_address',
+  'numero': 'buyer_address_number',
+  'número': 'buyer_address_number',
+  'complemento': 'buyer_address_complement',
   
-  // Product info
-  'produto': 'product_name',
+  // Produto (lidos para referência/log)
   'nome do produto': 'product_name',
+  'produto': 'product_name',
   'product_name': 'product_name',
   'codigo do produto': 'product_code',
   'código do produto': 'product_code',
   'product_id': 'product_code',
   'product_code': 'product_code',
   
-  // Pricing
-  'valor do produto': 'product_price',
-  'preco do produto': 'product_price',
-  'product_price': 'product_price',
-  'valor da oferta': 'offer_price',
-  'offer_price': 'offer_price',
-  'valor total': 'total_price',
-  'total': 'total_price',
-  'total_price': 'total_price',
-  'valor liquido': 'net_revenue',
-  'valor líquido': 'net_revenue',
-  'comissao': 'net_revenue',
-  'comissão': 'net_revenue',
-  'net_revenue': 'net_revenue',
+  // Produtor
+  'nome do produtor': 'producer_name',
+  'documento do produtor': 'producer_document',
   
-  // Offer info
-  'oferta': 'offer_code',
-  'codigo da oferta': 'offer_code',
-  'código da oferta': 'offer_code',
-  'offer_code': 'offer_code',
+  // Afiliado
+  'nome do afiliado': 'affiliate_name',
+  'afiliado': 'affiliate_name',
+  'affiliate_name': 'affiliate_name',
+  'codigo da afiliacao': 'affiliate_code',
+  'código da afiliação': 'affiliate_code',
+  'codigo do afiliado': 'affiliate_code',
+  'código do afiliado': 'affiliate_code',
+  'affiliate_code': 'affiliate_code',
   
-  // Payment
+  // Pagamento
+  'meio de pagamento': 'payment_method',
   'metodo de pagamento': 'payment_method',
   'método de pagamento': 'payment_method',
   'forma de pagamento': 'payment_method',
   'payment_method': 'payment_method',
   'tipo de pagamento': 'payment_type',
+  'tipo pagamento oferta': 'payment_type',
   'payment_type': 'payment_type',
+  'numero da parcela': 'installment_number',
+  'número da parcela': 'installment_number',
   'parcelas': 'installment_number',
-  'numero de parcelas': 'installment_number',
   'installments': 'installment_number',
   
-  // Affiliate
-  'afiliado': 'affiliate_name',
-  'nome do afiliado': 'affiliate_name',
-  'affiliate_name': 'affiliate_name',
-  'codigo do afiliado': 'affiliate_code',
-  'código do afiliado': 'affiliate_code',
-  'affiliate_code': 'affiliate_code',
+  // Valores (lidos para referência, NÃO atualizados)
+  'preco do produto': 'product_price',
+  'preço do produto': 'product_price',
+  'valor do produto': 'product_price',
+  'product_price': 'product_price',
+  'preco da oferta': 'offer_price',
+  'preço da oferta': 'offer_price',
+  'valor da oferta': 'offer_price',
+  'offer_price': 'offer_price',
+  'preco original': 'original_price',
+  'preço original': 'original_price',
+  'preco total': 'total_price',
+  'preço total': 'total_price',
+  'valor total': 'total_price',
+  'total': 'total_price',
+  'total_price': 'total_price',
+  'preco total convertido': 'total_price_brl',
+  'preço total convertido': 'total_price_brl',
+  'valor que voce recebeu convertido': 'received_value',
+  'valor que você recebeu convertido': 'received_value',
+  'faturamento liquido': 'net_revenue',
+  'faturamento líquido': 'net_revenue',
+  'valor liquido': 'net_revenue',
+  'valor líquido': 'net_revenue',
+  'comissao': 'net_revenue',
+  'comissão': 'net_revenue',
+  'net_revenue': 'net_revenue',
+  'taxa de cambio': 'exchange_rate',
+  'taxa de câmbio': 'exchange_rate',
+  'taxa de cambio real': 'exchange_rate_used',
+  'taxa de câmbio real': 'exchange_rate_used',
+  'taxa de cambio do valor recebido': 'exchange_rate_used',
+  'taxa de câmbio do valor recebido': 'exchange_rate_used',
+  
+  // Datas
+  'data de venda': 'sale_date',
+  'data da compra': 'sale_date',
+  'data compra': 'sale_date',
+  'purchase_date': 'sale_date',
+  'data de confirmacao': 'confirmation_date',
+  'data de confirmação': 'confirmation_date',
+  'data da confirmacao': 'confirmation_date',
+  'data da confirmação': 'confirmation_date',
+  'confirmation_date': 'confirmation_date',
+  'data vencimento': 'due_date',
+  'data de vencimento': 'due_date',
+  
+  // Oferta
+  'codigo de oferta': 'offer_code',
+  'código de oferta': 'offer_code',
+  'oferta': 'offer_code',
+  'offer_code': 'offer_code',
+  
+  // Origem
+  'origem': 'origin',
+  'origem de checkout': 'checkout_origin',
+  'origem da venda': 'sale_origin',
   
   // UTM
   'utm_source': 'utm_source',
-  'origem': 'utm_source',
-  'utm_campaign': 'utm_campaign_id',
-  'campanha': 'utm_campaign_id',
+  'chave': 'utm_source', // Hotmart uses "chave" for tracking
   
-  // Coupon
+  // Cupom
   'cupom': 'coupon',
   'coupon': 'coupon',
   'codigo do cupom': 'coupon',
   
-  // Currency
+  // Moeda
   'moeda': 'product_currency',
+  'moeda de recebimento': 'offer_currency',
   'currency': 'product_currency',
+  
+  // Outros
+  'recorrencia': 'recurrence',
+  'recorrência': 'recurrence',
+  'periodo gratis': 'free_period',
+  'período grátis': 'free_period',
+  'tem co-producao': 'has_coproduction',
+  'tem co-produção': 'has_coproduction',
+  'venda feita como': 'sold_as',
+  'quantidade de itens': 'items_quantity',
+  'quantidade de itensoferta de upgrade': 'items_quantity', // Hotmart concatenation bug
+  'oferta de upgrade': 'is_upgrade',
+  'codigo do assinante': 'subscriber_code',
+  'código do assinante': 'subscriber_code',
+  'nota fiscal': 'invoice_number',
+  'valor do frete bruto': 'shipping_value',
 };
 
 // Status mapping from Hotmart Portuguese to our format
@@ -175,11 +238,25 @@ const STATUS_MAP: Record<string, string> = {
   'overdue': 'OVERDUE',
 };
 
+// Campos de contato que serão atualizados (modo seguro)
+const CONTACT_FIELDS = [
+  'buyer_name',
+  'buyer_email',
+  'buyer_phone_ddd',
+  'buyer_phone',
+  'buyer_instagram',
+  'buyer_document',
+];
+
 interface ParsedRow {
   transaction_id: string;
   status: string;
   buyer_email?: string;
   buyer_name?: string;
+  buyer_phone?: string;
+  buyer_phone_ddd?: string;
+  buyer_instagram?: string;
+  buyer_document?: string;
   product_name?: string;
   total_price?: number;
   sale_date?: string;
@@ -187,9 +264,9 @@ interface ParsedRow {
 }
 
 interface ImportResult {
-  inserted: number;
   updated: number;
   skipped: number;
+  notFound: number;
   errors: string[];
 }
 
@@ -202,6 +279,7 @@ export const HotmartCSVImport = () => {
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [foundHeaders, setFoundHeaders] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -262,18 +340,6 @@ export const HotmartCSVImport = () => {
   const parseDate = (dateStr: string): string | null => {
     if (!dateStr) return null;
     
-    // Try different date formats
-    const formats = [
-      // DD/MM/YYYY HH:mm:ss
-      /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/,
-      // DD/MM/YYYY
-      /^(\d{2})\/(\d{2})\/(\d{4})$/,
-      // YYYY-MM-DD HH:mm:ss
-      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/,
-      // YYYY-MM-DD
-      /^(\d{4})-(\d{2})-(\d{2})$/,
-    ];
-
     // DD/MM/YYYY format
     const brMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?$/);
     if (brMatch) {
@@ -317,6 +383,7 @@ export const HotmartCSVImport = () => {
     setFile(selectedFile);
     setParsedData([]);
     setColumnMapping({});
+    setFoundHeaders([]);
     setImportResult(null);
     setParseError(null);
 
@@ -328,6 +395,8 @@ export const HotmartCSVImport = () => {
         setParseError('Arquivo CSV vazio ou inválido.');
         return;
       }
+
+      setFoundHeaders(headers);
 
       // Map columns
       const mapping: Record<string, string> = {};
@@ -342,12 +411,12 @@ export const HotmartCSVImport = () => {
       // Check required fields
       const mappedFields = Object.values(mapping);
       if (!mappedFields.includes('transaction_id')) {
-        setParseError('Coluna "Código da transação" não encontrada. Verifique se é um CSV exportado da Hotmart.');
-        return;
-      }
-
-      if (!mappedFields.includes('status')) {
-        setParseError('Coluna "Status" não encontrada. Verifique se é um CSV exportado da Hotmart.');
+        const foundColumnsSample = headers.slice(0, 15).join(', ');
+        setParseError(
+          `Coluna de transação não encontrada.\n\n` +
+          `Esperado: "Transação" ou "Transacao"\n\n` +
+          `Colunas encontradas: ${foundColumnsSample}${headers.length > 15 ? '...' : ''}`
+        );
         return;
       }
 
@@ -365,9 +434,9 @@ export const HotmartCSVImport = () => {
             if (field === 'status') {
               const normalizedStatus = value.toLowerCase().trim();
               obj[field] = STATUS_MAP[normalizedStatus] || value.toUpperCase();
-            } else if (field === 'sale_date' || field === 'confirmation_date') {
+            } else if (field === 'sale_date' || field === 'confirmation_date' || field === 'due_date') {
               obj[field] = parseDate(value) || undefined;
-            } else if (['product_price', 'offer_price', 'total_price', 'net_revenue', 'installment_number'].includes(field)) {
+            } else if (['product_price', 'offer_price', 'total_price', 'net_revenue', 'installment_number', 'recurrence'].includes(field)) {
               const num = parseNumber(value);
               if (num !== null) obj[field] = num;
             } else {
@@ -388,7 +457,7 @@ export const HotmartCSVImport = () => {
 
       toast({
         title: 'Arquivo carregado!',
-        description: `${parsed.length} vendas encontradas.`,
+        description: `${parsed.length} transações encontradas para atualização de contatos.`,
       });
     } catch (error: any) {
       console.error('CSV parse error:', error);
@@ -401,13 +470,13 @@ export const HotmartCSVImport = () => {
 
     setImporting(true);
     setProgress(0);
-    setProgressMessage('Preparando importação...');
+    setProgressMessage('Preparando importação segura...');
     setImportResult(null);
 
     const result: ImportResult = {
-      inserted: 0,
       updated: 0,
       skipped: 0,
+      notFound: 0,
       errors: [],
     };
 
@@ -424,62 +493,60 @@ export const HotmartCSVImport = () => {
         const batchProgress = ((batchIndex + 1) / batches.length) * 100;
         
         setProgress(batchProgress);
-        setProgressMessage(`Importando lote ${batchIndex + 1} de ${batches.length}...`);
+        setProgressMessage(`Atualizando contatos - lote ${batchIndex + 1} de ${batches.length}...`);
 
-        const records = batch.map(row => ({
-          project_id: projectId,
-          transaction_id: row.transaction_id,
-          status: row.status,
-          product_name: row.product_name || 'Produto Importado',
-          buyer_name: row.buyer_name,
-          buyer_email: row.buyer_email,
-          buyer_phone: row.buyer_phone,
-          buyer_phone_ddd: row.buyer_phone_ddd,
-          buyer_document: row.buyer_document,
-          buyer_city: row.buyer_city,
-          buyer_state: row.buyer_state,
-          buyer_country: row.buyer_country,
-          buyer_cep: row.buyer_cep,
-          product_code: row.product_code,
-          product_price: row.product_price,
-          offer_price: row.offer_price,
-          offer_code: row.offer_code,
-          total_price: row.total_price,
-          net_revenue: row.net_revenue,
-          sale_date: row.sale_date,
-          confirmation_date: row.confirmation_date,
-          payment_method: row.payment_method,
-          payment_type: row.payment_type,
-          installment_number: row.installment_number,
-          affiliate_name: row.affiliate_name,
-          affiliate_code: row.affiliate_code,
-          utm_source: row.utm_source,
-          utm_campaign_id: row.utm_campaign_id,
-          coupon: row.coupon,
-          product_currency: row.product_currency || 'BRL',
-          sale_origin: 'csv_import',
-          last_synced_at: new Date().toISOString(),
-        }));
+        // Process each record individually to check if exists
+        for (const row of batch) {
+          try {
+            // Check if transaction exists
+            const { data: existing, error: selectError } = await supabase
+              .from('hotmart_sales')
+              .select('id')
+              .eq('project_id', projectId)
+              .eq('transaction_id', row.transaction_id)
+              .maybeSingle();
 
-        const { data, error } = await supabase
-          .from('hotmart_sales')
-          .upsert(records, {
-            onConflict: 'project_id,transaction_id',
-            ignoreDuplicates: false,
-          })
-          .select('id');
+            if (selectError) {
+              result.errors.push(`Erro ao buscar ${row.transaction_id}: ${selectError.message}`);
+              continue;
+            }
 
-        if (error) {
-          console.error('Batch import error:', error);
-          result.errors.push(`Lote ${batchIndex + 1}: ${error.message}`);
-        } else {
-          // Count as updated (upsert doesn't differentiate)
-          result.updated += data?.length || 0;
+            if (existing) {
+              // Update ONLY contact fields
+              const updateData: Record<string, any> = {
+                updated_at: new Date().toISOString(),
+              };
+
+              // Only add contact fields that have values
+              if (row.buyer_name) updateData.buyer_name = row.buyer_name;
+              if (row.buyer_email) updateData.buyer_email = row.buyer_email;
+              if (row.buyer_phone_ddd) updateData.buyer_phone_ddd = row.buyer_phone_ddd;
+              if (row.buyer_phone) updateData.buyer_phone = row.buyer_phone;
+              if (row.buyer_instagram) updateData.buyer_instagram = row.buyer_instagram;
+              if (row.buyer_document) updateData.buyer_document = row.buyer_document;
+
+              const { error: updateError } = await supabase
+                .from('hotmart_sales')
+                .update(updateData)
+                .eq('id', existing.id);
+
+              if (updateError) {
+                result.errors.push(`Erro ao atualizar ${row.transaction_id}: ${updateError.message}`);
+              } else {
+                result.updated++;
+              }
+            } else {
+              // Transaction not found - skip (don't create new)
+              result.notFound++;
+            }
+          } catch (err: any) {
+            result.errors.push(`Erro em ${row.transaction_id}: ${err.message}`);
+          }
         }
 
         // Small delay between batches
         if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
@@ -496,8 +563,12 @@ export const HotmartCSVImport = () => {
           entity_type: 'hotmart_sales',
           entity_name: file?.name || 'CSV Import',
           details: {
-            records_processed: result.updated,
+            mode: 'contacts_only',
+            records_updated: result.updated,
+            records_skipped: result.skipped,
+            records_not_found: result.notFound,
             errors_count: result.errors.length,
+            fields_updated: CONTACT_FIELDS,
             file_name: file?.name,
             file_size: file?.size,
           },
@@ -506,7 +577,7 @@ export const HotmartCSVImport = () => {
 
       toast({
         title: 'Importação concluída!',
-        description: `${result.updated} vendas processadas. ${result.errors.length > 0 ? `${result.errors.length} erros.` : ''}`,
+        description: `${result.updated} contatos atualizados. ${result.notFound > 0 ? `${result.notFound} transações não encontradas.` : ''}`,
         variant: result.errors.length > 0 ? 'destructive' : 'default',
       });
 
@@ -529,19 +600,12 @@ export const HotmartCSVImport = () => {
     setFile(null);
     setParsedData([]);
     setColumnMapping({});
+    setFoundHeaders([]);
     setImportResult(null);
     setParseError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const formatPrice = (value: number | undefined): string => {
-    if (value === undefined) return '-';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
   };
 
   return (
@@ -554,19 +618,20 @@ export const HotmartCSVImport = () => {
           <div>
             <CardTitle className="text-base">Importar CSV</CardTitle>
             <CardDescription>
-              Importe histórico de vendas do Hotmart via arquivo CSV
+              Atualize dados de contato das vendas existentes via CSV da Hotmart
             </CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Info alert */}
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>Formato suportado</AlertTitle>
-          <AlertDescription className="text-xs">
-            Exporte o relatório de vendas da Hotmart no formato CSV. As colunas são detectadas automaticamente.
-            Vendas com o mesmo código de transação serão atualizadas.
+        {/* Info alert - Modo Seguro */}
+        <Alert className="border-green-500/50 bg-green-500/5">
+          <ShieldCheck className="h-4 w-4 text-green-500" />
+          <AlertTitle className="text-green-700 dark:text-green-400">Modo Seguro: Somente Contatos</AlertTitle>
+          <AlertDescription className="text-xs space-y-2">
+            <p><strong>Campos que serão atualizados:</strong> Nome, Email, DDD, Telefone, Instagram, Documento</p>
+            <p><strong>Campos preservados:</strong> Todos os valores financeiros, datas e dados de vendas existentes</p>
+            <p><strong>Transações não encontradas:</strong> Serão ignoradas (não criam registros novos)</p>
           </AlertDescription>
         </Alert>
 
@@ -594,7 +659,7 @@ export const HotmartCSVImport = () => {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Erro ao processar arquivo</AlertTitle>
-            <AlertDescription>{parseError}</AlertDescription>
+            <AlertDescription className="whitespace-pre-line text-xs">{parseError}</AlertDescription>
           </Alert>
         )}
 
@@ -605,11 +670,21 @@ export const HotmartCSVImport = () => {
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">{file.name}</span>
-                <Badge variant="secondary">{parsedData.length} vendas</Badge>
+                <Badge variant="secondary">{parsedData.length} transações</Badge>
               </div>
               <Button variant="ghost" size="sm" onClick={handleClear}>
                 <X className="h-4 w-4" />
               </Button>
+            </div>
+
+            {/* Contact fields info */}
+            <div className="flex flex-wrap gap-1">
+              <span className="text-xs text-muted-foreground">Campos a atualizar:</span>
+              <Badge variant="outline" className="text-xs">Nome</Badge>
+              <Badge variant="outline" className="text-xs">Email</Badge>
+              <Badge variant="outline" className="text-xs">DDD</Badge>
+              <Badge variant="outline" className="text-xs">Telefone</Badge>
+              <Badge variant="outline" className="text-xs">Instagram</Badge>
             </div>
 
             {/* Preview table */}
@@ -619,29 +694,22 @@ export const HotmartCSVImport = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="sticky top-0 bg-muted">Transação</TableHead>
-                      <TableHead className="sticky top-0 bg-muted">Status</TableHead>
-                      <TableHead className="sticky top-0 bg-muted">Comprador</TableHead>
-                      <TableHead className="sticky top-0 bg-muted">Produto</TableHead>
-                      <TableHead className="sticky top-0 bg-muted">Valor</TableHead>
+                      <TableHead className="sticky top-0 bg-muted">Nome</TableHead>
+                      <TableHead className="sticky top-0 bg-muted">Email</TableHead>
+                      <TableHead className="sticky top-0 bg-muted">Telefone</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {parsedData.slice(0, 10).map((row, index) => (
                       <TableRow key={index}>
                         <TableCell className="font-mono text-xs">{row.transaction_id}</TableCell>
-                        <TableCell>
-                          <Badge variant={row.status === 'APPROVED' || row.status === 'COMPLETE' ? 'default' : 'secondary'}>
-                            {row.status}
-                          </Badge>
-                        </TableCell>
+                        <TableCell className="text-sm">{row.buyer_name || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.buyer_email || '-'}</TableCell>
                         <TableCell className="text-sm">
-                          <div>{row.buyer_name || '-'}</div>
-                          <div className="text-xs text-muted-foreground">{row.buyer_email || '-'}</div>
+                          {row.buyer_phone_ddd && row.buyer_phone 
+                            ? `(${row.buyer_phone_ddd}) ${row.buyer_phone}`
+                            : row.buyer_phone || '-'}
                         </TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate">
-                          {row.product_name || '-'}
-                        </TableCell>
-                        <TableCell className="text-sm">{formatPrice(row.total_price)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -649,7 +717,7 @@ export const HotmartCSVImport = () => {
               </div>
               {parsedData.length > 10 && (
                 <div className="p-2 bg-muted text-center text-xs text-muted-foreground">
-                  Mostrando 10 de {parsedData.length} vendas
+                  Mostrando 10 de {parsedData.length} transações
                 </div>
               )}
             </div>
@@ -671,8 +739,11 @@ export const HotmartCSVImport = () => {
                   <CheckCircle className="h-4 w-4" />
                 )}
                 <AlertTitle>Resultado da importação</AlertTitle>
-                <AlertDescription>
-                  <p>{importResult.updated} vendas processadas</p>
+                <AlertDescription className="space-y-1">
+                  <p>✅ {importResult.updated} contatos atualizados</p>
+                  {importResult.notFound > 0 && (
+                    <p className="text-muted-foreground">⏭️ {importResult.notFound} transações não encontradas (ignoradas)</p>
+                  )}
                   {importResult.errors.length > 0 && (
                     <ul className="mt-2 text-xs list-disc list-inside">
                       {importResult.errors.slice(0, 5).map((err, i) => (
@@ -696,12 +767,12 @@ export const HotmartCSVImport = () => {
                 {importing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Importando...
+                    Atualizando contatos...
                   </>
                 ) : (
                   <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar {parsedData.length} vendas
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    Atualizar Contatos
                   </>
                 )}
               </Button>

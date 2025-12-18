@@ -95,7 +95,13 @@ export function useWhatsAppNumbers() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Verificar se é erro de duplicidade
+        if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+          throw new Error('Este número de WhatsApp já está cadastrado em outro projeto. Cada número só pode estar vinculado a um projeto por vez.');
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {

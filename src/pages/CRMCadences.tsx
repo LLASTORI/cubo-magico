@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useCRMCadences, useCadenceSteps } from '@/hooks/useCRMCadences';
@@ -26,7 +27,6 @@ import {
   Lock, 
   Plus, 
   Trash2, 
-  ArrowLeft,
   Play,
   Pause,
   Clock,
@@ -37,7 +37,8 @@ import {
   Bell,
   CheckSquare,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  LayoutList
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -173,23 +174,33 @@ export default function CRMCadences() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader pageSubtitle="Cadências de Follow-up" />
+      <AppHeader pageSubtitle="CRM - Cadências" />
       
-      <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">Cadências de Follow-up</h1>
-            <p className="text-muted-foreground">
-              Crie sequências automáticas de atividades para seus leads
-            </p>
-          </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Cadência
-          </Button>
+      <CRMSubNav 
+        rightContent={
+          <>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate('/crm/activities')}
+            >
+              <LayoutList className="h-4 w-4 mr-2" />
+              Ver Atividades
+            </Button>
+            <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Cadência
+            </Button>
+          </>
+        }
+      />
+      
+      <main className="container mx-auto px-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Cadências de Follow-up</h1>
+          <p className="text-muted-foreground">
+            Crie sequências automáticas de atividades para seus leads
+          </p>
         </div>
 
         {cadences.length === 0 ? (

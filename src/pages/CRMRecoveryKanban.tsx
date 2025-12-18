@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useRecoveryStages } from '@/hooks/useRecoveryStages';
@@ -29,8 +30,6 @@ import {
   Lock,
   RefreshCcw,
   Search,
-  ArrowLeft,
-  Settings,
   Phone,
   Mail,
   DollarSign,
@@ -39,6 +38,7 @@ import {
   UserPlus,
   CheckCircle2,
   XCircle,
+  BarChart3,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -398,24 +398,13 @@ export default function CRMRecoveryKanban() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <AppHeader />
+      <AppHeader pageSubtitle="CRM - Recuperação Kanban" />
 
-      <main className="flex-1 container py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <RefreshCcw className="h-6 w-6 text-primary" />
-                Kanban de Recuperação
-              </h1>
-              <p className="text-muted-foreground">Gerencie o fluxo de recuperação de clientes</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <CRMSubNav 
+        showSettings
+        settingsPath="/crm/recovery/settings"
+        rightContent={
+          <>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -433,11 +422,18 @@ export default function CRMRecoveryKanban() {
                 <TooltipContent>Recarrega os dados do Kanban</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/crm/recovery/settings')}>
-              <Settings className="h-4 w-4" />
-              Configurar Etapas
+            <Button variant="outline" size="sm" onClick={() => navigate('/crm/recovery')}>
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Dashboard
             </Button>
-          </div>
+          </>
+        }
+      />
+
+      <main className="flex-1 container px-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Kanban de Recuperação</h1>
+          <p className="text-muted-foreground">Gerencie o fluxo de recuperação de clientes</p>
         </div>
 
         {isLoading ? (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
@@ -14,16 +15,12 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
   Loader2, 
   Lock, 
-  Users, 
-  Settings,
   GripVertical,
   Mail,
   Phone,
   DollarSign,
   CheckSquare,
-  Square,
-  Plus,
-  MessageCircle
+  Square
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -230,56 +227,40 @@ export default function CRMKanban() {
     <div className="min-h-screen bg-background">
       <AppHeader pageSubtitle="CRM - Pipeline" />
       
-      <main className="container mx-auto px-6 py-8 pb-24">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
-            <p className="text-muted-foreground">
-              {isSelectionMode 
-                ? 'Clique nos cards para selecionar' 
-                : 'Arraste os leads entre as etapas para atualizar o status'}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              variant={isSelectionMode ? "default" : "outline"} 
-              onClick={() => setIsSelectionMode(!isSelectionMode)}
-            >
-              {isSelectionMode ? (
-                <>
-                  <CheckSquare className="h-4 w-4 mr-2" />
-                  Selecionando
-                </>
-              ) : (
-                <>
-                  <Square className="h-4 w-4 mr-2" />
-                  Selecionar
-                </>
-              )}
-            </Button>
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Contato
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/crm')}>
-              <Users className="h-4 w-4 mr-2" />
-              Ver Lista
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/crm/activities')}>
-              Atividades
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/crm/cadences')}>
-              Cadências
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/whatsapp')}>
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Chat ao Vivo
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/crm/pipeline-settings')}>
-              <Settings className="h-4 w-4 mr-2" />
-              Configurar
-            </Button>
-          </div>
+      <CRMSubNav 
+        showNewContact 
+        onNewContact={() => setShowCreateDialog(true)}
+        showSettings
+        settingsPath="/crm/pipeline-settings"
+        rightContent={
+          <Button 
+            variant={isSelectionMode ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setIsSelectionMode(!isSelectionMode)}
+          >
+            {isSelectionMode ? (
+              <>
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Selecionando
+              </>
+            ) : (
+              <>
+                <Square className="h-4 w-4 mr-2" />
+                Selecionar
+              </>
+            )}
+          </Button>
+        }
+      />
+      
+      <main className="container mx-auto px-6 pb-24">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
+          <p className="text-muted-foreground">
+            {isSelectionMode 
+              ? 'Clique nos cards para selecionar' 
+              : 'Arraste os leads entre as etapas para atualizar o status'}
+          </p>
         </div>
 
         {/* Filters Bar */}

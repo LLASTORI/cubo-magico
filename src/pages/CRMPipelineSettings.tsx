@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
@@ -23,9 +24,9 @@ import {
   Plus, 
   Trash2, 
   GripVertical,
-  ArrowLeft,
   Save,
-  Pencil
+  Pencil,
+  Kanban
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -124,23 +125,29 @@ export default function CRMPipelineSettings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader pageSubtitle="Configurar Pipeline" />
+      <AppHeader pageSubtitle="CRM - Configurar Pipeline" />
       
-      <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">Configurar Etapas do Pipeline</h1>
-            <p className="text-muted-foreground">
-              Gerencie as etapas do seu funil de vendas
-            </p>
-          </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Etapa
-          </Button>
+      <CRMSubNav 
+        rightContent={
+          <>
+            <Button variant="outline" size="sm" onClick={() => navigate('/crm/kanban')}>
+              <Kanban className="h-4 w-4 mr-2" />
+              Ver Pipeline
+            </Button>
+            <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Etapa
+            </Button>
+          </>
+        }
+      />
+      
+      <main className="container mx-auto px-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Configurar Etapas do Pipeline</h1>
+          <p className="text-muted-foreground">
+            Gerencie as etapas do seu funil de vendas
+          </p>
         </div>
 
         <Card>

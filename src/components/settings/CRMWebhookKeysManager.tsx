@@ -436,12 +436,12 @@ export function CRMWebhookKeysManager() {
                   <p className="text-xs text-muted-foreground">
                     Uma tag "funil:nome" será adicionada a todos os leads
                   </p>
-                  <Select value={newKeyFunnelId} onValueChange={setNewKeyFunnelId}>
+                    <Select value={newKeyFunnelId || "__none__"} onValueChange={(val) => setNewKeyFunnelId(val === "__none__" ? "" : val)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um funil..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
+                      <SelectItem value="__none__">Nenhum</SelectItem>
                       {funnels?.map(funnel => (
                         <SelectItem key={funnel.id} value={funnel.id}>
                           {funnel.name}

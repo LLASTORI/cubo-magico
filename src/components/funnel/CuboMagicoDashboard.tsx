@@ -2366,32 +2366,53 @@ export function CuboMagicoDashboard({
 
                                 {/* Health Metrics - Separate Section */}
                                 {(() => {
-                                  const funnelHealth = healthMetrics.find(h => h.funnelId === metrics.funnel.id);
-                                  if (!funnelHealth || (funnelHealth.totalAbandonos === 0 && funnelHealth.totalReembolsos === 0 && funnelHealth.totalChargebacks === 0)) {
-                                    return null;
-                                  }
+                                  const funnelHealth =
+                                    healthMetrics.find((h) => h.funnelId === metrics.funnel.id) ?? {
+                                      funnelId: metrics.funnel.id,
+                                      funnelName: metrics.funnel.name,
+                                      totalAbandonos: 0,
+                                      valorAbandonos: 0,
+                                      abandonosRecuperados: 0,
+                                      valorRecuperados: 0,
+                                      taxaRecuperacao: 0,
+                                      totalReembolsos: 0,
+                                      valorReembolsado: 0,
+                                      taxaReembolso: 0,
+                                      totalChargebacks: 0,
+                                      valorChargeback: 0,
+                                      taxaChargeback: 0,
+                                      totalCancelamentos: 0,
+                                      valorCancelado: 0,
+                                      taxaCancelamento: 0,
+                                      vendasAprovadas: 0,
+                                      abandonoAtribuivel: true,
+                                    };
 
-                                  // Helper functions for status
+                                  // Helper functions for status (UI only)
                                   const getAbandonosStatus = (count: number) => {
+                                    if (count === 0) return { borderClass: '', color: 'neutral' };
                                     if (count >= 20) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
                                     if (count >= 10) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
                                     if (count >= 5) return { borderClass: 'ring-2 ring-orange-400 ring-offset-2 ring-offset-background', color: 'orange' };
                                     return { borderClass: '', color: 'green' };
                                   };
-                                  
+
                                   const getRecuperadosStatus = (rate: number) => {
+                                    if (funnelHealth.totalAbandonos === 0) return { borderClass: '', color: 'neutral' };
                                     if (rate >= 30) return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
                                     if (rate >= 15) return { borderClass: 'ring-2 ring-blue-400 ring-offset-2 ring-offset-background', color: 'blue' };
                                     return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
                                   };
-                                  
+
                                   const getReembolsoStatus = (rate: number) => {
+                                    if (funnelHealth.vendasAprovadas === 0) return { borderClass: '', color: 'neutral' };
                                     if (rate > 10) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
                                     if (rate > 5) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
                                     return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };
                                   };
-                                  
+
                                   const getChargebackStatus = (rate: number) => {
+                                    if (funnelHealth.vendasAprovadas === 0) return { borderClass: '', color: 'neutral' };
                                     if (rate > 2) return { borderClass: 'ring-2 ring-red-400 ring-offset-2 ring-offset-background', color: 'red' };
                                     if (rate > 1) return { borderClass: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-background', color: 'yellow' };
                                     return { borderClass: 'ring-2 ring-green-400 ring-offset-2 ring-offset-background', color: 'green' };

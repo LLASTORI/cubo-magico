@@ -3620,6 +3620,12 @@ export type Database = {
           transactions_created: number
         }[]
       }
+      migrate_hotmart_to_interactions: {
+        Args: never
+        Returns: {
+          interactions_created: number
+        }[]
+      }
       migrate_tags_to_contextual: {
         Args: never
         Returns: {

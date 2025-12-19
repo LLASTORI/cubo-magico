@@ -3,6 +3,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { useCRMContact } from '@/hooks/useCRMContact';
 import { useCRMActivities } from '@/hooks/useCRMActivities';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { useCRMContactJourney } from '@/hooks/useCRMContactJourney';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +51,9 @@ import { ContactTransactionsList } from '@/components/crm/ContactTransactionsLis
 import { ContactWhatsAppHistory } from '@/components/crm/ContactWhatsAppHistory';
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
+import { ContactAttributionCard } from '@/components/crm/ContactAttributionCard';
+import { ContactJourneyTab } from '@/components/crm/ContactJourneyTab';
+import { ContactSegmentInsights } from '@/components/crm/ContactSegmentInsights';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -63,6 +67,7 @@ export default function CRMContactCard() {
   const { currentProject } = useProject();
   const { contact, isLoading, updateContact, updateNotes, addTag, removeTag, updatePipelineStage, deleteContact } = useCRMContact(contactId);
   const { stages } = usePipelineStages();
+  const { interactions, segmentInsights, isLoadingInteractions, isLoadingInsights } = useCRMContactJourney(contactId, currentProject?.id);
   const { numbers, getPrimaryNumber } = useWhatsAppNumbers();
   const { conversations } = useWhatsAppConversations();
   const [notes, setNotes] = useState('');
@@ -369,8 +374,9 @@ export default function CRMContactCard() {
               <TabsList className="w-full">
                 <TabsTrigger value="activities" className="flex-1">Atividades</TabsTrigger>
                 <TabsTrigger value="transactions" className="flex-1">Transações</TabsTrigger>
+                <TabsTrigger value="journey" className="flex-1">Jornada</TabsTrigger>
                 <TabsTrigger value="whatsapp" className="flex-1">WhatsApp</TabsTrigger>
-                <TabsTrigger value="notes" className="flex-1">Anotações</TabsTrigger>
+                <TabsTrigger value="notes" className="flex-1">Notas</TabsTrigger>
               </TabsList>
 
               <TabsContent value="activities" className="mt-4">
@@ -399,6 +405,13 @@ export default function CRMContactCard() {
                     <ContactTransactionsList contactId={contactId!} />
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="journey" className="mt-4">
+                <ContactJourneyTab 
+                  interactions={interactions} 
+                  isLoading={isLoadingInteractions}
+                />
               </TabsContent>
 
               <TabsContent value="whatsapp" className="mt-4">
@@ -593,37 +606,16 @@ export default function CRMContactCard() {
               </CardContent>
             </Card>
 
-            {/* UTM Info */}
-            {(contact.first_utm_source || contact.first_utm_campaign) && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Atribuição
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  {contact.first_utm_source && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Source:</span>
-                      <span className="truncate max-w-[150px]">{contact.first_utm_source}</span>
-                    </div>
-                  )}
-                  {contact.first_utm_campaign && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Campaign:</span>
-                      <span className="truncate max-w-[150px]">{contact.first_utm_campaign}</span>
-                    </div>
-                  )}
-                  {contact.first_utm_medium && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Medium:</span>
-                      <span className="truncate max-w-[150px]">{contact.first_utm_medium}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            {/* UTM Attribution - Expanded */}
+            <ContactAttributionCard contact={contact} />
+
+            {/* Segment Insights */}
+            <ContactSegmentInsights 
+              insights={segmentInsights}
+              isLoading={isLoadingInsights}
+              contactLTV={contact.total_revenue || 0}
+              contactPurchases={contact.total_purchases || 0}
+            />
           </div>
         </div>
       </main>

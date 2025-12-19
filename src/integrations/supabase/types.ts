@@ -1645,7 +1645,7 @@ export type Database = {
           product_currency: string | null
           product_name: string
           product_price: number | null
-          project_id: string | null
+          project_id: string
           received_value: number | null
           recurrence: number | null
           sale_attribution_type: string | null
@@ -1716,7 +1716,7 @@ export type Database = {
           product_currency?: string | null
           product_name: string
           product_price?: number | null
-          project_id?: string | null
+          project_id: string
           received_value?: number | null
           recurrence?: number | null
           sale_attribution_type?: string | null
@@ -1787,7 +1787,7 @@ export type Database = {
           product_currency?: string | null
           product_name?: string
           product_price?: number | null
-          project_id?: string | null
+          project_id?: string
           received_value?: number | null
           recurrence?: number | null
           sale_attribution_type?: string | null

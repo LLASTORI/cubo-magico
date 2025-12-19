@@ -378,6 +378,11 @@ const Settings = () => {
             <div className="flex items-center gap-2">
               <SettingsIcon className="h-6 w-6 text-primary" />
               <h1 className="text-xl font-bold text-foreground">Configurações</h1>
+              {currentProject && (
+                <span className="text-muted-foreground">
+                  — <span className="font-medium text-foreground">{currentProject.name}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>

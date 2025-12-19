@@ -49,11 +49,26 @@ import {
   Activity
 } from 'lucide-react';
 
+import { ShoppingCart, Tag } from 'lucide-react';
+
 const triggerTypes = [
   { value: 'keyword', label: 'Palavra-chave', icon: MessageSquare, description: 'Quando receber uma mensagem com palavra específica' },
   { value: 'first_contact', label: 'Primeiro contato', icon: Zap, description: 'Quando um contato enviar mensagem pela primeira vez' },
+  { value: 'transaction_event', label: 'Evento de Transação', icon: ShoppingCart, description: 'Quando uma transação for criada ou atualizada' },
+  { value: 'tag_added', label: 'Tag Adicionada', icon: Tag, description: 'Quando uma tag específica for adicionada ao contato' },
   { value: 'webhook', label: 'Webhook', icon: GitBranch, description: 'Quando receber dados de uma integração externa' },
   { value: 'schedule', label: 'Agendamento', icon: Clock, description: 'Executar em horários específicos' },
+];
+
+const transactionStatuses = [
+  { value: 'APPROVED', label: 'Compra Aprovada' },
+  { value: 'ABANDONED', label: 'Carrinho Abandonado' },
+  { value: 'WAITING_PAYMENT', label: 'Aguardando Pagamento' },
+  { value: 'REFUNDED', label: 'Reembolso' },
+  { value: 'CHARGEBACK', label: 'Chargeback' },
+  { value: 'CANCELLED', label: 'Cancelado' },
+  { value: 'OVERDUE', label: 'Pagamento Atrasado' },
+  { value: 'EXPIRED', label: 'Pagamento Expirado' },
 ];
 
 export default function AutomationFlows() {
@@ -81,6 +96,8 @@ export default function AutomationFlows() {
   const [description, setDescription] = useState('');
   const [triggerType, setTriggerType] = useState('keyword');
   const [keywords, setKeywords] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [triggerTags, setTriggerTags] = useState('');
   const [folderId, setFolderId] = useState<string>('');
   const [folderName, setFolderName] = useState('');
 
@@ -102,6 +119,14 @@ export default function AutomationFlows() {
     if (triggerType === 'keyword' && keywords.trim()) {
       triggerConfig.keywords = keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
     }
+    
+    if (triggerType === 'transaction_event' && selectedStatuses.length > 0) {
+      triggerConfig.statuses = selectedStatuses;
+    }
+    
+    if (triggerType === 'tag_added' && triggerTags.trim()) {
+      triggerConfig.tags = triggerTags.split(',').map(t => t.trim()).filter(Boolean);
+    }
 
     await createFlow.mutateAsync({
       name: name.trim(),
@@ -116,6 +141,8 @@ export default function AutomationFlows() {
     setDescription('');
     setTriggerType('keyword');
     setKeywords('');
+    setSelectedStatuses([]);
+    setTriggerTags('');
     setFolderId('');
     setShowCreateDialog(false);
   };
@@ -316,6 +343,39 @@ export default function AutomationFlows() {
                       </div>
                     )}
 
+                    {flow.trigger_type === 'transaction_event' && flow.trigger_config?.statuses?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {(flow.trigger_config.statuses as string[]).slice(0, 3).map((status, i) => {
+                          const statusInfo = transactionStatuses.find(s => s.value === status);
+                          return (
+                            <Badge key={i} variant="secondary" className="text-xs">
+                              {statusInfo?.label || status}
+                            </Badge>
+                          );
+                        })}
+                        {(flow.trigger_config.statuses as string[]).length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{(flow.trigger_config.statuses as string[]).length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {flow.trigger_type === 'tag_added' && flow.trigger_config?.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {(flow.trigger_config.tags as string[]).slice(0, 3).map((tag, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {(flow.trigger_config.tags as string[]).length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{(flow.trigger_config.tags as string[]).length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between pt-2 border-t">
                       <div className="flex items-center gap-2">
                         {flow.is_active ? (
@@ -408,6 +468,48 @@ export default function AutomationFlows() {
                 />
                 <p className="text-xs text-muted-foreground">
                   Separe as palavras-chave por vírgula
+                </p>
+              </div>
+            )}
+
+            {triggerType === 'transaction_event' && (
+              <div className="space-y-2">
+                <Label>Status da Transação</Label>
+                <div className="grid grid-cols-2 gap-2 p-3 border rounded-lg">
+                  {transactionStatuses.map((status) => (
+                    <label key={status.value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedStatuses.includes(status.value)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedStatuses([...selectedStatuses, status.value]);
+                          } else {
+                            setSelectedStatuses(selectedStatuses.filter(s => s !== status.value));
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{status.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Selecione os status que dispararão o fluxo. Variáveis disponíveis: {"{{produto}}"}, {"{{oferta}}"}, {"{{valor}}"}, {"{{status}}"}
+                </p>
+              </div>
+            )}
+
+            {triggerType === 'tag_added' && (
+              <div className="space-y-2">
+                <Label>Tags que disparam o fluxo</Label>
+                <Input
+                  placeholder="Ex: abandonou:, comprou:, VIP"
+                  value={triggerTags}
+                  onChange={(e) => setTriggerTags(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Separe por vírgula. Use prefixos como "abandonou:" para capturar tags contextuais. Deixe vazio para qualquer tag.
                 </p>
               </div>
             )}

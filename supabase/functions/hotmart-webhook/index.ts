@@ -543,6 +543,51 @@ serve(async (req) => {
     const operation = upsertResult ? 'upserted' : 'processed';
     console.log(`${operation} sale ${transactionId}`);
     
+    // Trigger automation engine for transaction events
+    try {
+      // We need to get the contact_id that was created by the sync trigger
+      const { data: transaction } = await supabase
+        .from('crm_transactions')
+        .select('id, contact_id, status, product_name, product_code, offer_code, offer_name, total_price, total_price_brl, payment_method, transaction_date')
+        .eq('project_id', projectId)
+        .eq('external_id', transactionId)
+        .eq('platform', 'hotmart')
+        .single();
+      
+      if (transaction && transaction.contact_id) {
+        console.log('[Hotmart Webhook] Triggering automation for transaction:', transaction.id);
+        
+        const { error: automationError } = await supabase.functions.invoke('automation-engine', {
+          body: {
+            action: 'trigger_transaction',
+            projectId,
+            contactId: transaction.contact_id,
+            transaction: {
+              id: transaction.id,
+              status: transaction.status,
+              product_name: transaction.product_name,
+              product_code: transaction.product_code,
+              offer_code: transaction.offer_code,
+              offer_name: transaction.offer_name,
+              total_price: transaction.total_price,
+              total_price_brl: transaction.total_price_brl,
+              payment_method: transaction.payment_method,
+              transaction_date: transaction.transaction_date,
+            }
+          }
+        });
+        
+        if (automationError) {
+          console.error('[Hotmart Webhook] Automation trigger error:', automationError);
+        } else {
+          console.log('[Hotmart Webhook] Automation triggered successfully');
+        }
+      }
+    } catch (automationError) {
+      // Don't fail the webhook if automation fails
+      console.error('[Hotmart Webhook] Error triggering automation:', automationError);
+    }
+    
     console.log('=== WEBHOOK PROCESSED SUCCESSFULLY ===');
     console.log('Project:', project.name);
     console.log('Event:', event);

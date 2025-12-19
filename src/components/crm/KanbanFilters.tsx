@@ -219,7 +219,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80" align="start">
+        <PopoverContent className="w-96" align="start">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Filtros Avançados</h4>
@@ -242,7 +242,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                 onChange={(e) => setTagSearch(e.target.value)}
                 className="h-8 text-sm"
               />
-              <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-1">
                 {allTags.length === 0 && !tagSearch ? (
                   <span className="text-sm text-muted-foreground">Nenhuma tag disponível</span>
                 ) : (

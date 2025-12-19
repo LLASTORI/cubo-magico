@@ -2,11 +2,30 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Users, Package, Layers, Target, ShoppingBag, Globe, UserCheck, CreditCard, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { type GenericBreakdown } from '@/hooks/useCRMJourneyData';
+
+// Tooltips para status de contato
+const contactStatusTooltips: Record<string, string> = {
+  'Lead': 'Contato que ainda não realizou nenhuma transação. Pode ter vindo por webhook, importação ou cadastro manual.',
+  'Prospect': 'Contato que iniciou uma compra mas não concluiu. Inclui pagamentos expirados, cancelados, reembolsados ou com chargeback.',
+  'Cliente': 'Contato que realizou pelo menos uma compra aprovada/completa.',
+  'Churned': 'Cliente que cancelou assinatura ou não renovou.',
+  'Inativo': 'Contato sem atividade há muito tempo.',
+};
+
+// Tooltips para fontes de contato
+const sourceTooltips: Record<string, string> = {
+  'hotmart': 'Contato importado automaticamente via integração com a Hotmart.',
+  'kiwify': 'Contato importado automaticamente via integração com a Kiwify.',
+  'webhook': 'Contato recebido via webhook de integração externa.',
+  'manual': 'Contato cadastrado manualmente no sistema.',
+  'import': 'Contato importado via arquivo CSV.',
+};
 
 interface CRMSummaryCardsProps {
   statusBreakdown: GenericBreakdown[];
@@ -66,7 +85,8 @@ export function CRMSummaryCards({
     isClickable: boolean = false,
     selectedItems?: string[],
     onToggle?: (key: string) => void,
-    labelPrefix?: string
+    labelPrefix?: string,
+    tooltips?: Record<string, string>
   ) => {
     if (items.length === 0) {
       return (
@@ -75,39 +95,57 @@ export function CRMSummaryCards({
     }
 
     return (
-      <div className="flex flex-wrap gap-3">
-        {items.map((item) => {
-          const isSelected = selectedItems?.includes(item.key);
-          
-          const CardWrapper = isClickable ? 'button' : 'div';
-          
-          return (
-            <CardWrapper
-              key={item.key}
-              onClick={isClickable && onToggle ? () => onToggle(item.key) : undefined}
-              className={cn(
-                "flex flex-col items-start p-3 rounded-lg border transition-all text-left",
-                isClickable && "hover:border-primary/50 cursor-pointer",
-                isClickable && isSelected 
-                  ? "bg-primary/10 border-primary" 
-                  : "bg-muted/50 border-border"
-              )}
-            >
-              <span className="text-sm font-medium truncate max-w-[200px]" title={item.label}>
-                {item.label}
-              </span>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant={isClickable && isSelected ? "default" : "secondary"} className="text-xs">
-                  {item.count.toLocaleString('pt-BR')} {labelPrefix || 'itens'}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {item.uniqueClients.toLocaleString('pt-BR')} contatos
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-wrap gap-3">
+          {items.map((item) => {
+            const isSelected = selectedItems?.includes(item.key);
+            const tooltipText = tooltips?.[item.label];
+            
+            const CardWrapper = isClickable ? 'button' : 'div';
+            
+            const cardContent = (
+              <CardWrapper
+                key={item.key}
+                onClick={isClickable && onToggle ? () => onToggle(item.key) : undefined}
+                className={cn(
+                  "flex flex-col items-start p-3 rounded-lg border transition-all text-left",
+                  isClickable && "hover:border-primary/50 cursor-pointer",
+                  isClickable && isSelected 
+                    ? "bg-primary/10 border-primary" 
+                    : "bg-muted/50 border-border"
+                )}
+              >
+                <span className="text-sm font-medium truncate max-w-[200px]" title={item.label}>
+                  {item.label}
                 </span>
-              </div>
-            </CardWrapper>
-          );
-        })}
-      </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant={isClickable && isSelected ? "default" : "secondary"} className="text-xs">
+                    {item.count.toLocaleString('pt-BR')} {labelPrefix || 'itens'}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {item.uniqueClients.toLocaleString('pt-BR')} contatos
+                  </span>
+                </div>
+              </CardWrapper>
+            );
+
+            if (tooltipText) {
+              return (
+                <Tooltip key={item.key}>
+                  <TooltipTrigger asChild>
+                    {cardContent}
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-center">
+                    <p>{tooltipText}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            return cardContent;
+          })}
+        </div>
+      </TooltipProvider>
     );
   };
 
@@ -129,7 +167,8 @@ export function CRMSummaryCards({
       clickable: true,
       selected: selectedContactStatuses,
       onToggle: onContactStatusToggle,
-      labelPrefix: 'contatos'
+      labelPrefix: 'contatos',
+      tooltips: contactStatusTooltips
     },
     { 
       id: 'source', 
@@ -139,7 +178,8 @@ export function CRMSummaryCards({
       clickable: true,
       selected: selectedSources,
       onToggle: onSourceToggle,
-      labelPrefix: 'contatos'
+      labelPrefix: 'contatos',
+      tooltips: sourceTooltips
     },
     { 
       id: 'page', 
@@ -149,7 +189,8 @@ export function CRMSummaryCards({
       clickable: true,
       selected: selectedPages,
       onToggle: onPageToggle,
-      labelPrefix: 'contatos'
+      labelPrefix: 'contatos',
+      tooltips: undefined
     },
   ];
 
@@ -257,7 +298,8 @@ export function CRMSummaryCards({
                       tab.clickable,
                       tab.selected,
                       tab.onToggle,
-                      tab.labelPrefix
+                      tab.labelPrefix,
+                      tab.tooltips
                     )}
                     {tab.clickable && tab.data.length > 0 && (
                       <p className="text-xs text-muted-foreground">
@@ -292,7 +334,8 @@ export function CRMSummaryCards({
                       tab.clickable,
                       tab.selected,
                       tab.onToggle,
-                      tab.labelPrefix
+                      tab.labelPrefix,
+                      undefined
                     )}
                     {tab.clickable && tab.data.length > 0 && (
                       <p className="text-xs text-muted-foreground">

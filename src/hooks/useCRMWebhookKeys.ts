@@ -11,6 +11,7 @@ export interface CRMWebhookKey {
   is_active: boolean;
   allowed_sources: string[] | null;
   default_tags: string[] | null;
+  default_funnel_id: string | null;
   field_mappings: Record<string, string> | null;
   usage_count: number;
   last_used_at: string | null;
@@ -43,10 +44,11 @@ export function useCRMWebhookKeys() {
   });
 
   const createKeyMutation = useMutation({
-    mutationFn: async ({ name, allowedSources, defaultTags }: { 
+    mutationFn: async ({ name, allowedSources, defaultTags, defaultFunnelId }: { 
       name: string; 
       allowedSources?: string[];
       defaultTags?: string[];
+      defaultFunnelId?: string | null;
     }) => {
       if (!projectId) throw new Error('Projeto não selecionado');
 
@@ -57,6 +59,7 @@ export function useCRMWebhookKeys() {
           name,
           allowed_sources: allowedSources || [],
           default_tags: defaultTags || [],
+          default_funnel_id: defaultFunnelId || null,
         });
 
       if (error) throw error;

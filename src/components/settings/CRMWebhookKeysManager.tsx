@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { WebhookTestDashboard } from './WebhookTestDashboard';
+import { CRMLeadsCSVImport } from './CRMLeadsCSVImport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Dialog, 
   DialogContent, 
@@ -35,7 +37,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useCRMWebhookKeys, type CRMWebhookKey } from '@/hooks/useCRMWebhookKeys';
-import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight, Play, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { useProject } from '@/contexts/ProjectContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight, Play, Loader2, CheckCircle, XCircle, X, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -70,6 +75,7 @@ const ACCEPTED_FIELDS = [
 
 export function CRMWebhookKeysManager() {
   const { webhookKeys, isLoading, createKey, updateKey, deleteKey, isCreating } = useCRMWebhookKeys();
+  const { currentProject } = useProject();
   const { toast } = useToast();
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -80,6 +86,11 @@ export function CRMWebhookKeysManager() {
   const [newMappingFrom, setNewMappingFrom] = useState('');
   const [newMappingTo, setNewMappingTo] = useState('');
   
+  // Create key state - tags and funnel
+  const [newKeyTags, setNewKeyTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [newKeyFunnelId, setNewKeyFunnelId] = useState<string>('');
+  
   // Test webhook state
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [selectedKeyForTest, setSelectedKeyForTest] = useState<CRMWebhookKey | null>(null);
@@ -87,6 +98,22 @@ export function CRMWebhookKeysManager() {
   const [testResult, setTestResult] = useState<{ success: boolean; data?: any; error?: string } | null>(null);
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-webhook`;
+
+  // Fetch funnels for selection
+  const { data: funnels } = useQuery({
+    queryKey: ['funnels', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return [];
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name')
+        .eq('project_id', currentProject.id)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentProject?.id,
+  });
 
   const handleCopyKey = async (apiKey: string, keyId: string) => {
     try {
@@ -160,9 +187,27 @@ export function CRMWebhookKeysManager() {
       return;
     }
 
-    createKey({ name: newKeyName.trim() });
+    createKey({ 
+      name: newKeyName.trim(),
+      defaultTags: newKeyTags.length > 0 ? newKeyTags : undefined,
+      defaultFunnelId: newKeyFunnelId || null,
+    });
     setNewKeyName('');
+    setNewKeyTags([]);
+    setNewTagInput('');
+    setNewKeyFunnelId('');
     setDialogOpen(false);
+  };
+
+  const handleAddNewKeyTag = () => {
+    if (!newTagInput.trim()) return;
+    if (newKeyTags.includes(newTagInput.trim())) return;
+    setNewKeyTags([...newKeyTags, newTagInput.trim()]);
+    setNewTagInput('');
+  };
+
+  const handleRemoveNewKeyTag = (tag: string) => {
+    setNewKeyTags(newKeyTags.filter(t => t !== tag));
   };
 
   const toggleShowKey = (keyId: string) => {
@@ -335,7 +380,7 @@ export function CRMWebhookKeysManager() {
                 Nova API Key
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Criar nova API Key</DialogTitle>
                 <DialogDescription>
@@ -352,6 +397,59 @@ export function CRMWebhookKeysManager() {
                     onChange={(e) => setNewKeyName(e.target.value)}
                   />
                 </div>
+                
+                {/* Default tags */}
+                <div className="space-y-2">
+                  <Label>Tags Padrão (opcional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Serão adicionadas automaticamente a todos os leads recebidos
+                  </p>
+                  {newKeyTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {newKeyTags.map(tag => (
+                        <Badge key={tag} variant="secondary" className="gap-1">
+                          {tag}
+                          <button onClick={() => handleRemoveNewKeyTag(tag)} type="button">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Digite uma tag..."
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddNewKeyTag())}
+                      className="flex-1"
+                    />
+                    <Button variant="outline" size="icon" onClick={handleAddNewKeyTag} type="button">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Default funnel */}
+                <div className="space-y-2">
+                  <Label>Funil Padrão (opcional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Uma tag "funil:nome" será adicionada a todos os leads
+                  </p>
+                  <Select value={newKeyFunnelId} onValueChange={setNewKeyFunnelId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um funil..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {funnels?.map(funnel => (
+                        <SelectItem key={funnel.id} value={funnel.id}>
+                          {funnel.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -367,10 +465,11 @@ export function CRMWebhookKeysManager() {
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs defaultValue="keys" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="keys">API Keys</TabsTrigger>
-            <TabsTrigger value="test">Testar Webhook</TabsTrigger>
-            <TabsTrigger value="docs">Documentação</TabsTrigger>
+            <TabsTrigger value="import">Importar CSV</TabsTrigger>
+            <TabsTrigger value="test">Testar</TabsTrigger>
+            <TabsTrigger value="docs">Docs</TabsTrigger>
           </TabsList>
           
           <TabsContent value="keys" className="space-y-6 mt-4">
@@ -497,6 +596,10 @@ export function CRMWebhookKeysManager() {
                 <p className="text-sm">Crie uma chave para começar a receber leads.</p>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="import" className="mt-4">
+            <CRMLeadsCSVImport />
           </TabsContent>
 
           <TabsContent value="test" className="mt-4">

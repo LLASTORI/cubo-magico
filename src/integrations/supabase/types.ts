@@ -1316,6 +1316,7 @@ export type Database = {
           allowed_sources: string[] | null
           api_key: string
           created_at: string
+          default_funnel_id: string | null
           default_tags: string[] | null
           field_mappings: Json | null
           id: string
@@ -1330,6 +1331,7 @@ export type Database = {
           allowed_sources?: string[] | null
           api_key?: string
           created_at?: string
+          default_funnel_id?: string | null
           default_tags?: string[] | null
           field_mappings?: Json | null
           id?: string
@@ -1344,6 +1346,7 @@ export type Database = {
           allowed_sources?: string[] | null
           api_key?: string
           created_at?: string
+          default_funnel_id?: string | null
           default_tags?: string[] | null
           field_mappings?: Json | null
           id?: string
@@ -1355,6 +1358,13 @@ export type Database = {
           usage_count?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_webhook_keys_default_funnel_id_fkey"
+            columns: ["default_funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_webhook_keys_project_id_fkey"
             columns: ["project_id"]

@@ -205,8 +205,13 @@ export function useCRMContact(contactId?: string) {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalidate all contact-related queries to ensure counts are accurate
       queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
       queryClient.invalidateQueries({ queryKey: ['crm-journey'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-all-contacts-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-all-transactions-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
       toast.success('Contato excluído');
     },
     onError: (error) => {

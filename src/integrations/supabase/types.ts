@@ -3620,6 +3620,12 @@ export type Database = {
           transactions_created: number
         }[]
       }
+      migrate_tags_to_contextual: {
+        Args: never
+        Returns: {
+          contacts_updated: number
+        }[]
+      }
       normalize_phone_number: { Args: { phone: string }; Returns: string }
       update_last_login: { Args: never; Returns: undefined }
     }

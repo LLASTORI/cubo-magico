@@ -391,7 +391,7 @@ serve(async (req) => {
     // Validate API key and get project info
     const { data: webhookKey, error: keyError } = await supabase
       .from('crm_webhook_keys')
-      .select('id, project_id, default_tags, allowed_sources, field_mappings, usage_count')
+      .select('id, project_id, default_tags, default_funnel_id, allowed_sources, field_mappings, usage_count')
       .eq('api_key', apiKey)
       .eq('is_active', true)
       .single();
@@ -405,6 +405,21 @@ serve(async (req) => {
     }
 
     console.log('[CRM Webhook] Valid API key for project:', webhookKey.project_id);
+
+    // Get funnel name if default_funnel_id is set
+    let funnelTag: string | null = null;
+    if (webhookKey.default_funnel_id) {
+      const { data: funnel } = await supabase
+        .from('funnels')
+        .select('name')
+        .eq('id', webhookKey.default_funnel_id)
+        .single();
+      
+      if (funnel?.name) {
+        funnelTag = `funil:${funnel.name}`;
+        console.log('[CRM Webhook] Adding funnel tag:', funnelTag);
+      }
+    }
 
     // Parse request body
     const rawBody: Record<string, unknown> = await req.json();
@@ -435,10 +450,11 @@ serve(async (req) => {
       );
     }
 
-    // Merge tags (default + provided)
+    // Merge tags (default + provided + funnel tag)
     const mergedTags = [
       ...(webhookKey.default_tags || []),
-      ...(body.tags || [])
+      ...(body.tags || []),
+      ...(funnelTag ? [funnelTag] : [])
     ].filter((tag, index, arr) => arr.indexOf(tag) === index);
 
     const email = body.email.toLowerCase().trim();

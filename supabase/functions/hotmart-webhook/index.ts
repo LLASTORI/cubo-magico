@@ -471,38 +471,70 @@ serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
     
-    // Use atomic UPSERT to prevent race conditions with concurrent webhooks
-    // IMPORTANT: Use the (project_id, transaction_id) unique constraint (no spaces!)
-    console.log('=== UPSERTING SALE ===');
+    // Check if sale already exists and INSERT or UPDATE accordingly
+    console.log('=== PROCESSING SALE ===');
     console.log('Transaction ID:', transactionId);
     console.log('Project ID:', projectId);
     console.log('Status:', status);
     console.log('Email:', buyer?.email);
     
-    const { data: upsertResult, error: upsertError } = await supabase
+    // First check if the sale already exists
+    const { data: existingSale, error: checkError } = await supabase
       .from('hotmart_sales')
-      .upsert(saleData, {
-        onConflict: 'project_id,transaction_id',
-        ignoreDuplicates: false, // Update on conflict
-      })
       .select('id')
-      .single();
+      .eq('project_id', projectId)
+      .eq('transaction_id', transactionId)
+      .maybeSingle();
     
-    if (upsertError) {
-      // Handle unique constraint violation gracefully (concurrent request)
-      if (upsertError.code === '23505') {
-        console.log(`Duplicate webhook for transaction ${transactionId}, ignoring`);
-        return new Response(JSON.stringify({ 
-          success: true, 
-          message: 'Duplicate event, already processed',
-          transaction: transactionId,
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+    if (checkError) {
+      console.error('Error checking existing sale:', checkError);
+      throw checkError;
+    }
+    
+    let upsertResult: { id: string } | null = null;
+    
+    if (existingSale) {
+      // Update existing sale
+      console.log('Updating existing sale:', existingSale.id);
+      const { data: updateData, error: updateError } = await supabase
+        .from('hotmart_sales')
+        .update(saleData)
+        .eq('id', existingSale.id)
+        .select('id')
+        .single();
+      
+      if (updateError) {
+        console.error('Error updating sale:', updateError);
+        console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
+        throw updateError;
       }
-      console.error('Error upserting sale:', upsertError);
-      console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
-      throw upsertError;
+      upsertResult = updateData;
+    } else {
+      // Insert new sale
+      console.log('Inserting new sale');
+      const { data: insertData, error: insertError } = await supabase
+        .from('hotmart_sales')
+        .insert(saleData)
+        .select('id')
+        .single();
+      
+      if (insertError) {
+        // Handle unique constraint violation gracefully (concurrent request)
+        if (insertError.code === '23505') {
+          console.log(`Duplicate webhook for transaction ${transactionId}, ignoring`);
+          return new Response(JSON.stringify({ 
+            success: true, 
+            message: 'Duplicate event, already processed',
+            transaction: transactionId,
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        console.error('Error inserting sale:', insertError);
+        console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
+        throw insertError;
+      }
+      upsertResult = insertData;
     }
     
     console.log('=== SALE UPSERTED SUCCESSFULLY ===');

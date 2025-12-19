@@ -1240,9 +1240,6 @@ export function CuboMagicoDashboard({
           const taxaRecuperacao = healthTotals.totalAbandonos > 0 ? (healthTotals.abandonosRecuperados / healthTotals.totalAbandonos) * 100 : 0;
           const taxaReembolso = healthTotals.vendasAprovadas > 0 ? (healthTotals.totalReembolsos / healthTotals.vendasAprovadas) * 100 : 0;
           const taxaChargeback = healthTotals.vendasAprovadas > 0 ? (healthTotals.totalChargebacks / healthTotals.vendasAprovadas) * 100 : 0;
-          const hasHealthData = healthTotals.totalAbandonos > 0 || healthTotals.totalReembolsos > 0 || healthTotals.totalChargebacks > 0;
-
-          if (!hasHealthData) return null;
 
           return (
             <>

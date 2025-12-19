@@ -133,22 +133,6 @@ export function CRMWebhookKeysManager() {
     }
   };
 
-  const handleCopyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(webhookUrl);
-      toast({
-        title: 'Copiado!',
-        description: 'URL do webhook copiada.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível copiar a URL.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleCopyExample = async () => {
     const example = `curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
@@ -473,22 +457,6 @@ export function CRMWebhookKeysManager() {
           </TabsList>
           
           <TabsContent value="keys" className="space-y-6 mt-4">
-            {/* Webhook URL */}
-            <div className="p-4 rounded-lg bg-muted space-y-2">
-              <Label className="text-sm font-medium">URL do Webhook</Label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 rounded bg-background text-sm font-mono break-all">
-                  {webhookUrl}
-                </code>
-                <Button variant="outline" size="icon" onClick={handleCopyUrl}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Envie requisições POST para esta URL com a API Key no header <code className="bg-background px-1 rounded">x-api-key</code>
-              </p>
-            </div>
-
             {/* API Keys list */}
             {webhookKeys && webhookKeys.length > 0 ? (
               <div className="space-y-3">

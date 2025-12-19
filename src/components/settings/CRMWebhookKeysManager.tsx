@@ -774,6 +774,31 @@ export function CRMWebhookKeysManager() {
               </Accordion>
             </div>
 
+            {/* API Key features info */}
+            <div className="p-4 rounded-lg border bg-green-500/10 border-green-500/20">
+              <h5 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                Configurações por API Key
+              </h5>
+              <p className="text-sm text-muted-foreground mb-3">
+                Cada API Key pode ter configurações específicas que são aplicadas automaticamente a todos os leads recebidos:
+              </p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2">
+                  <Badge variant="outline" className="mt-0.5 shrink-0">Tags Padrão</Badge>
+                  <span className="text-muted-foreground">
+                    Tags definidas na API Key são mescladas com as tags enviadas na requisição.
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Badge variant="outline" className="mt-0.5 shrink-0">Funil Padrão</Badge>
+                  <span className="text-muted-foreground">
+                    Se configurado, adiciona automaticamente uma tag <code className="bg-background px-1 rounded">funil:nome-do-funil</code> ao lead.
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Custom mappings info */}
             <div className="p-4 rounded-lg border bg-blue-500/10 border-blue-500/20">
               <h5 className="font-medium text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-2">

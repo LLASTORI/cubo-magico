@@ -854,10 +854,16 @@ export type Database = {
           first_utm_placement: string | null
           first_utm_source: string | null
           first_utm_term: string | null
+          has_pending_payment: boolean | null
           id: string
           instagram: string | null
           last_activity_at: string
+          last_offer_code: string | null
+          last_offer_name: string | null
+          last_product_code: string | null
+          last_product_name: string | null
           last_purchase_at: string | null
+          last_transaction_status: string | null
           name: string | null
           neighborhood: string | null
           notes: string | null
@@ -865,6 +871,7 @@ export type Database = {
           phone_country_code: string | null
           phone_ddd: string | null
           pipeline_stage_id: string | null
+          products_purchased: string[] | null
           project_id: string
           recovery_stage_id: string | null
           recovery_started_at: string | null
@@ -872,6 +879,7 @@ export type Database = {
           source: string
           state: string | null
           status: string
+          subscription_status: string | null
           tags: string[] | null
           total_purchases: number | null
           total_revenue: number | null
@@ -905,10 +913,16 @@ export type Database = {
           first_utm_placement?: string | null
           first_utm_source?: string | null
           first_utm_term?: string | null
+          has_pending_payment?: boolean | null
           id?: string
           instagram?: string | null
           last_activity_at?: string
+          last_offer_code?: string | null
+          last_offer_name?: string | null
+          last_product_code?: string | null
+          last_product_name?: string | null
           last_purchase_at?: string | null
+          last_transaction_status?: string | null
           name?: string | null
           neighborhood?: string | null
           notes?: string | null
@@ -916,6 +930,7 @@ export type Database = {
           phone_country_code?: string | null
           phone_ddd?: string | null
           pipeline_stage_id?: string | null
+          products_purchased?: string[] | null
           project_id: string
           recovery_stage_id?: string | null
           recovery_started_at?: string | null
@@ -923,6 +938,7 @@ export type Database = {
           source?: string
           state?: string | null
           status?: string
+          subscription_status?: string | null
           tags?: string[] | null
           total_purchases?: number | null
           total_revenue?: number | null
@@ -956,10 +972,16 @@ export type Database = {
           first_utm_placement?: string | null
           first_utm_source?: string | null
           first_utm_term?: string | null
+          has_pending_payment?: boolean | null
           id?: string
           instagram?: string | null
           last_activity_at?: string
+          last_offer_code?: string | null
+          last_offer_name?: string | null
+          last_product_code?: string | null
+          last_product_name?: string | null
           last_purchase_at?: string | null
+          last_transaction_status?: string | null
           name?: string | null
           neighborhood?: string | null
           notes?: string | null
@@ -967,6 +989,7 @@ export type Database = {
           phone_country_code?: string | null
           phone_ddd?: string | null
           pipeline_stage_id?: string | null
+          products_purchased?: string[] | null
           project_id?: string
           recovery_stage_id?: string | null
           recovery_started_at?: string | null
@@ -974,6 +997,7 @@ export type Database = {
           source?: string
           state?: string | null
           status?: string
+          subscription_status?: string | null
           tags?: string[] | null
           total_purchases?: number | null
           total_revenue?: number | null
@@ -3581,6 +3605,12 @@ export type Database = {
         Args: never
         Returns: {
           contacts_recovered: number
+        }[]
+      }
+      migrate_contact_product_data: {
+        Args: never
+        Returns: {
+          contacts_updated: number
         }[]
       }
       migrate_hotmart_to_crm: {

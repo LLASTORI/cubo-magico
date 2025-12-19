@@ -356,7 +356,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                 Período Específico
               </label>
               <div className="flex gap-2">
-                <Popover open={dateFromOpen} onOpenChange={setDateFromOpen}>
+                <Popover open={dateFromOpen} onOpenChange={setDateFromOpen} modal={true}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal">
                       {filters.dateFrom 
@@ -364,7 +364,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                         : 'De'}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0 z-[60]" align="start" side="bottom" sideOffset={4}>
                     <Calendar
                       mode="single"
                       selected={filters.dateFrom ?? undefined}
@@ -373,10 +373,11 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                         setDateFromOpen(false);
                       }}
                       locale={ptBR}
+                      className="pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
-                <Popover open={dateToOpen} onOpenChange={setDateToOpen}>
+                <Popover open={dateToOpen} onOpenChange={setDateToOpen} modal={true}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal">
                       {filters.dateTo 
@@ -384,7 +385,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                         : 'Até'}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0 z-[60]" align="start" side="bottom" sideOffset={4}>
                     <Calendar
                       mode="single"
                       selected={filters.dateTo ?? undefined}
@@ -393,6 +394,7 @@ export function KanbanFiltersBar({ contacts, filters, onFiltersChange, onSearchS
                         setDateToOpen(false);
                       }}
                       locale={ptBR}
+                      className="pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>

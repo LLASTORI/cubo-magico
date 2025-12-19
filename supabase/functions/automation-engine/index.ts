@@ -73,6 +73,13 @@ serve(async (req) => {
         break;
       }
 
+      case 'trigger_transaction': {
+        // Triggered when a transaction is created or updated
+        const { projectId, contactId, transaction } = params;
+        result = await handleTransactionTrigger(supabase, projectId, contactId, transaction);
+        break;
+      }
+
       case 'process_delayed': {
         // Process executions that have reached their delay time
         result = await processDelayedExecutions(supabase);
@@ -385,7 +392,7 @@ async function handleNewContactTrigger(supabase: any, projectId: string, contact
   return { triggered: triggeredCount };
 }
 
-// Handle tag added trigger
+// Handle tag added trigger with prefix matching support
 async function handleTagAddedTrigger(supabase: any, projectId: string, contactId: string, tag: string) {
   console.log('[Automation Engine] Checking tag_added triggers for tag:', tag);
 
@@ -411,10 +418,138 @@ async function handleTagAddedTrigger(supabase: any, projectId: string, contactId
   for (const flow of flows) {
     const triggerTags: string[] = flow.trigger_config?.tags || [];
     
-    if (triggerTags.length === 0 || triggerTags.includes(tag)) {
+    // Empty array means any tag
+    if (triggerTags.length === 0) {
       await startFlowExecution(supabase, flow, {
         contact: contact || { id: contactId },
-        variables: { triggered_tag: tag },
+        variables: { 
+          triggered_tag: tag,
+          ...parseContextualTag(tag),
+        },
+      });
+      triggeredCount++;
+      continue;
+    }
+    
+    // Check each trigger tag - support prefix matching (e.g., "abandonou:" matches "abandonou:Produto|Oferta")
+    for (const triggerTag of triggerTags) {
+      const isPrefix = triggerTag.endsWith(':');
+      const matches = isPrefix 
+        ? tag.startsWith(triggerTag)
+        : tag === triggerTag || tag.startsWith(triggerTag + ':');
+      
+      if (matches) {
+        console.log(`[Automation Engine] Tag "${tag}" matched trigger "${triggerTag}"`);
+        await startFlowExecution(supabase, flow, {
+          contact: contact || { id: contactId },
+          variables: { 
+            triggered_tag: tag,
+            ...parseContextualTag(tag),
+          },
+        });
+        triggeredCount++;
+        break; // Don't trigger same flow multiple times
+      }
+    }
+  }
+
+  return { triggered: triggeredCount };
+}
+
+// Parse contextual tag format: "evento:Produto|Oferta"
+function parseContextualTag(tag: string): Record<string, string> {
+  const variables: Record<string, string> = {};
+  
+  const colonIndex = tag.indexOf(':');
+  if (colonIndex === -1) return variables;
+  
+  const evento = tag.substring(0, colonIndex);
+  const rest = tag.substring(colonIndex + 1);
+  
+  variables.evento = evento;
+  variables.tag_evento = evento;
+  
+  const pipeIndex = rest.indexOf('|');
+  if (pipeIndex !== -1) {
+    variables.produto = rest.substring(0, pipeIndex);
+    variables.oferta = rest.substring(pipeIndex + 1);
+    variables.tag_produto = variables.produto;
+    variables.tag_oferta = variables.oferta;
+  } else {
+    variables.produto = rest;
+    variables.tag_produto = rest;
+  }
+  
+  return variables;
+}
+
+// Handle transaction event trigger
+async function handleTransactionTrigger(
+  supabase: any, 
+  projectId: string, 
+  contactId: string, 
+  transaction: {
+    id: string;
+    status: string;
+    product_name: string;
+    product_code: string | null;
+    offer_code: string | null;
+    offer_name: string | null;
+    total_price: number | null;
+    total_price_brl: number | null;
+    payment_method: string | null;
+    transaction_date: string | null;
+  }
+) {
+  console.log('[Automation Engine] Checking transaction_event triggers for status:', transaction.status);
+
+  const { data: flows } = await supabase
+    .from('automation_flows')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .eq('trigger_type', 'transaction_event');
+
+  if (!flows || flows.length === 0) {
+    console.log('[Automation Engine] No active transaction_event flows found');
+    return { triggered: 0 };
+  }
+
+  const { data: contact } = await supabase
+    .from('crm_contacts')
+    .select('*')
+    .eq('id', contactId)
+    .single();
+
+  let triggeredCount = 0;
+
+  for (const flow of flows) {
+    const triggerStatuses: string[] = flow.trigger_config?.statuses || [];
+    
+    // Check if status matches (empty array means any status)
+    const statusMatches = triggerStatuses.length === 0 || 
+      triggerStatuses.includes(transaction.status) ||
+      (transaction.status === 'COMPLETE' && triggerStatuses.includes('APPROVED'));
+    
+    if (statusMatches) {
+      console.log(`[Automation Engine] Transaction trigger matched for flow: ${flow.name}`);
+      
+      await startFlowExecution(supabase, flow, {
+        contact: contact || { id: contactId },
+        variables: {
+          transaction_id: transaction.id,
+          transaction_status: transaction.status,
+          produto: transaction.product_name,
+          product_name: transaction.product_name,
+          product_code: transaction.product_code,
+          oferta: transaction.offer_code,
+          offer_code: transaction.offer_code,
+          offer_name: transaction.offer_name,
+          valor: transaction.total_price_brl || transaction.total_price || 0,
+          total_price: transaction.total_price_brl || transaction.total_price || 0,
+          payment_method: transaction.payment_method,
+          transaction_date: transaction.transaction_date,
+        },
       });
       triggeredCount++;
     }

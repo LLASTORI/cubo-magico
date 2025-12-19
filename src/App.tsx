@@ -25,6 +25,7 @@ import LaunchDashboard from "./pages/LaunchDashboard";
 import AnaliseMensal from "./pages/AnaliseMensal";
 import AgencyDashboard from "./pages/AgencyDashboard";
 import CRM from "./pages/CRM";
+import CRMUTMBehavior from "./pages/CRMUTMBehavior";
 import CRMKanban from "./pages/CRMKanban";
 import CRMContactCard from "./pages/CRMContactCard";
 import CRMPipelineSettings from "./pages/CRMPipelineSettings";
@@ -128,6 +129,11 @@ const App = () => (
                 <Route path="/crm" element={
                   <ProtectedRoute>
                     <CRM />
+                  </ProtectedRoute>
+                } />
+                <Route path="/crm/utm-behavior" element={
+                  <ProtectedRoute>
+                    <CRMUTMBehavior />
                   </ProtectedRoute>
                 } />
                 <Route path="/crm/kanban" element={

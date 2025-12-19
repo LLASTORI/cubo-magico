@@ -8,7 +8,8 @@ import {
   Workflow, 
   MessageCircle,
   Plus,
-  Settings
+  Settings,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,12 @@ const navItems: NavItem[] = [
     icon: Route, 
     path: '/crm',
     matchPaths: ['/crm']
+  },
+  { 
+    label: 'Comportamento UTM', 
+    icon: BarChart3, 
+    path: '/crm/utm-behavior',
+    matchPaths: ['/crm/utm-behavior']
   },
   { 
     label: 'Pipeline', 

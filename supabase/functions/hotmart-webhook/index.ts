@@ -472,11 +472,17 @@ serve(async (req) => {
     };
     
     // Use atomic UPSERT to prevent race conditions with concurrent webhooks
-    // This handles duplicates gracefully without SELECT + INSERT/UPDATE pattern
+    // Using transaction_id as the conflict key since it's the UNIQUE constraint
+    console.log('=== UPSERTING SALE ===');
+    console.log('Transaction ID:', transactionId);
+    console.log('Project ID:', projectId);
+    console.log('Status:', status);
+    console.log('Email:', buyer?.email);
+    
     const { data: upsertResult, error: upsertError } = await supabase
       .from('hotmart_sales')
       .upsert(saleData, {
-        onConflict: 'project_id,transaction_id',
+        onConflict: 'transaction_id', // Use only transaction_id as it's the UNIQUE constraint
         ignoreDuplicates: false, // Update on conflict
       })
       .select('id')
@@ -495,8 +501,12 @@ serve(async (req) => {
         });
       }
       console.error('Error upserting sale:', upsertError);
+      console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
       throw upsertError;
     }
+    
+    console.log('=== SALE UPSERTED SUCCESSFULLY ===');
+    console.log('Sale ID:', upsertResult?.id);
     
     const operation = upsertResult ? 'upserted' : 'processed';
     console.log(`${operation} sale ${transactionId}`);

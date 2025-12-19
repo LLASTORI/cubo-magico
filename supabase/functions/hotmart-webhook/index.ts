@@ -472,7 +472,7 @@ serve(async (req) => {
     };
     
     // Use atomic UPSERT to prevent race conditions with concurrent webhooks
-    // Using transaction_id as the conflict key since it's the UNIQUE constraint
+    // IMPORTANT: Use the (project_id, transaction_id) unique constraint (no spaces!)
     console.log('=== UPSERTING SALE ===');
     console.log('Transaction ID:', transactionId);
     console.log('Project ID:', projectId);
@@ -482,7 +482,7 @@ serve(async (req) => {
     const { data: upsertResult, error: upsertError } = await supabase
       .from('hotmart_sales')
       .upsert(saleData, {
-        onConflict: 'transaction_id', // Use only transaction_id as it's the UNIQUE constraint
+        onConflict: 'project_id,transaction_id',
         ignoreDuplicates: false, // Update on conflict
       })
       .select('id')

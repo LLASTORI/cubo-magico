@@ -1,10 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { useCRMContact } from '@/hooks/useCRMContact';
-import { useCRMActivities } from '@/hooks/useCRMActivities';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useCRMContactJourney } from '@/hooks/useCRMContactJourney';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,7 +51,6 @@ import { ContactWhatsAppHistory } from '@/components/crm/ContactWhatsAppHistory'
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { ContactAttributionCard } from '@/components/crm/ContactAttributionCard';
-import { ContactJourneyTab } from '@/components/crm/ContactJourneyTab';
 import { ContactSegmentInsights } from '@/components/crm/ContactSegmentInsights';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
@@ -67,7 +65,7 @@ export default function CRMContactCard() {
   const { currentProject } = useProject();
   const { contact, isLoading, updateContact, updateNotes, addTag, removeTag, updatePipelineStage, deleteContact } = useCRMContact(contactId);
   const { stages } = usePipelineStages();
-  const { interactions, segmentInsights, isLoadingInteractions, isLoadingInsights } = useCRMContactJourney(contactId, currentProject?.id);
+  const { segmentInsights, isLoadingInsights } = useCRMContactJourney(contactId, currentProject?.id);
   const { numbers, getPrimaryNumber } = useWhatsAppNumbers();
   const { conversations } = useWhatsAppConversations();
   const [notes, setNotes] = useState('');
@@ -374,7 +372,6 @@ export default function CRMContactCard() {
               <TabsList className="w-full">
                 <TabsTrigger value="activities" className="flex-1">Atividades</TabsTrigger>
                 <TabsTrigger value="transactions" className="flex-1">Transações</TabsTrigger>
-                <TabsTrigger value="journey" className="flex-1">Jornada</TabsTrigger>
                 <TabsTrigger value="whatsapp" className="flex-1">WhatsApp</TabsTrigger>
                 <TabsTrigger value="notes" className="flex-1">Notas</TabsTrigger>
               </TabsList>
@@ -405,13 +402,6 @@ export default function CRMContactCard() {
                     <ContactTransactionsList contactId={contactId!} />
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-              <TabsContent value="journey" className="mt-4">
-                <ContactJourneyTab 
-                  interactions={interactions} 
-                  isLoading={isLoadingInteractions}
-                />
               </TabsContent>
 
               <TabsContent value="whatsapp" className="mt-4">

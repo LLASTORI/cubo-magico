@@ -6,7 +6,6 @@ import { UTMBehaviorTable } from '@/components/crm/UTMBehaviorTable';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
 import { AppHeader } from '@/components/AppHeader';
 import { 
   Users, 
@@ -18,9 +17,7 @@ import {
   Layers,
   MousePointer,
   Palette,
-  Radio,
-  RefreshCw,
-  Loader2
+  Radio
 } from 'lucide-react';
 
 export default function CRMUTMBehavior() {
@@ -36,7 +33,6 @@ export default function CRMUTMBehavior() {
     metricsByAd,
     metricsByCreative,
     summary,
-    populateUTMs,
   } = useUTMBehaviorData({ projectId: currentProject?.id || null });
 
   if (modulesLoading) {
@@ -77,9 +73,6 @@ export default function CRMUTMBehavior() {
     }).format(value);
   };
 
-  // Verificar se há muitos contatos sem UTM source
-  const hasEmptyUTMs = metricsBySource.length === 1 && metricsBySource[0]?.key === '(não definido)';
-
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -87,29 +80,11 @@ export default function CRMUTMBehavior() {
       
       <div className="container mx-auto px-6 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Comportamento por UTM</h1>
-            <p className="text-muted-foreground">
-              Analise o comportamento e performance de clientes por origem de tráfego
-            </p>
-          </div>
-          
-          {/* Botão para popular UTMs */}
-          {hasEmptyUTMs && (
-            <Button
-              variant="outline"
-              onClick={() => populateUTMs.mutate()}
-              disabled={populateUTMs.isPending}
-            >
-              {populateUTMs.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Preencher UTMs das Transações
-            </Button>
-          )}
+        <div>
+          <h1 className="text-2xl font-bold">Comportamento por UTM</h1>
+          <p className="text-muted-foreground">
+            Analise o comportamento e performance de clientes por origem de tráfego
+          </p>
         </div>
 
         {/* Summary Cards */}

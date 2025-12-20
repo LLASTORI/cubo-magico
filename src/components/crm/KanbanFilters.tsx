@@ -45,6 +45,7 @@ interface KanbanContact {
   total_revenue: number | null;
   total_purchases: number | null;
   last_activity_at: string;
+  updated_at: string;
   tags: string[] | null;
 }
 
@@ -505,16 +506,16 @@ export function applyFilters(contacts: KanbanContact[], filters: KanbanFilters):
     if (filters.revenueMin !== null && revenue < filters.revenueMin) return false;
     if (filters.revenueMax !== null && revenue > filters.revenueMax) return false;
 
-    // Last activity days filter
+    // Last activity days filter - use updated_at for more accurate filtering
     if (filters.lastActivityDays !== null) {
-      const activityDate = new Date(contact.last_activity_at);
+      const activityDate = new Date(contact.updated_at);
       const cutoffDate = subDays(new Date(), filters.lastActivityDays);
       if (isBefore(activityDate, cutoffDate)) return false;
     }
 
-    // Date range filter (compare by day, not by exact timestamp)
+    // Date range filter - use updated_at for filtering (when contact was last updated/synced)
     if (filters.dateFrom || filters.dateTo) {
-      const activityDate = new Date(contact.last_activity_at);
+      const activityDate = new Date(contact.updated_at);
       if (filters.dateFrom && isBefore(activityDate, startOfDay(filters.dateFrom))) return false;
       if (filters.dateTo && isAfter(activityDate, endOfDay(filters.dateTo))) return false;
     }

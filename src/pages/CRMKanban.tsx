@@ -36,6 +36,7 @@ interface KanbanContact {
   total_revenue: number | null;
   total_purchases: number | null;
   last_activity_at: string;
+  updated_at: string;
   tags: string[] | null;
 }
 
@@ -97,9 +98,9 @@ export default function CRMKanban() {
 
       const { data, error } = await supabase
         .from('crm_contacts')
-        .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, tags')
+        .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, updated_at, tags')
         .eq('project_id', currentProject.id)
-        .order('last_activity_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) throw error;
       return data as KanbanContact[];
@@ -494,8 +495,8 @@ export default function CRMKanban() {
 // Map tags to colors for visual identification
 const TAG_COLORS: Record<string, string> = {
   'Cliente': 'bg-green-500/10 text-green-600 border-green-200',
-  'Recuperado (manual)': 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
-  'Recuperado (auto)': 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
+  'Recuperado (manual)': 'bg-teal-500/10 text-teal-600 border-teal-200',
+  'Recuperado (auto)': 'bg-teal-500/10 text-teal-600 border-teal-200',
   'Carrinho Abandonado': 'bg-orange-500/10 text-orange-600 border-orange-200',
   'Boleto Pendente': 'bg-yellow-500/10 text-yellow-600 border-yellow-200',
   'Pix Pendente': 'bg-yellow-500/10 text-yellow-600 border-yellow-200',
@@ -507,10 +508,36 @@ const TAG_COLORS: Record<string, string> = {
   'Lead': 'bg-slate-500/10 text-slate-600 border-slate-200',
   'VIP': 'bg-purple-500/10 text-purple-600 border-purple-200',
   'Prospect': 'bg-indigo-500/10 text-indigo-600 border-indigo-200',
+  'Expirado': 'bg-gray-500/10 text-gray-600 border-gray-200',
+  'Lead Expirado': 'bg-gray-500/10 text-gray-600 border-gray-200',
+};
+
+// Prefix-based color mappings for contextual tags (comprou:, cancelou:, etc.)
+const TAG_PREFIX_COLORS: Record<string, string> = {
+  'comprou:': 'bg-green-500/10 text-green-600 border-green-200',
+  'abandonou:': 'bg-orange-500/10 text-orange-600 border-orange-200',
+  'pendente:': 'bg-yellow-500/10 text-yellow-600 border-yellow-200',
+  'cancelou:': 'bg-rose-500/10 text-rose-600 border-rose-200',
+  'reembolsou:': 'bg-amber-500/10 text-amber-600 border-amber-200',
+  'chargeback:': 'bg-red-500/10 text-red-600 border-red-200',
+  'recuperou:': 'bg-teal-500/10 text-teal-600 border-teal-200',
+  'funil:': 'bg-indigo-500/10 text-indigo-600 border-indigo-200',
 };
 
 function getTagColor(tag: string): string {
-  return TAG_COLORS[tag] || 'bg-muted text-muted-foreground';
+  // First check exact match
+  if (TAG_COLORS[tag]) {
+    return TAG_COLORS[tag];
+  }
+  
+  // Then check prefix match
+  for (const [prefix, color] of Object.entries(TAG_PREFIX_COLORS)) {
+    if (tag.startsWith(prefix)) {
+      return color;
+    }
+  }
+  
+  return 'bg-muted text-muted-foreground';
 }
 
 interface KanbanCardProps {

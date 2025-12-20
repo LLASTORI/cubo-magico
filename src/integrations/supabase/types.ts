@@ -729,6 +729,7 @@ export type Database = {
         Row: {
           contact_id: string
           created_at: string
+          external_id: string | null
           funnel_id: string | null
           id: string
           interacted_at: string
@@ -754,6 +755,7 @@ export type Database = {
         Insert: {
           contact_id: string
           created_at?: string
+          external_id?: string | null
           funnel_id?: string | null
           id?: string
           interacted_at?: string
@@ -779,6 +781,7 @@ export type Database = {
         Update: {
           contact_id?: string
           created_at?: string
+          external_id?: string | null
           funnel_id?: string | null
           id?: string
           interacted_at?: string
@@ -3622,6 +3625,12 @@ export type Database = {
       }
       migrate_hotmart_to_interactions: {
         Args: never
+        Returns: {
+          interactions_created: number
+        }[]
+      }
+      migrate_hotmart_to_interactions_batch: {
+        Args: { p_batch_size?: number; p_project_id?: string }
         Returns: {
           interactions_created: number
         }[]

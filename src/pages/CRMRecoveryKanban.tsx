@@ -150,9 +150,9 @@ function StageColumn({
   onContactClick: (contactId: string) => void;
 }) {
   return (
-    <div className="flex flex-col min-w-[300px] max-w-[300px] bg-muted/30 rounded-lg border">
+    <div className="flex flex-col min-w-[280px] max-w-[280px] h-full bg-muted/30 rounded-lg border">
       <div
-        className="p-3 border-b flex items-center justify-between"
+        className="p-3 border-b shrink-0 flex items-center justify-between"
         style={{ borderTopColor: stage.color, borderTopWidth: 3 }}
       >
         <div className="flex items-center gap-2">
@@ -165,7 +165,7 @@ function StageColumn({
         </div>
       </div>
 
-      <ScrollArea className="flex-1 p-2" style={{ height: 'calc(100vh - 300px)' }}>
+      <div className="flex-1 overflow-y-auto p-2 min-h-0">
         <SortableContext items={contacts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {contacts.map((contact) => (
@@ -177,7 +177,7 @@ function StageColumn({
             ))}
           </div>
         </SortableContext>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
@@ -397,7 +397,7 @@ export default function CRMRecoveryKanban() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen h-screen bg-background flex flex-col overflow-hidden">
       <AppHeader pageSubtitle="CRM - Recuperação Kanban" />
 
       <CRMSubNav 
@@ -430,8 +430,8 @@ export default function CRMRecoveryKanban() {
         }
       />
 
-      <main className="flex-1 container px-6">
-        <div className="mb-6">
+      <main className="flex-1 container px-6 pb-6 overflow-hidden flex flex-col min-h-0">
+        <div className="mb-4 shrink-0">
           <h1 className="text-2xl font-bold">Kanban de Recuperação</h1>
           <p className="text-muted-foreground">Gerencie o fluxo de recuperação de clientes</p>
         </div>
@@ -443,7 +443,7 @@ export default function CRMRecoveryKanban() {
         ) : (
           <>
             {/* Search */}
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center gap-4 mb-4 shrink-0">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -466,12 +466,13 @@ export default function CRMRecoveryKanban() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <ScrollArea className="w-full">
-                <div className="flex gap-4 pb-4">
-                  {/* Unassigned Column */}
-                  <StageColumn
-                    stage={{
-                      id: 'unassigned',
+              <div className="flex-1 overflow-hidden min-h-0">
+                <ScrollArea className="h-full w-full">
+                  <div className="flex gap-4 pb-4 min-w-max h-full" style={{ minHeight: 'calc(100vh - 240px)' }}>
+                    {/* Unassigned Column */}
+                    <StageColumn
+                      stage={{
+                        id: 'unassigned',
                       name: 'Não Iniciados',
                       color: '#6b7280',
                       is_initial: false,
@@ -491,9 +492,10 @@ export default function CRMRecoveryKanban() {
                       onContactClick={(id) => navigate(`/crm/contact/${id}`)}
                     />
                   ))}
-                </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </div>
 
               <DragOverlay>
                 {activeContact && <ContactCard contact={activeContact} onClick={() => {}} />}

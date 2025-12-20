@@ -33,7 +33,7 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
-import { format, subDays, isAfter, isBefore } from 'date-fns';
+import { format, subDays, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface KanbanContact {
@@ -512,11 +512,11 @@ export function applyFilters(contacts: KanbanContact[], filters: KanbanFilters):
       if (isBefore(activityDate, cutoffDate)) return false;
     }
 
-    // Date range filter
+    // Date range filter (compare by day, not by exact timestamp)
     if (filters.dateFrom || filters.dateTo) {
       const activityDate = new Date(contact.last_activity_at);
-      if (filters.dateFrom && isBefore(activityDate, filters.dateFrom)) return false;
-      if (filters.dateTo && isAfter(activityDate, filters.dateTo)) return false;
+      if (filters.dateFrom && isBefore(activityDate, startOfDay(filters.dateFrom))) return false;
+      if (filters.dateTo && isAfter(activityDate, endOfDay(filters.dateTo))) return false;
     }
 
     return true;

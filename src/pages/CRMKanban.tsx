@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
@@ -41,11 +41,48 @@ interface KanbanContact {
 
 export default function CRMKanban() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { stages, isLoading: stagesLoading, createDefaultStages } = usePipelineStages();
-  const [filters, setFilters] = useState<KanbanFilters>(defaultFilters);
   const queryClient = useQueryClient();
+
+  // Restore filters from URL params
+  const [filters, setFiltersState] = useState<KanbanFilters>(() => {
+    const tagsParam = searchParams.get('tags');
+    const revenueMinParam = searchParams.get('revenueMin');
+    const revenueMaxParam = searchParams.get('revenueMax');
+    const lastActivityDaysParam = searchParams.get('lastActivityDays');
+    const dateFromParam = searchParams.get('dateFrom');
+    const dateToParam = searchParams.get('dateTo');
+    const searchParam = searchParams.get('search');
+
+    return {
+      search: searchParam || '',
+      tags: tagsParam ? tagsParam.split(',').filter(Boolean) : [],
+      revenueMin: revenueMinParam ? Number(revenueMinParam) : null,
+      revenueMax: revenueMaxParam ? Number(revenueMaxParam) : null,
+      lastActivityDays: lastActivityDaysParam ? Number(lastActivityDaysParam) : null,
+      dateFrom: dateFromParam ? new Date(dateFromParam) : null,
+      dateTo: dateToParam ? new Date(dateToParam) : null,
+    };
+  });
+
+  // Sync filters to URL params
+  const setFilters = useCallback((newFilters: KanbanFilters) => {
+    setFiltersState(newFilters);
+    
+    const params = new URLSearchParams();
+    if (newFilters.search) params.set('search', newFilters.search);
+    if (newFilters.tags.length > 0) params.set('tags', newFilters.tags.join(','));
+    if (newFilters.revenueMin !== null) params.set('revenueMin', String(newFilters.revenueMin));
+    if (newFilters.revenueMax !== null) params.set('revenueMax', String(newFilters.revenueMax));
+    if (newFilters.lastActivityDays !== null) params.set('lastActivityDays', String(newFilters.lastActivityDays));
+    if (newFilters.dateFrom) params.set('dateFrom', newFilters.dateFrom.toISOString());
+    if (newFilters.dateTo) params.set('dateTo', newFilters.dateTo.toISOString());
+    
+    setSearchParams(params, { replace: true });
+  }, [setSearchParams]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -272,7 +309,7 @@ export default function CRMKanban() {
             onSearchSelect={handleSearchSelect}
             onCreateTag={(tag) => {
               // Add tag to filter immediately
-              setFilters(prev => ({ ...prev, tags: [...prev.tags, tag] }));
+              setFilters({ ...filters, tags: [...filters.tags, tag] });
             }}
             onDeleteTag={async (tag) => {
               if (!currentProject?.id) return;
@@ -454,6 +491,28 @@ export default function CRMKanban() {
   );
 }
 
+// Map tags to colors for visual identification
+const TAG_COLORS: Record<string, string> = {
+  'Cliente': 'bg-green-500/10 text-green-600 border-green-200',
+  'Recuperado (manual)': 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
+  'Recuperado (auto)': 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
+  'Carrinho Abandonado': 'bg-orange-500/10 text-orange-600 border-orange-200',
+  'Boleto Pendente': 'bg-yellow-500/10 text-yellow-600 border-yellow-200',
+  'Pix Pendente': 'bg-yellow-500/10 text-yellow-600 border-yellow-200',
+  'Cartão Recusado': 'bg-red-500/10 text-red-600 border-red-200',
+  'Chargeback': 'bg-red-500/10 text-red-600 border-red-200',
+  'Reembolsado': 'bg-amber-500/10 text-amber-600 border-amber-200',
+  'Cancelado': 'bg-rose-500/10 text-rose-600 border-rose-200',
+  'Assinante': 'bg-blue-500/10 text-blue-600 border-blue-200',
+  'Lead': 'bg-slate-500/10 text-slate-600 border-slate-200',
+  'VIP': 'bg-purple-500/10 text-purple-600 border-purple-200',
+  'Prospect': 'bg-indigo-500/10 text-indigo-600 border-indigo-200',
+};
+
+function getTagColor(tag: string): string {
+  return TAG_COLORS[tag] || 'bg-muted text-muted-foreground';
+}
+
 interface KanbanCardProps {
   contact: KanbanContact;
   isSelected: boolean;
@@ -507,12 +566,12 @@ function KanbanCard({ contact, isSelected, isSelectionMode, onDragStart, onClick
             {contact.tags && contact.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {contact.tags.slice(0, 2).map((tag) => (
-                  <Badge key={tag} variant="outline" className="text-xs px-1.5 py-0">
+                  <Badge key={tag} variant="outline" className={`text-xs px-1.5 py-0 ${getTagColor(tag)}`}>
                     {tag}
                   </Badge>
                 ))}
                 {contact.tags.length > 2 && (
-                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0 bg-muted">
                     +{contact.tags.length - 2}
                   </Badge>
                 )}

@@ -3642,6 +3642,12 @@ export type Database = {
         }[]
       }
       normalize_phone_number: { Args: { phone: string }; Returns: string }
+      populate_contact_utms_from_transactions: {
+        Args: never
+        Returns: {
+          updated_count: number
+        }[]
+      }
       update_last_login: { Args: never; Returns: undefined }
     }
     Enums: {

@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemo } from 'react';
+import { toast } from 'sonner';
 
 export interface UTMMetrics {
   key: string;
@@ -20,38 +21,78 @@ export interface UseUTMBehaviorDataProps {
 }
 
 export function useUTMBehaviorData({ projectId }: UseUTMBehaviorDataProps) {
-  // Fetch all contacts with UTM data
+  const queryClient = useQueryClient();
+
+  // Fetch all contacts with UTM data - usando paginação para buscar todos
   const { data: contacts, isLoading: contactsLoading } = useQuery({
     queryKey: ['utm-behavior-contacts', projectId],
     queryFn: async () => {
       if (!projectId) return [];
       
-      const { data, error } = await supabase
-        .from('crm_contacts')
-        .select(`
-          id,
-          first_utm_source,
-          first_utm_campaign,
-          first_utm_medium,
-          first_utm_adset,
-          first_utm_ad,
-          first_utm_creative,
-          first_meta_campaign_id,
-          first_meta_adset_id,
-          first_meta_ad_id,
-          status,
-          total_revenue,
-          total_purchases,
-          first_seen_at,
-          first_purchase_at
-        `)
-        .eq('project_id', projectId);
+      const allContacts: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data || [];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('crm_contacts')
+          .select(`
+            id,
+            first_utm_source,
+            first_utm_campaign,
+            first_utm_medium,
+            first_utm_adset,
+            first_utm_ad,
+            first_utm_creative,
+            first_meta_campaign_id,
+            first_meta_adset_id,
+            first_meta_ad_id,
+            status,
+            total_revenue,
+            total_purchases,
+            first_seen_at,
+            first_purchase_at
+          `)
+          .eq('project_id', projectId)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allContacts.push(...data);
+          page++;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allContacts;
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // Mutation para popular UTMs dos contatos
+  const populateUTMs = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('populate_contact_utms_from_transactions');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      const count = data?.[0]?.updated_count || 0;
+      if (count > 0) {
+        toast.success(`${count} contatos atualizados com dados de UTM`);
+        queryClient.invalidateQueries({ queryKey: ['utm-behavior-contacts', projectId] });
+      } else {
+        toast.info('Nenhum contato precisava de atualização');
+      }
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao popular UTMs: ${error.message}`);
+    },
   });
 
   // Calculate metrics by UTM dimension
@@ -156,5 +197,6 @@ export function useUTMBehaviorData({ projectId }: UseUTMBehaviorDataProps) {
     metricsByAd,
     metricsByCreative,
     summary,
+    populateUTMs,
   };
 }

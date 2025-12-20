@@ -1,15 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { CustomerJourneyAnalysis } from '@/components/crm/CustomerJourneyAnalysis';
 import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
-import { MigrateInteractionsButton } from '@/components/crm/MigrateInteractionsButton';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, TrendingUp, Route, Settings } from 'lucide-react';
+import { Users, Loader2, Lock, TrendingUp, Route } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
@@ -117,10 +116,6 @@ export default function CRM() {
                   <TrendingUp className="h-4 w-4" />
                   Análise de Ascensão
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Configurações
-                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="journey" className="mt-6">
@@ -129,12 +124,6 @@ export default function CRM() {
               
               <TabsContent value="ascension" className="mt-6">
                 <AscensionAnalysis />
-              </TabsContent>
-              
-              <TabsContent value="settings" className="mt-6">
-                <div className="space-y-6">
-                  <MigrateInteractionsButton />
-                </div>
               </TabsContent>
             </Tabs>
           </main>

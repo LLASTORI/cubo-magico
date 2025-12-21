@@ -107,23 +107,30 @@ export default function CRMKanban() {
       if (contactsError) throw contactsError;
       
       // Fetch last transaction date for each contact (for date filtering)
+      // Do this in batches to avoid URL length limits
       const contactIds = contactsData.map(c => c.id);
-      
-      // Get transactions grouped by contact with latest date
-      const { data: transactionsData, error: txError } = await supabase
-        .from('crm_transactions')
-        .select('contact_id, transaction_date, created_at')
-        .eq('project_id', currentProject.id)
-        .in('contact_id', contactIds)
-        .order('transaction_date', { ascending: false, nullsFirst: false });
-
-      if (txError) throw txError;
-
-      // Build map of contact_id -> last transaction date
       const lastTxDateMap = new Map<string, string>();
-      for (const tx of transactionsData || []) {
-        if (!lastTxDateMap.has(tx.contact_id)) {
-          lastTxDateMap.set(tx.contact_id, tx.transaction_date || tx.created_at);
+      
+      const batchSize = 50; // Smaller batch size to avoid URL length issues
+      for (let i = 0; i < contactIds.length; i += batchSize) {
+        const batchIds = contactIds.slice(i, i + batchSize);
+        
+        const { data: transactionsData, error: txError } = await supabase
+          .from('crm_transactions')
+          .select('contact_id, transaction_date, created_at')
+          .eq('project_id', currentProject.id)
+          .in('contact_id', batchIds)
+          .order('transaction_date', { ascending: false, nullsFirst: false });
+
+        if (txError) {
+          console.error('Error fetching transactions batch:', txError);
+          continue; // Continue with other batches even if one fails
+        }
+
+        for (const tx of transactionsData || []) {
+          if (!lastTxDateMap.has(tx.contact_id)) {
+            lastTxDateMap.set(tx.contact_id, tx.transaction_date || tx.created_at);
+          }
         }
       }
 

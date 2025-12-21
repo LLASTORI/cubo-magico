@@ -47,6 +47,7 @@ interface KanbanContact {
   last_activity_at: string;
   updated_at: string;
   tags: string[] | null;
+  last_transaction_date?: string | null;
 }
 
 export interface KanbanFilters {
@@ -513,9 +514,11 @@ export function applyFilters(contacts: KanbanContact[], filters: KanbanFilters):
       if (isBefore(activityDate, cutoffDate)) return false;
     }
 
-    // Date range filter - use updated_at for filtering (when contact was last updated/synced)
+    // Date range filter - use last_transaction_date when available for better accuracy
     if (filters.dateFrom || filters.dateTo) {
-      const activityDate = new Date(contact.updated_at);
+      // Prefer last_transaction_date for filtering (when the event actually happened)
+      const dateToCheck = contact.last_transaction_date || contact.updated_at;
+      const activityDate = new Date(dateToCheck);
       if (filters.dateFrom && isBefore(activityDate, startOfDay(filters.dateFrom))) return false;
       if (filters.dateTo && isAfter(activityDate, endOfDay(filters.dateTo))) return false;
     }

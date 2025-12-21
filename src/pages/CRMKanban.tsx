@@ -38,6 +38,7 @@ interface KanbanContact {
   last_activity_at: string;
   updated_at: string;
   tags: string[] | null;
+  last_transaction_date?: string | null;
 }
 
 export default function CRMKanban() {
@@ -90,20 +91,46 @@ export default function CRMKanban() {
 
   const crmEnabled = isModuleEnabled('crm');
 
-  // Fetch contacts for kanban
+  // Fetch contacts for kanban with their last transaction date
   const { data: contacts = [], isLoading: contactsLoading } = useQuery({
     queryKey: ['crm-kanban-contacts', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return [];
 
-      const { data, error } = await supabase
+      // Fetch contacts
+      const { data: contactsData, error: contactsError } = await supabase
         .from('crm_contacts')
         .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, updated_at, tags')
         .eq('project_id', currentProject.id)
         .order('updated_at', { ascending: false });
 
-      if (error) throw error;
-      return data as KanbanContact[];
+      if (contactsError) throw contactsError;
+      
+      // Fetch last transaction date for each contact (for date filtering)
+      const contactIds = contactsData.map(c => c.id);
+      
+      // Get transactions grouped by contact with latest date
+      const { data: transactionsData, error: txError } = await supabase
+        .from('crm_transactions')
+        .select('contact_id, transaction_date, created_at')
+        .eq('project_id', currentProject.id)
+        .in('contact_id', contactIds)
+        .order('transaction_date', { ascending: false, nullsFirst: false });
+
+      if (txError) throw txError;
+
+      // Build map of contact_id -> last transaction date
+      const lastTxDateMap = new Map<string, string>();
+      for (const tx of transactionsData || []) {
+        if (!lastTxDateMap.has(tx.contact_id)) {
+          lastTxDateMap.set(tx.contact_id, tx.transaction_date || tx.created_at);
+        }
+      }
+
+      return contactsData.map(c => ({
+        ...c,
+        last_transaction_date: lastTxDateMap.get(c.id) || null,
+      })) as KanbanContact[];
     },
     enabled: !!currentProject?.id && crmEnabled,
   });
@@ -354,30 +381,32 @@ export default function CRMKanban() {
         )}
 
         <ScrollArea className="w-full pb-4">
-          <div className="flex gap-4 min-w-max">
+          <div className="flex gap-4 min-w-max h-[calc(100vh-280px)]">
             {/* Unstaged column */}
             <div
-              className="w-72 flex-shrink-0"
+              className="min-w-[280px] max-w-[280px] h-full"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, null)}
             >
-              <Card className="h-full bg-muted/30">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      {isSelectionMode && (
-                        <Checkbox
-                          checked={unstagedContacts.length > 0 && unstagedContacts.every(c => selectedContacts.has(c.id))}
-                          onCheckedChange={() => toggleSelectAllInStage(null)}
-                        />
-                      )}
-                      <div className="w-3 h-3 rounded-full bg-gray-400" />
-                      Sem etapa
-                    </CardTitle>
-                    <Badge variant="secondary">{unstagedContacts.length}</Badge>
+              <div className="flex flex-col h-full bg-muted/30 rounded-lg border">
+                <div
+                  className="p-3 border-b shrink-0 flex items-center justify-between"
+                  style={{ borderTopColor: '#6b7280', borderTopWidth: 3, borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}
+                >
+                  <div className="flex items-center gap-2">
+                    {isSelectionMode && (
+                      <Checkbox
+                        checked={unstagedContacts.length > 0 && unstagedContacts.every(c => selectedContacts.has(c.id))}
+                        onCheckedChange={() => toggleSelectAllInStage(null)}
+                      />
+                    )}
+                    <h3 className="font-semibold">Sem etapa</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {unstagedContacts.length}
+                    </Badge>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 min-h-0 space-y-2">
                   {unstagedContacts.map((contact) => (
                     <KanbanCard 
                       key={contact.id} 
@@ -400,8 +429,8 @@ export default function CRMKanban() {
                       Nenhum lead
                     </p>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
 
             {/* Stage columns */}
@@ -412,35 +441,38 @@ export default function CRMKanban() {
               return (
                 <div
                   key={stage.id}
-                  className="w-72 flex-shrink-0"
+                  className="min-w-[280px] max-w-[280px] h-full"
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, stage.id)}
                 >
-                  <Card className={`h-full ${stage.is_won ? 'bg-green-500/5' : stage.is_lost ? 'bg-red-500/5' : ''}`}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                          {isSelectionMode && (
-                            <Checkbox
-                              checked={stageContacts.length > 0 && stageContacts.every(c => selectedContacts.has(c.id))}
-                              onCheckedChange={() => toggleSelectAllInStage(stage.id)}
-                            />
-                          )}
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: stage.color }}
+                  <div className={`flex flex-col h-full rounded-lg border ${stage.is_won ? 'bg-green-500/5' : stage.is_lost ? 'bg-red-500/5' : 'bg-muted/30'}`}>
+                    <div
+                      className="p-3 border-b shrink-0 flex items-center justify-between"
+                      style={{ borderTopColor: stage.color, borderTopWidth: 3, borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isSelectionMode && (
+                          <Checkbox
+                            checked={stageContacts.length > 0 && stageContacts.every(c => selectedContacts.has(c.id))}
+                            onCheckedChange={() => toggleSelectAllInStage(stage.id)}
                           />
-                          {stage.name}
-                        </CardTitle>
-                        <Badge variant="secondary">{stageContacts.length}</Badge>
+                        )}
+                        {stage.is_won && <CheckSquare className="h-4 w-4 text-green-500" />}
+                        {stage.is_lost && <Square className="h-4 w-4 text-red-500" />}
+                        <h3 className="font-semibold">{stage.name}</h3>
+                        <Badge variant="secondary" className="text-xs">
+                          {stageContacts.length}
+                        </Badge>
                       </div>
-                      {stageRevenue > 0 && (
+                    </div>
+                    {stageRevenue > 0 && (
+                      <div className="px-3 py-1 border-b">
                         <p className="text-xs text-muted-foreground">
                           {formatCurrency(stageRevenue)} em receita
                         </p>
-                      )}
-                    </CardHeader>
-                    <CardContent className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+                      </div>
+                    )}
+                    <div className="flex-1 overflow-y-auto p-2 min-h-0 space-y-2">
                       {stageContacts.map((contact) => (
                         <KanbanCard 
                           key={contact.id} 
@@ -463,8 +495,8 @@ export default function CRMKanban() {
                           Nenhum lead nesta etapa
                         </p>
                       )}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -552,7 +584,7 @@ interface KanbanCardProps {
 function KanbanCard({ contact, isSelected, isSelectionMode, onDragStart, onClick, formatCurrency }: KanbanCardProps) {
   return (
     <Card
-      className={`cursor-pointer hover:shadow-md transition-all ${
+      className={`cursor-pointer hover:shadow-md transition-all hover:border-primary/50 group ${
         isSelectionMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
       } ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
       draggable={!isSelectionMode}
@@ -560,51 +592,52 @@ function KanbanCard({ contact, isSelected, isSelectionMode, onDragStart, onClick
       onClick={onClick}
     >
       <CardContent className="p-3">
-        <div className="flex items-start gap-2">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{contact.name || contact.email}</p>
+            {contact.name && (
+              <p className="text-xs text-muted-foreground truncate">{contact.email}</p>
+            )}
+          </div>
           {isSelectionMode ? (
             <Checkbox 
               checked={isSelected} 
-              className="mt-0.5 flex-shrink-0"
+              className="shrink-0"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
           )}
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">
-              {contact.name || contact.email.split('@')[0]}
-            </p>
-            <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-              <Mail className="h-3 w-3" />
-              {contact.email}
-            </p>
-            {contact.phone && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Phone className="h-3 w-3" />
-                {contact.phone}
-              </p>
-            )}
-            {(contact.total_revenue ?? 0) > 0 && (
-              <p className="text-xs text-green-600 font-medium flex items-center gap-1 mt-1">
-                <DollarSign className="h-3 w-3" />
-                {formatCurrency(contact.total_revenue)}
-              </p>
-            )}
-            {contact.tags && contact.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {contact.tags.slice(0, 2).map((tag) => (
-                  <Badge key={tag} variant="outline" className={`text-xs px-1.5 py-0 ${getTagColor(tag)}`}>
-                    {tag}
-                  </Badge>
-                ))}
-                {contact.tags.length > 2 && (
-                  <Badge variant="outline" className="text-xs px-1.5 py-0 bg-muted">
-                    +{contact.tags.length - 2}
-                  </Badge>
-                )}
-              </div>
-            )}
-          </div>
+        </div>
+        
+        {contact.phone && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+            <Phone className="h-3 w-3" />
+            {contact.phone}
+          </p>
+        )}
+        
+        <div className="flex items-center gap-2 flex-wrap">
+          {contact.tags && contact.tags.length > 0 && (
+            <>
+              {contact.tags.slice(0, 2).map((tag) => (
+                <Badge key={tag} variant="outline" className={`text-xs ${getTagColor(tag)}`}>
+                  {tag}
+                </Badge>
+              ))}
+              {contact.tags.length > 2 && (
+                <Badge variant="outline" className="text-xs bg-muted">
+                  +{contact.tags.length - 2}
+                </Badge>
+              )}
+            </>
+          )}
+          {(contact.total_revenue ?? 0) > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              <DollarSign className="h-3 w-3 mr-1" />
+              {formatCurrency(contact.total_revenue)}
+            </Badge>
+          )}
         </div>
       </CardContent>
     </Card>

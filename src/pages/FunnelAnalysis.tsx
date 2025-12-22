@@ -976,6 +976,7 @@ const FunnelAnalysis = () => {
                   externalEndDate={appliedEndDate}
                   embedded={true}
                   salesData={salesData}
+                  insightsData={metaInsights}
                 />
                 
                 <Card className="p-4 bg-muted/30 border-dashed">

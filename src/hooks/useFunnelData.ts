@@ -296,9 +296,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       return allData as MetaInsight[];
     },
     enabled: enabled && activeAccountIds.length > 0,
-    staleTime: 0, // Always fetch fresh data
-    gcTime: 0, // Don't cache
-    refetchOnMount: 'always',
+    staleTime: 30 * 1000, // 30 seconds - prevents excessive refetches
+    gcTime: 60 * 1000, // 1 minute cache
   });
 
   // Use unified hook for Meta hierarchy (campaigns, adsets, ads)

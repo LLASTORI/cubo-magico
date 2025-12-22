@@ -49,6 +49,24 @@ interface UnifiedSale {
   installment_number?: number | null;
 }
 
+interface MetaInsightData {
+  id: string;
+  campaign_id: string | null;
+  adset_id: string | null;
+  ad_id: string | null;
+  ad_account_id: string;
+  spend: number | null;
+  impressions: number | null;
+  clicks: number | null;
+  reach: number | null;
+  ctr: number | null;
+  cpc: number | null;
+  cpm: number | null;
+  date_start: string;
+  date_stop: string;
+  actions?: any[];
+}
+
 interface CuboMagicoDashboardProps {
   projectId: string;
   externalStartDate?: Date;
@@ -57,6 +75,8 @@ interface CuboMagicoDashboardProps {
   onFunnelSelect?: (funnelId: string) => void;
   // Accept pre-fetched sales data from parent to avoid duplicate queries
   salesData?: UnifiedSale[];
+  // Accept pre-fetched insights data from parent to ensure consistency
+  insightsData?: MetaInsightData[];
 }
 
 interface FunnelWithConfig {
@@ -104,7 +124,8 @@ export function CuboMagicoDashboard({
   externalEndDate, 
   embedded = false,
   onFunnelSelect,
-  salesData: externalSalesData
+  salesData: externalSalesData,
+  insightsData: externalInsightsData
 }: CuboMagicoDashboardProps) {
   const { isModuleEnabled } = useProjectModules();
   const isMetaAdsEnabled = isModuleEnabled('meta_ads');
@@ -257,9 +278,9 @@ export function CuboMagicoDashboard({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch Meta insights - ALL ad-level for accurate spend calculations with pagination
-  // IMPORTANT: Include activeAccountIds in query key to refetch when accounts change
-  const { data: insightsData, refetch: refetchInsights, isRefetching } = useQuery({
+  // Use external insights data if provided (from parent), otherwise fetch locally
+  // This avoids duplicate queries and ensures consistency across the app
+  const { data: fetchedInsightsData, refetch: refetchInsights, isRefetching } = useQuery({
     queryKey: ['insights', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
       if (activeAccountIds.length === 0) return [];
@@ -298,11 +319,14 @@ export function CuboMagicoDashboard({
       console.log(`[CuboMagico] Ad-level insights loaded: ${allData.length}, total spend: R$${allData.reduce((s: number, i: any) => s + (i.spend || 0), 0).toFixed(2)}`);
       return allData;
     },
-    enabled: !!projectId && activeAccountIds.length > 0,
-    staleTime: 0, // Always fetch fresh data
-    gcTime: 0, // Don't cache
-    refetchOnMount: 'always',
+    // Only fetch if no external data provided
+    enabled: !!projectId && activeAccountIds.length > 0 && !externalInsightsData,
+    staleTime: 30 * 1000, // 30 seconds - consistent with useFunnelData
+    gcTime: 60 * 1000, // 1 minute
   });
+
+  // Use external insights if provided, otherwise use fetched data
+  const insightsData = externalInsightsData || fetchedInsightsData || [];
 
   // Use unified hook for Meta hierarchy (adsets, ads)
   const { adsets: adsetsData, ads: adsData } = useMetaHierarchy({
@@ -960,8 +984,8 @@ export function CuboMagicoDashboard({
       </Card>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Summary Cards - Shows only funnel-attributed data */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Tooltip>
           <TooltipTrigger asChild>
             <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
@@ -975,51 +999,7 @@ export function CuboMagicoDashboard({
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    Investimento Total
-                    {!isMetaAdsEnabled && <Lock className="w-3 h-3" />}
-                  </p>
-                  {isMetaAdsEnabled ? (
-                    <>
-                      <p className="text-xl font-bold text-foreground">{formatCurrency(totals.investimentoTotal)}</p>
-                      {totals.investimentoNaoAtribuido > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(totals.investimentoNaoAtribuido)} não atribuído
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xl font-bold text-muted-foreground">-</p>
-                  )}
-                </div>
-              </div>
-            </Card>
-          </TooltipTrigger>
-          <TooltipContent>
-            {isMetaAdsEnabled ? (
-              <>
-                <p><strong>Investimento Total:</strong> Soma de todo gasto em anúncios no período</p>
-                <p className="text-xs text-muted-foreground">Inclui campanhas atribuídas e não atribuídas a funis</p>
-              </>
-            ) : (
-              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-orange-500/10">
-                  {isMetaAdsEnabled ? (
-                    <TrendingDown className="w-5 h-5 text-orange-500" />
-                  ) : (
-                    <Lock className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    Invest. Atribuído
+                    Investimento
                     {!isMetaAdsEnabled && <Lock className="w-3 h-3" />}
                   </p>
                   {isMetaAdsEnabled ? (
@@ -1034,8 +1014,8 @@ export function CuboMagicoDashboard({
           <TooltipContent>
             {isMetaAdsEnabled ? (
               <>
-                <p><strong>Investimento Atribuído:</strong> Gasto em campanhas vinculadas a funis</p>
-                <p className="text-xs text-muted-foreground">Baseado no padrão de nome das campanhas</p>
+                <p><strong>Investimento:</strong> Gasto em campanhas vinculadas aos funis</p>
+                <p className="text-xs text-muted-foreground">Baseado no padrão de nome das campanhas configurado</p>
               </>
             ) : (
               <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
@@ -1060,14 +1040,7 @@ export function CuboMagicoDashboard({
                     {!isHotmartEnabled && <Lock className="w-3 h-3" />}
                   </p>
                   {isHotmartEnabled ? (
-                    <>
-                      <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamentoTotal)}</p>
-                      {totals.faturamentoNaoAtribuido > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(totals.faturamentoNaoAtribuido)} não atribuído
-                        </p>
-                      )}
-                    </>
+                    <p className="text-xl font-bold text-foreground">{formatCurrency(totals.faturamento)}</p>
                   ) : (
                     <p className="text-xl font-bold text-muted-foreground">-</p>
                   )}
@@ -1078,7 +1051,7 @@ export function CuboMagicoDashboard({
           <TooltipContent>
             {isHotmartEnabled ? (
               <>
-                <p><strong>Faturamento:</strong> Receita total de vendas aprovadas</p>
+                <p><strong>Faturamento:</strong> Receita das vendas mapeadas aos funis</p>
                 <p className="text-xs text-muted-foreground">Status: approved, complete, completed</p>
               </>
             ) : (
@@ -1126,81 +1099,31 @@ export function CuboMagicoDashboard({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Card className={cn("p-4 cursor-help", !isHotmartEnabled && "opacity-60")}>
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  {isHotmartEnabled ? (
-                    <Users className="w-5 h-5 text-purple-500" />
-                  ) : (
-                    <Lock className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    Total Produtos
-                    {!isHotmartEnabled && <Lock className="w-3 h-3" />}
-                  </p>
-                  {isHotmartEnabled ? (
-                    <>
-                      <p className="text-xl font-bold text-foreground">{totals.totalProdutosReal}</p>
-                      {(totals.totalProdutosReal - totals.totalProdutos) > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {totals.totalProdutosReal - totals.totalProdutos} não atribuído
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xl font-bold text-muted-foreground">-</p>
-                  )}
-                </div>
-              </div>
-            </Card>
-          </TooltipTrigger>
-          <TooltipContent>
-            {isHotmartEnabled ? (
-              <>
-                <p><strong>Total Produtos:</strong> Soma de todas as vendas (FRONT + Order Bumps + Upsells)</p>
-                <p className="text-xs text-muted-foreground">Inclui todas as posições do funil</p>
-              </>
-            ) : (
-              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      {/* Second Row: ROAS + Health Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
             <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "p-2 rounded-lg",
                   !isMetaAdsEnabled 
                     ? "bg-muted" 
-                    : totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 
+                    : totals.investimento > 0 && (totals.faturamento / totals.investimento) >= 2 
                       ? 'bg-green-500/10' 
                       : 'bg-yellow-500/10'
                 )}>
                   {isMetaAdsEnabled ? (
-                    <TrendingUp className={`w-5 h-5 ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`} />
+                    <TrendingUp className={`w-5 h-5 ${totals.investimento > 0 && (totals.faturamento / totals.investimento) >= 2 ? 'text-green-500' : 'text-yellow-500'}`} />
                   ) : (
                     <Lock className="w-5 h-5 text-muted-foreground" />
                   )}
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    ROAS Geral
+                    ROAS
                     {!isMetaAdsEnabled && <Lock className="w-3 h-3" />}
                   </p>
                   {isMetaAdsEnabled ? (
                     <>
-                      <p className={`text-xl font-bold ${totals.investimentoTotal > 0 && (totals.faturamentoTotal / totals.investimentoTotal) >= 2 ? 'text-green-500' : 'text-yellow-500'}`}>
-                        {totals.investimentoTotal > 0 ? (totals.faturamentoTotal / totals.investimentoTotal).toFixed(2) : '0.00'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Fat. Total / Invest. Total
+                      <p className={`text-xl font-bold ${totals.investimento > 0 && (totals.faturamento / totals.investimento) >= 2 ? 'text-green-500' : 'text-yellow-500'}`}>
+                        {totals.investimento > 0 ? (totals.faturamento / totals.investimento).toFixed(2) : '0.00'}
                       </p>
                     </>
                   ) : (
@@ -1214,15 +1137,17 @@ export function CuboMagicoDashboard({
             {isMetaAdsEnabled ? (
               <>
                 <p><strong>ROAS:</strong> Return on Ad Spend (Retorno sobre Investimento)</p>
-                <p className="text-xs text-muted-foreground">Faturamento ÷ Investimento. Meta: ≥ 2x</p>
+                <p className="text-xs text-muted-foreground">Faturamento dos Funis ÷ Investimento dos Funis</p>
               </>
             ) : (
               <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
             )}
           </TooltipContent>
         </Tooltip>
+      </div>
 
-        {/* Health Summary Cards - Compact */}
+      {/* Second Row: Health Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {(() => {
           const healthTotals = healthMetrics.reduce((acc, h) => ({
             totalAbandonos: acc.totalAbandonos + h.totalAbandonos,

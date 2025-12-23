@@ -59,10 +59,12 @@ interface RecoveryContact {
   last_activity_at: string;
 }
 
+// Status que entram no pipeline de recuperação
 const RECOVERY_STATUS_MAP = {
   CANCELLED: 'Cancelado',
   CHARGEBACK: 'Chargeback',
   REFUNDED: 'Reembolsado',
+  ABANDONED: 'Carrinho Abandonado',
 } as const;
 
 // Contact Card Component
@@ -71,10 +73,12 @@ function ContactCard({ contact, onClick }: { contact: RecoveryContact; onClick: 
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  // Cores padronizadas (mesmo padrão do CRMKanban)
   const getRecoveryTag = () => {
-    if (contact.tags?.includes('Chargeback')) return { label: 'Chargeback', color: 'bg-red-500/10 text-red-500' };
-    if (contact.tags?.includes('Reembolsado')) return { label: 'Reembolsado', color: 'bg-yellow-500/10 text-yellow-500' };
-    if (contact.tags?.includes('Cancelado')) return { label: 'Cancelado', color: 'bg-orange-500/10 text-orange-500' };
+    if (contact.tags?.includes('Chargeback')) return { label: 'Chargeback', color: 'bg-red-500/10 text-red-600 border-red-200' };
+    if (contact.tags?.includes('Reembolsado')) return { label: 'Reembolsado', color: 'bg-amber-500/10 text-amber-600 border-amber-200' };
+    if (contact.tags?.includes('Cancelado')) return { label: 'Cancelado', color: 'bg-rose-500/10 text-rose-600 border-rose-200' };
+    if (contact.tags?.includes('Carrinho Abandonado')) return { label: 'Carrinho Abandonado', color: 'bg-orange-500/10 text-orange-600 border-orange-200' };
     return null;
   };
 

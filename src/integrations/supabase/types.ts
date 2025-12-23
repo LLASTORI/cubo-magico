@@ -3616,6 +3616,12 @@ export type Database = {
           contacts_updated: number
         }[]
       }
+      migrate_generic_tags: {
+        Args: never
+        Returns: {
+          contacts_updated: number
+        }[]
+      }
       migrate_hotmart_to_crm: {
         Args: never
         Returns: {

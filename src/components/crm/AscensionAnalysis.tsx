@@ -11,13 +11,25 @@ import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, TrendingUp, Users, Target, CalendarIcon, ArrowRight, Package, Tag, Filter } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Target, CalendarIcon, ArrowRight, Package, Tag, Filter, Database } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
+import { usePaginatedQuery } from '@/hooks/usePaginatedQuery';
 
 type SelectionType = 'product' | 'offer' | 'funnel';
+
+interface TransactionData {
+  contact_id: string;
+  product_name: string | null;
+  product_code: string | null;
+  offer_code: string | null;
+  offer_name: string | null;
+  status: string;
+  transaction_date: string | null;
+  funnel_id: string | null;
+}
 
 interface AscensionResult {
   entryName: string;
@@ -43,23 +55,18 @@ export function AscensionAnalysis() {
   // Date range
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  // Fetch transactions
-  const { data: transactions = [], isLoading: loadingTransactions } = useQuery({
-    queryKey: ['crm-ascension-transactions', projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      
-      const { data, error } = await supabase
-        .from('crm_transactions')
-        .select('contact_id, product_name, product_code, offer_code, offer_name, status, transaction_date, funnel_id')
-        .eq('project_id', projectId)
-        .in('status', ['APPROVED', 'COMPLETE']);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!projectId,
-  });
+  // Fetch transactions with pagination (overcomes 1000 limit)
+  const { data: transactions = [], isLoading: loadingTransactions } = usePaginatedQuery<TransactionData>(
+    ['crm-ascension-transactions', projectId],
+    {
+      table: 'crm_transactions',
+      select: 'contact_id, product_name, product_code, offer_code, offer_name, status, transaction_date, funnel_id',
+      filters: { project_id: projectId },
+      inFilters: { status: ['APPROVED', 'COMPLETE'] },
+      orderBy: { column: 'id', ascending: true },
+      enabled: !!projectId,
+    }
+  );
 
   // Fetch offer mappings to include all configured offers
   const { data: offerMappings = [], isLoading: loadingOfferMappings } = useQuery({
@@ -350,13 +357,21 @@ export function AscensionAnalysis() {
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Análise de Ascensão
-          </CardTitle>
-          <CardDescription>
-            Descubra quais produtos de entrada geram mais upsells para produtos premium
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Análise de Ascensão
+              </CardTitle>
+              <CardDescription>
+                Descubra quais produtos de entrada geram mais upsells para produtos premium
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="flex items-center gap-1.5">
+              <Database className="h-3 w-3" />
+              {transactions.length.toLocaleString('pt-BR')} transações
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

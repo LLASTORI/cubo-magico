@@ -5,6 +5,7 @@ import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { usePaginatedQuery } from '@/hooks/usePaginatedQuery';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { KanbanFiltersBar, KanbanFilters, defaultFilters, applyFilters } from '@/components/crm/KanbanFilters';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +21,8 @@ import {
   Phone,
   DollarSign,
   CheckSquare,
-  Square
+  Square,
+  Database
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -91,56 +93,57 @@ export default function CRMKanban() {
 
   const crmEnabled = isModuleEnabled('crm');
 
-  // Fetch contacts for kanban with their last transaction date
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
-    queryKey: ['crm-kanban-contacts', currentProject?.id],
-    queryFn: async () => {
-      if (!currentProject?.id) return [];
+  // Fetch contacts using paginated query to overcome 1000 limit
+  interface KanbanContactRaw {
+    id: string;
+    name: string | null;
+    email: string;
+    phone: string | null;
+    pipeline_stage_id: string | null;
+    total_revenue: number | null;
+    total_purchases: number | null;
+    last_activity_at: string;
+    updated_at: string;
+    tags: string[] | null;
+  }
 
-      // Fetch contacts
-      const { data: contactsData, error: contactsError } = await supabase
-        .from('crm_contacts')
-        .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, updated_at, tags')
-        .eq('project_id', currentProject.id)
-        .order('updated_at', { ascending: false });
+  const { data: rawContacts = [], isLoading: contactsLoading } = usePaginatedQuery<KanbanContactRaw>(
+    ['crm-kanban-contacts', currentProject?.id],
+    {
+      table: 'crm_contacts',
+      select: 'id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, updated_at, tags',
+      filters: { project_id: currentProject?.id },
+      orderBy: { column: 'updated_at', ascending: false },
+      enabled: !!currentProject?.id && crmEnabled,
+    }
+  );
 
-      if (contactsError) throw contactsError;
-      
-      // Fetch last transaction date for each contact (for date filtering)
-      // Do this in batches to avoid URL length limits
-      const contactIds = contactsData.map(c => c.id);
-      const lastTxDateMap = new Map<string, string>();
-      
-      const batchSize = 50; // Smaller batch size to avoid URL length issues
-      for (let i = 0; i < contactIds.length; i += batchSize) {
-        const batchIds = contactIds.slice(i, i + batchSize);
-        
-        const { data: transactionsData, error: txError } = await supabase
-          .from('crm_transactions')
-          .select('contact_id, transaction_date, created_at')
-          .eq('project_id', currentProject.id)
-          .in('contact_id', batchIds)
-          .order('transaction_date', { ascending: false, nullsFirst: false });
+  // Fetch last transaction dates for filtering
+  const { data: transactionDates = [] } = usePaginatedQuery<{ contact_id: string; transaction_date: string | null; created_at: string }>(
+    ['crm-kanban-tx-dates', currentProject?.id],
+    {
+      table: 'crm_transactions',
+      select: 'contact_id, transaction_date, created_at',
+      filters: { project_id: currentProject?.id },
+      orderBy: { column: 'transaction_date', ascending: false },
+      enabled: !!currentProject?.id && crmEnabled && rawContacts.length > 0,
+    }
+  );
 
-        if (txError) {
-          console.error('Error fetching transactions batch:', txError);
-          continue; // Continue with other batches even if one fails
-        }
-
-        for (const tx of transactionsData || []) {
-          if (!lastTxDateMap.has(tx.contact_id)) {
-            lastTxDateMap.set(tx.contact_id, tx.transaction_date || tx.created_at);
-          }
-        }
+  // Combine contacts with their last transaction date
+  const contacts = useMemo((): KanbanContact[] => {
+    const lastTxDateMap = new Map<string, string>();
+    for (const tx of transactionDates) {
+      if (!lastTxDateMap.has(tx.contact_id)) {
+        lastTxDateMap.set(tx.contact_id, tx.transaction_date || tx.created_at);
       }
+    }
 
-      return contactsData.map(c => ({
-        ...c,
-        last_transaction_date: lastTxDateMap.get(c.id) || null,
-      })) as KanbanContact[];
-    },
-    enabled: !!currentProject?.id && crmEnabled,
-  });
+    return rawContacts.map(c => ({
+      ...c,
+      last_transaction_date: lastTxDateMap.get(c.id) || null,
+    }));
+  }, [rawContacts, transactionDates]);
 
   // Create default stages if none exist
   useEffect(() => {
@@ -327,7 +330,13 @@ export default function CRMKanban() {
       
       <main className="container mx-auto px-6 pb-24">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">Pipeline de Vendas</h1>
+            <Badge variant="outline" className="flex items-center gap-1">
+              <Database className="h-3 w-3" />
+              {contacts.length.toLocaleString('pt-BR')} contatos
+            </Badge>
+          </div>
           <p className="text-muted-foreground">
             {isSelectionMode 
               ? 'Clique nos cards para selecionar' 

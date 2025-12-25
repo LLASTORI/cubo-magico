@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { 
-  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock
+  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Zap
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +51,7 @@ const FunnelAnalysis = () => {
   const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ elapsed: 0, estimated: 60 });
   const [dataGaps, setDataGaps] = useState<{ missingDays: number; completeness: number; missingRanges: string[]; missingDateRanges: Array<{start: string, end: string}> } | null>(null);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use centralized hook for ALL data
@@ -736,6 +738,33 @@ const FunnelAnalysis = () => {
   const isRefreshingAll = isSyncing;
   const datesChanged = startDate.getTime() !== appliedStartDate.getTime() || endDate.getTime() !== appliedEndDate.getTime();
 
+  // Consolidated status for visual feedback
+  const dataStatus = useMemo(() => {
+    if (loadingSales || loadingInsights) {
+      return { status: 'loading', label: 'Carregando...', color: 'bg-blue-500/20 text-blue-600 border-blue-500/30' };
+    }
+    if (metaSyncInProgress || isSyncing) {
+      return { status: 'syncing', label: 'Sincronizando...', color: 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30' };
+    }
+    if (datesChanged) {
+      return { status: 'pending', label: 'Período não aplicado', color: 'bg-amber-500/20 text-amber-600 border-amber-500/30' };
+    }
+    return { 
+      status: 'ready', 
+      label: lastUpdateTime 
+        ? `Atualizado às ${format(lastUpdateTime, 'HH:mm', { locale: ptBR })}`
+        : 'Dados prontos',
+      color: 'bg-green-500/20 text-green-600 border-green-500/30' 
+    };
+  }, [loadingSales, loadingInsights, metaSyncInProgress, isSyncing, datesChanged, lastUpdateTime]);
+
+  // Update timestamp when data loads
+  useEffect(() => {
+    if (!loadingSales && !loadingInsights && !metaSyncInProgress && salesData.length > 0) {
+      setLastUpdateTime(new Date());
+    }
+  }, [loadingSales, loadingInsights, metaSyncInProgress, salesData.length]);
+
   if (!currentProject) return null;
 
   return (
@@ -796,19 +825,44 @@ const FunnelAnalysis = () => {
                     </PopoverContent>
                   </Popover>
                   
-                  <Button 
-                    variant={datesChanged ? "default" : "outline"} 
-                    size="sm" 
-                    onClick={handleSearch}
-                    className="gap-2"
-                  >
-                    <Search className="w-4 h-4" />
-                    Buscar
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant={datesChanged ? "default" : "outline"} 
+                        size="sm" 
+                        onClick={handleSearch}
+                        className={cn(
+                          "gap-2 transition-all",
+                          datesChanged && "animate-pulse ring-2 ring-primary/50"
+                        )}
+                      >
+                        <Search className="w-4 h-4" />
+                        Aplicar Período
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Busca os dados do banco para o período selecionado</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Status Badge Consolidado */}
+                <Badge 
+                  variant="outline" 
+                  className={cn(
+                    "gap-1.5 px-3 py-1 text-xs font-medium transition-colors",
+                    dataStatus.color
+                  )}
+                >
+                  {dataStatus.status === 'loading' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                  {dataStatus.status === 'syncing' && <Zap className="w-3 h-3 animate-pulse" />}
+                  {dataStatus.status === 'pending' && <AlertTriangle className="w-3 h-3" />}
+                  {dataStatus.status === 'ready' && <CheckCircle2 className="w-3 h-3" />}
+                  {dataStatus.label}
+                </Badge>
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button 
@@ -819,11 +873,11 @@ const FunnelAnalysis = () => {
                       className="gap-2"
                     >
                       <RefreshCw className={cn("w-4 h-4", (isRefreshingAll || metaSyncInProgress) && "animate-spin")} />
-                      {metaSyncInProgress ? 'Sincronizando...' : 'Atualizar'}
+                      {metaSyncInProgress ? 'Sincronizando...' : 'Sincronizar APIs'}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Sincroniza vendas do Hotmart e Meta Ads em paralelo</p>
+                    <p>Busca dados atualizados do Hotmart e Meta Ads</p>
                   </TooltipContent>
                 </Tooltip>
                 
@@ -837,6 +891,7 @@ const FunnelAnalysis = () => {
                       hotmartSyncStatus === 'idle' && "bg-muted text-muted-foreground"
                     )}>
                       {hotmartSyncStatus === 'syncing' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                      {hotmartSyncStatus === 'done' && <CheckCircle2 className="w-3 h-3" />}
                       Hotmart
                     </div>
                     <div className={cn(
@@ -847,6 +902,7 @@ const FunnelAnalysis = () => {
                       metaSyncStatus === 'idle' && "bg-muted text-muted-foreground"
                     )}>
                       {metaSyncStatus === 'syncing' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                      {metaSyncStatus === 'done' && <CheckCircle2 className="w-3 h-3" />}
                       Meta
                     </div>
                   </div>
@@ -856,24 +912,29 @@ const FunnelAnalysis = () => {
             </div>
           </Card>
 
-          {/* Meta sync in progress with intelligent polling */}
+          {/* Meta sync in progress with CubeLoader */}
           {metaSyncInProgress && (
-            <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
+            <Card className="p-6 border-cube-blue/30 bg-cube-blue/5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <RefreshCw className="w-5 h-5 animate-spin text-cube-blue" />
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <CubeLoader size="sm" message="" />
+                  </div>
                   <div>
                     <span className="text-sm font-medium text-foreground">Sincronização Meta Ads em andamento...</span>
-                    <p className="text-xs text-muted-foreground">
-                      Verificando novos dados a cada 5 segundos. Tempo estimado: ~{syncProgress.estimated}s
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Verificando novos dados a cada 3 segundos. Tempo estimado: ~{syncProgress.estimated}s
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-sm font-mono text-cube-blue">{syncProgress.elapsed}s</span>
-                  <div className="w-32 h-2 bg-muted rounded-full overflow-hidden mt-1">
+                  <div className="flex items-center gap-2 text-sm font-mono text-cube-blue">
+                    <Clock className="w-4 h-4" />
+                    {syncProgress.elapsed}s
+                  </div>
+                  <div className="w-32 h-2 bg-muted rounded-full overflow-hidden mt-2">
                     <div 
-                      className="h-full bg-cube-blue transition-all duration-500"
+                      className="h-full bg-gradient-to-r from-cube-blue to-cube-purple transition-all duration-500"
                       style={{ width: `${Math.min(100, (syncProgress.elapsed / syncProgress.estimated) * 100)}%` }}
                     />
                   </div>
@@ -882,21 +943,25 @@ const FunnelAnalysis = () => {
             </Card>
           )}
 
-          {/* Loading Meta data indicator */}
+          {/* Loading Meta data indicator with CubeLoader */}
           {!metaSyncInProgress && loadingInsights && activeAccountIds.length > 0 && (
-            <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
-              <div className="flex items-center gap-3">
-                <RefreshCw className="w-5 h-5 animate-spin text-cube-blue" />
+            <Card className="p-6 border-cube-blue/30 bg-cube-blue/5">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <CubeLoader size="sm" message="" />
+                </div>
                 <span className="text-sm text-muted-foreground">Carregando dados do Meta Ads...</span>
               </div>
             </Card>
           )}
 
-          {/* Data gaps info - now just informational since auto-fill handles it */}
+          {/* Data gaps info with CubeLoader */}
           {dataGaps && !metaSyncInProgress && !loadingInsights && (
-            <Card className="p-4 border-cube-blue/30 bg-cube-blue/5">
-              <div className="flex items-center gap-3">
-                <RefreshCw className="w-5 h-5 animate-spin text-cube-blue" />
+            <Card className="p-6 border-cube-blue/30 bg-cube-blue/5">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <CubeLoader size="sm" message="" />
+                </div>
                 <div>
                   <span className="text-sm font-medium text-foreground">
                     Sincronizando {dataGaps.missingDays} dias de dados Meta Ads...

@@ -77,45 +77,50 @@ const FunnelAnalysis = () => {
     endDate: appliedEndDate,
   });
 
-  // Date validation handlers
-  const handleStartDateChange = (date: Date) => {
-    setStartDate(date);
-    // Se a data inicial for maior que a final, ajusta a final
-    if (date > endDate) {
-      setEndDate(date);
-    }
-    // Abre o seletor de data final após selecionar a inicial
-    setTimeout(() => setEndDatePopoverOpen(true), 100);
-  };
+  // Quick date setters with period tracking
+  const [selectedPeriod, setSelectedPeriod] = useState<string | null>('7d'); // Default 7 days
 
-  const handleEndDateChange = (date: Date) => {
-    // Impede que a data final seja menor que a inicial
-    if (date < startDate) return;
-    setEndDate(date);
-    setEndDatePopoverOpen(false);
-  };
-
-  // Quick date setters
   const setQuickDate = (days: number) => {
     setEndDate(new Date());
     setStartDate(subDays(new Date(), days));
+    setSelectedPeriod(days === 0 ? 'today' : `${days}d`);
   };
 
   const setYesterday = () => {
     const yesterday = subDays(new Date(), 1);
     setStartDate(yesterday);
     setEndDate(yesterday);
+    setSelectedPeriod('yesterday');
   };
 
   const setThisMonth = () => {
     setStartDate(startOfMonth(new Date()));
     setEndDate(new Date());
+    setSelectedPeriod('thisMonth');
   };
 
   const setLastMonth = () => {
     const lastMonth = subMonths(new Date(), 1);
     setStartDate(startOfMonth(lastMonth));
     setEndDate(endOfMonth(lastMonth));
+    setSelectedPeriod('lastMonth');
+  };
+
+  // Clear selected period when dates are manually changed
+  const handleStartDateChange = (date: Date) => {
+    setStartDate(date);
+    setSelectedPeriod(null); // Custom date selection
+    if (date > endDate) {
+      setEndDate(date);
+    }
+    setTimeout(() => setEndDatePopoverOpen(true), 100);
+  };
+
+  const handleEndDateChange = (date: Date) => {
+    if (date < startDate) return;
+    setEndDate(date);
+    setSelectedPeriod(null); // Custom date selection
+    setEndDatePopoverOpen(false);
   };
 
   // Cleanup polling on unmount
@@ -778,12 +783,54 @@ const FunnelAnalysis = () => {
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={() => setQuickDate(0)}>Hoje</Button>
-                  <Button variant="outline" size="sm" onClick={setYesterday}>Ontem</Button>
-                  <Button variant="outline" size="sm" onClick={() => setQuickDate(7)}>7 dias</Button>
-                  <Button variant="outline" size="sm" onClick={() => setQuickDate(30)}>30 dias</Button>
-                  <Button variant="outline" size="sm" onClick={setThisMonth}>Este mês</Button>
-                  <Button variant="outline" size="sm" onClick={setLastMonth}>Mês passado</Button>
+                  <Button 
+                    variant={selectedPeriod === 'today' ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={() => setQuickDate(0)}
+                    className={cn(selectedPeriod === 'today' && "ring-2 ring-primary/30")}
+                  >
+                    Hoje
+                  </Button>
+                  <Button 
+                    variant={selectedPeriod === 'yesterday' ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={setYesterday}
+                    className={cn(selectedPeriod === 'yesterday' && "ring-2 ring-primary/30")}
+                  >
+                    Ontem
+                  </Button>
+                  <Button 
+                    variant={selectedPeriod === '7d' ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={() => setQuickDate(7)}
+                    className={cn(selectedPeriod === '7d' && "ring-2 ring-primary/30")}
+                  >
+                    7 dias
+                  </Button>
+                  <Button 
+                    variant={selectedPeriod === '30d' ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={() => setQuickDate(30)}
+                    className={cn(selectedPeriod === '30d' && "ring-2 ring-primary/30")}
+                  >
+                    30 dias
+                  </Button>
+                  <Button 
+                    variant={selectedPeriod === 'thisMonth' ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={setThisMonth}
+                    className={cn(selectedPeriod === 'thisMonth' && "ring-2 ring-primary/30")}
+                  >
+                    Este mês
+                  </Button>
+                  <Button 
+                    variant={selectedPeriod === 'lastMonth' ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={setLastMonth}
+                    className={cn(selectedPeriod === 'lastMonth' && "ring-2 ring-primary/30")}
+                  >
+                    Mês passado
+                  </Button>
                 </div>
 
                 <div className="flex items-center gap-2">

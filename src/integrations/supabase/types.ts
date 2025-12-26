@@ -845,6 +845,7 @@ export type Database = {
           first_meta_ad_id: string | null
           first_meta_adset_id: string | null
           first_meta_campaign_id: string | null
+          first_name: string | null
           first_page_name: string | null
           first_purchase_at: string | null
           first_seen_at: string
@@ -861,6 +862,7 @@ export type Database = {
           id: string
           instagram: string | null
           last_activity_at: string
+          last_name: string | null
           last_offer_code: string | null
           last_offer_name: string | null
           last_product_code: string | null
@@ -904,6 +906,7 @@ export type Database = {
           first_meta_ad_id?: string | null
           first_meta_adset_id?: string | null
           first_meta_campaign_id?: string | null
+          first_name?: string | null
           first_page_name?: string | null
           first_purchase_at?: string | null
           first_seen_at?: string
@@ -920,6 +923,7 @@ export type Database = {
           id?: string
           instagram?: string | null
           last_activity_at?: string
+          last_name?: string | null
           last_offer_code?: string | null
           last_offer_name?: string | null
           last_product_code?: string | null
@@ -963,6 +967,7 @@ export type Database = {
           first_meta_ad_id?: string | null
           first_meta_adset_id?: string | null
           first_meta_campaign_id?: string | null
+          first_name?: string | null
           first_page_name?: string | null
           first_purchase_at?: string | null
           first_seen_at?: string
@@ -979,6 +984,7 @@ export type Database = {
           id?: string
           instagram?: string | null
           last_activity_at?: string
+          last_name?: string | null
           last_offer_code?: string | null
           last_offer_name?: string | null
           last_product_code?: string | null

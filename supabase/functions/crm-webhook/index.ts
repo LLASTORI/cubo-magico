@@ -353,15 +353,14 @@ function normalizePayload(
     };
   }
 
-  // Join first_name + last_name into name if name is not already set
+  // Build full name from first_name + last_name if name is not already set
+  // Keep first_name and last_name as separate fields for the database
   if (!normalized.name && (normalized.first_name || normalized.last_name)) {
     const parts = [
       normalized.first_name as string,
       normalized.last_name as string
     ].filter(Boolean);
     normalized.name = parts.join(' ').trim();
-    delete normalized.first_name;
-    delete normalized.last_name;
   }
 
   return normalized as NormalizedPayload;
@@ -492,6 +491,8 @@ serve(async (req) => {
         project_id: webhookKey.project_id,
         email,
         name: body.name || null,
+        first_name: body.first_name || null,
+        last_name: body.last_name || null,
         phone: body.phone || null,
         phone_ddd: body.phone_ddd || null,
         phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
@@ -549,6 +550,8 @@ serve(async (req) => {
 
       // Only update if new value is provided and not empty
       if (body.name) updateFields.name = body.name;
+      if (body.first_name) updateFields.first_name = body.first_name;
+      if (body.last_name) updateFields.last_name = body.last_name;
       if (body.phone) updateFields.phone = body.phone;
       if (body.phone_ddd) updateFields.phone_ddd = body.phone_ddd;
       if (body.phone_country_code || body.country) {

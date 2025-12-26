@@ -25,7 +25,8 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
   const [fullPhone, setFullPhone] = useState('');
   
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone_country_code: '55',
     phone_ddd: '',
@@ -48,7 +49,8 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
 
   const resetForm = () => {
     setFormData({
-      name: '',
+      first_name: '',
+      last_name: '',
       email: '',
       phone_country_code: '55',
       phone_ddd: '',
@@ -115,11 +117,16 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
         .map(t => t.trim())
         .filter(t => t.length > 0);
 
+      // Construir nome completo a partir de first_name e last_name
+      const fullName = [formData.first_name.trim(), formData.last_name.trim()].filter(Boolean).join(' ') || null;
+
       const { data, error } = await supabase
         .from('crm_contacts')
         .insert({
           project_id: currentProject.id,
-          name: formData.name.trim() || null,
+          name: fullName,
+          first_name: formData.first_name.trim() || null,
+          last_name: formData.last_name.trim() || null,
           email: formData.email.toLowerCase().trim(),
           phone_country_code: formData.phone_country_code || '55',
           phone_ddd: formData.phone_ddd || null,
@@ -166,13 +173,23 @@ export function CreateContactDialog({ open, onOpenChange, onSuccess }: CreateCon
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label htmlFor="name">Nome</Label>
+            <div>
+              <Label htmlFor="first_name">Primeiro Nome</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Nome completo"
+                id="first_name"
+                value={formData.first_name}
+                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                placeholder="Primeiro nome"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="last_name">Sobrenome</Label>
+              <Input
+                id="last_name"
+                value={formData.last_name}
+                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                placeholder="Sobrenome"
               />
             </div>
             

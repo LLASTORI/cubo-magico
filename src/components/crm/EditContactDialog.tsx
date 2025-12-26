@@ -19,6 +19,8 @@ interface EditContactDialogProps {
 export function EditContactDialog({ open, onOpenChange, contact, onSave, isPending }: EditContactDialogProps) {
   const [formData, setFormData] = useState({
     name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone_country_code: '55',
     phone_ddd: '',
@@ -41,9 +43,11 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
 
   useEffect(() => {
     if (contact) {
-      const countryCode = (contact as any).phone_country_code || '55';
+      const countryCode = contact.phone_country_code || '55';
       setFormData({
         name: contact.name || '',
+        first_name: contact.first_name || '',
+        last_name: contact.last_name || '',
         email: contact.email || '',
         phone_country_code: countryCode,
         phone_ddd: contact.phone_ddd || '',
@@ -84,7 +88,12 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    // Atualiza name baseado em first_name e last_name se foram preenchidos
+    const updatedData = { ...formData };
+    if (formData.first_name || formData.last_name) {
+      updatedData.name = [formData.first_name, formData.last_name].filter(Boolean).join(' ');
+    }
+    onSave(updatedData);
   };
 
   const estados = [
@@ -103,13 +112,23 @@ export function EditContactDialog({ open, onOpenChange, contact, onSave, isPendi
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Dados básicos */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label htmlFor="name">Nome</Label>
+            <div>
+              <Label htmlFor="first_name">Nome</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Nome completo"
+                id="first_name"
+                value={formData.first_name}
+                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                placeholder="Primeiro nome"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="last_name">Sobrenome</Label>
+              <Input
+                id="last_name"
+                value={formData.last_name}
+                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                placeholder="Sobrenome"
               />
             </div>
             

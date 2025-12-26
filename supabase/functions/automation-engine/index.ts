@@ -1312,8 +1312,14 @@ function replaceVariables(text: string, context: ExecutionContext): string {
   
   const contact = context.contact;
   
+  // Compute first_name and last_name from contact data
+  const firstName = contact.first_name || (contact.name ? contact.name.split(' ')[0] : '');
+  const lastName = contact.last_name || (contact.name ? contact.name.split(' ').slice(1).join(' ') : '');
+  
   const replacements: Record<string, string> = {
     '{{nome}}': contact.name || '',
+    '{{primeiro_nome}}': firstName,
+    '{{sobrenome}}': lastName,
     '{{email}}': contact.email || '',
     '{{telefone}}': contact.phone || '',
     '{{cidade}}': contact.city || '',

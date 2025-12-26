@@ -177,7 +177,9 @@ export function NodeConfigPanel({ node, open, onOpenChange, onSave, onDelete }: 
 // Message Config
 function MessageNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
   const contactVariables = [
-    { key: '{{nome}}', label: 'Nome' },
+    { key: '{{nome}}', label: 'Nome Completo' },
+    { key: '{{primeiro_nome}}', label: 'Primeiro Nome' },
+    { key: '{{sobrenome}}', label: 'Sobrenome' },
     { key: '{{email}}', label: 'Email' },
     { key: '{{telefone}}', label: 'Telefone' },
     { key: '{{cidade}}', label: 'Cidade' },
@@ -354,7 +356,9 @@ function ActionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: a
   
   // Contact field variables for templates
   const contactVariables = [
-    { key: '{{nome}}', label: 'Nome' },
+    { key: '{{nome}}', label: 'Nome Completo' },
+    { key: '{{primeiro_nome}}', label: 'Primeiro Nome' },
+    { key: '{{sobrenome}}', label: 'Sobrenome' },
     { key: '{{email}}', label: 'Email' },
     { key: '{{telefone}}', label: 'Telefone' },
     { key: '{{cidade}}', label: 'Cidade' },
@@ -1094,7 +1098,9 @@ function MenuNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any
   const [optionInput, setOptionInput] = useState('');
 
   const contactVariables = [
-    { key: '{{nome}}', label: 'Nome' },
+    { key: '{{nome}}', label: 'Nome Completo' },
+    { key: '{{primeiro_nome}}', label: 'Primeiro Nome' },
+    { key: '{{sobrenome}}', label: 'Sobrenome' },
     { key: '{{email}}', label: 'Email' },
     { key: '{{telefone}}', label: 'Telefone' },
   ];

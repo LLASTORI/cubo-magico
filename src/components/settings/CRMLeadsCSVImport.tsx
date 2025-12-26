@@ -16,6 +16,8 @@ import { Upload, FileSpreadsheet, X, Plus, CheckCircle, AlertCircle, Loader2 } f
 interface ParsedLead {
   email: string;
   name?: string;
+  first_name?: string;
+  last_name?: string;
   phone?: string;
   phone_ddd?: string;
   document?: string;
@@ -144,7 +146,9 @@ export function CRMLeadsCSVImport() {
           // Map common field names
           const fieldMap: Record<string, string> = {
             'email': 'email', 'e-mail': 'email', 'e_mail': 'email', 'mail': 'email',
-            'nome': 'name', 'name': 'name', 'nome_completo': 'name', 'full_name': 'name', 'firstname': 'name', 'first_name': 'name',
+            'nome': 'name', 'name': 'name', 'nome_completo': 'name', 'full_name': 'name',
+            'primeiro_nome': 'first_name', 'first_name': 'first_name', 'firstname': 'first_name',
+            'sobrenome': 'last_name', 'last_name': 'last_name', 'lastname': 'last_name', 'segundo_nome': 'last_name', 'surname': 'last_name',
             'telefone': 'phone', 'phone': 'phone', 'celular': 'phone', 'whatsapp': 'phone',
             'ddd': 'phone_ddd', 'phone_ddd': 'phone_ddd',
             'cpf': 'document', 'cnpj': 'document', 'documento': 'document', 'document': 'document',
@@ -295,6 +299,8 @@ export function CRMLeadsCSVImport() {
               .from('crm_contacts')
               .update({
                 name: lead.name || undefined,
+                first_name: lead.first_name || undefined,
+                last_name: lead.last_name || undefined,
                 phone: lead.phone || undefined,
                 phone_ddd: lead.phone_ddd || undefined,
                 document: lead.document || undefined,
@@ -320,6 +326,8 @@ export function CRMLeadsCSVImport() {
                 project_id: currentProject.id,
                 email,
                 name: lead.name || null,
+                first_name: lead.first_name || null,
+                last_name: lead.last_name || null,
                 phone: lead.phone || null,
                 phone_ddd: lead.phone_ddd || null,
                 document: lead.document || null,

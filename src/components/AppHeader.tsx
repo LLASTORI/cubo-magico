@@ -59,7 +59,7 @@ export const AppHeader = ({
   
   // Check if current page is in the "Busca Rápida" dropdown
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
-  const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard';
+  const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard' || currentPath === '/undefined-offers';
   const isInCRM = currentPath === '/crm' || currentPath.startsWith('/crm/') || currentPath === '/automations' || currentPath.startsWith('/automations/') || currentPath === '/whatsapp' || currentPath === '/crm/kanban';
   
   const handleLogout = async () => {
@@ -105,16 +105,6 @@ export const AppHeader = ({
 
             {/* Right side - Navigation */}
             <div className="flex gap-2 items-center">
-              {/* Agência - sempre visível */}
-              <Button
-                onClick={() => navigate('/agencia')}
-                variant={currentPath === '/agencia' ? "default" : "outline"}
-                className="gap-2"
-              >
-                <Building2 className="w-4 h-4" />
-                Agência
-              </Button>
-
               {currentProject && (
                 <>
                   {/* Visão Geral - only show if not on home */}
@@ -204,18 +194,15 @@ export const AppHeader = ({
                       <Rocket className="w-4 h-4" />
                       Lançamentos
                     </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => navigate('/undefined-offers')} 
+                      className={`gap-2 cursor-pointer ${currentPath === '/undefined-offers' ? 'bg-muted' : ''}`}
+                    >
+                      <Package className="w-4 h-4" />
+                      A Definir
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-
-                {/* A Definir */}
-                <Button
-                  onClick={() => navigate('/undefined-offers')}
-                  variant={currentPath === '/undefined-offers' ? "default" : "outline"}
-                  className="gap-2"
-                >
-                  <Package className="w-4 h-4" />
-                  A Definir
-                </Button>
 
                 {/* CRM Dropdown */}
                 <TooltipProvider>

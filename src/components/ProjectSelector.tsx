@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject, Project } from '@/contexts/ProjectContext';
 import { Button } from '@/components/ui/button';
@@ -10,13 +10,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, FolderOpen, Settings, CheckCircle, AlertCircle } from 'lucide-react';
+import { ChevronDown, FolderOpen, Settings, CheckCircle, AlertCircle, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ProjectSelector = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { projects, currentProject, setCurrentProject, isProjectReady } = useProject();
+  
+  const isOnConsolidado = location.pathname === '/agencia';
 
   const handleSelectProject = (project: Project) => {
     // Skip if same project
@@ -67,8 +70,16 @@ const ProjectSelector = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[240px]">
-        <DropdownMenuLabel>Seus Projetos</DropdownMenuLabel>
+        {/* Consolidado - visão de todos os projetos */}
+        <DropdownMenuItem 
+          onClick={() => navigate('/agencia')}
+          className={`gap-2 cursor-pointer ${isOnConsolidado ? 'bg-accent' : ''}`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Consolidado
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuLabel>Seus Projetos</DropdownMenuLabel>
         {projects.length === 0 ? (
           <DropdownMenuItem disabled>
             Nenhum projeto

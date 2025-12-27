@@ -139,7 +139,8 @@ export function CRMWebhookKeysManager() {
   -H "x-api-key: SUA_API_KEY" \\
   -d '{
     "email": "lead@exemplo.com",
-    "name": "Nome do Lead",
+    "first_name": "João",
+    "last_name": "Silva",
     "phone": "11999999999",
     "tags": ["campanha-x"],
     "page_name": "LP Vendas",
@@ -623,7 +624,8 @@ export function CRMWebhookKeysManager() {
   -H "x-api-key: SUA_API_KEY" \\
   -d '{
     "email": "lead@exemplo.com",
-    "name": "Nome do Lead",
+    "first_name": "João",
+    "last_name": "Silva",
     "phone": "11999999999",
     "tags": ["campanha-x"],
     "page_name": "LP Vendas",

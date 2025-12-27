@@ -1,7 +1,20 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, startOfYear } from "date-fns";
-import { DollarSign, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Calendar, Building2, ExternalLink, ShoppingCart, FolderOpen, RefreshCw, Loader2 } from "lucide-react";
+import { 
+  DollarSign, 
+  TrendingUp, 
+  Target,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
+  Building2,
+  ExternalLink,
+  ShoppingCart,
+  FolderOpen,
+  RefreshCw,
+  Loader2
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,12 +25,14 @@ import { useAgencyOverview } from "@/hooks/useAgencyOverview";
 import { useProject } from "@/contexts/ProjectContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
-    currency: 'BRL'
+    currency: 'BRL',
   }).format(value);
 };
+
 const formatCompactCurrency = (value: number) => {
   if (value >= 1000000) {
     return `R$ ${(value / 1000000).toFixed(1)}M`;
@@ -27,19 +42,17 @@ const formatCompactCurrency = (value: number) => {
   }
   return formatCurrency(value);
 };
+
 const getRoasBadgeClass = (roas: number) => {
   if (roas >= 2) return 'bg-green-500/20 text-green-400 border-green-500/30';
   if (roas >= 1) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
   return 'bg-red-500/20 text-red-400 border-red-500/30';
 };
+
 const AgencyDashboard = () => {
   const navigate = useNavigate();
-  const {
-    setCurrentProject
-  } = useProject();
-  const {
-    toast
-  } = useToast();
+  const { setCurrentProject } = useProject();
+  const { toast } = useToast();
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // Date range state
@@ -82,57 +95,55 @@ const AgencyDashboard = () => {
         break;
     }
   }, [dateRange]);
-  const {
-    projectSummaries,
-    agencyTotals,
-    isLoading,
-    refetchAll
-  } = useAgencyOverview({
+
+  const { projectSummaries, agencyTotals, isLoading, refetchAll } = useAgencyOverview({
     startDate,
-    endDate
+    endDate,
   });
+
   const handleProjectClick = (projectId: string, projectName: string) => {
     // Set the project as current and navigate to overview
-    setCurrentProject({
-      id: projectId,
-      name: projectName
-    } as any);
+    setCurrentProject({ id: projectId, name: projectName } as any);
     navigate('/');
   };
+
   const handleSyncAll = async () => {
     if (isSyncingAll) return;
+    
     setIsSyncingAll(true);
     toast({
       title: 'Sincronização iniciada',
-      description: 'Atualizando dados de todos os projetos...'
+      description: 'Atualizando dados de todos os projetos...',
     });
+
     try {
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('auto-sync', {
-        body: {}
+      const { data, error } = await supabase.functions.invoke('auto-sync', {
+        body: {},
       });
+
       if (error) throw error;
 
       // Refetch data after sync
       await refetchAll();
+
       toast({
         title: 'Sincronização completa',
-        description: `${data.results?.length || 0} projeto(s) processado(s).`
+        description: `${data.results?.length || 0} projeto(s) processado(s).`,
       });
     } catch (error: any) {
       console.error('Sync all error:', error);
       toast({
         title: 'Erro na sincronização',
         description: error.message || 'Não foi possível sincronizar',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     } finally {
       setIsSyncingAll(false);
     }
   };
-  return <div className="min-h-screen bg-background">
+
+  return (
+    <div className="min-h-screen bg-background">
       <AppHeader />
 
       <main className="container mx-auto px-4 md:px-6 py-6 space-y-6">
@@ -144,7 +155,9 @@ const AgencyDashboard = () => {
               <div className="p-2 rounded-lg bg-primary/20">
                 <Building2 className="w-6 h-6 text-primary" />
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">Visão Consolidada de Todos Projetos</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                Visão da Agência
+              </h1>
             </div>
             <p className="text-muted-foreground">
               Consolidado de {agencyTotals.projectCount} projeto{agencyTotals.projectCount !== 1 ? 's' : ''} sob sua gestão
@@ -154,8 +167,17 @@ const AgencyDashboard = () => {
 
         {/* Date Range Selector */}
         <div className="flex items-center justify-end gap-3">
-          <Button onClick={handleSyncAll} disabled={isSyncingAll} variant="outline" size="sm">
-            {isSyncingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+          <Button
+            onClick={handleSyncAll}
+            disabled={isSyncingAll}
+            variant="outline"
+            size="sm"
+          >
+            {isSyncingAll ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
             {isSyncingAll ? 'Sincronizando...' : 'Atualizar Todos'}
           </Button>
           <Select value={dateRange} onValueChange={setDateRange}>
@@ -175,9 +197,12 @@ const AgencyDashboard = () => {
           </Select>
         </div>
 
-        {isLoading ? <div className="flex justify-center py-20">
+        {isLoading ? (
+          <div className="flex justify-center py-20">
             <CubeLoader size="lg" />
-          </div> : projectSummaries.length === 0 ? <Card className="border-border/50">
+          </div>
+        ) : projectSummaries.length === 0 ? (
+          <Card className="border-border/50">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-lg font-medium text-foreground mb-2">Nenhum projeto encontrado</p>
@@ -186,7 +211,9 @@ const AgencyDashboard = () => {
                 Ir para Projetos
               </Button>
             </CardContent>
-          </Card> : <>
+          </Card>
+        ) : (
+          <>
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <Card className="border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-transparent">
@@ -216,7 +243,11 @@ const AgencyDashboard = () => {
               <Card className={`border-${agencyTotals.totalProfit >= 0 ? 'green' : 'red'}-500/30 bg-gradient-to-br from-${agencyTotals.totalProfit >= 0 ? 'green' : 'red'}-500/10 to-transparent`}>
                 <CardContent className="p-4">
                   <div className={`flex items-center gap-2 ${agencyTotals.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
-                    {agencyTotals.totalProfit >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                    {agencyTotals.totalProfit >= 0 ? (
+                      <ArrowUpRight className="w-4 h-4" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4" />
+                    )}
                     <span className="text-xs font-medium">Lucro Total</span>
                   </div>
                   <p className={`text-xl md:text-2xl font-bold ${agencyTotals.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -276,7 +307,12 @@ const AgencyDashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {projectSummaries.map(project => <TableRow key={project.projectId} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => handleProjectClick(project.projectId, project.projectName)}>
+                      {projectSummaries.map((project) => (
+                        <TableRow 
+                          key={project.projectId} 
+                          className="hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={() => handleProjectClick(project.projectId, project.projectName)}
+                        >
                           <TableCell className="font-medium">{project.projectName}</TableCell>
                           <TableCell className="text-right text-blue-400">{formatCompactCurrency(project.investment)}</TableCell>
                           <TableCell className="text-right text-orange-400">{formatCompactCurrency(project.revenue)}</TableCell>
@@ -290,14 +326,19 @@ const AgencyDashboard = () => {
                           </TableCell>
                           <TableCell className="text-right text-purple-400">{project.sales}</TableCell>
                           <TableCell className="text-center">
-                            <Button variant="ghost" size="sm" onClick={e => {
-                        e.stopPropagation();
-                        handleProjectClick(project.projectId, project.projectName);
-                      }}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleProjectClick(project.projectId, project.projectName);
+                              }}
+                            >
                               <ExternalLink className="w-4 h-4" />
                             </Button>
                           </TableCell>
-                        </TableRow>)}
+                        </TableRow>
+                      ))}
                       {/* Total Row */}
                       <TableRow className="bg-primary/10 border-t-2 border-primary/30 font-bold">
                         <TableCell className="font-bold text-primary">TOTAL AGÊNCIA</TableCell>
@@ -319,8 +360,11 @@ const AgencyDashboard = () => {
                 </div>
               </CardContent>
             </Card>
-          </>}
+          </>
+        )}
       </main>
-    </div>;
+    </div>
+  );
 };
+
 export default AgencyDashboard;

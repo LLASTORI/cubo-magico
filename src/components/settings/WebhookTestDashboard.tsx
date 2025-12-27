@@ -128,12 +128,14 @@ interface WebhookTestDashboardProps {
 const EXAMPLE_PAYLOADS = {
   basic: {
     email: "teste@email.com",
-    nome: "João Silva",
+    primeiro_nome: "João",
+    sobrenome: "Silva",
     telefone: "11999999999"
   },
   hotmart: {
     email: "cliente@hotmart.com",
-    nome_completo: "Maria Santos",
+    first_name: "Maria",
+    last_name: "Santos",
     celular: "21988887777",
     cpf: "12345678900",
     sck: "facebook",
@@ -155,7 +157,8 @@ const EXAMPLE_PAYLOADS = {
   },
   activecampaign: {
     email_address: "contato@active.com",
-    fullname: "Ana Costa",
+    primeiro_nome: "Ana",
+    sobrenome: "Costa",
     mobile: "41966665555",
     source: "instagram",
     campaign: "stories_anuncio",
@@ -396,10 +399,11 @@ export function WebhookTestDashboard({ apiKey, webhookUrl }: WebhookTestDashboar
             <strong>Dica:</strong> O webhook aceita campos em diversos formatos:
           </p>
           <ul className="text-sm text-muted-foreground mt-1 list-disc list-inside">
+            <li><code className="text-xs">first_name + last_name</code> - Recomendado (serão salvos separadamente)</li>
+            <li><code className="text-xs">primeiro_nome + sobrenome</code> - Aliases em português</li>
             <li><code className="text-xs">utm_*</code> - Formato padrão de UTM</li>
             <li><code className="text-xs">sck_*</code> - Formato Hotmart</li>
             <li><code className="text-xs">source, campaign, medium</code> - Aliases sem prefixo</li>
-            <li><code className="text-xs">origem, campanha, midia</code> - Aliases em português</li>
           </ul>
         </div>
       </CardContent>

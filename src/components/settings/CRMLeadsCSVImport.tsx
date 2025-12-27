@@ -602,7 +602,10 @@ export function CRMLeadsCSVImport() {
               Coluna obrigatória: <code className="bg-background px-1 rounded">email</code>
             </p>
             <p className="text-xs text-muted-foreground">
-              Colunas opcionais: nome, telefone, ddd, documento, instagram, tags, utm_source, utm_campaign, cidade, estado, etc.
+              Colunas de nome: <code className="bg-background px-1 rounded">first_name</code> (ou primeiro_nome) + <code className="bg-background px-1 rounded">last_name</code> (ou sobrenome) — recomendado
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Outras colunas: telefone, ddd, documento, instagram, tags, utm_source, utm_campaign, cidade, estado, etc.
             </p>
             <p className="text-xs text-muted-foreground">
               Colunas não reconhecidas serão salvas em "campos personalizados".

@@ -746,16 +746,26 @@ async function executeMessageNode(supabase: any, node: FlowNode, context: Execut
 async function executeMediaNode(supabase: any, node: FlowNode, context: ExecutionContext) {
   const { media_type, media_url, caption } = node.config;
   
+  console.log(`[Automation Engine] Media node config:`, JSON.stringify({ media_type, media_url: media_url?.substring(0, 80), caption: caption?.substring(0, 50) }));
+  
   if (!media_url) {
-    console.log('[Automation Engine] Media node has no URL');
+    console.log('[Automation Engine] Media node has no URL - skipping');
     return;
+  }
+
+  if (!media_type) {
+    console.log('[Automation Engine] Media node has no type - defaulting to image');
   }
 
   const processedCaption = caption ? replaceVariables(caption, context) : '';
   
-  await sendWhatsAppMedia(supabase, context, media_type, media_url, processedCaption);
-  
-  console.log(`[Automation Engine] Media sent: ${media_type}`);
+  try {
+    await sendWhatsAppMedia(supabase, context, media_type || 'image', media_url, processedCaption);
+    console.log(`[Automation Engine] Media sent successfully: ${media_type || 'image'}`);
+  } catch (error) {
+    console.error(`[Automation Engine] Failed to send media:`, error instanceof Error ? error.message : error);
+    throw error;
+  }
 }
 
 // Execute delay node

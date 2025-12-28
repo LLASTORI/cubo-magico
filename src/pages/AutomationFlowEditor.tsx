@@ -296,13 +296,13 @@ function FlowEditor() {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {flow.is_active ? 'Ativo' : 'Inativo'}
-              </span>
               <Switch
                 checked={flow.is_active}
                 onCheckedChange={(checked) => toggleFlow.mutate({ flowId: flow.id, isActive: checked })}
               />
+              <span className="text-sm text-muted-foreground">
+                {flow.is_active ? 'Ativo' : 'Inativo'}
+              </span>
             </div>
             <Badge variant={flow.is_active ? 'default' : 'secondary'} className="gap-1">
               {flow.is_active ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}

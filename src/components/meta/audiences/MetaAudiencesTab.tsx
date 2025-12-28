@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, RefreshCw, Users, AlertCircle, Clock, Play, Pause, Trash2, Copy, History, Loader2 } from 'lucide-react';
+import { Plus, RefreshCw, Users, AlertCircle, Clock, Play, Pause, Trash2, Copy, History, Loader2, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -21,6 +21,7 @@ import {
 
 import { useMetaAudiences, MetaAdAudience } from '@/hooks/useMetaAudiences';
 import { MetaAudienceDialog } from './MetaAudienceDialog';
+import { MetaAudienceEditDialog } from './MetaAudienceEditDialog';
 import { MetaLookalikeDialog } from './MetaLookalikeDialog';
 import { MetaAudienceSyncLogs } from './MetaAudienceSyncLogs';
 
@@ -48,7 +49,7 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
   const [editAudience, setEditAudience] = useState<MetaAdAudience | null>(null);
   const [lookalikeAudience, setLookalikeAudience] = useState<MetaAdAudience | null>(null);
   const [logsAudience, setLogsAudience] = useState<MetaAdAudience | null>(null);
-  const [deleteAudience, setDeleteAudience] = useState<MetaAdAudience | null>(null);
+  const [deleteAudienceItem, setDeleteAudienceItem] = useState<MetaAdAudience | null>(null);
 
   const {
     audiences,
@@ -67,9 +68,9 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
   };
 
   const handleDelete = async () => {
-    if (deleteAudience) {
-      await deleteAudienceMutation.mutateAsync(deleteAudience.id);
-      setDeleteAudience(null);
+    if (deleteAudienceItem) {
+      await deleteAudienceMutation.mutateAsync(deleteAudienceItem.id);
+      setDeleteAudienceItem(null);
     }
   };
 
@@ -286,7 +287,20 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setDeleteAudience(audience)}
+                                onClick={() => setEditAudience(audience)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Editar</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeleteAudienceItem(audience)}
                                 className="text-destructive hover:text-destructive"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -366,13 +380,23 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
         />
       )}
 
+      {/* Edit Dialog */}
+      {editAudience && (
+        <MetaAudienceEditDialog
+          open={!!editAudience}
+          onOpenChange={() => setEditAudience(null)}
+          audience={editAudience}
+          projectId={projectId}
+        />
+      )}
+
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteAudience} onOpenChange={() => setDeleteAudience(null)}>
+      <AlertDialog open={!!deleteAudienceItem} onOpenChange={() => setDeleteAudienceItem(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir público?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação irá remover o público "{deleteAudience?.name}" do Meta Ads e do sistema. 
+              Esta ação irá remover o público "{deleteAudienceItem?.name}" do Meta Ads e do sistema. 
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>

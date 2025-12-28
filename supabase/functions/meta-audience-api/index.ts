@@ -65,15 +65,14 @@ function getLastName(fullName: string): string {
   return parts.slice(1).join(' ')
 }
 
-// Build contact query based on segment config
-function buildContactQuery(
+// Build contact query based on segment config - returns filters only, no select
+function buildContactFilters(
   supabase: any,
   projectId: string,
   segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
 ) {
   let query = supabase
     .from('crm_contacts')
-    .select('id, email, phone, phone_country_code, name, first_name, last_name')
     .eq('project_id', projectId)
   
   const { tags, operator } = segmentConfig
@@ -92,6 +91,16 @@ function buildContactQuery(
   query = query.or('email.neq.null,phone.neq.null')
   
   return query
+}
+
+// Build contact query with select for fetching data
+function buildContactQuery(
+  supabase: any,
+  projectId: string,
+  segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
+) {
+  return buildContactFilters(supabase, projectId, segmentConfig)
+    .select('id, email, phone, phone_country_code, name, first_name, last_name')
 }
 
 Deno.serve(async (req) => {
@@ -135,6 +144,10 @@ Deno.serve(async (req) => {
     switch (action) {
       case 'create_audience':
         result = await createAudience(supabase, serviceSupabase, body)
+        break
+
+      case 'update_audience':
+        result = await updateAudience(supabase, serviceSupabase, body)
         break
 
       case 'sync_audience':
@@ -239,14 +252,16 @@ async function getEstimatedSize(
 ) {
   console.log('Getting estimated size for segment:', segmentConfig)
   
-  const query = buildContactQuery(supabase, projectId, segmentConfig)
-  const { count, error } = await query.select('id', { count: 'exact', head: true })
+  // Use buildContactFilters (no select) and then add count-only select
+  const { count, error } = await buildContactFilters(supabase, projectId, segmentConfig)
+    .select('id', { count: 'exact', head: true })
   
   if (error) {
     console.error('Error getting estimated size:', error)
     throw error
   }
   
+  console.log('Estimated size result:', count)
   return { estimatedSize: count || 0 }
 }
 
@@ -344,6 +359,95 @@ async function createAudience(
     audience,
     syncResult,
   }
+}
+
+// Update an existing audience
+async function updateAudience(
+  supabase: any,
+  serviceSupabase: any,
+  params: {
+    audienceId: string
+    name?: string
+    segmentConfig?: { tags: string[], operator: 'AND' | 'OR' }
+    syncFrequency?: string
+  }
+) {
+  const { audienceId, name, segmentConfig, syncFrequency } = params
+  
+  console.log('Updating audience:', { audienceId, name, segmentConfig, syncFrequency })
+  
+  // Get audience details
+  const { data: audience, error: audienceError } = await supabase
+    .from('meta_ad_audiences')
+    .select('*')
+    .eq('id', audienceId)
+    .single()
+  
+  if (audienceError || !audience) {
+    throw new Error('Público não encontrado')
+  }
+  
+  // Build update object
+  const updateData: any = { updated_at: new Date().toISOString() }
+  
+  if (name) {
+    updateData.name = name
+    
+    // Also update name in Meta if connected
+    const { data: credentials } = await supabase
+      .from('meta_credentials')
+      .select('access_token, expires_at')
+      .eq('project_id', audience.project_id)
+      .maybeSingle()
+    
+    if (credentials?.access_token && audience.meta_audience_id) {
+      try {
+        const response = await fetch(
+          `${GRAPH_API_BASE}/${audience.meta_audience_id}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              access_token: credentials.access_token,
+              name: name,
+            }),
+          }
+        )
+        const result = await response.json()
+        if (result.error) {
+          console.warn('Failed to update name in Meta:', result.error)
+        }
+      } catch (e) {
+        console.warn('Error updating name in Meta:', e)
+      }
+    }
+  }
+  
+  if (segmentConfig) {
+    updateData.segment_config = segmentConfig
+    // Recalculate estimated size
+    const { estimatedSize } = await getEstimatedSize(supabase, audience.project_id, segmentConfig)
+    updateData.estimated_size = estimatedSize
+  }
+  
+  if (syncFrequency) {
+    updateData.sync_frequency = syncFrequency
+  }
+  
+  // Update in database
+  const { data: updated, error: updateError } = await serviceSupabase
+    .from('meta_ad_audiences')
+    .update(updateData)
+    .eq('id', audienceId)
+    .select()
+    .single()
+  
+  if (updateError) {
+    console.error('Error updating audience:', updateError)
+    throw new Error('Erro ao atualizar público')
+  }
+  
+  return { success: true, audience: updated }
 }
 
 // Sync an audience with Meta (delta sync)

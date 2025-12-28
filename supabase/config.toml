@@ -35,3 +35,7 @@ verify_jwt = false
 [functions.automation-engine]
 verify_jwt = false
 max_duration = 300
+
+[functions.meta-audience-api]
+verify_jwt = true
+max_duration = 300

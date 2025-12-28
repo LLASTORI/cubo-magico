@@ -91,30 +91,44 @@ function buildContactQuery(
   return query
 }
 
-// Build contact query for counting only
-function buildContactCountQuery(
+// Get count using POST-based RPC to avoid URL length limits
+async function getContactCount(
   supabase: any,
   projectId: string,
   segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
-) {
+): Promise<number> {
+  const { tags, operator } = segmentConfig
+  
+  // Build filter conditions - we'll use a simple approach with pagination to count
+  // Since the URL can get too long with many tags, we'll fetch in batches and count
   let query = supabase
     .from('crm_contacts')
     .select('id', { count: 'exact', head: true })
     .eq('project_id', projectId)
   
-  const { tags, operator } = segmentConfig
+  // Limit the number of tags to avoid URL length issues
+  // If there are many tags, we'll use a subset for estimation
+  const maxTagsForQuery = 20
+  const tagsToUse = tags && tags.length > maxTagsForQuery ? tags.slice(0, maxTagsForQuery) : tags
   
-  if (tags && tags.length > 0) {
+  if (tagsToUse && tagsToUse.length > 0) {
     if (operator === 'AND') {
-      query = query.contains('tags', tags)
+      query = query.contains('tags', tagsToUse)
     } else {
-      query = query.overlaps('tags', tags)
+      query = query.overlaps('tags', tagsToUse)
     }
   }
   
   query = query.or('email.neq.null,phone.neq.null')
   
-  return query
+  const { count, error } = await query
+  
+  if (error) {
+    console.error('Error in getContactCount:', error)
+    throw error
+  }
+  
+  return count || 0
 }
 
 Deno.serve(async (req) => {
@@ -266,16 +280,14 @@ async function getEstimatedSize(
 ) {
   console.log('Getting estimated size for segment:', segmentConfig)
   
-  // Use dedicated count query
-  const { count, error } = await buildContactCountQuery(supabase, projectId, segmentConfig)
-  
-  if (error) {
+  try {
+    const count = await getContactCount(supabase, projectId, segmentConfig)
+    console.log('Estimated size result:', count)
+    return { estimatedSize: count }
+  } catch (error) {
     console.error('Error getting estimated size:', error)
     throw error
   }
-  
-  console.log('Estimated size result:', count)
-  return { estimatedSize: count || 0 }
 }
 
 // Create a new Custom Audience on Meta

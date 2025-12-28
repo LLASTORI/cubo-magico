@@ -29,13 +29,11 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays 
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
-import { useQueryClient } from "@tanstack/react-query";
 
 const FunnelAnalysis = () => {
   const { currentProject } = useProject();
   const { isModuleEnabled } = useProjectModules();
   const isMetaAdsEnabled = isModuleEnabled('meta_ads');
-  const queryClient = useQueryClient();
   
   // Single source of truth for dates
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
@@ -690,46 +688,29 @@ const FunnelAnalysis = () => {
     return false; // No gaps to fill
   }, [startPolling]);
 
-  // Auto-fill gaps when detected (runs after checkDataGaps updates state)
-  useEffect(() => {
-    if (dataGaps && dataGaps.missingDays > 0 && !metaSyncInProgress && !isSyncing && currentProject?.id && activeAccountIds.length > 0) {
-      console.log('[AutoFill] Gaps detected, starting auto-fill...');
-      // Auto-fill the gaps silently
-      const fillGaps = async () => {
-        setDataGaps(null); // Clear the warning immediately
-        await autoFillGaps(currentProject.id, activeAccountIds, appliedStartDate, appliedEndDate);
-      };
-      fillGaps();
-    }
-  }, [dataGaps, metaSyncInProgress, isSyncing, currentProject?.id, activeAccountIds, appliedStartDate, appliedEndDate, autoFillGaps]);
+  // Note: Auto-fill is now disabled - user must click sync button to sync data
+  // This prevents confusing automatic re-syncs when navigating or changing periods
+  // Gaps are still detected and shown to the user via the warning alert
 
-  // Simple search - apply filters and auto-fill gaps if needed
-  const handleSearch = async () => {
-    // Invalidate all insights cache to force fresh fetch
-    await queryClient.invalidateQueries({ queryKey: ['insights'] });
-    await queryClient.invalidateQueries({ queryKey: ['meta-insights'] });
-    
+  // Simple search - apply filters without auto-syncing
+  // The data will be fetched from cache if available
+  const handleSearch = useCallback(async () => {
+    // Only apply dates - don't invalidate cache unnecessarily
+    // The query will automatically fetch with new date parameters
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
     setDataGaps(null); // Clear any existing gap warnings
     
-    // Auto-fill gaps if Meta is configured
-    if (currentProject?.id && activeAccountIds.length > 0 && !metaSyncInProgress) {
-      // Small delay to let the UI update first
+    // Trigger a refetch only if dates are different
+    if (startDate.getTime() !== appliedStartDate.getTime() || endDate.getTime() !== appliedEndDate.getTime()) {
+      // Wait for state to update, then check for gaps silently
       setTimeout(async () => {
-        const isFillingGaps = await autoFillGaps(
-          currentProject.id,
-          activeAccountIds,
-          startDate,
-          endDate
-        );
-        
-        if (isFillingGaps) {
-          toast.info('Sincronizando dados Meta Ads para o período selecionado...');
+        if (currentProject?.id && activeAccountIds.length > 0 && !metaSyncInProgress) {
+          await checkDataGaps();
         }
-      }, 500);
+      }, 1000);
     }
-  };
+  }, [startDate, endDate, appliedStartDate, appliedEndDate, currentProject?.id, activeAccountIds, metaSyncInProgress, checkDataGaps]);
 
   // ROAS status
   const roasStatus = useMemo(() => {

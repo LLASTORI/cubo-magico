@@ -31,16 +31,19 @@ interface MetaInsight {
 
 interface MetaCampaign {
   campaign_id: string;
+  campaign_name?: string | null;
   status: string | null;
 }
 
 interface MetaAdset {
   adset_id: string;
+  adset_name?: string | null;
   status: string | null;
 }
 
 interface MetaAd {
   ad_id: string;
+  ad_name?: string | null;
   status: string | null;
 }
 
@@ -187,6 +190,25 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     return { byCampaign, byAdset, byAd };
   }, [metaInsights]);
 
+  // Build name lookup maps
+  const nameMaps = useMemo(() => {
+    const byCampaign = new Map<string, string>();
+    const byAdset = new Map<string, string>();
+    const byAd = new Map<string, string>();
+    
+    metaCampaigns.forEach(c => {
+      if (c.campaign_name) byCampaign.set(c.campaign_id, c.campaign_name);
+    });
+    metaAdsets.forEach(a => {
+      if (a.adset_name) byAdset.set(a.adset_id, a.adset_name);
+    });
+    metaAds.forEach(a => {
+      if (a.ad_name) byAd.set(a.ad_id, a.ad_name);
+    });
+    
+    return { byCampaign, byAdset, byAd };
+  }, [metaCampaigns, metaAdsets, metaAds]);
+
   // Build status lookup maps
   const statusMaps = useMemo(() => {
     const byCampaign = new Map<string, string>();
@@ -299,26 +321,114 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
   };
 
   // Analysis for individual tabs (no drilldown filtering)
+  // Now includes Meta items WITHOUT sales but WITH spend
   const analyzeUTM = useMemo(() => {
-    if (filteredSales.length === 0) {
-      return {
-        source: [],
-        campaign: [],
-        adset: [],
-        placement: [],
-        creative: [],
-        page: [],
-        totalSales: 0,
-        totalRevenue: 0,
-        totalSpend: 0,
-      };
-    }
-
     const totalSales = filteredSales.length;
     const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
     const totalSpend = metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
 
+    // Group sales by UTM field
+    const groupSalesByField = (field: HierarchyLevel) => {
+      const groups: Record<string, { sales: number; revenue: number; metaId: string | null }> = {};
+      
+      filteredSales.forEach(sale => {
+        const value = getFieldValue(sale.parsedUTM, field);
+        const displayName = getDisplayName(value);
+        const valueInBRL = sale.total_price_brl || 0;
+        
+        // Get Meta ID for this sale at the given field level
+        let metaId: string | null = null;
+        if (field === 'campaign') metaId = sale.parsedUTM.campaignId;
+        else if (field === 'adset') metaId = sale.parsedUTM.adsetId;
+        else if (field === 'creative') metaId = sale.parsedUTM.adId;
+        
+        if (!groups[displayName]) {
+          groups[displayName] = { sales: 0, revenue: 0, metaId };
+        }
+        groups[displayName].sales += 1;
+        groups[displayName].revenue += valueInBRL;
+        // Keep first valid metaId
+        if (metaId && !groups[displayName].metaId) {
+          groups[displayName].metaId = metaId;
+        }
+      });
+      
+      return groups;
+    };
+
+    // Analyze by field including Meta items without sales
     const analyzeByField = (field: HierarchyLevel): UTMMetrics[] => {
+      const salesGroups = groupSalesByField(field);
+      const result: UTMMetrics[] = [];
+      const processedMetaIds = new Set<string>();
+
+      // First, add items that have sales
+      Object.entries(salesGroups).forEach(([name, data]) => {
+        let spend = 0;
+        let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | null = null;
+        
+        if (data.metaId) {
+          processedMetaIds.add(data.metaId);
+          if (field === 'campaign') {
+            spend = spendMaps.byCampaign.get(data.metaId) || 0;
+            status = (statusMaps.byCampaign.get(data.metaId) as 'ACTIVE' | 'PAUSED') || null;
+          } else if (field === 'adset') {
+            spend = spendMaps.byAdset.get(data.metaId) || 0;
+            status = (statusMaps.byAdset.get(data.metaId) as 'ACTIVE' | 'PAUSED') || null;
+          } else if (field === 'creative') {
+            spend = spendMaps.byAd.get(data.metaId) || 0;
+            status = (statusMaps.byAd.get(data.metaId) as 'ACTIVE' | 'PAUSED') || null;
+          }
+        }
+
+        const roas = spend > 0 ? data.revenue / spend : (data.sales > 0 ? null : 0);
+        
+        result.push({
+          name,
+          sales: data.sales,
+          revenue: data.revenue,
+          avgTicket: data.sales > 0 ? data.revenue / data.sales : 0,
+          percentage: totalSales > 0 ? (data.sales / totalSales) * 100 : 0,
+          spend,
+          roas,
+          status,
+        });
+      });
+
+      // For campaign, adset, creative: add Meta items with spend but NO sales
+      if (field === 'campaign' || field === 'adset' || field === 'creative') {
+        const spendMap = field === 'campaign' ? spendMaps.byCampaign : 
+                         field === 'adset' ? spendMaps.byAdset : spendMaps.byAd;
+        const statusMap = field === 'campaign' ? statusMaps.byCampaign : 
+                          field === 'adset' ? statusMaps.byAdset : statusMaps.byAd;
+        const nameMap = field === 'campaign' ? nameMaps.byCampaign : 
+                        field === 'adset' ? nameMaps.byAdset : nameMaps.byAd;
+        
+        spendMap.forEach((spend, metaId) => {
+          if (!processedMetaIds.has(metaId) && spend > 0) {
+            const displayName = nameMap.get(metaId) || metaId;
+            const status = (statusMap.get(metaId) as 'ACTIVE' | 'PAUSED') || null;
+            
+            result.push({
+              name: displayName,
+              sales: 0,
+              revenue: 0,
+              avgTicket: 0,
+              percentage: 0,
+              spend,
+              roas: 0, // Zero ROAS for items with spend but no sales
+              status,
+            });
+          }
+        });
+      }
+
+      // Sort by spend (descending) to highlight where money is going
+      return result.sort((a, b) => b.spend - a.spend || b.revenue - a.revenue);
+    };
+
+    // For source, placement, page - keep original logic (sales-based only)
+    const analyzeByFieldSalesOnly = (field: HierarchyLevel): UTMMetrics[] => {
       const groups: Record<string, { sales: number; revenue: number; salesData: typeof filteredSales }> = {};
       
       filteredSales.forEach(sale => {
@@ -351,23 +461,23 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
             status,
           };
         })
-        .sort((a, b) => b.sales - a.sales);
+        .sort((a, b) => b.spend - a.spend || b.revenue - a.revenue);
     };
 
     return {
-      source: analyzeByField('source'),
+      source: analyzeByFieldSalesOnly('source'),
       campaign: analyzeByField('campaign'),
       adset: analyzeByField('adset'),
-      placement: analyzeByField('placement'),
+      placement: analyzeByFieldSalesOnly('placement'),
       creative: analyzeByField('creative'),
-      page: analyzeByField('page'),
+      page: analyzeByFieldSalesOnly('page'),
       totalSales,
       totalRevenue,
       totalSpend,
     };
-  }, [filteredSales, spendMaps, metaInsights]);
+  }, [filteredSales, spendMaps, statusMaps, nameMaps, metaInsights]);
 
-  // Analysis with drilldown filtering applied
+  // Analysis with drilldown filtering applied - also includes Meta items without sales
   const drilldownData = useMemo(() => {
     let filtered = [...filteredSales];
     
@@ -393,27 +503,50 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
 
     const totalSales = filtered.length;
     const totalRevenue = filtered.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const processedMetaIds = new Set<string>();
 
-    const groups: Record<string, { sales: number; revenue: number; salesData: typeof filteredSales }> = {};
+    const groups: Record<string, { sales: number; revenue: number; metaId: string | null }> = {};
     
     filtered.forEach(sale => {
       const value = getFieldValue(sale.parsedUTM, currentField);
       const displayName = getDisplayName(value);
       const valueInBRL = sale.total_price_brl || 0;
       
+      let metaId: string | null = null;
+      if (currentField === 'campaign') metaId = sale.parsedUTM.campaignId;
+      else if (currentField === 'adset') metaId = sale.parsedUTM.adsetId;
+      else if (currentField === 'creative') metaId = sale.parsedUTM.adId;
+      
       if (!groups[displayName]) {
-        groups[displayName] = { sales: 0, revenue: 0, salesData: [] };
+        groups[displayName] = { sales: 0, revenue: 0, metaId };
       }
       groups[displayName].sales += 1;
       groups[displayName].revenue += valueInBRL;
-      groups[displayName].salesData.push(sale);
+      if (metaId && !groups[displayName].metaId) {
+        groups[displayName].metaId = metaId;
+      }
     });
 
     const metrics: UTMMetrics[] = Object.entries(groups)
       .map(([name, data]) => {
-        const spend = getSpendForUTM(currentField, name, data.salesData);
-        const roas = spend > 0 ? data.revenue / spend : null;
-        const status = getStatusForUTM(currentField, data.salesData);
+        let spend = 0;
+        let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | null = null;
+        
+        if (data.metaId) {
+          processedMetaIds.add(data.metaId);
+          if (currentField === 'campaign') {
+            spend = spendMaps.byCampaign.get(data.metaId) || 0;
+            status = (statusMaps.byCampaign.get(data.metaId) as 'ACTIVE' | 'PAUSED') || null;
+          } else if (currentField === 'adset') {
+            spend = spendMaps.byAdset.get(data.metaId) || 0;
+            status = (statusMaps.byAdset.get(data.metaId) as 'ACTIVE' | 'PAUSED') || null;
+          } else if (currentField === 'creative') {
+            spend = spendMaps.byAd.get(data.metaId) || 0;
+            status = (statusMaps.byAd.get(data.metaId) as 'ACTIVE' | 'PAUSED') || null;
+          }
+        }
+        
+        const roas = spend > 0 ? data.revenue / spend : (data.sales > 0 ? null : 0);
         
         return {
           name,
@@ -425,11 +558,41 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
           roas,
           status,
         };
-      })
-      .sort((a, b) => b.sales - a.sales);
+      });
+
+    // For campaign, adset, creative in drilldown: add items with spend but no sales
+    if (currentField === 'campaign' || currentField === 'adset' || currentField === 'creative') {
+      const spendMap = currentField === 'campaign' ? spendMaps.byCampaign : 
+                       currentField === 'adset' ? spendMaps.byAdset : spendMaps.byAd;
+      const statusMap = currentField === 'campaign' ? statusMaps.byCampaign : 
+                        currentField === 'adset' ? statusMaps.byAdset : statusMaps.byAd;
+      const nameMap = currentField === 'campaign' ? nameMaps.byCampaign : 
+                      currentField === 'adset' ? nameMaps.byAdset : nameMaps.byAd;
+      
+      spendMap.forEach((spend, metaId) => {
+        if (!processedMetaIds.has(metaId) && spend > 0) {
+          const displayName = nameMap.get(metaId) || metaId;
+          const status = (statusMap.get(metaId) as 'ACTIVE' | 'PAUSED') || null;
+          
+          metrics.push({
+            name: displayName,
+            sales: 0,
+            revenue: 0,
+            avgTicket: 0,
+            percentage: 0,
+            spend,
+            roas: 0,
+            status,
+          });
+        }
+      });
+    }
+
+    // Sort by spend descending
+    metrics.sort((a, b) => b.spend - a.spend || b.revenue - a.revenue);
 
     return { metrics, totalSales, totalRevenue };
-  }, [filteredSales, drilldownPath, currentField, spendMaps]);
+  }, [filteredSales, drilldownPath, currentField, spendMaps, statusMaps, nameMaps]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -530,17 +693,17 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         </TableRow>
       </TableHeader>
       <TableBody>
-        {metrics.slice(0, 10).map((metric, idx) => (
+        {metrics.slice(0, 15).map((metric, idx) => (
           <TableRow 
             key={`${metric.name}-${idx}`} 
-            className={showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/50" : ""}
+            className={`${showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/50" : ""} ${metric.sales === 0 && metric.spend > 0 ? "bg-red-500/5" : ""}`}
             onClick={() => showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && handleDrilldown(metric)}
           >
             <TableCell>
               <div className="flex items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-full flex-shrink-0" 
-                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                  style={{ backgroundColor: metric.sales === 0 && metric.spend > 0 ? 'hsl(var(--destructive))' : COLORS[idx % COLORS.length] }}
                 />
                 <span className="truncate max-w-[180px]" title={metric.name}>{metric.name}</span>
                 {showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && (
@@ -558,10 +721,20 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
                 </Badge>
               ) : '-'}
             </TableCell>
-            <TableCell className="text-right">{metric.sales}</TableCell>
-            <TableCell className="text-right">{formatCurrency(metric.revenue)}</TableCell>
             <TableCell className="text-right">
-              {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
+              <span className={metric.sales === 0 && metric.spend > 0 ? "text-red-500" : ""}>
+                {metric.sales}
+              </span>
+            </TableCell>
+            <TableCell className="text-right">
+              <span className={metric.sales === 0 && metric.spend > 0 ? "text-red-500" : ""}>
+                {formatCurrency(metric.revenue)}
+              </span>
+            </TableCell>
+            <TableCell className="text-right">
+              <span className={metric.spend > 0 && metric.sales === 0 ? "text-red-500 font-medium" : ""}>
+                {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
+              </span>
             </TableCell>
             <TableCell className="text-right">
               {metric.roas !== null ? (

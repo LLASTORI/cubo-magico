@@ -83,8 +83,8 @@ export function useMetaAudiences(projectId: string | undefined) {
     enabled: !!projectId,
   });
 
-  // Fetch available tags
-  const { data: availableTags, isLoading: tagsLoading } = useQuery({
+  // Fetch available tags - refetch frequently to catch new tags
+  const { data: availableTags, isLoading: tagsLoading, refetch: refetchTags } = useQuery({
     queryKey: ['meta_audience_tags', projectId],
     queryFn: async () => {
       if (!projectId) return [];
@@ -94,9 +94,12 @@ export function useMetaAudiences(projectId: string | undefined) {
       });
       
       if (error) throw error;
+      console.log(`[MetaAudiences] Loaded ${data?.tags?.length || 0} tags from ${data?.totalContacts || 0} contacts`);
       return (data?.tags || []) as AvailableTag[];
     },
     enabled: !!projectId,
+    staleTime: 30000, // Consider stale after 30 seconds
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 
   // Get estimated size for a segment config
@@ -310,6 +313,7 @@ export function useMetaAudiences(projectId: string | undefined) {
     refetch,
     availableTags,
     tagsLoading,
+    refetchTags,
     getEstimatedSize,
     createAudience,
     syncAudience,

@@ -58,6 +58,8 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
     deleteAudience: deleteAudienceMutation,
     toggleAudienceStatus,
     availableTags,
+    tagsLoading,
+    refetchTags,
   } = useMetaAudiences(projectId);
 
   const handleSync = async (audienceId: string) => {
@@ -340,6 +342,8 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
         projectId={projectId}
         adAccounts={adAccounts}
         availableTags={availableTags || []}
+        tagsLoading={tagsLoading}
+        onRefreshTags={refetchTags}
       />
 
       {/* Lookalike Dialog */}

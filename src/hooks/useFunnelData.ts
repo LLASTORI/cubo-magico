@@ -65,6 +65,7 @@ interface MetaInsight {
   ctr: number | null;
   cpc: number | null;
   cpm: number | null;
+  actions?: any | null;
   date_start: string;
   date_stop: string;
 }
@@ -265,17 +266,17 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       let page = 0;
       let hasMore = true;
       
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('meta_insights')
-          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, date_start, date_stop')
-          .eq('project_id', projectId!)
-          .in('ad_account_id', activeAccountIds)
-          .not('ad_id', 'is', null)
-          .gte('date_start', startDateStr)
-          .lte('date_start', endDateStr)
-          .order('id', { ascending: true })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('meta_insights')
+            .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, actions, date_start, date_stop')
+            .eq('project_id', projectId!)
+            .in('ad_account_id', activeAccountIds)
+            .not('ad_id', 'is', null)
+            .gte('date_start', startDateStr)
+            .lte('date_start', endDateStr)
+            .order('id', { ascending: true })
+            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
         if (error) {
           console.error(`[useFunnelData] Error fetching insights:`, error);

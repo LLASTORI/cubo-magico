@@ -178,38 +178,57 @@ Deno.serve(async (req) => {
   }
 })
 
-// Get available tags from contacts
+// Get available tags from contacts - with pagination to get ALL contacts
 async function getAvailableTags(supabase: any, projectId: string) {
   console.log('Getting available tags for project:', projectId)
   
-  const { data, error } = await supabase
-    .from('crm_contacts')
-    .select('tags')
-    .eq('project_id', projectId)
-    .not('tags', 'is', null)
-  
-  if (error) {
-    console.error('Error getting tags:', error)
-    throw error
-  }
-  
-  // Flatten and count unique tags
+  // Use pagination to get ALL contacts (Supabase default limit is 1000)
   const tagCounts = new Map<string, number>()
+  const PAGE_SIZE = 1000
+  let offset = 0
+  let hasMore = true
+  let totalProcessed = 0
   
-  for (const contact of data || []) {
-    if (contact.tags && Array.isArray(contact.tags)) {
-      for (const tag of contact.tags) {
-        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('crm_contacts')
+      .select('tags')
+      .eq('project_id', projectId)
+      .not('tags', 'is', null)
+      .range(offset, offset + PAGE_SIZE - 1)
+    
+    if (error) {
+      console.error('Error getting tags:', error)
+      throw error
+    }
+    
+    // Process this batch
+    for (const contact of data || []) {
+      if (contact.tags && Array.isArray(contact.tags)) {
+        for (const tag of contact.tags) {
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
+        }
       }
     }
+    
+    totalProcessed += (data?.length || 0)
+    
+    // Check if there are more records
+    if (!data || data.length < PAGE_SIZE) {
+      hasMore = false
+    } else {
+      offset += PAGE_SIZE
+    }
   }
+  
+  console.log(`Processed ${totalProcessed} contacts, found ${tagCounts.size} unique tags`)
   
   // Sort by count descending
   const sortedTags = Array.from(tagCounts.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([tag, count]) => ({ tag, count }))
   
-  return { tags: sortedTags }
+  return { tags: sortedTags, totalContacts: totalProcessed }
 }
 
 // Get estimated size based on segment config

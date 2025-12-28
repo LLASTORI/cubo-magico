@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, Users } from 'lucide-react';
+import { Loader2, AlertCircle, Users, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +32,8 @@ interface MetaAudienceDialogProps {
   projectId: string;
   adAccounts: { id: string; account_id: string; account_name: string | null }[];
   availableTags: AvailableTag[];
+  tagsLoading?: boolean;
+  onRefreshTags?: () => void;
 }
 
 export function MetaAudienceDialog({
@@ -40,6 +42,8 @@ export function MetaAudienceDialog({
   projectId,
   adAccounts,
   availableTags,
+  tagsLoading,
+  onRefreshTags,
 }: MetaAudienceDialogProps) {
   const [name, setName] = useState('');
   const [adAccountId, setAdAccountId] = useState('');
@@ -157,7 +161,23 @@ export function MetaAudienceDialog({
           {/* Tags Selection */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Tags do Segmento *</Label>
+              <div className="flex items-center gap-2">
+                <Label>Tags do Segmento *</Label>
+                <span className="text-xs text-muted-foreground">
+                  ({availableTags.length} disponíveis)
+                </span>
+                {onRefreshTags && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6" 
+                    onClick={onRefreshTags}
+                    disabled={tagsLoading}
+                  >
+                    <RefreshCw className={`h-3 w-3 ${tagsLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
+              </div>
               {selectedTags.length > 0 && (
                 <span className="text-sm text-muted-foreground">
                   {selectedTags.length} selecionada(s)

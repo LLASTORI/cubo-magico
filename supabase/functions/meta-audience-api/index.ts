@@ -179,9 +179,9 @@ function buildContactQuery(
       custom_fields
     `)
     .eq('project_id', projectId)
-  
+
   const { tags, operator } = segmentConfig
-  
+
   if (tags && tags.length > 0) {
     if (operator === 'AND') {
       query = query.contains('tags', tags)
@@ -189,10 +189,82 @@ function buildContactQuery(
       query = query.overlaps('tags', tags)
     }
   }
-  
+
   query = query.or('email.neq.null,phone.neq.null')
-  
+
   return query
+}
+
+const CONTACTS_PAGE_SIZE = 1000
+const MAX_TAGS_FOR_URL_FILTER = 40
+
+// Fetch ALL contacts matching a segment (handles the 1000-row limit and avoids huge URL filters)
+async function fetchContactsMatchingSegment(
+  supabase: any,
+  projectId: string,
+  segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
+) {
+  const tags = segmentConfig?.tags || []
+  const operator = segmentConfig?.operator || 'OR'
+
+  // AND with a huge number of tags is practically impossible and also breaks URL-based filters.
+  // We'll short-circuit to avoid timeouts.
+  if (operator === 'AND' && tags.length > MAX_TAGS_FOR_URL_FILTER) {
+    console.log(`[Sync] AND com ${tags.length} tags -> retornando 0 contatos (evitar timeout/URL grande)`) 
+    return []
+  }
+
+  const shouldUseUrlFilter = tags.length > 0 && tags.length <= MAX_TAGS_FOR_URL_FILTER
+  const tagsSet = new Set(tags)
+
+  let all: any[] = []
+  let offset = 0
+
+  while (true) {
+    let q = supabase
+      .from('crm_contacts')
+      .select(
+        `id, email, phone, phone_country_code, name, first_name, last_name, city, state, country, cep, custom_fields, tags`
+      )
+      .eq('project_id', projectId)
+      .or('email.neq.null,phone.neq.null')
+      .range(offset, offset + CONTACTS_PAGE_SIZE - 1)
+
+    if (shouldUseUrlFilter) {
+      q = operator === 'AND' ? q.contains('tags', tags) : q.overlaps('tags', tags)
+    } else if (tags.length > 0 && operator === 'OR') {
+      // Reduz volume quando filtraremos em memória
+      q = q.not('tags', 'is', null)
+    }
+
+    const { data, error } = await q
+    if (error) {
+      console.error('Error fetching contacts page:', { offset, error })
+      throw error
+    }
+
+    const page = data || []
+
+    if (!shouldUseUrlFilter && tags.length > 0) {
+      if (operator === 'OR') {
+        all.push(
+          ...page.filter((c: any) => Array.isArray(c.tags) && c.tags.some((t: any) => tagsSet.has(String(t))))
+        )
+      } else {
+        // AND (apenas quando tags <= MAX_TAGS_FOR_URL_FILTER, mas deixamos por segurança)
+        all.push(
+          ...page.filter((c: any) => Array.isArray(c.tags) && tags.every((t) => c.tags.includes(t)))
+        )
+      }
+    } else {
+      all.push(...page)
+    }
+
+    if (page.length < CONTACTS_PAGE_SIZE) break
+    offset += CONTACTS_PAGE_SIZE
+  }
+
+  return all
 }
 
 // Get count using POST-based RPC to avoid URL length limits
@@ -202,19 +274,19 @@ async function getContactCount(
   segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
 ): Promise<number> {
   const { tags, operator } = segmentConfig
-  
+
   // Build filter conditions - we'll use a simple approach with pagination to count
   // Since the URL can get too long with many tags, we'll fetch in batches and count
   let query = supabase
     .from('crm_contacts')
     .select('id', { count: 'exact', head: true })
     .eq('project_id', projectId)
-  
+
   // Limit the number of tags to avoid URL length issues
   // If there are many tags, we'll use a subset for estimation
   const maxTagsForQuery = 20
   const tagsToUse = tags && tags.length > maxTagsForQuery ? tags.slice(0, maxTagsForQuery) : tags
-  
+
   if (tagsToUse && tagsToUse.length > 0) {
     if (operator === 'AND') {
       query = query.contains('tags', tagsToUse)
@@ -222,16 +294,16 @@ async function getContactCount(
       query = query.overlaps('tags', tagsToUse)
     }
   }
-  
+
   query = query.or('email.neq.null,phone.neq.null')
-  
+
   const { count, error } = await query
-  
+
   if (error) {
     console.error('Error in getContactCount:', error)
     throw error
   }
-  
+
   return count || 0
 }
 
@@ -696,17 +768,13 @@ async function syncAudienceInternal(
     .eq('id', audienceId)
   
   try {
-    // Get current contacts matching segment
-    const { data: contacts, error: contactsError } = await buildContactQuery(
-      serviceSupabase, 
-      projectId, 
+    // Get ALL current contacts matching segment (paginated + safe for many tags)
+    const contacts = await fetchContactsMatchingSegment(
+      serviceSupabase,
+      projectId,
       segmentConfig
     )
-    
-    if (contactsError) {
-      throw new Error('Erro ao buscar contatos')
-    }
-    
+
     console.log(`Found ${contacts?.length || 0} contacts matching segment`)
     
     // Get previously synced contacts

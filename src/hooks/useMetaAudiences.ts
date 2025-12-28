@@ -118,6 +118,19 @@ export function useMetaAudiences(projectId: string | undefined) {
     [projectId]
   );
 
+  const getInvokeErrorMessage = (err: any): string => {
+    const ctxBody = err?.context?.body ?? err?.context?.response?.body
+    if (ctxBody) {
+      try {
+        const parsed = typeof ctxBody === 'string' ? JSON.parse(ctxBody) : ctxBody
+        if (parsed?.error) return String(parsed.error)
+      } catch {
+        // ignore
+      }
+    }
+    return err?.message ? String(err.message) : 'Erro ao executar ação'
+  }
+
   // Create audience mutation
   const createAudience = useMutation({
     mutationFn: async (params: {
@@ -133,8 +146,8 @@ export function useMetaAudiences(projectId: string | undefined) {
           ...params,
         },
       });
-      
-      if (error) throw error;
+
+      if (error) throw new Error(getInvokeErrorMessage(error));
       if (data?.error) throw new Error(data.error);
       return data;
     },

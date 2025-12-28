@@ -447,8 +447,37 @@ async function createAudience(
   const metaResult = await response.json()
   
   if (metaResult.error) {
-    console.error('Meta API error:', metaResult.error)
-    throw new Error(metaResult.error.message || 'Erro ao criar público no Meta')
+    console.error('=== META API ERROR DETAILS ===')
+    console.error('Error Code:', metaResult.error.code)
+    console.error('Error Subcode:', metaResult.error.error_subcode)
+    console.error('Error Message:', metaResult.error.message)
+    console.error('Error Type:', metaResult.error.type)
+    console.error('FBTrace ID:', metaResult.error.fbtrace_id)
+    console.error('Full Error Object:', JSON.stringify(metaResult.error, null, 2))
+    console.error('Request URL:', createUrl)
+    console.error('Ad Account ID:', cleanAdAccountId)
+    console.error('=== END ERROR DETAILS ===')
+    
+    // Provide more helpful error messages based on error codes
+    let errorMessage = metaResult.error.message || 'Erro ao criar público no Meta'
+    
+    if (metaResult.error.code === 2654) {
+      if (metaResult.error.error_subcode === 1713092) {
+        errorMessage = 'Sem permissão de escrita na conta de anúncios. Verifique se o app tem permissão de admin na conta.'
+      } else {
+        errorMessage = `Erro ao criar público (${metaResult.error.code}). Possíveis causas: 1) App em modo desenvolvimento - coloque em Live Mode. 2) Termos de Custom Audience não aceitos. 3) Permissão ads_management não aprovada.`
+      }
+    } else if (metaResult.error.code === 200 && metaResult.error.error_subcode === 1870034) {
+      errorMessage = 'Aceite os termos de Custom Audience em: https://www.facebook.com/ads/manage/customaudiences/tos'
+    } else if (metaResult.error.code === 294) {
+      errorMessage = 'A permissão ads_management é necessária. Verifique se está aprovada no App Review.'
+    } else if (metaResult.error.code === 10) {
+      errorMessage = 'O app não tem permissão para esta ação. Verifique as permissões no Meta Developers.'
+    } else if (metaResult.error.code === 190) {
+      errorMessage = 'Token de acesso inválido. Reconecte sua conta Meta.'
+    }
+    
+    throw new Error(errorMessage)
   }
   
   console.log('Meta audience created:', metaResult)

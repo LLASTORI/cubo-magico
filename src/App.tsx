@@ -39,6 +39,7 @@ import AutomationFlows from "./pages/AutomationFlows";
 import AutomationFlowEditor from "./pages/AutomationFlowEditor";
 import AutomationExecutions from "./pages/AutomationExecutions";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/" element={
                   <ProtectedRoute>
                     <ProjectOverview />

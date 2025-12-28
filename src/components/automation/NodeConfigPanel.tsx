@@ -385,16 +385,16 @@ function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c
                   <SelectValue placeholder={loadingTags ? 'Carregando tags...' : 'Selecione uma tag'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableTags.length > 0 ? (
+                  {loadingTags ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">Carregando...</div>
+                  ) : availableTags.length > 0 ? (
                     availableTags.map((tag) => (
                       <SelectItem key={tag} value={tag}>
                         {tag}
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="" disabled>
-                      {loadingTags ? 'Carregando...' : 'Nenhuma tag encontrada'}
-                    </SelectItem>
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhuma tag encontrada</div>
                   )}
                 </SelectContent>
               </Select>

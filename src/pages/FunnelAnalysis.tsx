@@ -983,23 +983,25 @@ const FunnelAnalysis = () => {
             </Card>
           )}
 
-          {/* Data gaps info with CubeLoader */}
-          {dataGaps && !metaSyncInProgress && !loadingInsights && (
-            <Card className="p-6 border-cube-blue/30 bg-cube-blue/5">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <CubeLoader size="sm" message="" />
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-foreground">
-                    Sincronizando {dataGaps.missingDays} dias de dados Meta Ads...
-                  </span>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Aguarde, os dados serão atualizados automaticamente.
-                  </p>
-                </div>
-              </div>
-            </Card>
+          {/* Data gaps info with action button - only show when not syncing */}
+          {dataGaps && !metaSyncInProgress && !loadingInsights && !isSyncing && (
+            <Alert className="border-yellow-500/50 bg-yellow-500/10">
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700 dark:text-yellow-400 flex items-center justify-between">
+                <span>
+                  <strong>{dataGaps.missingDays} dias sem dados Meta Ads.</strong> Clique em "Preencher Lacunas" para sincronizar.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFillGaps}
+                  className="ml-4"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Preencher Lacunas
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Warning when no Meta investment data */}

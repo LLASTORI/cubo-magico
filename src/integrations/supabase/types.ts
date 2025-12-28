@@ -2369,6 +2369,7 @@ export type Database = {
           id_funil: string
           id_produto: string | null
           id_produto_visual: string | null
+          moeda: string | null
           nome_oferta: string | null
           nome_posicao: string | null
           nome_produto: string
@@ -2378,6 +2379,7 @@ export type Database = {
           tipo_posicao: string | null
           updated_at: string
           valor: number | null
+          valor_original: number | null
         }
         Insert: {
           anotacoes?: string | null
@@ -2390,6 +2392,7 @@ export type Database = {
           id_funil: string
           id_produto?: string | null
           id_produto_visual?: string | null
+          moeda?: string | null
           nome_oferta?: string | null
           nome_posicao?: string | null
           nome_produto: string
@@ -2399,6 +2402,7 @@ export type Database = {
           tipo_posicao?: string | null
           updated_at?: string
           valor?: number | null
+          valor_original?: number | null
         }
         Update: {
           anotacoes?: string | null
@@ -2411,6 +2415,7 @@ export type Database = {
           id_funil?: string
           id_produto?: string | null
           id_produto_visual?: string | null
+          moeda?: string | null
           nome_oferta?: string | null
           nome_posicao?: string | null
           nome_produto?: string
@@ -2420,6 +2425,7 @@ export type Database = {
           tipo_posicao?: string | null
           updated_at?: string
           valor?: number | null
+          valor_original?: number | null
         }
         Relationships: [
           {

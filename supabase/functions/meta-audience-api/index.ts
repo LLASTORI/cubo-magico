@@ -479,26 +479,47 @@ async function createAudience(
   }
 ) {
   const { projectId, adAccountId, name, segmentConfig, syncFrequency } = params
-  
-  console.log('Creating audience:', { projectId, adAccountId, name, segmentConfig })
-  
+
+  const safeName = String(name || '').trim()
+
+  console.log('Creating audience:', { projectId, adAccountId, name: safeName, segmentConfig })
+
   // Get Meta credentials
   const { data: credentials, error: credError } = await supabase
     .from('meta_credentials')
     .select('access_token, expires_at')
     .eq('project_id', projectId)
     .maybeSingle()
-  
+
   if (credError || !credentials) {
     throw new Error('Meta não conectado')
   }
-  
+
   if (credentials.expires_at && new Date(credentials.expires_at) < new Date()) {
     throw new Error('Token Meta expirado. Reconecte sua conta.')
   }
-  
+
   const accessToken = credentials.access_token
-  
+
+  // Prevent duplicates BEFORE calling Meta API
+  // (there is a unique constraint on project_id + ad_account_id + name)
+  const { data: existingAudience, error: existingError } = await serviceSupabase
+    .from('meta_ad_audiences')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('ad_account_id', adAccountId)
+    .eq('name', safeName)
+    .maybeSingle()
+
+  if (existingError) {
+    console.error('Error checking existing audience:', existingError)
+    throw new Error('Erro ao validar público existente')
+  }
+
+  if (existingAudience?.id) {
+    return { error: 'Já existe um público com esse nome nessa conta. Escolha outro nome (ex: "teste publico 2").' }
+  }
+
   // Create Custom Audience on Meta
   // Ensure adAccountId doesn't have duplicate 'act_' prefix
   const cleanAdAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
@@ -513,7 +534,7 @@ async function createAudience(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       access_token: accessToken,
-      name: name,
+      name: safeName,
       subtype: 'CUSTOM',
       description: description,
       customer_file_source: 'USER_PROVIDED_ONLY',
@@ -592,7 +613,7 @@ async function createAudience(
     .insert({
       project_id: projectId,
       ad_account_id: adAccountId,
-      name: name,
+      name: safeName,
       meta_audience_id: metaResult.id,
       segment_type: 'tag',
       segment_config: segmentConfig,
@@ -602,13 +623,23 @@ async function createAudience(
     })
     .select()
     .single()
-  
+
   if (insertError) {
     console.error('Error saving audience:', insertError)
+
     // Try to delete the audience from Meta since we couldn't save it
-    await fetch(`${GRAPH_API_BASE}/${metaResult.id}?access_token=${accessToken}`, {
-      method: 'DELETE',
-    })
+    try {
+      await fetch(`${GRAPH_API_BASE}/${metaResult.id}?access_token=${accessToken}`, {
+        method: 'DELETE',
+      })
+    } catch (_) {
+      // ignore
+    }
+
+    if (insertError.code === '23505') {
+      return { error: 'Já existe um público com esse nome nessa conta. Escolha outro nome (ex: "teste publico 2").' }
+    }
+
     throw new Error('Erro ao salvar público no banco de dados')
   }
   

@@ -431,7 +431,11 @@ async function createAudience(
   // Ensure adAccountId doesn't have duplicate 'act_' prefix
   const cleanAdAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
   const createUrl = `${GRAPH_API_BASE}/${cleanAdAccountId}/customaudiences`
-  
+
+  // IMPORTANT: Meta costuma falhar silenciosamente (ex: #2654) quando enviamos descrições gigantes.
+  // Como nosso segmento pode ter centenas de tags, mantemos a descrição curta e previsível.
+  const description = `Público criado pelo CRM. Segmento por tags (${segmentConfig.operator}) - ${segmentConfig.tags.length} tags.`
+
   const response = await fetch(createUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -439,7 +443,7 @@ async function createAudience(
       access_token: accessToken,
       name: name,
       subtype: 'CUSTOM',
-      description: `Público criado pelo CRM - Tags: ${segmentConfig.tags.join(', ')} (${segmentConfig.operator})`,
+      description: description,
       customer_file_source: 'USER_PROVIDED_ONLY',
     }),
   })

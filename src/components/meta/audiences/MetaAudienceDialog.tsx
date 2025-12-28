@@ -208,6 +208,38 @@ export function MetaAudienceDialog({
               onChange={(e) => setTagSearch(e.target.value)}
             />
 
+            {/* Add/Remove All Buttons */}
+            {filteredTags.length > 0 && (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const filteredTagNames = filteredTags.map(t => t.tag);
+                    setSelectedTags(prev => {
+                      const newTags = new Set(prev);
+                      filteredTagNames.forEach(tag => newTags.add(tag));
+                      return Array.from(newTags);
+                    });
+                  }}
+                >
+                  Adicionar Todas ({filteredTags.length})
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const filteredTagNames = filteredTags.map(t => t.tag);
+                    setSelectedTags(prev => prev.filter(tag => !filteredTagNames.includes(tag)));
+                  }}
+                >
+                  Remover Todas
+                </Button>
+              </div>
+            )}
+
             {/* Available tags */}
             <ScrollArea className="h-48 border rounded-md p-2">
               <div className="space-y-1">

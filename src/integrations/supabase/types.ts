@@ -2023,6 +2023,65 @@ export type Database = {
           },
         ]
       }
+      meta_ad_audiences: {
+        Row: {
+          ad_account_id: string
+          created_at: string
+          error_message: string | null
+          estimated_size: number | null
+          id: string
+          last_sync_at: string | null
+          meta_audience_id: string | null
+          name: string
+          project_id: string
+          segment_config: Json
+          segment_type: string
+          status: string
+          sync_frequency: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          created_at?: string
+          error_message?: string | null
+          estimated_size?: number | null
+          id?: string
+          last_sync_at?: string | null
+          meta_audience_id?: string | null
+          name: string
+          project_id: string
+          segment_config?: Json
+          segment_type?: string
+          status?: string
+          sync_frequency?: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          created_at?: string
+          error_message?: string | null
+          estimated_size?: number | null
+          id?: string
+          last_sync_at?: string | null
+          meta_audience_id?: string | null
+          name?: string
+          project_id?: string
+          segment_config?: Json
+          segment_type?: string
+          status?: string
+          sync_frequency?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ad_audiences_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_ads: {
         Row: {
           ad_account_id: string
@@ -2140,6 +2199,101 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_audience_contacts: {
+        Row: {
+          audience_id: string
+          contact_id: string
+          email_hash: string | null
+          first_name_hash: string | null
+          id: string
+          last_name_hash: string | null
+          phone_hash: string | null
+          removed_at: string | null
+          synced_at: string
+        }
+        Insert: {
+          audience_id: string
+          contact_id: string
+          email_hash?: string | null
+          first_name_hash?: string | null
+          id?: string
+          last_name_hash?: string | null
+          phone_hash?: string | null
+          removed_at?: string | null
+          synced_at?: string
+        }
+        Update: {
+          audience_id?: string
+          contact_id?: string
+          email_hash?: string | null
+          first_name_hash?: string | null
+          id?: string
+          last_name_hash?: string | null
+          phone_hash?: string | null
+          removed_at?: string | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_audience_contacts_audience_id_fkey"
+            columns: ["audience_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_audiences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_audience_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_audience_sync_logs: {
+        Row: {
+          audience_id: string
+          contacts_added: number
+          contacts_removed: number
+          contacts_total: number
+          duration_ms: number | null
+          errors: Json | null
+          executed_at: string
+          id: string
+          status: string
+        }
+        Insert: {
+          audience_id: string
+          contacts_added?: number
+          contacts_removed?: number
+          contacts_total?: number
+          duration_ms?: number | null
+          errors?: Json | null
+          executed_at?: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          audience_id?: string
+          contacts_added?: number
+          contacts_removed?: number
+          contacts_total?: number
+          duration_ms?: number | null
+          errors?: Json | null
+          executed_at?: string
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_audience_sync_logs_audience_id_fkey"
+            columns: ["audience_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_audiences"
             referencedColumns: ["id"]
           },
         ]
@@ -2320,6 +2474,50 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_lookalike_audiences: {
+        Row: {
+          country: string
+          created_at: string
+          error_message: string | null
+          id: string
+          meta_lookalike_id: string | null
+          name: string
+          percentage: number
+          source_audience_id: string
+          status: string
+        }
+        Insert: {
+          country?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          meta_lookalike_id?: string | null
+          name: string
+          percentage?: number
+          source_audience_id: string
+          status?: string
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          meta_lookalike_id?: string | null
+          name?: string
+          percentage?: number
+          source_audience_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_lookalike_audiences_source_audience_id_fkey"
+            columns: ["source_audience_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_audiences"
             referencedColumns: ["id"]
           },
         ]

@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -103,16 +104,19 @@ export function useMetaAudiences(projectId: string | undefined) {
   });
 
   // Get estimated size for a segment config
-  const getEstimatedSize = async (segmentConfig: SegmentConfig): Promise<number> => {
-    if (!projectId) return 0;
-    
-    const { data, error } = await supabase.functions.invoke('meta-audience-api', {
-      body: { action: 'get_estimated_size', projectId, segmentConfig },
-    });
-    
-    if (error) throw error;
-    return data?.estimatedSize || 0;
-  };
+  const getEstimatedSize = useCallback(
+    async (segmentConfig: SegmentConfig): Promise<number> => {
+      if (!projectId) return 0;
+
+      const { data, error } = await supabase.functions.invoke('meta-audience-api', {
+        body: { action: 'get_estimated_size', projectId, segmentConfig },
+      });
+
+      if (error) throw error;
+      return data?.estimatedSize || 0;
+    },
+    [projectId]
+  );
 
   // Create audience mutation
   const createAudience = useMutation({

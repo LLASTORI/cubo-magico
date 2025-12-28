@@ -242,7 +242,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       return allData;
     },
     enabled,
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
   });
 
   // Get active account IDs first before building insights query
@@ -296,8 +297,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       return allData as MetaInsight[];
     },
     enabled: enabled && activeAccountIds.length > 0,
-    staleTime: 30 * 1000, // 30 seconds - prevents excessive refetches
-    gcTime: 60 * 1000, // 1 minute cache
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
   });
 
   // Use unified hook for Meta hierarchy (campaigns, adsets, ads)

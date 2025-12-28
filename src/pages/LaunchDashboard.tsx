@@ -232,7 +232,7 @@ const LaunchDashboard = () => {
             </div>
           </Card>
 
-          {/* Summary Cards */}
+          {/* Summary Cards - Order: Lançamentos, Investimento, Faturamento, Lucro, ROAS, Vendas */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <Card className="p-4 bg-gradient-to-br from-card to-primary/5">
               <div className="flex items-center gap-2 mb-2">
@@ -244,6 +244,16 @@ const LaunchDashboard = () => {
               <p className="text-2xl font-bold text-foreground">{summaryMetrics.funnelCount}</p>
             </Card>
 
+            <Card className="p-4 bg-gradient-to-br from-card to-blue-500/5">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Target className="w-4 h-4 text-blue-600" />
+                </div>
+                <span className="text-xs text-muted-foreground">Investimento</span>
+              </div>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalSpend)}</p>
+            </Card>
+
             <Card className="p-4 bg-gradient-to-br from-card to-green-500/5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="p-2 rounded-lg bg-green-500/10">
@@ -252,36 +262,6 @@ const LaunchDashboard = () => {
                 <span className="text-xs text-muted-foreground">Faturamento</span>
               </div>
               <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalRevenue)}</p>
-            </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-card to-blue-500/5">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <ShoppingCart className="w-4 h-4 text-blue-600" />
-                </div>
-                <span className="text-xs text-muted-foreground">Vendas</span>
-              </div>
-              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalSales}</p>
-            </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-card to-purple-500/5">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  <Target className="w-4 h-4 text-purple-600" />
-                </div>
-                <span className="text-xs text-muted-foreground">Investimento</span>
-              </div>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalSpend)}</p>
-            </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-card to-orange-500/5">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-orange-500/10">
-                  <TrendingUp className="w-4 h-4 text-orange-600" />
-                </div>
-                <span className="text-xs text-muted-foreground">ROAS Geral</span>
-              </div>
-              <p className="text-2xl font-bold text-foreground">{formatNumber(summaryMetrics.roas)}x</p>
             </Card>
 
             <Card className={cn(
@@ -307,6 +287,26 @@ const LaunchDashboard = () => {
                 {formatCurrency(summaryMetrics.profit)}
               </p>
             </Card>
+
+            <Card className="p-4 bg-gradient-to-br from-card to-orange-500/5">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-lg bg-orange-500/10">
+                  <TrendingUp className="w-4 h-4 text-orange-600" />
+                </div>
+                <span className="text-xs text-muted-foreground">ROAS Geral</span>
+              </div>
+              <p className="text-2xl font-bold text-foreground">{formatNumber(summaryMetrics.roas)}x</p>
+            </Card>
+
+            <Card className="p-4 bg-gradient-to-br from-card to-purple-500/5">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <ShoppingCart className="w-4 h-4 text-purple-600" />
+                </div>
+                <span className="text-xs text-muted-foreground">Vendas</span>
+              </div>
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalSales}</p>
+            </Card>
           </div>
 
           {/* Launch Table */}
@@ -331,12 +331,12 @@ const LaunchDashboard = () => {
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-8"></TableHead>
                     <TableHead>Lançamento</TableHead>
+                    <TableHead className="text-right">Investimento</TableHead>
                     <TableHead className="text-right">Faturamento</TableHead>
+                    <TableHead className="text-right">Lucro</TableHead>
+                    <TableHead className="text-right">ROAS</TableHead>
                     <TableHead className="text-right">Vendas</TableHead>
                     <TableHead className="text-right">Ticket Médio</TableHead>
-                    <TableHead className="text-right">Investimento</TableHead>
-                    <TableHead className="text-right">ROAS</TableHead>
-                    <TableHead className="text-right">Lucro</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
@@ -382,17 +382,17 @@ const LaunchDashboard = () => {
                               </div>
                             </div>
                           </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(launch.totalSpend)}
+                          </TableCell>
                           <TableCell className="text-right font-semibold">
                             {formatCurrency(launch.totalRevenue)}
                           </TableCell>
-                          <TableCell className="text-right">
-                            {launch.totalSales}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(launch.avgTicket)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(launch.totalSpend)}
+                          <TableCell className={cn(
+                            "text-right font-semibold",
+                            launch.profit >= 0 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {formatCurrency(launch.profit)}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex flex-col items-end gap-1">
@@ -410,11 +410,11 @@ const LaunchDashboard = () => {
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className={cn(
-                            "text-right font-semibold",
-                            launch.profit >= 0 ? "text-green-600" : "text-red-600"
-                          )}>
-                            {formatCurrency(launch.profit)}
+                          <TableCell className="text-right">
+                            {launch.totalSales}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(launch.avgTicket)}
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge className={cn(status.bg, status.color, "border-0")}>

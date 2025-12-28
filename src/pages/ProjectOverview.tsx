@@ -455,7 +455,7 @@ const ProjectOverview = () => {
                   Evolução Mensal
                 </CardTitle>
                 <CardDescription>
-                  Evolução mensal de receita, investimento e ROAS
+                  Evolução mensal de investimento, receita e ROAS
                 </CardDescription>
               </CardHeader>
               <CardContent>

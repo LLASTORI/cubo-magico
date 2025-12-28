@@ -685,10 +685,10 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         <TableRow>
           <TableHead>Nome</TableHead>
           <TableHead className="text-right">Status</TableHead>
-          <TableHead className="text-right">Vendas</TableHead>
-          <TableHead className="text-right">Receita</TableHead>
           <TableHead className="text-right">Invest.</TableHead>
+          <TableHead className="text-right">Receita</TableHead>
           <TableHead className="text-right">ROAS</TableHead>
+          <TableHead className="text-right">Vendas</TableHead>
           <TableHead className="text-right">%</TableHead>
         </TableRow>
       </TableHeader>
@@ -722,8 +722,8 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
               ) : '-'}
             </TableCell>
             <TableCell className="text-right">
-              <span className={metric.sales === 0 && metric.spend > 0 ? "text-red-500" : ""}>
-                {metric.sales}
+              <span className={metric.spend > 0 && metric.sales === 0 ? "text-red-500 font-medium" : ""}>
+                {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
               </span>
             </TableCell>
             <TableCell className="text-right">
@@ -732,16 +732,16 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
               </span>
             </TableCell>
             <TableCell className="text-right">
-              <span className={metric.spend > 0 && metric.sales === 0 ? "text-red-500 font-medium" : ""}>
-                {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
-              </span>
-            </TableCell>
-            <TableCell className="text-right">
               {metric.roas !== null ? (
                 <Badge variant={metric.roas >= 1 ? "default" : "destructive"} className="font-mono">
                   {metric.roas.toFixed(2)}x
                 </Badge>
               ) : '-'}
+            </TableCell>
+            <TableCell className="text-right">
+              <span className={metric.sales === 0 && metric.spend > 0 ? "text-red-500" : ""}>
+                {metric.sales}
+              </span>
             </TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-2">

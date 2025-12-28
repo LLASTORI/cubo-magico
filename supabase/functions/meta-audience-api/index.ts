@@ -530,7 +530,7 @@ async function createAudience(
 
   // IMPORTANT: Meta costuma falhar silenciosamente (ex: #2654) quando enviamos descrições gigantes.
   // Como nosso segmento pode ter centenas de tags, mantemos a descrição curta e previsível.
-  const description = `Público criado pelo CRM. Segmento por tags (${segmentConfig.operator}) - ${segmentConfig.tags.length} tags.`
+  const description = `CUBO MÁGICO - Público criado pelo CRM. Segmento por tags (${segmentConfig.operator}) - ${segmentConfig.tags.length} tags.`
 
   const response = await fetch(createUrl, {
     method: 'POST',

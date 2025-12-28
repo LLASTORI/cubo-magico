@@ -324,7 +324,9 @@ async function createAudience(
   const accessToken = credentials.access_token
   
   // Create Custom Audience on Meta
-  const createUrl = `${GRAPH_API_BASE}/act_${adAccountId}/customaudiences`
+  // Ensure adAccountId doesn't have duplicate 'act_' prefix
+  const cleanAdAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
+  const createUrl = `${GRAPH_API_BASE}/${cleanAdAccountId}/customaudiences`
   
   const response = await fetch(createUrl, {
     method: 'POST',

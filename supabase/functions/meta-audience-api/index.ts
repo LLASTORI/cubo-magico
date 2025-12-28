@@ -65,42 +65,56 @@ function getLastName(fullName: string): string {
   return parts.slice(1).join(' ')
 }
 
-// Build contact query based on segment config - returns filters only, no select
-function buildContactFilters(
+// Build contact query for fetching data
+function buildContactQuery(
   supabase: any,
   projectId: string,
   segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
 ) {
   let query = supabase
     .from('crm_contacts')
+    .select('id, email, phone, phone_country_code, name, first_name, last_name')
     .eq('project_id', projectId)
   
   const { tags, operator } = segmentConfig
   
   if (tags && tags.length > 0) {
     if (operator === 'AND') {
-      // All tags must be present - use @> contains operator
       query = query.contains('tags', tags)
     } else {
-      // Any tag must be present - use && overlaps operator
       query = query.overlaps('tags', tags)
     }
   }
   
-  // Only contacts with email or phone
   query = query.or('email.neq.null,phone.neq.null')
   
   return query
 }
 
-// Build contact query with select for fetching data
-function buildContactQuery(
+// Build contact query for counting only
+function buildContactCountQuery(
   supabase: any,
   projectId: string,
   segmentConfig: { tags: string[], operator: 'AND' | 'OR' }
 ) {
-  return buildContactFilters(supabase, projectId, segmentConfig)
-    .select('id, email, phone, phone_country_code, name, first_name, last_name')
+  let query = supabase
+    .from('crm_contacts')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+  
+  const { tags, operator } = segmentConfig
+  
+  if (tags && tags.length > 0) {
+    if (operator === 'AND') {
+      query = query.contains('tags', tags)
+    } else {
+      query = query.overlaps('tags', tags)
+    }
+  }
+  
+  query = query.or('email.neq.null,phone.neq.null')
+  
+  return query
 }
 
 Deno.serve(async (req) => {
@@ -252,9 +266,8 @@ async function getEstimatedSize(
 ) {
   console.log('Getting estimated size for segment:', segmentConfig)
   
-  // Use buildContactFilters (no select) and then add count-only select
-  const { count, error } = await buildContactFilters(supabase, projectId, segmentConfig)
-    .select('id', { count: 'exact', head: true })
+  // Use dedicated count query
+  const { count, error } = await buildContactCountQuery(supabase, projectId, segmentConfig)
   
   if (error) {
     console.error('Error getting estimated size:', error)

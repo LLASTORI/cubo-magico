@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings, Lock } from 'lucide-react';
+import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings, Lock, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const META_APP_ID = '845927421602166';
@@ -29,6 +29,7 @@ import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/componen
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
+import { MetaAudiencesTab } from '@/components/meta/audiences';
 
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
@@ -759,6 +760,10 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="publicos" className="gap-1">
+              <Users className="h-4 w-4" />
+              Públicos
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -982,6 +987,29 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
               }}
             />
+          </TabsContent>
+
+          <TabsContent value="publicos" className="space-y-6">
+            {(!adAccounts || adAccounts.length === 0) && !accountsLoading ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Configure suas contas primeiro</h3>
+                  <p className="text-muted-foreground text-center mb-4 max-w-md">
+                    Selecione as contas de anúncio do Meta para criar públicos personalizados.
+                  </p>
+                  <Button onClick={() => setActiveTab('accounts')} variant="outline" className="gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Ir para Contas
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <MetaAudiencesTab 
+                projectId={projectId}
+                adAccounts={adAccounts || []}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </main>

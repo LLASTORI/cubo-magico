@@ -191,9 +191,11 @@ export function useAutomationFlows() {
         .eq('id', params.flowId);
 
       if (error) throw error;
+      return params;
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['automation-flows'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-flow', vars.flowId] });
       toast.success(vars.isActive ? 'Fluxo ativado' : 'Fluxo desativado');
     },
     onError: (error) => {

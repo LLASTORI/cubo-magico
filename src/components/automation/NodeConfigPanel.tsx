@@ -27,6 +27,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAutomationMedia, getMediaTypeFromMime, formatFileSize } from '@/hooks/useAutomationMedia';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NodeConfigPanelProps {
   node: Node | null;
@@ -296,11 +297,46 @@ function DelayNodeConfig({ config, setConfig }: { config: any; setConfig: (c: an
 
 // Condition Config
 function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {
+  const { currentProject } = useProject();
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [loadingTags, setLoadingTags] = useState(false);
+
+  // Fetch unique tags from contacts when "tags" field is selected
+  useEffect(() => {
+    const fetchTags = async () => {
+      if (config.field !== 'tags' || !currentProject?.id) return;
+      
+      setLoadingTags(true);
+      try {
+        const { data: contacts } = await supabase
+          .from('crm_contacts')
+          .select('tags')
+          .eq('project_id', currentProject.id)
+          .not('tags', 'is', null);
+        
+        if (contacts) {
+          const allTags = contacts.flatMap((c) => (c.tags as string[]) || []);
+          const uniqueTags = [...new Set(allTags)].filter(Boolean).sort() as string[];
+          setAvailableTags(uniqueTags);
+        }
+      } catch (error) {
+        console.error('Error fetching tags:', error);
+      } finally {
+        setLoadingTags(false);
+      }
+    };
+
+    fetchTags();
+  }, [config.field, currentProject?.id]);
+
+  // Show tags as selectable options when field is "tags"
+  const showTagSelector = config.field === 'tags' && !['is_empty', 'is_not_empty'].includes(config.operator);
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Campo a verificar</Label>
-        <Select value={config.field || ''} onValueChange={(v) => setConfig({ ...config, field: v })}>
+        <Select value={config.field || ''} onValueChange={(v) => setConfig({ ...config, field: v, value: '' })}>
           <SelectTrigger>
             <SelectValue placeholder="Selecione o campo" />
           </SelectTrigger>
@@ -309,9 +345,13 @@ function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c
             <SelectItem value="status">Status</SelectItem>
             <SelectItem value="city">Cidade</SelectItem>
             <SelectItem value="state">Estado</SelectItem>
+            <SelectItem value="country">País</SelectItem>
+            <SelectItem value="source">Origem</SelectItem>
             <SelectItem value="total_purchases">Total de compras</SelectItem>
             <SelectItem value="total_revenue">Receita total</SelectItem>
             <SelectItem value="pipeline_stage">Etapa do pipeline</SelectItem>
+            <SelectItem value="subscription_status">Status de assinatura</SelectItem>
+            <SelectItem value="has_pending_payment">Tem pagamento pendente</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -338,16 +378,45 @@ function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c
       {!['is_empty', 'is_not_empty'].includes(config.operator) && (
         <div className="space-y-2">
           <Label>Valor</Label>
-          <Input
-            placeholder="Valor para comparar"
-            value={config.value || ''}
-            onChange={(e) => setConfig({ ...config, value: e.target.value })}
-          />
+          {showTagSelector ? (
+            <div className="space-y-2">
+              <Select value={config.value || ''} onValueChange={(v) => setConfig({ ...config, value: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingTags ? 'Carregando tags...' : 'Selecione uma tag'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTags.length > 0 ? (
+                    availableTags.map((tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        {tag}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      {loadingTags ? 'Carregando...' : 'Nenhuma tag encontrada'}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Ou digite manualmente..."
+                value={config.value || ''}
+                onChange={(e) => setConfig({ ...config, value: e.target.value })}
+              />
+            </div>
+          ) : (
+            <Input
+              placeholder="Valor para comparar"
+              value={config.value || ''}
+              onChange={(e) => setConfig({ ...config, value: e.target.value })}
+            />
+          )}
         </div>
       )}
     </div>
   );
 }
+
 
 // Action Config
 function ActionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: any) => void }) {

@@ -45,10 +45,101 @@ function normalizePhone(phone: string, countryCode: string = '55'): string {
   return countryCode + clean
 }
 
-// Normalize name for hashing
+// Normalize name for hashing (remove special characters, lowercase)
 function normalizeName(name: string): string {
   if (!name) return ''
-  return name.toLowerCase().trim()
+  return name.toLowerCase().trim().replace(/[^a-z\s]/g, '')
+}
+
+// Normalize city for hashing (remove special characters, lowercase, no spaces)
+function normalizeCity(city: string): string {
+  if (!city) return ''
+  return city.toLowerCase().trim().replace(/[^a-z]/g, '')
+}
+
+// Normalize state to 2-letter code (lowercase)
+function normalizeState(state: string): string {
+  if (!state) return ''
+  // If it's already a 2-letter code, return lowercase
+  const clean = state.trim().toLowerCase()
+  if (clean.length === 2) return clean
+  // Try to map common Brazilian state names to codes
+  const stateMap: Record<string, string> = {
+    'acre': 'ac', 'alagoas': 'al', 'amapa': 'ap', 'amazonas': 'am',
+    'bahia': 'ba', 'ceara': 'ce', 'distrito federal': 'df', 'espirito santo': 'es',
+    'goias': 'go', 'maranhao': 'ma', 'mato grosso': 'mt', 'mato grosso do sul': 'ms',
+    'minas gerais': 'mg', 'para': 'pa', 'paraiba': 'pb', 'parana': 'pr',
+    'pernambuco': 'pe', 'piaui': 'pi', 'rio de janeiro': 'rj', 'rio grande do norte': 'rn',
+    'rio grande do sul': 'rs', 'rondonia': 'ro', 'roraima': 'rr', 'santa catarina': 'sc',
+    'sao paulo': 'sp', 'sergipe': 'se', 'tocantins': 'to'
+  }
+  return stateMap[clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')] || clean.substring(0, 2)
+}
+
+// Normalize country to 2-letter ISO code (lowercase)
+function normalizeCountry(country: string): string {
+  if (!country) return 'br' // Default to Brazil
+  const clean = country.trim().toLowerCase()
+  // Common country mappings
+  const countryMap: Record<string, string> = {
+    'brasil': 'br', 'brazil': 'br', 'br': 'br',
+    'united states': 'us', 'usa': 'us', 'us': 'us', 'estados unidos': 'us',
+    'portugal': 'pt', 'pt': 'pt',
+    'argentina': 'ar', 'ar': 'ar',
+    'mexico': 'mx', 'mx': 'mx', 'méxico': 'mx',
+    'colombia': 'co', 'co': 'co', 'colômbia': 'co',
+    'chile': 'cl', 'cl': 'cl',
+    'peru': 'pe', 'pe': 'pe', 'perú': 'pe',
+  }
+  return countryMap[clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')] || clean.substring(0, 2)
+}
+
+// Normalize ZIP/CEP (numbers only)
+function normalizeZip(zip: string): string {
+  if (!zip) return ''
+  return zip.replace(/\D/g, '')
+}
+
+// Normalize gender to Meta format (m or f)
+function normalizeGender(gender: string): string {
+  if (!gender) return ''
+  const clean = gender.toLowerCase().trim()
+  if (clean === 'm' || clean === 'male' || clean === 'masculino' || clean === 'homem') return 'm'
+  if (clean === 'f' || clean === 'female' || clean === 'feminino' || clean === 'mulher') return 'f'
+  return ''
+}
+
+// Parse birth date components from various formats
+function parseBirthDate(dateStr: string): { year: string, month: string, day: string } | null {
+  if (!dateStr) return null
+  
+  // Try to parse ISO format (YYYY-MM-DD) or similar
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    return { year: isoMatch[1], month: isoMatch[2], day: isoMatch[3] }
+  }
+  
+  // Try Brazilian format (DD/MM/YYYY)
+  const brMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (brMatch) {
+    return { year: brMatch[3], month: brMatch[2], day: brMatch[1] }
+  }
+  
+  // Try to parse as Date object
+  try {
+    const date = new Date(dateStr)
+    if (!isNaN(date.getTime())) {
+      return {
+        year: date.getFullYear().toString(),
+        month: (date.getMonth() + 1).toString().padStart(2, '0'),
+        day: date.getDate().toString().padStart(2, '0')
+      }
+    }
+  } catch (e) {
+    // Ignore parse errors
+  }
+  
+  return null
 }
 
 // Get first name from full name
@@ -65,7 +156,7 @@ function getLastName(fullName: string): string {
   return parts.slice(1).join(' ')
 }
 
-// Build contact query for fetching data
+// Build contact query for fetching data - includes all fields Meta supports
 function buildContactQuery(
   supabase: any,
   projectId: string,
@@ -73,7 +164,20 @@ function buildContactQuery(
 ) {
   let query = supabase
     .from('crm_contacts')
-    .select('id, email, phone, phone_country_code, name, first_name, last_name')
+    .select(`
+      id, 
+      email, 
+      phone, 
+      phone_country_code, 
+      name, 
+      first_name, 
+      last_name,
+      city,
+      state,
+      country,
+      cep,
+      custom_fields
+    `)
     .eq('project_id', projectId)
   
   const { tags, operator } = segmentConfig
@@ -586,24 +690,81 @@ async function syncAudienceInternal(
       const hashedData: any[] = []
       const contactRecords: any[] = []
       
+      // Meta supported schema fields (in order):
+      // EMAIL, PHONE, FN, LN, CT, ST, ZIP, COUNTRY, DOBY, DOBM, DOBD, GEN, EXTERN_ID
+      // We'll build dynamic schema based on available data
+      
       for (const contact of contactsToAdd) {
         const emailHash = contact.email ? await sha256(normalizeEmail(contact.email)) : null
         const phoneHash = contact.phone ? await sha256(normalizePhone(contact.phone, contact.phone_country_code || '55')) : null
         
-        // Skip if no email or phone
+        // Skip if no email or phone (minimum required for matching)
         if (!emailHash && !phoneHash) continue
         
+        // Name fields
         const firstName = contact.first_name || getFirstName(contact.name || '')
         const lastName = contact.last_name || getLastName(contact.name || '')
         const firstNameHash = firstName ? await sha256(normalizeName(firstName)) : null
         const lastNameHash = lastName ? await sha256(normalizeName(lastName)) : null
         
-        // Build Meta schema data
-        const userData: string[] = []
-        if (emailHash) userData.push(emailHash)
-        if (phoneHash) userData.push(phoneHash)
-        if (firstNameHash) userData.push(firstNameHash)
-        if (lastNameHash) userData.push(lastNameHash)
+        // Location fields
+        const cityHash = contact.city ? await sha256(normalizeCity(contact.city)) : null
+        const stateHash = contact.state ? await sha256(normalizeState(contact.state)) : null
+        const zipHash = contact.cep ? await sha256(normalizeZip(contact.cep)) : null
+        const countryHash = contact.country ? await sha256(normalizeCountry(contact.country)) : await sha256('br')
+        
+        // Custom fields (birth date, gender, external_id)
+        const customFields = contact.custom_fields || {}
+        let dobYearHash = null
+        let dobMonthHash = null
+        let dobDayHash = null
+        let genderHash = null
+        let externalIdHash = null
+        
+        // Try to get birth date from custom_fields
+        const birthDate = customFields.birth_date || customFields.data_nascimento || 
+                         customFields.birthdate || customFields.dob || customFields.nascimento
+        if (birthDate) {
+          const parsed = parseBirthDate(birthDate)
+          if (parsed) {
+            dobYearHash = await sha256(parsed.year)
+            dobMonthHash = await sha256(parsed.month)
+            dobDayHash = await sha256(parsed.day)
+          }
+        }
+        
+        // Try to get gender from custom_fields
+        const gender = customFields.gender || customFields.genero || customFields.sexo
+        if (gender) {
+          const normalizedGender = normalizeGender(gender)
+          if (normalizedGender) {
+            genderHash = await sha256(normalizedGender)
+          }
+        }
+        
+        // External ID (can be useful for matching)
+        const externalId = customFields.external_id || customFields.customer_id || customFields.id_externo
+        if (externalId) {
+          externalIdHash = await sha256(String(externalId).toLowerCase().trim())
+        }
+        
+        // Build Meta schema data array (must match schema order)
+        // Schema: EMAIL, PHONE, FN, LN, CT, ST, ZIP, COUNTRY, DOBY, DOBM, DOBD, GEN, EXTERN_ID
+        const userData: (string | null)[] = [
+          emailHash || '',
+          phoneHash || '',
+          firstNameHash || '',
+          lastNameHash || '',
+          cityHash || '',
+          stateHash || '',
+          zipHash || '',
+          countryHash || '',
+          dobYearHash || '',
+          dobMonthHash || '',
+          dobDayHash || '',
+          genderHash || '',
+          externalIdHash || ''
+        ]
         
         hashedData.push(userData)
         
@@ -614,17 +775,26 @@ async function syncAudienceInternal(
           phone_hash: phoneHash,
           first_name_hash: firstNameHash,
           last_name_hash: lastNameHash,
+          city_hash: cityHash,
+          state_hash: stateHash,
+          zip_hash: zipHash,
+          country_hash: countryHash,
+          dob_year_hash: dobYearHash,
+          dob_month_hash: dobMonthHash,
+          dob_day_hash: dobDayHash,
+          gender_hash: genderHash,
+          external_id_hash: externalIdHash,
         })
       }
       
-      // Send to Meta in batches
-      const schema = ['EMAIL', 'PHONE', 'FN', 'LN']
+      // Full Meta schema with all supported fields
+      const schema = ['EMAIL', 'PHONE', 'FN', 'LN', 'CT', 'ST', 'ZIP', 'COUNTRY', 'DOBY', 'DOBM', 'DOBD', 'GEN', 'EXTERN_ID']
       
       for (let i = 0; i < hashedData.length; i += META_BATCH_SIZE) {
         const batch = hashedData.slice(i, i + META_BATCH_SIZE)
         const batchRecords = contactRecords.slice(i, i + META_BATCH_SIZE)
         
-        console.log(`Sending batch ${Math.floor(i / META_BATCH_SIZE) + 1} with ${batch.length} users`)
+        console.log(`Sending batch ${Math.floor(i / META_BATCH_SIZE) + 1} with ${batch.length} users (full schema)`)
         
         const addResponse = await fetch(
           `${GRAPH_API_BASE}/${audience.meta_audience_id}/users`,
@@ -649,10 +819,19 @@ async function syncAudienceInternal(
         } else {
           addedCount += addResult.num_received || batch.length
           
-          // Save contact records to database
+          // Save contact records to database (only save the basic hashes that exist in the table)
+          const basicRecords = batchRecords.map((r: any) => ({
+            audience_id: r.audience_id,
+            contact_id: r.contact_id,
+            email_hash: r.email_hash,
+            phone_hash: r.phone_hash,
+            first_name_hash: r.first_name_hash,
+            last_name_hash: r.last_name_hash,
+          }))
+          
           await serviceSupabase
             .from('meta_audience_contacts')
-            .upsert(batchRecords, { onConflict: 'audience_id,contact_id' })
+            .upsert(basicRecords, { onConflict: 'audience_id,contact_id' })
         }
         
         // Small delay between batches
@@ -672,16 +851,18 @@ async function syncAudienceInternal(
         .in('contact_id', contactsToRemove)
       
       if (contactsToRemoveData && contactsToRemoveData.length > 0) {
+        // For removal, we use a minimal schema that matches what we have stored
         const removeData = contactsToRemoveData.map((c: any) => {
-          const userData: string[] = []
-          if (c.email_hash) userData.push(c.email_hash)
-          if (c.phone_hash) userData.push(c.phone_hash)
-          if (c.first_name_hash) userData.push(c.first_name_hash)
-          if (c.last_name_hash) userData.push(c.last_name_hash)
-          return userData
+          return [
+            c.email_hash || '',
+            c.phone_hash || '',
+            c.first_name_hash || '',
+            c.last_name_hash || '',
+            '', '', '', '', '', '', '', '', '' // Empty for fields we don't store
+          ]
         })
         
-        const schema = ['EMAIL', 'PHONE', 'FN', 'LN']
+        const schema = ['EMAIL', 'PHONE', 'FN', 'LN', 'CT', 'ST', 'ZIP', 'COUNTRY', 'DOBY', 'DOBM', 'DOBD', 'GEN', 'EXTERN_ID']
         
         for (let i = 0; i < removeData.length; i += META_BATCH_SIZE) {
           const batch = removeData.slice(i, i + META_BATCH_SIZE)

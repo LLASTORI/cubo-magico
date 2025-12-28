@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="64" fill="#1a1f2e"/>
+  
+  <!-- Row 1 -->
+  <circle cx="144" cy="144" r="48" fill="#3B82F6"/> <!-- Blue -->
+  <circle cx="256" cy="144" r="48" fill="#FACC15"/> <!-- Yellow -->
+  <circle cx="368" cy="144" r="48" fill="#22C55E"/> <!-- Green -->
+  
+  <!-- Row 2 -->
+  <circle cx="144" cy="256" r="48" fill="#EF4444"/> <!-- Red -->
+  <circle cx="256" cy="256" r="48" fill="#FFFFFF"/> <!-- White -->
+  <circle cx="368" cy="256" r="48" fill="#F97316"/> <!-- Orange -->
+  
+  <!-- Row 3 -->
+  <circle cx="144" cy="368" r="48" fill="#F97316"/> <!-- Orange -->
+  <circle cx="256" cy="368" r="48" fill="#3B82F6"/> <!-- Blue -->
+  <circle cx="368" cy="368" r="48" fill="#22C55E"/> <!-- Green -->
+</svg>

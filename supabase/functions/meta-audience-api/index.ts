@@ -460,17 +460,42 @@ async function createAudience(
     
     // Provide more helpful error messages based on error codes
     let errorMessage = metaResult.error.message || 'Erro ao criar público no Meta'
-    
-    if (metaResult.error.code === 2654) {
+
+    // Diagnóstico: conferir quais permissões o token realmente tem
+    // (muito comum o usuário estar logado no Ads Manager, mas o token do app não ter ads_management)
+    let permStatus: Record<string, string> = {}
+    if ([2654, 10, 294].includes(metaResult.error.code)) {
+      try {
+        const permsRes = await fetch(`${GRAPH_API_BASE}/me/permissions?access_token=${encodeURIComponent(accessToken)}`)
+        const permsJson = await permsRes.json()
+
+        if (Array.isArray(permsJson?.data)) {
+          permStatus = Object.fromEntries(
+            permsJson.data.map((p: any) => [String(p.permission), String(p.status)])
+          )
+        }
+
+        console.error('Token permission status:', JSON.stringify(permStatus, null, 2))
+      } catch (e) {
+        console.error('Failed to fetch token permissions for diagnostics:', e)
+      }
+    }
+
+    const hasAdsManagement = permStatus['ads_management'] === 'granted'
+    const hasBusinessManagement = permStatus['business_management'] === 'granted'
+
+    if ([2654, 10, 294].includes(metaResult.error.code) && (!hasAdsManagement || !hasBusinessManagement)) {
+      errorMessage = `Sua conexão Meta não concedeu permissões suficientes para criar Públicos.\n\nPermissões no token:\n- ads_management: ${permStatus['ads_management'] || 'não encontrado'}\n- business_management: ${permStatus['business_management'] || 'não encontrado'}\n\nComo resolver: desconecte e conecte novamente sua conta Meta (para reautorizar) e confirme as permissões solicitadas.`
+    } else if (metaResult.error.code === 2654) {
       if (metaResult.error.error_subcode === 1713092) {
-        errorMessage = 'Sem permissão de escrita na conta de anúncios. Verifique se o app tem permissão de admin na conta.'
+        errorMessage = 'Sem permissão de escrita na conta de anúncios. Verifique se o usuário conectado é admin da conta e se o app tem acesso à conta.'
       } else {
-        errorMessage = `Erro ao criar público (${metaResult.error.code}). Possíveis causas: 1) App em modo desenvolvimento - coloque em Live Mode. 2) Termos de Custom Audience não aceitos. 3) Permissão ads_management não aprovada.`
+        errorMessage = `Erro ao criar público (${metaResult.error.code}). Causas mais comuns: 1) App ainda em modo desenvolvimento no Meta Developers (precisa Live Mode) 2) Termos de Custom Audience não aceitos 3) Permissão ads_management sem Advanced Access/App Review.`
       }
     } else if (metaResult.error.code === 200 && metaResult.error.error_subcode === 1870034) {
       errorMessage = 'Aceite os termos de Custom Audience em: https://www.facebook.com/ads/manage/customaudiences/tos'
     } else if (metaResult.error.code === 294) {
-      errorMessage = 'A permissão ads_management é necessária. Verifique se está aprovada no App Review.'
+      errorMessage = 'A permissão ads_management é necessária. Verifique se está aprovada (Advanced Access) no Meta Developers.'
     } else if (metaResult.error.code === 10) {
       errorMessage = 'O app não tem permissão para esta ação. Verifique as permissões no Meta Developers.'
     } else if (metaResult.error.code === 190) {

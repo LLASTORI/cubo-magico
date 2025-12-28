@@ -359,6 +359,29 @@ export function useAutomationFlows() {
     },
   });
 
+  const moveFlowToFolder = useMutation({
+    mutationFn: async (params: { flowId: string; folderId: string | null }) => {
+      const { error } = await supabase
+        .from('automation_flows')
+        .update({ folder_id: params.folderId })
+        .eq('id', params.flowId);
+
+      if (error) throw error;
+      return params;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['automation-flows'] });
+      const folderName = vars.folderId 
+        ? folders.find(f => f.id === vars.folderId)?.name || 'pasta'
+        : 'raiz';
+      toast.success(`Fluxo movido para ${folderName}`);
+    },
+    onError: (error) => {
+      console.error('Error moving flow:', error);
+      toast.error('Erro ao mover fluxo');
+    },
+  });
+
   return {
     flows,
     folders,
@@ -371,6 +394,7 @@ export function useAutomationFlows() {
     duplicateFlow,
     createFolder,
     deleteFolder,
+    moveFlowToFolder,
   };
 }
 

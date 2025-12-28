@@ -24,6 +24,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -41,13 +44,16 @@ import {
   Edit,
   FolderPlus,
   Folder,
+  FolderInput,
   Search,
   Zap,
   MessageSquare,
   Clock,
   GitBranch,
-  Activity
+  Activity,
+  GripVertical
 } from 'lucide-react';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 
 import { ShoppingCart, Tag } from 'lucide-react';
 
@@ -71,6 +77,72 @@ const transactionStatuses = [
   { value: 'EXPIRED', label: 'Pagamento Expirado' },
 ];
 
+// Droppable folder component
+function FolderDropZone({ 
+  folderId, 
+  isActive, 
+  children 
+}: { 
+  folderId: string; 
+  isActive: boolean;
+  isOver: boolean;
+  children: React.ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `folder-${folderId}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`transition-all rounded-lg ${
+        isActive 
+          ? isOver 
+            ? 'ring-2 ring-primary bg-primary/10' 
+            : 'ring-2 ring-dashed ring-muted-foreground/30'
+          : ''
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Draggable flow card wrapper
+function DraggableFlowCard({
+  flow,
+  children,
+}: {
+  flow: { id: string; name: string };
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: flow.id,
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative ${isDragging ? 'opacity-50 z-50' : ''}`}
+    >
+      <div
+        {...listeners}
+        {...attributes}
+        className="absolute left-2 top-4 cursor-grab active:cursor-grabbing z-10 p-1 rounded hover:bg-muted"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function AutomationFlows() {
   const navigate = useNavigate();
   const { currentProject } = useProject();
@@ -83,13 +155,23 @@ export default function AutomationFlows() {
     deleteFlow, 
     toggleFlow,
     duplicateFlow,
-    createFolder 
+    createFolder,
+    moveFlowToFolder
   } = useAutomationFlows();
   
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
   
   // Form state
   const [name, setName] = useState('');
@@ -157,6 +239,41 @@ export default function AutomationFlows() {
   const getTriggerInfo = (type: string) => {
     return triggerTypes.find(t => t.value === type) || triggerTypes[0];
   };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    
+    if (!over) return;
+    
+    const flowId = active.id as string;
+    const targetFolderId = over.id as string;
+    
+    const flow = flows.find(f => f.id === flowId);
+    if (!flow) return;
+    
+    // If dropping on "root" drop zone
+    if (targetFolderId === 'folder-root') {
+      if (flow.folder_id !== null) {
+        moveFlowToFolder.mutate({ flowId, folderId: null });
+      }
+      return;
+    }
+    
+    // If dropping on a folder
+    if (targetFolderId.startsWith('folder-')) {
+      const folderId = targetFolderId.replace('folder-', '');
+      if (flow.folder_id !== folderId) {
+        moveFlowToFolder.mutate({ flowId, folderId });
+      }
+    }
+  };
+
+  const draggedFlow = activeDragId ? flows.find(f => f.id === activeDragId) : null;
 
   if (isLoading) {
     return (
@@ -232,178 +349,240 @@ export default function AutomationFlows() {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant={selectedFolder === null ? "secondary" : "ghost"} 
-              size="sm"
-              onClick={() => setSelectedFolder(null)}
+          <div className="flex items-center gap-2 flex-wrap">
+            <FolderDropZone 
+              folderId="root" 
+              isActive={activeDragId !== null}
+              isOver={false}
             >
-              Todos
-            </Button>
-            {folders.map((folder) => (
-              <Button
-                key={folder.id}
-                variant={selectedFolder === folder.id ? "secondary" : "ghost"}
+              <Button 
+                variant={selectedFolder === null ? "secondary" : "ghost"} 
                 size="sm"
-                onClick={() => setSelectedFolder(folder.id)}
+                onClick={() => setSelectedFolder(null)}
               >
-                <Folder className="h-4 w-4 mr-1" />
-                {folder.name}
+                Todos
               </Button>
+            </FolderDropZone>
+            {folders.map((folder) => (
+              <FolderDropZone 
+                key={folder.id} 
+                folderId={folder.id}
+                isActive={activeDragId !== null}
+                isOver={false}
+              >
+                <Button
+                  variant={selectedFolder === folder.id ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setSelectedFolder(folder.id)}
+                >
+                  <Folder className="h-4 w-4 mr-1" />
+                  {folder.name}
+                </Button>
+              </FolderDropZone>
             ))}
           </div>
         </div>
 
-        {filteredFlows.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Workflow className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-medium mb-2">Nenhum fluxo encontrado</h3>
-              <p className="text-muted-foreground mb-4">
-                Crie seu primeiro fluxo de automação para começar
-              </p>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Fluxo
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredFlows.map((flow) => {
-              const triggerInfo = getTriggerInfo(flow.trigger_type);
-              const TriggerIcon = triggerInfo.icon;
-              
-              return (
-                <Card 
-                  key={flow.id} 
-                  className="cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => navigate(`/automations/${flow.id}`)}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${flow.is_active ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-muted text-muted-foreground'}`}>
-                          <Workflow className="h-5 w-5" />
-                        </div>
-                        <div className="space-y-1">
-                          <CardTitle className="text-base line-clamp-1">{flow.name}</CardTitle>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <TriggerIcon className="h-3 w-3" />
-                            {triggerInfo.label}
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          {filteredFlows.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Workflow className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-medium mb-2">Nenhum fluxo encontrado</h3>
+                <p className="text-muted-foreground mb-4">
+                  Crie seu primeiro fluxo de automação para começar
+                </p>
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar Fluxo
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredFlows.map((flow) => {
+                const triggerInfo = getTriggerInfo(flow.trigger_type);
+                const TriggerIcon = triggerInfo.icon;
+                
+                return (
+                  <DraggableFlowCard key={flow.id} flow={flow}>
+                    <Card 
+                      className="cursor-pointer hover:border-primary/50 transition-colors pl-8"
+                      onClick={() => navigate(`/automations/${flow.id}`)}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${flow.is_active ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                              <Workflow className="h-5 w-5" />
+                            </div>
+                            <div className="space-y-1">
+                              <CardTitle className="text-base line-clamp-1">{flow.name}</CardTitle>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <TriggerIcon className="h-3 w-3" />
+                                {triggerInfo.label}
+                              </div>
+                            </div>
                           </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/automations/${flow.id}`); }}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); duplicateFlow.mutate(flow.id); }}>
+                                <Copy className="h-4 w-4 mr-2" />
+                                Duplicar
+                              </DropdownMenuItem>
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger onClick={(e) => e.stopPropagation()}>
+                                  <FolderInput className="h-4 w-4 mr-2" />
+                                  Mover para pasta
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  <DropdownMenuItem 
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      moveFlowToFolder.mutate({ flowId: flow.id, folderId: null }); 
+                                    }}
+                                    disabled={flow.folder_id === null}
+                                  >
+                                    <Folder className="h-4 w-4 mr-2" />
+                                    Sem pasta (raiz)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  {folders.map((folder) => (
+                                    <DropdownMenuItem 
+                                      key={folder.id}
+                                      onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        moveFlowToFolder.mutate({ flowId: flow.id, folderId: folder.id }); 
+                                      }}
+                                      disabled={flow.folder_id === folder.id}
+                                    >
+                                      <Folder className="h-4 w-4 mr-2" />
+                                      {folder.name}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={(e) => { e.stopPropagation(); deleteFlow.mutate(flow.id); }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/automations/${flow.id}`); }}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); duplicateFlow.mutate(flow.id); }}>
-                            <Copy className="h-4 w-4 mr-2" />
-                            Duplicar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            className="text-destructive"
-                            onClick={(e) => { e.stopPropagation(); deleteFlow.mutate(flow.id); }}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {flow.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                            {flow.description}
+                          </p>
+                        )}
+                        
+                        {flow.trigger_type === 'keyword' && flow.trigger_config?.keywords?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {(flow.trigger_config.keywords as string[]).slice(0, 3).map((kw, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs">
+                                {kw}
+                              </Badge>
+                            ))}
+                            {(flow.trigger_config.keywords as string[]).length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{(flow.trigger_config.keywords as string[]).length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        {flow.trigger_type === 'transaction_event' && flow.trigger_config?.statuses?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {(flow.trigger_config.statuses as string[]).slice(0, 3).map((status, i) => {
+                              const statusInfo = transactionStatuses.find(s => s.value === status);
+                              return (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {statusInfo?.label || status}
+                                </Badge>
+                              );
+                            })}
+                            {(flow.trigger_config.statuses as string[]).length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{(flow.trigger_config.statuses as string[]).length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        {flow.trigger_type === 'tag_added' && flow.trigger_config?.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {(flow.trigger_config.tags as string[]).slice(0, 3).map((tag, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {(flow.trigger_config.tags as string[]).length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{(flow.trigger_config.tags as string[]).length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="flex items-center gap-2">
+                            {flow.is_active ? (
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                <Play className="h-3 w-3 mr-1" />
+                                Ativo
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">
+                                <Pause className="h-3 w-3 mr-1" />
+                                Inativo
+                              </Badge>
+                            )}
+                          </div>
+                          <Switch
+                            checked={flow.is_active}
+                            onCheckedChange={(checked) => {
+                              toggleFlow.mutate({ flowId: flow.id, isActive: checked });
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </DraggableFlowCard>
+                );
+              })}
+            </div>
+          )}
+
+          <DragOverlay>
+            {draggedFlow ? (
+              <Card className="w-80 opacity-90 shadow-xl border-primary">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <Workflow className="h-5 w-5" />
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    {flow.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                        {flow.description}
-                      </p>
-                    )}
-                    
-                    {flow.trigger_type === 'keyword' && flow.trigger_config?.keywords?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {(flow.trigger_config.keywords as string[]).slice(0, 3).map((kw, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs">
-                            {kw}
-                          </Badge>
-                        ))}
-                        {(flow.trigger_config.keywords as string[]).length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{(flow.trigger_config.keywords as string[]).length - 3}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    {flow.trigger_type === 'transaction_event' && flow.trigger_config?.statuses?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {(flow.trigger_config.statuses as string[]).slice(0, 3).map((status, i) => {
-                          const statusInfo = transactionStatuses.find(s => s.value === status);
-                          return (
-                            <Badge key={i} variant="secondary" className="text-xs">
-                              {statusInfo?.label || status}
-                            </Badge>
-                          );
-                        })}
-                        {(flow.trigger_config.statuses as string[]).length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{(flow.trigger_config.statuses as string[]).length - 3}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    {flow.trigger_type === 'tag_added' && flow.trigger_config?.tags?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {(flow.trigger_config.tags as string[]).slice(0, 3).map((tag, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {(flow.trigger_config.tags as string[]).length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{(flow.trigger_config.tags as string[]).length - 3}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between pt-2 border-t">
-                      <div className="flex items-center gap-2">
-                        {flow.is_active ? (
-                          <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            <Play className="h-3 w-3 mr-1" />
-                            Ativo
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">
-                            <Pause className="h-3 w-3 mr-1" />
-                            Inativo
-                          </Badge>
-                        )}
-                      </div>
-                      <Switch
-                        checked={flow.is_active}
-                        onCheckedChange={(checked) => {
-                          toggleFlow.mutate({ flowId: flow.id, isActive: checked });
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                    <CardTitle className="text-base">{draggedFlow.name}</CardTitle>
+                  </div>
+                </CardHeader>
+              </Card>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </main>
 
       {/* Create Flow Dialog */}

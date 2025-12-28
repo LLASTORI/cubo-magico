@@ -53,6 +53,8 @@ interface OfferMapping {
   nome_produto: string;
   nome_oferta: string | null;
   codigo_oferta: string | null;
+  moeda: string | null;
+  valor_original: number | null;
   valor: number | null;
   status: string | null;
   data_ativacao: string | null;

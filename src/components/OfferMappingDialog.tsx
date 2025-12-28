@@ -39,11 +39,19 @@ const POSITION_TYPES = [
 
 const ORDER_OPTIONS = [1, 2, 3, 4, 5];
 
+const CURRENCIES = [
+  { value: 'BRL', label: 'R$ - Real Brasileiro', symbol: 'R$' },
+  { value: 'USD', label: '$ - Dólar Americano', symbol: '$' },
+  { value: 'EUR', label: '€ - Euro', symbol: '€' },
+];
+
 const formSchema = z.object({
   id_produto_visual: z.string().optional(),
   nome_produto: z.string().min(1, 'Nome do produto é obrigatório').max(200),
   nome_oferta: z.string().optional(),
   codigo_oferta: z.string().optional(),
+  moeda: z.string().optional(),
+  valor_original: z.string().optional(),
   valor: z.string().optional(),
   status: z.string().optional(),
   data_ativacao: z.string().optional(),
@@ -63,6 +71,8 @@ interface OfferMapping {
   nome_produto: string;
   nome_oferta: string | null;
   codigo_oferta: string | null;
+  moeda: string | null;
+  valor_original: number | null;
   valor: number | null;
   status: string | null;
   data_ativacao: string | null;
@@ -107,6 +117,8 @@ export function OfferMappingDialog({
       nome_produto: '',
       nome_oferta: '',
       codigo_oferta: '',
+      moeda: 'BRL',
+      valor_original: '',
       valor: '',
       status: 'Ativo',
       data_ativacao: '',
@@ -150,6 +162,8 @@ export function OfferMappingDialog({
         nome_produto: mapping.nome_produto || '',
         nome_oferta: mapping.nome_oferta || '',
         codigo_oferta: mapping.codigo_oferta || '',
+        moeda: mapping.moeda || 'BRL',
+        valor_original: mapping.valor_original !== null && mapping.valor_original !== undefined ? mapping.valor_original.toString() : '',
         valor: mapping.valor !== null && mapping.valor !== undefined ? mapping.valor.toString() : '',
         status: mapping.status || 'Ativo',
         data_ativacao: mapping.data_ativacao || '',
@@ -165,6 +179,8 @@ export function OfferMappingDialog({
         nome_produto: '',
         nome_oferta: '',
         codigo_oferta: '',
+        moeda: 'BRL',
+        valor_original: '',
         valor: '',
         status: 'Ativo',
         data_ativacao: '',
@@ -178,7 +194,10 @@ export function OfferMappingDialog({
   }, [mapping, form]);
 
   const tipoPosicao = form.watch('tipo_posicao');
+  const moedaSelecionada = form.watch('moeda');
   const showOrdemField = tipoPosicao && tipoPosicao !== 'FRONT';
+  const isForeignCurrency = moedaSelecionada && moedaSelecionada !== 'BRL';
+  const currencySymbol = CURRENCIES.find(c => c.value === moedaSelecionada)?.symbol || 'R$';
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -218,6 +237,8 @@ export function OfferMappingDialog({
         nome_produto: values.nome_produto,
         nome_oferta: values.nome_oferta || null,
         codigo_oferta: values.codigo_oferta || null,
+        moeda: values.moeda || 'BRL',
+        valor_original: values.valor_original ? parseFloat(values.valor_original) : null,
         valor: values.valor ? parseFloat(values.valor) : null,
         status: values.status || null,
         data_ativacao: values.data_ativacao || null,
@@ -376,13 +397,39 @@ export function OfferMappingDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Moeda e Valor */}
+            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
-                name="valor"
+                name="moeda"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valor (R$)</FormLabel>
+                    <FormLabel>Moeda</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Moeda" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {CURRENCIES.map((currency) => (
+                          <SelectItem key={currency.value} value={currency.value}>
+                            {currency.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="valor_original"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor Original ({currencySymbol})</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -391,7 +438,7 @@ export function OfferMappingDialog({
                         {...field}
                       />
                     </FormControl>
-                    <p className="text-xs text-muted-foreground">Valor à vista da oferta (editável)</p>
+                    <p className="text-xs text-muted-foreground">Preço na moeda original</p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -399,27 +446,49 @@ export function OfferMappingDialog({
 
               <FormField
                 control={form.control}
-                name="status"
+                name="valor"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Ativo">Ativo</SelectItem>
-                        <SelectItem value="Inativo">Inativo</SelectItem>
-                        <SelectItem value="Pausado">Pausado</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Valor em BRL (R$)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      {isForeignCurrency ? 'Valor convertido para cálculos' : 'Valor à vista'}
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Ativo">Ativo</SelectItem>
+                      <SelectItem value="Inativo">Inativo</SelectItem>
+                      <SelectItem value="Pausado">Pausado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <FormField

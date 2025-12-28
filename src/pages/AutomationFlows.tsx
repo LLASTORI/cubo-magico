@@ -85,7 +85,6 @@ function FolderDropZone({
 }: { 
   folderId: string; 
   isActive: boolean;
-  isOver: boolean;
   children: React.ReactNode;
 }) {
   const { isOver, setNodeRef } = useDroppable({
@@ -95,11 +94,11 @@ function FolderDropZone({
   return (
     <div
       ref={setNodeRef}
-      className={`transition-all rounded-lg ${
+      className={`transition-all rounded-lg p-0.5 ${
         isActive 
           ? isOver 
-            ? 'ring-2 ring-primary bg-primary/10' 
-            : 'ring-2 ring-dashed ring-muted-foreground/30'
+            ? 'ring-2 ring-primary bg-primary/20 scale-105' 
+            : 'ring-2 ring-dashed ring-muted-foreground/40'
           : ''
       }`}
     >
@@ -156,6 +155,7 @@ export default function AutomationFlows() {
     toggleFlow,
     duplicateFlow,
     createFolder,
+    deleteFolder,
     moveFlowToFolder
   } = useAutomationFlows();
   
@@ -349,11 +349,14 @@ export default function AutomationFlows() {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+        </div>
+
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          {/* Drop zones for folders - must be inside DndContext */}
+          <div className="flex items-center gap-2 flex-wrap mb-6">
             <FolderDropZone 
               folderId="root" 
               isActive={activeDragId !== null}
-              isOver={false}
             >
               <Button 
                 variant={selectedFolder === null ? "secondary" : "ghost"} 
@@ -364,26 +367,39 @@ export default function AutomationFlows() {
               </Button>
             </FolderDropZone>
             {folders.map((folder) => (
-              <FolderDropZone 
-                key={folder.id} 
-                folderId={folder.id}
-                isActive={activeDragId !== null}
-                isOver={false}
-              >
-                <Button
-                  variant={selectedFolder === folder.id ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedFolder(folder.id)}
+              <div key={folder.id} className="flex items-center gap-1">
+                <FolderDropZone 
+                  folderId={folder.id}
+                  isActive={activeDragId !== null}
                 >
-                  <Folder className="h-4 w-4 mr-1" />
-                  {folder.name}
-                </Button>
-              </FolderDropZone>
+                  <Button
+                    variant={selectedFolder === folder.id ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setSelectedFolder(folder.id)}
+                  >
+                    <Folder className="h-4 w-4 mr-1" />
+                    {folder.name}
+                  </Button>
+                </FolderDropZone>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                      <MoreVertical className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={() => deleteFolder.mutate(folder.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir Pasta
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ))}
           </div>
-        </div>
-
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           {filteredFlows.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">

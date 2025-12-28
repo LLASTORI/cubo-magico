@@ -300,37 +300,72 @@ function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c
   const { currentProject } = useProject();
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
 
-  // Fetch unique tags from contacts when "tags" field is selected
-  useEffect(() => {
-    const fetchTags = async () => {
-      if (config.field !== 'tags' || !currentProject?.id) return;
+  // Fetch unique tags from contacts
+  const fetchTags = async () => {
+    if (!currentProject?.id) return;
+    
+    setLoadingTags(true);
+    try {
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('tags')
+        .eq('project_id', currentProject.id)
+        .not('tags', 'is', null);
       
-      setLoadingTags(true);
-      try {
-        const { data: contacts } = await supabase
-          .from('crm_contacts')
-          .select('tags')
-          .eq('project_id', currentProject.id)
-          .not('tags', 'is', null);
-        
-        if (contacts) {
-          const allTags = contacts.flatMap((c) => (c.tags as string[]) || []);
-          const uniqueTags = [...new Set(allTags)].filter(Boolean).sort() as string[];
-          setAvailableTags(uniqueTags);
-        }
-      } catch (error) {
-        console.error('Error fetching tags:', error);
-      } finally {
-        setLoadingTags(false);
+      if (contacts) {
+        const allTags = contacts.flatMap((c) => (c.tags as string[]) || []);
+        const uniqueTags = [...new Set(allTags)].filter(Boolean).sort() as string[];
+        setAvailableTags(uniqueTags);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+    } finally {
+      setLoadingTags(false);
+    }
+  };
 
-    fetchTags();
+  // Fetch tags when "tags" field is selected
+  useEffect(() => {
+    if (config.field === 'tags') {
+      fetchTags();
+    }
+  }, [config.field, currentProject?.id]);
+
+  // Subscribe to realtime updates for crm_contacts to sync tags automatically
+  useEffect(() => {
+    if (config.field !== 'tags' || !currentProject?.id) return;
+
+    const channel = supabase
+      .channel('tags-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'crm_contacts',
+          filter: `project_id=eq.${currentProject.id}`,
+        },
+        () => {
+          // Refetch tags when any contact changes
+          fetchTags();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [config.field, currentProject?.id]);
 
   // Show tags as selectable options when field is "tags"
   const showTagSelector = config.field === 'tags' && !['is_empty', 'is_not_empty'].includes(config.operator);
+
+  // Filter tags based on search
+  const filteredTags = availableTags.filter(tag => 
+    tag.toLowerCase().includes(tagSearch.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
@@ -380,24 +415,59 @@ function ConditionNodeConfig({ config, setConfig }: { config: any; setConfig: (c
           <Label>Valor</Label>
           {showTagSelector ? (
             <div className="space-y-2">
-              <Select value={config.value || ''} onValueChange={(v) => setConfig({ ...config, value: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingTags ? 'Carregando tags...' : 'Selecione uma tag'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {loadingTags ? (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">Carregando...</div>
-                  ) : availableTags.length > 0 ? (
-                    availableTags.map((tag) => (
-                      <SelectItem key={tag} value={tag}>
-                        {tag}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhuma tag encontrada</div>
-                  )}
-                </SelectContent>
-              </Select>
+              {/* Search input for tags */}
+              <div className="relative">
+                <Input
+                  placeholder="Buscar tag..."
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                  className="mb-2"
+                />
+                {tagSearch && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1 h-6 w-6 p-0"
+                    onClick={() => setTagSearch('')}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* Tags list */}
+              <div className="border rounded-md max-h-[200px] overflow-y-auto">
+                {loadingTags ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Carregando tags...
+                  </div>
+                ) : filteredTags.length > 0 ? (
+                  <div className="p-1">
+                    {filteredTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setConfig({ ...config, value: tag })}
+                        className={`w-full text-left px-3 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors ${
+                          config.value === tag ? 'bg-accent text-accent-foreground' : ''
+                        }`}
+                      >
+                        <Badge variant="secondary" className="font-normal">
+                          {tag}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    {tagSearch ? 'Nenhuma tag encontrada para a busca' : 'Nenhuma tag encontrada'}
+                  </div>
+                )}
+              </div>
+
+              {/* Manual input as fallback */}
               <Input
                 placeholder="Ou digite manualmente..."
                 value={config.value || ''}

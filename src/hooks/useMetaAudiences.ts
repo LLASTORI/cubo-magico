@@ -204,6 +204,38 @@ export function useMetaAudiences(projectId: string | undefined) {
     },
   });
 
+  // Update audience mutation
+  const updateAudience = useMutation({
+    mutationFn: async (params: {
+      audienceId: string;
+      name?: string;
+      segmentConfig?: SegmentConfig;
+      syncFrequency?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('meta-audience-api', {
+        body: { action: 'update_audience', ...params },
+      });
+      
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Público atualizado!',
+        description: 'As alterações foram salvas com sucesso.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['meta_audiences', projectId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao atualizar público',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Pause/resume audience
   const toggleAudienceStatus = useMutation({
     mutationFn: async ({ audienceId, pause }: { audienceId: string; pause: boolean }) => {
@@ -316,6 +348,7 @@ export function useMetaAudiences(projectId: string | undefined) {
     refetchTags,
     getEstimatedSize,
     createAudience,
+    updateAudience,
     syncAudience,
     deleteAudience,
     toggleAudienceStatus,

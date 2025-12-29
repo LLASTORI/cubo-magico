@@ -47,7 +47,7 @@ const Projects = () => {
   const { projects, currentProject, setCurrentProject, createProject, updateProject, deleteProject, saveCredentials, markCredentialsValidated, loading, refreshCredentials, refreshProjects } = useProject();
   const { toast } = useToast();
   const { invites: myInvites } = useMyInvites();
-  const { canCreateProjects, maxProjects, currentProjectCount, isAdmin, refreshPermissions } = useUserPermissions();
+  const { canCreateProjects, maxProjects, currentProjectCount, isAdmin, hasActiveSubscription, subscriptionStatus, planName, refreshPermissions } = useUserPermissions();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
@@ -358,6 +358,40 @@ const Projects = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Subscription Status Banner */}
+      {!hasActiveSubscription && subscriptionStatus === 'expired' && (
+        <div className="bg-destructive/10 border-b border-destructive/20 py-3 px-6">
+          <div className="container mx-auto flex items-center justify-between">
+            <p className="text-sm text-destructive font-medium">
+              ⚠️ Sua assinatura expirou. Renove para continuar usando todas as funcionalidades.
+            </p>
+            <Button size="sm" variant="destructive">
+              Renovar Assinatura
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {hasActiveSubscription && planName && (
+        <div className="bg-primary/5 border-b border-primary/10 py-2 px-6">
+          <div className="container mx-auto flex items-center gap-2 text-sm">
+            <Crown className="w-4 h-4 text-primary" />
+            <span className="text-muted-foreground">Plano:</span>
+            <span className="font-medium text-primary">{planName}</span>
+            {maxProjects > 0 && (
+              <span className="text-muted-foreground ml-2">
+                ({currentProjectCount}/{maxProjects} projetos)
+              </span>
+            )}
+            {subscriptionStatus === 'trial' && (
+              <Badge variant="outline" className="ml-2 text-orange-500 border-orange-500/30">
+                Trial
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+      
       <header className="border-b border-border bg-card shadow-cube">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -453,16 +487,41 @@ const Projects = () => {
                   <DialogHeader>
                     <DialogTitle>Criação de Projetos Não Disponível</DialogTitle>
                     <DialogDescription>
-                      Seu plano atual não permite criar novos projetos.
+                      {!hasActiveSubscription 
+                        ? 'Você não possui uma assinatura ativa.'
+                        : 'Você atingiu o limite de projetos do seu plano.'}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="py-4 space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Para criar projetos, você precisa de autorização do administrador.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Entre em contato com o suporte ou aguarde um convite para participar de um projeto existente.
-                    </p>
+                    {!hasActiveSubscription ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Para criar projetos, você precisa de uma assinatura ativa do Cubo Mágico.
+                        </p>
+                        {subscriptionStatus === 'expired' && (
+                          <div className="p-3 bg-destructive/10 rounded-lg border border-destructive/20">
+                            <p className="text-sm text-destructive font-medium">
+                              Sua assinatura expirou. Renove para continuar usando a plataforma.
+                            </p>
+                          </div>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          Entre em contato com o suporte para adquirir um plano.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Seu plano <strong>{planName}</strong> permite até {maxProjects} projeto{maxProjects > 1 ? 's' : ''}.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Você já possui {currentProjectCount} projeto{currentProjectCount > 1 ? 's' : ''}.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Faça upgrade do seu plano para criar mais projetos.
+                        </p>
+                      </>
+                    )}
                   </div>
                   <DialogFooter>
                     <Button onClick={() => setIsNoPermissionOpen(false)}>

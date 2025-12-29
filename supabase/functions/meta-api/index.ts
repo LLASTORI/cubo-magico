@@ -29,7 +29,9 @@ const MAX_DAYS_PER_CHUNK = 15
 const IMMUTABLE_DAYS_THRESHOLD = 8
 
 // Days threshold for "very recent" data that might still change significantly
-const VERY_RECENT_DAYS_THRESHOLD = 2
+// IMPORTANT: Set to 7 to match Meta's attribution window - data can change up to 7 days
+// This ensures we always refetch data within the attribution window for accuracy
+const VERY_RECENT_DAYS_THRESHOLD = 7
 
 // Batch size for database inserts - INCREASED for performance
 const DB_INSERT_BATCH_SIZE = 250
@@ -198,8 +200,7 @@ function determineDatesToFetch(
   // Track reasons for logging
   const reasons = {
     immutableCached: 0,  // 8+ days old, in cache → skip
-    recentCached: 0,     // 3-7 days old, in cache → skip
-    veryRecentRefetch: 0, // 0-2 days, in cache → refetch (might change)
+    veryRecentRefetch: 0, // 0-7 days, in cache → refetch (within attribution window)
     notInCache: 0,       // not in cache → fetch
     forceRefreshed: 0,   // force refresh → fetch
   }
@@ -226,12 +227,9 @@ function determineDatesToFetch(
       // Data is 8+ days old and in cache - DEFINITELY use cache (Meta's attribution window passed)
       fromCache.push(dateStr)
       reasons.immutableCached++
-    } else if (isInCache && !isVeryRecent) {
-      // Data is 3-7 days old and in cache - use cache (still within attribution window but unlikely to change much)
-      fromCache.push(dateStr)
-      reasons.recentCached++
     } else if (isInCache && isVeryRecent) {
-      // Data is 0-2 days old - refetch as it might still change significantly
+      // Data is within attribution window (0-7 days) - ALWAYS refetch for accuracy
+      // Meta can adjust spend values retroactively during this period
       toFetch.push(dateStr)
       reasons.veryRecentRefetch++
     } else {
@@ -241,10 +239,9 @@ function determineDatesToFetch(
     }
   }
   
-  console.log(`\n📊 SMART SYNC ANALYSIS (IMMUTABLE_DAYS=${IMMUTABLE_DAYS_THRESHOLD}, VERY_RECENT_DAYS=${VERY_RECENT_DAYS_THRESHOLD}):`)
+  console.log(`\n📊 SMART SYNC ANALYSIS (IMMUTABLE_DAYS=${IMMUTABLE_DAYS_THRESHOLD}, ATTRIBUTION_WINDOW=${VERY_RECENT_DAYS_THRESHOLD}):`)
   console.log(`   ✅ Using cache (8+ days, immutable): ${reasons.immutableCached} dates`)
-  console.log(`   ✅ Using cache (3-7 days): ${reasons.recentCached} dates`)
-  console.log(`   🔄 Refetching (0-2 days, might change): ${reasons.veryRecentRefetch} dates`)
+  console.log(`   🔄 Refetching (0-7 days, attribution window): ${reasons.veryRecentRefetch} dates`)
   console.log(`   📥 New data (not in cache): ${reasons.notInCache} dates`)
   console.log(`   ⚡ Force refreshed: ${reasons.forceRefreshed} dates`)
   console.log(`   ⏭️ Skipped (future): ${toSkip.length} dates`)

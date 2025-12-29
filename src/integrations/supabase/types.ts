@@ -2844,10 +2844,12 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean | null
+          is_trial_available: boolean | null
           max_projects: number
           max_users_per_project: number
           name: string
           price_cents: number | null
+          trial_days: number | null
           type: Database["public"]["Enums"]["plan_type"]
           updated_at: string | null
         }
@@ -2856,10 +2858,12 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_trial_available?: boolean | null
           max_projects?: number
           max_users_per_project?: number
           name: string
           price_cents?: number | null
+          trial_days?: number | null
           type?: Database["public"]["Enums"]["plan_type"]
           updated_at?: string | null
         }
@@ -2868,10 +2872,12 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_trial_available?: boolean | null
           max_projects?: number
           max_users_per_project?: number
           name?: string
           price_cents?: number | null
+          trial_days?: number | null
           type?: Database["public"]["Enums"]["plan_type"]
           updated_at?: string | null
         }

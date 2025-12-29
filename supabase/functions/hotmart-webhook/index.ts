@@ -543,6 +543,219 @@ serve(async (req) => {
     const operation = upsertResult ? 'upserted' : 'processed';
     console.log(`${operation} sale ${transactionId}`);
     
+    // =====================================================
+    // SUBSCRIPTION MANAGEMENT - Check if product is mapped to a plan
+    // This is used for managing Cubo Mágico platform subscriptions
+    // =====================================================
+    let subscriptionCreated = false;
+    let subscriptionAction: string | null = null;
+    
+    try {
+      const productCode = product?.id?.toString();
+      const offerCode = purchase?.offer?.code;
+      const buyerEmail = buyer?.email;
+      
+      if (productCode && buyerEmail) {
+        console.log('=== CHECKING SUBSCRIPTION MAPPING ===');
+        console.log('Product code:', productCode);
+        console.log('Offer code:', offerCode);
+        console.log('Buyer email:', buyerEmail);
+        
+        // Check if this product is mapped to a plan
+        // First try with offer_code, then without
+        let planMapping = null;
+        
+        if (offerCode) {
+          const { data: mappingWithOffer } = await supabase
+            .from('hotmart_product_plans')
+            .select('id, plan_id, plans(id, name, type, max_projects)')
+            .eq('product_id', productCode)
+            .eq('offer_code', offerCode)
+            .eq('is_active', true)
+            .single();
+          
+          planMapping = mappingWithOffer;
+        }
+        
+        // If no mapping with offer_code, try without
+        if (!planMapping) {
+          const { data: mappingWithoutOffer } = await supabase
+            .from('hotmart_product_plans')
+            .select('id, plan_id, plans(id, name, type, max_projects)')
+            .eq('product_id', productCode)
+            .is('offer_code', null)
+            .eq('is_active', true)
+            .single();
+          
+          planMapping = mappingWithoutOffer;
+        }
+        
+        if (planMapping) {
+          console.log('=== PRODUCT MAPPED TO PLAN ===');
+          console.log('Plan:', (planMapping as any).plans?.name);
+          console.log('Plan ID:', planMapping.plan_id);
+          
+          // Find user by email
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .eq('email', buyerEmail.toLowerCase())
+            .single();
+          
+          if (userProfile) {
+            console.log('User found:', userProfile.id);
+            
+            // Determine subscription action based on event
+            if (event === 'PURCHASE_APPROVED' || event === 'PURCHASE_COMPLETE') {
+              // Create or activate subscription
+              const planType = (planMapping as any).plans?.type || 'monthly';
+              
+              // Calculate expiration based on plan type
+              const now = new Date();
+              let expiresAt: string | null = null;
+              
+              if (planType === 'monthly') {
+                const expireDate = new Date(now);
+                expireDate.setMonth(expireDate.getMonth() + 1);
+                expiresAt = expireDate.toISOString();
+              } else if (planType === 'yearly') {
+                const expireDate = new Date(now);
+                expireDate.setFullYear(expireDate.getFullYear() + 1);
+                expiresAt = expireDate.toISOString();
+              } else if (planType === 'lifetime') {
+                expiresAt = null; // Never expires
+              } else if (planType === 'trial') {
+                const expireDate = new Date(now);
+                expireDate.setDate(expireDate.getDate() + 7); // 7 day trial
+                expiresAt = expireDate.toISOString();
+              }
+              
+              // Check if user already has a subscription
+              const { data: existingSubscription } = await supabase
+                .from('subscriptions')
+                .select('id, plan_id, status, expires_at')
+                .eq('user_id', userProfile.id)
+                .in('status', ['active', 'trial', 'pending'])
+                .single();
+              
+              if (existingSubscription) {
+                // Update existing subscription
+                console.log('Updating existing subscription:', existingSubscription.id);
+                
+                // If upgrading to a different plan, update plan_id
+                // If same plan, extend expiration
+                let newExpiresAt = expiresAt;
+                if (existingSubscription.plan_id === planMapping.plan_id && existingSubscription.expires_at) {
+                  // Same plan - extend from current expiration
+                  const currentExpires = new Date(existingSubscription.expires_at);
+                  if (currentExpires > now) {
+                    if (planType === 'monthly') {
+                      currentExpires.setMonth(currentExpires.getMonth() + 1);
+                    } else if (planType === 'yearly') {
+                      currentExpires.setFullYear(currentExpires.getFullYear() + 1);
+                    }
+                    newExpiresAt = currentExpires.toISOString();
+                  }
+                }
+                
+                const { error: updateSubError } = await supabase
+                  .from('subscriptions')
+                  .update({
+                    plan_id: planMapping.plan_id,
+                    status: 'active',
+                    is_trial: planType === 'trial',
+                    expires_at: newExpiresAt,
+                    origin: 'hotmart',
+                    external_id: transactionId,
+                    notes: `Atualizado via Hotmart webhook - ${event}`,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', existingSubscription.id);
+                
+                if (updateSubError) {
+                  console.error('Error updating subscription:', updateSubError);
+                } else {
+                  subscriptionCreated = true;
+                  subscriptionAction = 'updated';
+                  console.log('Subscription updated successfully');
+                }
+              } else {
+                // Create new subscription
+                console.log('Creating new subscription for user:', userProfile.id);
+                
+                const { error: createSubError } = await supabase
+                  .from('subscriptions')
+                  .insert({
+                    user_id: userProfile.id,
+                    plan_id: planMapping.plan_id,
+                    status: planType === 'trial' ? 'trial' : 'active',
+                    is_trial: planType === 'trial',
+                    starts_at: new Date().toISOString(),
+                    expires_at: expiresAt,
+                    trial_ends_at: planType === 'trial' ? expiresAt : null,
+                    origin: 'hotmart',
+                    external_id: transactionId,
+                    notes: `Criado via Hotmart webhook - ${event}`
+                  });
+                
+                if (createSubError) {
+                  console.error('Error creating subscription:', createSubError);
+                } else {
+                  subscriptionCreated = true;
+                  subscriptionAction = 'created';
+                  console.log('Subscription created successfully');
+                }
+              }
+            } else if (event === 'PURCHASE_CANCELED' || event === 'PURCHASE_REFUNDED' || event === 'PURCHASE_CHARGEBACK') {
+              // Cancel subscription
+              console.log('Cancelling subscription due to:', event);
+              
+              const { error: cancelError } = await supabase
+                .from('subscriptions')
+                .update({
+                  status: 'cancelled',
+                  notes: `Cancelado via Hotmart webhook - ${event}`,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('user_id', userProfile.id)
+                .in('status', ['active', 'trial', 'pending']);
+              
+              if (cancelError) {
+                console.error('Error cancelling subscription:', cancelError);
+              } else {
+                subscriptionCreated = true;
+                subscriptionAction = 'cancelled';
+                console.log('Subscription cancelled successfully');
+              }
+            } else if (event === 'PURCHASE_RECURRENCE_CANCELLATION') {
+              // Mark subscription as expiring (don't cancel immediately)
+              console.log('Subscription recurrence cancelled, will expire at current period end');
+              
+              const { error: expireError } = await supabase
+                .from('subscriptions')
+                .update({
+                  notes: `Recorrência cancelada via Hotmart - expira em ${new Date().toISOString()}`,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('user_id', userProfile.id)
+                .in('status', ['active', 'trial']);
+              
+              if (!expireError) {
+                subscriptionAction = 'recurrence_cancelled';
+              }
+            }
+          } else {
+            console.log('User not found for email:', buyerEmail, '- Subscription will be created when user registers');
+          }
+        } else {
+          console.log('No plan mapping found for product:', productCode);
+        }
+      }
+    } catch (subscriptionError) {
+      // Don't fail the webhook if subscription logic fails
+      console.error('[Hotmart Webhook] Error processing subscription:', subscriptionError);
+    }
+    
     // Trigger automation engine for transaction events
     try {
       // We need to get the contact_id that was created by the sync trigger
@@ -594,6 +807,7 @@ serve(async (req) => {
     console.log('Status:', status);
     console.log('Operation:', operation);
     console.log('Phone captured:', !!buyerPhone);
+    console.log('Subscription action:', subscriptionAction || 'none');
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -603,6 +817,10 @@ serve(async (req) => {
       status,
       phone_captured: !!buyerPhone,
       is_abandoned_cart: event === 'PURCHASE_OUT_OF_SHOPPING_CART',
+      subscription: subscriptionAction ? {
+        action: subscriptionAction,
+        created: subscriptionCreated
+      } : null
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2 } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2, Crown } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -29,6 +29,7 @@ import { FeaturesManager } from '@/components/admin/FeaturesManager';
 import { PlanFeaturesManager } from '@/components/admin/PlanFeaturesManager';
 import { FeatureOverridesManager } from '@/components/admin/FeatureOverridesManager';
 import { HotmartProductPlansManager } from '@/components/admin/HotmartProductPlansManager';
+import { PlansManager } from '@/components/admin/PlansManager';
 
 interface UserProfile {
   id: string;
@@ -252,6 +253,12 @@ const Admin = () => {
               <CreditCard className="h-4 w-4" />
               Assinaturas
             </TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger value="plans" className="gap-2">
+                <Crown className="h-4 w-4" />
+                Planos
+              </TabsTrigger>
+            )}
             {isSuperAdmin && (
               <TabsTrigger value="projects" className="gap-2">
                 <FolderKanban className="h-4 w-4" />
@@ -566,6 +573,12 @@ const Admin = () => {
           <TabsContent value="subscriptions">
             <SubscriptionsManager />
           </TabsContent>
+
+          {isSuperAdmin && (
+            <TabsContent value="plans">
+              <PlansManager />
+            </TabsContent>
+          )}
 
           {isSuperAdmin && (
             <TabsContent value="projects">

@@ -547,6 +547,7 @@ const FunnelAnalysis = () => {
             accountIds: activeAccountIds,
             dateStart: syncStartDateStr,
             dateStop: syncEndDateStr,
+            forceRefresh: true,
           },
         });
 

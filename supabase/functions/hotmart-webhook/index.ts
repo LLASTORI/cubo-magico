@@ -549,6 +549,7 @@ serve(async (req) => {
     // =====================================================
     let subscriptionCreated = false;
     let subscriptionAction: string | null = null;
+    let newUserCreated = false;
     
     try {
       const productCode = product?.id?.toString();
@@ -592,23 +593,160 @@ serve(async (req) => {
         
         if (planMapping) {
           console.log('=== PRODUCT MAPPED TO PLAN ===');
-          console.log('Plan:', (planMapping as any).plans?.name);
+          const planName = (planMapping as any).plans?.name || 'Cubo Mágico';
+          const planType = (planMapping as any).plans?.type || 'monthly';
+          console.log('Plan:', planName);
           console.log('Plan ID:', planMapping.plan_id);
           
           // Find user by email
-          const { data: userProfile } = await supabase
+          let { data: userProfile } = await supabase
             .from('profiles')
             .select('id, email')
             .eq('email', buyerEmail.toLowerCase())
             .single();
           
+          // If user doesn't exist and this is an approved purchase, create the user
+          if (!userProfile && (event === 'PURCHASE_APPROVED' || event === 'PURCHASE_COMPLETE')) {
+            console.log('=== CREATING NEW USER ===');
+            console.log('Email:', buyerEmail);
+            console.log('Name:', buyer?.name);
+            
+            try {
+              // Generate a random secure password (user will reset it via email)
+              const randomPassword = crypto.randomUUID() + crypto.randomUUID();
+              
+              // Create user in auth.users
+              const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
+                email: buyerEmail.toLowerCase(),
+                password: randomPassword,
+                email_confirm: true, // Auto-confirm email since they bought
+                user_metadata: {
+                  full_name: buyer?.name || 'Cliente Hotmart',
+                  source: 'hotmart',
+                  transaction_id: transactionId
+                }
+              });
+              
+              if (createUserError) {
+                console.error('Error creating user:', createUserError);
+                
+                // Check if user already exists in auth but not in profiles
+                if (createUserError.message?.includes('already exists') || createUserError.message?.includes('already been registered')) {
+                  console.log('User already exists in auth, trying to find profile...');
+                  
+                  // Try to get user from auth by email
+                  const { data: existingUsers } = await supabase.auth.admin.listUsers();
+                  const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === buyerEmail.toLowerCase());
+                  
+                  if (existingUser) {
+                    // Check if profile exists
+                    const { data: existingProfile } = await supabase
+                      .from('profiles')
+                      .select('id, email')
+                      .eq('id', existingUser.id)
+                      .single();
+                    
+                    if (existingProfile) {
+                      userProfile = existingProfile;
+                      console.log('Found existing profile:', userProfile.id);
+                    } else {
+                      // Create profile for existing auth user
+                      const { data: createdProfile, error: profileError } = await supabase
+                        .from('profiles')
+                        .insert({
+                          id: existingUser.id,
+                          email: buyerEmail.toLowerCase(),
+                          full_name: buyer?.name || 'Cliente Hotmart',
+                          is_active: true,
+                          can_create_projects: true,
+                          max_projects: 0
+                        })
+                        .select('id, email')
+                        .single();
+                      
+                      if (profileError) {
+                        console.error('Error creating profile for existing user:', profileError);
+                      } else {
+                        userProfile = createdProfile;
+                        console.log('Created profile for existing auth user:', userProfile?.id);
+                      }
+                    }
+                  }
+                }
+              } else if (newUser?.user) {
+                console.log('User created successfully:', newUser.user.id);
+                newUserCreated = true;
+                
+                // Wait a bit for the trigger to create the profile
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Fetch the profile that should have been created by trigger
+                const { data: createdProfile } = await supabase
+                  .from('profiles')
+                  .select('id, email')
+                  .eq('id', newUser.user.id)
+                  .single();
+                
+                if (createdProfile) {
+                  userProfile = createdProfile;
+                  console.log('Profile found after user creation:', userProfile.id);
+                } else {
+                  // If trigger didn't create profile, create it manually
+                  console.log('Profile not found after trigger, creating manually...');
+                  
+                  const { data: manualProfile, error: manualProfileError } = await supabase
+                    .from('profiles')
+                    .insert({
+                      id: newUser.user.id,
+                      email: buyerEmail.toLowerCase(),
+                      full_name: buyer?.name || 'Cliente Hotmart',
+                      is_active: true,
+                      can_create_projects: true,
+                      max_projects: 0
+                    })
+                    .select('id, email')
+                    .single();
+                  
+                  if (manualProfileError) {
+                    console.error('Error creating profile manually:', manualProfileError);
+                  } else {
+                    userProfile = manualProfile;
+                    console.log('Profile created manually:', userProfile?.id);
+                  }
+                }
+                
+                // Send welcome email with password reset link
+                try {
+                  console.log('Sending welcome email...');
+                  const { error: emailError } = await supabase.functions.invoke('send-welcome-email', {
+                    body: {
+                      email: buyerEmail.toLowerCase(),
+                      name: buyer?.name || 'Cliente',
+                      planName: planName,
+                      transactionId: transactionId
+                    }
+                  });
+                  
+                  if (emailError) {
+                    console.error('Error sending welcome email:', emailError);
+                  } else {
+                    console.log('Welcome email sent successfully');
+                  }
+                } catch (emailErr) {
+                  console.error('Exception sending welcome email:', emailErr);
+                }
+              }
+            } catch (createError) {
+              console.error('Exception creating user:', createError);
+            }
+          }
+          
           if (userProfile) {
-            console.log('User found:', userProfile.id);
+            console.log('User found/created:', userProfile.id);
             
             // Determine subscription action based on event
             if (event === 'PURCHASE_APPROVED' || event === 'PURCHASE_COMPLETE') {
               // Create or activate subscription
-              const planType = (planMapping as any).plans?.type || 'monthly';
               
               // Calculate expiration based on plan type
               const now = new Date();
@@ -695,14 +833,14 @@ serve(async (req) => {
                     trial_ends_at: planType === 'trial' ? expiresAt : null,
                     origin: 'hotmart',
                     external_id: transactionId,
-                    notes: `Criado via Hotmart webhook - ${event}`
+                    notes: `Criado via Hotmart webhook - ${event}${newUserCreated ? ' (novo usuário)' : ''}`
                   });
                 
                 if (createSubError) {
                   console.error('Error creating subscription:', createSubError);
                 } else {
                   subscriptionCreated = true;
-                  subscriptionAction = 'created';
+                  subscriptionAction = newUserCreated ? 'created_with_user' : 'created';
                   console.log('Subscription created successfully');
                 }
               }
@@ -745,10 +883,10 @@ serve(async (req) => {
               }
             }
           } else {
-            console.log('User not found for email:', buyerEmail, '- Subscription will be created when user registers');
+            console.log('Could not find or create user for email:', buyerEmail);
           }
         } else {
-          console.log('No plan mapping found for product:', productCode);
+          console.log('No plan mapping found for product:', productCode, 'offer:', offerCode);
         }
       }
     } catch (subscriptionError) {
@@ -808,6 +946,7 @@ serve(async (req) => {
     console.log('Operation:', operation);
     console.log('Phone captured:', !!buyerPhone);
     console.log('Subscription action:', subscriptionAction || 'none');
+    console.log('New user created:', newUserCreated);
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -817,6 +956,7 @@ serve(async (req) => {
       status,
       phone_captured: !!buyerPhone,
       is_abandoned_cart: event === 'PURCHASE_OUT_OF_SHOPPING_CART',
+      new_user_created: newUserCreated,
       subscription: subscriptionAction ? {
         action: subscriptionAction,
         created: subscriptionCreated

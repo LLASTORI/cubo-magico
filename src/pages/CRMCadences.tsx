@@ -41,6 +41,7 @@ import {
   LayoutList
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { FeatureGate, FeatureUpgradeButton, FeatureLockedBadge } from '@/components/FeatureGate';
 
 const activityTypes = [
   { value: 'task', label: 'Tarefa', icon: CheckSquare },
@@ -187,10 +188,12 @@ export default function CRMCadences() {
               <LayoutList className="h-4 w-4 mr-2" />
               Ver Atividades
             </Button>
-            <Button size="sm" onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Cadência
-            </Button>
+            <FeatureUpgradeButton featureKey="crm.cadences">
+              <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Cadência
+              </Button>
+            </FeatureUpgradeButton>
           </>
         }
       />

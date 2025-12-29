@@ -36,6 +36,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { FeatureGate, FeatureLockedBadge } from '@/components/FeatureGate';
 
 interface RecoveryContact {
   id: string;

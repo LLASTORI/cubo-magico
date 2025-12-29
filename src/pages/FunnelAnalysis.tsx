@@ -29,6 +29,7 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays 
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
+import { FeatureGate, FeatureLockedBadge } from "@/components/FeatureGate";
 
 const FunnelAnalysis = () => {
   const { currentProject } = useProject();
@@ -1058,9 +1059,15 @@ const FunnelAnalysis = () => {
                 </Tooltip>
                 <TabsTrigger value="temporal">Evolução</TabsTrigger>
                 <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
-                <TabsTrigger value="utm">UTM</TabsTrigger>
+                <TabsTrigger value="utm" className="gap-1">
+                  UTM
+                  <FeatureLockedBadge featureKey="analytics.utm_analysis" className="ml-1" />
+                </TabsTrigger>
                 <TabsTrigger value="payment">Pagamentos</TabsTrigger>
-                <TabsTrigger value="ltv">LTV</TabsTrigger>
+                <TabsTrigger value="ltv" className="gap-1">
+                  LTV
+                  <FeatureLockedBadge featureKey="analytics.ltv_analysis" className="ml-1" />
+                </TabsTrigger>
                 <TabsTrigger value="changelog">Histórico</TabsTrigger>
               </TabsList>
 
@@ -1100,14 +1107,20 @@ const FunnelAnalysis = () => {
               </TabsContent>
 
               <TabsContent value="utm">
-                <UTMAnalysis
-                  salesData={salesData}
-                  funnelOfferCodes={offerCodes}
-                  metaInsights={metaInsights}
-                  metaCampaigns={metaStructure.campaigns}
-                  metaAdsets={metaStructure.adsets}
-                  metaAds={metaStructure.ads}
-                />
+                <FeatureGate 
+                  featureKey="analytics.utm_analysis" 
+                  showLocked 
+                  lockedMessage="Análise UTM detalhada disponível nos planos pagos"
+                >
+                  <UTMAnalysis
+                    salesData={salesData}
+                    funnelOfferCodes={offerCodes}
+                    metaInsights={metaInsights}
+                    metaCampaigns={metaStructure.campaigns}
+                    metaAdsets={metaStructure.adsets}
+                    metaAds={metaStructure.ads}
+                  />
+                </FeatureGate>
               </TabsContent>
 
               <TabsContent value="payment">
@@ -1118,19 +1131,25 @@ const FunnelAnalysis = () => {
               </TabsContent>
 
               <TabsContent value="ltv">
-                <LTVAnalysis
-                  salesData={salesData.map(s => ({
-                    transaction: s.transaction_id,
-                    product: s.product_name,
-                    buyer: s.buyer_email || '',
-                    value: s.total_price_brl || 0,
-                    status: s.status,
-                    date: s.sale_date || '',
-                    offerCode: s.offer_code || undefined,
-                  }))}
-                  funnelOfferCodes={offerCodes}
-                  selectedFunnel="Todos os Funis"
-                />
+                <FeatureGate 
+                  featureKey="analytics.ltv_analysis" 
+                  showLocked 
+                  lockedMessage="Análise LTV disponível nos planos pagos"
+                >
+                  <LTVAnalysis
+                    salesData={salesData.map(s => ({
+                      transaction: s.transaction_id,
+                      product: s.product_name,
+                      buyer: s.buyer_email || '',
+                      value: s.total_price_brl || 0,
+                      status: s.status,
+                      date: s.sale_date || '',
+                      offerCode: s.offer_code || undefined,
+                    }))}
+                    funnelOfferCodes={offerCodes}
+                    selectedFunnel="Todos os Funis"
+                  />
+                </FeatureGate>
               </TabsContent>
 
               <TabsContent value="changelog">

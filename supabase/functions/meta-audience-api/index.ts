@@ -877,6 +877,9 @@ async function syncAudienceInternal(
         })
       }
 
+      // Track the actual number of new contacts being added (not Meta's num_received)
+      const actualNewContacts = hashedData.length
+
       for (let i = 0; i < hashedData.length; i += META_BATCH_SIZE) {
         const batch = hashedData.slice(i, i + META_BATCH_SIZE)
         const batchRecords = contactRecords.slice(i, i + META_BATCH_SIZE)
@@ -903,7 +906,8 @@ async function syncAudienceInternal(
           console.error('Error adding users to Meta:', addResult.error)
           errors.push({ type: 'add', batch: i / META_BATCH_SIZE, error: addResult.error })
         } else {
-          addedCount += addResult.num_received || batch.length
+          // Count the actual batch size, not Meta's num_received (which can be inflated)
+          addedCount += batchRecords.length
 
           await serviceSupabase
             .from('meta_audience_contacts')
@@ -915,6 +919,8 @@ async function syncAudienceInternal(
           await delay(500)
         }
       }
+      
+      console.log(`Successfully added ${addedCount} new contacts (out of ${actualNewContacts} processed)`)
     }
     
     // Remove contacts from Meta

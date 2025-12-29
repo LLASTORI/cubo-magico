@@ -51,6 +51,7 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
   const [lookalikeAudience, setLookalikeAudience] = useState<MetaAdAudience | null>(null);
   const [logsAudience, setLogsAudience] = useState<MetaAdAudience | null>(null);
   const [deleteAudienceItem, setDeleteAudienceItem] = useState<MetaAdAudience | null>(null);
+  const [syncingAudienceId, setSyncingAudienceId] = useState<string | null>(null);
 
   const {
     audiences,
@@ -65,7 +66,12 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
   } = useMetaAudiences(projectId);
 
   const handleSync = async (audienceId: string) => {
-    await syncAudience.mutateAsync(audienceId);
+    setSyncingAudienceId(audienceId);
+    try {
+      await syncAudience.mutateAsync(audienceId);
+    } finally {
+      setSyncingAudienceId(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -226,9 +232,9 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleSync(audience.id)}
-                                disabled={syncAudience.isPending || audience.status === 'syncing'}
+                                disabled={syncingAudienceId === audience.id || audience.status === 'syncing'}
                               >
-                                <RefreshCw className={`h-4 w-4 ${syncAudience.isPending ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`h-4 w-4 ${syncingAudienceId === audience.id ? 'animate-spin' : ''}`} />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Sincronizar agora</TooltipContent>

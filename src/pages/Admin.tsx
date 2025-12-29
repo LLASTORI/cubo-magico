@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2 } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -25,6 +25,10 @@ import { ModulesManager } from '@/components/admin/ModulesManager';
 import { TermsAcceptancesManager } from '@/components/admin/TermsAcceptancesManager';
 import { UserActivityManager } from '@/components/admin/UserActivityManager';
 import { WhatsAppMetricsDashboard } from '@/components/admin/WhatsAppMetricsDashboard';
+import { FeaturesManager } from '@/components/admin/FeaturesManager';
+import { PlanFeaturesManager } from '@/components/admin/PlanFeaturesManager';
+import { FeatureOverridesManager } from '@/components/admin/FeatureOverridesManager';
+import { HotmartProductPlansManager } from '@/components/admin/HotmartProductPlansManager';
 
 interface UserProfile {
   id: string;
@@ -276,6 +280,30 @@ const Admin = () => {
               <TabsTrigger value="whatsapp" className="gap-2">
                 <MessageCircle className="h-4 w-4" />
                 WhatsApp
+              </TabsTrigger>
+            )}
+            {isSuperAdmin && (
+              <TabsTrigger value="features" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Features
+              </TabsTrigger>
+            )}
+            {isSuperAdmin && (
+              <TabsTrigger value="plan-features" className="gap-2">
+                <Grid3X3 className="h-4 w-4" />
+                Planos × Features
+              </TabsTrigger>
+            )}
+            {isSuperAdmin && (
+              <TabsTrigger value="overrides" className="gap-2">
+                <ShieldAlert className="h-4 w-4" />
+                Overrides
+              </TabsTrigger>
+            )}
+            {isSuperAdmin && (
+              <TabsTrigger value="hotmart-plans" className="gap-2">
+                <Link2 className="h-4 w-4" />
+                Hotmart → Planos
               </TabsTrigger>
             )}
           </TabsList>
@@ -566,6 +594,30 @@ const Admin = () => {
           {isSuperAdmin && (
             <TabsContent value="whatsapp">
               <WhatsAppMetricsDashboard />
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="features">
+              <FeaturesManager />
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="plan-features">
+              <PlanFeaturesManager />
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="overrides">
+              <FeatureOverridesManager />
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="hotmart-plans">
+              <HotmartProductPlansManager />
             </TabsContent>
           )}
 

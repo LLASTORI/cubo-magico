@@ -1431,6 +1431,83 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_overrides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          expires_at: string | null
+          feature_id: string
+          id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["override_target_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          expires_at?: string | null
+          feature_id: string
+          id?: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["override_target_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          expires_at?: string | null
+          feature_id?: string
+          id?: string
+          target_id?: string
+          target_type?: Database["public"]["Enums"]["override_target_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_overrides_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      features: {
+        Row: {
+          created_at: string
+          description: string | null
+          feature_key: string
+          id: string
+          is_active: boolean
+          module_key: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          feature_key: string
+          id?: string
+          is_active?: boolean
+          module_key: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          feature_key?: string
+          id?: string
+          is_active?: boolean
+          module_key?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       funnel_changes: {
         Row: {
           anotacoes: string | null
@@ -1633,6 +1710,44 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hotmart_product_plans: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          offer_code: string | null
+          plan_id: string
+          product_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          offer_code?: string | null
+          plan_id: string
+          product_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          offer_code?: string | null
+          plan_id?: string
+          product_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_product_plans_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
             referencedColumns: ["id"]
           },
         ]
@@ -2681,6 +2796,48 @@ export type Database = {
           },
         ]
       }
+      plan_features: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          feature_id: string
+          id: string
+          plan_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          feature_id: string
+          id?: string
+          plan_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          feature_id?: string
+          id?: string
+          plan_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_features_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           created_at: string | null
@@ -2688,8 +2845,10 @@ export type Database = {
           id: string
           is_active: boolean | null
           max_projects: number
+          max_users_per_project: number
           name: string
           price_cents: number | null
+          type: Database["public"]["Enums"]["plan_type"]
           updated_at: string | null
         }
         Insert: {
@@ -2698,8 +2857,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_projects?: number
+          max_users_per_project?: number
           name: string
           price_cents?: number | null
+          type?: Database["public"]["Enums"]["plan_type"]
           updated_at?: string | null
         }
         Update: {
@@ -2708,8 +2869,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_projects?: number
+          max_users_per_project?: number
           name?: string
           price_cents?: number | null
+          type?: Database["public"]["Enums"]["plan_type"]
           updated_at?: string | null
         }
         Relationships: []
@@ -3101,9 +3264,11 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           expires_at: string | null
+          external_id: string | null
           id: string
           is_trial: boolean | null
           notes: string | null
+          origin: Database["public"]["Enums"]["subscription_origin"]
           plan_id: string
           starts_at: string | null
           status: Database["public"]["Enums"]["subscription_status"]
@@ -3115,9 +3280,11 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           expires_at?: string | null
+          external_id?: string | null
           id?: string
           is_trial?: boolean | null
           notes?: string | null
+          origin?: Database["public"]["Enums"]["subscription_origin"]
           plan_id: string
           starts_at?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
@@ -3129,9 +3296,11 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           expires_at?: string | null
+          external_id?: string | null
           id?: string
           is_trial?: boolean | null
           notes?: string | null
+          origin?: Database["public"]["Enums"]["subscription_origin"]
           plan_id?: string
           starts_at?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
@@ -3715,6 +3884,10 @@ export type Database = {
     }
     Functions: {
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
+      can_use_feature: {
+        Args: { _feature_key: string; _project_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_user_create_project: { Args: { _user_id: string }; Returns: boolean }
       cleanup_old_webhook_metrics: { Args: never; Returns: undefined }
       count_project_members: { Args: { _project_id: string }; Returns: number }
@@ -3870,8 +4043,11 @@ export type Database = {
       agent_status: "online" | "away" | "offline" | "busy"
       app_role: "admin" | "user" | "super_admin"
       invite_status: "pending" | "accepted" | "rejected" | "expired"
+      override_target_type: "user" | "project"
       permission_level: "none" | "view" | "edit" | "admin"
+      plan_type: "trial" | "monthly" | "yearly" | "lifetime"
       project_role: "owner" | "manager" | "operator"
+      subscription_origin: "hotmart" | "manual" | "stripe" | "other"
       subscription_status:
         | "active"
         | "trial"
@@ -4008,8 +4184,11 @@ export const Constants = {
       agent_status: ["online", "away", "offline", "busy"],
       app_role: ["admin", "user", "super_admin"],
       invite_status: ["pending", "accepted", "rejected", "expired"],
+      override_target_type: ["user", "project"],
       permission_level: ["none", "view", "edit", "admin"],
+      plan_type: ["trial", "monthly", "yearly", "lifetime"],
       project_role: ["owner", "manager", "operator"],
+      subscription_origin: ["hotmart", "manual", "stripe", "other"],
       subscription_status: [
         "active",
         "trial",

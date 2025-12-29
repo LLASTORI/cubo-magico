@@ -181,6 +181,7 @@ async function getExistingDatesInCache(
 
 // SMART SYNC: Determine which dates need to be fetched from Meta
 // IMPROVED: Only refetch dates that are NOT in cache, preserving existing data
+// FIXED: Properly handle all date ranges to avoid gaps
 function determineDatesToFetch(
   dateStart: string,
   dateStop: string,
@@ -200,6 +201,7 @@ function determineDatesToFetch(
   // Track reasons for logging
   const reasons = {
     immutableCached: 0,  // 8+ days old, in cache → skip
+    recentCached: 0,     // 8-30 days old, in cache → skip (stable data)
     veryRecentRefetch: 0, // 0-7 days, in cache → refetch (within attribution window)
     notInCache: 0,       // not in cache → fetch
     forceRefreshed: 0,   // force refresh → fetch
@@ -217,21 +219,25 @@ function determineDatesToFetch(
     
     const isInCache = cachedDates.has(dateStr)
     const isImmutable = daysAgo >= IMMUTABLE_DAYS_THRESHOLD // 8+ days old - data won't change (Meta's attribution window)
-    const isVeryRecent = daysAgo <= VERY_RECENT_DAYS_THRESHOLD // Last 2 days data might still change significantly
+    const isVeryRecent = daysAgo < VERY_RECENT_DAYS_THRESHOLD // Within attribution window (0-6 days)
     
     if (forceRefresh) {
       // Force refresh: always fetch
       toFetch.push(dateStr)
       reasons.forceRefreshed++
-    } else if (isInCache && isImmutable) {
-      // Data is 8+ days old and in cache - DEFINITELY use cache (Meta's attribution window passed)
-      fromCache.push(dateStr)
-      reasons.immutableCached++
-    } else if (isInCache && isVeryRecent) {
-      // Data is within attribution window (0-7 days) - ALWAYS refetch for accuracy
+    } else if (isVeryRecent) {
+      // Data is within attribution window - ALWAYS refetch for accuracy
       // Meta can adjust spend values retroactively during this period
       toFetch.push(dateStr)
       reasons.veryRecentRefetch++
+    } else if (isInCache && isImmutable) {
+      // Data is 8+ days old and in cache - use cache (Meta's attribution window passed)
+      fromCache.push(dateStr)
+      reasons.immutableCached++
+    } else if (isInCache) {
+      // Data is in cache but not immutable (7 days exactly) - still use cache
+      fromCache.push(dateStr)
+      reasons.recentCached++
     } else {
       // Data not in cache - need to fetch
       toFetch.push(dateStr)
@@ -241,6 +247,7 @@ function determineDatesToFetch(
   
   console.log(`\n📊 SMART SYNC ANALYSIS (IMMUTABLE_DAYS=${IMMUTABLE_DAYS_THRESHOLD}, ATTRIBUTION_WINDOW=${VERY_RECENT_DAYS_THRESHOLD}):`)
   console.log(`   ✅ Using cache (8+ days, immutable): ${reasons.immutableCached} dates`)
+  console.log(`   ✅ Using cache (7-8 days, stable): ${reasons.recentCached} dates`)
   console.log(`   🔄 Refetching (0-7 days, attribution window): ${reasons.veryRecentRefetch} dates`)
   console.log(`   📥 New data (not in cache): ${reasons.notInCache} dates`)
   console.log(`   ⚡ Force refreshed: ${reasons.forceRefreshed} dates`)

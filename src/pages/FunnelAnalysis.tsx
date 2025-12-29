@@ -557,6 +557,16 @@ const FunnelAnalysis = () => {
           return;
         }
         
+        // Check if sync was skipped because data is already in cache
+        const responseData = response.data;
+        if (responseData?.periodDays === 0) {
+          // Data already in cache - no sync needed, just refresh UI
+          setMetaSyncStatus('done');
+          toast.success('Meta Ads: Dados já estão atualizados no cache');
+          await refetchAll();
+          return;
+        }
+        
         // Meta sync runs in background - start intelligent polling
         setMetaSyncInProgress(true);
         toast.info('Sincronização Meta Ads iniciada em background...');

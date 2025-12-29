@@ -260,7 +260,7 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
                             </TooltipContent>
                           </Tooltip>
 
-                          <FeatureGate featureKey="meta_ads.create_lookalike">
+                          <FeatureGate featureKey="create_lookalike">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button

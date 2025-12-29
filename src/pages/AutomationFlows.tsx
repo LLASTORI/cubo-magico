@@ -329,13 +329,13 @@ export default function AutomationFlows() {
             <Activity className="h-4 w-4 mr-2" />
             Execuções
           </Button>
-          <FeatureUpgradeButton featureKey="automation.create_flow">
+          <FeatureUpgradeButton featureKey="automations.create_flows">
             <Button variant="outline" onClick={() => setShowFolderDialog(true)}>
               <FolderPlus className="h-4 w-4 mr-2" />
               Nova Pasta
             </Button>
           </FeatureUpgradeButton>
-          <FeatureUpgradeButton featureKey="automation.create_flow">
+          <FeatureUpgradeButton featureKey="automations.create_flows">
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Fluxo

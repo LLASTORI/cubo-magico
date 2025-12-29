@@ -30,14 +30,12 @@ interface PlanFeature {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  meta_ads: 'Meta Ads',
+  core: 'Core (Dashboard/Configurações)',
   crm: 'CRM',
-  hotmart: 'Hotmart',
+  hotmart: 'Hotmart (inclui Lançamentos)',
+  meta_ads: 'Meta Ads',
   whatsapp: 'WhatsApp',
   automations: 'Automações',
-  dashboard: 'Dashboard',
-  launches: 'Lançamentos',
-  settings: 'Configurações',
 };
 
 export const PlanFeaturesManager = () => {

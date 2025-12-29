@@ -1072,12 +1072,12 @@ const FunnelAnalysis = () => {
                 <TabsTrigger value="comparison">Comparar Períodos</TabsTrigger>
                 <TabsTrigger value="utm" className="gap-1">
                   UTM
-                  <FeatureLockedBadge featureKey="analytics.utm_analysis" className="ml-1" />
+                  <FeatureLockedBadge featureKey="utm_analysis" className="ml-1" />
                 </TabsTrigger>
                 <TabsTrigger value="payment">Pagamentos</TabsTrigger>
                 <TabsTrigger value="ltv" className="gap-1">
                   LTV
-                  <FeatureLockedBadge featureKey="analytics.ltv_analysis" className="ml-1" />
+                  <FeatureLockedBadge featureKey="ltv_analysis" className="ml-1" />
                 </TabsTrigger>
                 <TabsTrigger value="changelog">Histórico</TabsTrigger>
               </TabsList>
@@ -1119,7 +1119,7 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="utm">
                 <FeatureGate 
-                  featureKey="analytics.utm_analysis" 
+                  featureKey="utm_analysis" 
                   showLocked 
                   lockedMessage="Análise UTM detalhada disponível nos planos pagos"
                 >
@@ -1143,7 +1143,7 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="ltv">
                 <FeatureGate 
-                  featureKey="analytics.ltv_analysis" 
+                  featureKey="ltv_analysis" 
                   showLocked 
                   lockedMessage="Análise LTV disponível nos planos pagos"
                 >

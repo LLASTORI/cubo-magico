@@ -2844,6 +2844,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean | null
+          is_public: boolean
           is_trial_available: boolean | null
           max_projects: number
           max_users_per_project: number
@@ -2858,6 +2859,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_public?: boolean
           is_trial_available?: boolean | null
           max_projects?: number
           max_users_per_project?: number
@@ -2872,6 +2874,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_public?: boolean
           is_trial_available?: boolean | null
           max_projects?: number
           max_users_per_project?: number

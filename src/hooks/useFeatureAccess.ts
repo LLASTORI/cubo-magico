@@ -264,8 +264,24 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
       return true;
     }
 
-    // Extract module key from feature key (e.g., 'meta_ads.create_audience' -> 'meta_ads')
-    const moduleKey = featureKey.split('.')[0];
+    // Find feature to get its module_key
+    const feature = features.find(f => f.feature_key === featureKey);
+    const moduleKey = feature?.module_key || featureKey.split('.')[0];
+
+    // "core" module features are always available (dashboard, settings, etc.)
+    if (moduleKey === 'core') {
+      // Still check plan features and overrides for core features
+      const userOverride = overrides.find(o => o.feature_key === featureKey);
+      if (userOverride !== undefined) {
+        return userOverride.enabled;
+      }
+      const planFeature = planFeatures.find(pf => pf.feature_key === featureKey);
+      if (planFeature !== undefined) {
+        return planFeature.enabled;
+      }
+      // Core features are available by default
+      return true;
+    }
 
     // Check if module is active in project
     if (currentProject && !activeModules.includes(moduleKey)) {

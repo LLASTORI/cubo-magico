@@ -38,6 +38,20 @@ const MODULE_LABELS: Record<string, string> = {
   automations: 'Automações',
 };
 
+// Custom plan order: Básico → Pro → Business → Ilimitado
+const PLAN_ORDER: Record<string, number> = {
+  'básico': 1,
+  'basico': 1,
+  'pro': 2,
+  'business': 3,
+  'ilimitado': 4,
+};
+
+const getPlanOrder = (planName: string): number => {
+  const normalized = planName.toLowerCase().trim();
+  return PLAN_ORDER[normalized] ?? 99;
+};
+
 export const PlanFeaturesManager = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
@@ -52,11 +66,15 @@ export const PlanFeaturesManager = () => {
       const { data: plansData, error: plansError } = await supabase
         .from('plans')
         .select('id, name, max_projects, is_active')
-        .eq('is_active', true)
-        .order('max_projects', { ascending: true });
+        .eq('is_active', true);
 
       if (plansError) throw plansError;
-      setPlans(plansData || []);
+      
+      // Sort plans by custom order
+      const sortedPlans = (plansData || []).sort((a, b) => 
+        getPlanOrder(a.name) - getPlanOrder(b.name)
+      );
+      setPlans(sortedPlans);
 
       // Fetch features
       const { data: featuresData, error: featuresError } = await supabase

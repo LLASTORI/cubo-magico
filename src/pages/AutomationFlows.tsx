@@ -54,6 +54,7 @@ import {
   GripVertical
 } from 'lucide-react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { FeatureGate, FeatureUpgradeButton, FeatureLockedBadge } from '@/components/FeatureGate';
 
 import { ShoppingCart, Tag } from 'lucide-react';
 
@@ -328,14 +329,18 @@ export default function AutomationFlows() {
             <Activity className="h-4 w-4 mr-2" />
             Execuções
           </Button>
-          <Button variant="outline" onClick={() => setShowFolderDialog(true)}>
-            <FolderPlus className="h-4 w-4 mr-2" />
-            Nova Pasta
-          </Button>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Fluxo
-          </Button>
+          <FeatureUpgradeButton featureKey="automation.create_flow">
+            <Button variant="outline" onClick={() => setShowFolderDialog(true)}>
+              <FolderPlus className="h-4 w-4 mr-2" />
+              Nova Pasta
+            </Button>
+          </FeatureUpgradeButton>
+          <FeatureUpgradeButton featureKey="automation.create_flow">
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Fluxo
+            </Button>
+          </FeatureUpgradeButton>
         </div>
 
         {/* Filters */}

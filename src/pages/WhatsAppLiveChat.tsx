@@ -36,6 +36,7 @@ import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
 import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { FeatureGate, FeatureLockedBadge } from '@/components/FeatureGate';
 
 export default function WhatsAppLiveChat() {
   const { currentProject } = useProject();

@@ -24,6 +24,7 @@ import { MetaAudienceDialog } from './MetaAudienceDialog';
 import { MetaAudienceEditDialog } from './MetaAudienceEditDialog';
 import { MetaLookalikeDialog } from './MetaLookalikeDialog';
 import { MetaAudienceSyncLogs } from './MetaAudienceSyncLogs';
+import { FeatureGate, FeatureLockedBadge, FeatureUpgradeButton } from '@/components/FeatureGate';
 
 interface MetaAudiencesTabProps {
   projectId: string;
@@ -104,15 +105,17 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
             Crie e sincronize públicos personalizados no Meta Ads baseados em tags do CRM
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Button variant="outline" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} disabled={adAccounts.length === 0}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Público
-          </Button>
+          <FeatureUpgradeButton featureKey="meta_ads.create_audience">
+            <Button onClick={() => setCreateDialogOpen(true)} disabled={adAccounts.length === 0}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Público
+            </Button>
+          </FeatureUpgradeButton>
         </div>
       </div>
 
@@ -251,23 +254,25 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
                             </TooltipContent>
                           </Tooltip>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setLookalikeAudience(audience)}
-                                disabled={(audience.estimated_size || 0) < 100}
-                              >
-                                <Copy className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {(audience.estimated_size || 0) < 100
-                                ? 'Mínimo 100 contatos para Lookalike'
-                                : 'Criar público semelhante'}
-                            </TooltipContent>
-                          </Tooltip>
+                          <FeatureGate featureKey="meta_ads.create_lookalike">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setLookalikeAudience(audience)}
+                                  disabled={(audience.estimated_size || 0) < 100}
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {(audience.estimated_size || 0) < 100
+                                  ? 'Mínimo 100 contatos para Lookalike'
+                                  : 'Criar público semelhante'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </FeatureGate>
 
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -326,10 +331,12 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
               <p className="text-muted-foreground mb-4">
                 Crie seu primeiro público personalizado para sincronizar contatos com o Meta Ads.
               </p>
-              <Button onClick={() => setCreateDialogOpen(true)} disabled={adAccounts.length === 0}>
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Público
-              </Button>
+              <FeatureUpgradeButton featureKey="meta_ads.create_audience">
+                <Button onClick={() => setCreateDialogOpen(true)} disabled={adAccounts.length === 0}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar Público
+                </Button>
+              </FeatureUpgradeButton>
             </div>
           </CardContent>
         </Card>

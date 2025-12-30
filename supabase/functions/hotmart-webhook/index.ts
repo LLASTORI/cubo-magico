@@ -842,6 +842,30 @@ serve(async (req) => {
                   subscriptionCreated = true;
                   subscriptionAction = newUserCreated ? 'created_with_user' : 'created';
                   console.log('Subscription created successfully');
+                  
+                  // Send welcome email for new subscription (even for existing users)
+                  if (!newUserCreated) {
+                    try {
+                      console.log('Sending welcome email for existing user with new subscription...');
+                      const welcomePlanName = (planMapping as any).plans?.name || 'Cubo Mágico';
+                      const { error: emailError } = await supabase.functions.invoke('send-welcome-email', {
+                        body: {
+                          email: buyerEmail.toLowerCase(),
+                          name: buyer?.name || 'Cliente',
+                          planName: welcomePlanName,
+                          transactionId: transactionId
+                        }
+                      });
+                      
+                      if (emailError) {
+                        console.error('Error sending welcome email:', emailError);
+                      } else {
+                        console.log('Welcome email sent successfully to existing user');
+                      }
+                    } catch (emailErr) {
+                      console.error('Exception sending welcome email to existing user:', emailErr);
+                    }
+                  }
                 }
               }
             } else if (event === 'PURCHASE_CANCELED' || event === 'PURCHASE_REFUNDED' || event === 'PURCHASE_CHARGEBACK') {

@@ -181,7 +181,7 @@ export default function AutomationFlows() {
   const [keywords, setKeywords] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [triggerTags, setTriggerTags] = useState('');
-  const [folderId, setFolderId] = useState<string>('');
+  const [folderId, setFolderId] = useState<string>('__none__');
   const [folderName, setFolderName] = useState('');
 
   const automationEnabled = isModuleEnabled('automation');
@@ -216,7 +216,7 @@ export default function AutomationFlows() {
       description: description.trim() || undefined,
       trigger_type: triggerType,
       trigger_config: triggerConfig,
-      folder_id: folderId || undefined,
+      folder_id: folderId && folderId !== '__none__' ? folderId : undefined,
     });
 
     // Reset form
@@ -226,7 +226,7 @@ export default function AutomationFlows() {
     setKeywords('');
     setSelectedStatuses([]);
     setTriggerTags('');
-    setFolderId('');
+    setFolderId('__none__');
     setShowCreateDialog(false);
   };
 
@@ -722,7 +722,7 @@ export default function AutomationFlows() {
                     <SelectValue placeholder="Selecione uma pasta" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma pasta</SelectItem>
+                    <SelectItem value="__none__">Nenhuma pasta</SelectItem>
                     {folders.map((f) => (
                       <SelectItem key={f.id} value={f.id}>
                         <div className="flex items-center gap-2">

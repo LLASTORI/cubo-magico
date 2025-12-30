@@ -35,6 +35,7 @@ const ResetPassword = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isValidSession, setIsValidSession] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [isFirstPassword, setIsFirstPassword] = useState(false);
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -45,6 +46,19 @@ const ResetPassword = () => {
       if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
         setIsValidSession(true);
         setCheckingSession(false);
+        
+        // Check if this is the user's first time setting a password
+        // If the user was created by the system (via webhook), they never set a password
+        if (session?.user) {
+          const createdAt = new Date(session.user.created_at);
+          const lastSignIn = session.user.last_sign_in_at ? new Date(session.user.last_sign_in_at) : null;
+          
+          // If last_sign_in is very close to created_at (within 5 minutes), it's likely first access
+          // Or if this is a magiclink type access
+          const timeDiff = lastSignIn ? Math.abs(lastSignIn.getTime() - createdAt.getTime()) : 0;
+          const isFirstAccess = !lastSignIn || timeDiff < 5 * 60 * 1000; // 5 minutes
+          setIsFirstPassword(isFirstAccess);
+        }
       }
     });
 
@@ -53,8 +67,12 @@ const ResetPassword = () => {
     const accessToken = hashParams.get('access_token');
     const type = hashParams.get('type');
 
-    if (accessToken && type === 'recovery') {
+    if (accessToken && (type === 'recovery' || type === 'magiclink')) {
       // Token exists in URL, wait for Supabase to process it
+      // If it's a magiclink, it's likely first password setup
+      if (type === 'magiclink') {
+        setIsFirstPassword(true);
+      }
       timeoutId = setTimeout(() => {
         // If still checking after 3 seconds, assume invalid
         setCheckingSession(false);
@@ -168,8 +186,13 @@ const ResetPassword = () => {
             <CuboBrand size="lg" />
           </div>
           <CardDescription className="text-base">
-            Redefinir Senha
+            {isFirstPassword ? 'Criar Minha Senha' : 'Redefinir Senha'}
           </CardDescription>
+          {isFirstPassword && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Sua conta foi criada! Defina uma senha para acessar o Cubo Mágico.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           {success ? (
@@ -177,15 +200,19 @@ const ResetPassword = () => {
               <div className="flex justify-center">
                 <CheckCircle className="h-16 w-16 text-green-500" />
               </div>
-              <h3 className="text-lg font-semibold">Senha Alterada!</h3>
+              <h3 className="text-lg font-semibold">
+                {isFirstPassword ? 'Senha Criada!' : 'Senha Alterada!'}
+              </h3>
               <p className="text-muted-foreground">
-                Redirecionando para seus projetos...
+                {isFirstPassword 
+                  ? 'Bem-vindo ao Cubo Mágico! Redirecionando...' 
+                  : 'Redirecionando para seus projetos...'}
               </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Nova Senha</Label>
+                <Label htmlFor="password">{isFirstPassword ? 'Sua Senha' : 'Nova Senha'}</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -226,7 +253,7 @@ const ResetPassword = () => {
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Redefinir Senha
+                {isFirstPassword ? 'Criar Minha Senha' : 'Redefinir Senha'}
               </Button>
             </form>
           )}

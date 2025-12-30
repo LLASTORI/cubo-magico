@@ -149,13 +149,14 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
             </Button>
           </div>
           <div className="rounded-lg bg-muted p-4">
-            <p className="text-sm font-medium mb-2">Permissões necessárias:</p>
+            <p className="text-sm font-medium mb-2">Permissões necessárias (disponíveis em modo de desenvolvimento):</p>
             <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• pages_show_list</li>
               <li>• pages_read_engagement</li>
-              <li>• pages_manage_engagement</li>
-              <li>• instagram_basic</li>
-              <li>• instagram_manage_comments</li>
             </ul>
+            <p className="text-xs text-muted-foreground mt-2">
+              Nota: Permissões avançadas (instagram_basic, instagram_manage_comments) requerem App Review do Meta.
+            </p>
           </div>
         </CardContent>
       </Card>

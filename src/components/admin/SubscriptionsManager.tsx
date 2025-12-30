@@ -349,6 +349,7 @@ export const SubscriptionsManager = () => {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Plano</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Origem</TableHead>
                   <TableHead>Expira em</TableHead>
                   <TableHead>Projetos</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -357,13 +358,13 @@ export const SubscriptionsManager = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : filteredSubscriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhuma assinatura encontrada
                     </TableCell>
                   </TableRow>
@@ -387,6 +388,11 @@ export const SubscriptionsManager = () => {
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(sub)}</TableCell>
+                        <TableCell>
+                          <Badge variant={sub.origin === 'hotmart' ? 'default' : sub.origin === 'stripe' ? 'secondary' : 'outline'}>
+                            {sub.origin === 'hotmart' ? 'Hotmart' : sub.origin === 'stripe' ? 'Stripe' : sub.origin === 'other' ? 'Outro' : 'Manual'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           {sub.is_trial && sub.trial_ends_at ? (
                             <div>
@@ -460,7 +466,13 @@ export const SubscriptionsManager = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {plans.filter(p => p.is_active).map(plan => (
+            {plans
+              .filter(p => p.is_active)
+              .sort((a, b) => {
+                const order: Record<string, number> = { 'básico': 1, 'basico': 1, 'pro': 2, 'business': 3, 'ilimitado': 4 };
+                return (order[a.name.toLowerCase()] ?? 99) - (order[b.name.toLowerCase()] ?? 99);
+              })
+              .map(plan => (
               <div key={plan.id} className="p-4 border rounded-lg">
                 <h3 className="font-semibold text-lg">{plan.name}</h3>
                 <p className="text-sm text-muted-foreground mb-2">{plan.description}</p>

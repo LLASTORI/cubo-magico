@@ -25,6 +25,8 @@ export interface Subscription {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  origin: 'manual' | 'hotmart' | 'stripe' | 'other';
+  external_id: string | null;
   plan?: Plan;
   profile?: {
     id: string;

@@ -560,13 +560,41 @@ async function getAvailablePages(accessToken: string) {
   console.log('Getting available pages for user')
   
   try {
+    // First, check token permissions
+    const debugUrl = `${GRAPH_API_BASE}/debug_token?input_token=${accessToken}&access_token=${accessToken}`
+    const debugResponse = await fetch(debugUrl)
+    const debugData = await debugResponse.json()
+    
+    console.log('Token debug info:', JSON.stringify({
+      isValid: debugData.data?.is_valid,
+      scopes: debugData.data?.scopes,
+      expiresAt: debugData.data?.expires_at,
+      userId: debugData.data?.user_id,
+    }))
+    
+    // Get user pages
     const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
+    console.log('Fetching pages from:', pagesUrl.replace(accessToken, 'TOKEN_HIDDEN'))
+    
     const response = await fetch(pagesUrl)
     const data = await response.json()
 
+    console.log('Pages API response:', JSON.stringify({
+      hasData: !!data.data,
+      dataLength: data.data?.length,
+      error: data.error,
+      paging: !!data.paging,
+    }))
+
     if (data.error) {
       console.error('Meta API error:', data.error)
-      throw new Error(data.error.message)
+      return { 
+        success: false, 
+        error: data.error.message,
+        errorCode: data.error.code,
+        errorType: data.error.type,
+        pages: [] 
+      }
     }
 
     const pages = (data.data || []).map((page: any) => ({
@@ -580,7 +608,17 @@ async function getAvailablePages(accessToken: string) {
     }))
 
     console.log(`Found ${pages.length} pages`)
-    return { success: true, pages }
+    
+    // If no pages found, check if user has pages but no permission
+    if (pages.length === 0) {
+      console.log('No pages found. This could mean:')
+      console.log('1. User has no Facebook Pages')
+      console.log('2. User did not grant pages_show_list permission')
+      console.log('3. User did not grant pages_read_engagement permission')
+      console.log('Token scopes:', debugData.data?.scopes)
+    }
+    
+    return { success: true, pages, scopes: debugData.data?.scopes }
   } catch (error: any) {
     console.error('Error getting pages:', error)
     return { success: false, error: error.message, pages: [] }

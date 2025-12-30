@@ -723,7 +723,8 @@ serve(async (req) => {
                       email: buyerEmail.toLowerCase(),
                       name: buyer?.name || 'Cliente',
                       planName: planName,
-                      transactionId: transactionId
+                      transactionId: transactionId,
+                      internalSecret: Deno.env.get('SEND_WELCOME_EMAIL_SECRET')
                     }
                   });
                   
@@ -831,7 +832,8 @@ serve(async (req) => {
                           email: buyerEmail.toLowerCase(),
                           name: buyer?.name || 'Cliente',
                           planName: welcomePlanName,
-                          transactionId: transactionId
+                          transactionId: transactionId,
+                          internalSecret: Deno.env.get('SEND_WELCOME_EMAIL_SECRET')
                         }
                       });
 
@@ -892,7 +894,8 @@ serve(async (req) => {
                           email: buyerEmail.toLowerCase(),
                           name: buyer?.name || 'Cliente',
                           planName: welcomePlanName,
-                          transactionId: transactionId
+                          transactionId: transactionId,
+                          internalSecret: Deno.env.get('SEND_WELCOME_EMAIL_SECRET')
                         }
                       });
                       

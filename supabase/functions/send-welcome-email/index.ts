@@ -35,7 +35,18 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, name, planName, transactionId }: WelcomeEmailRequest = await req.json();
+    const body = await req.json();
+    const { email, name, planName, transactionId, internalSecret } = body as WelcomeEmailRequest & { internalSecret?: string };
+
+    // Validate internal secret for internal calls (from other edge functions)
+    const expectedSecret = Deno.env.get("SEND_WELCOME_EMAIL_SECRET");
+    if (expectedSecret && internalSecret !== expectedSecret) {
+      console.error('Invalid internal secret provided');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     console.log(`Sending welcome email to ${email} for plan ${planName}`);
 

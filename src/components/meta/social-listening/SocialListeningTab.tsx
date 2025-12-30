@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { 
   MessageCircle, 
   RefreshCw, 
@@ -16,7 +17,8 @@ import {
   Ban,
   Star,
   Instagram,
-  Facebook
+  Facebook,
+  Settings2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +27,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
+import { SocialListeningPagesManager } from './SocialListeningPagesManager';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -50,12 +55,27 @@ const classificationConfig: Record<string, { label: string; icon: any; color: st
 };
 
 export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
+  const [activeSubTab, setActiveSubTab] = useState('dashboard');
   const [filters, setFilters] = useState({
     sentiment: 'all',
     classification: 'all',
     platform: 'all',
     search: '',
   });
+
+  // Check if pages are configured
+  const { data: savedPages, isLoading: loadingPages, refetch: refetchPages } = useQuery({
+    queryKey: ['social-listening-pages', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('social-comments-api', {
+        body: { action: 'get_saved_pages', projectId }
+      });
+      if (error) throw error;
+      return data?.pages || [];
+    },
+  });
+
+  const hasConfiguredPages = savedPages && savedPages.length > 0;
 
   const { 
     posts, 
@@ -87,9 +107,36 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   const isSyncing = syncPosts.isPending || syncComments.isPending;
   const isProcessing = processAI.isPending;
 
+  // Show setup screen if no pages configured
+  if (loadingPages) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (!hasConfiguredPages) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold">Social Listening</h2>
+          <p className="text-muted-foreground">
+            Configure as páginas que deseja monitorar
+          </p>
+        </div>
+        <SocialListeningPagesManager 
+          projectId={projectId} 
+          onPagesConfigured={() => refetchPages()}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with sub-tabs */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Social Listening</h2>
@@ -97,24 +144,21 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
             Monitore e analise comentários do Instagram e Facebook
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleSync}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
-          </Button>
-          <Button 
-            onClick={handleProcessAI}
-            disabled={isProcessing || (stats?.pendingAI === 0)}
-          >
-            <Brain className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-pulse' : ''}`} />
-            {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
-          </Button>
-        </div>
       </div>
+
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
+        <TabsList>
+          <TabsTrigger value="dashboard" className="gap-2">
+            <MessageCircle className="h-4 w-4" />
+            Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="configuracoes" className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            Páginas ({savedPages?.length || 0})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6 mt-6">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -313,6 +357,34 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Sync Buttons */}
+      <div className="flex justify-end gap-2">
+        <Button 
+          variant="outline" 
+          onClick={handleSync}
+          disabled={isSyncing}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+          {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+        </Button>
+        <Button 
+          onClick={handleProcessAI}
+          disabled={isProcessing || (stats?.pendingAI === 0)}
+        >
+          <Brain className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-pulse' : ''}`} />
+          {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
+        </Button>
+      </div>
+        </TabsContent>
+
+        <TabsContent value="configuracoes" className="mt-6">
+          <SocialListeningPagesManager 
+            projectId={projectId} 
+            onPagesConfigured={() => refetchPages()}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

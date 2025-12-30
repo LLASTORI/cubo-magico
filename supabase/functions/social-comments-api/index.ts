@@ -87,6 +87,19 @@ Deno.serve(async (req) => {
     let result: any
 
     switch (action) {
+      case 'get_available_pages':
+        result = await getAvailablePages(accessToken)
+        break
+
+      case 'save_pages':
+        const { pages } = body
+        result = await saveSelectedPages(serviceSupabase, projectId, accessToken, pages)
+        break
+
+      case 'get_saved_pages':
+        result = await getSavedPages(supabase, projectId)
+        break
+
       case 'sync_posts':
         result = await syncPosts(serviceSupabase, projectId, accessToken)
         break
@@ -540,4 +553,88 @@ async function getStats(supabase: any, projectId: string) {
     sentimentDistribution: sentimentDist,
     classificationDistribution: classificationDist,
   }
+}
+
+// Get available Facebook Pages and Instagram accounts
+async function getAvailablePages(accessToken: string) {
+  console.log('Getting available pages for user')
+  
+  try {
+    const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
+    const response = await fetch(pagesUrl)
+    const data = await response.json()
+
+    if (data.error) {
+      console.error('Meta API error:', data.error)
+      throw new Error(data.error.message)
+    }
+
+    const pages = (data.data || []).map((page: any) => ({
+      pageId: page.id,
+      pageName: page.name,
+      pageAccessToken: page.access_token,
+      pagePicture: page.picture?.data?.url,
+      instagramAccountId: page.instagram_business_account?.id,
+      instagramUsername: page.instagram_business_account?.username,
+      instagramPicture: page.instagram_business_account?.profile_picture_url,
+    }))
+
+    console.log(`Found ${pages.length} pages`)
+    return { success: true, pages }
+  } catch (error: any) {
+    console.error('Error getting pages:', error)
+    return { success: false, error: error.message, pages: [] }
+  }
+}
+
+// Save selected pages to database
+async function saveSelectedPages(supabase: any, projectId: string, accessToken: string, pages: any[]) {
+  console.log(`Saving ${pages.length} pages for project:`, projectId)
+
+  const errors: string[] = []
+  let saved = 0
+
+  for (const page of pages) {
+    try {
+      const pageData: any = {
+        project_id: projectId,
+        platform: page.instagramAccountId ? 'instagram' : 'facebook',
+        page_id: page.pageId,
+        page_name: page.pageName,
+        page_access_token: page.pageAccessToken,
+        instagram_account_id: page.instagramAccountId || null,
+        instagram_username: page.instagramUsername || null,
+        is_active: true,
+      }
+
+      const { error } = await supabase
+        .from('social_listening_pages')
+        .upsert(pageData, { onConflict: 'project_id,page_id' })
+
+      if (error) {
+        errors.push(`${page.pageName}: ${error.message}`)
+      } else {
+        saved++
+      }
+    } catch (e: any) {
+      errors.push(`${page.pageName}: ${e.message}`)
+    }
+  }
+
+  return { success: errors.length === 0, saved, errors }
+}
+
+// Get saved pages from database
+async function getSavedPages(supabase: any, projectId: string) {
+  const { data, error } = await supabase
+    .from('social_listening_pages')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    return { success: false, error: error.message, pages: [] }
+  }
+
+  return { success: true, pages: data || [] }
 }

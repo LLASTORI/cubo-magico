@@ -3473,6 +3473,59 @@ export type Database = {
           },
         ]
       }
+      social_listening_pages: {
+        Row: {
+          created_at: string
+          id: string
+          instagram_account_id: string | null
+          instagram_username: string | null
+          is_active: boolean
+          last_synced_at: string | null
+          page_access_token: string | null
+          page_id: string
+          page_name: string
+          platform: Database["public"]["Enums"]["social_platform"]
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          instagram_account_id?: string | null
+          instagram_username?: string | null
+          is_active?: boolean
+          last_synced_at?: string | null
+          page_access_token?: string | null
+          page_id: string
+          page_name: string
+          platform: Database["public"]["Enums"]["social_platform"]
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          instagram_account_id?: string | null
+          instagram_username?: string | null
+          is_active?: boolean
+          last_synced_at?: string | null
+          page_access_token?: string | null
+          page_id?: string
+          page_name?: string
+          platform?: Database["public"]["Enums"]["social_platform"]
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_listening_pages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_listening_sync_logs: {
         Row: {
           comments_processed: number | null

@@ -128,6 +128,13 @@ export type Database = {
             foreignKeyName: "automation_executions_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "automation_executions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -560,6 +567,13 @@ export type Database = {
             foreignKeyName: "crm_activities_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -629,6 +643,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_activities_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
           {
             foreignKeyName: "crm_activities_tasks_contact_id_fkey"
             columns: ["contact_id"]
@@ -798,6 +819,13 @@ export type Database = {
             foreignKeyName: "crm_contact_cadences_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_cadences_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -883,6 +911,13 @@ export type Database = {
           utm_term?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_contact_interactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
           {
             foreignKeyName: "crm_contact_interactions_contact_id_fkey"
             columns: ["contact_id"]
@@ -1215,6 +1250,13 @@ export type Database = {
             foreignKeyName: "crm_recovery_activities_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_recovery_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -1406,6 +1448,13 @@ export type Database = {
           utm_term?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_transactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
           {
             foreignKeyName: "crm_transactions_contact_id_fkey"
             columns: ["contact_id"]
@@ -2442,6 +2491,13 @@ export type Database = {
             foreignKeyName: "meta_audience_contacts_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "meta_audience_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -3364,6 +3420,7 @@ export type Database = {
           comment_id_meta: string
           comment_timestamp: string
           created_at: string
+          crm_contact_id: string | null
           id: string
           intent_score: number | null
           is_deleted: boolean | null
@@ -3398,6 +3455,7 @@ export type Database = {
           comment_id_meta: string
           comment_timestamp: string
           created_at?: string
+          crm_contact_id?: string | null
           id?: string
           intent_score?: number | null
           is_deleted?: boolean | null
@@ -3432,6 +3490,7 @@ export type Database = {
           comment_id_meta?: string
           comment_timestamp?: string
           created_at?: string
+          crm_contact_id?: string | null
           id?: string
           intent_score?: number | null
           is_deleted?: boolean | null
@@ -3450,6 +3509,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "social_comments_crm_contact_id_fkey"
+            columns: ["crm_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "social_comments_crm_contact_id_fkey"
+            columns: ["crm_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "social_comments_parent_fkey"
             columns: ["parent_comment_id"]
@@ -4045,6 +4118,13 @@ export type Database = {
             foreignKeyName: "whatsapp_conversations_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -4286,7 +4366,32 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      contact_social_insights: {
+        Row: {
+          avg_intent_score: number | null
+          commercial_interest_count: number | null
+          contact_id: string | null
+          contact_name: string | null
+          email: string | null
+          instagram: string | null
+          last_comment_at: string | null
+          negative_comments: number | null
+          neutral_comments: number | null
+          positive_comments: number | null
+          project_id: string | null
+          questions_count: number | null
+          total_comments: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       aggregate_comment_metrics_daily: {

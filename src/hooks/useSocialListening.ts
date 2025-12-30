@@ -44,7 +44,13 @@ export interface SocialComment {
   is_replied: boolean;
   comment_timestamp: string;
   created_at: string;
+  crm_contact_id: string | null;
   social_posts?: SocialPost;
+  crm_contacts?: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
 }
 
 export interface SocialStats {
@@ -95,7 +101,7 @@ export function useSocialListening(projectId: string | undefined) {
 
         let query = supabase
           .from('social_comments')
-          .select('*, social_posts(*)')
+          .select('*, social_posts(*), crm_contacts(id, name, email)')
           .eq('project_id', projectId)
           .eq('is_deleted', false)
           .order('comment_timestamp', { ascending: false });
@@ -223,6 +229,33 @@ export function useSocialListening(projectId: string | undefined) {
     },
   });
 
+  // Link to CRM mutation
+  const linkToCRM = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('social-comments-api', {
+        body: { action: 'link_crm_contacts', projectId },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Vinculação concluída!',
+        description: `${data.linked} comentários vinculados ao CRM.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao vincular ao CRM',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   return {
     posts,
     postsLoading,
@@ -234,5 +267,6 @@ export function useSocialListening(projectId: string | undefined) {
     syncPosts,
     syncComments,
     processAI,
+    linkToCRM,
   };
 }

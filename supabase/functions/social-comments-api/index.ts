@@ -112,6 +112,10 @@ Deno.serve(async (req) => {
         result = await processCommentsWithAI(serviceSupabase, projectId, limit || 50)
         break
 
+      case 'link_crm_contacts':
+        result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
+        break
+
       case 'get_stats':
         result = await getStats(supabase, projectId)
         break
@@ -389,6 +393,14 @@ async function getCommentByMetaId(supabase: any, projectId: string, metaId: stri
 }
 
 async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any, parentId?: string) {
+  const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
+  
+  // Try to match with CRM contact by Instagram username
+  let crmContactId: string | null = null
+  if (authorUsername && platform === 'instagram') {
+    crmContactId = await findCRMContactByInstagram(supabase, projectId, authorUsername)
+  }
+  
   const commentData: any = {
     project_id: projectId,
     post_id: postId,
@@ -396,12 +408,13 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
     comment_id_meta: comment.id,
     parent_comment_id: parentId || null,
     text: platform === 'instagram' ? comment.text : comment.message,
-    author_username: platform === 'instagram' ? comment.username : comment.from?.name,
+    author_username: authorUsername,
     author_id: platform === 'instagram' ? null : comment.from?.id,
     like_count: comment.like_count || 0,
     reply_count: comment.comment_count || comment.replies?.data?.length || 0,
     comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
     ai_processing_status: 'pending',
+    crm_contact_id: crmContactId,
   }
 
   const { error } = await supabase
@@ -411,6 +424,113 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
   if (error) {
     console.error('Error upserting comment:', error)
   }
+}
+
+// Find CRM contact by Instagram username
+async function findCRMContactByInstagram(supabase: any, projectId: string, instagramUsername: string): Promise<string | null> {
+  if (!instagramUsername) return null
+  
+  // Normalize username (remove @ if present)
+  const normalizedUsername = instagramUsername.replace(/^@/, '').toLowerCase()
+  
+  const { data, error } = await supabase
+    .from('crm_contacts')
+    .select('id')
+    .eq('project_id', projectId)
+    .or(`instagram.ilike.${normalizedUsername},instagram.ilike.@${normalizedUsername}`)
+    .limit(1)
+    .maybeSingle()
+  
+  if (error) {
+    console.error('Error finding CRM contact by Instagram:', error)
+    return null
+  }
+  
+  if (data) {
+    console.log(`Matched Instagram @${normalizedUsername} to CRM contact: ${data.id}`)
+  }
+  
+  return data?.id || null
+}
+
+// Link existing comments to CRM contacts (batch operation)
+async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
+  console.log('Linking existing comments to CRM contacts for project:', projectId)
+  
+  let linked = 0
+  let notFound = 0
+  
+  // Get comments without CRM link that have Instagram usernames
+  const { data: comments, error } = await supabase
+    .from('social_comments')
+    .select('id, author_username, platform')
+    .eq('project_id', projectId)
+    .eq('platform', 'instagram')
+    .is('crm_contact_id', null)
+    .not('author_username', 'is', null)
+    .limit(500)
+  
+  if (error) {
+    console.error('Error fetching comments for CRM linking:', error)
+    return { success: false, error: error.message }
+  }
+  
+  if (!comments || comments.length === 0) {
+    return { success: true, linked: 0, message: 'Nenhum comentário pendente para vincular' }
+  }
+  
+  console.log(`Found ${comments.length} comments to try linking`)
+  
+  // Get all unique usernames
+  const uniqueUsernames = [...new Set(comments.map((c: any) => c.author_username?.toLowerCase()?.replace(/^@/, '')))]
+  
+  // Get all CRM contacts with Instagram usernames for this project
+  const { data: contacts, error: contactsError } = await supabase
+    .from('crm_contacts')
+    .select('id, instagram')
+    .eq('project_id', projectId)
+    .not('instagram', 'is', null)
+  
+  if (contactsError) {
+    console.error('Error fetching CRM contacts:', contactsError)
+    return { success: false, error: contactsError.message }
+  }
+  
+  // Create a map for fast lookup (normalize Instagram usernames)
+  const contactMap = new Map<string, string>()
+  for (const contact of contacts || []) {
+    if (contact.instagram) {
+      const normalizedIG = contact.instagram.toLowerCase().replace(/^@/, '')
+      contactMap.set(normalizedIG, contact.id)
+    }
+  }
+  
+  console.log(`Found ${contactMap.size} CRM contacts with Instagram usernames`)
+  
+  // Update comments with matched CRM contact IDs
+  for (const comment of comments) {
+    if (!comment.author_username) continue
+    
+    const normalizedUsername = comment.author_username.toLowerCase().replace(/^@/, '')
+    const contactId = contactMap.get(normalizedUsername)
+    
+    if (contactId) {
+      const { error: updateError } = await supabase
+        .from('social_comments')
+        .update({ crm_contact_id: contactId })
+        .eq('id', comment.id)
+      
+      if (!updateError) {
+        linked++
+      }
+    } else {
+      notFound++
+    }
+  }
+  
+  console.log(`Linked ${linked} comments to CRM contacts. ${notFound} usernames not found in CRM.`)
+  
+  return { success: true, linked, notFound, totalProcessed: comments.length }
 }
 
 // Process comments with AI

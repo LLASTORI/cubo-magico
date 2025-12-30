@@ -18,8 +18,11 @@ import {
   Star,
   Instagram,
   Facebook,
-  Settings2
+  Settings2,
+  Users,
+  ExternalLink
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +88,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     syncPosts, 
     syncComments, 
     processAI,
+    linkToCRM,
     useComments 
   } = useSocialListening(projectId);
 
@@ -104,8 +108,13 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     await processAI.mutateAsync(50);
   };
 
+  const handleLinkCRM = async () => {
+    await linkToCRM.mutateAsync();
+  };
+
   const isSyncing = syncPosts.isPending || syncComments.isPending;
   const isProcessing = processAI.isPending;
+  const isLinking = linkToCRM.isPending;
 
   // Show setup screen if no pages configured
   if (loadingPages) {
@@ -369,6 +378,14 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
         </Button>
         <Button 
+          variant="outline"
+          onClick={handleLinkCRM}
+          disabled={isLinking}
+        >
+          <Users className={`h-4 w-4 mr-2 ${isLinking ? 'animate-pulse' : ''}`} />
+          {isLinking ? 'Vinculando...' : 'Vincular ao CRM'}
+        </Button>
+        <Button 
           onClick={handleProcessAI}
           disabled={isProcessing || (stats?.pendingAI === 0)}
         >
@@ -392,6 +409,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
 function CommentRow({ comment }: { comment: SocialComment }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
+  const crmContact = comment.crm_contacts;
 
   return (
     <TableRow>
@@ -413,9 +431,21 @@ function CommentRow({ comment }: { comment: SocialComment }) {
         </div>
       </TableCell>
       <TableCell>
-        <span className="text-sm font-medium">
-          @{comment.author_username || 'Anônimo'}
-        </span>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">
+            @{comment.author_username || 'Anônimo'}
+          </span>
+          {crmContact && (
+            <Link 
+              to={`/crm/contato/${crmContact.id}`}
+              className="flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <Users className="h-3 w-3" />
+              {crmContact.name || crmContact.email}
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
+        </div>
       </TableCell>
       <TableCell>
         {sentiment ? (

@@ -252,11 +252,40 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
         return acc;
       }, {} as Record<string, { tipo: string; nome: string; revenue: number; sales: number }>);
 
-      const positions = Object.values(positionGroups).map(p => ({
-        ...p,
-        avgTicket: p.sales > 0 ? p.revenue / p.sales : 0,
-        percentage: totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0,
-      }));
+      // Define position order (FRONT first, then OB1, OB2, etc., then others)
+      const positionOrder: Record<string, number> = {
+        'FRONT': 0,
+        'OB1': 1,
+        'OB2': 2,
+        'OB3': 3,
+        'OB4': 4,
+        'OB5': 5,
+        'OB6': 6,
+        'OB7': 7,
+        'OB8': 8,
+        'OB9': 9,
+        'OB10': 10,
+        'DOWNSELL': 11,
+        'DS': 12,
+        'NC': 99,
+      };
+
+      const getPositionOrder = (tipo: string): number => {
+        const upperTipo = tipo.toUpperCase();
+        if (positionOrder[upperTipo] !== undefined) return positionOrder[upperTipo];
+        // Handle OB with any number
+        const obMatch = upperTipo.match(/^OB(\d+)$/);
+        if (obMatch) return parseInt(obMatch[1], 10);
+        return 50; // Unknown positions in the middle
+      };
+
+      const positions = Object.values(positionGroups)
+        .map(p => ({
+          ...p,
+          avgTicket: p.sales > 0 ? p.revenue / p.sales : 0,
+          percentage: totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0,
+        }))
+        .sort((a, b) => getPositionOrder(a.tipo) - getPositionOrder(b.tipo));
 
       return {
         funnelId: funnel.id,

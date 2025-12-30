@@ -1,0 +1,394 @@
+import { useState } from 'react';
+import { 
+  MessageCircle, 
+  RefreshCw, 
+  Brain, 
+  TrendingUp, 
+  TrendingDown, 
+  Minus,
+  Filter,
+  Search,
+  AlertCircle,
+  ThumbsUp,
+  HelpCircle,
+  ShoppingCart,
+  MessageSquare,
+  Ban,
+  Star,
+  Instagram,
+  Facebook
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+interface SocialListeningTabProps {
+  projectId: string;
+}
+
+const sentimentConfig = {
+  positive: { label: 'Positivo', icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10' },
+  neutral: { label: 'Neutro', icon: Minus, color: 'text-gray-500', bg: 'bg-gray-500/10' },
+  negative: { label: 'Negativo', icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-500/10' },
+};
+
+const classificationConfig: Record<string, { label: string; icon: any; color: string }> = {
+  question: { label: 'Pergunta', icon: HelpCircle, color: 'text-blue-500' },
+  commercial_interest: { label: 'Interesse Comercial', icon: ShoppingCart, color: 'text-green-500' },
+  complaint: { label: 'Reclamação', icon: AlertCircle, color: 'text-red-500' },
+  praise: { label: 'Elogio', icon: Star, color: 'text-yellow-500' },
+  negative_feedback: { label: 'Feedback Negativo', icon: TrendingDown, color: 'text-orange-500' },
+  spam: { label: 'Spam', icon: Ban, color: 'text-gray-400' },
+  other: { label: 'Outro', icon: MessageSquare, color: 'text-gray-500' },
+};
+
+export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
+  const [filters, setFilters] = useState({
+    sentiment: 'all',
+    classification: 'all',
+    platform: 'all',
+    search: '',
+  });
+
+  const { 
+    posts, 
+    postsLoading, 
+    stats, 
+    statsLoading, 
+    syncPosts, 
+    syncComments, 
+    processAI,
+    useComments 
+  } = useSocialListening(projectId);
+
+  const { data: comments, isLoading: commentsLoading, refetch: refetchComments } = useComments({
+    sentiment: filters.sentiment,
+    classification: filters.classification,
+    platform: filters.platform,
+    search: filters.search,
+  });
+
+  const handleSync = async () => {
+    await syncPosts.mutateAsync();
+    await syncComments.mutateAsync(undefined);
+  };
+
+  const handleProcessAI = async () => {
+    await processAI.mutateAsync(50);
+  };
+
+  const isSyncing = syncPosts.isPending || syncComments.isPending;
+  const isProcessing = processAI.isPending;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Social Listening</h2>
+          <p className="text-muted-foreground">
+            Monitore e analise comentários do Instagram e Facebook
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSync}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+          </Button>
+          <Button 
+            onClick={handleProcessAI}
+            disabled={isProcessing || (stats?.pendingAI === 0)}
+          >
+            <Brain className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-pulse' : ''}`} />
+            {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Total de Comentários</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.totalComments || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Sentimento Positivo</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-green-500" />
+                <span className="text-2xl font-bold text-green-500">
+                  {stats?.sentimentDistribution?.positive || 0}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Interesse Comercial</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-primary" />
+                <span className="text-2xl font-bold">
+                  {stats?.classificationDistribution?.commercial_interest || 0}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Reclamações</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <span className="text-2xl font-bold text-red-500">
+                  {stats?.classificationDistribution?.complaint || 0}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            Filtros
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar no texto..."
+                className="pl-9"
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              />
+            </div>
+
+            <Select
+              value={filters.platform}
+              onValueChange={(value) => setFilters({ ...filters, platform: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Plataforma" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas Plataformas</SelectItem>
+                <SelectItem value="instagram">Instagram</SelectItem>
+                <SelectItem value="facebook">Facebook</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filters.sentiment}
+              onValueChange={(value) => setFilters({ ...filters, sentiment: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sentimento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Sentimentos</SelectItem>
+                <SelectItem value="positive">Positivo</SelectItem>
+                <SelectItem value="neutral">Neutro</SelectItem>
+                <SelectItem value="negative">Negativo</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filters.classification}
+              onValueChange={(value) => setFilters({ ...filters, classification: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Classificação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas Classificações</SelectItem>
+                <SelectItem value="question">Pergunta</SelectItem>
+                <SelectItem value="commercial_interest">Interesse Comercial</SelectItem>
+                <SelectItem value="complaint">Reclamação</SelectItem>
+                <SelectItem value="praise">Elogio</SelectItem>
+                <SelectItem value="negative_feedback">Feedback Negativo</SelectItem>
+                <SelectItem value="spam">Spam</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button 
+              variant="ghost" 
+              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', search: '' })}
+            >
+              Limpar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Comments Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5" />
+            Comentários
+            {comments && <Badge variant="secondary">{comments.length}</Badge>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {commentsLoading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : comments && comments.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Plataforma</TableHead>
+                  <TableHead className="w-[40%]">Comentário</TableHead>
+                  <TableHead>Autor</TableHead>
+                  <TableHead>Sentimento</TableHead>
+                  <TableHead>Classificação</TableHead>
+                  <TableHead>Intenção</TableHead>
+                  <TableHead>Data</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {comments.map((comment) => (
+                  <CommentRow key={comment.id} comment={comment} />
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-12">
+              <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">Nenhum comentário encontrado</h3>
+              <p className="text-muted-foreground mb-4">
+                Clique em "Sincronizar" para buscar comentários das suas páginas.
+              </p>
+              <Button onClick={handleSync} disabled={isSyncing}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                Sincronizar Agora
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CommentRow({ comment }: { comment: SocialComment }) {
+  const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
+  const classification = comment.classification ? classificationConfig[comment.classification] : null;
+
+  return (
+    <TableRow>
+      <TableCell>
+        {comment.platform === 'instagram' ? (
+          <Instagram className="h-4 w-4 text-pink-500" />
+        ) : (
+          <Facebook className="h-4 w-4 text-blue-600" />
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="max-w-md">
+          <p className="text-sm line-clamp-2">{comment.text}</p>
+          {comment.ai_summary && (
+            <p className="text-xs text-muted-foreground mt-1 italic">
+              {comment.ai_summary}
+            </p>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm font-medium">
+          @{comment.author_username || 'Anônimo'}
+        </span>
+      </TableCell>
+      <TableCell>
+        {sentiment ? (
+          <Badge variant="outline" className={`${sentiment.bg} ${sentiment.color} border-0`}>
+            <sentiment.icon className="h-3 w-3 mr-1" />
+            {sentiment.label}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">
+            Pendente
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        {classification ? (
+          <Badge variant="outline" className={classification.color}>
+            <classification.icon className="h-3 w-3 mr-1" />
+            {classification.label}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">
+            Pendente
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        {comment.intent_score !== null ? (
+          <div className="flex items-center gap-2">
+            <div className="w-12 h-2 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-primary rounded-full"
+                style={{ width: `${comment.intent_score}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium">{comment.intent_score}</span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <span className="text-xs text-muted-foreground">
+          {format(new Date(comment.comment_timestamp), 'dd/MM/yy HH:mm', { locale: ptBR })}
+        </span>
+      </TableCell>
+    </TableRow>
+  );
+}

@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Facebook, Instagram, Check, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, Facebook, Instagram, Check, AlertCircle, Search } from 'lucide-react';
 
 interface SocialListeningPagesManagerProps {
   projectId: string;
@@ -36,6 +37,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPages, setSelectedPages] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch saved pages
   const { data: savedPages, isLoading: loadingSaved } = useQuery({
@@ -113,6 +115,18 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   const isPageSaved = (pageId: string) => {
     return savedPages?.some(p => p.page_id === pageId);
   };
+
+  // Filter pages based on search query
+  const filteredPages = useMemo(() => {
+    if (!availablePages) return [];
+    if (!searchQuery.trim()) return availablePages;
+    
+    const query = searchQuery.toLowerCase();
+    return availablePages.filter(page => 
+      page.pageName.toLowerCase().includes(query) ||
+      (page.instagramUsername && page.instagramUsername.toLowerCase().includes(query))
+    );
+  }, [availablePages, searchQuery]);
 
   if (loadingSaved || loadingAvailable) {
     return (
@@ -221,45 +235,70 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3">
-            {availablePages.map((page) => {
-              const isSaved = isPageSaved(page.pageId);
-              const isSelected = selectedPages.has(page.pageId);
-              
-              return (
-                <div
-                  key={page.pageId}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                    isSaved ? 'bg-muted/50 border-primary/30' : isSelected ? 'bg-primary/5 border-primary' : 'bg-card hover:bg-accent/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={isSaved || isSelected}
-                      disabled={isSaved}
-                      onCheckedChange={() => handleTogglePage(page.pageId)}
-                    />
-                    <Facebook className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="font-medium">{page.pageName}</p>
-                      {page.instagramUsername && (
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Instagram className="h-3 w-3 text-pink-500" />
-                          @{page.instagramUsername}
-                        </div>
-                      )}
+          {/* Search Input */}
+          {availablePages && availablePages.length > 5 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar página por nome..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+
+          <div className="grid gap-3 max-h-[400px] overflow-y-auto">
+            {filteredPages.length === 0 && searchQuery ? (
+              <div className="text-center py-6 text-muted-foreground">
+                Nenhuma página encontrada para "{searchQuery}"
+              </div>
+            ) : (
+              filteredPages.map((page) => {
+                const isSaved = isPageSaved(page.pageId);
+                const isSelected = selectedPages.has(page.pageId);
+                
+                return (
+                  <div
+                    key={page.pageId}
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      isSaved ? 'bg-muted/50 border-primary/30' : isSelected ? 'bg-primary/5 border-primary' : 'bg-card hover:bg-accent/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={isSaved || isSelected}
+                        disabled={isSaved}
+                        onCheckedChange={() => handleTogglePage(page.pageId)}
+                      />
+                      <Facebook className="h-5 w-5 text-blue-500" />
+                      <div>
+                        <p className="font-medium">{page.pageName}</p>
+                        {page.instagramUsername && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Instagram className="h-3 w-3 text-pink-500" />
+                            @{page.instagramUsername}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    {isSaved && (
+                      <Badge variant="outline" className="gap-1">
+                        <Check className="h-3 w-3" />
+                        Configurado
+                      </Badge>
+                    )}
                   </div>
-                  {isSaved && (
-                    <Badge variant="outline" className="gap-1">
-                      <Check className="h-3 w-3" />
-                      Configurado
-                    </Badge>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
+
+          {availablePages && availablePages.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Mostrando {filteredPages.length} de {availablePages.length} páginas
+            </p>
+          )}
 
           {selectedPages.size > 0 && (
             <div className="flex justify-end pt-4 border-t">

@@ -33,10 +33,12 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Plus, Search, Trash2, Link2, Loader2, AlertTriangle } from 'lucide-react';
+import { formatPlanName } from '@/lib/planUtils';
 
 interface Plan {
   id: string;
   name: string;
+  type: string;
   max_projects: number;
 }
 
@@ -79,9 +81,10 @@ export const HotmartProductPlansManager = () => {
       // Fetch plans
       const { data: plansData, error: plansError } = await supabase
         .from('plans')
-        .select('id, name, max_projects')
+        .select('id, name, type, max_projects')
         .eq('is_active', true)
-        .order('name');
+        .order('name')
+        .order('type');
 
       if (plansError) throw plansError;
       setPlans(plansData || []);
@@ -272,7 +275,9 @@ export const HotmartProductPlansManager = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{m.plan?.name || 'Plano não encontrado'}</Badge>
+                      <Badge variant="secondary">
+                        {m.plan ? formatPlanName(m.plan.name, m.plan.type) : 'Plano não encontrado'}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Switch
@@ -341,7 +346,7 @@ export const HotmartProductPlansManager = () => {
                 <SelectContent>
                   {plans.map(p => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.max_projects === 0 ? '∞' : p.max_projects} projetos)
+                      {formatPlanName(p.name, p.type)} ({p.max_projects === 0 ? '∞' : p.max_projects} projetos)
                     </SelectItem>
                   ))}
                 </SelectContent>

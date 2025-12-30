@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, Crown, Clock, Users, FolderOpen, Loader2 } from 'lucide-react';
+import { formatPlanName, getPlanTypeLabel } from '@/lib/planUtils';
 
 interface Plan {
   id: string;
@@ -317,7 +318,7 @@ export const PlansManager = () => {
                 <TableRow key={plan.id}>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{plan.name}</p>
+                      <p className="font-medium">{formatPlanName(plan.name, plan.type)}</p>
                       {plan.description && (
                         <p className="text-sm text-muted-foreground truncate max-w-[200px]">
                           {plan.description}

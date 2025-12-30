@@ -54,7 +54,9 @@ const handler = async (req: Request): Promise<Response> => {
     const safeName = escapeHtml(name || 'Cliente');
     const safePlanName = escapeHtml(planName || 'Cubo Mágico');
 
-    const appUrl = Deno.env.get("APP_URL") || "https://cubomagico.leandrolastori.com.br";
+    // Use production URL - NEVER use localhost
+    const appUrl = "https://cubomagico.leandrolastori.com.br";
+    const logoUrl = `${appUrl}/app-logo-512.png`;
 
     // Create Supabase client to generate password reset link
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -67,21 +69,28 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     // Generate password reset link for the user to set their password
+    // Using magiclink type instead of recovery to create a proper login link
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'recovery',
+      type: 'magiclink',
       email: email,
       options: {
         redirectTo: `${appUrl}/reset-password`
       }
     });
 
+    let resetLink = `${appUrl}/forgot-password`;
+    
     if (linkError) {
-      console.error('Error generating password reset link:', linkError);
-      throw linkError;
+      console.error('Error generating magic link, will use forgot password fallback:', linkError);
+      // Continue with fallback link instead of throwing
+    } else if (linkData?.properties?.action_link) {
+      // Replace localhost with production URL if it appears in the generated link
+      resetLink = linkData.properties.action_link.replace(
+        /http:\/\/localhost:\d+/g, 
+        appUrl
+      );
+      console.log('Magic link generated successfully');
     }
-
-    // The actual link is in the action_link property
-    const resetLink = linkData?.properties?.action_link || `${appUrl}/forgot-password`;
 
     console.log('Password reset link generated successfully');
 
@@ -105,7 +114,8 @@ const handler = async (req: Request): Promise<Response> => {
                   <!-- Header -->
                   <tr>
                     <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px 12px 0 0;">
-                      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">🎲 Cubo Mágico</h1>
+                      <img src="${logoUrl}" alt="Cubo Mágico" style="width: 80px; height: 80px; margin-bottom: 16px; border-radius: 12px;">
+                      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">Cubo Mágico</h1>
                       <p style="margin: 10px 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">Inteligência para Funis de Vendas</p>
                     </td>
                   </tr>

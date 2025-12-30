@@ -24,12 +24,28 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,7 +60,8 @@ import {
   CheckCircle,
   XCircle,
   Pause,
-  RefreshCw
+  RefreshCw,
+  RotateCcw
 } from 'lucide-react';
 
 interface UserWithProfile {
@@ -71,6 +88,7 @@ export const SubscriptionsManager = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
   const [usersWithoutSub, setUsersWithoutSub] = useState<UserWithProfile[]>([]);
   const [userProfiles, setUserProfiles] = useState<Record<string, { email: string; full_name: string }>>({});
@@ -172,12 +190,24 @@ export const SubscriptionsManager = () => {
     }
   };
 
-  const handleCancelSubscription = async (sub: Subscription) => {
+  const handleCancelSubscription = async () => {
+    if (!selectedSub) return;
     try {
-      await updateSubscription(sub.id, { status: 'cancelled' });
+      await updateSubscription(selectedSub.id, { status: 'cancelled' });
       toast.success('Assinatura cancelada');
+      setShowCancelDialog(false);
+      setSelectedSub(null);
     } catch (error) {
       toast.error('Erro ao cancelar assinatura');
+    }
+  };
+
+  const handleReactivateSubscription = async (sub: Subscription) => {
+    try {
+      await updateSubscription(sub.id, { status: 'active' });
+      toast.success('Assinatura reativada!');
+    } catch (error) {
+      toast.error('Erro ao reativar assinatura');
     }
   };
 
@@ -418,36 +448,77 @@ export const SubscriptionsManager = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {sub.status === 'trial' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleActivateFromTrial(sub)}
-                              >
-                                Ativar
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedSub(sub);
-                                setShowExtendDialog(true);
-                              }}
-                            >
-                              <Calendar className="h-4 w-4" />
-                            </Button>
-                            {sub.status !== 'cancelled' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleCancelSubscription(sub)}
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
+                          <TooltipProvider delayDuration={200}>
+                            <div className="flex justify-end gap-2">
+                              {sub.status === 'trial' && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleActivateFromTrial(sub)}
+                                    >
+                                      Ativar
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Converter trial em assinatura ativa por 12 meses</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedSub(sub);
+                                      setShowExtendDialog(true);
+                                    }}
+                                  >
+                                    <Calendar className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Estender período da assinatura</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              {sub.status === 'cancelled' ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleReactivateSubscription(sub)}
+                                    >
+                                      <RotateCcw className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Reativar assinatura cancelada</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedSub(sub);
+                                        setShowCancelDialog(true);
+                                      }}
+                                    >
+                                      <XCircle className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Cancelar assinatura (usuário perde acesso)</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     );
@@ -639,6 +710,38 @@ export const SubscriptionsManager = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Subscription Confirmation */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar assinatura?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Você está prestes a cancelar a assinatura de:</p>
+              <p className="font-medium text-foreground">
+                {selectedSub && userProfiles[selectedSub.user_id]?.full_name || 'Usuário'} - {selectedSub?.plan?.name}
+              </p>
+              <p className="text-destructive">
+                ⚠️ O usuário perderá acesso imediatamente a todos os recursos do plano.
+              </p>
+              <p className="text-sm">
+                Caso mude de ideia, você poderá reativar a assinatura usando o botão de reativar (↺).
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedSub(null)}>
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleCancelSubscription}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sim, cancelar assinatura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

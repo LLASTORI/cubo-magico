@@ -30,6 +30,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
 import { MetaAudiencesTab } from '@/components/meta/audiences';
+import { SocialListeningTab } from '@/components/meta/social-listening';
 
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];

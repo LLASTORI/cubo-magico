@@ -443,6 +443,84 @@ export type Database = {
           },
         ]
       }
+      comment_metrics_daily: {
+        Row: {
+          avg_intent_score: number | null
+          avg_sentiment_score: number | null
+          commercial_interest_count: number | null
+          complaints_count: number | null
+          created_at: string
+          id: string
+          metric_date: string
+          negative_count: number | null
+          neutral_count: number | null
+          new_comments: number | null
+          positive_count: number | null
+          post_id: string
+          praise_count: number | null
+          project_id: string
+          questions_count: number | null
+          total_comments: number | null
+          total_replies: number | null
+          updated_at: string
+        }
+        Insert: {
+          avg_intent_score?: number | null
+          avg_sentiment_score?: number | null
+          commercial_interest_count?: number | null
+          complaints_count?: number | null
+          created_at?: string
+          id?: string
+          metric_date: string
+          negative_count?: number | null
+          neutral_count?: number | null
+          new_comments?: number | null
+          positive_count?: number | null
+          post_id: string
+          praise_count?: number | null
+          project_id: string
+          questions_count?: number | null
+          total_comments?: number | null
+          total_replies?: number | null
+          updated_at?: string
+        }
+        Update: {
+          avg_intent_score?: number | null
+          avg_sentiment_score?: number | null
+          commercial_interest_count?: number | null
+          complaints_count?: number | null
+          created_at?: string
+          id?: string
+          metric_date?: string
+          negative_count?: number | null
+          neutral_count?: number | null
+          new_comments?: number | null
+          positive_count?: number | null
+          post_id?: string
+          praise_count?: number | null
+          project_id?: string
+          questions_count?: number | null
+          total_comments?: number | null
+          total_replies?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_metrics_daily_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_metrics_daily_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_activities: {
         Row: {
           activity_type: string
@@ -3268,6 +3346,272 @@ export type Database = {
         }
         Relationships: []
       }
+      social_comments: {
+        Row: {
+          ai_error: string | null
+          ai_processed_at: string | null
+          ai_processing_status:
+            | Database["public"]["Enums"]["ai_processing_status"]
+            | null
+          ai_summary: string | null
+          author_id: string | null
+          author_name: string | null
+          author_profile_picture: string | null
+          author_username: string | null
+          classification:
+            | Database["public"]["Enums"]["comment_classification"]
+            | null
+          comment_id_meta: string
+          comment_timestamp: string
+          created_at: string
+          id: string
+          intent_score: number | null
+          is_deleted: boolean | null
+          is_hidden: boolean | null
+          is_replied: boolean | null
+          like_count: number | null
+          parent_comment_id: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          post_id: string
+          project_id: string
+          replied_at: string | null
+          replied_by: string | null
+          reply_count: number | null
+          sentiment: Database["public"]["Enums"]["comment_sentiment"] | null
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          ai_error?: string | null
+          ai_processed_at?: string | null
+          ai_processing_status?:
+            | Database["public"]["Enums"]["ai_processing_status"]
+            | null
+          ai_summary?: string | null
+          author_id?: string | null
+          author_name?: string | null
+          author_profile_picture?: string | null
+          author_username?: string | null
+          classification?:
+            | Database["public"]["Enums"]["comment_classification"]
+            | null
+          comment_id_meta: string
+          comment_timestamp: string
+          created_at?: string
+          id?: string
+          intent_score?: number | null
+          is_deleted?: boolean | null
+          is_hidden?: boolean | null
+          is_replied?: boolean | null
+          like_count?: number | null
+          parent_comment_id?: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          post_id: string
+          project_id: string
+          replied_at?: string | null
+          replied_by?: string | null
+          reply_count?: number | null
+          sentiment?: Database["public"]["Enums"]["comment_sentiment"] | null
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          ai_error?: string | null
+          ai_processed_at?: string | null
+          ai_processing_status?:
+            | Database["public"]["Enums"]["ai_processing_status"]
+            | null
+          ai_summary?: string | null
+          author_id?: string | null
+          author_name?: string | null
+          author_profile_picture?: string | null
+          author_username?: string | null
+          classification?:
+            | Database["public"]["Enums"]["comment_classification"]
+            | null
+          comment_id_meta?: string
+          comment_timestamp?: string
+          created_at?: string
+          id?: string
+          intent_score?: number | null
+          is_deleted?: boolean | null
+          is_hidden?: boolean | null
+          is_replied?: boolean | null
+          like_count?: number | null
+          parent_comment_id?: string | null
+          platform?: Database["public"]["Enums"]["social_platform"]
+          post_id?: string
+          project_id?: string
+          replied_at?: string | null
+          replied_by?: string | null
+          reply_count?: number | null
+          sentiment?: Database["public"]["Enums"]["comment_sentiment"] | null
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_comments_parent_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "social_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_listening_sync_logs: {
+        Row: {
+          comments_processed: number | null
+          comments_synced: number | null
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          errors: Json | null
+          id: string
+          posts_synced: number | null
+          project_id: string
+          started_at: string
+          status: string
+          sync_type: string
+        }
+        Insert: {
+          comments_processed?: number | null
+          comments_synced?: number | null
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          errors?: Json | null
+          id?: string
+          posts_synced?: number | null
+          project_id: string
+          started_at?: string
+          status?: string
+          sync_type: string
+        }
+        Update: {
+          comments_processed?: number | null
+          comments_synced?: number | null
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          errors?: Json | null
+          id?: string
+          posts_synced?: number | null
+          project_id?: string
+          started_at?: string
+          status?: string
+          sync_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_listening_sync_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_posts: {
+        Row: {
+          ad_id: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          comments_count: number | null
+          created_at: string
+          id: string
+          impressions: number | null
+          last_synced_at: string | null
+          likes_count: number | null
+          media_type: string | null
+          media_url: string | null
+          message: string | null
+          page_id: string | null
+          page_name: string | null
+          permalink: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          post_id_meta: string
+          post_type: Database["public"]["Enums"]["social_post_type"]
+          project_id: string
+          published_at: string | null
+          reach: number | null
+          shares_count: number | null
+          updated_at: string
+        }
+        Insert: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          comments_count?: number | null
+          created_at?: string
+          id?: string
+          impressions?: number | null
+          last_synced_at?: string | null
+          likes_count?: number | null
+          media_type?: string | null
+          media_url?: string | null
+          message?: string | null
+          page_id?: string | null
+          page_name?: string | null
+          permalink?: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          post_id_meta: string
+          post_type?: Database["public"]["Enums"]["social_post_type"]
+          project_id: string
+          published_at?: string | null
+          reach?: number | null
+          shares_count?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          comments_count?: number | null
+          created_at?: string
+          id?: string
+          impressions?: number | null
+          last_synced_at?: string | null
+          likes_count?: number | null
+          media_type?: string | null
+          media_url?: string | null
+          message?: string | null
+          page_id?: string | null
+          page_name?: string | null
+          permalink?: string | null
+          platform?: Database["public"]["Enums"]["social_platform"]
+          post_id_meta?: string
+          post_type?: Database["public"]["Enums"]["social_post_type"]
+          project_id?: string
+          published_at?: string | null
+          reach?: number | null
+          shares_count?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_posts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           created_at: string | null
@@ -3892,6 +4236,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      aggregate_comment_metrics_daily: {
+        Args: { p_date: string; p_project_id: string }
+        Returns: undefined
+      }
       can_invite_to_project: { Args: { _project_id: string }; Returns: boolean }
       can_use_feature: {
         Args: { _feature_key: string; _project_id: string; _user_id: string }
@@ -4050,12 +4398,24 @@ export type Database = {
     }
     Enums: {
       agent_status: "online" | "away" | "offline" | "busy"
+      ai_processing_status: "pending" | "processing" | "completed" | "failed"
       app_role: "admin" | "user" | "super_admin"
+      comment_classification:
+        | "question"
+        | "commercial_interest"
+        | "complaint"
+        | "praise"
+        | "negative_feedback"
+        | "spam"
+        | "other"
+      comment_sentiment: "positive" | "neutral" | "negative"
       invite_status: "pending" | "accepted" | "rejected" | "expired"
       override_target_type: "user" | "project"
       permission_level: "none" | "view" | "edit" | "admin"
       plan_type: "trial" | "monthly" | "yearly" | "lifetime"
       project_role: "owner" | "manager" | "operator"
+      social_platform: "instagram" | "facebook"
+      social_post_type: "organic" | "ad"
       subscription_origin: "hotmart" | "manual" | "stripe" | "other"
       subscription_status:
         | "active"
@@ -4191,12 +4551,25 @@ export const Constants = {
   public: {
     Enums: {
       agent_status: ["online", "away", "offline", "busy"],
+      ai_processing_status: ["pending", "processing", "completed", "failed"],
       app_role: ["admin", "user", "super_admin"],
+      comment_classification: [
+        "question",
+        "commercial_interest",
+        "complaint",
+        "praise",
+        "negative_feedback",
+        "spam",
+        "other",
+      ],
+      comment_sentiment: ["positive", "neutral", "negative"],
       invite_status: ["pending", "accepted", "rejected", "expired"],
       override_target_type: ["user", "project"],
       permission_level: ["none", "view", "edit", "admin"],
       plan_type: ["trial", "monthly", "yearly", "lifetime"],
       project_role: ["owner", "manager", "operator"],
+      social_platform: ["instagram", "facebook"],
+      social_post_type: ["organic", "ad"],
       subscription_origin: ["hotmart", "manual", "stripe", "other"],
       subscription_status: [
         "active",

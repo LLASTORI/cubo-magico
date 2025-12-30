@@ -169,7 +169,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
-      const scope = 'ads_read,ads_management,business_management';
+      const scope = 'ads_read,ads_management,business_management,pages_read_engagement,pages_manage_engagement,pages_show_list,instagram_basic,instagram_manage_comments,instagram_manage_insights';
       
       const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${data.state}&scope=${scope}&auth_type=rerequest&response_type=code`;
       

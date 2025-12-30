@@ -3,8 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings, Lock, Users, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-
-const META_APP_ID = '845927421602166';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -32,6 +30,7 @@ import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
 import { MetaAudiencesTab } from '@/components/meta/audiences';
 import { SocialListeningTab } from '@/components/meta/social-listening';
 
+const META_APP_ID = '845927421602166';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -169,7 +168,8 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
-      const scope = 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement,pages_manage_engagement,instagram_basic,instagram_manage_comments,instagram_manage_insights';
+      // Permissões base (funcionam sem Business Login/App Review).
+      const scope = 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement';
       
       const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${data.state}&scope=${scope}&auth_type=rerequest&response_type=code`;
       

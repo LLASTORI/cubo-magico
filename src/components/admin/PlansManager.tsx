@@ -57,13 +57,21 @@ export const PlansManager = () => {
     const { data, error } = await supabase
       .from('plans')
       .select('*')
-      .order('price_cents', { ascending: true });
+      .order('name', { ascending: true })
+      .order('type', { ascending: true });
     
     if (error) {
       toast.error('Erro ao carregar planos');
       console.error(error);
     } else {
-      setPlans(data || []);
+      // Custom sort: group by name, then monthly before yearly
+      const typeOrder = { monthly: 0, yearly: 1, lifetime: 2, trial: 3 };
+      const sorted = (data || []).sort((a, b) => {
+        const nameCompare = a.name.localeCompare(b.name);
+        if (nameCompare !== 0) return nameCompare;
+        return (typeOrder[a.type as keyof typeof typeOrder] || 99) - (typeOrder[b.type as keyof typeof typeOrder] || 99);
+      });
+      setPlans(sorted);
     }
     setLoading(false);
   };

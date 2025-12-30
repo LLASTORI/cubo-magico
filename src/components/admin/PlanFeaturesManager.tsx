@@ -6,10 +6,12 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Grid3X3, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatPlanName } from '@/lib/planUtils';
 
 interface Plan {
   id: string;
   name: string;
+  type: string;
   max_projects: number;
   is_active: boolean;
 }
@@ -65,15 +67,18 @@ export const PlanFeaturesManager = () => {
       // Fetch plans
       const { data: plansData, error: plansError } = await supabase
         .from('plans')
-        .select('id, name, max_projects, is_active')
+        .select('id, name, type, max_projects, is_active')
         .eq('is_active', true);
 
       if (plansError) throw plansError;
       
-      // Sort plans by custom order
-      const sortedPlans = (plansData || []).sort((a, b) => 
-        getPlanOrder(a.name) - getPlanOrder(b.name)
-      );
+      // Sort plans by custom order (name then type)
+      const typeOrder: Record<string, number> = { monthly: 0, yearly: 1, lifetime: 2, trial: 3 };
+      const sortedPlans = (plansData || []).sort((a, b) => {
+        const nameOrder = getPlanOrder(a.name) - getPlanOrder(b.name);
+        if (nameOrder !== 0) return nameOrder;
+        return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
+      });
       setPlans(sortedPlans);
 
       // Fetch features
@@ -231,9 +236,9 @@ export const PlanFeaturesManager = () => {
                   {plans.map(plan => (
                     <th key={plan.id} className="text-center p-3 bg-muted/50 min-w-[120px]">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="font-semibold">{plan.name}</span>
+                        <span className="font-semibold text-xs">{formatPlanName(plan.name, plan.type)}</span>
                         <Badge variant="outline" className="text-xs">
-                          {plan.max_projects === 0 ? '∞' : plan.max_projects} projetos
+                          {plan.max_projects === 0 ? '∞' : plan.max_projects} proj
                         </Badge>
                         <Button 
                           size="sm" 

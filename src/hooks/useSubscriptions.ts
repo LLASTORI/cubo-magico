@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export interface Plan {
   id: string;
   name: string;
+  type: 'monthly' | 'yearly' | 'lifetime' | 'trial';
   description: string | null;
   max_projects: number;
   price_cents: number;

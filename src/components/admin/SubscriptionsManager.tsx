@@ -63,6 +63,7 @@ import {
   RefreshCw,
   RotateCcw
 } from 'lucide-react';
+import { formatPlanName } from '@/lib/planUtils';
 
 interface UserWithProfile {
   id: string;
@@ -411,7 +412,7 @@ export const SubscriptionsManager = () => {
                         </TableCell>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{sub.plan?.name}</p>
+                            <p className="font-medium">{formatPlanName(sub.plan?.name, sub.plan?.type)}</p>
                             <p className="text-sm text-muted-foreground">
                               {sub.plan?.max_projects === 0 ? 'Ilimitado' : `${sub.plan?.max_projects} projeto(s)`}
                             </p>
@@ -545,7 +546,7 @@ export const SubscriptionsManager = () => {
               })
               .map(plan => (
               <div key={plan.id} className="p-4 border rounded-lg">
-                <h3 className="font-semibold text-lg">{plan.name}</h3>
+                <h3 className="font-semibold text-lg">{formatPlanName(plan.name, plan.type)}</h3>
                 <p className="text-sm text-muted-foreground mb-2">{plan.description}</p>
                 <div className="flex justify-between items-center">
                   <span className="text-2xl font-bold">
@@ -604,7 +605,7 @@ export const SubscriptionsManager = () => {
                 <SelectContent>
                   {plans.filter(p => p.is_active).map(plan => (
                     <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name} - {plan.max_projects === 0 ? 'Ilimitado' : `${plan.max_projects} projeto(s)`}
+                      {formatPlanName(plan.name, plan.type)} - {plan.max_projects === 0 ? 'Ilimitado' : `${plan.max_projects} projeto(s)`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -719,7 +720,7 @@ export const SubscriptionsManager = () => {
             <AlertDialogDescription className="space-y-2">
               <p>Você está prestes a cancelar a assinatura de:</p>
               <p className="font-medium text-foreground">
-                {selectedSub && userProfiles[selectedSub.user_id]?.full_name || 'Usuário'} - {selectedSub?.plan?.name}
+                {selectedSub && userProfiles[selectedSub.user_id]?.full_name || 'Usuário'} - {formatPlanName(selectedSub?.plan?.name, selectedSub?.plan?.type)}
               </p>
               <p className="text-destructive">
                 ⚠️ O usuário perderá acesso imediatamente a todos os recursos do plano.

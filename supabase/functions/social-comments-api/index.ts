@@ -572,32 +572,49 @@ async function getAvailablePages(accessToken: string) {
       userId: debugData.data?.user_id,
     }))
     
-    // Get user pages
-    const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
-    console.log('Fetching pages from:', pagesUrl.replace(accessToken, 'TOKEN_HIDDEN'))
+    // Get user pages - with pagination support
+    const allPages: any[] = []
+    let nextUrl: string | null = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&limit=100&access_token=${accessToken}`
     
-    const response = await fetch(pagesUrl)
-    const data = await response.json()
+    while (nextUrl) {
+      console.log('Fetching pages from:', nextUrl.replace(accessToken, 'TOKEN_HIDDEN'))
+      
+      const response: Response = await fetch(nextUrl)
+      const data: any = await response.json()
 
-    console.log('Pages API response:', JSON.stringify({
-      hasData: !!data.data,
-      dataLength: data.data?.length,
-      error: data.error,
-      paging: !!data.paging,
-    }))
+      console.log('Pages API response:', JSON.stringify({
+        hasData: !!data.data,
+        dataLength: data.data?.length,
+        error: data.error,
+        hasNextPage: !!data.paging?.next,
+      }))
 
-    if (data.error) {
-      console.error('Meta API error:', data.error)
-      return { 
-        success: false, 
-        error: data.error.message,
-        errorCode: data.error.code,
-        errorType: data.error.type,
-        pages: [] 
+      if (data.error) {
+        console.error('Meta API error:', data.error)
+        return { 
+          success: false, 
+          error: data.error.message,
+          errorCode: data.error.code,
+          errorType: data.error.type,
+          pages: [] 
+        }
+      }
+
+      if (data.data) {
+        allPages.push(...data.data)
+      }
+      
+      // Check for next page
+      nextUrl = data.paging?.next || null
+      
+      // Safety limit to prevent infinite loops (max 500 pages)
+      if (allPages.length >= 500) {
+        console.log('Reached max pages limit (500)')
+        break
       }
     }
 
-    const pages = (data.data || []).map((page: any) => ({
+    const pages = allPages.map((page: any) => ({
       pageId: page.id,
       pageName: page.name,
       pageAccessToken: page.access_token,
@@ -607,7 +624,7 @@ async function getAvailablePages(accessToken: string) {
       instagramPicture: page.instagram_business_account?.profile_picture_url,
     }))
 
-    console.log(`Found ${pages.length} pages`)
+    console.log(`Found ${pages.length} total pages after pagination`)
     
     // If no pages found, check if user has pages but no permission
     if (pages.length === 0) {
@@ -618,7 +635,7 @@ async function getAvailablePages(accessToken: string) {
       console.log('Token scopes:', debugData.data?.scopes)
     }
     
-    return { success: true, pages, scopes: debugData.data?.scopes }
+    return { success: true, pages, scopes: debugData.data?.scopes, totalFetched: pages.length }
   } catch (error: any) {
     console.error('Error getting pages:', error)
     return { success: false, error: error.message, pages: [] }

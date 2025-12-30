@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
   }
 })
 
-// Sync posts from Facebook Pages and Instagram
+// Sync posts from Facebook Pages and Instagram - using SAVED pages only
 async function syncPosts(supabase: any, projectId: string, accessToken: string) {
   console.log('Syncing posts for project:', projectId)
   
@@ -145,46 +145,75 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
   const errors: string[] = []
 
   try {
-    // Get user's pages
-    const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${accessToken}`
-    const pagesResponse = await fetch(pagesUrl)
-    const pagesData = await pagesResponse.json()
+    // Get SAVED pages from database (not all user pages)
+    const { data: savedPages, error: pagesError } = await supabase
+      .from('social_listening_pages')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
 
-    if (pagesData.error) {
-      throw new Error(pagesData.error.message)
+    if (pagesError) {
+      console.error('Error fetching saved pages:', pagesError)
+      throw new Error('Erro ao buscar páginas salvas')
     }
 
-    const pages = pagesData.data || []
-    console.log(`Found ${pages.length} pages`)
+    if (!savedPages || savedPages.length === 0) {
+      console.log('No saved pages found for project')
+      return { success: false, error: 'Nenhuma página configurada. Adicione páginas primeiro.', postsSynced: 0 }
+    }
 
-    for (const page of pages) {
-      // Sync Facebook Page posts
-      try {
-        const fbPosts = await fetchFacebookPosts(page.id, page.access_token)
-        for (const post of fbPosts) {
-          await upsertPost(supabase, projectId, 'facebook', post, page.name)
-          totalPosts++
-        }
-      } catch (e: any) {
-        errors.push(`FB Page ${page.name}: ${e.message}`)
-      }
+    console.log(`Found ${savedPages.length} saved pages to sync`)
 
-      // Sync Instagram posts if connected
-      if (page.instagram_business_account?.id) {
+    for (const savedPage of savedPages) {
+      const pageToken = savedPage.page_access_token
+      const pageName = savedPage.page_name
+      const pageId = savedPage.page_id
+      const instagramAccountId = savedPage.instagram_account_id
+      const platform = savedPage.platform
+
+      console.log(`Syncing page: ${pageName} (${platform}) - pageId: ${pageId}, igId: ${instagramAccountId}`)
+
+      // Sync based on platform
+      if (platform === 'facebook' || (!platform && !instagramAccountId)) {
+        // Sync Facebook Page posts
         try {
-          const igPosts = await fetchInstagramPosts(page.instagram_business_account.id, page.access_token)
-          for (const post of igPosts) {
-            await upsertPost(supabase, projectId, 'instagram', post, page.name)
+          const fbPosts = await fetchFacebookPosts(pageId, pageToken)
+          console.log(`Fetched ${fbPosts.length} Facebook posts for ${pageName}`)
+          for (const post of fbPosts) {
+            await upsertPost(supabase, projectId, 'facebook', post, pageName)
             totalPosts++
           }
         } catch (e: any) {
-          errors.push(`IG ${page.name}: ${e.message}`)
+          console.error(`FB Page ${pageName} error:`, e.message)
+          errors.push(`FB Page ${pageName}: ${e.message}`)
         }
       }
+
+      // Sync Instagram posts if this is an Instagram page or has Instagram connected
+      if (platform === 'instagram' && instagramAccountId) {
+        try {
+          const igPosts = await fetchInstagramPosts(instagramAccountId, pageToken)
+          console.log(`Fetched ${igPosts.length} Instagram posts for ${pageName}`)
+          for (const post of igPosts) {
+            await upsertPost(supabase, projectId, 'instagram', post, pageName)
+            totalPosts++
+          }
+        } catch (e: any) {
+          console.error(`IG ${pageName} error:`, e.message)
+          errors.push(`IG ${pageName}: ${e.message}`)
+        }
+      }
+
+      // Update last_synced_at
+      await supabase
+        .from('social_listening_pages')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('id', savedPage.id)
 
       await delay(500) // Rate limiting
     }
 
+    console.log(`Sync completed: ${totalPosts} posts synced`)
     return { success: true, postsSynced: totalPosts, errors }
   } catch (error: any) {
     console.error('Sync posts error:', error)

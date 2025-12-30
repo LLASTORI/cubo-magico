@@ -771,7 +771,7 @@ serve(async (req) => {
               // Check if user already has a subscription
               const { data: existingSubscription } = await supabase
                 .from('subscriptions')
-                .select('id, plan_id, status, expires_at')
+                .select('id, plan_id, status, expires_at, notes')
                 .eq('user_id', userProfile.id)
                 .in('status', ['active', 'trial', 'pending'])
                 .single();
@@ -816,6 +816,45 @@ serve(async (req) => {
                   subscriptionCreated = true;
                   subscriptionAction = 'updated';
                   console.log('Subscription updated successfully');
+
+                  // Send welcome email once (avoid spamming on repeated webhooks)
+                  const notesText = (existingSubscription as any)?.notes || '';
+                  const welcomeMarker = `[welcome_email_sent:${transactionId}]`;
+                  const shouldSendWelcomeEmail = !notesText.includes(welcomeMarker);
+
+                  if (shouldSendWelcomeEmail) {
+                    try {
+                      console.log('Sending welcome email for existing user (updated subscription)...');
+                      const welcomePlanName = (planMapping as any).plans?.name || 'Cubo Mágico';
+                      const { error: emailError } = await supabase.functions.invoke('send-welcome-email', {
+                        body: {
+                          email: buyerEmail.toLowerCase(),
+                          name: buyer?.name || 'Cliente',
+                          planName: welcomePlanName,
+                          transactionId: transactionId
+                        }
+                      });
+
+                      if (emailError) {
+                        console.error('Error sending welcome email:', emailError);
+                      } else {
+                        console.log('Welcome email sent successfully (updated subscription)');
+
+                        // Mark as sent to avoid duplicate emails
+                        const updatedNotes = `Atualizado via Hotmart webhook - ${event}\n${welcomeMarker}`;
+                        const { error: markError } = await supabase
+                          .from('subscriptions')
+                          .update({ notes: updatedNotes, updated_at: new Date().toISOString() })
+                          .eq('id', existingSubscription.id);
+
+                        if (markError) {
+                          console.error('Error marking welcome email as sent:', markError);
+                        }
+                      }
+                    } catch (emailErr) {
+                      console.error('Exception sending welcome email (updated subscription):', emailErr);
+                    }
+                  }
                 }
               } else {
                 // Create new subscription

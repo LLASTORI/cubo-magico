@@ -149,6 +149,10 @@ Deno.serve(async (req) => {
         result = await removePage(serviceSupabase, projectId, removePageId)
         break
 
+      case 'sync_ad_comments':
+        result = await syncAdComments(serviceSupabase, projectId, accessToken)
+        break
+
       default:
         return new Response(JSON.stringify({ error: 'Ação inválida' }), {
           status: 400,
@@ -1106,4 +1110,220 @@ async function removePage(supabase: any, projectId: string, pageId: string) {
   }
 
   return { success: true }
+}
+
+// Sync ad comments from Meta Ads - fetches ads and their comments
+async function syncAdComments(supabase: any, projectId: string, accessToken: string) {
+  console.log('='.repeat(60))
+  console.log('[SYNC_AD_COMMENTS] Starting for project:', projectId)
+  
+  let totalAds = 0
+  let totalComments = 0
+  const errors: string[] = []
+
+  try {
+    // Get Meta credentials to find ad accounts
+    const { data: credentials, error: credError } = await supabase
+      .from('meta_credentials')
+      .select('ad_account_id')
+      .eq('project_id', projectId)
+      .maybeSingle()
+
+    if (credError || !credentials?.ad_account_id) {
+      console.log('[SYNC_AD_COMMENTS] No ad account configured')
+      return { 
+        success: false, 
+        error: 'Conta de anúncios não configurada. Configure uma conta de anúncios no Meta Ads primeiro.',
+        adsSynced: 0,
+        commentsSynced: 0 
+      }
+    }
+
+    const adAccountId = credentials.ad_account_id
+    console.log(`[SYNC_AD_COMMENTS] Using ad account: ${adAccountId}`)
+
+    // Fetch ads with their effective_object_story_id (post_id)
+    const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,effective_object_story_id,creative{object_story_id,effective_object_story_id}&limit=100&access_token=${accessToken}`
+    console.log('[SYNC_AD_COMMENTS] Fetching ads...')
+    
+    const adsResponse = await fetch(adsUrl)
+    const adsData = await adsResponse.json()
+
+    if (adsData.error) {
+      console.error('[SYNC_AD_COMMENTS] Ads API error:', adsData.error)
+      return { 
+        success: false, 
+        error: `Erro ao buscar anúncios: ${adsData.error.message}`,
+        adsSynced: 0,
+        commentsSynced: 0 
+      }
+    }
+
+    const ads = adsData.data || []
+    console.log(`[SYNC_AD_COMMENTS] Found ${ads.length} ads`)
+
+    // Get saved pages with tokens for comment fetching
+    const { data: savedPages } = await supabase
+      .from('social_listening_pages')
+      .select('page_id, page_access_token')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+
+    // Get page token (use first available)
+    const pageToken = savedPages?.[0]?.page_access_token || accessToken
+
+    for (const ad of ads) {
+      const postId = ad.effective_object_story_id || 
+                     ad.creative?.effective_object_story_id || 
+                     ad.creative?.object_story_id
+
+      if (!postId) {
+        console.log(`[SYNC_AD_COMMENTS] Ad ${ad.id} has no associated post, skipping`)
+        continue
+      }
+
+      console.log(`[SYNC_AD_COMMENTS] Processing ad: ${ad.id} with post: ${postId}`)
+
+      try {
+        // Determine platform from post ID format
+        // Instagram: numeric ID, Facebook: page_id_post_id format
+        const platform = postId.includes('_') ? 'facebook' : 'instagram'
+        
+        // First, create/update the post as an ad
+        const postData: any = {
+          project_id: projectId,
+          platform,
+          post_id_meta: postId,
+          post_type: 'ad',
+          is_ad: true,
+          meta_ad_id: ad.id,
+          message: ad.name || 'Anúncio',
+          last_synced_at: new Date().toISOString(),
+        }
+
+        const { error: upsertError } = await supabase
+          .from('social_posts')
+          .upsert(postData, { onConflict: 'project_id,platform,post_id_meta' })
+
+        if (upsertError) {
+          console.error(`[SYNC_AD_COMMENTS] Error upserting ad post:`, upsertError)
+          errors.push(`Ad ${ad.id}: ${upsertError.message}`)
+          continue
+        }
+
+        totalAds++
+
+        // Get the post record to have its UUID
+        const { data: postRecord } = await supabase
+          .from('social_posts')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('post_id_meta', postId)
+          .maybeSingle()
+
+        if (!postRecord) {
+          console.log(`[SYNC_AD_COMMENTS] Could not find post record for ${postId}`)
+          continue
+        }
+
+        // Fetch comments for this ad post
+        let commentsUrl: string
+        if (platform === 'facebook') {
+          commentsUrl = `${GRAPH_API_BASE}/${postId}/comments?fields=id,message,from{id,name},created_time,like_count,comment_count&limit=100&access_token=${pageToken}`
+        } else {
+          // Instagram
+          commentsUrl = `${GRAPH_API_BASE}/${postId}/comments?fields=id,text,username,timestamp,like_count,replies{id,text,username,timestamp,like_count}&limit=100&access_token=${pageToken}`
+        }
+
+        const commentsResponse = await fetch(commentsUrl)
+        const commentsData = await commentsResponse.json()
+
+        if (commentsData.error) {
+          console.log(`[SYNC_AD_COMMENTS] Error fetching comments for ${postId}:`, commentsData.error.message)
+          // Not a fatal error, continue with other ads
+          continue
+        }
+
+        const comments = commentsData.data || []
+        console.log(`[SYNC_AD_COMMENTS] Found ${comments.length} comments for ad ${ad.id}`)
+
+        for (const comment of comments) {
+          const commentData: any = {
+            project_id: projectId,
+            post_id: postRecord.id,
+            platform,
+            comment_id_meta: comment.id,
+            text: platform === 'instagram' ? comment.text : comment.message,
+            author_username: platform === 'instagram' ? comment.username : null,
+            author_name: platform === 'facebook' ? comment.from?.name : comment.username,
+            author_id: platform === 'facebook' ? comment.from?.id : null,
+            like_count: comment.like_count || 0,
+            reply_count: platform === 'facebook' ? (comment.comment_count || 0) : (comment.replies?.data?.length || 0),
+            comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
+            is_deleted: false,
+          }
+
+          const { error: commentError } = await supabase
+            .from('social_comments')
+            .upsert(commentData, { onConflict: 'project_id,platform,comment_id_meta' })
+
+          if (!commentError) {
+            totalComments++
+          }
+
+          // Handle replies
+          if (comment.replies?.data) {
+            for (const reply of comment.replies.data) {
+              const replyData: any = {
+                project_id: projectId,
+                post_id: postRecord.id,
+                platform,
+                comment_id_meta: reply.id,
+                parent_comment_id: comment.id,
+                text: reply.text,
+                author_username: reply.username,
+                author_name: reply.username,
+                like_count: reply.like_count || 0,
+                reply_count: 0,
+                comment_timestamp: reply.timestamp,
+                is_deleted: false,
+              }
+
+              const { error: replyError } = await supabase
+                .from('social_comments')
+                .upsert(replyData, { onConflict: 'project_id,platform,comment_id_meta' })
+
+              if (!replyError) {
+                totalComments++
+              }
+            }
+          }
+        }
+
+        await delay(300) // Rate limiting
+      } catch (e: any) {
+        console.error(`[SYNC_AD_COMMENTS] Error processing ad ${ad.id}:`, e.message)
+        errors.push(`Ad ${ad.id}: ${e.message}`)
+      }
+    }
+
+    console.log('='.repeat(60))
+    console.log(`[SYNC_AD_COMMENTS] COMPLETED: ${totalAds} ads, ${totalComments} comments synced`)
+
+    return { 
+      success: true, 
+      adsSynced: totalAds, 
+      commentsSynced: totalComments,
+      errors 
+    }
+  } catch (error: any) {
+    console.error('[SYNC_AD_COMMENTS] FATAL ERROR:', error)
+    return { 
+      success: false, 
+      error: error.message, 
+      adsSynced: 0,
+      commentsSynced: 0,
+      errors 
+    }
+  }
 }

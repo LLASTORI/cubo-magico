@@ -9,6 +9,8 @@ export interface SocialPost {
   post_id_meta: string;
   page_name: string | null;
   post_type: 'organic' | 'ad';
+  is_ad: boolean;
+  meta_ad_id: string | null;
   campaign_id: string | null;
   adset_id: string | null;
   ad_id: string | null;
@@ -94,6 +96,7 @@ export function useSocialListening(projectId: string | undefined) {
     platform?: string;
     postId?: string;
     search?: string;
+    postType?: string; // 'organic' | 'ad' | 'all'
   }) => {
     return useQuery({
       queryKey: ['social_comments', projectId, filters],
@@ -102,7 +105,7 @@ export function useSocialListening(projectId: string | undefined) {
 
         let query = supabase
           .from('social_comments')
-          .select('*, social_posts(*), crm_contacts(id, name, email)')
+          .select('*, social_posts!inner(*), crm_contacts(id, name, email)')
           .eq('project_id', projectId)
           .eq('is_deleted', false)
           .order('comment_timestamp', { ascending: false });
@@ -121,6 +124,12 @@ export function useSocialListening(projectId: string | undefined) {
         }
         if (filters?.search) {
           query = query.ilike('text', `%${filters.search}%`);
+        }
+        // Filter by post type (organic vs ad)
+        if (filters?.postType === 'ad') {
+          query = query.eq('social_posts.is_ad', true);
+        } else if (filters?.postType === 'organic') {
+          query = query.eq('social_posts.is_ad', false);
         }
 
         const { data, error } = await query.limit(500);
@@ -257,6 +266,35 @@ export function useSocialListening(projectId: string | undefined) {
     },
   });
 
+  // Sync ad comments mutation
+  const syncAdComments = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('social-comments-api', {
+        body: { action: 'sync_ad_comments', projectId },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Comentários de Ads sincronizados!',
+        description: `${data.adsSynced || 0} ads e ${data.commentsSynced || 0} comentários encontrados.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['social_posts', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['social_stats', projectId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao sincronizar ads',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   return {
     posts,
     postsLoading,
@@ -269,5 +307,6 @@ export function useSocialListening(projectId: string | undefined) {
     syncComments,
     processAI,
     linkToCRM,
+    syncAdComments,
   };
 }

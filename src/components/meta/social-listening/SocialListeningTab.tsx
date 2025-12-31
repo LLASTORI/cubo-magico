@@ -73,6 +73,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     platform: 'all',
     postType: 'all',
     search: '',
+    postId: '',
   });
 
   // Check if pages are configured
@@ -107,6 +108,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     classification: filters.classification,
     platform: filters.platform,
     postType: filters.postType,
+    postId: filters.postId || undefined,
     search: filters.search,
   });
 
@@ -348,7 +350,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
 
             <Button 
               variant="ghost" 
-              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', postType: 'all', search: '' })}
+              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', postType: 'all', search: '', postId: '' })}
             >
               Limpar
             </Button>
@@ -447,7 +449,13 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
         </TabsContent>
 
         <TabsContent value="analise" className="mt-6">
-          <PostAnalysisDashboard projectId={projectId} />
+          <PostAnalysisDashboard
+            projectId={projectId}
+            onOpenComments={(postId) => {
+              setFilters((prev) => ({ ...prev, postId }));
+              setActiveSubTab('dashboard');
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="ia" className="mt-6">

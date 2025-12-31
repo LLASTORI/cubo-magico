@@ -325,32 +325,34 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
             {comments && <Badge variant="secondary">{comments.length}</Badge>}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {commentsLoading ? (
-            <div className="space-y-4">
+            <div className="space-y-4 p-6">
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
           ) : comments && comments.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Plataforma</TableHead>
-                  <TableHead className="w-[40%]">Comentário</TableHead>
-                  <TableHead>Autor</TableHead>
-                  <TableHead>Sentimento</TableHead>
-                  <TableHead>Classificação</TableHead>
-                  <TableHead>Intenção</TableHead>
-                  <TableHead>Data</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {comments.map((comment) => (
-                  <CommentRow key={comment.id} comment={comment} />
-                ))}
-              </TableBody>
-            </Table>
+            <div className="max-h-[600px] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card z-10">
+                  <TableRow>
+                    <TableHead>Plataforma</TableHead>
+                    <TableHead className="w-[40%]">Comentário</TableHead>
+                    <TableHead>Autor</TableHead>
+                    <TableHead>Sentimento</TableHead>
+                    <TableHead>Classificação</TableHead>
+                    <TableHead>Intenção</TableHead>
+                    <TableHead>Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {comments.map((comment) => (
+                    <CommentRow key={comment.id} comment={comment} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <div className="text-center py-12">
               <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

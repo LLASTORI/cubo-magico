@@ -48,7 +48,12 @@ export interface SocialComment {
   comment_timestamp: string;
   created_at: string;
   crm_contact_id: string | null;
-  social_posts?: SocialPost;
+  social_posts?: {
+    id: string;
+    is_ad: boolean;
+    post_type: string;
+    permalink: string | null;
+  };
   crm_contacts?: {
     id: string;
     name: string | null;
@@ -105,7 +110,7 @@ export function useSocialListening(projectId: string | undefined) {
 
         let query = supabase
           .from('social_comments')
-          .select('*, social_posts!inner(*), crm_contacts(id, name, email)')
+          .select('*, social_posts!inner(id, is_ad, post_type, permalink), crm_contacts(id, name, email)')
           .eq('project_id', projectId)
           .eq('is_deleted', false)
           .order('comment_timestamp', { ascending: false });

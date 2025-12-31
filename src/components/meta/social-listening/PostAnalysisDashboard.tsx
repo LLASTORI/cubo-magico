@@ -43,6 +43,10 @@ interface PostWithStats {
   caption: string | null;
   media_type: string | null;
   permalink: string | null;
+  thumbnail_url: string | null;
+  campaign_name: string | null;
+  adset_name: string | null;
+  ad_name: string | null;
   likes_count: number;
   comments_count: number;
   is_ad: boolean;
@@ -470,17 +474,42 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1" title={mediaConfig?.label}>
-                            <MediaIcon className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex items-center gap-2" title={mediaConfig?.label}>
+                            {post.thumbnail_url ? (
+                              <img 
+                                src={post.thumbnail_url} 
+                                alt="" 
+                                className="h-8 w-8 object-cover rounded"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <MediaIcon className="h-4 w-4 text-muted-foreground" />
+                            )}
                             {post.is_ad && (
                               <Badge variant="outline" className="text-xs px-1">Ad</Badge>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <p className="text-sm line-clamp-2 max-w-xs">
-                            {post.message || post.caption || 'Sem legenda'}
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-sm line-clamp-2 max-w-xs">
+                              {post.message || post.caption || 'Sem legenda'}
+                            </p>
+                            {post.is_ad && post.campaign_name && (
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant="secondary" className="text-xs">
+                                  {post.campaign_name}
+                                </Badge>
+                                {post.adset_name && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {post.adset_name}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">

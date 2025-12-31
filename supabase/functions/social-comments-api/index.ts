@@ -1163,8 +1163,8 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       const adAccountId = rawAccountId.replace('act_', '')
       console.log(`[SYNC_AD_COMMENTS] Processing account: ${adAccount.account_name} (${adAccountId})`)
 
-      // Fetch ads with their effective_object_story_id (post_id), instagram info AND campaign/adset info
-      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,adset_id,adset{id,name,campaign_id},campaign_id,campaign{id,name},effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id}&limit=100&access_token=${accessToken}`
+      // Fetch ads with their effective_object_story_id (post_id), instagram info, campaign/adset info AND thumbnail
+      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,adset_id,adset{id,name,campaign_id},campaign_id,campaign{id,name},effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id,thumbnail_url,image_url}&limit=100&access_token=${accessToken}`
       console.log('[SYNC_AD_COMMENTS] Fetching ads...')
       
       const adsResponse = await fetch(adsUrl)
@@ -1219,6 +1219,9 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
           const adsetName = ad.adset?.name || null
           const adName = ad.name || null
           
+          // Get thumbnail from creative
+          const thumbnailUrl = ad.creative?.thumbnail_url || ad.creative?.image_url || null
+          
           // First, create/update the post as an ad with full info
           const postData: any = {
             project_id: projectId,
@@ -1236,6 +1239,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
             ad_name: adName,
             message: adName || 'Anúncio',
             permalink: permalink,
+            thumbnail_url: thumbnailUrl,
             last_synced_at: new Date().toISOString(),
           }
 

@@ -464,29 +464,64 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
 
     posts = data
   } else {
-    // Process a small batch per platform to avoid timeouts and garantir Facebook + Instagram
-    const [fbRes, igRes] = await Promise.all([
+    // Get posts with existing comments (to check for deleted comments) + recent posts
+    // This ensures we detect deleted comments even on older posts
+    const [fbRes, igRes, postsWithCommentsRes] = await Promise.all([
       supabase
         .from('social_posts')
         .select('*')
         .eq('project_id', projectId)
         .eq('platform', 'facebook')
         .order('published_at', { ascending: false })
-        .limit(10),
+        .limit(25),
       supabase
         .from('social_posts')
         .select('*')
         .eq('project_id', projectId)
         .eq('platform', 'instagram')
         .order('published_at', { ascending: false })
-        .limit(10),
+        .limit(25),
+      // Also get posts that have non-deleted comments (to verify if they were deleted from Meta)
+      supabase
+        .from('social_comments')
+        .select('post_id')
+        .eq('project_id', projectId)
+        .eq('is_deleted', false)
+        .order('comment_timestamp', { ascending: false })
+        .limit(100),
     ])
 
     if (fbRes.error || igRes.error) {
       return { success: false, error: 'Erro ao buscar posts para sincronizar comentários' }
     }
 
-    posts = [...(fbRes.data || []), ...(igRes.data || [])]
+    // Combine recent posts
+    const recentPosts = [...(fbRes.data || []), ...(igRes.data || [])]
+    const recentPostIds = new Set(recentPosts.map(p => p.id))
+
+    // Get unique post IDs from comments that aren't already in recent posts
+    const commentPostIds = new Set<string>()
+    for (const comment of postsWithCommentsRes.data || []) {
+      if (!recentPostIds.has(comment.post_id)) {
+        commentPostIds.add(comment.post_id)
+      }
+    }
+
+    // Fetch additional posts that have comments but aren't in recent posts
+    let additionalPosts: any[] = []
+    if (commentPostIds.size > 0) {
+      const { data: extraPosts } = await supabase
+        .from('social_posts')
+        .select('*')
+        .eq('project_id', projectId)
+        .in('id', Array.from(commentPostIds))
+        .limit(50)
+      
+      additionalPosts = extraPosts || []
+      console.log(`[SYNC_COMMENTS] Adding ${additionalPosts.length} posts with existing comments`)
+    }
+
+    posts = [...recentPosts, ...additionalPosts]
   }
 
   if (!posts || posts.length === 0) {

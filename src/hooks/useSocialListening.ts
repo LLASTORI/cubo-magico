@@ -301,9 +301,10 @@ export function useSocialListening(projectId: string | undefined) {
       return data;
     },
     onSuccess: (data) => {
+      const deletedText = data.deletedComments ? ` ${data.deletedComments} removidos detectados.` : '';
       toast({
         title: 'Comentários de Ads sincronizados!',
-        description: `${data.adsSynced || 0} ads e ${data.commentsSynced || 0} comentários encontrados.`,
+        description: `${data.adsSynced || 0} ads e ${data.commentsSynced || 0} comentários encontrados.${deletedText}`,
       });
       queryClient.invalidateQueries({ queryKey: ['social_posts', projectId] });
       queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });

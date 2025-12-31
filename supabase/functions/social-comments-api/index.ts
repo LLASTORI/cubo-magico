@@ -1163,8 +1163,8 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       const adAccountId = rawAccountId.replace('act_', '')
       console.log(`[SYNC_AD_COMMENTS] Processing account: ${adAccount.account_name} (${adAccountId})`)
 
-      // Fetch ads with their effective_object_story_id (post_id) and instagram info
-      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id}&limit=100&access_token=${accessToken}`
+      // Fetch ads with their effective_object_story_id (post_id), instagram info AND campaign/adset info
+      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,adset_id,adset{id,name,campaign_id},campaign_id,campaign{id,name},effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id}&limit=100&access_token=${accessToken}`
       console.log('[SYNC_AD_COMMENTS] Fetching ads...')
       
       const adsResponse = await fetch(adsUrl)
@@ -1182,6 +1182,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       for (const ad of ads) {
         // Check for Instagram media first, then Facebook post
         const instagramMediaId = ad.creative?.effective_instagram_media_id
+        const instagramPermalink = ad.creative?.instagram_permalink_url
         const facebookPostId = ad.effective_object_story_id || 
                                ad.creative?.effective_object_story_id || 
                                ad.creative?.object_story_id
@@ -1189,14 +1190,21 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
         // Prioritize Instagram if we have an Instagram media ID
         let postId: string
         let platform: 'facebook' | 'instagram'
+        let permalink: string | null = null
         
         if (instagramMediaId) {
           postId = instagramMediaId
           platform = 'instagram'
+          permalink = instagramPermalink || null
           console.log(`[SYNC_AD_COMMENTS] Processing INSTAGRAM ad: ${ad.id} with media: ${postId}`)
         } else if (facebookPostId) {
           postId = facebookPostId
           platform = 'facebook'
+          // Build Facebook permalink if we have page_id_post_id format
+          if (facebookPostId.includes('_')) {
+            const [pageId, postIdPart] = facebookPostId.split('_')
+            permalink = `https://www.facebook.com/${pageId}/posts/${postIdPart}`
+          }
           console.log(`[SYNC_AD_COMMENTS] Processing FACEBOOK ad: ${ad.id} with post: ${postId}`)
         } else {
           console.log(`[SYNC_AD_COMMENTS] Ad ${ad.id} has no associated post/media, skipping`)
@@ -1204,8 +1212,14 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
         }
 
         try {
+          // Extract campaign and adset info
+          const campaignId = ad.campaign_id || ad.campaign?.id || null
+          const campaignName = ad.campaign?.name || null
+          const adsetId = ad.adset_id || ad.adset?.id || null
+          const adsetName = ad.adset?.name || null
+          const adName = ad.name || null
           
-          // First, create/update the post as an ad
+          // First, create/update the post as an ad with full info
           const postData: any = {
             project_id: projectId,
             platform,
@@ -1213,7 +1227,15 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
             post_type: 'ad',
             is_ad: true,
             meta_ad_id: ad.id,
-            message: ad.name || 'Anúncio',
+            meta_campaign_id: campaignId,
+            campaign_id: campaignId,
+            campaign_name: campaignName,
+            adset_id: adsetId,
+            adset_name: adsetName,
+            ad_id: ad.id,
+            ad_name: adName,
+            message: adName || 'Anúncio',
+            permalink: permalink,
             last_synced_at: new Date().toISOString(),
           }
 

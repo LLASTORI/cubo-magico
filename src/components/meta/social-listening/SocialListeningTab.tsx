@@ -520,24 +520,6 @@ function CommentRow({ comment }: { comment: SocialComment }) {
               {comment.ai_summary}
             </p>
           )}
-          {/* Show campaign/adset/ad info for ads */}
-          {isAd && postData?.campaign_name && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                {postData.campaign_name}
-              </Badge>
-              {postData?.adset_name && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                  {postData.adset_name}
-                </Badge>
-              )}
-              {postData?.ad_name && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                  {postData.ad_name}
-                </Badge>
-              )}
-            </div>
-          )}
         </div>
       </TableCell>
       <TableCell>

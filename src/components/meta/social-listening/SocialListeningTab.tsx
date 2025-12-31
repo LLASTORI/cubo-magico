@@ -415,6 +415,25 @@ function CommentRow({ comment }: { comment: SocialComment }) {
   const crmContact = comment.crm_contacts;
   const postPermalink = comment.social_posts?.permalink;
 
+  const handleOpenPost = () => {
+    if (!postPermalink) return;
+    
+    // Try to open in parent window (works outside iframe)
+    // If in iframe, window.top may be blocked, so we copy to clipboard as fallback
+    try {
+      const targetWindow = window.top || window;
+      targetWindow.open(postPermalink, '_blank');
+    } catch (e) {
+      // Fallback: copy link to clipboard
+      navigator.clipboard.writeText(postPermalink).then(() => {
+        alert('Link copiado! Cole no navegador para abrir.');
+      }).catch(() => {
+        // Last resort: show the URL
+        alert(`Abra este link: ${postPermalink}`);
+      });
+    }
+  };
+
   return (
     <TableRow>
       <TableCell>
@@ -430,7 +449,7 @@ function CommentRow({ comment }: { comment: SocialComment }) {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => window.open(postPermalink, '_blank')}
+            onClick={handleOpenPost}
             title="Ver post original"
           >
             <ExternalLink className="h-4 w-4" />

@@ -746,7 +746,23 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
 
 // Process comments with AI - now uses knowledge base for context
 async function processCommentsWithAI(supabase: any, projectId: string, limit: number) {
-  console.log(`Processing up to ${limit} comments with AI for project:`, projectId)
+  // Use larger batch size for efficiency
+  const batchSize = Math.max(limit, 100)
+  console.log(`Processing up to ${batchSize} comments with AI for project:`, projectId)
+
+  // First, reset any comments stuck in 'processing' status (from previous failed runs)
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const { data: stuckComments, error: stuckError } = await supabase
+    .from('social_comments')
+    .update({ ai_processing_status: 'pending' })
+    .eq('project_id', projectId)
+    .eq('ai_processing_status', 'processing')
+    .lt('updated_at', fiveMinutesAgo)
+    .select('id')
+  
+  if (stuckComments?.length > 0) {
+    console.log(`Reset ${stuckComments.length} stuck comments from 'processing' to 'pending'`)
+  }
 
   // Fetch knowledge base for this project
   const { data: knowledgeBase } = await supabase
@@ -768,7 +784,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
     `)
     .eq('project_id', projectId)
     .eq('ai_processing_status', 'pending')
-    .limit(limit)
+    .limit(batchSize)
 
   if (error || !comments || comments.length === 0) {
     return { success: true, processed: 0, message: 'Nenhum comentário pendente' }
@@ -776,58 +792,93 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
   console.log(`Found ${comments.length} comments to process`)
 
+  // Get count of remaining pending after this batch
+  const { count: remainingCount } = await supabase
+    .from('social_comments')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .eq('ai_processing_status', 'pending')
+
   let processed = 0
   let failed = 0
 
   // Build prompt once with knowledge base context
   const classificationPrompt = buildClassificationPrompt(knowledgeBase)
 
-  for (const comment of comments) {
-    try {
-      // Mark as processing
-      await supabase
-        .from('social_comments')
-        .update({ ai_processing_status: 'processing' })
-        .eq('id', comment.id)
+  // Process comments in parallel batches of 5 for speed
+  const parallelBatchSize = 5
+  for (let i = 0; i < comments.length; i += parallelBatchSize) {
+    const batch = comments.slice(i, i + parallelBatchSize)
+    
+    const results = await Promise.allSettled(
+      batch.map(async (comment: any) => {
+        try {
+          // Mark as processing
+          await supabase
+            .from('social_comments')
+            .update({ ai_processing_status: 'processing' })
+            .eq('id', comment.id)
 
-      // Call AI with knowledge base enhanced prompt
-      const postContext = comment.social_posts?.message || 'Contexto não disponível'
-      const aiResult = await classifyComment(comment.text, postContext, classificationPrompt, knowledgeBase)
+          // Call AI with knowledge base enhanced prompt
+          const postContext = comment.social_posts?.message || 'Contexto não disponível'
+          const aiResult = await classifyComment(comment.text, postContext, classificationPrompt, knowledgeBase)
 
-      // Update with results
-      await supabase
-        .from('social_comments')
-        .update({
-          sentiment: aiResult.sentiment,
-          classification: aiResult.classification,
-          classification_key: aiResult.classification, // Store raw key for filtering
-          intent_score: aiResult.intent_score,
-          ai_summary: aiResult.summary,
-          ai_processing_status: 'completed',
-          ai_processed_at: new Date().toISOString(),
-        })
-        .eq('id', comment.id)
+          // Update with results
+          await supabase
+            .from('social_comments')
+            .update({
+              sentiment: aiResult.sentiment,
+              classification: aiResult.classification,
+              classification_key: aiResult.classification,
+              intent_score: aiResult.intent_score,
+              ai_summary: aiResult.summary,
+              ai_processing_status: 'completed',
+              ai_processed_at: new Date().toISOString(),
+            })
+            .eq('id', comment.id)
 
-      processed++
-    } catch (e: any) {
-      console.error(`Error processing comment ${comment.id}:`, e.message)
-      
-      await supabase
-        .from('social_comments')
-        .update({
-          ai_processing_status: 'failed',
-          ai_error: e.message,
-        })
-        .eq('id', comment.id)
+          return true
+        } catch (e: any) {
+          console.error(`Error processing comment ${comment.id}:`, e.message)
+          
+          await supabase
+            .from('social_comments')
+            .update({
+              ai_processing_status: 'failed',
+              ai_error: e.message,
+            })
+            .eq('id', comment.id)
 
-      failed++
+          throw e
+        }
+      })
+    )
+
+    // Count results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        processed++
+      } else {
+        failed++
+      }
     }
 
-    // Rate limiting between AI calls
-    await delay(500)
+    // Small delay between batches to avoid rate limiting
+    if (i + parallelBatchSize < comments.length) {
+      await delay(300)
+    }
   }
 
-  return { success: true, processed, failed, total: comments.length }
+  const remaining = (remainingCount || 0) - processed
+  console.log(`Processed ${processed} comments, ${failed} failed, ~${remaining} remaining`)
+
+  return { 
+    success: true, 
+    processed, 
+    failed, 
+    total: comments.length,
+    remaining: Math.max(0, remaining)
+  }
 }
 
 async function classifyComment(commentText: string, postContext: string, classificationPrompt: string, knowledgeBase?: any) {

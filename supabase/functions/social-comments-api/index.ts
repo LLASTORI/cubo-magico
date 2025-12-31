@@ -143,7 +143,9 @@ Deno.serve(async (req) => {
 
 // Sync posts from Facebook Pages and Instagram - using SAVED pages only
 async function syncPosts(supabase: any, projectId: string, accessToken: string) {
-  console.log('Syncing posts for project:', projectId)
+  console.log('='.repeat(60))
+  console.log('[SYNC_POSTS] Starting sync for project:', projectId)
+  console.log('[SYNC_POSTS] Access token preview:', accessToken?.substring(0, 20) + '...')
   
   let totalPosts = 0
   const errors: string[] = []
@@ -157,16 +159,19 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       .eq('is_active', true)
 
     if (pagesError) {
-      console.error('Error fetching saved pages:', pagesError)
+      console.error('[SYNC_POSTS] Error fetching saved pages:', pagesError)
       throw new Error('Erro ao buscar páginas salvas')
     }
 
     if (!savedPages || savedPages.length === 0) {
-      console.log('No saved pages found for project')
+      console.log('[SYNC_POSTS] No saved pages found for project')
       return { success: false, error: 'Nenhuma página configurada. Adicione páginas primeiro.', postsSynced: 0 }
     }
 
-    console.log(`Found ${savedPages.length} saved pages to sync`)
+    console.log(`[SYNC_POSTS] Found ${savedPages.length} saved pages to sync:`)
+    savedPages.forEach((p: any, i: number) => {
+      console.log(`  [${i + 1}] ${p.page_name} (${p.platform}) - pageId: ${p.page_id}, igId: ${p.instagram_account_id || 'N/A'}`)
+    })
 
     for (const savedPage of savedPages) {
       const pageToken = savedPage.page_access_token
@@ -175,20 +180,26 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       const instagramAccountId = savedPage.instagram_account_id
       const platform = savedPage.platform
 
-      console.log(`Syncing page: ${pageName} (${platform}) - pageId: ${pageId}, igId: ${instagramAccountId}`)
+      console.log('-'.repeat(40))
+      console.log(`[SYNC_PAGE] Processing: ${pageName}`)
+      console.log(`[SYNC_PAGE] Platform: ${platform}`)
+      console.log(`[SYNC_PAGE] Page ID: ${pageId}`)
+      console.log(`[SYNC_PAGE] Instagram Account ID: ${instagramAccountId || 'N/A'}`)
+      console.log(`[SYNC_PAGE] Token preview: ${pageToken?.substring(0, 20)}...`)
 
       // Sync based on platform
       if (platform === 'facebook' || (!platform && !instagramAccountId)) {
         // Sync Facebook Page posts
         try {
+          console.log(`[SYNC_PAGE] Fetching Facebook posts...`)
           const fbPosts = await fetchFacebookPosts(pageId, pageToken)
-          console.log(`Fetched ${fbPosts.length} Facebook posts for ${pageName}`)
+          console.log(`[SYNC_PAGE] Fetched ${fbPosts.length} Facebook posts for ${pageName}`)
           for (const post of fbPosts) {
             await upsertPost(supabase, projectId, 'facebook', post, pageName)
             totalPosts++
           }
         } catch (e: any) {
-          console.error(`FB Page ${pageName} error:`, e.message)
+          console.error(`[SYNC_PAGE] FB Page ${pageName} error:`, e.message)
           errors.push(`FB Page ${pageName}: ${e.message}`)
         }
       }
@@ -196,14 +207,20 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       // Sync Instagram posts if this is an Instagram page or has Instagram connected
       if (platform === 'instagram' && instagramAccountId) {
         try {
-          const igPosts = await fetchInstagramPosts(instagramAccountId, pageToken)
-          console.log(`Fetched ${igPosts.length} Instagram posts for ${pageName}`)
+          console.log(`[SYNC_PAGE] Fetching Instagram posts for IG Account: ${instagramAccountId}`)
+          const igPosts = await fetchInstagramPosts(instagramAccountId, pageToken, accessToken)
+          console.log(`[SYNC_PAGE] Fetched ${igPosts.length} Instagram posts for ${pageName}`)
+          
+          if (igPosts.length === 0) {
+            console.log(`[SYNC_PAGE] WARNING: No Instagram posts returned. Check token permissions.`)
+          }
+          
           for (const post of igPosts) {
             await upsertPost(supabase, projectId, 'instagram', post, pageName)
             totalPosts++
           }
         } catch (e: any) {
-          console.error(`IG ${pageName} error:`, e.message)
+          console.error(`[SYNC_PAGE] IG ${pageName} error:`, e.message)
           errors.push(`IG ${pageName}: ${e.message}`)
         }
       }
@@ -217,10 +234,14 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       await delay(500) // Rate limiting
     }
 
-    console.log(`Sync completed: ${totalPosts} posts synced`)
+    console.log('='.repeat(60))
+    console.log(`[SYNC_POSTS] COMPLETED: ${totalPosts} posts synced, ${errors.length} errors`)
+    if (errors.length > 0) {
+      console.log(`[SYNC_POSTS] Errors:`, errors)
+    }
     return { success: true, postsSynced: totalPosts, errors }
   } catch (error: any) {
-    console.error('Sync posts error:', error)
+    console.error('[SYNC_POSTS] FATAL ERROR:', error)
     return { success: false, error: error.message, errors }
   }
 }
@@ -248,18 +269,75 @@ async function fetchFacebookPosts(pageId: string, pageToken: string): Promise<an
   return posts
 }
 
-async function fetchInstagramPosts(igAccountId: string, pageToken: string) {
-  const posts: any[] = []
-  const url = `${GRAPH_API_BASE}/${igAccountId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=50&access_token=${pageToken}`
-
-  const response = await fetch(url)
-  const data = await response.json()
-
-  if (data.error) {
-    throw new Error(data.error.message)
+async function fetchInstagramPosts(igAccountId: string, pageToken: string, mainAccessToken?: string) {
+  console.log(`[FETCH_IG_POSTS] Starting for IG Account: ${igAccountId}`)
+  
+  // Try with page token first, then fall back to main access token
+  const tokensToTry = [
+    { token: pageToken, name: 'page_access_token' },
+  ]
+  
+  // Add main access token as fallback if available and different
+  if (mainAccessToken && mainAccessToken !== pageToken) {
+    tokensToTry.push({ token: mainAccessToken, name: 'main_access_token' })
   }
-
-  return data.data || []
+  
+  for (const { token, name } of tokensToTry) {
+    console.log(`[FETCH_IG_POSTS] Trying with ${name}...`)
+    console.log(`[FETCH_IG_POSTS] Token preview: ${token?.substring(0, 20)}...`)
+    
+    const url = `${GRAPH_API_BASE}/${igAccountId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=50&access_token=${token}`
+    
+    console.log(`[FETCH_IG_POSTS] Request URL (token hidden): ${url.replace(token, 'TOKEN_HIDDEN')}`)
+    
+    try {
+      const response = await fetch(url)
+      const statusCode = response.status
+      const data = await response.json()
+      
+      console.log(`[FETCH_IG_POSTS] Response status: ${statusCode}`)
+      console.log(`[FETCH_IG_POSTS] Response data:`, JSON.stringify({
+        hasData: !!data.data,
+        dataLength: data.data?.length,
+        error: data.error,
+        firstPostId: data.data?.[0]?.id,
+      }))
+      
+      if (data.error) {
+        console.error(`[FETCH_IG_POSTS] API Error with ${name}:`, JSON.stringify(data.error))
+        
+        // If it's a permission error, try the next token
+        if (data.error.code === 190 || data.error.code === 200) {
+          console.log(`[FETCH_IG_POSTS] Permission error, trying next token...`)
+          continue
+        }
+        
+        throw new Error(`${data.error.message} (code: ${data.error.code})`)
+      }
+      
+      const posts = data.data || []
+      console.log(`[FETCH_IG_POSTS] SUCCESS with ${name}: Found ${posts.length} posts`)
+      
+      if (posts.length > 0) {
+        console.log(`[FETCH_IG_POSTS] First post sample:`, JSON.stringify({
+          id: posts[0].id,
+          caption: posts[0].caption?.substring(0, 50),
+          media_type: posts[0].media_type,
+          timestamp: posts[0].timestamp,
+        }))
+      }
+      
+      return posts
+    } catch (fetchError: any) {
+      console.error(`[FETCH_IG_POSTS] Fetch error with ${name}:`, fetchError.message)
+      if (tokensToTry.indexOf({ token, name }) === tokensToTry.length - 1) {
+        throw fetchError // Re-throw if this was the last token to try
+      }
+    }
+  }
+  
+  console.log(`[FETCH_IG_POSTS] All tokens failed, returning empty array`)
+  return []
 }
 
 async function upsertPost(supabase: any, projectId: string, platform: string, post: any, pageName: string) {

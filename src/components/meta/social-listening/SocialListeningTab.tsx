@@ -337,8 +337,9 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Plataforma</TableHead>
-                    <TableHead className="w-[40%]">Comentário</TableHead>
+                    <TableHead className="w-10">Rede</TableHead>
+                    <TableHead className="w-10">Post</TableHead>
+                    <TableHead className="w-[35%]">Comentário</TableHead>
                     <TableHead>Autor</TableHead>
                     <TableHead>Sentimento</TableHead>
                     <TableHead>Classificação</TableHead>
@@ -412,6 +413,7 @@ function CommentRow({ comment }: { comment: SocialComment }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
   const crmContact = comment.crm_contacts;
+  const postPermalink = comment.social_posts?.permalink;
 
   return (
     <TableRow>
@@ -420,6 +422,21 @@ function CommentRow({ comment }: { comment: SocialComment }) {
           <Instagram className="h-4 w-4 text-pink-500" />
         ) : (
           <Facebook className="h-4 w-4 text-blue-600" />
+        )}
+      </TableCell>
+      <TableCell>
+        {postPermalink ? (
+          <a 
+            href={postPermalink} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-primary transition-colors"
+            title="Ver post original"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        ) : (
+          <span className="text-muted-foreground">-</span>
         )}
       </TableCell>
       <TableCell>

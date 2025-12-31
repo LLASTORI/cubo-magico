@@ -181,14 +181,18 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
     for (const savedPage of savedPages) {
       const pageToken = savedPage.page_access_token
       const pageName = savedPage.page_name
-      const pageId = savedPage.page_id
+      const rawPageId = savedPage.page_id
       const instagramAccountId = savedPage.instagram_account_id
       const platform = savedPage.platform
+
+      // Extract original page ID (remove _facebook or _instagram suffix if present)
+      const originalPageId = rawPageId.replace(/_facebook$/, '').replace(/_instagram$/, '')
 
       console.log('-'.repeat(40))
       console.log(`[SYNC_PAGE] Processing: ${pageName}`)
       console.log(`[SYNC_PAGE] Platform: ${platform}`)
-      console.log(`[SYNC_PAGE] Page ID: ${pageId}`)
+      console.log(`[SYNC_PAGE] Raw Page ID: ${rawPageId}`)
+      console.log(`[SYNC_PAGE] Original Page ID (for API): ${originalPageId}`)
       console.log(`[SYNC_PAGE] Instagram Account ID: ${instagramAccountId || 'N/A'}`)
       console.log(`[SYNC_PAGE] Token preview: ${pageToken?.substring(0, 20)}...`)
 
@@ -196,8 +200,8 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       if (platform === 'facebook' || (!platform && !instagramAccountId)) {
         // Sync Facebook Page posts
         try {
-          console.log(`[SYNC_PAGE] Fetching Facebook posts...`)
-          const fbPosts = await fetchFacebookPosts(pageId, pageToken)
+          console.log(`[SYNC_PAGE] Fetching Facebook posts using ID: ${originalPageId}`)
+          const fbPosts = await fetchFacebookPosts(originalPageId, pageToken)
           console.log(`[SYNC_PAGE] Fetched ${fbPosts.length} Facebook posts for ${pageName}`)
           for (const post of fbPosts) {
             await upsertPost(supabase, projectId, 'facebook', post, pageName)

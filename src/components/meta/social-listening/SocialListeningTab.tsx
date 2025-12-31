@@ -426,15 +426,15 @@ function CommentRow({ comment }: { comment: SocialComment }) {
       </TableCell>
       <TableCell>
         {postPermalink ? (
-          <a 
-            href={postPermalink} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-primary transition-colors"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => window.open(postPermalink, '_blank')}
             title="Ver post original"
           >
             <ExternalLink className="h-4 w-4" />
-          </a>
+          </Button>
         ) : (
           <span className="text-muted-foreground">-</span>
         )}

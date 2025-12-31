@@ -415,19 +415,49 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
   const errors: string[] = []
 
   // Get posts to sync
-  let query = supabase
-    .from('social_posts')
-    .select('*')
-    .eq('project_id', projectId)
+  let posts: any[] = []
 
   if (specificPostId) {
-    query = query.eq('id', specificPostId)
+    const { data, error: postError } = await supabase
+      .from('social_posts')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('id', specificPostId)
+      .limit(1)
+
+    if (postError || !data) {
+      return { success: false, error: 'Erro ao buscar post específico' }
+    }
+
+    posts = data
+  } else {
+    // Process a small batch per platform to avoid timeouts and garantir Facebook + Instagram
+    const [fbRes, igRes] = await Promise.all([
+      supabase
+        .from('social_posts')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('platform', 'facebook')
+        .order('published_at', { ascending: false })
+        .limit(10),
+      supabase
+        .from('social_posts')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('platform', 'instagram')
+        .order('published_at', { ascending: false })
+        .limit(10),
+    ])
+
+    if (fbRes.error || igRes.error) {
+      return { success: false, error: 'Erro ao buscar posts para sincronizar comentários' }
+    }
+
+    posts = [...(fbRes.data || []), ...(igRes.data || [])]
   }
 
-  const { data: posts, error: postsError } = await query.limit(50)
-
-  if (postsError || !posts) {
-    return { success: false, error: 'Erro ao buscar posts' }
+  if (!posts || posts.length === 0) {
+    return { success: true, commentsSynced: 0, errors: [] }
   }
 
   console.log(`[SYNC_COMMENTS] Found ${posts.length} posts to sync comments`)
@@ -501,8 +531,7 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
       console.warn(`[SYNC_COMMENTS] Error for post ${post.post_id_meta}: ${e.message}`)
       errors.push(`Post ${post.post_id_meta}: ${e.message}`)
     }
-
-    await delay(300)
+    await delay(150)
   }
 
   console.log(`[SYNC_COMMENTS] Completed: ${totalComments} comments synced, ${errors.length} errors`)

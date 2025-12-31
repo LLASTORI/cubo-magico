@@ -34,7 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
-import { SocialListeningPagesManager } from './SocialListeningPagesManager';
+import { useToast } from '@/hooks/use-toast';
 import { AIKnowledgeBaseSettings } from './AIKnowledgeBaseSettings';
 import { PostAnalysisDashboard } from './PostAnalysisDashboard';
 import { format } from 'date-fns';
@@ -503,6 +503,28 @@ function CommentRow({ comment }: { comment: SocialComment }) {
   };
 
   const postUrl = getPostUrl();
+  const { toast } = useToast();
+
+  const openExternal = async (url: string) => {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer') ?? window.top?.open(url, '_blank', 'noopener,noreferrer');
+
+    // In embedded previews, popups/new tabs can be blocked; offer copy fallback
+    if (!opened) {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({
+          title: 'Link copiado',
+          description: 'Cole no navegador para abrir o post e responder.',
+        });
+      } catch {
+        toast({
+          title: 'Não foi possível abrir o link',
+          description: 'Copie e abra manualmente no navegador.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
 
   return (
     <TableRow>
@@ -526,8 +548,12 @@ function CommentRow({ comment }: { comment: SocialComment }) {
             href={postUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => {
+              e.preventDefault();
+              void openExternal(postUrl);
+            }}
             className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent hover:text-accent-foreground"
-            title="Ver post original"
+            title="Abrir post (para responder)"
           >
             <ExternalLink className="h-4 w-4" />
           </a>

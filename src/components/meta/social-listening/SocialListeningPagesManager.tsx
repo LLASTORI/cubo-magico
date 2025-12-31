@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Facebook, Instagram, Check, AlertCircle, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Facebook, Instagram, Check, AlertCircle, Search, Trash2 } from 'lucide-react';
 
 interface SocialListeningPagesManagerProps {
   projectId: string;
@@ -96,6 +96,32 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
     },
   });
 
+  // Remove a page
+  const removeMutation = useMutation({
+    mutationFn: async (pageId: string) => {
+      const { data, error } = await supabase.functions.invoke('social-comments-api', {
+        body: { action: 'remove_page', projectId, pageId }
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Página removida!',
+        description: 'A página foi removida do monitoramento.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['social-listening-pages', projectId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao remover',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleTogglePage = (pageId: string) => {
     const newSelected = new Set(selectedPages);
     if (newSelected.has(pageId)) {
@@ -114,9 +140,12 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   };
 
   const isPageSaved = (pageId: string, platform: string) => {
-    // Check with platform-specific unique ID
+    // Check with platform-specific unique ID (new format) OR old format with matching platform
     const uniqueId = `${pageId}_${platform}`;
-    return savedPages?.some(p => p.page_id === uniqueId || p.page_id === pageId);
+    return savedPages?.some(p => 
+      p.page_id === uniqueId || 
+      (p.page_id === pageId && p.platform === platform)
+    );
   };
 
   // Filter pages based on search query
@@ -209,15 +238,35 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
                       <Facebook className="h-5 w-5 text-blue-500" />
                     )}
                     <div>
-                      <p className="font-medium">{page.page_name}</p>
+                      <p className="font-medium">
+                        {page.page_name}
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          {page.platform === 'instagram' ? 'Instagram' : 'Facebook'}
+                        </Badge>
+                      </p>
                       {page.instagram_username && (
                         <p className="text-sm text-muted-foreground">@{page.instagram_username}</p>
                       )}
                     </div>
                   </div>
-                  <Badge variant={page.is_active ? 'default' : 'secondary'}>
-                    {page.is_active ? 'Ativo' : 'Inativo'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={page.is_active ? 'default' : 'secondary'}>
+                      {page.is_active ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => removeMutation.mutate(page.page_id)}
+                      disabled={removeMutation.isPending}
+                    >
+                      {removeMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

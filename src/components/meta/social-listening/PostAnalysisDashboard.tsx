@@ -17,7 +17,8 @@ import {
   Instagram,
   Facebook,
   ExternalLink,
-  Eye
+  Eye,
+  Filter
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -64,22 +66,55 @@ interface PostWithStats {
   praise_count: number;
 }
 
+// Map all possible media_type values from both APIs (lowercase and uppercase)
 const mediaTypeConfig: Record<string, { label: string; icon: any }> = {
   IMAGE: { label: 'Foto', icon: Image },
+  image: { label: 'Foto', icon: Image },
   VIDEO: { label: 'Vídeo', icon: Video },
+  video: { label: 'Vídeo', icon: Video },
+  added_video: { label: 'Vídeo', icon: Video },
   REELS: { label: 'Reels', icon: Film },
+  reels: { label: 'Reels', icon: Film },
   CAROUSEL: { label: 'Carrossel', icon: Images },
   CAROUSEL_ALBUM: { label: 'Carrossel', icon: Images },
+  carousel_album: { label: 'Carrossel', icon: Images },
+  added_photos: { label: 'Carrossel', icon: Images },
+};
+
+// Normalize media type to filter value
+const normalizeMediaType = (mediaType: string | null): string => {
+  if (!mediaType) return 'unknown';
+  const lower = mediaType.toLowerCase();
+  if (lower === 'image') return 'image';
+  if (lower === 'video' || lower === 'added_video') return 'video';
+  if (lower === 'reels') return 'reels';
+  if (lower === 'carousel' || lower === 'carousel_album' || lower === 'added_photos') return 'carousel';
+  return lower;
 };
 
 export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps) {
   const [platformFilter, setPlatformFilter] = useState('all');
   const [mediaTypeFilter, setMediaTypeFilter] = useState('all');
+  const [funnelFilter, setFunnelFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'intent' | 'comments' | 'sentiment'>('intent');
+
+  // Fetch funnels for filter
+  const { data: funnels } = useQuery({
+    queryKey: ['funnels_for_filter', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name, campaign_name_pattern')
+        .eq('project_id', projectId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   // Fetch posts with aggregated comment stats
   const { data: postsWithStats, isLoading } = useQuery({
-    queryKey: ['post_analysis', projectId, platformFilter, mediaTypeFilter],
+    queryKey: ['post_analysis', projectId, platformFilter, mediaTypeFilter, funnelFilter],
     queryFn: async () => {
       // Fetch posts
       let postsQuery = supabase
@@ -91,9 +126,7 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
       if (platformFilter !== 'all') {
         postsQuery = postsQuery.eq('platform', platformFilter as 'instagram' | 'facebook');
       }
-      if (mediaTypeFilter !== 'all') {
-        postsQuery = postsQuery.eq('media_type', mediaTypeFilter);
-      }
+      // Note: mediaTypeFilter is applied after fetch due to normalization needs
 
       const { data: posts, error: postsError } = await postsQuery.limit(50);
       if (postsError) throw postsError;
@@ -172,7 +205,7 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
       });
 
       // Merge posts with stats
-      const postsWithStats: PostWithStats[] = (posts || []).map(post => {
+      let postsWithStats: PostWithStats[] = (posts || []).map(post => {
         const stats = statsMap.get(post.id);
         return {
           ...post,
@@ -192,6 +225,24 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
           praise_count: stats?.praise || 0,
         };
       });
+
+      // Apply media type filter (after fetch, due to normalization)
+      if (mediaTypeFilter !== 'all') {
+        postsWithStats = postsWithStats.filter(post => 
+          normalizeMediaType(post.media_type) === mediaTypeFilter
+        );
+      }
+
+      // Apply funnel filter for ads (match campaign_name against funnel's campaign_name_pattern)
+      if (funnelFilter !== 'all') {
+        const selectedFunnel = funnels?.find(f => f.id === funnelFilter);
+        if (selectedFunnel?.campaign_name_pattern) {
+          const pattern = selectedFunnel.campaign_name_pattern.toLowerCase();
+          postsWithStats = postsWithStats.filter(post => 
+            post.is_ad && post.campaign_name?.toLowerCase().includes(pattern)
+          );
+        }
+      }
 
       return postsWithStats;
     },
@@ -343,44 +394,73 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
       {/* Filters */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Filtros</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            Filtros
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <Select value={platformFilter} onValueChange={setPlatformFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Plataforma" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="instagram">Instagram</SelectItem>
-                <SelectItem value="facebook">Facebook</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap gap-6">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Plataforma</Label>
+              <Select value={platformFilter} onValueChange={setPlatformFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Plataforma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                  <SelectItem value="facebook">Facebook</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select value={mediaTypeFilter} onValueChange={setMediaTypeFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Tipo de Mídia" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="IMAGE">Foto</SelectItem>
-                <SelectItem value="VIDEO">Vídeo</SelectItem>
-                <SelectItem value="REELS">Reels</SelectItem>
-                <SelectItem value="CAROUSEL_ALBUM">Carrossel</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Tipo de Mídia</Label>
+              <Select value={mediaTypeFilter} onValueChange={setMediaTypeFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Tipo de Mídia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="image">Foto</SelectItem>
+                  <SelectItem value="video">Vídeo</SelectItem>
+                  <SelectItem value="reels">Reels</SelectItem>
+                  <SelectItem value="carousel">Carrossel</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Ordenar por" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="intent">Maior Intent Score</SelectItem>
-                <SelectItem value="comments">Mais Comentários</SelectItem>
-                <SelectItem value="sentiment">Melhor Sentimento</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Funil (Ads)</Label>
+              <Select value={funnelFilter} onValueChange={setFunnelFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Todos os Funis" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Funis</SelectItem>
+                  {funnels?.map(funnel => (
+                    <SelectItem key={funnel.id} value={funnel.id}>
+                      {funnel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Ordenar por</Label>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Ordenar por" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="intent">Maior Intent Score</SelectItem>
+                  <SelectItem value="comments">Mais Comentários</SelectItem>
+                  <SelectItem value="sentiment">Melhor Sentimento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>

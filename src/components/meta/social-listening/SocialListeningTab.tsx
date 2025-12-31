@@ -37,6 +37,7 @@ import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
 import { useToast } from '@/hooks/use-toast';
 import { AIKnowledgeBaseSettings } from './AIKnowledgeBaseSettings';
 import { PostAnalysisDashboard } from './PostAnalysisDashboard';
+import { SocialListeningPagesManager } from './SocialListeningPagesManager';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 

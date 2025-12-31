@@ -19,6 +19,7 @@ interface AvailablePage {
   pageName: string;
   pageAccessToken: string;
   pagePicture?: string;
+  platform: 'facebook' | 'instagram';
   instagramAccountId?: string;
   instagramUsername?: string;
   instagramPicture?: string;
@@ -106,14 +107,16 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   };
 
   const handleSaveSelected = () => {
-    const pagesToSave = availablePages?.filter(p => selectedPages.has(p.pageId)) || [];
+    const pagesToSave = availablePages?.filter(p => selectedPages.has(`${p.pageId}_${p.platform}`)) || [];
     if (pagesToSave.length > 0) {
       saveMutation.mutate(pagesToSave);
     }
   };
 
-  const isPageSaved = (pageId: string) => {
-    return savedPages?.some(p => p.page_id === pageId);
+  const isPageSaved = (pageId: string, platform: string) => {
+    // Check with platform-specific unique ID
+    const uniqueId = `${pageId}_${platform}`;
+    return savedPages?.some(p => p.page_id === uniqueId || p.page_id === pageId);
   };
 
   // Filter pages based on search query
@@ -124,9 +127,13 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
     const query = searchQuery.toLowerCase();
     return availablePages.filter(page => 
       page.pageName.toLowerCase().includes(query) ||
-      (page.instagramUsername && page.instagramUsername.toLowerCase().includes(query))
+      (page.instagramUsername && page.instagramUsername.toLowerCase().includes(query)) ||
+      page.platform.toLowerCase().includes(query)
     );
   }, [availablePages, searchQuery]);
+
+  // Create unique key for each page (pageId + platform)
+  const getUniqueKey = (page: AvailablePage) => `${page.pageId}_${page.platform}`;
 
   if (loadingSaved || loadingAvailable) {
     return (
@@ -255,12 +262,14 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
               </div>
             ) : (
               filteredPages.map((page) => {
-                const isSaved = isPageSaved(page.pageId);
-                const isSelected = selectedPages.has(page.pageId);
+                const uniqueKey = getUniqueKey(page);
+                const isSaved = isPageSaved(page.pageId, page.platform);
+                const isSelected = selectedPages.has(uniqueKey);
+                const isInstagram = page.platform === 'instagram';
                 
                 return (
                   <div
-                    key={page.pageId}
+                    key={uniqueKey}
                     className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
                       isSaved ? 'bg-muted/50 border-primary/30' : isSelected ? 'bg-primary/5 border-primary' : 'bg-card hover:bg-accent/50'
                     }`}
@@ -269,16 +278,24 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
                       <Checkbox
                         checked={isSaved || isSelected}
                         disabled={isSaved}
-                        onCheckedChange={() => handleTogglePage(page.pageId)}
+                        onCheckedChange={() => handleTogglePage(uniqueKey)}
                       />
-                      <Facebook className="h-5 w-5 text-blue-500" />
+                      {isInstagram ? (
+                        <Instagram className="h-5 w-5 text-pink-500" />
+                      ) : (
+                        <Facebook className="h-5 w-5 text-blue-500" />
+                      )}
                       <div>
-                        <p className="font-medium">{page.pageName}</p>
+                        <p className="font-medium">
+                          {page.pageName}
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {isInstagram ? 'Instagram' : 'Facebook'}
+                          </Badge>
+                        </p>
                         {page.instagramUsername && (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Instagram className="h-3 w-3 text-pink-500" />
+                          <p className="text-sm text-muted-foreground">
                             @{page.instagramUsername}
-                          </div>
+                          </p>
                         )}
                       </div>
                     </div>

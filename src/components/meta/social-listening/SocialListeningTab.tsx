@@ -469,45 +469,17 @@ function CommentRow({ comment }: { comment: SocialComment }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
   const crmContact = comment.crm_contacts;
-  const postPermalink = comment.social_posts?.permalink;
+  const postData = comment.social_posts;
+  const postPermalink = postData?.permalink;
+  const isAd = postData?.is_ad ?? false;
 
-  const handleOpenPost = () => {
-    if (!postPermalink) return;
-
-    const url = /^https?:\/\//i.test(postPermalink) ? postPermalink : `https://${postPermalink}`;
-
-    // Prefer an actual anchor click (tends to work better in sandboxed iframes)
-    try {
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noreferrer';
-      a.referrerPolicy = 'no-referrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return;
-    } catch {
-      // ignore
-    }
-
-    // Fallback: window.open
-    try {
-      (window.top || window).open(url, '_blank');
-      return;
-    } catch {
-      // ignore
-    }
-
-    // Last resort: copy
-    navigator.clipboard.writeText(url).then(() => {
-      alert('Link copiado! Cole no navegador para abrir.');
-    }).catch(() => {
-      alert(`Abra este link: ${url}`);
-    });
+  // Build permalink URL - ensure it's absolute
+  const getPostUrl = () => {
+    if (!postPermalink) return null;
+    return /^https?:\/\//i.test(postPermalink) ? postPermalink : `https://${postPermalink}`;
   };
 
-  const isAd = comment.social_posts?.is_ad ?? false;
+  const postUrl = getPostUrl();
 
   return (
     <TableRow>
@@ -526,18 +498,18 @@ function CommentRow({ comment }: { comment: SocialComment }) {
         </div>
       </TableCell>
       <TableCell>
-        {postPermalink ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={handleOpenPost}
+        {postUrl ? (
+          <a
+            href={postUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent hover:text-accent-foreground"
             title="Ver post original"
           >
             <ExternalLink className="h-4 w-4" />
-          </Button>
+          </a>
         ) : (
-          <span className="text-muted-foreground">-</span>
+          <span className="text-muted-foreground text-xs">-</span>
         )}
       </TableCell>
       <TableCell>
@@ -547,6 +519,24 @@ function CommentRow({ comment }: { comment: SocialComment }) {
             <p className="text-xs text-muted-foreground mt-1 italic">
               {comment.ai_summary}
             </p>
+          )}
+          {/* Show campaign/adset/ad info for ads */}
+          {isAd && postData?.campaign_name && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                {postData.campaign_name}
+              </Badge>
+              {postData?.adset_name && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {postData.adset_name}
+                </Badge>
+              )}
+              {postData?.ad_name && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {postData.ad_name}
+                </Badge>
+              )}
+            </div>
           )}
         </div>
       </TableCell>

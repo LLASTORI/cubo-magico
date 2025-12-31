@@ -50,13 +50,18 @@ const sentimentConfig = {
 };
 
 const classificationConfig: Record<string, { label: string; icon: any; color: string }> = {
-  question: { label: 'Pergunta', icon: HelpCircle, color: 'text-blue-500' },
+  product_question: { label: 'Dúvida de Produto', icon: HelpCircle, color: 'text-blue-500' },
+  purchase_question: { label: 'Dúvida de Compra', icon: ShoppingCart, color: 'text-blue-400' },
   commercial_interest: { label: 'Interesse Comercial', icon: ShoppingCart, color: 'text-green-500' },
-  complaint: { label: 'Reclamação', icon: AlertCircle, color: 'text-red-500' },
   praise: { label: 'Elogio', icon: Star, color: 'text-yellow-500' },
-  negative_feedback: { label: 'Feedback Negativo', icon: TrendingDown, color: 'text-orange-500' },
+  complaint: { label: 'Reclamação', icon: AlertCircle, color: 'text-red-500' },
+  contact_request: { label: 'Pedido de Contato', icon: MessageSquare, color: 'text-purple-500' },
+  friend_tag: { label: 'Marcação de Amigo', icon: Users, color: 'text-gray-400' },
   spam: { label: 'Spam', icon: Ban, color: 'text-gray-400' },
   other: { label: 'Outro', icon: MessageSquare, color: 'text-gray-500' },
+  // Legacy mappings for backward compatibility
+  question: { label: 'Pergunta', icon: HelpCircle, color: 'text-blue-500' },
+  negative_feedback: { label: 'Feedback Negativo', icon: TrendingDown, color: 'text-orange-500' },
 };
 
 export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
@@ -307,11 +312,13 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas Classificações</SelectItem>
-                <SelectItem value="question">Pergunta</SelectItem>
+                <SelectItem value="product_question">Dúvida de Produto</SelectItem>
+                <SelectItem value="purchase_question">Dúvida de Compra</SelectItem>
                 <SelectItem value="commercial_interest">Interesse Comercial</SelectItem>
-                <SelectItem value="complaint">Reclamação</SelectItem>
                 <SelectItem value="praise">Elogio</SelectItem>
-                <SelectItem value="negative_feedback">Feedback Negativo</SelectItem>
+                <SelectItem value="complaint">Reclamação</SelectItem>
+                <SelectItem value="contact_request">Pedido de Contato</SelectItem>
+                <SelectItem value="friend_tag">Marcação de Amigo</SelectItem>
                 <SelectItem value="spam">Spam</SelectItem>
               </SelectContent>
             </Select>

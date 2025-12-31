@@ -481,10 +481,25 @@ function CommentRow({ comment }: { comment: SocialComment }) {
   const postPermalink = postData?.permalink;
   const isAd = postData?.is_ad ?? false;
 
-  // Build permalink URL - ensure it's absolute
+  // Build permalink URL - ensure it's absolute, or generate fallback for ads
   const getPostUrl = () => {
-    if (!postPermalink) return null;
-    return /^https?:\/\//i.test(postPermalink) ? postPermalink : `https://${postPermalink}`;
+    if (postPermalink) {
+      return /^https?:\/\//i.test(postPermalink) ? postPermalink : `https://${postPermalink}`;
+    }
+    
+    // Fallback: construct URL from post_id_meta for ads without permalink
+    const postIdMeta = postData?.post_id_meta;
+    if (!postIdMeta) return null;
+    
+    // Facebook format: pageId_postId -> https://www.facebook.com/pageId/posts/postId
+    if (comment.platform === 'facebook' && postIdMeta.includes('_')) {
+      const [pageId, postId] = postIdMeta.split('_');
+      return `https://www.facebook.com/${pageId}/posts/${postId}`;
+    }
+    
+    // Instagram format: mediaId -> https://www.instagram.com/p/{shortcode}/ (can't construct without shortcode)
+    // For Instagram without permalink, we can't construct a valid URL
+    return null;
   };
 
   const postUrl = getPostUrl();

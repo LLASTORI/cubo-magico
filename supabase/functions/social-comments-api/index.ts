@@ -1141,15 +1141,20 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
 
     console.log(`[SYNC_AD_COMMENTS] Found ${adAccounts.length} active ad accounts`)
 
-    // Get saved pages with tokens for comment fetching
+    // Get saved pages with tokens for comment fetching - separate FB and IG
     const { data: savedPages } = await supabase
       .from('social_listening_pages')
-      .select('page_id, page_access_token')
+      .select('page_id, page_access_token, platform')
       .eq('project_id', projectId)
       .eq('is_active', true)
 
-    // Get page token (use first available)
-    const pageToken = savedPages?.[0]?.page_access_token || accessToken
+    // Get tokens by platform
+    const fbPage = savedPages?.find((p: any) => p.platform === 'facebook')
+    const igPage = savedPages?.find((p: any) => p.platform === 'instagram')
+    const fbPageToken = fbPage?.page_access_token || accessToken
+    const igPageToken = igPage?.page_access_token || accessToken
+    
+    console.log(`[SYNC_AD_COMMENTS] FB token available: ${!!fbPage}, IG token available: ${!!igPage}`)
 
     // Process each ad account
     for (const adAccount of adAccounts) {
@@ -1158,8 +1163,8 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       const adAccountId = rawAccountId.replace('act_', '')
       console.log(`[SYNC_AD_COMMENTS] Processing account: ${adAccount.account_name} (${adAccountId})`)
 
-      // Fetch ads with their effective_object_story_id (post_id)
-      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,effective_object_story_id,creative{object_story_id,effective_object_story_id}&limit=100&access_token=${accessToken}`
+      // Fetch ads with their effective_object_story_id (post_id) and instagram info
+      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id}&limit=100&access_token=${accessToken}`
       console.log('[SYNC_AD_COMMENTS] Fetching ads...')
       
       const adsResponse = await fetch(adsUrl)
@@ -1175,21 +1180,30 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       console.log(`[SYNC_AD_COMMENTS] Found ${ads.length} ads for account ${adAccount.account_name}`)
 
       for (const ad of ads) {
-        const postId = ad.effective_object_story_id || 
-                       ad.creative?.effective_object_story_id || 
-                       ad.creative?.object_story_id
+        // Check for Instagram media first, then Facebook post
+        const instagramMediaId = ad.creative?.effective_instagram_media_id
+        const facebookPostId = ad.effective_object_story_id || 
+                               ad.creative?.effective_object_story_id || 
+                               ad.creative?.object_story_id
 
-        if (!postId) {
-          console.log(`[SYNC_AD_COMMENTS] Ad ${ad.id} has no associated post, skipping`)
+        // Prioritize Instagram if we have an Instagram media ID
+        let postId: string
+        let platform: 'facebook' | 'instagram'
+        
+        if (instagramMediaId) {
+          postId = instagramMediaId
+          platform = 'instagram'
+          console.log(`[SYNC_AD_COMMENTS] Processing INSTAGRAM ad: ${ad.id} with media: ${postId}`)
+        } else if (facebookPostId) {
+          postId = facebookPostId
+          platform = 'facebook'
+          console.log(`[SYNC_AD_COMMENTS] Processing FACEBOOK ad: ${ad.id} with post: ${postId}`)
+        } else {
+          console.log(`[SYNC_AD_COMMENTS] Ad ${ad.id} has no associated post/media, skipping`)
           continue
         }
 
-        console.log(`[SYNC_AD_COMMENTS] Processing ad: ${ad.id} with post: ${postId}`)
-
         try {
-          // Determine platform from post ID format
-          // Instagram: numeric ID, Facebook: page_id_post_id format
-          const platform = postId.includes('_') ? 'facebook' : 'instagram'
           
           // First, create/update the post as an ad
           const postData: any = {
@@ -1228,13 +1242,18 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
             continue
           }
 
-          // Fetch comments for this ad post
+          // Fetch comments for this ad post - use appropriate token per platform
           let commentsUrl: string
+          let tokenToUse: string
+          
           if (platform === 'facebook') {
-            commentsUrl = `${GRAPH_API_BASE}/${postId}/comments?fields=id,message,from{id,name},created_time,like_count,comment_count&limit=100&access_token=${pageToken}`
+            tokenToUse = fbPageToken
+            commentsUrl = `${GRAPH_API_BASE}/${postId}/comments?fields=id,message,from{id,name},created_time,like_count,comment_count&limit=100&access_token=${tokenToUse}`
           } else {
-            // Instagram
-            commentsUrl = `${GRAPH_API_BASE}/${postId}/comments?fields=id,text,username,timestamp,like_count,replies{id,text,username,timestamp,like_count}&limit=100&access_token=${pageToken}`
+            // Instagram - use IG token for media comments
+            tokenToUse = igPageToken
+            commentsUrl = `${GRAPH_API_BASE}/${postId}/comments?fields=id,text,username,timestamp,like_count,replies{id,text,username,timestamp,like_count}&limit=100&access_token=${tokenToUse}`
+            console.log(`[SYNC_AD_COMMENTS] Using IG token for media ${postId}`)
           }
 
           const commentsResponse = await fetch(commentsUrl)

@@ -507,14 +507,23 @@ function CommentRow({ comment }: { comment: SocialComment }) {
     });
   };
 
+  const isAd = comment.social_posts?.is_ad ?? false;
+
   return (
     <TableRow>
       <TableCell>
-        {comment.platform === 'instagram' ? (
-          <Instagram className="h-4 w-4 text-pink-500" />
-        ) : (
-          <Facebook className="h-4 w-4 text-blue-600" />
-        )}
+        <div className="flex items-center gap-1.5">
+          {comment.platform === 'instagram' ? (
+            <Instagram className="h-4 w-4 text-pink-500" />
+          ) : (
+            <Facebook className="h-4 w-4 text-blue-600" />
+          )}
+          {isAd && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-900/20">
+              AD
+            </Badge>
+          )}
+        </div>
       </TableCell>
       <TableCell>
         {postPermalink ? (

@@ -104,7 +104,7 @@ export function useSocialListening(projectId: string | undefined) {
     enabled: !!projectId,
   });
 
-  // Fetch comments with filters
+  // Fetch comments with filters - auto-refresh every 10 seconds
   const useComments = (filters?: {
     sentiment?: string;
     classification?: string;
@@ -152,10 +152,11 @@ export function useSocialListening(projectId: string | undefined) {
         return (data || []) as SocialComment[];
       },
       enabled: !!projectId,
+      refetchInterval: 10000, // Auto-refresh every 10 seconds
     });
   };
 
-  // Fetch stats
+  // Fetch stats - auto-refresh every 10 seconds
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['social_stats', projectId],
     queryFn: async () => {
@@ -169,6 +170,7 @@ export function useSocialListening(projectId: string | undefined) {
       return data as SocialStats;
     },
     enabled: !!projectId,
+    refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
 
   // Sync posts mutation
@@ -228,7 +230,7 @@ export function useSocialListening(projectId: string | undefined) {
 
   // Process AI mutation
   const processAI = useMutation({
-    mutationFn: async (limit: number = 50) => {
+    mutationFn: async (limit: number = 100) => {
       const { data, error } = await supabase.functions.invoke('social-comments-api', {
         body: { action: 'process_ai', projectId, limit },
       });
@@ -238,9 +240,14 @@ export function useSocialListening(projectId: string | undefined) {
       return data;
     },
     onSuccess: (data) => {
+      const remaining = data.remaining || 0;
+      const description = remaining > 0 
+        ? `${data.processed} comentários classificados. Ainda restam ~${remaining} pendentes.`
+        : `${data.processed} comentários classificados. Todos processados!`;
+      
       toast({
         title: 'Processamento IA concluído!',
-        description: `${data.processed} comentários classificados.`,
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
       queryClient.invalidateQueries({ queryKey: ['social_stats', projectId] });

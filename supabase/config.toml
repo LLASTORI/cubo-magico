@@ -46,3 +46,11 @@ max_duration = 300
 [functions.social-comments-api]
 verify_jwt = true
 max_duration = 300
+
+[functions.social-listening-cron]
+verify_jwt = false
+max_duration = 540
+
+[functions.social-comments-api]
+verify_jwt = true
+max_duration = 300

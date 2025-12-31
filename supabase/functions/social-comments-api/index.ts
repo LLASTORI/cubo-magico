@@ -1164,7 +1164,8 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       console.log(`[SYNC_AD_COMMENTS] Processing account: ${adAccount.account_name} (${adAccountId})`)
 
       // Fetch ads with their effective_object_story_id (post_id), instagram info, campaign/adset info AND thumbnail
-      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,adset_id,adset{id,name,campaign_id},campaign_id,campaign{id,name},effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id,thumbnail_url,image_url}&limit=100&access_token=${accessToken}`
+      // Limit to 50 ads per sync to avoid timeout (each ad may be processed for both FB and IG)
+      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,adset_id,adset{id,name,campaign_id},campaign_id,campaign{id,name},effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id,thumbnail_url,image_url}&limit=50&access_token=${accessToken}`
       console.log('[SYNC_AD_COMMENTS] Fetching ads...')
       
       const adsResponse = await fetch(adsUrl)
@@ -1363,7 +1364,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
               }
             }
 
-            await delay(300) // Rate limiting
+            await delay(100) // Rate limiting - reduced for faster processing
           } catch (e: any) {
             console.error(`[SYNC_AD_COMMENTS] Error processing ad ${ad.id} on ${platform}:`, e.message)
             errors.push(`Ad ${ad.id} (${platform}): ${e.message}`)
@@ -1371,7 +1372,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
         } // end for platformsToProcess
       } // end for ads
 
-      await delay(500) // Rate limiting between accounts
+      await delay(200) // Rate limiting between accounts - reduced
     }
 
     console.log('='.repeat(60))

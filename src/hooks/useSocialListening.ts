@@ -48,6 +48,11 @@ export interface SocialComment {
   comment_timestamp: string;
   created_at: string;
   crm_contact_id: string | null;
+  // New reply fields
+  ai_suggested_reply: string | null;
+  reply_status: 'pending' | 'approved' | 'rejected' | 'sent' | null;
+  reply_sent_at: string | null;
+  replied_by: string | null;
   social_posts?: {
     id: string;
     is_ad: boolean;

@@ -21,7 +21,9 @@ import {
   Settings2,
   Users,
   ExternalLink,
-  Megaphone
+  Megaphone,
+  BookOpen,
+  Reply
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -38,6 +40,9 @@ import { useToast } from '@/hooks/use-toast';
 import { AIKnowledgeBaseSettings } from './AIKnowledgeBaseSettings';
 import { PostAnalysisDashboard } from './PostAnalysisDashboard';
 import { SocialListeningPagesManager } from './SocialListeningPagesManager';
+import { SocialListeningGuide } from './SocialListeningGuide';
+import { ReplyApprovalDialog } from './ReplyApprovalDialog';
+import { FeatureGate } from '@/components/FeatureGate';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -76,6 +81,8 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     search: '',
     postId: '',
   });
+  const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
 
   // Check if pages are configured
   const { data: savedPages, isLoading: loadingPages, refetch: refetchPages } = useQuery({
@@ -147,20 +154,31 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
 
   if (!hasConfiguredPages) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold">Social Listening</h2>
-          <p className="text-muted-foreground">
-            Configure as páginas que deseja monitorar
-          </p>
+      <FeatureGate 
+        featureKey="meta_ads.social_listening" 
+        showLocked 
+        lockedMessage="Social Listening está disponível no plano Business"
+      >
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold">Social Listening</h2>
+            <p className="text-muted-foreground">
+              Configure as páginas que deseja monitorar
+            </p>
+          </div>
+          <SocialListeningPagesManager 
+            projectId={projectId} 
+            onPagesConfigured={() => refetchPages()}
+          />
         </div>
-        <SocialListeningPagesManager 
-          projectId={projectId} 
-          onPagesConfigured={() => refetchPages()}
-        />
-      </div>
+      </FeatureGate>
     );
   }
+
+  const handleOpenReply = (comment: SocialComment) => {
+    setSelectedComment(comment);
+    setReplyDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -187,6 +205,10 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           <TabsTrigger value="ia" className="gap-2">
             <Brain className="h-4 w-4" />
             Base IA
+          </TabsTrigger>
+          <TabsTrigger value="guia" className="gap-2">
+            <BookOpen className="h-4 w-4" />
+            Como Usar
           </TabsTrigger>
           <TabsTrigger value="configuracoes" className="gap-2">
             <Settings2 className="h-4 w-4" />
@@ -463,6 +485,10 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           <AIKnowledgeBaseSettings projectId={projectId} />
         </TabsContent>
 
+        <TabsContent value="guia" className="mt-6">
+          <SocialListeningGuide projectId={projectId} />
+        </TabsContent>
+
         <TabsContent value="configuracoes" className="mt-6">
           <SocialListeningPagesManager 
             projectId={projectId} 
@@ -470,6 +496,14 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Reply Dialog */}
+      <ReplyApprovalDialog
+        comment={selectedComment}
+        open={replyDialogOpen}
+        onOpenChange={setReplyDialogOpen}
+        projectId={projectId}
+      />
     </div>
   );
 }

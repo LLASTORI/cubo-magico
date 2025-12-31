@@ -130,7 +130,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   };
 
   const handleProcessAI = async () => {
-    await processAI.mutateAsync(50);
+    await processAI.mutateAsync(100);
   };
 
   const handleLinkCRM = async () => {

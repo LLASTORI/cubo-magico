@@ -268,7 +268,9 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
 
 async function fetchFacebookPosts(pageId: string, pageToken: string): Promise<any[]> {
   const posts: any[] = []
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${pageId}/posts?fields=id,message,created_time,permalink_url,shares,type&limit=50&access_token=${pageToken}`
+  // Updated fields - removed deprecated 'shares' and 'type' fields (deprecated in v3.3+)
+  // Using 'status_type' instead of 'type', and getting share count from insights if needed
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${pageId}/posts?fields=id,message,created_time,permalink_url,status_type,full_picture&limit=50&access_token=${pageToken}`
 
   while (nextUrl !== null && posts.length < 100) {
     const currentUrl = nextUrl

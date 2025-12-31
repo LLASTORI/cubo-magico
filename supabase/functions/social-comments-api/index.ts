@@ -870,17 +870,38 @@ async function getAvailablePages(accessToken: string) {
       }
     }
 
-    const pages = allPages.map((page: any) => ({
-      pageId: page.id,
-      pageName: page.name,
-      pageAccessToken: page.access_token,
-      pagePicture: page.picture?.data?.url,
-      instagramAccountId: page.instagram_business_account?.id,
-      instagramUsername: page.instagram_business_account?.username,
-      instagramPicture: page.instagram_business_account?.profile_picture_url,
-    }))
+    // Create separate entries for Facebook and Instagram
+    const pages: any[] = []
+    
+    for (const page of allPages) {
+      // Always add Facebook page entry
+      pages.push({
+        pageId: page.id,
+        pageName: page.name,
+        pageAccessToken: page.access_token,
+        pagePicture: page.picture?.data?.url,
+        platform: 'facebook',
+        instagramAccountId: null,
+        instagramUsername: null,
+        instagramPicture: null,
+      })
+      
+      // If page has Instagram Business Account, add separate Instagram entry
+      if (page.instagram_business_account?.id) {
+        pages.push({
+          pageId: page.id, // Same page ID, but will be saved with platform: instagram
+          pageName: page.name,
+          pageAccessToken: page.access_token,
+          pagePicture: page.picture?.data?.url,
+          platform: 'instagram',
+          instagramAccountId: page.instagram_business_account.id,
+          instagramUsername: page.instagram_business_account.username,
+          instagramPicture: page.instagram_business_account.profile_picture_url,
+        })
+      }
+    }
 
-    console.log(`Found ${pages.length} total pages after pagination`)
+    console.log(`Found ${allPages.length} Facebook pages, expanded to ${pages.length} entries (FB + IG)`)
     
     // If no pages found, check if user has pages but no permission
     if (pages.length === 0) {
@@ -907,10 +928,16 @@ async function saveSelectedPages(supabase: any, projectId: string, accessToken: 
 
   for (const page of pages) {
     try {
+      // Use platform from the page object, or determine from instagramAccountId
+      const platform = page.platform || (page.instagramAccountId ? 'instagram' : 'facebook')
+      
+      // Create unique identifier: page_id + platform
+      const uniquePageId = `${page.pageId}_${platform}`
+      
       const pageData: any = {
         project_id: projectId,
-        platform: page.instagramAccountId ? 'instagram' : 'facebook',
-        page_id: page.pageId,
+        platform: platform,
+        page_id: uniquePageId, // Use unique ID with platform suffix
         page_name: page.pageName,
         page_access_token: page.pageAccessToken,
         instagram_account_id: page.instagramAccountId || null,
@@ -923,7 +950,7 @@ async function saveSelectedPages(supabase: any, projectId: string, accessToken: 
         .upsert(pageData, { onConflict: 'project_id,page_id' })
 
       if (error) {
-        errors.push(`${page.pageName}: ${error.message}`)
+        errors.push(`${page.pageName} (${platform}): ${error.message}`)
       } else {
         saved++
       }

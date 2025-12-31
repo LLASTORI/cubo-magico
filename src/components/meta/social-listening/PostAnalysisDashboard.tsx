@@ -34,6 +34,7 @@ import { ptBR } from 'date-fns/locale';
 
 interface PostAnalysisDashboardProps {
   projectId: string;
+  onOpenComments?: (postId: string) => void;
 }
 
 interface PostWithStats {
@@ -92,7 +93,23 @@ const normalizeMediaType = (mediaType: string | null): string => {
   return lower;
 };
 
-export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps) {
+// Map UI filter values -> DB values (so we can filter before limit())
+const getMediaTypeDbValues = (filter: string): string[] => {
+  switch (filter) {
+    case 'image':
+      return ['IMAGE', 'image'];
+    case 'video':
+      return ['VIDEO', 'video', 'added_video'];
+    case 'reels':
+      return ['REELS', 'reels'];
+    case 'carousel':
+      return ['CAROUSEL', 'CAROUSEL_ALBUM', 'carousel_album', 'added_photos'];
+    default:
+      return [];
+  }
+};
+
+export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysisDashboardProps) {
   const [platformFilter, setPlatformFilter] = useState('all');
   const [mediaTypeFilter, setMediaTypeFilter] = useState('all');
   const [funnelFilter, setFunnelFilter] = useState('all');
@@ -126,7 +143,14 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
       if (platformFilter !== 'all') {
         postsQuery = postsQuery.eq('platform', platformFilter as 'instagram' | 'facebook');
       }
-      // Note: mediaTypeFilter is applied after fetch due to normalization needs
+
+      // Apply mediaType filter BEFORE limit() (otherwise the latest 50 may not include this type)
+      if (mediaTypeFilter !== 'all') {
+        const mediaTypes = getMediaTypeDbValues(mediaTypeFilter);
+        if (mediaTypes.length > 0) {
+          postsQuery = postsQuery.in('media_type', mediaTypes);
+        }
+      }
 
       const { data: posts, error: postsError } = await postsQuery.limit(50);
       if (postsError) throw postsError;
@@ -558,8 +582,9 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
                             {post.thumbnail_url ? (
                               <img 
                                 src={post.thumbnail_url} 
-                                alt="" 
-                                className="h-8 w-8 object-cover rounded"
+                                alt={`Miniatura do post (${post.platform})`} 
+                                loading="lazy"
+                                className="h-10 w-10 object-cover rounded-md"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
                                 }}
@@ -631,17 +656,30 @@ export function PostAnalysisDashboard({ projectId }: PostAnalysisDashboardProps)
                           </span>
                         </TableCell>
                         <TableCell>
-                          {post.permalink && (
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() => handleOpenPost(post.permalink)}
-                              title="Ver post"
+                              onClick={() => onOpenComments?.(post.id)}
+                              title="Ver comentários"
+                              disabled={post.total_comments === 0}
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <MessageCircle className="h-4 w-4" />
                             </Button>
-                          )}
+
+                            {post.permalink && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => handleOpenPost(post.permalink)}
+                                title="Ver post"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

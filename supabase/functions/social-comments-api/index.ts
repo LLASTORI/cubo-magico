@@ -120,6 +120,11 @@ Deno.serve(async (req) => {
         result = await getStats(supabase, projectId)
         break
 
+      case 'remove_page':
+        const { pageId: removePageId } = body
+        result = await removePage(serviceSupabase, projectId, removePageId)
+        break
+
       default:
         return new Response(JSON.stringify({ error: 'Ação inválida' }), {
           status: 400,
@@ -975,4 +980,22 @@ async function getSavedPages(supabase: any, projectId: string) {
   }
 
   return { success: true, pages: data || [] }
+}
+
+// Remove a page from monitoring
+async function removePage(supabase: any, projectId: string, pageId: string) {
+  console.log(`Removing page ${pageId} from project ${projectId}`)
+  
+  const { error } = await supabase
+    .from('social_listening_pages')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('page_id', pageId)
+
+  if (error) {
+    console.error('Error removing page:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true }
 }

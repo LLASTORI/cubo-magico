@@ -204,7 +204,7 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
           const fbPosts = await fetchFacebookPosts(originalPageId, pageToken)
           console.log(`[SYNC_PAGE] Fetched ${fbPosts.length} Facebook posts for ${pageName}`)
           for (const post of fbPosts) {
-            await upsertPost(supabase, projectId, 'facebook', post, pageName)
+            await upsertPost(supabase, projectId, 'facebook', post, pageName, originalPageId)
             totalPosts++
           }
         } catch (e: any) {
@@ -225,7 +225,7 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
           }
           
           for (const post of igPosts) {
-            await upsertPost(supabase, projectId, 'instagram', post, pageName)
+            await upsertPost(supabase, projectId, 'instagram', post, pageName, instagramAccountId)
             totalPosts++
           }
         } catch (e: any) {
@@ -380,15 +380,16 @@ async function fetchInstagramPosts(igAccountId: string, pageToken: string, mainA
   throw lastError || new Error('Falha ao buscar posts do Instagram')
 }
 
-async function upsertPost(supabase: any, projectId: string, platform: string, post: any, pageName: string) {
+async function upsertPost(supabase: any, projectId: string, platform: string, post: any, pageName: string, pageId?: string) {
   const postData: any = {
     project_id: projectId,
     platform,
     post_id_meta: post.id,
+    page_id: pageId || null, // Store page_id for token lookup later
     page_name: pageName,
     post_type: 'organic',
     message: platform === 'instagram' ? post.caption : post.message,
-    media_type: platform === 'instagram' ? post.media_type?.toLowerCase() : post.type,
+    media_type: platform === 'instagram' ? post.media_type?.toLowerCase() : (post.status_type || 'post'),
     permalink: platform === 'instagram' ? post.permalink : post.permalink_url,
     likes_count: post.like_count || 0,
     comments_count: post.comments_count || 0,
@@ -429,31 +430,59 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     return { success: false, error: 'Erro ao buscar posts' }
   }
 
-  // Get page tokens
-  const { data: credentials } = await supabase
-    .from('meta_credentials')
-    .select('access_token')
+  console.log(`[SYNC_COMMENTS] Found ${posts.length} posts to sync comments`)
+
+  // Get saved pages with their tokens for this project
+  const { data: savedPages } = await supabase
+    .from('social_listening_pages')
+    .select('page_id, page_access_token, instagram_account_id, platform')
     .eq('project_id', projectId)
-    .single()
+    .eq('is_active', true)
 
-  const userToken = credentials?.access_token || accessToken
-
-  // Get page tokens for each page
-  const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,access_token,instagram_business_account&access_token=${userToken}`
-  const pagesResponse = await fetch(pagesUrl)
-  const pagesData = await pagesResponse.json()
-  
+  // Build token map: page_id -> token (for both FB page ID and IG account ID)
   const pageTokenMap = new Map<string, string>()
-  for (const page of pagesData.data || []) {
-    pageTokenMap.set(page.id, page.access_token)
-    if (page.instagram_business_account?.id) {
-      pageTokenMap.set(page.instagram_business_account.id, page.access_token)
+  for (const page of savedPages || []) {
+    // Store by raw page_id (with suffix)
+    if (page.page_access_token) {
+      pageTokenMap.set(page.page_id, page.page_access_token)
+      // Also store by original ID (without suffix) for lookup
+      const originalId = page.page_id.replace(/_facebook$/, '').replace(/_instagram$/, '')
+      pageTokenMap.set(originalId, page.page_access_token)
+      // Store by IG account ID if available
+      if (page.instagram_account_id) {
+        pageTokenMap.set(page.instagram_account_id, page.page_access_token)
+      }
     }
   }
 
+  console.log(`[SYNC_COMMENTS] Built token map with ${pageTokenMap.size} entries`)
+
   for (const post of posts) {
     try {
-      const comments = await fetchCommentsForPost(post, userToken)
+      // Determine the correct token to use for this post
+      let tokenToUse = accessToken // fallback to user token
+      
+      if (post.page_id) {
+        const pageToken = pageTokenMap.get(post.page_id)
+        if (pageToken) {
+          tokenToUse = pageToken
+          console.log(`[SYNC_COMMENTS] Using page token for post ${post.post_id_meta} (page: ${post.page_id})`)
+        } else {
+          console.log(`[SYNC_COMMENTS] No page token found for page_id: ${post.page_id}, using user token`)
+        }
+      } else {
+        // Try to extract page ID from post_id_meta (format: pageId_postId for FB)
+        if (post.platform === 'facebook' && post.post_id_meta.includes('_')) {
+          const extractedPageId = post.post_id_meta.split('_')[0]
+          const pageToken = pageTokenMap.get(extractedPageId)
+          if (pageToken) {
+            tokenToUse = pageToken
+            console.log(`[SYNC_COMMENTS] Extracted page ID ${extractedPageId} from post_id_meta, using page token`)
+          }
+        }
+      }
+
+      const comments = await fetchCommentsForPost(post, tokenToUse)
       
       for (const comment of comments) {
         await upsertComment(supabase, projectId, post.id, post.platform, comment)
@@ -469,12 +498,14 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
         }
       }
     } catch (e: any) {
-      errors.push(`Post ${post.id}: ${e.message}`)
+      console.warn(`[SYNC_COMMENTS] Error for post ${post.post_id_meta}: ${e.message}`)
+      errors.push(`Post ${post.post_id_meta}: ${e.message}`)
     }
 
     await delay(300)
   }
 
+  console.log(`[SYNC_COMMENTS] Completed: ${totalComments} comments synced, ${errors.length} errors`)
   return { success: true, commentsSynced: totalComments, errors }
 }
 

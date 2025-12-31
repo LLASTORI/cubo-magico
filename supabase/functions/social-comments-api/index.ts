@@ -153,6 +153,11 @@ Deno.serve(async (req) => {
         result = await syncAdComments(serviceSupabase, projectId, accessToken)
         break
 
+      case 'generate_reply':
+        const { commentId } = body
+        result = await generateReply(serviceSupabase, projectId, commentId)
+        break
+
       default:
         return new Response(JSON.stringify({ error: 'Ação inválida' }), {
           status: 400,
@@ -1394,4 +1399,141 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       errors 
     }
   }
+}
+
+// Generate AI reply for a comment
+async function generateReply(supabase: any, projectId: string, commentId: string) {
+  console.log('[GENERATE_REPLY] Starting for comment:', commentId)
+  
+  if (!commentId) {
+    throw new Error('ID do comentário é obrigatório')
+  }
+
+  // Fetch the comment with post context
+  const { data: comment, error: commentError } = await supabase
+    .from('social_comments')
+    .select(`
+      id,
+      text,
+      author_name,
+      sentiment,
+      classification,
+      ai_summary,
+      post_id,
+      social_posts(message, page_name)
+    `)
+    .eq('id', commentId)
+    .single()
+
+  if (commentError || !comment) {
+    console.error('[GENERATE_REPLY] Comment not found:', commentError)
+    throw new Error('Comentário não encontrado')
+  }
+
+  // Fetch knowledge base for context
+  const { data: knowledgeBase } = await supabase
+    .from('ai_knowledge_base')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle()
+
+  // Build reply generation prompt
+  const businessContext = knowledgeBase ? `
+CONTEXTO DO NEGÓCIO:
+- Nome: ${knowledgeBase.business_name || 'Não informado'}
+- Descrição: ${knowledgeBase.business_description || 'Não informado'}
+- Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
+- Tom de voz: ${knowledgeBase.tone_of_voice || 'Amigável e profissional'}
+${knowledgeBase.faqs ? `- FAQs: ${JSON.stringify(knowledgeBase.faqs)}` : ''}
+` : ''
+
+  const classificationActions: Record<string, string> = {
+    'commercial_interest': 'Responda de forma calorosa, confirme o interesse e direcione para a compra ou contato.',
+    'purchase_question': 'Responda a dúvida sobre preço/pagamento/entrega de forma clara e objetiva.',
+    'product_question': 'Responda a dúvida técnica com informações úteis sobre o produto/serviço.',
+    'contact_request': 'Forneça o canal de contato solicitado (WhatsApp, email, DM).',
+    'praise': 'Agradeça o elogio de forma genuína e, se apropriado, peça uma avaliação.',
+    'complaint': 'Responda com empatia, peça desculpas pelo inconveniente e ofereça resolver em privado.',
+    'friend_tag': 'Cumprimente também os amigos marcados de forma simpática.',
+    'spam': 'Não responda.',
+    'other': 'Responda de forma educada e relevante.'
+  }
+
+  const actionGuide = classificationActions[comment.classification || 'other'] || classificationActions['other']
+
+  const prompt = `Você é um especialista em atendimento ao cliente em redes sociais.
+${businessContext}
+
+CONTEXTO DO POST: "${comment.social_posts?.message || 'Não disponível'}"
+
+COMENTÁRIO DO USUÁRIO: "${comment.text}"
+- Autor: ${comment.author_name || 'Usuário'}
+- Sentimento: ${comment.sentiment || 'Não analisado'}
+- Classificação: ${comment.classification || 'Não classificado'}
+${comment.ai_summary ? `- Resumo IA: ${comment.ai_summary}` : ''}
+
+ORIENTAÇÃO: ${actionGuide}
+
+Gere uma resposta curta (máximo 3 frases), amigável e profissional.
+- Use o nome do usuário se disponível
+- Seja natural, evite parecer robótico
+- Inclua emoji relevante quando apropriado
+- Se for interesse comercial, inclua call-to-action
+
+Responda APENAS com o texto da resposta, sem explicações adicionais.`
+
+  // Call AI
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 300,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[GENERATE_REPLY] AI API error:', response.status, errorText)
+    
+    if (response.status === 429) {
+      throw new Error('Limite de requisições excedido. Tente novamente em alguns segundos.')
+    }
+    if (response.status === 402) {
+      throw new Error('Créditos de IA esgotados. Entre em contato com o suporte.')
+    }
+    throw new Error(`Erro na API de IA: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const reply = data.choices?.[0]?.message?.content?.trim() || ''
+
+  if (!reply) {
+    throw new Error('A IA não gerou uma resposta válida')
+  }
+
+  console.log('[GENERATE_REPLY] Generated reply:', reply.substring(0, 100) + '...')
+
+  // Update comment with suggested reply
+  const { error: updateError } = await supabase
+    .from('social_comments')
+    .update({
+      ai_suggested_reply: reply,
+      reply_status: 'pending'
+    })
+    .eq('id', commentId)
+
+  if (updateError) {
+    console.error('[GENERATE_REPLY] Error updating comment:', updateError)
+    throw new Error('Erro ao salvar resposta')
+  }
+
+  return { success: true, reply }
 }

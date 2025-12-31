@@ -3471,6 +3471,7 @@ export type Database = {
           ai_processing_status:
             | Database["public"]["Enums"]["ai_processing_status"]
             | null
+          ai_suggested_reply: string | null
           ai_summary: string | null
           author_id: string | null
           author_name: string | null
@@ -3497,6 +3498,8 @@ export type Database = {
           replied_at: string | null
           replied_by: string | null
           reply_count: number | null
+          reply_sent_at: string | null
+          reply_status: string | null
           sentiment: Database["public"]["Enums"]["comment_sentiment"] | null
           text: string
           updated_at: string
@@ -3507,6 +3510,7 @@ export type Database = {
           ai_processing_status?:
             | Database["public"]["Enums"]["ai_processing_status"]
             | null
+          ai_suggested_reply?: string | null
           ai_summary?: string | null
           author_id?: string | null
           author_name?: string | null
@@ -3533,6 +3537,8 @@ export type Database = {
           replied_at?: string | null
           replied_by?: string | null
           reply_count?: number | null
+          reply_sent_at?: string | null
+          reply_status?: string | null
           sentiment?: Database["public"]["Enums"]["comment_sentiment"] | null
           text: string
           updated_at?: string
@@ -3543,6 +3549,7 @@ export type Database = {
           ai_processing_status?:
             | Database["public"]["Enums"]["ai_processing_status"]
             | null
+          ai_suggested_reply?: string | null
           ai_summary?: string | null
           author_id?: string | null
           author_name?: string | null
@@ -3569,6 +3576,8 @@ export type Database = {
           replied_at?: string | null
           replied_by?: string | null
           reply_count?: number | null
+          reply_sent_at?: string | null
+          reply_status?: string | null
           sentiment?: Database["public"]["Enums"]["comment_sentiment"] | null
           text?: string
           updated_at?: string
@@ -3721,6 +3730,7 @@ export type Database = {
         Row: {
           ad_id: string | null
           ad_name: string | null
+          ad_status: string | null
           adset_id: string | null
           adset_name: string | null
           campaign_id: string | null
@@ -3754,6 +3764,7 @@ export type Database = {
         Insert: {
           ad_id?: string | null
           ad_name?: string | null
+          ad_status?: string | null
           adset_id?: string | null
           adset_name?: string | null
           campaign_id?: string | null
@@ -3787,6 +3798,7 @@ export type Database = {
         Update: {
           ad_id?: string | null
           ad_name?: string | null
+          ad_status?: string | null
           adset_id?: string | null
           adset_name?: string | null
           campaign_id?: string | null

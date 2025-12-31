@@ -520,6 +520,8 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
 
   console.log(`[SYNC_COMMENTS] Built token map with ${pageTokenMap.size} entries`)
 
+  let deletedComments = 0
+
   for (const post of posts) {
     try {
       // Determine the correct token to use for this post
@@ -547,19 +549,29 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
 
       const comments = await fetchCommentsForPost(post, tokenToUse)
       
+      // Collect all meta IDs from API (including replies)
+      const metaCommentIds = new Set<string>()
+      
       for (const comment of comments) {
+        metaCommentIds.add(comment.id)
         await upsertComment(supabase, projectId, post.id, post.platform, comment)
         totalComments++
 
         // Also sync replies
         if (comment.replies?.data) {
           for (const reply of comment.replies.data) {
+            metaCommentIds.add(reply.id)
             const parentComment = await getCommentByMetaId(supabase, projectId, comment.id)
             await upsertComment(supabase, projectId, post.id, post.platform, reply, parentComment?.id)
             totalComments++
           }
         }
       }
+
+      // Detect deleted comments: compare DB comments with API comments
+      const deletedCount = await markDeletedComments(supabase, projectId, post.id, metaCommentIds)
+      deletedComments += deletedCount
+      
     } catch (e: any) {
       console.warn(`[SYNC_COMMENTS] Error for post ${post.post_id_meta}: ${e.message}`)
       errors.push(`Post ${post.post_id_meta}: ${e.message}`)
@@ -567,8 +579,8 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     await delay(150)
   }
 
-  console.log(`[SYNC_COMMENTS] Completed: ${totalComments} comments synced, ${errors.length} errors`)
-  return { success: true, commentsSynced: totalComments, errors }
+  console.log(`[SYNC_COMMENTS] Completed: ${totalComments} comments synced, ${deletedComments} marked as deleted, ${errors.length} errors`)
+  return { success: true, commentsSynced: totalComments, deletedComments, errors }
 }
 
 async function fetchCommentsForPost(post: any, accessToken: string) {
@@ -603,6 +615,49 @@ async function getCommentByMetaId(supabase: any, projectId: string, metaId: stri
   return data
 }
 
+// Mark comments as deleted if they no longer exist in the Meta API
+async function markDeletedComments(supabase: any, projectId: string, postId: string, metaCommentIds: Set<string>): Promise<number> {
+  // Get all existing comments for this post that are not already marked as deleted
+  const { data: existingComments, error } = await supabase
+    .from('social_comments')
+    .select('id, comment_id_meta')
+    .eq('project_id', projectId)
+    .eq('post_id', postId)
+    .eq('is_deleted', false)
+
+  if (error || !existingComments) {
+    console.error('[MARK_DELETED] Error fetching existing comments:', error)
+    return 0
+  }
+
+  // Find comments that exist in DB but not in API response (they were deleted)
+  const deletedCommentIds: string[] = []
+  for (const comment of existingComments) {
+    if (!metaCommentIds.has(comment.comment_id_meta)) {
+      deletedCommentIds.push(comment.id)
+    }
+  }
+
+  if (deletedCommentIds.length === 0) {
+    return 0
+  }
+
+  console.log(`[MARK_DELETED] Found ${deletedCommentIds.length} deleted comments for post ${postId}`)
+
+  // Mark them as deleted
+  const { error: updateError } = await supabase
+    .from('social_comments')
+    .update({ is_deleted: true, updated_at: new Date().toISOString() })
+    .in('id', deletedCommentIds)
+
+  if (updateError) {
+    console.error('[MARK_DELETED] Error marking comments as deleted:', updateError)
+    return 0
+  }
+
+  return deletedCommentIds.length
+}
+
 async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any, parentId?: string) {
   const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
   
@@ -626,6 +681,7 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
     comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
     ai_processing_status: 'pending',
     crm_contact_id: crmContactId,
+    is_deleted: false, // Ensure comment is marked as not deleted when it exists in API
   }
 
   const { error } = await supabase

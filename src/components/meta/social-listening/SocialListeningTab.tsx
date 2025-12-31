@@ -23,7 +23,9 @@ import {
   ExternalLink,
   Megaphone,
   BookOpen,
-  Reply
+  Reply,
+  Clock,
+  Zap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -84,7 +86,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
 
-  // Check if pages are configured
+  // Check if pages are configured and get last sync time
   const { data: savedPages, isLoading: loadingPages, refetch: refetchPages } = useQuery({
     queryKey: ['social-listening-pages', projectId],
     queryFn: async () => {
@@ -94,7 +96,27 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
       if (error) throw error;
       return data?.pages || [];
     },
+    refetchInterval: 30000, // Refresh every 30 seconds to update sync status
   });
+
+  // Get most recent sync time from pages
+  const lastSyncTime = savedPages?.reduce((latest: Date | null, page: any) => {
+    if (!page.last_synced_at) return latest;
+    const pageSync = new Date(page.last_synced_at);
+    return !latest || pageSync > latest ? pageSync : latest;
+  }, null as Date | null);
+
+  const getTimeSinceSync = () => {
+    if (!lastSyncTime) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - lastSyncTime.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'agora mesmo';
+    if (diffMins < 60) return `há ${diffMins} min`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `há ${diffHours}h`;
+    return `há ${Math.floor(diffHours / 24)}d`;
+  };
 
   const hasConfiguredPages = savedPages && savedPages.length > 0;
 
@@ -217,6 +239,30 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6 mt-6">
+
+      {/* Auto-sync status banner */}
+      {hasConfiguredPages && (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-primary">
+              <Zap className="h-4 w-4" />
+              <span className="font-medium">Sincronização Automática Ativa</span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              • Comentários sincronizados e classificados automaticamente a cada 30 min
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>Última sincronização: {getTimeSinceSync() || 'Nunca'}</span>
+            {stats?.pendingAI ? (
+              <Badge variant="secondary" className="text-xs">
+                {stats.pendingAI} pendentes
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

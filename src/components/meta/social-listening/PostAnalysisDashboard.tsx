@@ -29,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -304,20 +305,48 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
   // Top 10 by intent
   const top10Intent = sortedPosts.filter(p => p.avg_intent_score > 0).slice(0, 10);
 
-  const handleOpenPost = (permalink: string | null) => {
-    if (!permalink) return;
-    const url = /^https?:\/\//i.test(permalink) ? permalink : `https://${permalink}`;
-    try {
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch {
-      window.open(url, '_blank');
+  const { toast } = useToast();
+
+  const getPostUrl = (post: Pick<PostWithStats, 'platform' | 'permalink' | 'post_id_meta'>): string | null => {
+    if (post.permalink) {
+      return /^https?:\/\//i.test(post.permalink) ? post.permalink : `https://${post.permalink}`;
     }
+
+    // Fallback (mainly for some Facebook ads): pageId_postId -> https://www.facebook.com/pageId/posts/postId
+    if (post.platform === 'facebook' && post.post_id_meta?.includes('_')) {
+      const [pageId, postId] = post.post_id_meta.split('_');
+      return `https://www.facebook.com/${pageId}/posts/${postId}`;
+    }
+
+    // Instagram without permalink cannot be reconstructed reliably (needs shortcode)
+    return null;
+  };
+
+  const openExternal = async (url: string) => {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer') ?? window.top?.open(url, '_blank', 'noopener,noreferrer');
+
+    // In embedded previews, new tabs can be blocked; offer copy fallback
+    if (!opened) {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({
+          title: 'Link copiado',
+          description: 'Cole no navegador para abrir o post.',
+        });
+      } catch {
+        toast({
+          title: 'Não foi possível abrir o link',
+          description: 'Copie e abra manualmente no navegador.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const handleOpenPost = (post: Pick<PostWithStats, 'platform' | 'permalink' | 'post_id_meta'>) => {
+    const url = getPostUrl(post);
+    if (!url) return;
+    void openExternal(url);
   };
 
   if (isLoading) {
@@ -507,7 +536,7 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                 <div 
                   key={post.id} 
                   className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
-                  onClick={() => handleOpenPost(post.permalink)}
+                  onClick={() => handleOpenPost(post)}
                 >
                   <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold">
                     {index + 1}
@@ -550,23 +579,25 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
           {sortedPosts.length > 0 ? (
             <div className="max-h-[600px] overflow-auto">
               <Table>
-                <TableHeader className="sticky top-0 bg-card z-10">
-                  <TableRow>
-                    <TableHead className="w-10">Rede</TableHead>
-                    <TableHead className="w-10">Tipo</TableHead>
-                    <TableHead className="w-[30%]">Conteúdo</TableHead>
-                    <TableHead>Comentários</TableHead>
-                    <TableHead>Sentimento</TableHead>
-                    <TableHead>Intent</TableHead>
-                    <TableHead>Interesse</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
+                  <TableHeader className="sticky top-0 bg-card z-10">
+                    <TableRow>
+                      <TableHead className="w-10">Rede</TableHead>
+                      <TableHead className="w-10">Post</TableHead>
+                      <TableHead className="w-10">Tipo</TableHead>
+                      <TableHead className="w-[30%]">Conteúdo</TableHead>
+                      <TableHead>Comentários</TableHead>
+                      <TableHead>Sentimento</TableHead>
+                      <TableHead>Intent</TableHead>
+                      <TableHead>Interesse</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
                 <TableBody>
                   {sortedPosts.map((post) => {
                     const mediaConfig = post.media_type ? mediaTypeConfig[post.media_type] : null;
                     const MediaIcon = mediaConfig?.icon || Image;
+                    const postUrl = getPostUrl(post);
 
                     return (
                       <TableRow key={post.id}>
@@ -577,18 +608,55 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             <Facebook className="h-4 w-4 text-blue-600" />
                           )}
                         </TableCell>
+
+                        {/* Post link (padronizado como 2ª coluna) */}
+                        <TableCell>
+                          {postUrl ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => void openExternal(postUrl)}
+                              title="Abrir post (para responder)"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
+
                         <TableCell>
                           <div className="flex items-center gap-2" title={mediaConfig?.label}>
                             {post.thumbnail_url ? (
-                              <img 
-                                src={post.thumbnail_url} 
-                                alt={`Miniatura do post (${post.platform})`} 
-                                loading="lazy"
-                                className="h-10 w-10 object-cover rounded-md"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
+                              postUrl ? (
+                                <button
+                                  type="button"
+                                  className="shrink-0"
+                                  title="Abrir post"
+                                  onClick={() => void openExternal(postUrl)}
+                                >
+                                  <img 
+                                    src={post.thumbnail_url} 
+                                    alt={`Miniatura do post (${post.platform})`} 
+                                    loading="lazy"
+                                    className="h-10 w-10 object-cover rounded-md"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </button>
+                              ) : (
+                                <img 
+                                  src={post.thumbnail_url} 
+                                  alt={`Miniatura do post (${post.platform})`} 
+                                  loading="lazy"
+                                  className="h-10 w-10 object-cover rounded-md"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              )
                             ) : (
                               <MediaIcon className="h-4 w-4 text-muted-foreground" />
                             )}
@@ -597,6 +665,7 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             )}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="space-y-1">
                             <p className="text-sm line-clamp-2 max-w-xs">
@@ -616,12 +685,14 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             )}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <MessageCircle className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{post.total_comments}</span>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Progress 
@@ -633,6 +704,7 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             </span>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <Badge 
                             variant={post.avg_intent_score >= 50 ? 'default' : 'secondary'}
@@ -641,12 +713,14 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             {post.avg_intent_score}%
                           </Badge>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <ShoppingCart className="h-4 w-4 text-green-500" />
                             <span>{post.commercial_interest_count}</span>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <span className="text-xs text-muted-foreground">
                             {post.published_at 
@@ -655,6 +729,7 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             }
                           </span>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             <Button
@@ -667,18 +742,6 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
                             >
                               <MessageCircle className="h-4 w-4" />
                             </Button>
-
-                            {post.permalink && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleOpenPost(post.permalink)}
-                                title="Ver post"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </Button>
-                            )}
                           </div>
                         </TableCell>
                       </TableRow>

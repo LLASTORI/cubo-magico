@@ -77,6 +77,68 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_knowledge_base: {
+        Row: {
+          auto_classify_new_comments: boolean | null
+          business_description: string | null
+          business_name: string | null
+          commercial_keywords: string[] | null
+          created_at: string
+          custom_categories: Json | null
+          faqs: Json | null
+          id: string
+          min_intent_score_for_crm: number | null
+          products_services: string | null
+          project_id: string
+          spam_keywords: string[] | null
+          target_audience: string | null
+          tone_of_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          auto_classify_new_comments?: boolean | null
+          business_description?: string | null
+          business_name?: string | null
+          commercial_keywords?: string[] | null
+          created_at?: string
+          custom_categories?: Json | null
+          faqs?: Json | null
+          id?: string
+          min_intent_score_for_crm?: number | null
+          products_services?: string | null
+          project_id: string
+          spam_keywords?: string[] | null
+          target_audience?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_classify_new_comments?: boolean | null
+          business_description?: string | null
+          business_name?: string | null
+          commercial_keywords?: string[] | null
+          created_at?: string
+          custom_categories?: Json | null
+          faqs?: Json | null
+          id?: string
+          min_intent_score_for_crm?: number | null
+          products_services?: string | null
+          project_id?: string
+          spam_keywords?: string[] | null
+          target_audience?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_knowledge_base_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_executions: {
         Row: {
           completed_at: string | null
@@ -3417,6 +3479,7 @@ export type Database = {
           classification:
             | Database["public"]["Enums"]["comment_classification"]
             | null
+          classification_key: string | null
           comment_id_meta: string
           comment_timestamp: string
           created_at: string
@@ -3452,6 +3515,7 @@ export type Database = {
           classification?:
             | Database["public"]["Enums"]["comment_classification"]
             | null
+          classification_key?: string | null
           comment_id_meta: string
           comment_timestamp: string
           created_at?: string
@@ -3487,6 +3551,7 @@ export type Database = {
           classification?:
             | Database["public"]["Enums"]["comment_classification"]
             | null
+          classification_key?: string | null
           comment_id_meta?: string
           comment_timestamp?: string
           created_at?: string
@@ -3657,15 +3722,18 @@ export type Database = {
           ad_id: string | null
           adset_id: string | null
           campaign_id: string | null
+          caption: string | null
           comments_count: number | null
           created_at: string
           id: string
           impressions: number | null
+          is_ad: boolean | null
           last_synced_at: string | null
           likes_count: number | null
           media_type: string | null
           media_url: string | null
           message: string | null
+          meta_campaign_id: string | null
           page_id: string | null
           page_name: string | null
           permalink: string | null
@@ -3682,15 +3750,18 @@ export type Database = {
           ad_id?: string | null
           adset_id?: string | null
           campaign_id?: string | null
+          caption?: string | null
           comments_count?: number | null
           created_at?: string
           id?: string
           impressions?: number | null
+          is_ad?: boolean | null
           last_synced_at?: string | null
           likes_count?: number | null
           media_type?: string | null
           media_url?: string | null
           message?: string | null
+          meta_campaign_id?: string | null
           page_id?: string | null
           page_name?: string | null
           permalink?: string | null
@@ -3707,15 +3778,18 @@ export type Database = {
           ad_id?: string | null
           adset_id?: string | null
           campaign_id?: string | null
+          caption?: string | null
           comments_count?: number | null
           created_at?: string
           id?: string
           impressions?: number | null
+          is_ad?: boolean | null
           last_synced_at?: string | null
           likes_count?: number | null
           media_type?: string | null
           media_url?: string | null
           message?: string | null
+          meta_campaign_id?: string | null
           page_id?: string | null
           page_name?: string | null
           permalink?: string | null

@@ -34,6 +34,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
 import { SocialListeningPagesManager } from './SocialListeningPagesManager';
+import { AIKnowledgeBaseSettings } from './AIKnowledgeBaseSettings';
+import { PostAnalysisDashboard } from './PostAnalysisDashboard';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -160,6 +162,14 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           <TabsTrigger value="dashboard" className="gap-2">
             <MessageCircle className="h-4 w-4" />
             Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="analise" className="gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Análise por Post
+          </TabsTrigger>
+          <TabsTrigger value="ia" className="gap-2">
+            <Brain className="h-4 w-4" />
+            Base IA
           </TabsTrigger>
           <TabsTrigger value="configuracoes" className="gap-2">
             <Settings2 className="h-4 w-4" />
@@ -396,6 +406,14 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
         </Button>
       </div>
+        </TabsContent>
+
+        <TabsContent value="analise" className="mt-6">
+          <PostAnalysisDashboard projectId={projectId} />
+        </TabsContent>
+
+        <TabsContent value="ia" className="mt-6">
+          <AIKnowledgeBaseSettings projectId={projectId} />
         </TabsContent>
 
         <TabsContent value="configuracoes" className="mt-6">

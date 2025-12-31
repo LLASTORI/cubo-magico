@@ -36,7 +36,8 @@ export interface SocialComment {
   like_count: number;
   reply_count: number;
   sentiment: 'positive' | 'neutral' | 'negative' | null;
-  classification: 'question' | 'commercial_interest' | 'complaint' | 'praise' | 'negative_feedback' | 'spam' | 'other' | null;
+  classification: 'product_question' | 'purchase_question' | 'commercial_interest' | 'praise' | 'complaint' | 'contact_request' | 'friend_tag' | 'spam' | 'other' | null;
+  classification_key: string | null;
   intent_score: number | null;
   ai_summary: string | null;
   ai_processing_status: 'pending' | 'processing' | 'completed' | 'failed';

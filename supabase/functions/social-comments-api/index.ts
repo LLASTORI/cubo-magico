@@ -16,19 +16,42 @@ const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// AI Classification prompt
-const CLASSIFICATION_PROMPT = `Você é um especialista em análise de comentários de redes sociais para negócios digitais.
+// AI Classification prompt - will be enhanced with knowledge base context
+function buildClassificationPrompt(knowledgeBase?: any) {
+  const businessContext = knowledgeBase ? `
+CONTEXTO DO NEGÓCIO:
+- Nome: ${knowledgeBase.business_name || 'Não informado'}
+- Descrição: ${knowledgeBase.business_description || 'Não informado'}
+- Público-alvo: ${knowledgeBase.target_audience || 'Não informado'}
+- Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
+${knowledgeBase.commercial_keywords?.length ? `- Palavras comerciais: ${knowledgeBase.commercial_keywords.join(', ')}` : ''}
+${knowledgeBase.spam_keywords?.length ? `- Palavras de spam: ${knowledgeBase.spam_keywords.join(', ')}` : ''}
+` : ''
 
+  // Get categories from knowledge base or use defaults
+  const defaultCategories = {
+    product_question: 'Dúvida de Produto - perguntas sobre características, uso, benefícios',
+    purchase_question: 'Dúvida de Compra/Preço - perguntas sobre preço, pagamento, entrega',
+    commercial_interest: 'Interesse Comercial - demonstra vontade de comprar',
+    praise: 'Elogio - feedback positivo, agradecimento',
+    complaint: 'Crítica/Reclamação - insatisfação, problema',
+    contact_request: 'Pedido de Contato - quer falar por DM, WhatsApp, etc',
+    friend_tag: 'Marcação de Amigo - apenas marcou alguém sem contexto relevante',
+    spam: 'Spam - conteúdo irrelevante, propaganda, bots',
+    other: 'Outro - não se encaixa nas categorias acima'
+  }
+
+  const categories = knowledgeBase?.custom_categories || defaultCategories
+  const categoryList = Object.entries(categories)
+    .map(([key, desc]) => `   - "${key}" - ${desc}`)
+    .join('\n')
+
+  return `Você é um especialista em análise de comentários de redes sociais para negócios digitais.
+${businessContext}
 Analise o comentário abaixo e forneça:
 1. sentiment: "positive", "neutral" ou "negative"
 2. classification: uma das opções:
-   - "question" - pergunta sobre produto/serviço
-   - "commercial_interest" - demonstra interesse em comprar
-   - "complaint" - reclamação ou insatisfação
-   - "praise" - elogio ou feedback positivo
-   - "negative_feedback" - crítica construtiva ou negativa
-   - "spam" - conteúdo irrelevante ou spam
-   - "other" - não se encaixa nas categorias
+${categoryList}
 3. intent_score: número de 0 a 100 representando intenção comercial (0 = nenhuma, 100 = muito alta)
 4. summary: resumo de 1 linha do comentário (máximo 100 caracteres)
 
@@ -39,6 +62,7 @@ Comentário para análise:
 
 Responda APENAS em JSON válido no formato:
 {"sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}`
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -711,9 +735,18 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
   return { success: true, linked, notFound, totalProcessed: comments.length }
 }
 
-// Process comments with AI
+// Process comments with AI - now uses knowledge base for context
 async function processCommentsWithAI(supabase: any, projectId: string, limit: number) {
   console.log(`Processing up to ${limit} comments with AI for project:`, projectId)
+
+  // Fetch knowledge base for this project
+  const { data: knowledgeBase } = await supabase
+    .from('ai_knowledge_base')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle()
+
+  console.log(`Knowledge base found: ${!!knowledgeBase}`)
 
   // Get pending comments
   const { data: comments, error } = await supabase
@@ -737,6 +770,9 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
   let processed = 0
   let failed = 0
 
+  // Build prompt once with knowledge base context
+  const classificationPrompt = buildClassificationPrompt(knowledgeBase)
+
   for (const comment of comments) {
     try {
       // Mark as processing
@@ -745,9 +781,9 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
         .update({ ai_processing_status: 'processing' })
         .eq('id', comment.id)
 
-      // Call AI
+      // Call AI with knowledge base enhanced prompt
       const postContext = comment.social_posts?.message || 'Contexto não disponível'
-      const aiResult = await classifyComment(comment.text, postContext)
+      const aiResult = await classifyComment(comment.text, postContext, classificationPrompt, knowledgeBase)
 
       // Update with results
       await supabase
@@ -755,6 +791,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
         .update({
           sentiment: aiResult.sentiment,
           classification: aiResult.classification,
+          classification_key: aiResult.classification, // Store raw key for filtering
           intent_score: aiResult.intent_score,
           ai_summary: aiResult.summary,
           ai_processing_status: 'completed',
@@ -784,8 +821,8 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
   return { success: true, processed, failed, total: comments.length }
 }
 
-async function classifyComment(commentText: string, postContext: string) {
-  const prompt = CLASSIFICATION_PROMPT
+async function classifyComment(commentText: string, postContext: string, classificationPrompt: string, knowledgeBase?: any) {
+  const prompt = classificationPrompt
     .replace('{post_context}', postContext)
     .replace('{comment_text}', commentText)
 
@@ -821,12 +858,17 @@ async function classifyComment(commentText: string, postContext: string) {
 
   const result = JSON.parse(jsonMatch[0])
 
+  // Get valid classification keys from knowledge base or use defaults
+  const validClassifications = knowledgeBase?.custom_categories 
+    ? Object.keys(knowledgeBase.custom_categories)
+    : ['product_question', 'purchase_question', 'commercial_interest', 'praise', 'complaint', 'contact_request', 'friend_tag', 'spam', 'other']
+
   // Validate and normalize
   return {
     sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) 
       ? result.sentiment 
       : 'neutral',
-    classification: ['question', 'commercial_interest', 'complaint', 'praise', 'negative_feedback', 'spam', 'other'].includes(result.classification)
+    classification: validClassifications.includes(result.classification)
       ? result.classification
       : 'other',
     intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),

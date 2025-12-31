@@ -417,21 +417,38 @@ function CommentRow({ comment }: { comment: SocialComment }) {
 
   const handleOpenPost = () => {
     if (!postPermalink) return;
-    
-    // Try to open in parent window (works outside iframe)
-    // If in iframe, window.top may be blocked, so we copy to clipboard as fallback
+
+    const url = /^https?:\/\//i.test(postPermalink) ? postPermalink : `https://${postPermalink}`;
+
+    // Prefer an actual anchor click (tends to work better in sandboxed iframes)
     try {
-      const targetWindow = window.top || window;
-      targetWindow.open(postPermalink, '_blank');
-    } catch (e) {
-      // Fallback: copy link to clipboard
-      navigator.clipboard.writeText(postPermalink).then(() => {
-        alert('Link copiado! Cole no navegador para abrir.');
-      }).catch(() => {
-        // Last resort: show the URL
-        alert(`Abra este link: ${postPermalink}`);
-      });
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      a.referrerPolicy = 'no-referrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    } catch {
+      // ignore
     }
+
+    // Fallback: window.open
+    try {
+      (window.top || window).open(url, '_blank');
+      return;
+    } catch {
+      // ignore
+    }
+
+    // Last resort: copy
+    navigator.clipboard.writeText(url).then(() => {
+      alert('Link copiado! Cole no navegador para abrir.');
+    }).catch(() => {
+      alert(`Abra este link: ${url}`);
+    });
   };
 
   return (

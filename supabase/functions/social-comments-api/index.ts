@@ -238,7 +238,18 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
     console.log(`[SYNC_POSTS] COMPLETED: ${totalPosts} posts synced, ${errors.length} errors`)
     if (errors.length > 0) {
       console.log(`[SYNC_POSTS] Errors:`, errors)
+
+      // If nothing was synced and we have errors, surface it to the UI
+      if (totalPosts === 0) {
+        return {
+          success: false,
+          error: errors[0],
+          postsSynced: totalPosts,
+          errors,
+        }
+      }
     }
+
     return { success: true, postsSynced: totalPosts, errors }
   } catch (error: any) {
     console.error('[SYNC_POSTS] FATAL ERROR:', error)
@@ -271,73 +282,91 @@ async function fetchFacebookPosts(pageId: string, pageToken: string): Promise<an
 
 async function fetchInstagramPosts(igAccountId: string, pageToken: string, mainAccessToken?: string) {
   console.log(`[FETCH_IG_POSTS] Starting for IG Account: ${igAccountId}`)
-  
+
   // Try with page token first, then fall back to main access token
-  const tokensToTry = [
+  const tokensToTry: Array<{ token: string; name: string }> = [
     { token: pageToken, name: 'page_access_token' },
   ]
-  
+
   // Add main access token as fallback if available and different
   if (mainAccessToken && mainAccessToken !== pageToken) {
     tokensToTry.push({ token: mainAccessToken, name: 'main_access_token' })
   }
-  
-  for (const { token, name } of tokensToTry) {
+
+  let lastError: Error | null = null
+
+  for (let i = 0; i < tokensToTry.length; i++) {
+    const { token, name } = tokensToTry[i]
+
     console.log(`[FETCH_IG_POSTS] Trying with ${name}...`)
     console.log(`[FETCH_IG_POSTS] Token preview: ${token?.substring(0, 20)}...`)
-    
+
     const url = `${GRAPH_API_BASE}/${igAccountId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=50&access_token=${token}`
-    
     console.log(`[FETCH_IG_POSTS] Request URL (token hidden): ${url.replace(token, 'TOKEN_HIDDEN')}`)
-    
+
     try {
       const response = await fetch(url)
       const statusCode = response.status
       const data = await response.json()
-      
+
       console.log(`[FETCH_IG_POSTS] Response status: ${statusCode}`)
-      console.log(`[FETCH_IG_POSTS] Response data:`, JSON.stringify({
-        hasData: !!data.data,
-        dataLength: data.data?.length,
-        error: data.error,
-        firstPostId: data.data?.[0]?.id,
-      }))
-      
+      console.log(
+        `[FETCH_IG_POSTS] Response data:`,
+        JSON.stringify({
+          hasData: !!data.data,
+          dataLength: data.data?.length,
+          error: data.error,
+          firstPostId: data.data?.[0]?.id,
+        })
+      )
+
       if (data.error) {
         console.error(`[FETCH_IG_POSTS] API Error with ${name}:`, JSON.stringify(data.error))
-        
-        // If it's a permission error, try the next token
-        if (data.error.code === 190 || data.error.code === 200) {
-          console.log(`[FETCH_IG_POSTS] Permission error, trying next token...`)
+
+        const err = new Error(`${data.error.message} (code: ${data.error.code})`)
+        lastError = err
+
+        // Common auth/permission errors. If we have another token to try, continue.
+        if ([10, 190, 200].includes(data.error.code) && i < tokensToTry.length - 1) {
+          console.log(`[FETCH_IG_POSTS] Permission/auth error, trying next token...`)
           continue
         }
-        
-        throw new Error(`${data.error.message} (code: ${data.error.code})`)
+
+        throw err
       }
-      
+
       const posts = data.data || []
       console.log(`[FETCH_IG_POSTS] SUCCESS with ${name}: Found ${posts.length} posts`)
-      
+
       if (posts.length > 0) {
-        console.log(`[FETCH_IG_POSTS] First post sample:`, JSON.stringify({
-          id: posts[0].id,
-          caption: posts[0].caption?.substring(0, 50),
-          media_type: posts[0].media_type,
-          timestamp: posts[0].timestamp,
-        }))
+        console.log(
+          `[FETCH_IG_POSTS] First post sample:`,
+          JSON.stringify({
+            id: posts[0].id,
+            caption: posts[0].caption?.substring(0, 50),
+            media_type: posts[0].media_type,
+            timestamp: posts[0].timestamp,
+          })
+        )
       }
-      
+
       return posts
     } catch (fetchError: any) {
-      console.error(`[FETCH_IG_POSTS] Fetch error with ${name}:`, fetchError.message)
-      if (tokensToTry.indexOf({ token, name }) === tokensToTry.length - 1) {
-        throw fetchError // Re-throw if this was the last token to try
+      const err = fetchError instanceof Error ? fetchError : new Error(String(fetchError))
+      lastError = err
+      console.error(`[FETCH_IG_POSTS] Fetch error with ${name}:`, err.message)
+
+      if (i < tokensToTry.length - 1) {
+        continue
       }
+
+      throw err
     }
   }
-  
-  console.log(`[FETCH_IG_POSTS] All tokens failed, returning empty array`)
-  return []
+
+  // If we got here, nothing worked.
+  console.log(`[FETCH_IG_POSTS] All tokens failed`) 
+  throw lastError || new Error('Falha ao buscar posts do Instagram')
 }
 
 async function upsertPost(supabase: any, projectId: string, platform: string, post: any, pageName: string) {

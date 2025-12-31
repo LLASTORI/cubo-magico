@@ -404,17 +404,20 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
                   <TableRow>
                     <TableHead className="w-10">Rede</TableHead>
                     <TableHead className="w-10">Post</TableHead>
-                    <TableHead className="w-[35%]">Comentário</TableHead>
+                    <TableHead className="w-12">Thumb</TableHead>
+                    <TableHead className="w-[30%]">Comentário</TableHead>
                     <TableHead>Autor</TableHead>
                     <TableHead>Sentimento</TableHead>
                     <TableHead>Classificação</TableHead>
                     <TableHead>Intenção</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {comments.map((comment) => (
-                    <CommentRow key={comment.id} comment={comment} />
+                    <CommentRow key={comment.id} comment={comment} onOpenReply={handleOpenReply} />
                   ))}
                 </TableBody>
               </Table>
@@ -508,13 +511,22 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   );
 }
 
-function CommentRow({ comment }: { comment: SocialComment }) {
+const replyStatusConfig: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  approved: { label: 'Aprovada', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  rejected: { label: 'Rejeitada', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  sent: { label: 'Enviada', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+};
+
+function CommentRow({ comment, onOpenReply }: { comment: SocialComment; onOpenReply: (comment: SocialComment) => void }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
   const crmContact = comment.crm_contacts;
   const postData = comment.social_posts;
   const postPermalink = postData?.permalink;
+  const postThumbnail = postData?.thumbnail_url;
   const isAd = postData?.is_ad ?? false;
+  const replyStatus = comment.reply_status ? replyStatusConfig[comment.reply_status] : null;
 
   // Build permalink URL - ensure it's absolute, or generate fallback for ads
   const getPostUrl = () => {
@@ -597,6 +609,23 @@ function CommentRow({ comment }: { comment: SocialComment }) {
         )}
       </TableCell>
       <TableCell>
+        {postThumbnail ? (
+          <img 
+            src={postThumbnail} 
+            alt="Thumbnail do post" 
+            loading="lazy"
+            className="h-9 w-9 object-cover rounded-md"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center">
+            <MessageCircle className="h-4 w-4 text-muted-foreground" />
+          </div>
+        )}
+      </TableCell>
+      <TableCell>
         <div className="max-w-md">
           <p className="text-sm line-clamp-2">{comment.text}</p>
           {comment.ai_summary && (
@@ -663,9 +692,29 @@ function CommentRow({ comment }: { comment: SocialComment }) {
         )}
       </TableCell>
       <TableCell>
+        {replyStatus ? (
+          <Badge variant="outline" className={`border-0 ${replyStatus.color}`}>
+            {replyStatus.label}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell>
         <span className="text-xs text-muted-foreground">
           {format(new Date(comment.comment_timestamp), 'dd/MM/yy HH:mm', { locale: ptBR })}
         </span>
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onOpenReply(comment)}
+          title="Gerar resposta com IA"
+        >
+          <Reply className="h-4 w-4" />
+        </Button>
       </TableCell>
     </TableRow>
   );

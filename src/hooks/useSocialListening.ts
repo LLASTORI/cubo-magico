@@ -212,9 +212,10 @@ export function useSocialListening(projectId: string | undefined) {
       return data;
     },
     onSuccess: (data) => {
+      const deletedText = data.deletedComments ? ` ${data.deletedComments} removidos detectados.` : '';
       toast({
         title: 'Comentários sincronizados!',
-        description: `${data.commentsSynced} comentários encontrados.`,
+        description: `${data.commentsSynced} comentários encontrados.${deletedText}`,
       });
       queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
       queryClient.invalidateQueries({ queryKey: ['social_stats', projectId] });

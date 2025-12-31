@@ -20,7 +20,8 @@ import {
   Facebook,
   Settings2,
   Users,
-  ExternalLink
+  ExternalLink,
+  Megaphone
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     sentiment: 'all',
     classification: 'all',
     platform: 'all',
+    postType: 'all',
     search: '',
   });
 
@@ -96,6 +98,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     syncComments, 
     processAI,
     linkToCRM,
+    syncAdComments,
     useComments 
   } = useSocialListening(projectId);
 
@@ -103,12 +106,17 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     sentiment: filters.sentiment,
     classification: filters.classification,
     platform: filters.platform,
+    postType: filters.postType,
     search: filters.search,
   });
 
   const handleSync = async () => {
     await syncPosts.mutateAsync();
     await syncComments.mutateAsync(undefined);
+  };
+
+  const handleSyncAds = async () => {
+    await syncAdComments.mutateAsync();
   };
 
   const handleProcessAI = async () => {
@@ -120,6 +128,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   };
 
   const isSyncing = syncPosts.isPending || syncComments.isPending;
+  const isSyncingAds = syncAdComments.isPending;
   const isProcessing = processAI.isPending;
   const isLinking = linkToCRM.isPending;
 
@@ -263,7 +272,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -273,6 +282,20 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               />
             </div>
+
+            <Select
+              value={filters.postType}
+              onValueChange={(value) => setFilters({ ...filters, postType: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Posts</SelectItem>
+                <SelectItem value="organic">Orgânicos</SelectItem>
+                <SelectItem value="ad">Anúncios (Ads)</SelectItem>
+              </SelectContent>
+            </Select>
 
             <Select
               value={filters.platform}
@@ -325,7 +348,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
 
             <Button 
               variant="ghost" 
-              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', search: '' })}
+              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', postType: 'all', search: '' })}
             >
               Limpar
             </Button>
@@ -395,7 +418,15 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           disabled={isSyncing}
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+          {isSyncing ? 'Sincronizando...' : 'Sincronizar Orgânicos'}
+        </Button>
+        <Button 
+          variant="outline" 
+          onClick={handleSyncAds}
+          disabled={isSyncingAds}
+        >
+          <Megaphone className={`h-4 w-4 mr-2 ${isSyncingAds ? 'animate-pulse' : ''}`} />
+          {isSyncingAds ? 'Buscando Ads...' : 'Sincronizar Ads'}
         </Button>
         <Button 
           variant="outline"

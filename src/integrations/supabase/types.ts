@@ -3733,6 +3733,7 @@ export type Database = {
           media_type: string | null
           media_url: string | null
           message: string | null
+          meta_ad_id: string | null
           meta_campaign_id: string | null
           page_id: string | null
           page_name: string | null
@@ -3761,6 +3762,7 @@ export type Database = {
           media_type?: string | null
           media_url?: string | null
           message?: string | null
+          meta_ad_id?: string | null
           meta_campaign_id?: string | null
           page_id?: string | null
           page_name?: string | null
@@ -3789,6 +3791,7 @@ export type Database = {
           media_type?: string | null
           media_url?: string | null
           message?: string | null
+          meta_ad_id?: string | null
           meta_campaign_id?: string | null
           page_id?: string | null
           page_name?: string | null

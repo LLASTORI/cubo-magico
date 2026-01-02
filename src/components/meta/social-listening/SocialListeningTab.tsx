@@ -25,7 +25,8 @@ import {
   BookOpen,
   Reply,
   Clock,
-  Zap
+  Zap,
+  ClipboardList
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ import { PostAnalysisDashboard } from './PostAnalysisDashboard';
 import { SocialListeningPagesManager } from './SocialListeningPagesManager';
 import { SocialListeningGuide } from './SocialListeningGuide';
 import { ReplyApprovalDialog } from './ReplyApprovalDialog';
+import { SendSurveyDialog } from './SendSurveyDialog';
 import { FeatureGate } from '@/components/FeatureGate';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -85,6 +87,12 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   });
   const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [surveyDialogOpen, setSurveyDialogOpen] = useState(false);
+  const [selectedContactForSurvey, setSelectedContactForSurvey] = useState<{
+    id: string;
+    name: string | null;
+    email: string;
+  } | null>(null);
 
   // Check if pages are configured and get last sync time
   const { data: savedPages, isLoading: loadingPages, refetch: refetchPages } = useQuery({
@@ -200,6 +208,11 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   const handleOpenReply = (comment: SocialComment) => {
     setSelectedComment(comment);
     setReplyDialogOpen(true);
+  };
+
+  const handleOpenSurvey = (contact: { id: string; name: string | null; email: string }) => {
+    setSelectedContactForSurvey(contact);
+    setSurveyDialogOpen(true);
   };
 
   return (
@@ -463,7 +476,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
                 </TableHeader>
                 <TableBody>
                   {comments.map((comment) => (
-                    <CommentRow key={comment.id} comment={comment} onOpenReply={handleOpenReply} />
+                    <CommentRow key={comment.id} comment={comment} onOpenReply={handleOpenReply} onOpenSurvey={handleOpenSurvey} />
                   ))}
                 </TableBody>
               </Table>
@@ -553,6 +566,18 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
         onOpenChange={setReplyDialogOpen}
         projectId={projectId}
       />
+
+      {/* Send Survey Dialog */}
+      {selectedContactForSurvey && (
+        <SendSurveyDialog
+          open={surveyDialogOpen}
+          onOpenChange={setSurveyDialogOpen}
+          projectId={projectId}
+          contactId={selectedContactForSurvey.id}
+          contactName={selectedContactForSurvey.name}
+          contactEmail={selectedContactForSurvey.email}
+        />
+      )}
     </div>
   );
 }
@@ -564,7 +589,11 @@ const replyStatusConfig: Record<string, { label: string; color: string }> = {
   sent: { label: 'Enviada', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 };
 
-function CommentRow({ comment, onOpenReply }: { comment: SocialComment; onOpenReply: (comment: SocialComment) => void }) {
+function CommentRow({ comment, onOpenReply, onOpenSurvey }: { 
+  comment: SocialComment; 
+  onOpenReply: (comment: SocialComment) => void;
+  onOpenSurvey: (contact: { id: string; name: string | null; email: string }) => void;
+}) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
   const crmContact = comment.crm_contacts;
@@ -752,15 +781,32 @@ function CommentRow({ comment, onOpenReply }: { comment: SocialComment; onOpenRe
         </span>
       </TableCell>
       <TableCell>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => onOpenReply(comment)}
-          title="Gerar resposta com IA"
-        >
-          <Reply className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onOpenReply(comment)}
+            title="Gerar resposta com IA"
+          >
+            <Reply className="h-4 w-4" />
+          </Button>
+          {crmContact && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onOpenSurvey({
+                id: crmContact.id,
+                name: crmContact.name,
+                email: crmContact.email,
+              })}
+              title="Enviar pesquisa"
+            >
+              <ClipboardList className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </TableCell>
     </TableRow>
   );

@@ -1,3 +1,30 @@
+/**
+ * useSurveyResponses Hook
+ * 
+ * Gerencia as respostas de pesquisas inteligentes.
+ * 
+ * ## Funcionalidades:
+ * - Listagem de respostas por pesquisa
+ * - Listagem de respostas por contato
+ * - Exclusão de respostas
+ * - Join com dados do contato CRM
+ * 
+ * ## Fontes de Respostas:
+ * - `public_link`: Link público da pesquisa
+ * - `webhook`: Integração via webhook externo
+ * - `csv_import`: Importação em massa via CSV
+ * 
+ * ## Exemplo de uso:
+ * ```tsx
+ * // Por pesquisa
+ * const { responses, isLoading } = useSurveyResponses(surveyId);
+ * 
+ * // Por contato
+ * const { responses } = useContactSurveyResponses(contactId);
+ * ```
+ * 
+ * @module hooks/useSurveyResponses
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';

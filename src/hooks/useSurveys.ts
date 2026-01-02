@@ -1,3 +1,28 @@
+/**
+ * useSurveys Hook
+ * 
+ * Gerencia o CRUD completo de pesquisas inteligentes e suas perguntas.
+ * 
+ * ## Funcionalidades:
+ * - Listagem de pesquisas do projeto
+ * - Criação, atualização e exclusão de pesquisas
+ * - Gerenciamento de perguntas (adicionar, editar, reordenar, excluir)
+ * - Suporte a perguntas de identidade (identity_field)
+ * 
+ * ## Tipos de Perguntas:
+ * - `text`: Resposta aberta
+ * - `multiple_choice`: Múltipla escolha
+ * - `scale`: Escala numérica (1-10, NPS, etc.)
+ * - `identity_field`: Captura de dado declarado do contato
+ * 
+ * ## Exemplo de uso:
+ * ```tsx
+ * const { surveys, createSurvey, isLoading } = useSurveys();
+ * const { survey, addQuestion } = useSurvey(surveyId);
+ * ```
+ * 
+ * @module hooks/useSurveys
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';

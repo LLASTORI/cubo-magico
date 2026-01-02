@@ -1,3 +1,44 @@
+/**
+ * Survey Public Edge Function
+ * 
+ * Serve pesquisas públicas e recebe respostas via link público.
+ * 
+ * ## Endpoints:
+ * 
+ * ### GET /survey-public?slug=minha-pesquisa
+ * Retorna a pesquisa e suas perguntas para renderização pública.
+ * 
+ * ### POST /survey-public
+ * Submete uma resposta de pesquisa.
+ * 
+ * ## Payload POST:
+ * ```json
+ * {
+ *   "slug": "minha-pesquisa",
+ *   "email": "contato@email.com",
+ *   "answers": {
+ *     "question_id": "resposta"
+ *   },
+ *   "metadata": { "utm_source": "instagram", ... }
+ * }
+ * ```
+ * 
+ * ## Fluxo de Submissão:
+ * 1. Valida slug e status da pesquisa
+ * 2. Encontra ou cria contato no CRM
+ * 3. Salva resposta na tabela survey_responses
+ * 4. Processa perguntas de identidade (identity_field)
+ * 5. Atualiza dados do contato e cria eventos de identidade
+ * 
+ * ## Resposta de Sucesso:
+ * ```json
+ * {
+ *   "success": true,
+ *   "contact_id": "uuid",
+ *   "response_id": "uuid"
+ * }
+ * ```
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {

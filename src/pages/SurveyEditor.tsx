@@ -119,7 +119,7 @@ export default function SurveyEditor() {
     const origin = window.location.origin;
     // If we're on a lovable preview/sandbox URL, show the production URL
     if (origin.includes('lovable.app') || origin.includes('lovableproject.com')) {
-      return 'https://app.cubomagico.digital';
+      return 'https://cubomagico.leandrolastori.com.br';
     }
     return origin;
   };

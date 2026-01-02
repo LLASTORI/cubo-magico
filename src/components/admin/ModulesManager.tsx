@@ -20,7 +20,8 @@ import {
   FolderKanban,
   ShoppingCart,
   MessageCircle,
-  Workflow
+  Workflow,
+  ClipboardList
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,6 +45,7 @@ const MODULE_ICONS: Record<ModuleKey, React.ReactNode> = {
   meta_ads: <Facebook className="w-4 h-4" />,
   hotmart: <ShoppingCart className="w-4 h-4" />,
   automation: <Workflow className="w-4 h-4" />,
+  surveys: <ClipboardList className="w-4 h-4" />,
 };
 
 export const ModulesManager = () => {

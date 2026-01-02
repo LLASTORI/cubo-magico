@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Target, Megaphone, Layers, ChevronRight, Home, GitBranch, Image, Globe, FileText, TrendingUp, DollarSign, AlertTriangle } from "lucide-react";
+import { Target, Megaphone, Layers, ChevronRight, Home, GitBranch, Image, Globe, FileText, TrendingUp, DollarSign, AlertTriangle, Info, HelpCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ChartContainer,
   ChartTooltip,
@@ -81,7 +82,8 @@ interface UTMMetrics {
   percentage: number;
   spend: number;
   roas: number | null;
-  status: 'ACTIVE' | 'PAUSED' | 'MIXED' | null;
+  status: 'ACTIVE' | 'PAUSED' | 'MIXED' | 'UNKNOWN' | null;
+  hasSalesWithoutSpend?: boolean; // Flag when sales exist but no spend in period
 }
 
 interface DrilldownPath {
@@ -213,15 +215,16 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     return { byCampaign, byAdset, byAd };
   }, [metaCampaigns, metaAdsets, metaAds]);
 
-  // Build status lookup maps
+  // Build status lookup maps - ALWAYS from hierarchy tables, independent of spend
   const statusMaps = useMemo(() => {
     const byCampaign = new Map<string, string>();
     const byAdset = new Map<string, string>();
     const byAd = new Map<string, string>();
     
-    metaCampaigns.forEach(c => byCampaign.set(c.campaign_id, c.status || 'PAUSED'));
-    metaAdsets.forEach(a => byAdset.set(a.adset_id, a.status || 'PAUSED'));
-    metaAds.forEach(a => byAd.set(a.ad_id, a.status || 'PAUSED'));
+    // Status comes from meta_campaigns/adsets/ads tables, NOT from insights
+    metaCampaigns.forEach(c => byCampaign.set(c.campaign_id, c.status || 'UNKNOWN'));
+    metaAdsets.forEach(a => byAdset.set(a.adset_id, a.status || 'UNKNOWN'));
+    metaAds.forEach(a => byAd.set(a.ad_id, a.status || 'UNKNOWN'));
     
     return { byCampaign, byAdset, byAd };
   }, [metaCampaigns, metaAdsets, metaAds]);
@@ -289,8 +292,8 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     return totalSpend;
   };
 
-  // Get status for a UTM value based on the field type
-  const getStatusForUTM = (field: HierarchyLevel, salesWithUTM: typeof filteredSales): 'ACTIVE' | 'PAUSED' | 'MIXED' | null => {
+  // Get status for a UTM value based on the field type - uses hierarchy tables
+  const getStatusForUTM = (field: HierarchyLevel, salesWithUTM: typeof filteredSales): 'ACTIVE' | 'PAUSED' | 'MIXED' | 'UNKNOWN' | null => {
     const ids = new Set<string>();
     
     salesWithUTM.forEach(sale => {
@@ -319,9 +322,25 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
       if (status) statuses.add(status);
     });
     
-    if (statuses.size === 0) return null;
+    if (statuses.size === 0) return 'UNKNOWN'; // ID not found in hierarchy tables
+    if (statuses.has('UNKNOWN')) return 'UNKNOWN'; // Hierarchy has unknown status
     if (statuses.size > 1) return 'MIXED';
     return statuses.has('ACTIVE') ? 'ACTIVE' : 'PAUSED';
+  };
+
+  // Get status for a single Meta ID directly from hierarchy
+  const getStatusForMetaId = (field: HierarchyLevel, metaId: string): 'ACTIVE' | 'PAUSED' | 'UNKNOWN' | null => {
+    let status: string | undefined;
+    if (field === 'campaign') {
+      status = statusMaps.byCampaign.get(metaId);
+    } else if (field === 'adset') {
+      status = statusMaps.byAdset.get(metaId);
+    } else if (field === 'creative') {
+      status = statusMaps.byAd.get(metaId);
+    }
+    if (!status) return 'UNKNOWN';
+    if (status === 'UNKNOWN') return 'UNKNOWN';
+    return status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
   };
 
   // Analysis for individual tabs (no drilldown filtering)
@@ -402,24 +421,23 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         processedKeys.add(key);
         
         let spend = 0;
-        let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | null = null;
+        let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | 'UNKNOWN' | null = null;
         
-        // For fields with Meta data, look up spend and status by ID
-        if (field === 'campaign' && spendMaps.byCampaign.has(key)) {
+        // For fields with Meta data, look up spend by ID (from insights in period)
+        if (field === 'campaign') {
           spend = spendMaps.byCampaign.get(key) || 0;
-          status = (statusMaps.byCampaign.get(key) as 'ACTIVE' | 'PAUSED') || null;
-        } else if (field === 'adset' && spendMaps.byAdset.has(key)) {
+          // Status ALWAYS from hierarchy tables, not dependent on spend
+          status = getStatusForMetaId(field, key);
+        } else if (field === 'adset') {
           spend = spendMaps.byAdset.get(key) || 0;
-          status = (statusMaps.byAdset.get(key) as 'ACTIVE' | 'PAUSED') || null;
-        } else if (field === 'creative' && spendMaps.byAd.has(key)) {
+          status = getStatusForMetaId(field, key);
+        } else if (field === 'creative') {
           spend = spendMaps.byAd.get(key) || 0;
-          status = (statusMaps.byAd.get(key) as 'ACTIVE' | 'PAUSED') || null;
+          status = getStatusForMetaId(field, key);
         }
 
         const roas = spend > 0 ? data.revenue / spend : (data.sales > 0 ? null : 0);
-        
-        // Key is the Meta ID for campaign/adset/creative, or the name for others
-        const metaId = (field === 'campaign' || field === 'adset' || field === 'creative') && spendMaps.byCampaign.has(key) || spendMaps.byAdset.has(key) || spendMaps.byAd.has(key) ? key : null;
+        const hasSalesWithoutSpend = data.sales > 0 && spend === 0;
         
         result.push({
           name: data.displayName,
@@ -431,6 +449,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
           spend,
           roas,
           status,
+          hasSalesWithoutSpend,
         });
       });
 
@@ -438,15 +457,14 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
       if (field === 'campaign' || field === 'adset' || field === 'creative') {
         const spendMap = field === 'campaign' ? spendMaps.byCampaign : 
                          field === 'adset' ? spendMaps.byAdset : spendMaps.byAd;
-        const statusMap = field === 'campaign' ? statusMaps.byCampaign : 
-                          field === 'adset' ? statusMaps.byAdset : statusMaps.byAd;
         const nameMap = field === 'campaign' ? nameMaps.byCampaign : 
                         field === 'adset' ? nameMaps.byAdset : nameMaps.byAd;
         
         spendMap.forEach((spend, metaId) => {
           if (!processedKeys.has(metaId) && spend > 0) {
             const displayName = nameMap.get(metaId) || metaId;
-            const status = (statusMap.get(metaId) as 'ACTIVE' | 'PAUSED') || null;
+            // Status from hierarchy tables
+            const status = getStatusForMetaId(field, metaId);
             
             result.push({
               name: displayName,
@@ -458,6 +476,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
               spend,
               roas: 0,
               status,
+              hasSalesWithoutSpend: false,
             });
           }
         });
@@ -600,20 +619,21 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         processedKeys.add(key);
         
         let spend = 0;
-        let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | null = null;
+        let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | 'UNKNOWN' | null = null;
         
-        if (currentField === 'campaign' && spendMaps.byCampaign.has(key)) {
+        if (currentField === 'campaign') {
           spend = spendMaps.byCampaign.get(key) || 0;
-          status = (statusMaps.byCampaign.get(key) as 'ACTIVE' | 'PAUSED') || null;
-        } else if (currentField === 'adset' && spendMaps.byAdset.has(key)) {
+          status = getStatusForMetaId(currentField, key);
+        } else if (currentField === 'adset') {
           spend = spendMaps.byAdset.get(key) || 0;
-          status = (statusMaps.byAdset.get(key) as 'ACTIVE' | 'PAUSED') || null;
-        } else if (currentField === 'creative' && spendMaps.byAd.has(key)) {
+          status = getStatusForMetaId(currentField, key);
+        } else if (currentField === 'creative') {
           spend = spendMaps.byAd.get(key) || 0;
-          status = (statusMaps.byAd.get(key) as 'ACTIVE' | 'PAUSED') || null;
+          status = getStatusForMetaId(currentField, key);
         }
         
         const roas = spend > 0 ? data.revenue / spend : (data.sales > 0 ? null : 0);
+        const hasSalesWithoutSpend = data.sales > 0 && spend === 0;
         
         return {
           name: data.displayName,
@@ -625,6 +645,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
           spend,
           roas,
           status,
+          hasSalesWithoutSpend,
         };
       });
 
@@ -632,15 +653,13 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     if (currentField === 'campaign' || currentField === 'adset' || currentField === 'creative') {
       const spendMap = currentField === 'campaign' ? spendMaps.byCampaign : 
                        currentField === 'adset' ? spendMaps.byAdset : spendMaps.byAd;
-      const statusMap = currentField === 'campaign' ? statusMaps.byCampaign : 
-                        currentField === 'adset' ? statusMaps.byAdset : statusMaps.byAd;
       const nameMap = currentField === 'campaign' ? nameMaps.byCampaign : 
                       currentField === 'adset' ? nameMaps.byAdset : nameMaps.byAd;
       
       spendMap.forEach((spend, metaId) => {
         if (!processedKeys.has(metaId) && spend > 0) {
           const displayName = nameMap.get(metaId) || metaId;
-          const status = (statusMap.get(metaId) as 'ACTIVE' | 'PAUSED') || null;
+          const status = getStatusForMetaId(currentField, metaId);
           
           metrics.push({
             name: displayName,
@@ -652,6 +671,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
             spend,
             roas: 0,
             status,
+            hasSalesWithoutSpend: false,
           });
         }
       });
@@ -800,7 +820,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         {metrics.slice(0, 15).map((metric, idx) => (
           <TableRow 
             key={`${metric.name}-${idx}`} 
-            className={`${showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/50" : ""} ${metric.sales === 0 && metric.spend > 0 ? "bg-red-500/5" : ""}`}
+            className={`${showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/50" : ""} ${metric.sales === 0 && metric.spend > 0 ? "bg-red-500/5" : ""} ${metric.hasSalesWithoutSpend ? "bg-amber-500/5" : ""}`}
             onClick={() => showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && handleDrilldown(metric)}
           >
             <TableCell>
@@ -810,6 +830,20 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
                   style={{ backgroundColor: metric.sales === 0 && metric.spend > 0 ? 'hsl(var(--destructive))' : COLORS[idx % COLORS.length] }}
                 />
                 <span className="truncate max-w-[180px]" title={metric.name}>{metric.name}</span>
+                {metric.hasSalesWithoutSpend && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-4 h-4 text-amber-500 flex-shrink-0 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[280px]">
+                      <p className="text-sm">
+                        <strong>Venda atribuída sem investimento no período.</strong><br/>
+                        Esta campanha/anúncio teve vendas mas sem gasto no período selecionado. 
+                        Isso pode ocorrer por janela de atribuição (7 dias), campanha pausada após clique, ou UTM manual.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && (
                   <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 )}
@@ -818,17 +852,47 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
             <TableCell className="text-right">
               {metric.status ? (
                 <Badge 
-                  variant={metric.status === 'ACTIVE' ? "default" : metric.status === 'MIXED' ? "secondary" : "outline"}
-                  className={metric.status === 'ACTIVE' ? "bg-green-500/20 text-green-600 border-green-500/30" : metric.status === 'PAUSED' ? "bg-yellow-500/20 text-yellow-600 border-yellow-500/30" : ""}
+                  variant={metric.status === 'ACTIVE' ? "default" : metric.status === 'MIXED' ? "secondary" : metric.status === 'UNKNOWN' ? "outline" : "outline"}
+                  className={
+                    metric.status === 'ACTIVE' ? "bg-green-500/20 text-green-600 border-green-500/30" : 
+                    metric.status === 'PAUSED' ? "bg-yellow-500/20 text-yellow-600 border-yellow-500/30" : 
+                    metric.status === 'UNKNOWN' ? "bg-gray-500/20 text-gray-500 border-gray-500/30" : ""
+                  }
                 >
-                  {metric.status === 'ACTIVE' ? 'Ativo' : metric.status === 'PAUSED' ? 'Inativo' : 'Misto'}
+                  {metric.status === 'ACTIVE' ? 'Ativo' : 
+                   metric.status === 'PAUSED' ? 'Inativo' : 
+                   metric.status === 'UNKNOWN' ? (
+                     <Tooltip>
+                       <TooltipTrigger asChild>
+                         <span className="flex items-center gap-1">
+                           Desconhecido
+                           <HelpCircle className="w-3 h-3" />
+                         </span>
+                       </TooltipTrigger>
+                       <TooltipContent>
+                         <p className="text-sm">Item não encontrado na hierarquia Meta. Sincronize os dados.</p>
+                       </TooltipContent>
+                     </Tooltip>
+                   ) : 'Misto'}
                 </Badge>
               ) : '-'}
             </TableCell>
             <TableCell className="text-right">
-              <span className={metric.spend > 0 && metric.sales === 0 ? "text-red-500 font-medium" : ""}>
-                {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
-              </span>
+              <div className="flex items-center justify-end gap-1">
+                <span className={metric.spend > 0 && metric.sales === 0 ? "text-red-500 font-medium" : ""}>
+                  {metric.spend > 0 ? formatCurrency(metric.spend) : '-'}
+                </span>
+                {metric.spend > 0 && metric.sales === 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertTriangle className="w-3 h-3 text-red-500 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-sm">Investimento sem vendas atribuídas no período.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             </TableCell>
             <TableCell className="text-right">
               <span className={metric.sales === 0 && metric.spend > 0 ? "text-red-500" : ""}>
@@ -840,7 +904,18 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
                 <Badge variant={metric.roas >= 1 ? "default" : "destructive"} className="font-mono">
                   {metric.roas.toFixed(2)}x
                 </Badge>
-              ) : '-'}
+              ) : (
+                metric.hasSalesWithoutSpend ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-amber-500 cursor-help">∞</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-sm">ROAS infinito: vendas sem investimento no período.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : '-'
+              )}
             </TableCell>
             <TableCell className="text-right">
               <span className={metric.sales === 0 && metric.spend > 0 ? "text-red-500" : ""}>

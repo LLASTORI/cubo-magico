@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Palette, Image, Type, Eye } from 'lucide-react';
+import { Palette, Image, Type, Eye, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { MediaPickerDialog } from './MediaPickerDialog';
 
 export interface SurveyTheme {
   primary_color: string;
+  text_color: string;
   background_color: string;
   background_image?: string;
   logo_url?: string;
@@ -30,6 +32,7 @@ interface SurveyAppearanceSettingsProps {
 
 const defaultTheme: SurveyTheme = {
   primary_color: '#6366f1',
+  text_color: '#1e293b',
   background_color: '#f8fafc',
   show_progress: true,
   one_question_per_page: true,
@@ -44,6 +47,13 @@ const presetColors = [
   { name: 'Orange', value: '#f97316' },
   { name: 'Red', value: '#ef4444' },
   { name: 'Teal', value: '#14b8a6' },
+];
+
+const textColorPresets = [
+  { name: 'Escuro', value: '#1e293b' },
+  { name: 'Preto', value: '#000000' },
+  { name: 'Cinza', value: '#64748b' },
+  { name: 'Branco', value: '#ffffff' },
 ];
 
 export function SurveyAppearanceSettings({
@@ -71,7 +81,8 @@ export function SurveyAppearanceSettings({
             Personalize as cores da sua pesquisa
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          {/* Primary Color */}
           <div className="space-y-3">
             <Label>Cor Principal</Label>
             <div className="flex flex-wrap gap-2">
@@ -106,6 +117,45 @@ export function SurveyAppearanceSettings({
             </div>
           </div>
 
+          {/* Text Color */}
+          <div className="space-y-3">
+            <Label>Cor do Texto</Label>
+            <div className="flex flex-wrap gap-2">
+              {textColorPresets.map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => updateTheme({ text_color: color.value })}
+                  className={`w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 ${
+                    currentTheme.text_color === color.value 
+                      ? 'border-foreground ring-2 ring-offset-2 ring-foreground/20' 
+                      : 'border-muted'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={currentTheme.text_color}
+                  onChange={(e) => updateTheme({ text_color: e.target.value })}
+                  className="w-10 h-10 p-1 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={currentTheme.text_color}
+                  onChange={(e) => updateTheme({ text_color: e.target.value })}
+                  className="w-24 font-mono text-sm"
+                  placeholder="#1e293b"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cor de títulos e textos das perguntas
+            </p>
+          </div>
+
+          {/* Background Color */}
           <div className="space-y-3">
             <Label>Cor de Fundo</Label>
             <div className="flex items-center gap-2">
@@ -156,31 +206,81 @@ export function SurveyAppearanceSettings({
             Branding
           </CardTitle>
           <CardDescription>
-            Adicione sua logo e imagem de fundo
+            Adicione sua logo e imagem de fundo da biblioteca de mídias
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Logo */}
           <div className="space-y-2">
-            <Label>URL da Logo</Label>
-            <Input
-              type="url"
-              value={currentTheme.logo_url || ''}
-              onChange={(e) => updateTheme({ logo_url: e.target.value || undefined })}
-              placeholder="https://sua-empresa.com/logo.png"
-            />
+            <Label>Logo</Label>
+            <div className="flex items-center gap-3">
+              {currentTheme.logo_url && (
+                <div className="relative h-12 w-auto">
+                  <img 
+                    src={currentTheme.logo_url} 
+                    alt="Logo" 
+                    className="h-12 w-auto object-contain rounded border bg-muted/50 p-1"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-5 w-5"
+                    onClick={() => updateTheme({ logo_url: undefined })}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+              <MediaPickerDialog
+                value={currentTheme.logo_url}
+                onChange={(url) => updateTheme({ logo_url: url })}
+                label="Logo"
+                filterType="image"
+              >
+                <Button variant="outline" size="sm">
+                  <Image className="h-4 w-4 mr-2" />
+                  {currentTheme.logo_url ? 'Alterar logo' : 'Selecionar logo'}
+                </Button>
+              </MediaPickerDialog>
+            </div>
             <p className="text-xs text-muted-foreground">
               A logo aparecerá nas telas de boas-vindas e agradecimento
             </p>
           </div>
 
+          {/* Background Image */}
           <div className="space-y-2">
-            <Label>URL da Imagem de Fundo (opcional)</Label>
-            <Input
-              type="url"
-              value={currentTheme.background_image || ''}
-              onChange={(e) => updateTheme({ background_image: e.target.value || undefined })}
-              placeholder="https://sua-empresa.com/background.jpg"
-            />
+            <Label>Imagem de Fundo (opcional)</Label>
+            <div className="flex items-center gap-3">
+              {currentTheme.background_image && (
+                <div className="relative h-16 w-24">
+                  <img 
+                    src={currentTheme.background_image} 
+                    alt="Fundo" 
+                    className="h-16 w-24 object-cover rounded border"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-5 w-5"
+                    onClick={() => updateTheme({ background_image: undefined })}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+              <MediaPickerDialog
+                value={currentTheme.background_image}
+                onChange={(url) => updateTheme({ background_image: url })}
+                label="Imagem de Fundo"
+                filterType="image"
+              >
+                <Button variant="outline" size="sm">
+                  <Image className="h-4 w-4 mr-2" />
+                  {currentTheme.background_image ? 'Alterar fundo' : 'Selecionar fundo'}
+                </Button>
+              </MediaPickerDialog>
+            </div>
           </div>
         </CardContent>
       </Card>

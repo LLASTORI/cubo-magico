@@ -185,28 +185,76 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Save response
-    const { data: response, error: responseError } = await supabase
+    // Check if contact already responded to this survey (hybrid approach)
+    const { data: existingResponse } = await supabase
       .from('survey_responses')
-      .insert({
-        survey_id: survey.id,
-        project_id: projectId,
-        contact_id: contact.id,
-        email,
-        answers: processedAnswers,
-        source: 'webhook',
-        metadata: {
-          ...payload.metadata,
-          webhook_key_id: webhookKey.id,
-          webhook_key_name: webhookKey.name,
-        },
-      })
-      .select()
-      .single();
+      .select('*')
+      .eq('survey_id', survey.id)
+      .eq('contact_id', contact.id)
+      .maybeSingle();
 
-    if (responseError) {
-      console.error('Error saving response:', responseError);
-      throw responseError;
+    let response;
+
+    if (existingResponse) {
+      // Update existing response, preserving history in metadata
+      const previousVersions = existingResponse.metadata?.previous_versions || [];
+      previousVersions.push({
+        answers: existingResponse.answers,
+        submitted_at: existingResponse.submitted_at,
+        updated_at: existingResponse.updated_at,
+      });
+
+      const { data: updatedResponse, error: updateError } = await supabase
+        .from('survey_responses')
+        .update({
+          answers: processedAnswers,
+          metadata: {
+            ...payload.metadata,
+            webhook_key_id: webhookKey.id,
+            webhook_key_name: webhookKey.name,
+            previous_versions: previousVersions,
+            times_responded: previousVersions.length + 1,
+          },
+          submitted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingResponse.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error updating response:', updateError);
+        throw updateError;
+      }
+      response = updatedResponse;
+      console.log(`Updated existing response ${response.id} (version ${previousVersions.length + 1})`);
+    } else {
+      // Create new response
+      const { data: newResponse, error: responseError } = await supabase
+        .from('survey_responses')
+        .insert({
+          survey_id: survey.id,
+          project_id: projectId,
+          contact_id: contact.id,
+          email,
+          answers: processedAnswers,
+          source: 'webhook',
+          metadata: {
+            ...payload.metadata,
+            webhook_key_id: webhookKey.id,
+            webhook_key_name: webhookKey.name,
+            times_responded: 1,
+          },
+        })
+        .select()
+        .single();
+
+      if (responseError) {
+        console.error('Error saving response:', responseError);
+        throw responseError;
+      }
+      response = newResponse;
+      console.log('Created new response:', response.id);
     }
 
     // Process identity fields

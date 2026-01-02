@@ -52,6 +52,8 @@ import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { ContactAttributionCard } from '@/components/crm/ContactAttributionCard';
 import { ContactSegmentInsights } from '@/components/crm/ContactSegmentInsights';
+import { ContactIdentityTab } from '@/components/crm/ContactIdentityTab';
+import { ContactSurveysTab } from '@/components/crm/ContactSurveysTab';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -367,13 +369,15 @@ export default function CRMContactCard() {
               </CardContent>
             </Card>
 
-            {/* Tabs for Activities, Transactions, WhatsApp, Notes */}
+            {/* Tabs for Activities, Transactions, WhatsApp, Notes, Identity, Surveys */}
             <Tabs defaultValue="activities">
-              <TabsList className="w-full">
-                <TabsTrigger value="activities" className="flex-1">Atividades</TabsTrigger>
-                <TabsTrigger value="transactions" className="flex-1">Transações</TabsTrigger>
-                <TabsTrigger value="whatsapp" className="flex-1">WhatsApp</TabsTrigger>
-                <TabsTrigger value="notes" className="flex-1">Notas</TabsTrigger>
+              <TabsList className="w-full flex-wrap h-auto gap-1 p-1">
+                <TabsTrigger value="activities">Atividades</TabsTrigger>
+                <TabsTrigger value="transactions">Transações</TabsTrigger>
+                <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+                <TabsTrigger value="identity">Identidade</TabsTrigger>
+                <TabsTrigger value="surveys">Pesquisas</TabsTrigger>
+                <TabsTrigger value="notes">Notas</TabsTrigger>
               </TabsList>
 
               <TabsContent value="activities" className="mt-4">
@@ -416,6 +420,14 @@ export default function CRMContactCard() {
                     <ContactWhatsAppHistory contactId={contactId!} />
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="identity" className="mt-4">
+                <ContactIdentityTab contactId={contactId!} />
+              </TabsContent>
+
+              <TabsContent value="surveys" className="mt-4">
+                <ContactSurveysTab contactId={contactId!} />
               </TabsContent>
 
               <TabsContent value="notes" className="mt-4">

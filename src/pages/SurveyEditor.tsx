@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
-  Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy
+  Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet
 } from 'lucide-react';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { useSurveyWebhookKeys } from '@/hooks/useSurveyWebhookKeys';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { supabase } from '@/integrations/supabase/client';
+import { SurveyCSVImportLocal } from '@/components/surveys/SurveyCSVImportLocal';
 
 const QUESTION_TYPES = [
   { value: 'text', label: 'Texto Livre', icon: Type },
@@ -182,6 +183,10 @@ export default function SurveyEditor() {
             <TabsTrigger value="questions">Perguntas</TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
             <TabsTrigger value="integrations">Integrações</TabsTrigger>
+            <TabsTrigger value="import">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Importar CSV
+            </TabsTrigger>
           </TabsList>
 
           {/* Questions Tab */}
@@ -378,6 +383,14 @@ Headers: x-api-key: {sua_api_key}
                 </Card>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* CSV Import Tab */}
+          <TabsContent value="import" className="space-y-6">
+            <SurveyCSVImportLocal 
+              surveyId={surveyId!} 
+              questions={survey.survey_questions || []} 
+            />
           </TabsContent>
         </Tabs>
       </main>

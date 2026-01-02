@@ -717,7 +717,7 @@ function CommentRow({ comment, onOpenReply, onOpenSurvey }: {
           </span>
           {crmContact && (
             <Link 
-              to={`/crm/contato/${crmContact.id}`}
+              to={`/crm/contact/${crmContact.id}`}
               className="flex items-center gap-1 text-xs text-primary hover:underline"
             >
               <Users className="h-3 w-3" />

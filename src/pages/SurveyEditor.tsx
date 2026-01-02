@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
-  Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet
+  Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet,
+  Palette
 } from 'lucide-react';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,8 @@ import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { SurveyCSVImportLocal } from '@/components/surveys/SurveyCSVImportLocal';
+import { SurveyAppearanceSettings, SurveyTheme, SurveyMessages } from '@/components/surveys/SurveyAppearanceSettings';
+import { SurveyPreview } from '@/components/surveys/SurveyPreview';
 
 const QUESTION_TYPES = [
   { value: 'text', label: 'Texto Livre', icon: Type },
@@ -47,6 +50,11 @@ export default function SurveyEditor() {
   const { webhookKeys, createWebhookKey, deleteWebhookKey } = useSurveyWebhookKeys(surveyId);
   
   const [surveyData, setSurveyData] = useState({ name: '', description: '', objective: 'general', slug: '', status: 'draft' });
+  const [surveySettings, setSurveySettings] = useState<{
+    welcome_message?: string;
+    thank_you_message?: string;
+    theme?: SurveyTheme;
+  }>({});
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [newWebhookName, setNewWebhookName] = useState('');
 
@@ -59,14 +67,32 @@ export default function SurveyEditor() {
         slug: survey.slug || '',
         status: survey.status,
       });
+      // Parse settings for theme and messages
+      const settings = (survey.settings as any) || {};
+      setSurveySettings({
+        welcome_message: settings.welcome_message,
+        thank_you_message: settings.thank_you_message,
+        theme: settings.theme,
+      });
     }
   }, [survey]);
 
   const saveSurvey = async () => {
     if (!surveyId) return;
+    
+    // Merge settings with theme and messages
+    const currentSettings = (survey?.settings as any) || {};
+    const mergedSettings = {
+      ...currentSettings,
+      ...surveySettings,
+    };
+    
     const { error } = await supabase
       .from('surveys')
-      .update(surveyData)
+      .update({ 
+        ...surveyData,
+        settings: mergedSettings,
+      })
       .eq('id', surveyId);
 
     if (error) {
@@ -75,6 +101,22 @@ export default function SurveyEditor() {
       toast({ title: 'Pesquisa salva com sucesso' });
     }
   };
+
+  const handleThemeChange = (theme: SurveyTheme) => {
+    setSurveySettings(prev => ({ ...prev, theme }));
+  };
+
+  const handleMessagesChange = (messages: SurveyMessages) => {
+    setSurveySettings(prev => ({
+      ...prev,
+      welcome_message: messages.welcome_message,
+      thank_you_message: messages.thank_you_message,
+    }));
+  };
+
+  const publicUrl = surveyData.slug 
+    ? `${window.location.origin}/s/${surveyData.slug}` 
+    : undefined;
 
   const handleAddQuestion = async (type: string) => {
     const position = (survey?.survey_questions?.length || 0);
@@ -181,6 +223,10 @@ export default function SurveyEditor() {
         <Tabs defaultValue="questions" className="space-y-6">
           <TabsList>
             <TabsTrigger value="questions">Perguntas</TabsTrigger>
+            <TabsTrigger value="appearance">
+              <Palette className="h-4 w-4 mr-2" />
+              Aparência
+            </TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
             <TabsTrigger value="integrations">Integrações</TabsTrigger>
             <TabsTrigger value="import">
@@ -233,6 +279,65 @@ export default function SurveyEditor() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* Appearance Tab */}
+          <TabsContent value="appearance" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Settings Column */}
+              <div>
+                <SurveyAppearanceSettings
+                  theme={surveySettings.theme || {
+                    primary_color: '#6366f1',
+                    background_color: '#f8fafc',
+                    show_progress: true,
+                    one_question_per_page: true,
+                  }}
+                  messages={{
+                    welcome_message: surveySettings.welcome_message,
+                    thank_you_message: surveySettings.thank_you_message,
+                  }}
+                  onThemeChange={handleThemeChange}
+                  onMessagesChange={handleMessagesChange}
+                />
+              </div>
+
+              {/* Preview Column */}
+              <div className="lg:sticky lg:top-6 lg:self-start">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Eye className="h-5 w-5" />
+                      Preview
+                    </CardTitle>
+                    <CardDescription>
+                      Visualize como a pesquisa ficará para os respondentes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SurveyPreview
+                      surveyName={surveyData.name}
+                      surveyDescription={surveyData.description}
+                      welcomeMessage={surveySettings.welcome_message}
+                      thankYouMessage={surveySettings.thank_you_message}
+                      theme={surveySettings.theme || {
+                        primary_color: '#6366f1',
+                        background_color: '#f8fafc',
+                        show_progress: true,
+                        one_question_per_page: true,
+                      }}
+                      questions={(survey?.survey_questions || []).map(q => ({
+                        id: q.id,
+                        question_text: q.question_text,
+                        question_type: q.question_type,
+                        options: q.options as string[] | undefined,
+                      }))}
+                      publicUrl={publicUrl}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Settings Tab */}

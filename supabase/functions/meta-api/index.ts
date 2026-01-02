@@ -683,7 +683,26 @@ async function syncCampaigns(
   
   console.log(`Total campaigns fetched: ${allCampaigns.length}`)
   
-  // Prepare campaign records for upsert
+  // First, delete existing campaigns for this project and these account IDs
+  // This ensures we have fresh data with correct status
+  // Use delete+insert pattern (same as adsets/ads) for reliable sync
+  console.log(`Deleting existing campaigns for project ${projectId} and accounts:`, accountIds)
+  
+  for (const accountId of accountIds) {
+    const { error: deleteError } = await supabase
+      .from('meta_campaigns')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('ad_account_id', accountId)
+    
+    if (deleteError) {
+      console.error(`Error deleting campaigns for account ${accountId}:`, deleteError)
+    }
+  }
+  
+  console.log(`Deleted existing campaigns, now inserting ${allCampaigns.length} fresh records`)
+  
+  // Prepare campaign records for insert
   const campaignRecords = allCampaigns.map(campaign => ({
     project_id: projectId,
     ad_account_id: campaign.ad_account_id,
@@ -699,19 +718,17 @@ async function syncCampaigns(
     updated_at: new Date().toISOString(),
   }))
   
-  // Batch upsert campaigns
+  // Batch insert campaigns (fresh insert, not upsert)
   for (let i = 0; i < campaignRecords.length; i += DB_INSERT_BATCH_SIZE) {
     const batch = campaignRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
     const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
     const totalBatches = Math.ceil(campaignRecords.length / DB_INSERT_BATCH_SIZE)
     
-    console.log(`Upserting campaigns batch ${batchNum}/${totalBatches}...`)
+    console.log(`Inserting campaigns batch ${batchNum}/${totalBatches}...`)
     
     const { error } = await supabase
       .from('meta_campaigns')
-      .upsert(batch, {
-        onConflict: 'project_id,campaign_id',
-      })
+      .insert(batch)
     
     if (error) {
       console.error(`Campaigns batch ${batchNum} error:`, error)

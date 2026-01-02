@@ -50,13 +50,13 @@ export function SendSurveyDialog({
   const { toast } = useToast();
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('');
 
-  // Fetch active surveys for the project
+  // Fetch active surveys for the project (including slug)
   const { data: surveys, isLoading } = useQuery({
     queryKey: ['surveys-for-send', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('surveys')
-        .select('id, name, description, status')
+        .select('id, name, description, status, slug')
         .eq('project_id', projectId)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
@@ -80,16 +80,16 @@ export function SendSurveyDialog({
       : currentOrigin;
   };
 
-  // Generate public survey URL with pre-filled email
+  // Generate public survey URL with pre-filled email (using slug, not ID)
   const generateSurveyUrl = () => {
-    if (!selectedSurveyId) return '';
+    if (!selectedSurveyId || !selectedSurvey?.slug) return '';
     const baseUrl = getBaseUrl();
     const params = new URLSearchParams({
       email: contactEmail,
       contact_id: contactId,
       source: 'social_listening',
     });
-    return `${baseUrl}/s/${selectedSurveyId}?${params.toString()}`;
+    return `${baseUrl}/s/${selectedSurvey.slug}?${params.toString()}`;
   };
 
   const surveyUrl = generateSurveyUrl();

@@ -28,6 +28,7 @@ interface SurveyQuestion {
 
 interface SurveyTheme {
   primary_color: string;
+  text_color?: string;
   background_color: string;
   background_image?: string;
   logo_url?: string;
@@ -83,6 +84,7 @@ type ScreenState = 'welcome' | 'questions' | 'email' | 'submitting' | 'success';
 
 const defaultTheme: SurveyTheme = {
   primary_color: '#6366f1',
+  text_color: '#1e293b',
   background_color: '#f8fafc',
   show_progress: true,
   one_question_per_page: true,
@@ -347,6 +349,7 @@ export default function SurveyPublic() {
                 logoUrl={theme.logo_url}
                 onStart={() => setScreenState('questions')}
                 primaryColor={theme.primary_color}
+                textColor={theme.text_color}
               />
             )}
 
@@ -374,7 +377,10 @@ export default function SurveyPublic() {
                     )}
                   </div>
                   
-                  <h2 className="text-2xl md:text-3xl font-semibold leading-tight">
+                  <h2 
+                    className="text-2xl md:text-3xl font-semibold leading-tight"
+                    style={{ color: theme.text_color }}
+                  >
                     {currentQuestion.question_text}
                   </h2>
                   
@@ -525,6 +531,7 @@ export default function SurveyPublic() {
                 message={survey?.settings?.thank_you_message}
                 logoUrl={theme.logo_url}
                 primaryColor={theme.primary_color}
+                textColor={theme.text_color}
               />
             )}
           </AnimatePresence>

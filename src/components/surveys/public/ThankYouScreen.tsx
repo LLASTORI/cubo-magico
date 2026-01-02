@@ -5,12 +5,14 @@ interface ThankYouScreenProps {
   message?: string;
   logoUrl?: string;
   primaryColor?: string;
+  textColor?: string;
 }
 
 export function ThankYouScreen({ 
   message = 'Obrigado por participar! Sua resposta foi enviada com sucesso.',
   logoUrl,
-  primaryColor = '#6366f1'
+  primaryColor = '#6366f1',
+  textColor = '#1e293b'
 }: ThankYouScreenProps) {
   return (
     <motion.div
@@ -59,6 +61,7 @@ export function ThankYouScreen({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="text-2xl md:text-3xl font-bold mb-4"
+        style={{ color: textColor }}
       >
         Obrigado!
       </motion.h2>

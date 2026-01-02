@@ -590,6 +590,76 @@ export type Database = {
           },
         ]
       }
+      contact_identity_events: {
+        Row: {
+          confidence_score: number | null
+          contact_id: string
+          field_name: string
+          field_value: string
+          id: string
+          is_declared: boolean | null
+          metadata: Json | null
+          previous_value: string | null
+          project_id: string
+          recorded_at: string
+          source_id: string | null
+          source_name: string | null
+          source_type: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          contact_id: string
+          field_name: string
+          field_value: string
+          id?: string
+          is_declared?: boolean | null
+          metadata?: Json | null
+          previous_value?: string | null
+          project_id: string
+          recorded_at?: string
+          source_id?: string | null
+          source_name?: string | null
+          source_type: string
+        }
+        Update: {
+          confidence_score?: number | null
+          contact_id?: string
+          field_name?: string
+          field_value?: string
+          id?: string
+          is_declared?: boolean | null
+          metadata?: Json | null
+          previous_value?: string | null
+          project_id?: string
+          recorded_at?: string
+          source_id?: string | null
+          source_name?: string | null
+          source_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_identity_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_identity_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_identity_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_activities: {
         Row: {
           activity_type: string
@@ -3894,6 +3964,243 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_questions: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          identity_confidence_weight: number | null
+          identity_field_target: string | null
+          is_required: boolean | null
+          options: Json | null
+          position: number
+          question_text: string
+          question_type: string
+          settings: Json | null
+          survey_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          identity_confidence_weight?: number | null
+          identity_field_target?: string | null
+          is_required?: boolean | null
+          options?: Json | null
+          position?: number
+          question_text: string
+          question_type: string
+          settings?: Json | null
+          survey_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          identity_confidence_weight?: number | null
+          identity_field_target?: string | null
+          is_required?: boolean | null
+          options?: Json | null
+          position?: number
+          question_text?: string
+          question_type?: string
+          settings?: Json | null
+          survey_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_questions_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_responses: {
+        Row: {
+          answers: Json
+          contact_id: string | null
+          created_at: string
+          email: string
+          id: string
+          metadata: Json | null
+          processed_at: string | null
+          project_id: string
+          source: string
+          submitted_at: string
+          survey_id: string
+        }
+        Insert: {
+          answers?: Json
+          contact_id?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          metadata?: Json | null
+          processed_at?: string | null
+          project_id: string
+          source?: string
+          submitted_at?: string
+          survey_id: string
+        }
+        Update: {
+          answers?: Json
+          contact_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          metadata?: Json | null
+          processed_at?: string | null
+          project_id?: string
+          source?: string
+          submitted_at?: string
+          survey_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_responses_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "survey_responses_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_responses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_responses_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_webhook_keys: {
+        Row: {
+          api_key: string
+          created_at: string
+          default_tags: string[] | null
+          field_mappings: Json | null
+          id: string
+          is_active: boolean | null
+          last_used_at: string | null
+          name: string
+          project_id: string
+          survey_id: string
+          updated_at: string
+          usage_count: number | null
+        }
+        Insert: {
+          api_key?: string
+          created_at?: string
+          default_tags?: string[] | null
+          field_mappings?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_used_at?: string | null
+          name: string
+          project_id: string
+          survey_id: string
+          updated_at?: string
+          usage_count?: number | null
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          default_tags?: string[] | null
+          field_mappings?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_used_at?: string | null
+          name?: string
+          project_id?: string
+          survey_id?: string
+          updated_at?: string
+          usage_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_webhook_keys_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_webhook_keys_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      surveys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          objective: string
+          project_id: string
+          settings: Json | null
+          slug: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          objective?: string
+          project_id: string
+          settings?: Json | null
+          slug?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          objective?: string
+          project_id?: string
+          settings?: Json | null
+          slug?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "surveys_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

@@ -9,7 +9,8 @@ import {
   MessageCircle,
   Plus,
   Settings,
-  BarChart3
+  BarChart3,
+  ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +57,12 @@ const navItems: NavItem[] = [
     icon: Workflow, 
     path: '/automations',
     matchPaths: ['/automations']
+  },
+  { 
+    label: 'Pesquisas', 
+    icon: ClipboardList, 
+    path: '/surveys',
+    matchPaths: ['/surveys']
   },
   { 
     label: 'Chat ao Vivo', 

@@ -38,6 +38,10 @@ import WhatsAppLiveChat from "./pages/WhatsAppLiveChat";
 import AutomationFlows from "./pages/AutomationFlows";
 import AutomationFlowEditor from "./pages/AutomationFlowEditor";
 import AutomationExecutions from "./pages/AutomationExecutions";
+import Surveys from "./pages/Surveys";
+import SurveyEditor from "./pages/SurveyEditor";
+import SurveyResponses from "./pages/SurveyResponses";
+import SurveyPublic from "./pages/SurveyPublic";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -61,6 +65,7 @@ const App = () => (
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/terms-of-service" element={<TermsOfService />} />
                 <Route path="/data-deletion" element={<DataDeletion />} />
+                <Route path="/s/:slug" element={<SurveyPublic />} />
                 <Route path="/" element={
                   <ProtectedRoute>
                     <ProjectOverview />
@@ -200,6 +205,21 @@ const App = () => (
                 <Route path="/automations/executions" element={
                   <ProtectedRoute>
                     <AutomationExecutions />
+                  </ProtectedRoute>
+                } />
+                <Route path="/surveys" element={
+                  <ProtectedRoute>
+                    <Surveys />
+                  </ProtectedRoute>
+                } />
+                <Route path="/surveys/:surveyId" element={
+                  <ProtectedRoute>
+                    <SurveyEditor />
+                  </ProtectedRoute>
+                } />
+                <Route path="/surveys/:surveyId/responses" element={
+                  <ProtectedRoute>
+                    <SurveyResponses />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

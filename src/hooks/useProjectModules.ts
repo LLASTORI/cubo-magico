@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys';
 
 export interface ProjectModule {
   id: string;
@@ -57,6 +57,13 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     description: 'Fluxos de automação para WhatsApp com editor visual',
     icon: 'workflow',
     requiresModule: 'whatsapp',
+  },
+  {
+    key: 'surveys',
+    name: 'Pesquisa Inteligente',
+    description: 'Coleta de dados declarados e enriquecimento de identidade',
+    icon: 'clipboard-list',
+    requiresModule: 'crm',
   },
 ];
 

@@ -51,6 +51,8 @@ max_duration = 300
 verify_jwt = false
 max_duration = 540
 
-[functions.social-comments-api]
-verify_jwt = true
-max_duration = 300
+[functions.survey-webhook]
+verify_jwt = false
+
+[functions.survey-public]
+verify_jwt = false

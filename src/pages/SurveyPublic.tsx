@@ -114,35 +114,27 @@ export default function SurveyPublic() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('surveys')
-        .select(`
-          id,
-          name,
-          description,
-          settings,
-          survey_questions (
-            id,
-            question_text,
-            description,
-            question_type,
-            is_required,
-            options,
-            settings,
-            position,
-            identity_field_target
-          )
-        `)
-        .eq('slug', slug)
-        .eq('status', 'active')
-        .single();
+      try {
+        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-public?slug=${encodeURIComponent(slug)}`;
+        const res = await fetch(fnUrl, {
+          method: 'GET',
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+        });
 
-      if (error || !data) {
+        if (!res.ok) {
+          setNotFound(true);
+        } else {
+          const data = (await res.json()) as RawSurveyData;
+          data.survey_questions?.sort((a, b) => a.position - b.position);
+          setSurvey(parseSurveyData(data));
+        }
+      } catch {
         setNotFound(true);
-      } else {
-        data.survey_questions.sort((a, b) => a.position - b.position);
-        setSurvey(parseSurveyData(data as RawSurveyData));
       }
+
       setLoading(false);
     };
 

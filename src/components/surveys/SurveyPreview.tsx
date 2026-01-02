@@ -27,6 +27,7 @@ interface SurveyPreviewProps {
   thankYouMessage?: string;
   theme: SurveyTheme;
   questions: Question[];
+  previewUrl?: string;
   publicUrl?: string;
 }
 
@@ -44,6 +45,7 @@ export function SurveyPreview({
   thankYouMessage,
   theme,
   questions,
+  previewUrl,
   publicUrl,
 }: SurveyPreviewProps) {
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
@@ -103,16 +105,28 @@ export function SurveyPreview({
           </Button>
         </div>
         
-        {publicUrl && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.open(publicUrl, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Abrir Preview
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {previewUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(previewUrl, '_blank')}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Abrir aqui
+            </Button>
+          )}
+          {publicUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(publicUrl, '_blank')}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Abrir no domínio
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Preview Container */}

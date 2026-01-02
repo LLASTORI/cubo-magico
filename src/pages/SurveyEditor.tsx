@@ -114,18 +114,21 @@ export default function SurveyEditor() {
     }));
   };
 
-  // Use production URL if available, fallback to current origin
+  const previewUrl = surveyData.slug
+    ? `${window.location.origin}/s/${surveyData.slug}`
+    : undefined;
+
+  // Use production URL when we're in the preview/sandbox.
   const getBaseUrl = () => {
     const origin = window.location.origin;
-    // If we're on a lovable preview/sandbox URL, show the production URL
     if (origin.includes('lovable.app') || origin.includes('lovableproject.com')) {
       return 'https://cubomagico.leandrolastori.com.br';
     }
     return origin;
   };
 
-  const publicUrl = surveyData.slug 
-    ? `${getBaseUrl()}/s/${surveyData.slug}` 
+  const publicUrl = surveyData.slug
+    ? `${getBaseUrl()}/s/${surveyData.slug}`
     : undefined;
 
   const handleAddQuestion = async (type: string) => {
@@ -342,6 +345,7 @@ export default function SurveyEditor() {
                         question_type: q.question_type,
                         options: q.options as string[] | undefined,
                       }))}
+                      previewUrl={previewUrl}
                       publicUrl={publicUrl}
                     />
                   </CardContent>

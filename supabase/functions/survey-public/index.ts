@@ -91,7 +91,9 @@ Deno.serve(async (req) => {
             is_required,
             options,
             settings,
-            position
+            position,
+            identity_field_target,
+            identity_confidence_weight
           )
         `)
         .eq('slug', slug)

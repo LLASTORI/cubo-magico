@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
@@ -313,76 +313,16 @@ export default function SurveyEditor() {
 
           {/* Integrations Tab */}
           <TabsContent value="integrations" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Link2 className="h-5 w-5" />
-                  Webhooks
-                </CardTitle>
-                <CardDescription>
-                  Receba respostas de sistemas externos via API
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Nome do webhook"
-                    value={newWebhookName}
-                    onChange={(e) => setNewWebhookName(e.target.value)}
-                  />
-                  <Button onClick={handleCreateWebhook} disabled={createWebhookKey.isPending}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Criar
-                  </Button>
-                </div>
-
-                {webhookKeys && webhookKeys.length > 0 && (
-                  <div className="space-y-2">
-                    {webhookKeys.map((key) => (
-                      <div key={key.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{key.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{key.api_key}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {key.usage_count} requisições
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => copyWebhookUrl(key.api_key)}>
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => deleteWebhookKey.mutateAsync(key.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <Card className="bg-muted/50">
-                  <CardContent className="pt-4">
-                    <p className="text-sm font-medium mb-2">Exemplo de Payload</p>
-                    <pre className="text-xs bg-background p-3 rounded-lg overflow-x-auto">
-{`POST /functions/v1/survey-webhook
-Headers: x-api-key: {sua_api_key}
-
-{
-  "email": "usuario@email.com",
-  "answers": {
-    "pergunta_1": "Resposta",
-    "nome": "João Silva"
-  }
-}`}
-                    </pre>
-                  </CardContent>
-                </Card>
-              </CardContent>
-            </Card>
+            <IntegrationsDocumentation 
+              webhookKeys={webhookKeys || []}
+              newWebhookName={newWebhookName}
+              setNewWebhookName={setNewWebhookName}
+              onCreateWebhook={handleCreateWebhook}
+              onDeleteWebhook={(id) => deleteWebhookKey.mutateAsync(id)}
+              onCopyUrl={copyWebhookUrl}
+              isCreating={createWebhookKey.isPending}
+              questions={survey.survey_questions || []}
+            />
           </TabsContent>
 
           {/* CSV Import Tab */}
@@ -391,6 +331,7 @@ Headers: x-api-key: {sua_api_key}
               surveyId={surveyId!} 
               questions={survey.survey_questions || []} 
             />
+            <CSVImportDocumentation questions={survey.survey_questions || []} />
           </TabsContent>
         </Tabs>
       </main>
@@ -410,6 +351,18 @@ interface QuestionCardProps {
 function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelete }: QuestionCardProps) {
   const questionType = QUESTION_TYPES.find(t => t.value === question.question_type);
   const Icon = questionType?.icon || Type;
+  
+  // Local state for smooth typing - only updates DB on blur
+  const [localText, setLocalText] = useState(question.question_text);
+  const [localDescription, setLocalDescription] = useState(question.description || '');
+  const [localOptions, setLocalOptions] = useState((question.options as string[])?.join('\n') || '');
+  
+  // Sync local state when question changes from server
+  useEffect(() => {
+    setLocalText(question.question_text);
+    setLocalDescription(question.description || '');
+    setLocalOptions((question.options as string[])?.join('\n') || '');
+  }, [question.id, question.question_text, question.description, question.options]);
 
   return (
     <Card>
@@ -420,8 +373,13 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
           <Icon className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1">
             <Input
-              value={question.question_text}
-              onChange={(e) => onUpdate({ question_text: e.target.value })}
+              value={localText}
+              onChange={(e) => setLocalText(e.target.value)}
+              onBlur={() => {
+                if (localText !== question.question_text) {
+                  onUpdate({ question_text: localText });
+                }
+              }}
               className="border-0 p-0 h-auto font-medium focus-visible:ring-0"
             />
           </div>
@@ -444,8 +402,13 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
               <div className="space-y-2">
                 <Label>Descrição (opcional)</Label>
                 <Textarea
-                  value={question.description || ''}
-                  onChange={(e) => onUpdate({ description: e.target.value })}
+                  value={localDescription}
+                  onChange={(e) => setLocalDescription(e.target.value)}
+                  onBlur={() => {
+                    if (localDescription !== (question.description || '')) {
+                      onUpdate({ description: localDescription });
+                    }
+                  }}
                   placeholder="Texto de ajuda para a pergunta"
                 />
               </div>
@@ -496,8 +459,15 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
                   <div className="space-y-2">
                     <Label>Opções (uma por linha)</Label>
                     <Textarea
-                      value={(question.options as string[])?.join('\n') || ''}
-                      onChange={(e) => onUpdate({ options: e.target.value.split('\n').filter(Boolean) })}
+                      value={localOptions}
+                      onChange={(e) => setLocalOptions(e.target.value)}
+                      onBlur={() => {
+                        const newOptions = localOptions.split('\n').filter(Boolean);
+                        const currentOptions = (question.options as string[]) || [];
+                        if (JSON.stringify(newOptions) !== JSON.stringify(currentOptions)) {
+                          onUpdate({ options: newOptions });
+                        }
+                      }}
                       placeholder="Opção 1&#10;Opção 2&#10;Opção 3"
                     />
                   </div>
@@ -532,6 +502,428 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
           </div>
         </CollapsibleContent>
       </Collapsible>
+    </Card>
+  );
+}
+
+// =================== INTEGRATIONS DOCUMENTATION ===================
+
+interface IntegrationsDocProps {
+  webhookKeys: any[];
+  newWebhookName: string;
+  setNewWebhookName: (v: string) => void;
+  onCreateWebhook: () => void;
+  onDeleteWebhook: (id: string) => void;
+  onCopyUrl: (apiKey: string) => void;
+  isCreating: boolean;
+  questions: SurveyQuestion[];
+}
+
+function IntegrationsDocumentation({ 
+  webhookKeys, newWebhookName, setNewWebhookName, 
+  onCreateWebhook, onDeleteWebhook, onCopyUrl, isCreating, questions 
+}: IntegrationsDocProps) {
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-webhook`;
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+
+  const handleCopyKey = async (apiKey: string, keyId: string) => {
+    await navigator.clipboard.writeText(apiKey);
+    setCopiedKey(keyId);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const maskApiKey = (key: string) => {
+    if (key.length <= 16) return key;
+    return `${key.slice(0, 8)}${'•'.repeat(24)}${key.slice(-8)}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Webhook Keys Management */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Link2 className="h-5 w-5" />
+                API Keys do Webhook
+              </CardTitle>
+              <CardDescription>
+                Gerencie as chaves de API para receber respostas de ferramentas externas
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Nome do webhook (ex: Typeform, ActiveCampaign)"
+              value={newWebhookName}
+              onChange={(e) => setNewWebhookName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onCreateWebhook()}
+            />
+            <Button onClick={onCreateWebhook} disabled={isCreating}>
+              <Plus className="h-4 w-4 mr-2" />
+              Criar
+            </Button>
+          </div>
+
+          {webhookKeys && webhookKeys.length > 0 && (
+            <div className="space-y-2">
+              {webhookKeys.map((key) => (
+                <div key={key.id} className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{key.name}</p>
+                      <Badge variant={key.is_active ? 'default' : 'secondary'}>
+                        {key.is_active ? 'Ativa' : 'Inativa'}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        {showKey[key.id] ? key.api_key : maskApiKey(key.api_key)}
+                      </code>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6"
+                        onClick={() => setShowKey(prev => ({ ...prev, [key.id]: !prev[key.id] }))}
+                      >
+                        {showKey[key.id] ? <Eye className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {key.usage_count} requisições 
+                      {key.last_used_at && ` • Última: ${new Date(key.last_used_at).toLocaleDateString('pt-BR')}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => handleCopyKey(key.api_key, key.id)}
+                    >
+                      {copiedKey === key.id ? <Save className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onCopyUrl(key.api_key)}>
+                      <Link2 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteWebhook(key.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Documentation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5" />
+            Documentação do Webhook
+          </CardTitle>
+          <CardDescription>
+            Guia completo para integrar sistemas externos com esta pesquisa
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Endpoint */}
+          <div className="p-4 rounded-lg border bg-muted/50">
+            <h4 className="font-medium mb-2">Endpoint</h4>
+            <div className="flex items-center gap-2">
+              <Badge>POST</Badge>
+              <code className="text-sm bg-background px-3 py-1.5 rounded font-mono flex-1 overflow-x-auto">
+                {webhookUrl}
+              </code>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => navigator.clipboard.writeText(webhookUrl)}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Headers */}
+          <div className="space-y-3">
+            <h4 className="font-medium">Headers Obrigatórios</h4>
+            <div className="grid gap-2">
+              <div className="p-3 rounded bg-muted/50 flex items-center justify-between">
+                <div>
+                  <code className="text-sm font-semibold">Content-Type</code>
+                  <p className="text-xs text-muted-foreground mt-1">Tipo do conteúdo da requisição</p>
+                </div>
+                <code className="text-sm bg-background px-2 py-1 rounded">application/json</code>
+              </div>
+              <div className="p-3 rounded bg-muted/50 flex items-center justify-between">
+                <div>
+                  <code className="text-sm font-semibold">x-api-key</code>
+                  <p className="text-xs text-muted-foreground mt-1">Chave de autenticação da API</p>
+                </div>
+                <code className="text-sm bg-background px-2 py-1 rounded">sua_api_key_aqui</code>
+              </div>
+            </div>
+          </div>
+
+          {/* Payload Structure */}
+          <div className="space-y-3">
+            <h4 className="font-medium">Estrutura do Payload</h4>
+            <div className="p-4 rounded-lg border">
+              <pre className="text-xs overflow-x-auto bg-background p-4 rounded-lg">
+{`{
+  "email": "usuario@email.com",  // Obrigatório
+  "answers": {
+    "question_id_1": "Resposta da pergunta 1",
+    "question_id_2": "Resposta da pergunta 2",
+    // ou usando texto da pergunta:
+    "Qual seu nome?": "João Silva",
+    "Como conheceu a empresa?": "Indicação de amigo"
+  },
+  // Campos opcionais:
+  "name": "Nome do respondente",
+  "phone": "11999999999",
+  "metadata": {
+    "source": "typeform",
+    "campaign": "lancamento-2024"
+  }
+}`}
+              </pre>
+            </div>
+          </div>
+
+          {/* Questions Reference */}
+          {questions.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="font-medium">Perguntas desta Pesquisa</h4>
+              <p className="text-sm text-muted-foreground">
+                Use os IDs ou textos abaixo como chaves no objeto <code>answers</code>
+              </p>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {questions.map((q, i) => (
+                  <div key={q.id} className="p-3 rounded border bg-card flex items-start gap-3">
+                    <span className="text-xs font-medium text-muted-foreground w-6">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{q.question_text}</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {q.question_type}
+                        </Badge>
+                        {q.identity_field_target && (
+                          <Badge variant="secondary" className="text-xs">
+                            → {q.identity_field_target}
+                          </Badge>
+                        )}
+                      </div>
+                      <code className="text-xs text-muted-foreground mt-1 block truncate">
+                        ID: {q.id}
+                      </code>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* cURL Example */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium">Exemplo cURL</h4>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  const example = `curl -X POST "${webhookUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: SUA_API_KEY_AQUI" \\
+  -d '{
+    "email": "respondente@email.com",
+    "answers": {
+      "Qual seu nome?": "João Silva",
+      "Como avalia nosso produto?": "Excelente"
+    }
+  }'`;
+                  navigator.clipboard.writeText(example);
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar
+              </Button>
+            </div>
+            <pre className="text-xs overflow-x-auto bg-muted p-4 rounded-lg">
+{`curl -X POST "${webhookUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: SUA_API_KEY_AQUI" \\
+  -d '{
+    "email": "respondente@email.com",
+    "answers": {
+      "Qual seu nome?": "João Silva",
+      "Como avalia nosso produto?": "Excelente"
+    }
+  }'`}
+            </pre>
+          </div>
+
+          {/* Response Codes */}
+          <div className="space-y-3">
+            <h4 className="font-medium">Códigos de Resposta</h4>
+            <div className="grid gap-2">
+              <div className="flex items-center gap-3 p-3 rounded bg-green-500/10 border border-green-500/20">
+                <Badge className="bg-green-500">200</Badge>
+                <span className="text-sm">Resposta registrada com sucesso</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded bg-yellow-500/10 border border-yellow-500/20">
+                <Badge className="bg-yellow-500 text-yellow-950">400</Badge>
+                <span className="text-sm">Payload inválido ou email ausente</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded bg-red-500/10 border border-red-500/20">
+                <Badge className="bg-red-500">401</Badge>
+                <span className="text-sm">API Key inválida ou ausente</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded bg-red-500/10 border border-red-500/20">
+                <Badge className="bg-red-500">500</Badge>
+                <span className="text-sm">Erro interno do servidor</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Identity Fields Info */}
+          <div className="p-4 rounded-lg border bg-blue-500/10 border-blue-500/20">
+            <h5 className="font-medium text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-2">
+              <UserCircle className="h-4 w-4" />
+              Campos de Identidade
+            </h5>
+            <p className="text-sm text-muted-foreground">
+              Perguntas do tipo "Campo de Identidade" atualizam automaticamente os dados do contato no CRM.
+              Por exemplo, uma pergunta mapeada para "name" atualizará o nome do contato quando respondida.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// =================== CSV IMPORT DOCUMENTATION ===================
+
+interface CSVDocProps {
+  questions: SurveyQuestion[];
+}
+
+function CSVImportDocumentation({ questions }: CSVDocProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileSpreadsheet className="h-5 w-5" />
+          Documentação da Importação CSV
+        </CardTitle>
+        <CardDescription>
+          Guia completo para preparar seu arquivo CSV
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Required Columns */}
+        <div className="space-y-3">
+          <h4 className="font-medium">Colunas Obrigatórias</h4>
+          <div className="p-3 rounded bg-muted/50">
+            <code className="text-sm font-semibold text-primary">email</code>
+            <p className="text-sm text-muted-foreground mt-1">
+              O email é obrigatório para identificar o contato. Aceita também: <code>e-mail</code>
+            </p>
+          </div>
+        </div>
+
+        {/* Optional Columns */}
+        <div className="space-y-3">
+          <h4 className="font-medium">Colunas das Perguntas</h4>
+          <p className="text-sm text-muted-foreground">
+            Cada coluna adicional pode ser mapeada para uma pergunta da pesquisa.
+            O sistema tenta fazer o mapeamento automático pelo texto da pergunta.
+          </p>
+          
+          {questions.length > 0 && (
+            <div className="space-y-2">
+              {questions.map((q, i) => (
+                <div key={q.id} className="p-3 rounded border bg-card">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-medium text-muted-foreground w-6">{i + 1}</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{q.question_text}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">{q.question_type}</Badge>
+                        {q.identity_field_target && (
+                          <Badge variant="secondary" className="text-xs">
+                            Atualiza: {q.identity_field_target}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Example CSV */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Exemplo de CSV</h4>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                const header = ['email', ...questions.slice(0, 3).map(q => q.question_text)].join(';');
+                const row1 = ['joao@email.com', 'João Silva', 'Excelente', 'Facebook'].slice(0, questions.length + 1).join(';');
+                const row2 = ['maria@email.com', 'Maria Santos', 'Bom', 'Google'].slice(0, questions.length + 1).join(';');
+                const csv = `${header}\n${row1}\n${row2}`;
+                navigator.clipboard.writeText(csv);
+              }}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copiar Exemplo
+            </Button>
+          </div>
+          <pre className="text-xs overflow-x-auto bg-muted p-4 rounded-lg">
+{`email;${questions.slice(0, 3).map(q => q.question_text).join(';') || 'Pergunta 1;Pergunta 2'}
+joao@email.com;Resposta 1;Resposta 2
+maria@email.com;Resposta A;Resposta B
+pedro@email.com;Resposta X;Resposta Y`}
+          </pre>
+        </div>
+
+        {/* Separators */}
+        <div className="space-y-3">
+          <h4 className="font-medium">Separadores Aceitos</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded bg-muted/50 text-center">
+              <code className="text-lg">;</code>
+              <p className="text-sm text-muted-foreground mt-1">Ponto e vírgula (padrão BR)</p>
+            </div>
+            <div className="p-3 rounded bg-muted/50 text-center">
+              <code className="text-lg">,</code>
+              <p className="text-sm text-muted-foreground mt-1">Vírgula (padrão internacional)</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tips */}
+        <div className="p-4 rounded-lg border bg-amber-500/10 border-amber-500/20">
+          <h5 className="font-medium text-amber-700 dark:text-amber-400 mb-2">💡 Dicas Importantes</h5>
+          <ul className="text-sm text-muted-foreground space-y-2">
+            <li>• <strong>Encoding:</strong> Salve o arquivo como UTF-8 para evitar problemas com acentos</li>
+            <li>• <strong>Duplicados:</strong> Se o email já existir, a resposta será atualizada</li>
+            <li>• <strong>Contatos novos:</strong> Contatos não encontrados serão criados automaticamente</li>
+            <li>• <strong>Campos de identidade:</strong> Perguntas mapeadas como identidade atualizam os dados do contato</li>
+          </ul>
+        </div>
+      </CardContent>
     </Card>
   );
 }

@@ -69,16 +69,27 @@ export function SendSurveyDialog({
 
   const selectedSurvey = surveys?.find(s => s.id === selectedSurveyId);
 
+  // Get correct base URL (production domain when in Lovable preview)
+  const getBaseUrl = () => {
+    const currentOrigin = window.location.origin;
+    const lovablePreviewDomains = ['lovableproject.com', 'lovable.app', 'localhost'];
+    const isLovablePreview = lovablePreviewDomains.some(domain => currentOrigin.includes(domain));
+    
+    return isLovablePreview 
+      ? 'https://cubomagico.leandrolastori.com.br' 
+      : currentOrigin;
+  };
+
   // Generate public survey URL with pre-filled email
   const generateSurveyUrl = () => {
     if (!selectedSurveyId) return '';
-    const baseUrl = window.location.origin;
+    const baseUrl = getBaseUrl();
     const params = new URLSearchParams({
       email: contactEmail,
       contact_id: contactId,
       source: 'social_listening',
     });
-    return `${baseUrl}/pesquisa/${selectedSurveyId}?${params.toString()}`;
+    return `${baseUrl}/s/${selectedSurveyId}?${params.toString()}`;
   };
 
   const surveyUrl = generateSurveyUrl();

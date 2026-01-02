@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { CubeLoader } from "@/components/CubeLoader";
+import { ArrowLeft } from "lucide-react";
 
 interface RawData {
   metaInsights: any[];
@@ -18,13 +23,72 @@ interface RawData {
 }
 
 export default function DataDebug() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const { currentProject } = useProject();
   const [startDate, setStartDate] = useState(format(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(false);
   const [rawData, setRawData] = useState<RawData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
+  // Check authorization: super_admin OR project owner
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!user) {
+        navigate('/auth');
+        return;
+      }
+
+      // Check if super_admin
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (roleData?.role === 'super_admin') {
+        setIsAuthorized(true);
+        return;
+      }
+
+      // Check if project owner
+      if (currentProject) {
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('user_id')
+          .eq('id', currentProject.id)
+          .single();
+
+        if (projectData?.user_id === user.id) {
+          setIsAuthorized(true);
+          return;
+        }
+      }
+
+      // Not authorized
+      toast({
+        title: 'Acesso negado',
+        description: 'Você não tem permissão para acessar esta página.',
+        variant: 'destructive',
+      });
+      navigate('/projects');
+    };
+
+    checkAuth();
+  }, [user, currentProject, navigate, toast]);
+
+  if (isAuthorized === null) {
+    return <CubeLoader message="Verificando permissões..." />;
+  }
+
+  if (!isAuthorized) {
+    return null;
+  }
+
+  // Function to fetch all data - defined inside component to access state
   const fetchAllData = async () => {
     if (!currentProject?.id) {
       setError("Nenhum projeto selecionado");
@@ -79,12 +143,11 @@ export default function DataDebug() {
       console.log("Meta Ads encontrados:", metaAds?.length || 0);
 
       // 5. Buscar Hotmart Sales
-      // IMPORTANT: Use Brazil timezone (UTC-3) for date filtering
-      const startTimestamp = `${startDate}T03:00:00.000Z`; // 00:00 Brazil = 03:00 UTC
+      const startTimestamp = `${startDate}T03:00:00.000Z`;
       const endDateObj = new Date(endDate);
       endDateObj.setDate(endDateObj.getDate() + 1);
       const adjustedEndDate = endDateObj.toISOString().split('T')[0];
-      const endTimestamp = `${adjustedEndDate}T02:59:59.999Z`; // 23:59 Brazil = 02:59 UTC next day
+      const endTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
       
       const { data: hotmartSales, error: salesError } = await supabase
         .from('hotmart_sales')
@@ -143,93 +206,67 @@ export default function DataDebug() {
     }
   };
 
-  // Cálculos derivados - NOVA ESTRUTURA: apenas ad-level
+  // Cálculos derivados
   const calculations = rawData ? {
-    // Meta totals (agora todos os insights são ad-level)
     totalSpend: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.spend) || 0), 0),
     totalImpressions: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.impressions) || 0), 0),
     totalClicks: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.clicks) || 0), 0),
     totalReach: rawData.metaInsights.reduce((sum, i) => sum + (Number(i.reach) || 0), 0),
-    
-    // Unique IDs in insights
     uniqueCampaignIds: [...new Set(rawData.metaInsights.map(i => i.campaign_id).filter(Boolean))],
     uniqueAdsetIds: [...new Set(rawData.metaInsights.map(i => i.adset_id).filter(Boolean))],
     uniqueAdIds: [...new Set(rawData.metaInsights.map(i => i.ad_id).filter(Boolean))],
-    
-    // Insights por nível (para validar estrutura)
     insightsByCampaign: rawData.metaInsights.filter(i => i.campaign_id && !i.adset_id && !i.ad_id),
     insightsByAdset: rawData.metaInsights.filter(i => i.adset_id && !i.ad_id),
     insightsByAd: rawData.metaInsights.filter(i => i.ad_id),
     insightsAccountLevel: rawData.metaInsights.filter(i => !i.campaign_id && !i.adset_id && !i.ad_id),
-    
-    // Agregação por Campaign (soma dos ads de cada campaign)
     spendByCampaign: rawData.metaInsights.reduce((acc, i) => {
       if (!i.campaign_id) return acc;
       acc[i.campaign_id] = (acc[i.campaign_id] || 0) + (Number(i.spend) || 0);
       return acc;
     }, {} as Record<string, number>),
-    
-    // Agregação por Adset (soma dos ads de cada adset)
     spendByAdset: rawData.metaInsights.reduce((acc, i) => {
       if (!i.adset_id) return acc;
       acc[i.adset_id] = (acc[i.adset_id] || 0) + (Number(i.spend) || 0);
       return acc;
     }, {} as Record<string, number>),
-    
-    // Hotmart totals
     approvedSales: rawData.hotmartSales.filter(s => s.status === 'APPROVED' || s.status === 'COMPLETE'),
     totalRevenue: rawData.hotmartSales
       .filter(s => s.status === 'APPROVED' || s.status === 'COMPLETE')
       .reduce((sum, s) => sum + (Number(s.total_price_brl) || Number(s.total_price) || 0), 0),
-    
-    // Sales by status
     salesByStatus: rawData.hotmartSales.reduce((acc, s) => {
       acc[s.status] = (acc[s.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-
-    // DATA RELIABILITY AUDIT
-    // 1. Check for campaigns with spend in insights but no hierarchy record
     campaignsWithSpendNoHierarchy: (() => {
       const insightCampaignIds = new Set(rawData.metaInsights.map(i => i.campaign_id).filter(Boolean));
       const hierarchyCampaignIds = new Set(rawData.metaCampaigns.map(c => c.campaign_id));
       return [...insightCampaignIds].filter(id => !hierarchyCampaignIds.has(id));
     })(),
-    
-    // 2. Check for adsets with spend in insights but no hierarchy record
     adsetsWithSpendNoHierarchy: (() => {
       const insightAdsetIds = new Set(rawData.metaInsights.map(i => i.adset_id).filter(Boolean));
       const hierarchyAdsetIds = new Set(rawData.metaAdsets.map(a => a.adset_id));
       return [...insightAdsetIds].filter(id => !hierarchyAdsetIds.has(id));
     })(),
-    
-    // 3. Check for ads with spend in insights but no hierarchy record
     adsWithSpendNoHierarchy: (() => {
       const insightAdIds = new Set(rawData.metaInsights.map(i => i.ad_id).filter(Boolean));
       const hierarchyAdIds = new Set(rawData.metaAds.map(a => a.ad_id));
       return [...insightAdIds].filter(id => !hierarchyAdIds.has(id));
     })(),
-    
-    // 4. Status distribution
     campaignStatusDistribution: rawData.metaCampaigns.reduce((acc, c) => {
       const status = c.status || 'UNKNOWN';
       acc[status] = (acc[status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-    
     adsetStatusDistribution: rawData.metaAdsets.reduce((acc, a) => {
       const status = a.status || 'UNKNOWN';
       acc[status] = (acc[status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-    
     adStatusDistribution: rawData.metaAds.reduce((acc, a) => {
       const status = a.status || 'UNKNOWN';
       acc[status] = (acc[status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
-    
-    // 5. Last updated timestamps
     lastCampaignUpdate: rawData.metaCampaigns.length > 0 
       ? rawData.metaCampaigns.reduce((latest, c) => {
           const updated = new Date(c.updated_at || 0);
@@ -254,10 +291,15 @@ export default function DataDebug() {
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">Debug de Dados</h1>
-          <a href="/funnel-analysis" className="text-primary hover:underline">
-            Voltar para Análise
-          </a>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-3xl font-bold text-foreground">Debug de Dados</h1>
+          </div>
+          <span className="text-muted-foreground">
+            Projeto: <span className="font-medium text-foreground">{currentProject?.name || 'N/A'}</span>
+          </span>
         </div>
 
         {/* Filtros */}

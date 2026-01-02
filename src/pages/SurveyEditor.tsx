@@ -114,8 +114,18 @@ export default function SurveyEditor() {
     }));
   };
 
+  // Use production URL if available, fallback to current origin
+  const getBaseUrl = () => {
+    const origin = window.location.origin;
+    // If we're on a lovable preview/sandbox URL, show the production URL
+    if (origin.includes('lovable.app') || origin.includes('lovableproject.com')) {
+      return 'https://app.cubomagico.digital';
+    }
+    return origin;
+  };
+
   const publicUrl = surveyData.slug 
-    ? `${window.location.origin}/s/${surveyData.slug}` 
+    ? `${getBaseUrl()}/s/${surveyData.slug}` 
     : undefined;
 
   const handleAddQuestion = async (type: string) => {

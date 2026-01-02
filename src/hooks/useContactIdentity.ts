@@ -1,3 +1,31 @@
+/**
+ * useContactIdentity Hook
+ * 
+ * Gerencia eventos de identidade declarada dos contatos CRM.
+ * 
+ * ## O que são Eventos de Identidade?
+ * São registros de dados declarados pelo próprio contato através de:
+ * - Pesquisas inteligentes (perguntas do tipo identity_field)
+ * - Webhooks de formulários externos
+ * - Importação CSV
+ * - Edição manual
+ * - Social Listening (Instagram username)
+ * 
+ * ## Campos de Identidade Suportados:
+ * - email, name, first_name, last_name
+ * - phone, instagram, document
+ * - city, state, country
+ * 
+ * ## Exemplo de uso:
+ * ```tsx
+ * const { events, latestByField, isLoading } = useContactIdentityEvents(contactId);
+ * 
+ * // latestByField contém o valor mais recente de cada campo
+ * console.log(latestByField.instagram?.field_value);
+ * ```
+ * 
+ * @module hooks/useContactIdentity
+ */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 

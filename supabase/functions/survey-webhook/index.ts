@@ -1,3 +1,43 @@
+/**
+ * Survey Webhook Edge Function
+ * 
+ * Recebe respostas de pesquisas via webhook externo (Typeform, Google Forms, etc.)
+ * 
+ * ## Endpoint: POST /survey-webhook
+ * 
+ * ## Headers Obrigatórios:
+ * - `x-api-key`: Chave API gerada na configuração do webhook
+ * 
+ * ## Payload:
+ * ```json
+ * {
+ *   "email": "contato@email.com",
+ *   "answers": {
+ *     "question_id_ou_texto": "resposta",
+ *     "outra_pergunta": "outra resposta"
+ *   },
+ *   "metadata": { "source": "typeform", ... }
+ * }
+ * ```
+ * 
+ * ## Fluxo:
+ * 1. Valida API key e obtém configuração do webhook
+ * 2. Encontra ou cria contato no CRM
+ * 3. Mapeia respostas para perguntas da pesquisa
+ * 4. Salva resposta na tabela survey_responses
+ * 5. Processa perguntas de identidade (identity_field)
+ * 6. Atualiza dados do contato e cria eventos de identidade
+ * 
+ * ## Resposta de Sucesso:
+ * ```json
+ * {
+ *   "success": true,
+ *   "contact_id": "uuid",
+ *   "response_id": "uuid",
+ *   "identity_fields_updated": 2
+ * }
+ * ```
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {

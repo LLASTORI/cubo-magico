@@ -187,6 +187,67 @@ export default function DataDebug() {
       acc[s.status] = (acc[s.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
+
+    // DATA RELIABILITY AUDIT
+    // 1. Check for campaigns with spend in insights but no hierarchy record
+    campaignsWithSpendNoHierarchy: (() => {
+      const insightCampaignIds = new Set(rawData.metaInsights.map(i => i.campaign_id).filter(Boolean));
+      const hierarchyCampaignIds = new Set(rawData.metaCampaigns.map(c => c.campaign_id));
+      return [...insightCampaignIds].filter(id => !hierarchyCampaignIds.has(id));
+    })(),
+    
+    // 2. Check for adsets with spend in insights but no hierarchy record
+    adsetsWithSpendNoHierarchy: (() => {
+      const insightAdsetIds = new Set(rawData.metaInsights.map(i => i.adset_id).filter(Boolean));
+      const hierarchyAdsetIds = new Set(rawData.metaAdsets.map(a => a.adset_id));
+      return [...insightAdsetIds].filter(id => !hierarchyAdsetIds.has(id));
+    })(),
+    
+    // 3. Check for ads with spend in insights but no hierarchy record
+    adsWithSpendNoHierarchy: (() => {
+      const insightAdIds = new Set(rawData.metaInsights.map(i => i.ad_id).filter(Boolean));
+      const hierarchyAdIds = new Set(rawData.metaAds.map(a => a.ad_id));
+      return [...insightAdIds].filter(id => !hierarchyAdIds.has(id));
+    })(),
+    
+    // 4. Status distribution
+    campaignStatusDistribution: rawData.metaCampaigns.reduce((acc, c) => {
+      const status = c.status || 'UNKNOWN';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    
+    adsetStatusDistribution: rawData.metaAdsets.reduce((acc, a) => {
+      const status = a.status || 'UNKNOWN';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    
+    adStatusDistribution: rawData.metaAds.reduce((acc, a) => {
+      const status = a.status || 'UNKNOWN';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    
+    // 5. Last updated timestamps
+    lastCampaignUpdate: rawData.metaCampaigns.length > 0 
+      ? rawData.metaCampaigns.reduce((latest, c) => {
+          const updated = new Date(c.updated_at || 0);
+          return updated > latest ? updated : latest;
+        }, new Date(0))
+      : null,
+    lastAdsetUpdate: rawData.metaAdsets.length > 0
+      ? rawData.metaAdsets.reduce((latest, a) => {
+          const updated = new Date(a.updated_at || 0);
+          return updated > latest ? updated : latest;
+        }, new Date(0))
+      : null,
+    lastAdUpdate: rawData.metaAds.length > 0
+      ? rawData.metaAds.reduce((latest, a) => {
+          const updated = new Date(a.updated_at || 0);
+          return updated > latest ? updated : latest;
+        }, new Date(0))
+      : null,
   } : null;
 
   return (
@@ -272,6 +333,127 @@ export default function DataDebug() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* AUDITORIA DE CONFIABILIDADE META */}
+            <Card className="border-orange-500">
+              <CardHeader>
+                <CardTitle className="text-orange-500">🔍 Auditoria de Confiabilidade Meta</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Hierarquia incompleta */}
+                <div>
+                  <h4 className="font-medium mb-2">Itens com Spend mas sem Hierarquia (Status "Desconhecido")</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className={`p-4 rounded-lg ${calculations.campaignsWithSpendNoHierarchy.length === 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                      <p className="text-sm text-muted-foreground">Campanhas</p>
+                      <p className="text-xl font-bold">{calculations.campaignsWithSpendNoHierarchy.length}</p>
+                      {calculations.campaignsWithSpendNoHierarchy.length > 0 && (
+                        <p className="text-xs text-red-500 mt-1">⚠️ Sincronize para corrigir</p>
+                      )}
+                    </div>
+                    <div className={`p-4 rounded-lg ${calculations.adsetsWithSpendNoHierarchy.length === 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                      <p className="text-sm text-muted-foreground">Conjuntos</p>
+                      <p className="text-xl font-bold">{calculations.adsetsWithSpendNoHierarchy.length}</p>
+                      {calculations.adsetsWithSpendNoHierarchy.length > 0 && (
+                        <p className="text-xs text-red-500 mt-1">⚠️ Sincronize para corrigir</p>
+                      )}
+                    </div>
+                    <div className={`p-4 rounded-lg ${calculations.adsWithSpendNoHierarchy.length === 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                      <p className="text-sm text-muted-foreground">Anúncios</p>
+                      <p className="text-xl font-bold">{calculations.adsWithSpendNoHierarchy.length}</p>
+                      {calculations.adsWithSpendNoHierarchy.length > 0 && (
+                        <p className="text-xs text-red-500 mt-1">⚠️ Sincronize para corrigir</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {(calculations.campaignsWithSpendNoHierarchy.length === 0 && 
+                    calculations.adsetsWithSpendNoHierarchy.length === 0 && 
+                    calculations.adsWithSpendNoHierarchy.length === 0) && (
+                    <div className="mt-3 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
+                      <p className="text-green-600 text-sm">✓ Hierarquia completa! Todos os itens com spend têm status definido.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Distribuição de Status */}
+                <div>
+                  <h4 className="font-medium mb-2">Distribuição de Status na Hierarquia</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm font-medium mb-2">Campanhas</p>
+                      <div className="space-y-1">
+                        {Object.entries(calculations.campaignStatusDistribution).map(([status, count]) => (
+                          <div key={status} className="flex justify-between text-sm">
+                            <span className={status === 'ACTIVE' ? 'text-green-500' : status === 'PAUSED' ? 'text-yellow-500' : 'text-gray-500'}>
+                              {status === 'ACTIVE' ? 'Ativo' : status === 'PAUSED' ? 'Inativo' : status}
+                            </span>
+                            <span className="font-mono">{count as number}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm font-medium mb-2">Conjuntos</p>
+                      <div className="space-y-1">
+                        {Object.entries(calculations.adsetStatusDistribution).map(([status, count]) => (
+                          <div key={status} className="flex justify-between text-sm">
+                            <span className={status === 'ACTIVE' ? 'text-green-500' : status === 'PAUSED' ? 'text-yellow-500' : 'text-gray-500'}>
+                              {status === 'ACTIVE' ? 'Ativo' : status === 'PAUSED' ? 'Inativo' : status}
+                            </span>
+                            <span className="font-mono">{count as number}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm font-medium mb-2">Anúncios</p>
+                      <div className="space-y-1">
+                        {Object.entries(calculations.adStatusDistribution).map(([status, count]) => (
+                          <div key={status} className="flex justify-between text-sm">
+                            <span className={status === 'ACTIVE' ? 'text-green-500' : status === 'PAUSED' ? 'text-yellow-500' : 'text-gray-500'}>
+                              {status === 'ACTIVE' ? 'Ativo' : status === 'PAUSED' ? 'Inativo' : status}
+                            </span>
+                            <span className="font-mono">{count as number}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Última atualização */}
+                <div>
+                  <h4 className="font-medium mb-2">Última Atualização da Hierarquia</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">Campanhas</p>
+                      <p className="text-sm font-mono">
+                        {calculations.lastCampaignUpdate 
+                          ? calculations.lastCampaignUpdate.toLocaleString('pt-BR')
+                          : 'Nunca'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">Conjuntos</p>
+                      <p className="text-sm font-mono">
+                        {calculations.lastAdsetUpdate 
+                          ? calculations.lastAdsetUpdate.toLocaleString('pt-BR')
+                          : 'Nunca'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">Anúncios</p>
+                      <p className="text-sm font-mono">
+                        {calculations.lastAdUpdate 
+                          ? calculations.lastAdUpdate.toLocaleString('pt-BR')
+                          : 'Nunca'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Validação da Estrutura - Apenas Ad Level */}
             <Card className="border-primary">

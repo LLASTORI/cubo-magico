@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Trash2, User, Calendar, Globe } from 'lucide-react';
+import { ArrowLeft, Download, Trash2, User, Calendar, Globe, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
@@ -17,6 +17,7 @@ import {
 import { useSurvey } from '@/hooks/useSurveys';
 import { useSurveyResponses } from '@/hooks/useSurveyResponses';
 import { CubeLoader } from '@/components/CubeLoader';
+import { useProjectModules } from '@/hooks/useProjectModules';
 
 const SOURCE_LABELS: Record<string, string> = {
   public_link: 'Link Público',
@@ -29,6 +30,31 @@ export default function SurveyResponses() {
   const navigate = useNavigate();
   const { survey } = useSurvey(surveyId);
   const { responses, isLoading, deleteResponse } = useSurveyResponses(surveyId);
+  const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
+
+  const surveysEnabled = isModuleEnabled('surveys');
+
+  // Show module disabled state
+  if (!isLoadingModules && !surveysEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader pageSubtitle="Respostas" />
+        <main className="container mx-auto px-6 py-12">
+          <div className="text-center py-12 border rounded-lg bg-card">
+            <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
+            <p className="text-muted-foreground mb-4">
+              O módulo de Pesquisa Inteligente não está ativo para este projeto.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/surveys')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const handleDelete = async (id: string) => {
     if (confirm('Excluir esta resposta?')) {
@@ -65,7 +91,7 @@ export default function SurveyResponses() {
     a.click();
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingModules) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Respostas" />

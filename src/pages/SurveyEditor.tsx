@@ -565,7 +565,11 @@ export default function SurveyEditor() {
           <TabsContent value="import" className="space-y-6">
             <SurveyCSVImportLocal 
               surveyId={surveyId!} 
-              questions={survey.survey_questions || []} 
+              surveyName={survey.name}
+              questions={survey.survey_questions || []}
+              defaultTags={surveyData.default_tags}
+              defaultFunnelId={surveyData.default_funnel_id || null}
+              defaultFunnelName={funnels?.find(f => f.id === surveyData.default_funnel_id)?.name || null}
             />
             <CSVImportDocumentation questions={survey.survey_questions || []} />
           </TabsContent>

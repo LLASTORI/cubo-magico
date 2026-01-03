@@ -56,10 +56,14 @@ interface ImportResult {
 
 interface Props {
   surveyId: string;
+  surveyName: string;
   questions: SurveyQuestion[];
+  defaultTags: string[];
+  defaultFunnelId: string | null;
+  defaultFunnelName: string | null;
 }
 
-export const SurveyCSVImportLocal = ({ surveyId, questions }: Props) => {
+export const SurveyCSVImportLocal = ({ surveyId, surveyName, questions, defaultTags, defaultFunnelId, defaultFunnelName }: Props) => {
   const { currentProject } = useProject();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -244,16 +248,41 @@ export const SurveyCSVImportLocal = ({ surveyId, questions }: Props) => {
               }
             });
 
+            // Build tags to apply
+            const tagsToApply: string[] = [];
+            
+            // Add survey default tags
+            if (defaultTags && defaultTags.length > 0) {
+              tagsToApply.push(...defaultTags);
+            }
+            
+            // Add automatic survey tag
+            tagsToApply.push(`pesquisa:${surveyName}`);
+            
+            // Add funnel tag if configured
+            if (defaultFunnelId && defaultFunnelName) {
+              tagsToApply.push(`funil:${defaultFunnelName}`);
+            }
+
             let contactId: string | null = null;
             const { data: existingContact } = await supabase
               .from('crm_contacts')
-              .select('id')
+              .select('id, tags')
               .eq('project_id', projectId)
               .eq('email', row.email.toLowerCase().trim())
               .maybeSingle();
 
             if (existingContact) {
               contactId = existingContact.id;
+              
+              // Merge tags without duplicates
+              const existingTags = (existingContact.tags || []) as string[];
+              const mergedTags = [...new Set([...existingTags, ...tagsToApply])];
+              
+              await supabase
+                .from('crm_contacts')
+                .update({ tags: mergedTags })
+                .eq('id', contactId);
             } else {
               const { data: newContact, error: createError } = await supabase
                 .from('crm_contacts')
@@ -261,12 +290,26 @@ export const SurveyCSVImportLocal = ({ surveyId, questions }: Props) => {
                   project_id: projectId,
                   email: row.email.toLowerCase().trim(),
                   source: 'survey_csv',
+                  tags: tagsToApply,
                 })
                 .select('id')
                 .single();
 
               if (createError) throw createError;
               contactId = newContact.id;
+            }
+
+            // Create interaction if funnel is configured
+            if (defaultFunnelId && contactId) {
+              await supabase
+                .from('crm_contact_interactions')
+                .insert({
+                  contact_id: contactId,
+                  project_id: projectId,
+                  funnel_id: defaultFunnelId,
+                  interaction_type: 'survey_csv_import',
+                  page_name: `Pesquisa: ${surveyName}`,
+                });
             }
 
             const { data: existingResponse } = await supabase

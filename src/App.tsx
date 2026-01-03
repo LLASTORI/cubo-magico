@@ -42,6 +42,7 @@ import Surveys from "./pages/Surveys";
 import SurveyEditor from "./pages/SurveyEditor";
 import SurveyResponses from "./pages/SurveyResponses";
 import SurveyPublic from "./pages/SurveyPublic";
+import SurveyPublicLegacy from "./pages/SurveyPublicLegacy";
 import InsightsDashboard from "./pages/InsightsDashboard";
 import SocialListeningPage from "./pages/SocialListeningPage";
 import NotFound from "./pages/NotFound";
@@ -67,7 +68,10 @@ const App = () => (
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/terms-of-service" element={<TermsOfService />} />
                 <Route path="/data-deletion" element={<DataDeletion />} />
-                <Route path="/s/:slug" element={<SurveyPublic />} />
+                {/* Survey Public Routes - Multi-tenant */}
+                <Route path="/s/:code/:slug" element={<SurveyPublic />} />
+                {/* Legacy route for backward compatibility */}
+                <Route path="/s/:slug" element={<SurveyPublicLegacy />} />
                 <Route path="/" element={
                   <ProtectedRoute>
                     <ProjectOverview />

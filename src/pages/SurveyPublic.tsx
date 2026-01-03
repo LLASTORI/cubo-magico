@@ -1,3 +1,17 @@
+/**
+ * SurveyPublic
+ * 
+ * Página pública para responder pesquisas.
+ * 
+ * ## URLs MULTI-TENANT
+ * 
+ * Formato: /s/:code/:slug
+ * - code: Identificador público do projeto (ex: cm_abc123)
+ * - slug: Identificador da pesquisa dentro do projeto
+ * 
+ * Este formato garante isolamento total entre projetos e permite
+ * que diferentes projetos usem o mesmo slug sem conflito.
+ */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -76,9 +90,6 @@ interface RawSurveyData {
   survey_questions: SurveyQuestion[];
 }
 
-// Alias for backwards compatibility
-type ParsedSurvey = PublicSurvey;
-
 const parseSurveyData = (data: RawSurveyData): PublicSurvey => ({
   id: data.id,
   name: data.name,
@@ -86,18 +97,6 @@ const parseSurveyData = (data: RawSurveyData): PublicSurvey => ({
   settings: data.settings as PublicSurvey['settings'],
   survey_questions: data.survey_questions,
 });
-
-interface PublicSurveyLegacy {
-  id: string;
-  name: string;
-  description: string | null;
-  settings: {
-    welcome_message?: string;
-    thank_you_message?: string;
-    theme?: SurveyTheme;
-  } | null;
-  survey_questions: SurveyQuestion[];
-}
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 type ScreenState = 'welcome' | 'questions' | 'email' | 'submitting' | 'success';
@@ -113,7 +112,8 @@ const defaultTheme: SurveyTheme = {
 };
 
 export default function SurveyPublic() {
-  const { slug } = useParams();
+  // Parâmetros multi-tenant: code (project_code) + slug
+  const { code, slug } = useParams();
   const [survey, setSurvey] = useState<PublicSurvey | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -132,14 +132,17 @@ export default function SurveyPublic() {
 
   useEffect(() => {
     const fetchSurvey = async () => {
-      if (!slug) {
+      if (!slug || !code) {
+        console.log('[SurveyPublic] Missing code or slug');
         setNotFound(true);
         setLoading(false);
         return;
       }
 
+      console.log(`[SurveyPublic] Fetching survey: code=${code}, slug=${slug}`);
+
       try {
-        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-public?slug=${encodeURIComponent(slug)}`;
+        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-public?code=${encodeURIComponent(code)}&slug=${encodeURIComponent(slug)}`;
         const res = await fetch(fnUrl, {
           method: 'GET',
           headers: {
@@ -149,13 +152,15 @@ export default function SurveyPublic() {
         });
 
         if (!res.ok) {
+          console.log('[SurveyPublic] Survey not found');
           setNotFound(true);
         } else {
           const data = (await res.json()) as RawSurveyData;
           data.survey_questions?.sort((a, b) => a.position - b.position);
           setSurvey(parseSurveyData(data));
         }
-      } catch {
+      } catch (err) {
+        console.error('[SurveyPublic] Error fetching survey:', err);
         setNotFound(true);
       }
 
@@ -163,7 +168,7 @@ export default function SurveyPublic() {
     };
 
     fetchSurvey();
-  }, [slug]);
+  }, [code, slug]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -234,8 +239,9 @@ export default function SurveyPublic() {
     setErrorMessage('');
 
     try {
+      // Enviar com code + slug para garantir multi-tenant correto
       const response = await supabase.functions.invoke('survey-public', {
-        body: { slug, email, answers },
+        body: { code, slug, email, answers },
       });
 
       if (response.error) {
@@ -505,10 +511,11 @@ export default function SurveyPublic() {
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      setScreenState('questions');
                       setCurrentQuestionIndex(totalQuestions - 1);
+                      setScreenState('questions');
                     }}
                     className="gap-2"
+                    style={{ color: theme.secondary_text_color }}
                   >
                     <ArrowLeft className="h-4 w-4" />
                     Voltar
@@ -518,16 +525,9 @@ export default function SurveyPublic() {
                     onClick={handleSubmit}
                     className="gap-2 px-6"
                     style={{ backgroundColor: theme.primary_color }}
-                    disabled={submitState === 'submitting'}
                   >
-                    {submitState === 'submitting' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        Enviar
-                        <Send className="h-4 w-4" />
-                      </>
-                    )}
+                    <Send className="h-4 w-4" />
+                    Enviar
                   </Button>
                 </div>
               </motion.div>
@@ -539,27 +539,21 @@ export default function SurveyPublic() {
                 key="submitting"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center min-h-[60vh]"
+                className="text-center space-y-4"
               >
-                <Loader2 
-                  className="h-12 w-12 animate-spin mb-4"
-                  style={{ color: theme.primary_color }}
-                />
-                <p style={{ color: theme.secondary_text_color }}>Enviando sua resposta...</p>
+                <Loader2 className="h-12 w-12 animate-spin mx-auto" style={{ color: theme.primary_color }} />
+                <p className="text-lg" style={{ color: theme.text_color }}>Enviando sua resposta...</p>
               </motion.div>
             )}
 
             {/* Success Screen */}
-            {screenState === 'success' && (
+            {screenState === 'success' && survey && (
               <ThankYouScreen
                 key="success"
-                message={survey?.settings?.thank_you_message}
-                logoUrl={theme.logo_url}
+                message={survey.settings?.thank_you_message || 'Obrigado por responder!'}
                 primaryColor={theme.primary_color}
                 textColor={theme.text_color}
-                secondaryTextColor={theme.secondary_text_color}
-                completionSettings={survey?.settings?.completion}
+                completionSettings={survey.settings?.completion}
               />
             )}
           </AnimatePresence>

@@ -39,6 +39,7 @@ interface Project {
   created_at: string;
   updated_at: string;
   user_id: string;
+  public_code: string;
   owner_name: string | null;
   owner_email: string | null;
   member_count: number;
@@ -150,6 +151,7 @@ export const ProjectsManager = () => {
         created_at: project.created_at,
         updated_at: project.updated_at,
         user_id: project.user_id,
+        public_code: project.public_code || '',
       });
       
       toast({ title: `Acessando projeto: ${project.name}` });

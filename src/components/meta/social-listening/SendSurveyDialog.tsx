@@ -67,7 +67,23 @@ export function SendSurveyDialog({
     enabled: open && !!projectId,
   });
 
+  // Fetch project public_code for URL generation
+  const { data: projectData } = useQuery({
+    queryKey: ['project-public-code-for-send', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('public_code')
+        .eq('id', projectId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!projectId,
+  });
+
   const selectedSurvey = surveys?.find(s => s.id === selectedSurveyId);
+  const projectCode = projectData?.public_code;
 
   // Get correct base URL (production domain when in Lovable preview)
   const getBaseUrl = () => {
@@ -80,16 +96,16 @@ export function SendSurveyDialog({
       : currentOrigin;
   };
 
-  // Generate public survey URL with pre-filled email (using slug, not ID)
+  // Generate public survey URL with project_code + slug (multi-tenant format)
   const generateSurveyUrl = () => {
-    if (!selectedSurveyId || !selectedSurvey?.slug) return '';
+    if (!selectedSurveyId || !selectedSurvey?.slug || !projectCode) return '';
     const baseUrl = getBaseUrl();
     const params = new URLSearchParams({
       email: contactEmail,
       contact_id: contactId,
       source: 'social_listening',
     });
-    return `${baseUrl}/s/${selectedSurvey.slug}?${params.toString()}`;
+    return `${baseUrl}/s/${projectCode}/${selectedSurvey.slug}?${params.toString()}`;
   };
 
   const surveyUrl = generateSurveyUrl();

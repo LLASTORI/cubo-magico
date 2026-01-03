@@ -99,6 +99,22 @@ export default function SurveyEditor() {
     },
     enabled: !!survey?.project_id,
   });
+
+  // Fetch project public_code for URL generation
+  const { data: projectData } = useQuery({
+    queryKey: ['project-public-code', survey?.project_id],
+    queryFn: async () => {
+      if (!survey?.project_id) return null;
+      const { data, error } = await supabase
+        .from('projects')
+        .select('public_code')
+        .eq('id', survey.project_id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!survey?.project_id,
+  });
   const [surveySettings, setSurveySettings] = useState<{
     welcome_message?: string;
     thank_you_message?: string;
@@ -184,10 +200,6 @@ export default function SurveyEditor() {
     setSurveySettings(prev => ({ ...prev, completion }));
   };
 
-  const previewUrl = surveyData.slug
-    ? `${window.location.origin}/s/${surveyData.slug}`
-    : undefined;
-
   // Use production URL when we're in the preview/sandbox.
   const getBaseUrl = () => {
     const origin = window.location.origin;
@@ -197,8 +209,15 @@ export default function SurveyEditor() {
     return origin;
   };
 
-  const publicUrl = surveyData.slug
-    ? `${getBaseUrl()}/s/${surveyData.slug}`
+  // Generate URLs in multi-tenant format: /s/:code/:slug
+  const projectCode = projectData?.public_code;
+
+  const previewUrl = surveyData.slug && projectCode
+    ? `${window.location.origin}/s/${projectCode}/${surveyData.slug}`
+    : undefined;
+
+  const publicUrl = surveyData.slug && projectCode
+    ? `${getBaseUrl()}/s/${projectCode}/${surveyData.slug}`
     : undefined;
 
   const handleAddQuestion = async (type: string) => {
@@ -497,14 +516,21 @@ export default function SurveyEditor() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Slug (URL pública)</Label>
-                    <div className="flex gap-2">
-                      <span className="flex items-center text-sm text-muted-foreground">/s/</span>
+                    <div className="flex gap-2 items-center">
+                      <span className="flex items-center text-xs text-muted-foreground whitespace-nowrap">
+                        /s/{projectCode || '...'}/
+                      </span>
                       <Input
                         value={surveyData.slug}
                         onChange={(e) => setSurveyData({ ...surveyData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
                         placeholder="minha-pesquisa"
                       />
                     </div>
+                    {projectCode && surveyData.slug && (
+                      <p className="text-xs text-muted-foreground">
+                        URL: /s/{projectCode}/{surveyData.slug}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Status</Label>

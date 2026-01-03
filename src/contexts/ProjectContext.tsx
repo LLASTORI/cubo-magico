@@ -8,6 +8,7 @@ export interface Project {
   name: string;
   description: string | null;
   is_active: boolean;
+  public_code: string;
   created_at: string;
   updated_at: string;
 }
@@ -252,9 +253,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const createProject = async (name: string, description?: string) => {
     if (!user) return { data: null, error: new Error('User not authenticated') };
 
+    // Note: public_code is generated automatically by a database trigger
     const { data, error } = await supabase
       .from('projects')
-      .insert({ user_id: user.id, name, description })
+      .insert({ user_id: user.id, name, description } as any)
       .select()
       .single();
 

@@ -30,6 +30,7 @@ interface SurveyTheme {
   primary_color: string;
   text_color?: string;
   secondary_text_color?: string;
+  input_text_color?: string;
   background_color: string;
   background_image?: string;
   logo_url?: string;
@@ -105,6 +106,7 @@ const defaultTheme: SurveyTheme = {
   primary_color: '#6366f1',
   text_color: '#1e293b',
   secondary_text_color: '#64748b',
+  input_text_color: '#1e293b',
   background_color: '#f8fafc',
   show_progress: true,
   one_question_per_page: true,
@@ -255,6 +257,7 @@ export default function SurveyPublic() {
     const questionProps = {
       primaryColor: theme.primary_color,
       secondaryColor: theme.secondary_text_color,
+      inputTextColor: theme.input_text_color,
     };
 
     switch (currentQuestion.question_type) {

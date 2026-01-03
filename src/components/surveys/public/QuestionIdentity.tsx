@@ -10,6 +10,7 @@ interface QuestionIdentityProps {
   placeholder?: string;
   primaryColor?: string;
   secondaryColor?: string;
+  inputTextColor?: string;
 }
 
 const fieldIcons: Record<string, any> = {
@@ -44,7 +45,8 @@ export function QuestionIdentity({
   fieldType = 'name',
   placeholder,
   primaryColor = '#6366f1',
-  secondaryColor = '#64748b'
+  secondaryColor = '#64748b',
+  inputTextColor = '#1e293b'
 }: QuestionIdentityProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const Icon = fieldIcons[fieldType] || User;
@@ -78,7 +80,8 @@ export function QuestionIdentity({
         )}
         style={{ 
           borderColor: value ? primaryColor : secondaryColor,
-          '--placeholder-color': `${secondaryColor}80`
+          '--placeholder-color': `${secondaryColor}80`,
+          color: inputTextColor
         } as React.CSSProperties}
       />
       <style>{`

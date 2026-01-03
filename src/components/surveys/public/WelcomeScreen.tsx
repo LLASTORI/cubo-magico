@@ -10,6 +10,7 @@ interface WelcomeScreenProps {
   onStart: () => void;
   primaryColor?: string;
   textColor?: string;
+  secondaryTextColor?: string;
 }
 
 export function WelcomeScreen({ 
@@ -19,7 +20,8 @@ export function WelcomeScreen({
   logoUrl,
   onStart,
   primaryColor = '#6366f1',
-  textColor = '#1e293b'
+  textColor = '#1e293b',
+  secondaryTextColor = '#64748b'
 }: WelcomeScreenProps) {
   return (
     <motion.div
@@ -54,7 +56,8 @@ export function WelcomeScreen({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="text-lg text-muted-foreground mb-6 max-w-xl"
+          className="text-lg mb-6 max-w-xl"
+          style={{ color: secondaryTextColor }}
         >
           {description}
         </motion.p>
@@ -65,7 +68,8 @@ export function WelcomeScreen({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="text-base text-muted-foreground mb-8 max-w-lg"
+          className="text-base mb-8 max-w-lg"
+          style={{ color: secondaryTextColor }}
         >
           {welcomeMessage}
         </motion.p>

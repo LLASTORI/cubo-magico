@@ -371,6 +371,7 @@ export default function SurveyPublic() {
                 onStart={() => setScreenState('questions')}
                 primaryColor={theme.primary_color}
                 textColor={theme.text_color}
+                secondaryTextColor={theme.secondary_text_color}
               />
             )}
 
@@ -542,7 +543,7 @@ export default function SurveyPublic() {
                   className="h-12 w-12 animate-spin mb-4"
                   style={{ color: theme.primary_color }}
                 />
-                <p className="text-muted-foreground">Enviando sua resposta...</p>
+                <p style={{ color: theme.secondary_text_color }}>Enviando sua resposta...</p>
               </motion.div>
             )}
 
@@ -554,6 +555,7 @@ export default function SurveyPublic() {
                 logoUrl={theme.logo_url}
                 primaryColor={theme.primary_color}
                 textColor={theme.text_color}
+                secondaryTextColor={theme.secondary_text_color}
                 completionSettings={survey?.settings?.completion}
               />
             )}

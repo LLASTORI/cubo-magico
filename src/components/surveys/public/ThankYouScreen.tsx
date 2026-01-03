@@ -25,6 +25,7 @@ interface ThankYouScreenProps {
   logoUrl?: string;
   primaryColor?: string;
   textColor?: string;
+  secondaryTextColor?: string;
   completionSettings?: CompletionSettings;
 }
 
@@ -33,6 +34,7 @@ export function ThankYouScreen({
   logoUrl,
   primaryColor = '#6366f1',
   textColor = '#1e293b',
+  secondaryTextColor = '#64748b',
   completionSettings
 }: ThankYouScreenProps) {
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -148,7 +150,8 @@ export function ThankYouScreen({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="text-lg text-muted-foreground max-w-md"
+        className="text-lg max-w-md"
+        style={{ color: secondaryTextColor }}
       >
         {message}
       </motion.p>
@@ -196,7 +199,8 @@ export function ThankYouScreen({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
-          className="mt-6 flex items-center gap-2 text-sm text-muted-foreground"
+          className="mt-6 flex items-center gap-2 text-sm"
+          style={{ color: secondaryTextColor }}
         >
           <Clock className="h-4 w-4" />
           <span>Redirecionando em {countdown} segundos...</span>

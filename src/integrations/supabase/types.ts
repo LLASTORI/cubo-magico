@@ -3971,6 +3971,164 @@ export type Database = {
           },
         ]
       }
+      survey_ai_knowledge_base: {
+        Row: {
+          auto_classify_responses: boolean | null
+          business_description: string | null
+          business_name: string | null
+          created_at: string
+          high_intent_indicators: string | null
+          high_intent_keywords: string[] | null
+          id: string
+          min_intent_score_for_action: number | null
+          objection_patterns: string | null
+          pain_keywords: string[] | null
+          pain_point_indicators: string | null
+          products_services: string | null
+          project_id: string
+          satisfaction_indicators: string | null
+          satisfaction_keywords: string[] | null
+          target_audience: string | null
+          updated_at: string
+        }
+        Insert: {
+          auto_classify_responses?: boolean | null
+          business_description?: string | null
+          business_name?: string | null
+          created_at?: string
+          high_intent_indicators?: string | null
+          high_intent_keywords?: string[] | null
+          id?: string
+          min_intent_score_for_action?: number | null
+          objection_patterns?: string | null
+          pain_keywords?: string[] | null
+          pain_point_indicators?: string | null
+          products_services?: string | null
+          project_id: string
+          satisfaction_indicators?: string | null
+          satisfaction_keywords?: string[] | null
+          target_audience?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_classify_responses?: boolean | null
+          business_description?: string | null
+          business_name?: string | null
+          created_at?: string
+          high_intent_indicators?: string | null
+          high_intent_keywords?: string[] | null
+          id?: string
+          min_intent_score_for_action?: number | null
+          objection_patterns?: string | null
+          pain_keywords?: string[] | null
+          pain_point_indicators?: string | null
+          products_services?: string | null
+          project_id?: string
+          satisfaction_indicators?: string | null
+          satisfaction_keywords?: string[] | null
+          target_audience?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_ai_knowledge_base_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_insights_daily: {
+        Row: {
+          ai_daily_summary: string | null
+          avg_intent_score: number | null
+          confusion_count: number | null
+          created_at: string
+          feature_request_count: number | null
+          high_intent_count: number | null
+          high_intent_percentage: number | null
+          id: string
+          metric_date: string
+          negative_count: number | null
+          neutral_count: number | null
+          neutral_sentiment_count: number | null
+          opportunities_identified: number | null
+          pain_point_count: number | null
+          positive_count: number | null
+          price_objection_count: number | null
+          project_id: string
+          satisfaction_count: number | null
+          survey_id: string | null
+          total_responses: number | null
+          unique_respondents: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_daily_summary?: string | null
+          avg_intent_score?: number | null
+          confusion_count?: number | null
+          created_at?: string
+          feature_request_count?: number | null
+          high_intent_count?: number | null
+          high_intent_percentage?: number | null
+          id?: string
+          metric_date: string
+          negative_count?: number | null
+          neutral_count?: number | null
+          neutral_sentiment_count?: number | null
+          opportunities_identified?: number | null
+          pain_point_count?: number | null
+          positive_count?: number | null
+          price_objection_count?: number | null
+          project_id: string
+          satisfaction_count?: number | null
+          survey_id?: string | null
+          total_responses?: number | null
+          unique_respondents?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_daily_summary?: string | null
+          avg_intent_score?: number | null
+          confusion_count?: number | null
+          created_at?: string
+          feature_request_count?: number | null
+          high_intent_count?: number | null
+          high_intent_percentage?: number | null
+          id?: string
+          metric_date?: string
+          negative_count?: number | null
+          neutral_count?: number | null
+          neutral_sentiment_count?: number | null
+          opportunities_identified?: number | null
+          pain_point_count?: number | null
+          positive_count?: number | null
+          price_objection_count?: number | null
+          project_id?: string
+          satisfaction_count?: number | null
+          survey_id?: string | null
+          total_responses?: number | null
+          unique_respondents?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_insights_daily_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_insights_daily_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       survey_questions: {
         Row: {
           created_at: string
@@ -4020,6 +4178,99 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "survey_questions_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      survey_response_analysis: {
+        Row: {
+          ai_summary: string | null
+          classification: string | null
+          contact_id: string | null
+          created_at: string
+          detected_keywords: string[] | null
+          id: string
+          intent_score: number | null
+          key_insights: Json | null
+          processed_at: string | null
+          processed_by: string | null
+          processing_error: string | null
+          project_id: string
+          response_id: string
+          sentiment: string | null
+          survey_id: string
+          updated_at: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          classification?: string | null
+          contact_id?: string | null
+          created_at?: string
+          detected_keywords?: string[] | null
+          id?: string
+          intent_score?: number | null
+          key_insights?: Json | null
+          processed_at?: string | null
+          processed_by?: string | null
+          processing_error?: string | null
+          project_id: string
+          response_id: string
+          sentiment?: string | null
+          survey_id: string
+          updated_at?: string
+        }
+        Update: {
+          ai_summary?: string | null
+          classification?: string | null
+          contact_id?: string | null
+          created_at?: string
+          detected_keywords?: string[] | null
+          id?: string
+          intent_score?: number | null
+          key_insights?: Json | null
+          processed_at?: string | null
+          processed_by?: string | null
+          processing_error?: string | null
+          project_id?: string
+          response_id?: string
+          sentiment?: string | null
+          survey_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "survey_response_analysis_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "survey_response_analysis_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_response_analysis_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_response_analysis_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: true
+            referencedRelation: "survey_responses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "survey_response_analysis_survey_id_fkey"
             columns: ["survey_id"]
             isOneToOne: false
             referencedRelation: "surveys"

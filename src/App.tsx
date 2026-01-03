@@ -45,6 +45,7 @@ import SurveyPublic from "./pages/SurveyPublic";
 import SurveyPublicLegacy from "./pages/SurveyPublicLegacy";
 import InsightsDashboard from "./pages/InsightsDashboard";
 import SocialListeningPage from "./pages/SocialListeningPage";
+import SurveyAnalysisPage from "./pages/SurveyAnalysisPage";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -247,6 +248,26 @@ const App = () => (
                 <Route path="/insights/surveys/:surveyId/responses" element={
                   <ProtectedRoute>
                     <SurveyResponses />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys/analysis" element={
+                  <ProtectedRoute>
+                    <SurveyAnalysisPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys/analysis/by-survey" element={
+                  <ProtectedRoute>
+                    <SurveyAnalysisPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys/analysis/ai-settings" element={
+                  <ProtectedRoute>
+                    <SurveyAnalysisPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys/analysis/guide" element={
+                  <ProtectedRoute>
+                    <SurveyAnalysisPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/insights/social" element={

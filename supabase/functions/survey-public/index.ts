@@ -26,9 +26,11 @@
  * ## Fluxo de Submissão:
  * 1. Valida slug e status da pesquisa
  * 2. Encontra ou cria contato no CRM
- * 3. Salva resposta na tabela survey_responses
- * 4. Processa perguntas de identidade (identity_field)
- * 5. Atualiza dados do contato e cria eventos de identidade
+ * 3. Aplica tags configuradas na pesquisa + tags automáticas
+ * 4. Registra interação com funil (se configurado)
+ * 5. Salva resposta na tabela survey_responses
+ * 6. Processa perguntas de identidade (identity_field)
+ * 7. Atualiza dados do contato e cria eventos de identidade
  * 
  * ## Resposta de Sucesso:
  * ```json
@@ -129,7 +131,7 @@ Deno.serve(async (req) => {
 
       const email = payload.email.toLowerCase().trim();
 
-      // Get survey
+      // Get survey with default_tags and default_funnel_id
       const { data: survey, error: surveyError } = await supabase
         .from('surveys')
         .select(`
@@ -150,6 +152,25 @@ Deno.serve(async (req) => {
       const projectId = survey.project_id;
       console.log(`Processing public response for survey ${survey.id}, email: ${email}`);
 
+      // Build tags to apply
+      const surveyDefaultTags: string[] = survey.default_tags || [];
+      const autoTag = `pesquisa:${survey.name}`;
+      
+      // Get funnel name for tag if configured
+      let funnelTag: string | null = null;
+      let funnelName: string | null = null;
+      if (survey.default_funnel_id) {
+        const { data: funnel } = await supabase
+          .from('funnels')
+          .select('name')
+          .eq('id', survey.default_funnel_id)
+          .single();
+        if (funnel) {
+          funnelName = funnel.name;
+          funnelTag = `funil:${funnel.name}`;
+        }
+      }
+
       // Find or create contact
       let { data: contact } = await supabase
         .from('crm_contacts')
@@ -159,6 +180,10 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!contact) {
+        // Build initial tags for new contact
+        const initialTags = [...surveyDefaultTags, autoTag];
+        if (funnelTag) initialTags.push(funnelTag);
+        
         const { data: newContact, error: createError } = await supabase
           .from('crm_contacts')
           .insert({
@@ -166,6 +191,7 @@ Deno.serve(async (req) => {
             email,
             source: 'survey_public',
             status: 'lead',
+            tags: initialTags,
           })
           .select()
           .single();
@@ -176,6 +202,57 @@ Deno.serve(async (req) => {
         }
         contact = newContact;
         console.log('Created new contact:', contact.id);
+      } else {
+        // Update existing contact - merge tags without duplicates
+        const existingTags: string[] = contact.tags || [];
+        const newTags = new Set(existingTags);
+        
+        // Add survey default tags
+        surveyDefaultTags.forEach(tag => newTags.add(tag));
+        
+        // Add auto tag
+        newTags.add(autoTag);
+        
+        // Add funnel tag if configured
+        if (funnelTag) newTags.add(funnelTag);
+        
+        const mergedTags = Array.from(newTags);
+        
+        // Update contact tags if changed
+        if (mergedTags.length !== existingTags.length || !mergedTags.every(t => existingTags.includes(t))) {
+          await supabase
+            .from('crm_contacts')
+            .update({ 
+              tags: mergedTags,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', contact.id);
+          
+          contact.tags = mergedTags;
+          console.log('Updated contact tags:', mergedTags);
+        }
+      }
+
+      // Create interaction record if funnel is configured
+      if (survey.default_funnel_id) {
+        await supabase
+          .from('crm_contact_interactions')
+          .insert({
+            contact_id: contact.id,
+            project_id: projectId,
+            funnel_id: survey.default_funnel_id,
+            interaction_type: 'survey_response',
+            page_name: survey.name,
+            metadata: {
+              survey_id: survey.id,
+              survey_name: survey.name,
+              funnel_name: funnelName,
+            },
+            ...(payload.metadata?.utm_source && { utm_source: payload.metadata.utm_source }),
+            ...(payload.metadata?.utm_campaign && { utm_campaign: payload.metadata.utm_campaign }),
+            ...(payload.metadata?.utm_medium && { utm_medium: payload.metadata.utm_medium }),
+          });
+        console.log('Created interaction for funnel:', survey.default_funnel_id);
       }
 
       // Process answers

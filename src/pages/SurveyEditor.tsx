@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
   Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet,
-  Palette, Gift
+  Palette, Gift, Tag, Filter
 } from 'lucide-react';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -50,7 +51,24 @@ export default function SurveyEditor() {
   const { survey, isLoading, addQuestion, updateQuestion, deleteQuestion } = useSurvey(surveyId);
   const { webhookKeys, createWebhookKey, deleteWebhookKey } = useSurveyWebhookKeys(surveyId);
   
-  const [surveyData, setSurveyData] = useState({ name: '', description: '', objective: 'general', slug: '', status: 'draft' });
+  const [surveyData, setSurveyData] = useState({ name: '', description: '', objective: 'general', slug: '', status: 'draft', default_tags: [] as string[], default_funnel_id: '' });
+  const [tagsInput, setTagsInput] = useState('');
+
+  // Fetch funnels for the project
+  const { data: funnels } = useQuery({
+    queryKey: ['funnels-for-survey', survey?.project_id],
+    queryFn: async () => {
+      if (!survey?.project_id) return [];
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name')
+        .eq('project_id', survey.project_id)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!survey?.project_id,
+  });
   const [surveySettings, setSurveySettings] = useState<{
     welcome_message?: string;
     thank_you_message?: string;
@@ -68,7 +86,10 @@ export default function SurveyEditor() {
         objective: survey.objective,
         slug: survey.slug || '',
         status: survey.status,
+        default_tags: survey.default_tags || [],
+        default_funnel_id: survey.default_funnel_id || '',
       });
+      setTagsInput((survey.default_tags || []).join(', '));
       // Parse settings for theme, messages and completion
       const settings = (survey.settings as any) || {};
       setSurveySettings({
@@ -89,11 +110,23 @@ export default function SurveyEditor() {
       ...currentSettings,
       ...surveySettings,
     };
+
+    // Parse tags from input
+    const parsedTags = tagsInput
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
     
     const { error } = await supabase
       .from('surveys')
       .update({ 
-        ...surveyData,
+        name: surveyData.name,
+        description: surveyData.description,
+        objective: surveyData.objective,
+        slug: surveyData.slug,
+        status: surveyData.status,
+        default_tags: parsedTags,
+        default_funnel_id: surveyData.default_funnel_id || null,
         settings: mergedSettings,
       })
       .eq('id', surveyId);
@@ -458,6 +491,56 @@ export default function SurveyEditor() {
                         <SelectItem value="archived">Arquivada</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                {/* Tags e Funil Section */}
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                    <Tag className="h-4 w-4" />
+                    Tags e Funil para Contatos
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Configure as tags e o funil que serão automaticamente aplicados aos contatos que responderem esta pesquisa.
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Tags Padrão</Label>
+                      <Input
+                        value={tagsInput}
+                        onChange={(e) => setTagsInput(e.target.value)}
+                        placeholder="Lead, Pesquisa CPL1, Lançamento"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Separe as tags por vírgula. Além destas, a tag "pesquisa:NomeDaPesquisa" será adicionada automaticamente.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Filter className="h-4 w-4" />
+                        Funil Associado
+                      </Label>
+                      <Select
+                        value={surveyData.default_funnel_id}
+                        onValueChange={(value) => setSurveyData({ ...surveyData, default_funnel_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um funil (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Nenhum</SelectItem>
+                          {funnels?.map((funnel) => (
+                            <SelectItem key={funnel.id} value={funnel.id}>
+                              {funnel.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Contatos serão associados a este funil ao responderem a pesquisa.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>

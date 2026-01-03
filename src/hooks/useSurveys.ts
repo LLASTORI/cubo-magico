@@ -41,6 +41,8 @@ export interface Survey {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  default_tags: string[] | null;
+  default_funnel_id: string | null;
 }
 
 export interface SurveyQuestion {

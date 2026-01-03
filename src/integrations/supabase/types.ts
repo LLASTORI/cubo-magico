@@ -4159,6 +4159,8 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          default_funnel_id: string | null
+          default_tags: string[] | null
           description: string | null
           id: string
           name: string
@@ -4172,6 +4174,8 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          default_funnel_id?: string | null
+          default_tags?: string[] | null
           description?: string | null
           id?: string
           name: string
@@ -4185,6 +4189,8 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          default_funnel_id?: string | null
+          default_tags?: string[] | null
           description?: string | null
           id?: string
           name?: string
@@ -4196,6 +4202,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "surveys_default_funnel_id_fkey"
+            columns: ["default_funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "surveys_project_id_fkey"
             columns: ["project_id"]

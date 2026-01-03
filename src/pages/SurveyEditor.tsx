@@ -522,14 +522,14 @@ export default function SurveyEditor() {
                         Funil Associado
                       </Label>
                       <Select
-                        value={surveyData.default_funnel_id}
-                        onValueChange={(value) => setSurveyData({ ...surveyData, default_funnel_id: value })}
+                        value={surveyData.default_funnel_id || "none"}
+                        onValueChange={(value) => setSurveyData({ ...surveyData, default_funnel_id: value === "none" ? "" : value })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione um funil (opcional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Nenhum</SelectItem>
+                          <SelectItem value="none">Nenhum</SelectItem>
                           {funnels?.map((funnel) => (
                             <SelectItem key={funnel.id} value={funnel.id}>
                               {funnel.name}

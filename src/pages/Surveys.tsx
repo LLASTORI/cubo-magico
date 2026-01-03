@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock } from 'lucide-react';
+import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock, Brain } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -207,10 +207,16 @@ export default function Surveys() {
       {isInsightsRoute && (
         <InsightsSubNav
           rightContent={
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Pesquisa
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => navigate('/insights/surveys/analysis')} className="gap-2">
+                <Brain className="h-4 w-4" />
+                Análise IA
+              </Button>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Pesquisa
+              </Button>
+            </div>
           }
         />
       )}

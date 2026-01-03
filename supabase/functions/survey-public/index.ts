@@ -1,55 +1,25 @@
 /**
  * Survey Public Edge Function
  * 
- * Serve pesquisas públicas e recebe respostas via link público.
- * 
- * ## ARQUITETURA MULTI-TENANT
- * 
- * As pesquisas são identificadas por project_code + slug para garantir
- * isolamento total entre projetos. O project_code é um identificador
- * público único do projeto no formato cm_XXXXXX.
+ * SEGURANÇA MULTI-TENANT OBRIGATÓRIA:
+ * - Projetos são TOTALMENTE ISOLADOS
+ * - NUNCA expor lista de projetos
+ * - NUNCA permitir inferência de tenants
+ * - Falhar com segurança quando houver ambiguidade
  * 
  * ## Endpoints:
  * 
  * ### GET /survey-public?code=cm_abc123&slug=minha-pesquisa
  * Retorna a pesquisa e suas perguntas para renderização pública.
+ * Requer code (project_code) + slug para acesso determinístico.
  * 
  * ### GET /survey-public?slug=minha-pesquisa (LEGADO)
- * Busca por slug apenas. Retorna erro se encontrar múltiplas pesquisas.
+ * Busca por slug apenas. Redireciona se encontrar exatamente 1.
+ * Retorna erro neutro se ambíguo - NUNCA expõe dados de projetos.
  * 
  * ### POST /survey-public
  * Submete uma resposta de pesquisa.
- * 
- * ## Payload POST:
- * ```json
- * {
- *   "code": "cm_abc123",
- *   "slug": "minha-pesquisa",
- *   "email": "contato@email.com",
- *   "answers": {
- *     "question_id": "resposta"
- *   },
- *   "metadata": { "utm_source": "instagram", ... }
- * }
- * ```
- * 
- * ## Fluxo de Submissão:
- * 1. Valida project_code + slug e status da pesquisa
- * 2. Encontra ou cria contato no CRM
- * 3. Aplica tags configuradas na pesquisa + tags automáticas
- * 4. Registra interação com funil (se configurado)
- * 5. Salva resposta na tabela survey_responses
- * 6. Processa perguntas de identidade (identity_field)
- * 7. Atualiza dados do contato e cria eventos de identidade
- * 
- * ## Resposta de Sucesso:
- * ```json
- * {
- *   "success": true,
- *   "contact_id": "uuid",
- *   "response_id": "uuid"
- * }
- * ```
+ * OBRIGATÓRIO: code + slug para isolamento multi-tenant.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -66,9 +36,107 @@ interface SubmitPayload {
   metadata?: Record<string, any>;
 }
 
-interface SurveyResult {
-  survey: any;
-  projectId: string;
+/**
+ * Resolve projeto + pesquisa de forma segura e determinística.
+ * Retorna null se não encontrar ou se houver ambiguidade.
+ */
+async function resolveSurvey(
+  supabase: any,
+  code: string | null,
+  slug: string
+): Promise<{ survey: any; projectId: string; projectCode: string } | null> {
+  
+  // Fluxo principal: buscar por project_code + slug (determinístico)
+  if (code) {
+    console.log(`[survey-public] Resolving survey: code=${code}, slug=${slug}`);
+    
+    // Buscar projeto pelo public_code
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id, public_code')
+      .eq('public_code', code)
+      .single();
+
+    if (projectError || !project) {
+      console.log(`[survey-public] Project not found for code: ${code}`);
+      return null;
+    }
+
+    // Buscar pesquisa pelo project_id + slug + status
+    const { data: survey, error: surveyError } = await supabase
+      .from('surveys')
+      .select(`
+        *,
+        survey_questions (*)
+      `)
+      .eq('project_id', project.id)
+      .eq('slug', slug)
+      .eq('status', 'active')
+      .single();
+
+    if (surveyError || !survey) {
+      console.log(`[survey-public] Survey not found: project=${project.id}, slug=${slug}`);
+      return null;
+    }
+
+    return { survey, projectId: project.id, projectCode: project.public_code };
+  }
+
+  // Fluxo legado: buscar apenas por slug (apenas para redirecionamento)
+  console.log(`[survey-public] LEGACY: Resolving by slug only: ${slug}`);
+  
+  const { data: surveys, error } = await supabase
+    .from('surveys')
+    .select(`
+      id,
+      project_id,
+      slug,
+      status
+    `)
+    .eq('slug', slug)
+    .eq('status', 'active');
+
+  if (error || !surveys || surveys.length === 0) {
+    console.log(`[survey-public] LEGACY: No survey found for slug: ${slug}`);
+    return null;
+  }
+
+  // Se encontrar mais de uma pesquisa = AMBÍGUO = falhar com segurança
+  if (surveys.length > 1) {
+    console.log(`[survey-public] LEGACY: AMBIGUOUS - Multiple surveys (${surveys.length}) for slug: ${slug}`);
+    return null; // NUNCA expor informações sobre projetos
+  }
+
+  // Encontrou exatamente 1 - buscar dados completos + project_code para redirecionamento
+  const survey = surveys[0];
+  
+  const { data: project } = await supabase
+    .from('projects')
+    .select('public_code')
+    .eq('id', survey.project_id)
+    .single();
+
+  if (!project?.public_code) {
+    console.log(`[survey-public] LEGACY: Project code not found for project: ${survey.project_id}`);
+    return null;
+  }
+
+  // Buscar dados completos da pesquisa
+  const { data: fullSurvey, error: fullError } = await supabase
+    .from('surveys')
+    .select(`
+      *,
+      survey_questions (*)
+    `)
+    .eq('id', survey.id)
+    .eq('status', 'active')
+    .single();
+
+  if (fullError || !fullSurvey) {
+    return null;
+  }
+
+  return { survey: fullSurvey, projectId: survey.project_id, projectCode: project.public_code };
 }
 
 Deno.serve(async (req) => {
@@ -82,178 +150,56 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Handle GET - fetch survey by project_code + slug
+    // ========================================
+    // GET - Fetch survey
+    // ========================================
     if (req.method === 'GET') {
       const url = new URL(req.url);
       const code = url.searchParams.get('code');
       const slug = url.searchParams.get('slug');
 
       if (!slug) {
-        console.log('[survey-public] GET missing slug parameter');
+        console.log('[survey-public] GET: Missing slug parameter');
         return new Response(
           JSON.stringify({ error: 'Slug parameter required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      let projectId: string | null = null;
+      const result = await resolveSurvey(supabase, code, slug);
 
-      // Fluxo principal: buscar por project_code + slug
-      if (code) {
-        console.log(`[survey-public] GET with code=${code}, slug=${slug}`);
-        
-        // Buscar projeto pelo public_code
-        const { data: project, error: projectError } = await supabase
-          .from('projects')
-          .select('id')
-          .eq('public_code', code)
-          .single();
-
-        if (projectError || !project) {
-          console.log(`[survey-public] Project not found for code: ${code}`);
-          return new Response(
-            JSON.stringify({ error: 'Project not found' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        projectId = project.id;
-
-        // Buscar pesquisa pelo project_id + slug
-        const { data: survey, error } = await supabase
-          .from('surveys')
-          .select(`
-            id,
-            name,
-            description,
-            settings,
-            project_id,
-            survey_questions (
-              id,
-              question_text,
-              description,
-              question_type,
-              is_required,
-              options,
-              settings,
-              position,
-              identity_field_target,
-              identity_confidence_weight
-            )
-          `)
-          .eq('project_id', projectId)
-          .eq('slug', slug)
-          .eq('status', 'active')
-          .single();
-
-        if (error || !survey) {
-          console.log(`[survey-public] Survey not found for project=${projectId}, slug=${slug}`);
-          return new Response(
-            JSON.stringify({ error: 'Survey not found or inactive' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Sort questions by position
-        survey.survey_questions.sort((a: any, b: any) => a.position - b.position);
-
-        return new Response(
-          JSON.stringify(survey),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Fluxo legado: buscar apenas por slug (compatibilidade com URLs antigas)
-      console.log(`[survey-public] LEGACY GET with slug only: ${slug}`);
-      
-      const { data: surveys, error } = await supabase
-        .from('surveys')
-        .select(`
-          id,
-          name,
-          description,
-          settings,
-          project_id,
-          survey_questions (
-            id,
-            question_text,
-            description,
-            question_type,
-            is_required,
-            options,
-            settings,
-            position,
-            identity_field_target,
-            identity_confidence_weight
-          )
-        `)
-        .eq('slug', slug)
-        .eq('status', 'active');
-
-      if (error) {
-        console.error('[survey-public] Error fetching surveys by slug:', error);
-        return new Response(
-          JSON.stringify({ error: 'Error fetching survey' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Se não encontrou nenhuma pesquisa
-      if (!surveys || surveys.length === 0) {
-        console.log(`[survey-public] No survey found for slug: ${slug}`);
+      if (!result) {
+        // Mensagem neutra - NUNCA expor informações sobre projetos ou ambiguidade
         return new Response(
           JSON.stringify({ error: 'Survey not found or inactive' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Se encontrou mais de uma pesquisa com o mesmo slug (conflito entre projetos)
-      if (surveys.length > 1) {
-        console.log(`[survey-public] CONFLICT: Multiple surveys found for slug: ${slug} (count: ${surveys.length})`);
-        
-        // Buscar os project_codes para ajudar no redirecionamento
-        const projectIds = surveys.map(s => s.project_id);
-        const { data: projects } = await supabase
-          .from('projects')
-          .select('id, public_code, name')
-          .in('id', projectIds);
+      const { survey, projectCode } = result;
 
-        return new Response(
-          JSON.stringify({ 
-            error: 'Multiple surveys found with this slug',
-            code: 'AMBIGUOUS_SLUG',
-            message: 'Este link de pesquisa é ambíguo. Por favor, use o link completo com o código do projeto.',
-            projects: projects?.map(p => ({
-              code: p.public_code,
-              name: p.name,
-            })),
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      // Sort questions by position
+      if (survey.survey_questions) {
+        survey.survey_questions.sort((a: any, b: any) => a.position - b.position);
       }
 
-      // Encontrou exatamente uma pesquisa - retornar normalmente
-      const survey = surveys[0];
-
-      // Buscar project_code para incluir na resposta (facilita redirecionamento no frontend)
-      const { data: project } = await supabase
-        .from('projects')
-        .select('public_code')
-        .eq('id', survey.project_id)
-        .single();
-
-      survey.survey_questions.sort((a: any, b: any) => a.position - b.position);
-
+      // Incluir project_code apenas para facilitar redirecionamento no frontend legado
       return new Response(
         JSON.stringify({
-          ...survey,
-          project_code: project?.public_code,
+          id: survey.id,
+          name: survey.name,
+          description: survey.description,
+          settings: survey.settings,
+          survey_questions: survey.survey_questions,
+          project_code: projectCode, // Para redirecionamento legado
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Handle POST - submit response
+    // ========================================
+    // POST - Submit response
+    // ========================================
     if (req.method === 'POST') {
       const payload: SubmitPayload = await req.json();
 
@@ -265,87 +211,21 @@ Deno.serve(async (req) => {
       }
 
       const email = payload.email.toLowerCase().trim();
-      let survey: any = null;
-      let projectId: string | null = null;
 
-      // Fluxo principal: buscar por project_code + slug
-      if (payload.code) {
-        console.log(`[survey-public] POST with code=${payload.code}, slug=${payload.slug}, email=${email}`);
+      // SEGURANÇA: Resolver survey usando a mesma lógica centralizada
+      const result = await resolveSurvey(supabase, payload.code || null, payload.slug);
 
-        // Buscar projeto pelo public_code
-        const { data: project, error: projectError } = await supabase
-          .from('projects')
-          .select('id')
-          .eq('public_code', payload.code)
-          .single();
-
-        if (projectError || !project) {
-          console.log(`[survey-public] Project not found for code: ${payload.code}`);
-          return new Response(
-            JSON.stringify({ error: 'Project not found' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        projectId = project.id;
-
-        // Buscar pesquisa com project_id + slug
-        const { data: surveyData, error: surveyError } = await supabase
-          .from('surveys')
-          .select(`
-            *,
-            survey_questions (*)
-          `)
-          .eq('project_id', projectId)
-          .eq('slug', payload.slug)
-          .eq('status', 'active')
-          .single();
-
-        if (surveyError || !surveyData) {
-          console.log(`[survey-public] Survey not found for project=${projectId}, slug=${payload.slug}`);
-          return new Response(
-            JSON.stringify({ error: 'Survey not found or inactive' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        survey = surveyData;
-      } else {
-        // Fluxo legado: buscar apenas por slug
-        console.log(`[survey-public] POST LEGACY with slug=${payload.slug}, email=${email}`);
-
-        const { data: surveys, error: surveysError } = await supabase
-          .from('surveys')
-          .select(`
-            *,
-            survey_questions (*)
-          `)
-          .eq('slug', payload.slug)
-          .eq('status', 'active');
-
-        if (surveysError || !surveys || surveys.length === 0) {
-          return new Response(
-            JSON.stringify({ error: 'Survey not found or inactive' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (surveys.length > 1) {
-          console.log(`[survey-public] POST CONFLICT: Multiple surveys for slug: ${payload.slug}`);
-          return new Response(
-            JSON.stringify({ 
-              error: 'Multiple surveys found with this slug',
-              code: 'AMBIGUOUS_SLUG',
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        survey = surveys[0];
-        projectId = survey.project_id;
+      if (!result) {
+        console.log(`[survey-public] POST: Survey not found or ambiguous`);
+        return new Response(
+          JSON.stringify({ error: 'Survey not found or inactive' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      console.log(`Processing public response for survey ${survey.id}, email: ${email}`);
+      const { survey, projectId } = result;
+
+      console.log(`[survey-public] POST: Processing response for survey=${survey.id}, email=${email}`);
 
       // Build tags to apply
       const surveyDefaultTags: string[] = survey.default_tags || [];
@@ -392,28 +272,22 @@ Deno.serve(async (req) => {
           .single();
 
         if (createError) {
-          console.error('Error creating contact:', createError);
+          console.error('[survey-public] Error creating contact:', createError);
           throw createError;
         }
         contact = newContact;
-        console.log('Created new contact:', contact.id);
+        console.log('[survey-public] Created new contact:', contact.id);
       } else {
         // Update existing contact - merge tags without duplicates
         const existingTags: string[] = contact.tags || [];
         const newTags = new Set(existingTags);
         
-        // Add survey default tags
         surveyDefaultTags.forEach(tag => newTags.add(tag));
-        
-        // Add auto tag
         newTags.add(autoTag);
-        
-        // Add funnel tag if configured
         if (funnelTag) newTags.add(funnelTag);
         
         const mergedTags = Array.from(newTags);
         
-        // Update contact tags if changed
         if (mergedTags.length !== existingTags.length || !mergedTags.every(t => existingTags.includes(t))) {
           await supabase
             .from('crm_contacts')
@@ -424,7 +298,6 @@ Deno.serve(async (req) => {
             .eq('id', contact.id);
           
           contact.tags = mergedTags;
-          console.log('Updated contact tags:', mergedTags);
         }
       }
 
@@ -447,7 +320,6 @@ Deno.serve(async (req) => {
             ...(payload.metadata?.utm_campaign && { utm_campaign: payload.metadata.utm_campaign }),
             ...(payload.metadata?.utm_medium && { utm_medium: payload.metadata.utm_medium }),
           });
-        console.log('Created interaction for funnel:', survey.default_funnel_id);
       }
 
       // Process answers
@@ -465,7 +337,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Check if contact already responded to this survey (hybrid approach)
+      // Check if contact already responded to this survey
       const { data: existingResponse } = await supabase
         .from('survey_responses')
         .select('*')
@@ -476,7 +348,7 @@ Deno.serve(async (req) => {
       let response;
 
       if (existingResponse) {
-        // Update existing response, preserving history in metadata
+        // Update existing response, preserving history
         const previousVersions = existingResponse.metadata?.previous_versions || [];
         previousVersions.push({
           answers: existingResponse.answers,
@@ -501,11 +373,10 @@ Deno.serve(async (req) => {
           .single();
 
         if (updateError) {
-          console.error('Error updating response:', updateError);
+          console.error('[survey-public] Error updating response:', updateError);
           throw updateError;
         }
         response = updatedResponse;
-        console.log(`Updated existing response ${response.id} (version ${previousVersions.length + 1})`);
       } else {
         // Create new response
         const { data: newResponse, error: responseError } = await supabase
@@ -526,11 +397,10 @@ Deno.serve(async (req) => {
           .single();
 
         if (responseError) {
-          console.error('Error saving response:', responseError);
+          console.error('[survey-public] Error saving response:', responseError);
           throw responseError;
         }
         response = newResponse;
-        console.log('Created new response:', response.id);
       }
 
       // Process identity fields
@@ -600,7 +470,7 @@ Deno.serve(async (req) => {
         .update({ processed_at: new Date().toISOString() })
         .eq('id', response.id);
 
-      console.log('Public response processed successfully');
+      console.log('[survey-public] Response processed successfully');
 
       return new Response(
         JSON.stringify({
@@ -617,7 +487,7 @@ Deno.serve(async (req) => {
       { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('Survey public error:', error);
+    console.error('[survey-public] Error:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

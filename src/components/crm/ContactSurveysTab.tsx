@@ -24,6 +24,26 @@ export function ContactSurveysTab({ contactId }: ContactSurveysTabProps) {
   const navigate = useNavigate();
   const { responses, isLoading } = useContactSurveyResponses(contactId);
 
+  // Group responses by survey_id, keeping only the latest response per survey
+  const groupedResponses = responses?.reduce((acc, response) => {
+    const surveyId = response.survey_id;
+    if (!acc[surveyId]) {
+      acc[surveyId] = {
+        latest: response,
+        allResponses: [response],
+      };
+    } else {
+      acc[surveyId].allResponses.push(response);
+      // Keep the most recent as latest
+      if (new Date(response.submitted_at) > new Date(acc[surveyId].latest.submitted_at)) {
+        acc[surveyId].latest = response;
+      }
+    }
+    return acc;
+  }, {} as Record<string, { latest: typeof responses[0]; allResponses: typeof responses }>);
+
+  const uniqueSurveys = groupedResponses ? Object.values(groupedResponses) : [];
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -55,17 +75,19 @@ export function ContactSurveysTab({ contactId }: ContactSurveysTabProps) {
             Pesquisas Respondidas
           </CardTitle>
           <CardDescription>
-            {responses.length} {responses.length === 1 ? 'pesquisa respondida' : 'pesquisas respondidas'}
+            {uniqueSurveys.length} {uniqueSurveys.length === 1 ? 'pesquisa respondida' : 'pesquisas respondidas'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {responses.map((response) => {
-            const timesResponded = response.metadata?.times_responded || 1;
-            const previousVersions = response.metadata?.previous_versions || [];
-            const hasHistory = previousVersions.length > 0;
+          {uniqueSurveys.map(({ latest: response, allResponses }) => {
+            const timesResponded = allResponses.length;
+            const previousResponses = allResponses
+              .filter(r => r.id !== response.id)
+              .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+            const hasHistory = previousResponses.length > 0;
 
             return (
-              <div key={response.id} className="p-4 border rounded-lg space-y-3">
+              <div key={response.survey_id} className="p-4 border rounded-lg space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
                     <h4 className="font-medium">{response.surveys?.name || 'Pesquisa sem nome'}</h4>
@@ -119,31 +141,31 @@ export function ContactSurveysTab({ contactId }: ContactSurveysTabProps) {
                   </div>
                 </div>
 
-                {/* Previous Versions History */}
+                {/* Previous Responses History */}
                 {hasHistory && (
                   <Collapsible>
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-auto p-0 text-xs gap-1">
                         <History className="h-3 w-3" />
-                        Ver histórico de respostas anteriores ({previousVersions.length})
+                        Ver respostas anteriores ({previousResponses.length})
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-3 space-y-3">
-                      {previousVersions.map((version: any, index: number) => (
-                        <div key={index} className="p-3 bg-muted/50 rounded border-l-2 border-muted-foreground/20">
+                      {previousResponses.map((prevResponse) => (
+                        <div key={prevResponse.id} className="p-3 bg-muted/50 rounded border-l-2 border-muted-foreground/20">
                           <p className="text-xs font-medium text-muted-foreground mb-2">
-                            Versão {index + 1} - {format(new Date(version.submitted_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            {format(new Date(prevResponse.submitted_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                           </p>
                           <div className="grid gap-1">
-                            {Object.entries(version.answers).slice(0, 2).map(([qId, ans]: [string, any]) => (
+                            {Object.entries(prevResponse.answers).slice(0, 2).map(([qId, ans]: [string, any]) => (
                               <div key={qId} className="text-xs">
                                 <span className="text-muted-foreground">{ans.question_text || 'Pergunta'}: </span>
                                 <span>{typeof ans.value === 'string' ? ans.value.slice(0, 50) : JSON.stringify(ans.value).slice(0, 50)}</span>
                               </div>
                             ))}
-                            {Object.keys(version.answers).length > 2 && (
+                            {Object.keys(prevResponse.answers).length > 2 && (
                               <p className="text-xs text-muted-foreground">
-                                +{Object.keys(version.answers).length - 2} outras
+                                +{Object.keys(prevResponse.answers).length - 2} outras
                               </p>
                             )}
                           </div>

@@ -497,7 +497,7 @@ serve(async (req) => {
         phone_ddd: body.phone_ddd || null,
         phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
         document: body.document || null,
-        instagram: body.instagram || null,
+        instagram: body.instagram ? body.instagram.replace(/^@/, '') : null,
         address: body.address || null,
         address_number: body.address_number || null,
         address_complement: body.address_complement || null,
@@ -558,7 +558,7 @@ serve(async (req) => {
         updateFields.phone_country_code = body.phone_country_code || getCountryCode(body.country!);
       }
       if (body.document) updateFields.document = body.document;
-      if (body.instagram) updateFields.instagram = body.instagram;
+      if (body.instagram) updateFields.instagram = body.instagram.replace(/^@/, '');
       if (body.address) updateFields.address = body.address;
       if (body.address_number) updateFields.address_number = body.address_number;
       if (body.address_complement) updateFields.address_complement = body.address_complement;

@@ -9,6 +9,7 @@ interface QuestionIdentityProps {
   fieldType?: string;
   placeholder?: string;
   primaryColor?: string;
+  secondaryColor?: string;
 }
 
 const fieldIcons: Record<string, any> = {
@@ -42,7 +43,8 @@ export function QuestionIdentity({
   onChange, 
   fieldType = 'name',
   placeholder,
-  primaryColor = '#6366f1'
+  primaryColor = '#6366f1',
+  secondaryColor = '#64748b'
 }: QuestionIdentityProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const Icon = fieldIcons[fieldType] || User;
@@ -59,7 +61,7 @@ export function QuestionIdentity({
       transition={{ delay: 0.2 }}
       className="relative"
     >
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-muted-foreground">
+      <div className="absolute left-0 top-1/2 -translate-y-1/2" style={{ color: secondaryColor }}>
         <Icon className="h-6 w-6" />
       </div>
       <input
@@ -71,11 +73,19 @@ export function QuestionIdentity({
         className={cn(
           "w-full bg-transparent border-0 border-b-2 border-muted",
           "focus:border-primary focus:outline-none focus:ring-0",
-          "text-xl md:text-2xl font-light placeholder:text-muted-foreground/50",
+          "text-xl md:text-2xl font-light",
           "transition-all duration-300 py-4 pl-10 pr-0"
         )}
-        style={{ borderColor: value ? primaryColor : undefined }}
+        style={{ 
+          borderColor: value ? primaryColor : secondaryColor,
+          '--placeholder-color': `${secondaryColor}80`
+        } as React.CSSProperties}
       />
+      <style>{`
+        input::placeholder {
+          color: ${secondaryColor}80;
+        }
+      `}</style>
     </motion.div>
   );
 }

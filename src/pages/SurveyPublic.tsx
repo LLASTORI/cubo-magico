@@ -29,6 +29,7 @@ interface SurveyQuestion {
 interface SurveyTheme {
   primary_color: string;
   text_color?: string;
+  secondary_text_color?: string;
   background_color: string;
   background_image?: string;
   logo_url?: string;
@@ -103,6 +104,7 @@ type ScreenState = 'welcome' | 'questions' | 'email' | 'submitting' | 'success';
 const defaultTheme: SurveyTheme = {
   primary_color: '#6366f1',
   text_color: '#1e293b',
+  secondary_text_color: '#64748b',
   background_color: '#f8fafc',
   show_progress: true,
   one_question_per_page: true,
@@ -252,6 +254,7 @@ export default function SurveyPublic() {
 
     const questionProps = {
       primaryColor: theme.primary_color,
+      secondaryColor: theme.secondary_text_color,
     };
 
     switch (currentQuestion.question_type) {
@@ -403,7 +406,7 @@ export default function SurveyPublic() {
                   </h2>
                   
                   {currentQuestion.description && (
-                    <p className="text-muted-foreground">
+                    <p style={{ color: theme.secondary_text_color }}>
                       {currentQuestion.description}
                     </p>
                   )}
@@ -432,6 +435,7 @@ export default function SurveyPublic() {
                     variant="ghost"
                     onClick={handlePrevious}
                     className="gap-2"
+                    style={{ color: theme.secondary_text_color }}
                   >
                     <ArrowLeft className="h-4 w-4" />
                     Voltar
@@ -448,8 +452,8 @@ export default function SurveyPublic() {
                 </div>
 
                 {/* Keyboard hint */}
-                <p className="text-center text-xs text-muted-foreground">
-                  Pressione <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Enter ↵</kbd> para continuar
+                <p className="text-center text-xs" style={{ color: theme.secondary_text_color }}>
+                  Pressione <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: `${theme.secondary_text_color}20` }}>Enter ↵</kbd> para continuar
                 </p>
               </motion.div>
             )}

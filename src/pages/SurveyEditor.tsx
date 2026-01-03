@@ -261,7 +261,11 @@ export default function SurveyEditor() {
   };
 
   const copyWebhookUrl = (apiKey: string) => {
-    const url = `${window.location.origin}/functions/v1/survey-webhook`;
+    if (!projectCode || !surveyData.slug) {
+      toast({ title: 'Erro', description: 'Salve a pesquisa com um slug antes de copiar a URL', variant: 'destructive' });
+      return;
+    }
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-webhook/${projectCode}/${surveyData.slug}`;
     navigator.clipboard.writeText(url);
     toast({ title: 'URL copiada!', description: 'Use o header x-api-key com sua chave' });
   };
@@ -604,6 +608,7 @@ export default function SurveyEditor() {
           </TabsContent>
 
           {/* Integrations Tab */}
+          {/* Integrations Tab */}
           <TabsContent value="integrations" className="space-y-6">
             <IntegrationsDocumentation 
               webhookKeys={webhookKeys || []}
@@ -614,6 +619,8 @@ export default function SurveyEditor() {
               onCopyUrl={copyWebhookUrl}
               isCreating={createWebhookKey.isPending}
               questions={survey.survey_questions || []}
+              projectCode={projectCode}
+              surveySlug={surveyData.slug}
             />
           </TabsContent>
 
@@ -813,13 +820,19 @@ interface IntegrationsDocProps {
   onCopyUrl: (apiKey: string) => void;
   isCreating: boolean;
   questions: SurveyQuestion[];
+  projectCode?: string;
+  surveySlug?: string;
 }
 
 function IntegrationsDocumentation({ 
   webhookKeys, newWebhookName, setNewWebhookName, 
-  onCreateWebhook, onDeleteWebhook, onCopyUrl, isCreating, questions 
+  onCreateWebhook, onDeleteWebhook, onCopyUrl, isCreating, questions,
+  projectCode, surveySlug
 }: IntegrationsDocProps) {
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-webhook`;
+  // URL no formato multi-tenant seguro: /survey-webhook/:project_code/:survey_slug
+  const webhookUrl = projectCode && surveySlug
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/survey-webhook/${projectCode}/${surveySlug}`
+    : null;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
 
@@ -928,22 +941,47 @@ function IntegrationsDocumentation({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* URL Missing Warning */}
+          {!webhookUrl && (
+            <div className="p-4 rounded-lg border bg-yellow-500/10 border-yellow-500/20">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                <strong>Atenção:</strong> Defina um slug para a pesquisa nas configurações antes de usar o webhook.
+              </p>
+            </div>
+          )}
+
           {/* Endpoint */}
           <div className="p-4 rounded-lg border bg-muted/50">
-            <h4 className="font-medium mb-2">Endpoint</h4>
+            <h4 className="font-medium mb-2">Endpoint (Multi-Tenant Seguro)</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              A URL inclui o código do projeto e slug da pesquisa para isolamento total entre tenants.
+            </p>
             <div className="flex items-center gap-2">
               <Badge>POST</Badge>
               <code className="text-sm bg-background px-3 py-1.5 rounded font-mono flex-1 overflow-x-auto">
-                {webhookUrl}
+                {webhookUrl || 'Configure o slug da pesquisa primeiro'}
               </code>
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => navigator.clipboard.writeText(webhookUrl)}
+                disabled={!webhookUrl}
+                onClick={() => webhookUrl && navigator.clipboard.writeText(webhookUrl)}
               >
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+
+          {/* Security Notice */}
+          <div className="p-4 rounded-lg border bg-green-500/10 border-green-500/20">
+            <h5 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
+              <Lock className="h-4 w-4" />
+              Segurança Multi-Tenant
+            </h5>
+            <p className="text-sm text-muted-foreground">
+              A URL do webhook é única por projeto e pesquisa. A API key confirma o contexto, mas não o substitui. 
+              Qualquer requisição com project_code ou slug incorreto será rejeitada automaticamente.
+            </p>
           </div>
 
           {/* Headers */}
@@ -1027,6 +1065,7 @@ function IntegrationsDocumentation({
           )}
 
           {/* cURL Example */}
+          {webhookUrl && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Exemplo cURL</h4>
@@ -1064,6 +1103,7 @@ function IntegrationsDocumentation({
   }'`}
             </pre>
           </div>
+          )}
 
           {/* Response Codes */}
           <div className="space-y-3">

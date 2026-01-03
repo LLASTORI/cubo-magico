@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
-import { CRMSubNav } from '@/components/crm/CRMSubNav';
+import { InsightsSubNav } from '@/components/insights/InsightsSubNav';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,6 +46,7 @@ const STATUS_BADGES: Record<string, { label: string; variant: 'default' | 'secon
 
 export default function Surveys() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { surveys, isLoading, createSurvey, deleteSurvey } = useSurveys();
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
@@ -53,21 +54,23 @@ export default function Surveys() {
   const [newSurvey, setNewSurvey] = useState({ name: '', description: '', objective: 'general' });
   const [isCloning, setIsCloning] = useState(false);
 
-  const surveysEnabled = isModuleEnabled('surveys');
+  // Check if we're in the /insights route
+  const isInsightsRoute = location.pathname.startsWith('/insights');
+  const insightsEnabled = isModuleEnabled('insights');
 
   // Show module disabled state
-  if (!isLoadingModules && !surveysEnabled) {
+  if (!isLoadingModules && !insightsEnabled) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader pageSubtitle="Pesquisa Inteligente" />
-        <CRMSubNav />
+        <AppHeader pageSubtitle="Pesquisas" />
+        {isInsightsRoute && <InsightsSubNav />}
         <main className="container mx-auto px-6 py-12">
           <Card className="text-center py-12">
             <CardContent>
               <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
               <p className="text-muted-foreground mb-4">
-                O módulo de Pesquisa Inteligente não está ativo para este projeto.
+                O módulo de Pesquisas não está ativo para este projeto.
               </p>
               <p className="text-sm text-muted-foreground">
                 Entre em contato com o administrador para ativar este módulo.
@@ -88,7 +91,9 @@ export default function Surveys() {
     const result = await createSurvey.mutateAsync(newSurvey);
     setShowCreateDialog(false);
     setNewSurvey({ name: '', description: '', objective: 'general' });
-    navigate(`/surveys/${result.id}`);
+    // Navigate to the correct route based on where we are
+    const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
+    navigate(`${basePath}/${result.id}`);
   };
 
   const handleDelete = async (survey: Survey) => {
@@ -170,7 +175,9 @@ export default function Surveys() {
       }
 
       toast({ title: 'Pesquisa clonada com sucesso!' });
-      navigate(`/surveys/${newSurveyData.id}`);
+      // Navigate to the correct route based on where we are
+      const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
+      navigate(`${basePath}/${newSurveyData.id}`);
     } catch (error) {
       console.error('Error cloning survey:', error);
       toast({ title: 'Erro ao clonar pesquisa', variant: 'destructive' });
@@ -179,11 +186,14 @@ export default function Surveys() {
     }
   };
 
+  // Build the base path for navigation
+  const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
+
   if (isLoading || isLoadingModules) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader pageSubtitle="Pesquisa Inteligente" />
-        <CRMSubNav />
+        <AppHeader pageSubtitle="Pesquisas" />
+        {isInsightsRoute && <InsightsSubNav />}
         <div className="flex items-center justify-center h-64">
           <CubeLoader size="lg" />
         </div>
@@ -193,17 +203,29 @@ export default function Surveys() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader pageSubtitle="Pesquisa Inteligente" />
-      <CRMSubNav
-        rightContent={
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Pesquisa
-          </Button>
-        }
-      />
+      <AppHeader pageSubtitle="Pesquisas" />
+      {isInsightsRoute && (
+        <InsightsSubNav
+          rightContent={
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Pesquisa
+            </Button>
+          }
+        />
+      )}
 
       <main className="container mx-auto px-6 py-6">
+        {/* Show create button if not using InsightsSubNav */}
+        {!isInsightsRoute && (
+          <div className="flex justify-end mb-6">
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Pesquisa
+            </Button>
+          </div>
+        )}
+        
         {surveys && surveys.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
@@ -237,11 +259,11 @@ export default function Surveys() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/surveys/${survey.id}`)}>
+                        <DropdownMenuItem onClick={() => navigate(`${basePath}/${survey.id}`)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`/surveys/${survey.id}/responses`)}>
+                        <DropdownMenuItem onClick={() => navigate(`${basePath}/${survey.id}/responses`)}>
                           <BarChart2 className="h-4 w-4 mr-2" />
                           Ver Respostas
                         </DropdownMenuItem>

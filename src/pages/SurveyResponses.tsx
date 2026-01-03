@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Download, Trash2, User, Calendar, Globe, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -28,14 +28,18 @@ const SOURCE_LABELS: Record<string, string> = {
 export default function SurveyResponses() {
   const { surveyId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { survey } = useSurvey(surveyId);
   const { responses, isLoading, deleteResponse } = useSurveyResponses(surveyId);
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
 
-  const surveysEnabled = isModuleEnabled('surveys');
+  // Check if we're in the /insights route
+  const isInsightsRoute = location.pathname.startsWith('/insights');
+  const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
+  const insightsEnabled = isModuleEnabled('insights');
 
   // Show module disabled state
-  if (!isLoadingModules && !surveysEnabled) {
+  if (!isLoadingModules && !insightsEnabled) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Respostas" />
@@ -44,9 +48,9 @@ export default function SurveyResponses() {
             <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
             <p className="text-muted-foreground mb-4">
-              O módulo de Pesquisa Inteligente não está ativo para este projeto.
+              O módulo de Pesquisas não está ativo para este projeto.
             </p>
-            <Button variant="outline" onClick={() => navigate('/surveys')}>
+            <Button variant="outline" onClick={() => navigate(basePath)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -109,7 +113,7 @@ export default function SurveyResponses() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/surveys/${surveyId}`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`${basePath}/${surveyId}`)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>

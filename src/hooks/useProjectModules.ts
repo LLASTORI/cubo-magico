@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights';
 
 export interface ProjectModule {
   id: string;
@@ -31,6 +31,13 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'CRM',
     description: 'Gestão de contatos, jornada do cliente e entrada de leads via webhook',
     icon: 'users',
+  },
+  {
+    key: 'insights',
+    name: 'Insights',
+    description: 'Pesquisas inteligentes e monitoramento de redes sociais',
+    icon: 'lightbulb',
+    requiresModule: 'crm',
   },
   {
     key: 'whatsapp',
@@ -60,10 +67,10 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
   },
   {
     key: 'surveys',
-    name: 'Pesquisa Inteligente',
+    name: 'Pesquisas',
     description: 'Coleta de dados declarados e enriquecimento de identidade',
     icon: 'clipboard-list',
-    requiresModule: 'crm',
+    requiresModule: 'insights',
   },
 ];
 

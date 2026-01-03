@@ -35,7 +35,7 @@ export function ContactIdentityTab({ contactId }: ContactIdentityTabProps) {
           <Shield className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground">Nenhum dado de identidade declarado</p>
           <p className="text-sm text-muted-foreground mt-2">
-            Os dados coletados via Pesquisa Inteligente aparecerão aqui
+            Os dados coletados via Pesquisas aparecerão aqui
           </p>
         </CardContent>
       </Card>

@@ -46,7 +46,7 @@ export interface ContactIdentityEvent {
 }
 
 export const SOURCE_TYPE_LABELS: Record<string, string> = {
-  survey: 'Pesquisa Inteligente',
+  survey: 'Pesquisa',
   webhook: 'Webhook',
   csv_import: 'Importação CSV',
   manual: 'Edição Manual',

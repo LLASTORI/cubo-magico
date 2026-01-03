@@ -42,6 +42,8 @@ import Surveys from "./pages/Surveys";
 import SurveyEditor from "./pages/SurveyEditor";
 import SurveyResponses from "./pages/SurveyResponses";
 import SurveyPublic from "./pages/SurveyPublic";
+import InsightsDashboard from "./pages/InsightsDashboard";
+import SocialListeningPage from "./pages/SocialListeningPage";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -220,6 +222,32 @@ const App = () => (
                 <Route path="/surveys/:surveyId/responses" element={
                   <ProtectedRoute>
                     <SurveyResponses />
+                  </ProtectedRoute>
+                } />
+                {/* Insights Module Routes */}
+                <Route path="/insights" element={
+                  <ProtectedRoute>
+                    <InsightsDashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys" element={
+                  <ProtectedRoute>
+                    <Surveys />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys/:surveyId" element={
+                  <ProtectedRoute>
+                    <SurveyEditor />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/surveys/:surveyId/responses" element={
+                  <ProtectedRoute>
+                    <SurveyResponses />
+                  </ProtectedRoute>
+                } />
+                <Route path="/insights/social" element={
+                  <ProtectedRoute>
+                    <SocialListeningPage />
                   </ProtectedRoute>
                 } />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

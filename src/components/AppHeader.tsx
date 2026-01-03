@@ -17,7 +17,9 @@ import {
   Workflow,
   MessageCircle,
   Route,
-  Kanban
+  Kanban,
+  Lightbulb,
+  ClipboardList
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -54,6 +56,7 @@ export const AppHeader = ({
   const canAccessOfferMappings = userRole === 'owner' || userRole === 'manager';
   const isCRMEnabled = isModuleEnabled('crm');
   const isMetaAdsEnabled = isModuleEnabled('meta_ads');
+  const isInsightsEnabled = isModuleEnabled('insights');
   
   const currentPath = location.pathname;
   
@@ -61,6 +64,7 @@ export const AppHeader = ({
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
   const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard' || currentPath === '/undefined-offers';
   const isInCRM = currentPath === '/crm' || currentPath.startsWith('/crm/') || currentPath === '/automations' || currentPath.startsWith('/automations/') || currentPath === '/whatsapp' || currentPath === '/crm/kanban';
+  const isInInsights = currentPath === '/insights' || currentPath.startsWith('/insights/');
   
   const handleLogout = async () => {
     await signOut();
@@ -80,6 +84,7 @@ export const AppHeader = ({
       case '/launch-dashboard': return 'Dashboard de Lançamentos';
       case '/crm': return 'CRM - Jornada do Cliente';
       case '/offer-mappings': return 'Mapeamento de Ofertas';
+      case '/insights': return 'Insights';
       default: return 'Projeto ativo';
     }
   };
@@ -263,6 +268,58 @@ export const AppHeader = ({
                       </span>
                     </TooltipTrigger>
                     {!isCRMEnabled && (
+                      <TooltipContent>
+                        <p>Módulo bloqueado. Contate o suporte para ativar.</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+
+                {/* Insights Dropdown */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        {isInsightsEnabled ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant={isInInsights ? "default" : "outline"} className="gap-2">
+                                <Lightbulb className="w-4 h-4" />
+                                Insights
+                                <ChevronDown className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48">
+                              <DropdownMenuItem 
+                                onClick={() => navigate('/insights/surveys')} 
+                                className={`gap-2 cursor-pointer ${currentPath.startsWith('/insights/surveys') ? 'bg-muted' : ''}`}
+                              >
+                                <ClipboardList className="w-4 h-4" />
+                                Pesquisas
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => navigate('/insights/social')} 
+                                className={`gap-2 cursor-pointer ${currentPath === '/insights/social' ? 'bg-muted' : ''}`}
+                              >
+                                <MessageCircle className="w-4 h-4" />
+                                Social Listening
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            className="gap-2 opacity-60 cursor-not-allowed"
+                            disabled
+                          >
+                            <Lock className="w-4 h-4" />
+                            Insights
+                            <Lock className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </span>
+                    </TooltipTrigger>
+                    {!isInsightsEnabled && (
                       <TooltipContent>
                         <p>Módulo bloqueado. Contate o suporte para ativar.</p>
                       </TooltipContent>

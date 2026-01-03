@@ -28,7 +28,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
 import { MetaAudiencesTab } from '@/components/meta/audiences';
-import { SocialListeningTab } from '@/components/meta/social-listening';
 
 const META_APP_ID = '845927421602166';
 
@@ -765,10 +764,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
               <Users className="h-4 w-4" />
               Públicos
             </TabsTrigger>
-            <TabsTrigger value="social-listening" className="gap-1">
-              <MessageCircle className="h-4 w-4" />
-              Social Listening
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -1014,26 +1009,6 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
                 projectId={projectId}
                 adAccounts={adAccounts || []}
               />
-            )}
-          </TabsContent>
-
-          <TabsContent value="social-listening" className="space-y-6">
-            {(!adAccounts || adAccounts.length === 0) && !accountsLoading ? (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">Configure suas contas primeiro</h3>
-                  <p className="text-muted-foreground text-center mb-4 max-w-md">
-                    Conecte suas contas do Meta para monitorar comentários e interações sociais.
-                  </p>
-                  <Button onClick={() => setActiveTab('accounts')} variant="outline" className="gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Ir para Contas
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <SocialListeningTab projectId={projectId} />
             )}
           </TabsContent>
         </Tabs>

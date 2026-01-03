@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
@@ -48,6 +48,7 @@ const QUESTION_TYPES = [
 export default function SurveyEditor() {
   const { surveyId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { survey, isLoading, addQuestion, updateQuestion, deleteQuestion } = useSurvey(surveyId);
   const { webhookKeys, createWebhookKey, deleteWebhookKey } = useSurveyWebhookKeys(surveyId);
@@ -56,10 +57,13 @@ export default function SurveyEditor() {
   const [surveyData, setSurveyData] = useState({ name: '', description: '', objective: 'general', slug: '', status: 'draft', default_tags: [] as string[], default_funnel_id: '' });
   const [tagsInput, setTagsInput] = useState('');
 
-  const surveysEnabled = isModuleEnabled('surveys');
+  // Check if we're in the /insights route
+  const isInsightsRoute = location.pathname.startsWith('/insights');
+  const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
+  const insightsEnabled = isModuleEnabled('insights');
 
   // Show module disabled state
-  if (!isLoadingModules && !surveysEnabled) {
+  if (!isLoadingModules && !insightsEnabled) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Editor de Pesquisa" />
@@ -68,9 +72,9 @@ export default function SurveyEditor() {
             <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
             <p className="text-muted-foreground mb-4">
-              O módulo de Pesquisa Inteligente não está ativo para este projeto.
+              O módulo de Pesquisas não está ativo para este projeto.
             </p>
-            <Button variant="outline" onClick={() => navigate('/surveys')}>
+            <Button variant="outline" onClick={() => navigate(basePath)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -260,7 +264,7 @@ export default function SurveyEditor() {
         <AppHeader pageSubtitle="Editor de Pesquisa" />
         <div className="container mx-auto px-6 py-12 text-center">
           <p className="text-muted-foreground">Pesquisa não encontrada</p>
-          <Button variant="outline" onClick={() => navigate('/surveys')} className="mt-4">
+          <Button variant="outline" onClick={() => navigate(basePath)} className="mt-4">
             Voltar para Pesquisas
           </Button>
         </div>
@@ -275,7 +279,7 @@ export default function SurveyEditor() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/surveys')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(basePath)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -286,7 +290,7 @@ export default function SurveyEditor() {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => navigate(`/surveys/${surveyId}/responses`)}>
+            <Button variant="outline" onClick={() => navigate(`${basePath}/${surveyId}/responses`)}>
               <Eye className="h-4 w-4 mr-2" />
               Ver Respostas
             </Button>

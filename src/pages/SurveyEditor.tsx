@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
   Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet,
-  Palette
+  Palette, Gift
 } from 'lucide-react';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import { CubeLoader } from '@/components/CubeLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { SurveyCSVImportLocal } from '@/components/surveys/SurveyCSVImportLocal';
 import { SurveyAppearanceSettings, SurveyTheme, SurveyMessages } from '@/components/surveys/SurveyAppearanceSettings';
+import { SurveyCompletionSettings, CompletionSettings } from '@/components/surveys/SurveyCompletionSettings';
 import { SurveyPreview } from '@/components/surveys/SurveyPreview';
 
 const QUESTION_TYPES = [
@@ -54,6 +55,7 @@ export default function SurveyEditor() {
     welcome_message?: string;
     thank_you_message?: string;
     theme?: SurveyTheme;
+    completion?: CompletionSettings;
   }>({});
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [newWebhookName, setNewWebhookName] = useState('');
@@ -67,12 +69,13 @@ export default function SurveyEditor() {
         slug: survey.slug || '',
         status: survey.status,
       });
-      // Parse settings for theme and messages
+      // Parse settings for theme, messages and completion
       const settings = (survey.settings as any) || {};
       setSurveySettings({
         welcome_message: settings.welcome_message,
         thank_you_message: settings.thank_you_message,
         theme: settings.theme,
+        completion: settings.completion,
       });
     }
   }, [survey]);
@@ -112,6 +115,10 @@ export default function SurveyEditor() {
       welcome_message: messages.welcome_message,
       thank_you_message: messages.thank_you_message,
     }));
+  };
+
+  const handleCompletionChange = (completion: CompletionSettings) => {
+    setSurveySettings(prev => ({ ...prev, completion }));
   };
 
   const previewUrl = surveyData.slug
@@ -240,6 +247,10 @@ export default function SurveyEditor() {
               <Palette className="h-4 w-4 mr-2" />
               Aparência
             </TabsTrigger>
+            <TabsTrigger value="completion">
+              <Gift className="h-4 w-4 mr-2" />
+              Conclusão
+            </TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
             <TabsTrigger value="integrations">Integrações</TabsTrigger>
             <TabsTrigger value="import">
@@ -352,6 +363,26 @@ export default function SurveyEditor() {
                   </CardContent>
                 </Card>
               </div>
+            </div>
+          </TabsContent>
+
+          {/* Completion Tab */}
+          <TabsContent value="completion" className="space-y-6">
+            <div className="max-w-3xl">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-2">Ações de Conclusão</h2>
+                <p className="text-muted-foreground text-sm">
+                  Configure o que acontece quando o usuário finaliza a pesquisa: botões de ação, redirecionamento automático e mensagens de recompensa.
+                </p>
+              </div>
+              <SurveyCompletionSettings
+                settings={surveySettings.completion || {
+                  enable_auto_redirect: false,
+                  redirect_delay_seconds: 5,
+                  cta_buttons: [],
+                }}
+                onChange={handleCompletionChange}
+              />
             </div>
           </TabsContent>
 

@@ -36,6 +36,23 @@ interface SurveyTheme {
   one_question_per_page: boolean;
 }
 
+interface CTAButton {
+  id: string;
+  label: string;
+  url: string;
+  style: 'primary' | 'secondary' | 'outline';
+  open_in_new_tab: boolean;
+}
+
+interface CompletionSettings {
+  enable_auto_redirect?: boolean;
+  redirect_url?: string;
+  redirect_delay_seconds?: number;
+  cta_buttons?: CTAButton[];
+  reward_message?: string;
+  reward_highlight?: string;
+}
+
 interface PublicSurvey {
   id: string;
   name: string;
@@ -44,6 +61,7 @@ interface PublicSurvey {
     welcome_message?: string;
     thank_you_message?: string;
     theme?: SurveyTheme;
+    completion?: CompletionSettings;
   } | null;
   survey_questions: SurveyQuestion[];
 }
@@ -532,6 +550,7 @@ export default function SurveyPublic() {
                 logoUrl={theme.logo_url}
                 primaryColor={theme.primary_color}
                 textColor={theme.text_color}
+                completionSettings={survey?.settings?.completion}
               />
             )}
           </AnimatePresence>

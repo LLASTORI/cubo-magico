@@ -9,6 +9,7 @@ interface QuestionTextProps {
   multiline?: boolean;
   primaryColor?: string;
   secondaryColor?: string;
+  inputTextColor?: string;
 }
 
 export function QuestionText({ 
@@ -17,7 +18,8 @@ export function QuestionText({
   placeholder = "Digite sua resposta...",
   multiline = true,
   primaryColor = '#6366f1',
-  secondaryColor = '#64748b'
+  secondaryColor = '#64748b',
+  inputTextColor = '#1e293b'
 }: QuestionTextProps) {
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   
@@ -46,7 +48,10 @@ export function QuestionText({
           placeholder={placeholder}
           className={baseClasses}
           rows={3}
-          style={{ borderColor: value ? primaryColor : secondaryColor }}
+          style={{ 
+            borderColor: value ? primaryColor : secondaryColor,
+            color: inputTextColor
+          }}
         />
         <style>{`
           textarea::placeholder {
@@ -69,7 +74,10 @@ export function QuestionText({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={baseClasses}
-        style={{ borderColor: value ? primaryColor : secondaryColor }}
+        style={{ 
+          borderColor: value ? primaryColor : secondaryColor,
+          color: inputTextColor
+        }}
       />
       <style>{`
         input::placeholder {

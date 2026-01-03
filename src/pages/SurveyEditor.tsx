@@ -315,6 +315,7 @@ export default function SurveyEditor() {
                     primary_color: '#6366f1',
                     text_color: '#1e293b',
                     secondary_text_color: '#64748b',
+                    input_text_color: '#1e293b',
                     background_color: '#f8fafc',
                     show_progress: true,
                     one_question_per_page: true,

@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights' | 'social_listening';
 
 export interface ProjectModule {
   id: string;
@@ -70,6 +70,13 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'Pesquisas',
     description: 'Coleta de dados declarados e enriquecimento de identidade',
     icon: 'clipboard-list',
+    requiresModule: 'insights',
+  },
+  {
+    key: 'social_listening',
+    name: 'Social Listening',
+    description: 'Monitoramento de comentários e interações em redes sociais',
+    icon: 'message-circle',
     requiresModule: 'insights',
   },
 ];

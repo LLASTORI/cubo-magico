@@ -48,6 +48,7 @@ const MODULE_ICONS: Record<ModuleKey, React.ReactNode> = {
   hotmart: <ShoppingCart className="w-4 h-4" />,
   automation: <Workflow className="w-4 h-4" />,
   surveys: <ClipboardList className="w-4 h-4" />,
+  social_listening: <MessageCircle className="w-4 h-4" />,
 };
 
 export const ModulesManager = () => {

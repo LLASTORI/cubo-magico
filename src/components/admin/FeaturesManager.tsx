@@ -39,11 +39,12 @@ const MODULE_LABELS: Record<string, string> = {
   core: 'Core (Dashboard/Configurações)',
   crm: 'CRM',
   insights: 'Insights',
+  surveys: 'Pesquisas',
+  social_listening: 'Social Listening',
   hotmart: 'Hotmart (inclui Lançamentos)',
   meta_ads: 'Meta Ads',
   whatsapp: 'WhatsApp',
   automations: 'Automações',
-  surveys: 'Pesquisas',
 };
 
 export const FeaturesManager = () => {

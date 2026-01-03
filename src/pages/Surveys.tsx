@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2 } from 'lucide-react';
+import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
@@ -48,6 +49,7 @@ export default function Surveys() {
   const { surveys, isLoading, createSurvey, deleteSurvey } = useSurveys();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newSurvey, setNewSurvey] = useState({ name: '', description: '', objective: 'general' });
+  const [isCloning, setIsCloning] = useState(false);
 
   const handleCreate = async () => {
     if (!newSurvey.name.trim()) {
@@ -75,6 +77,78 @@ export default function Surveys() {
     const url = `${window.location.origin}/s/${survey.slug}`;
     navigator.clipboard.writeText(url);
     toast({ title: 'Link copiado!' });
+  };
+
+  const handleClone = async (survey: Survey) => {
+    setIsCloning(true);
+    try {
+      // Fetch original survey with all details
+      const { data: originalSurvey, error: surveyError } = await supabase
+        .from('surveys')
+        .select('*')
+        .eq('id', survey.id)
+        .single();
+
+      if (surveyError) throw surveyError;
+
+      // Fetch original questions
+      const { data: originalQuestions, error: questionsError } = await supabase
+        .from('survey_questions')
+        .select('*')
+        .eq('survey_id', survey.id)
+        .order('position', { ascending: true });
+
+      if (questionsError) throw questionsError;
+
+      // Create new survey (copy all fields except id, slug, created_at, updated_at)
+      const { data: newSurveyData, error: createError } = await supabase
+        .from('surveys')
+        .insert({
+          project_id: originalSurvey.project_id,
+          name: `${originalSurvey.name} (Cópia)`,
+          description: originalSurvey.description,
+          objective: originalSurvey.objective,
+          status: 'draft', // Always start as draft
+          settings: originalSurvey.settings,
+          default_tags: originalSurvey.default_tags,
+          default_funnel_id: originalSurvey.default_funnel_id,
+          // Don't copy slug - user should create a new unique one
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Clone questions
+      if (originalQuestions && originalQuestions.length > 0) {
+        const questionsToInsert = originalQuestions.map(q => ({
+          survey_id: newSurveyData.id,
+          question_type: q.question_type,
+          question_text: q.question_text,
+          description: q.description,
+          options: q.options,
+          is_required: q.is_required,
+          position: q.position,
+          identity_field_target: q.identity_field_target,
+          identity_confidence_weight: q.identity_confidence_weight,
+          settings: q.settings,
+        }));
+
+        const { error: insertQuestionsError } = await supabase
+          .from('survey_questions')
+          .insert(questionsToInsert);
+
+        if (insertQuestionsError) throw insertQuestionsError;
+      }
+
+      toast({ title: 'Pesquisa clonada com sucesso!' });
+      navigate(`/surveys/${newSurveyData.id}`);
+    } catch (error) {
+      console.error('Error cloning survey:', error);
+      toast({ title: 'Erro ao clonar pesquisa', variant: 'destructive' });
+    } finally {
+      setIsCloning(false);
+    }
   };
 
   if (isLoading) {
@@ -155,6 +229,13 @@ export default function Surveys() {
                             </DropdownMenuItem>
                           </>
                         )}
+                        <DropdownMenuItem 
+                          onClick={() => handleClone(survey)}
+                          disabled={isCloning}
+                        >
+                          <Files className="h-4 w-4 mr-2" />
+                          {isCloning ? 'Clonando...' : 'Clonar'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleDelete(survey)}
                           className="text-destructive"

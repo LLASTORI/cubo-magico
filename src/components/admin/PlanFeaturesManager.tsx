@@ -34,6 +34,8 @@ interface PlanFeature {
 const MODULE_LABELS: Record<string, string> = {
   core: 'Core (Dashboard/Configurações)',
   crm: 'CRM',
+  insights: 'Insights',
+  surveys: 'Pesquisas',
   hotmart: 'Hotmart (inclui Lançamentos)',
   meta_ads: 'Meta Ads',
   whatsapp: 'WhatsApp',

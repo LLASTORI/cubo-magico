@@ -97,7 +97,11 @@ export function CRMWebhookKeysManager() {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; data?: any; error?: string } | null>(null);
 
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-webhook`;
+  // URL no formato multi-tenant seguro: /crm-webhook/:project_code
+  const projectCode = currentProject?.public_code;
+  const webhookUrl = projectCode
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-webhook/${projectCode}`
+    : null;
 
   // Fetch funnels for selection
   const { data: funnels } = useQuery({
@@ -134,6 +138,14 @@ export function CRMWebhookKeysManager() {
   };
 
   const handleCopyExample = async () => {
+    if (!webhookUrl) {
+      toast({
+        title: 'Erro',
+        description: 'Aguarde o carregamento do projeto para copiar o exemplo.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const example = `curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: SUA_API_KEY" \\
@@ -267,7 +279,14 @@ export function CRMWebhookKeysManager() {
   };
 
   const handleTestWebhook = async () => {
-    if (!selectedKeyForTest) return;
+    if (!selectedKeyForTest || !webhookUrl) {
+      toast({
+        title: 'Erro',
+        description: 'Aguarde o carregamento do projeto.',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     setIsTesting(true);
     setTestResult(null);
@@ -590,7 +609,7 @@ export function CRMWebhookKeysManager() {
                     ))}
                   </select>
                 </div>
-                {selectedKeyForTest && (
+                {selectedKeyForTest && webhookUrl && (
                   <WebhookTestDashboard 
                     apiKey={selectedKeyForTest.api_key}
                     webhookUrl={webhookUrl}
@@ -606,6 +625,27 @@ export function CRMWebhookKeysManager() {
           </TabsContent>
 
           <TabsContent value="docs" className="space-y-6 mt-4">
+            {/* URL Missing Warning */}
+            {!webhookUrl && (
+              <div className="p-4 rounded-lg border bg-yellow-500/10 border-yellow-500/20">
+                <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                  <strong>Atenção:</strong> Aguardando carregamento do projeto para exibir a URL do webhook.
+                </p>
+              </div>
+            )}
+
+            {/* Security Notice */}
+            <div className="p-4 rounded-lg border bg-green-500/10 border-green-500/20">
+              <h5 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                Segurança Multi-Tenant
+              </h5>
+              <p className="text-sm text-muted-foreground">
+                A URL do webhook inclui o código único do projeto (<code className="bg-background px-1 rounded">{projectCode}</code>). 
+                A API key confirma o contexto, mas não o substitui. Requisições com project_code incorreto são rejeitadas.
+              </p>
+            </div>
+
             {/* Quick example */}
             <div className="p-4 rounded-lg border bg-muted/50">
               <div className="flex items-center justify-between mb-2">
@@ -613,13 +653,13 @@ export function CRMWebhookKeysManager() {
                   <FileText className="h-4 w-4" />
                   Exemplo de Requisição
                 </h5>
-                <Button variant="outline" size="sm" onClick={handleCopyExample}>
+                <Button variant="outline" size="sm" onClick={handleCopyExample} disabled={!webhookUrl}>
                   <Copy className="h-4 w-4 mr-2" />
                   Copiar
                 </Button>
               </div>
               <pre className="p-3 rounded bg-background text-xs overflow-x-auto">
-{`curl -X POST "${webhookUrl}" \\
+{`curl -X POST "${webhookUrl || 'Carregando...'}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: SUA_API_KEY" \\
   -d '{

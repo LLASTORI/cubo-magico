@@ -1,4 +1,22 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+/**
+ * CRM Webhook Edge Function (Multi-Tenant Seguro)
+ * 
+ * ENDPOINT PRINCIPAL (OBRIGATÓRIO):
+ * POST /crm-webhook/:project_code
+ * 
+ * Exemplo: POST /crm-webhook/cm_4f8k2d
+ * 
+ * ENDPOINT LEGADO (DEPRECATED):
+ * POST /crm-webhook (funciona apenas com API key, mas emite aviso)
+ * 
+ * ## Headers Obrigatórios:
+ * - `x-api-key`: Chave API exclusiva do projeto
+ * 
+ * ## Segurança Multi-Tenant:
+ * 1. Projeto resolvido EXCLUSIVAMENTE via project_code
+ * 2. API key valida o contexto (nunca o substitui)
+ * 3. Ambiguidade = erro seguro (sem exposição)
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -84,7 +102,7 @@ const FIELD_ALIASES: Record<string, string> = {
   'labels': 'tags',
   'etiquetas': 'tags',
   
-  // UTM variations (with and without underscore)
+  // UTM variations
   'utm_source': 'utm_source',
   'utmsource': 'utm_source',
   'source': 'utm_source',
@@ -114,7 +132,7 @@ const FIELD_ALIASES: Record<string, string> = {
   'placement': 'utm_placement',
   
   // SCK variations (Hotmart format)
-  'sck': 'utm_source', // Hotmart uses sck as source
+  'sck': 'utm_source',
   'sck_source': 'utm_source',
   'sck_src': 'utm_source',
   'src': 'utm_source',
@@ -156,7 +174,6 @@ const FIELD_ALIASES: Record<string, string> = {
   'metadata': 'custom_fields',
 };
 
-// Standard fields that we accept
 const STANDARD_FIELDS = [
   'email', 'name', 'first_name', 'last_name', 'phone', 'phone_ddd', 'phone_country_code', 'document', 'instagram',
   'address', 'address_number', 'address_complement', 'neighborhood',
@@ -201,7 +218,6 @@ interface NormalizedPayload {
   interaction_type?: string;
 }
 
-// Helper function to get phone country code from country name
 function getCountryCode(country: string): string {
   const countryMap: Record<string, string> = {
     'brasil': '55', 'brazil': '55', 'br': '55',
@@ -226,55 +242,36 @@ function getCountryCode(country: string): string {
   return countryMap[country.toLowerCase().trim()] || '55';
 }
 
-// Extract Meta IDs from UTM fields (same logic as hotmart-api)
 function extractMetaIds(payload: NormalizedPayload): { campaignId: string | null; adsetId: string | null; adId: string | null } {
   let campaignId: string | null = null;
   let adsetId: string | null = null;
   let adId: string | null = null;
 
-  // Try to extract from utm_campaign (often contains campaign ID)
   if (payload.utm_campaign) {
-    // Pattern: could be just the ID or "campaignname_123456789"
     const campaignMatch = payload.utm_campaign.match(/(\d{10,})/);
-    if (campaignMatch) {
-      campaignId = campaignMatch[1];
-    }
+    if (campaignMatch) campaignId = campaignMatch[1];
   }
 
-  // Try to extract from utm_adset (may contain adset ID)
   if (payload.utm_adset) {
     const adsetMatch = payload.utm_adset.match(/(\d{10,})/);
-    if (adsetMatch) {
-      adsetId = adsetMatch[1];
-    }
+    if (adsetMatch) adsetId = adsetMatch[1];
   }
 
-  // Try to extract from utm_ad (may contain ad ID)
   if (payload.utm_ad) {
     const adMatch = payload.utm_ad.match(/(\d{10,})/);
-    if (adMatch) {
-      adId = adMatch[1];
-    }
+    if (adMatch) adId = adMatch[1];
   }
 
-  // Try to extract from utm_content (often contains ad ID or creative ID)
   if (!adId && payload.utm_content) {
     const adMatch = payload.utm_content.match(/(\d{10,})/);
-    if (adMatch) {
-      adId = adMatch[1];
-    }
+    if (adMatch) adId = adMatch[1];
   }
 
-  // Try to extract from utm_creative (often contains creative/ad ID)
   if (!adId && payload.utm_creative) {
     const creativeMatch = payload.utm_creative.match(/(\d{10,})/);
-    if (creativeMatch) {
-      adId = creativeMatch[1];
-    }
+    if (creativeMatch) adId = creativeMatch[1];
   }
 
-  // For SCK format: source_sck often has multiple IDs separated by special characters
-  // Pattern like: "fb|123456789012345|234567890123456|345678901234567"
   if (payload.utm_source && payload.utm_source.includes('|')) {
     const sckParts = payload.utm_source.split('|');
     const numericIds = sckParts.filter(p => /^\d{10,}$/.test(p));
@@ -287,7 +284,6 @@ function extractMetaIds(payload: NormalizedPayload): { campaignId: string | null
   return { campaignId, adsetId, adId };
 }
 
-// Normalize field names using aliases and custom mappings
 function normalizePayload(
   body: Record<string, unknown>, 
   customMappings: Record<string, string> = {}
@@ -299,11 +295,8 @@ function normalizePayload(
     if (value === null || value === undefined || value === '') continue;
     
     const lowerKey = key.toLowerCase().trim();
-    
-    // Priority: 1. Custom mapping, 2. Built-in alias, 3. Direct match
     let targetField: string | undefined;
     
-    // Check custom mappings first (case-insensitive)
     for (const [mapFrom, mapTo] of Object.entries(customMappings)) {
       if (mapFrom.toLowerCase() === lowerKey) {
         targetField = mapTo;
@@ -311,27 +304,22 @@ function normalizePayload(
       }
     }
     
-    // If no custom mapping, check built-in aliases
     if (!targetField) {
       targetField = FIELD_ALIASES[lowerKey];
     }
     
-    // If no alias, check if it's a standard field
     if (!targetField && STANDARD_FIELDS.includes(lowerKey)) {
       targetField = lowerKey;
     }
     
     if (targetField) {
-      // Handle special cases
       if (targetField === 'tags') {
-        // Ensure tags is always an array
         if (Array.isArray(value)) {
           normalized[targetField] = value;
         } else if (typeof value === 'string') {
           normalized[targetField] = value.split(',').map(t => t.trim()).filter(Boolean);
         }
       } else if (targetField === 'custom_fields') {
-        // Merge custom fields
         normalized[targetField] = {
           ...(normalized[targetField] as Record<string, unknown> || {}),
           ...(typeof value === 'object' ? value : { [key]: value })
@@ -340,12 +328,10 @@ function normalizePayload(
         normalized[targetField] = value;
       }
     } else {
-      // Store unmapped fields in custom_fields
       unmappedFields[key] = value;
     }
   }
 
-  // Add unmapped fields to custom_fields
   if (Object.keys(unmappedFields).length > 0) {
     normalized.custom_fields = {
       ...(normalized.custom_fields as Record<string, unknown> || {}),
@@ -353,8 +339,6 @@ function normalizePayload(
     };
   }
 
-  // Build full name from first_name + last_name if name is not already set
-  // Keep first_name and last_name as separate fields for the database
   if (!normalized.name && (normalized.first_name || normalized.last_name)) {
     const parts = [
       normalized.first_name as string,
@@ -366,13 +350,241 @@ function normalizePayload(
   return normalized as NormalizedPayload;
 }
 
-serve(async (req) => {
-  // Handle CORS preflight
+// Resolve projeto via public_code de forma segura
+async function resolveProject(
+  supabase: any,
+  projectCode: string
+): Promise<{ id: string; public_code: string } | null> {
+  const { data: project, error } = await supabase
+    .from('projects')
+    .select('id, public_code')
+    .eq('public_code', projectCode)
+    .single();
+
+  if (error || !project) {
+    console.error(`[CRM Webhook] Project not found for code: ${projectCode}`);
+    return null;
+  }
+
+  return project;
+}
+
+// Valida que a API key pertence ao projeto correto
+async function validateApiKeyForProject(
+  supabase: any,
+  apiKey: string,
+  projectId: string
+): Promise<{ valid: boolean; webhookKey: any }> {
+  const { data: webhookKey, error } = await supabase
+    .from('crm_webhook_keys')
+    .select('id, project_id, default_tags, default_funnel_id, allowed_sources, field_mappings, usage_count')
+    .eq('api_key', apiKey)
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .single();
+
+  if (error || !webhookKey) {
+    return { valid: false, webhookKey: null };
+  }
+
+  return { valid: true, webhookKey };
+}
+
+// Processa o webhook após validação de contexto
+async function processWebhook(
+  supabase: any,
+  projectId: string,
+  webhookKey: any,
+  body: NormalizedPayload
+) {
+  const email = body.email!.toLowerCase().trim();
+  const now = new Date().toISOString();
+
+  // Get funnel tag if configured
+  let funnelTag: string | null = null;
+  if (webhookKey.default_funnel_id) {
+    const { data: funnel } = await supabase
+      .from('funnels')
+      .select('name')
+      .eq('id', webhookKey.default_funnel_id)
+      .single();
+    
+    if (funnel?.name) {
+      funnelTag = `funil:${funnel.name}`;
+    }
+  }
+
+  // Merge tags
+  const mergedTags = [
+    ...(webhookKey.default_tags || []),
+    ...(body.tags || []),
+    ...(funnelTag ? [funnelTag] : [])
+  ].filter((tag, index, arr) => arr.indexOf(tag) === index);
+
+  // Check if contact exists
+  const { data: existingContact } = await supabase
+    .from('crm_contacts')
+    .select('id, first_utm_source, tags')
+    .eq('project_id', projectId)
+    .eq('email', email)
+    .single();
+
+  const isNewContact = !existingContact;
+  const { campaignId, adsetId, adId } = extractMetaIds(body);
+
+  let contact;
+
+  if (isNewContact) {
+    const insertData = {
+      project_id: projectId,
+      email,
+      name: body.name || null,
+      first_name: body.first_name || null,
+      last_name: body.last_name || null,
+      phone: body.phone || null,
+      phone_ddd: body.phone_ddd || null,
+      phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
+      document: body.document || null,
+      instagram: body.instagram ? body.instagram.replace(/^@/, '') : null,
+      address: body.address || null,
+      address_number: body.address_number || null,
+      address_complement: body.address_complement || null,
+      neighborhood: body.neighborhood || null,
+      city: body.city || null,
+      state: body.state || null,
+      country: body.country || null,
+      cep: body.cep || null,
+      custom_fields: body.custom_fields || {},
+      source: 'webhook',
+      status: 'lead',
+      tags: mergedTags.length > 0 ? mergedTags : null,
+      first_utm_source: body.utm_source || null,
+      first_utm_campaign: body.utm_campaign || null,
+      first_utm_medium: body.utm_medium || null,
+      first_utm_content: body.utm_content || null,
+      first_utm_term: body.utm_term || null,
+      first_utm_adset: body.utm_adset || null,
+      first_utm_ad: body.utm_ad || null,
+      first_utm_creative: body.utm_creative || null,
+      first_utm_placement: body.utm_placement || null,
+      first_page_name: body.page_name || null,
+      first_meta_campaign_id: campaignId,
+      first_meta_adset_id: adsetId,
+      first_meta_ad_id: adId,
+      first_seen_at: now,
+      last_activity_at: now,
+    };
+
+    const { data: insertedContact, error: insertError } = await supabase
+      .from('crm_contacts')
+      .insert(insertData)
+      .select('id, email, name, status, tags, created_at')
+      .single();
+
+    if (insertError) throw insertError;
+    contact = insertedContact;
+  } else {
+    const updateFields: Record<string, unknown> = { last_activity_at: now };
+
+    if (body.name) updateFields.name = body.name;
+    if (body.first_name) updateFields.first_name = body.first_name;
+    if (body.last_name) updateFields.last_name = body.last_name;
+    if (body.phone) updateFields.phone = body.phone;
+    if (body.phone_ddd) updateFields.phone_ddd = body.phone_ddd;
+    if (body.phone_country_code || body.country) {
+      updateFields.phone_country_code = body.phone_country_code || getCountryCode(body.country!);
+    }
+    if (body.document) updateFields.document = body.document;
+    if (body.instagram) updateFields.instagram = body.instagram.replace(/^@/, '');
+    if (body.address) updateFields.address = body.address;
+    if (body.address_number) updateFields.address_number = body.address_number;
+    if (body.address_complement) updateFields.address_complement = body.address_complement;
+    if (body.neighborhood) updateFields.neighborhood = body.neighborhood;
+    if (body.city) updateFields.city = body.city;
+    if (body.state) updateFields.state = body.state;
+    if (body.country) updateFields.country = body.country;
+    if (body.cep) updateFields.cep = body.cep;
+
+    if (body.custom_fields && Object.keys(body.custom_fields).length > 0) {
+      const { data: currentContact } = await supabase
+        .from('crm_contacts')
+        .select('custom_fields')
+        .eq('id', existingContact.id)
+        .single();
+      
+      updateFields.custom_fields = {
+        ...(currentContact?.custom_fields as Record<string, unknown> || {}),
+        ...body.custom_fields
+      };
+    }
+
+    const existingTags = existingContact.tags || [];
+    const allTags = [...existingTags, ...mergedTags]
+      .filter((tag, index, arr) => arr.indexOf(tag) === index);
+    if (allTags.length > 0) {
+      updateFields.tags = allTags;
+    }
+
+    const { data: updatedContact, error: updateError } = await supabase
+      .from('crm_contacts')
+      .update(updateFields)
+      .eq('id', existingContact.id)
+      .select('id, email, name, status, tags, created_at')
+      .single();
+
+    if (updateError) throw updateError;
+    contact = updatedContact;
+  }
+
+  // Create interaction if we have UTM/page data
+  const hasUtmData = body.utm_source || body.utm_campaign || body.utm_medium || 
+                     body.utm_adset || body.utm_ad || body.utm_creative;
+  const hasInteractionData = body.page_name || body.page_url || body.launch_tag || body.interaction_type;
+  
+  if (hasUtmData || hasInteractionData) {
+    const interactionData = {
+      contact_id: contact.id,
+      project_id: projectId,
+      interaction_type: body.interaction_type || 'page_view',
+      page_name: body.page_name || null,
+      page_url: body.page_url || null,
+      utm_source: body.utm_source || null,
+      utm_campaign: body.utm_campaign || null,
+      utm_medium: body.utm_medium || null,
+      utm_content: body.utm_content || null,
+      utm_term: body.utm_term || null,
+      utm_adset: body.utm_adset || null,
+      utm_ad: body.utm_ad || null,
+      utm_creative: body.utm_creative || null,
+      utm_placement: body.utm_placement || null,
+      launch_tag: body.launch_tag || null,
+      meta_campaign_id: campaignId,
+      meta_adset_id: adsetId,
+      meta_ad_id: adId,
+      metadata: body.custom_fields || {},
+      interacted_at: now,
+    };
+
+    await supabase.from('crm_contact_interactions').insert(interactionData);
+  }
+
+  // Update webhook usage stats
+  await supabase
+    .from('crm_webhook_keys')
+    .update({
+      last_used_at: now,
+      usage_count: (webhookKey.usage_count || 0) + 1,
+    })
+    .eq('id', webhookKey.id);
+
+  return { contact, isNewContact };
+}
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Only accept POST
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
@@ -381,23 +593,102 @@ serve(async (req) => {
   }
 
   try {
-    // Get API key from header
     const apiKey = req.headers.get('x-api-key');
     
     if (!apiKey) {
-      console.log('[CRM Webhook] Missing API key');
       return new Response(
         JSON.stringify({ error: 'Missing API key. Provide it in the x-api-key header.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate API key and get project info
+    // Parse URL to extract project_code
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    
+    // Expected: /crm-webhook/:project_code
+    let projectCode: string | null = null;
+    if (pathParts.length >= 2) {
+      projectCode = pathParts[1];
+    }
+
+    // Parse body first for email validation
+    const rawBody: Record<string, unknown> = await req.json();
+
+    // ========== ENDPOINT PRINCIPAL (com namespace) ==========
+    if (projectCode && projectCode.startsWith('cm_')) {
+      console.log(`[CRM Webhook] New format - project_code: ${projectCode}`);
+
+      // 1. Resolver projeto via public_code
+      const project = await resolveProject(supabase, projectCode);
+      
+      if (!project) {
+        return new Response(
+          JSON.stringify({ error: 'Resource not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 2. Validar API key no contexto do projeto
+      const { valid, webhookKey } = await validateApiKeyForProject(supabase, apiKey, project.id);
+
+      if (!valid) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid API key for this context' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 3. Normalizar e validar payload
+      const customMappings = (webhookKey.field_mappings as Record<string, string>) || {};
+      const body = normalizePayload(rawBody, customMappings);
+
+      if (!body.email || typeof body.email !== 'string') {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Email is required and must be a string',
+            hint: 'Make sure to send "email" field or configure field mapping'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.email)) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid email format' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 4. Processar webhook
+      const { contact, isNewContact } = await processWebhook(supabase, project.id, webhookKey, body);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          contact: {
+            id: contact.id,
+            email: contact.email,
+            name: contact.name,
+            status: contact.status,
+            tags: contact.tags,
+            created_at: contact.created_at,
+            is_new: isNewContact,
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ========== ENDPOINT LEGADO (DEPRECATED) ==========
+    console.warn('[CRM Webhook] LEGACY endpoint used - this is deprecated');
+
+    // Buscar API key para obter project_id (comportamento legado)
     const { data: webhookKey, error: keyError } = await supabase
       .from('crm_webhook_keys')
       .select('id, project_id, default_tags, default_funnel_id, allowed_sources, field_mappings, usage_count')
@@ -406,51 +697,26 @@ serve(async (req) => {
       .single();
 
     if (keyError || !webhookKey) {
-      console.log('[CRM Webhook] Invalid API key:', keyError?.message);
       return new Response(
         JSON.stringify({ error: 'Invalid API key' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[CRM Webhook] Valid API key for project:', webhookKey.project_id);
-
-    // Get funnel name if default_funnel_id is set
-    let funnelTag: string | null = null;
-    if (webhookKey.default_funnel_id) {
-      const { data: funnel } = await supabase
-        .from('funnels')
-        .select('name')
-        .eq('id', webhookKey.default_funnel_id)
-        .single();
-      
-      if (funnel?.name) {
-        funnelTag = `funil:${funnel.name}`;
-        console.log('[CRM Webhook] Adding funnel tag:', funnelTag);
-      }
-    }
-
-    // Parse request body
-    const rawBody: Record<string, unknown> = await req.json();
-    
-    // Normalize payload using aliases and custom mappings
+    // Normalizar e validar payload
     const customMappings = (webhookKey.field_mappings as Record<string, string>) || {};
     const body = normalizePayload(rawBody, customMappings);
 
-    console.log('[CRM Webhook] Normalized payload:', JSON.stringify(body));
-
-    // Validate required fields
     if (!body.email || typeof body.email !== 'string') {
       return new Response(
         JSON.stringify({ 
           error: 'Email is required and must be a string',
-          hint: 'Make sure to send "email" field or configure field mapping for your email field name'
+          hint: 'Make sure to send "email" field or configure field mapping'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(body.email)) {
       return new Response(
@@ -459,205 +725,8 @@ serve(async (req) => {
       );
     }
 
-    // Merge tags (default + provided + funnel tag)
-    const mergedTags = [
-      ...(webhookKey.default_tags || []),
-      ...(body.tags || []),
-      ...(funnelTag ? [funnelTag] : [])
-    ].filter((tag, index, arr) => arr.indexOf(tag) === index);
-
-    const email = body.email.toLowerCase().trim();
-    const now = new Date().toISOString();
-
-    // Check if contact already exists
-    const { data: existingContact } = await supabase
-      .from('crm_contacts')
-      .select('id, first_utm_source, tags')
-      .eq('project_id', webhookKey.project_id)
-      .eq('email', email)
-      .single();
-
-    const isNewContact = !existingContact;
-
-    // Extract Meta IDs from UTM data
-    const { campaignId, adsetId, adId } = extractMetaIds(body);
-    console.log('[CRM Webhook] Extracted Meta IDs:', { campaignId, adsetId, adId });
-
-    let contact;
-
-    if (isNewContact) {
-      // For new contacts, insert with all data
-      const insertData = {
-        project_id: webhookKey.project_id,
-        email,
-        name: body.name || null,
-        first_name: body.first_name || null,
-        last_name: body.last_name || null,
-        phone: body.phone || null,
-        phone_ddd: body.phone_ddd || null,
-        phone_country_code: body.phone_country_code || (body.country ? getCountryCode(body.country) : '55'),
-        document: body.document || null,
-        instagram: body.instagram ? body.instagram.replace(/^@/, '') : null,
-        address: body.address || null,
-        address_number: body.address_number || null,
-        address_complement: body.address_complement || null,
-        neighborhood: body.neighborhood || null,
-        city: body.city || null,
-        state: body.state || null,
-        country: body.country || null,
-        cep: body.cep || null,
-        custom_fields: body.custom_fields || {},
-        source: 'webhook',
-        status: 'lead',
-        tags: mergedTags.length > 0 ? mergedTags : null,
-        first_utm_source: body.utm_source || null,
-        first_utm_campaign: body.utm_campaign || null,
-        first_utm_medium: body.utm_medium || null,
-        first_utm_content: body.utm_content || null,
-        first_utm_term: body.utm_term || null,
-        first_utm_adset: body.utm_adset || null,
-        first_utm_ad: body.utm_ad || null,
-        first_utm_creative: body.utm_creative || null,
-        first_utm_placement: body.utm_placement || null,
-        first_page_name: body.page_name || null,
-        first_meta_campaign_id: campaignId,
-        first_meta_adset_id: adsetId,
-        first_meta_ad_id: adId,
-        first_seen_at: now,
-        last_activity_at: now,
-      };
-
-      const { data: insertedContact, error: insertError } = await supabase
-        .from('crm_contacts')
-        .insert(insertData)
-        .select('id, email, name, status, tags, created_at')
-        .single();
-
-      if (insertError) {
-        console.error('[CRM Webhook] Error inserting contact:', insertError);
-        return new Response(
-          JSON.stringify({ error: 'Failed to save contact', details: insertError.message }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      contact = insertedContact;
-    } else {
-      // For existing contacts, use COALESCE logic to preserve existing data
-      // Only update fields if new value is provided (not null/undefined/empty)
-      const updateFields: Record<string, unknown> = {
-        last_activity_at: now,
-      };
-
-      // Only update if new value is provided and not empty
-      if (body.name) updateFields.name = body.name;
-      if (body.first_name) updateFields.first_name = body.first_name;
-      if (body.last_name) updateFields.last_name = body.last_name;
-      if (body.phone) updateFields.phone = body.phone;
-      if (body.phone_ddd) updateFields.phone_ddd = body.phone_ddd;
-      if (body.phone_country_code || body.country) {
-        updateFields.phone_country_code = body.phone_country_code || getCountryCode(body.country!);
-      }
-      if (body.document) updateFields.document = body.document;
-      if (body.instagram) updateFields.instagram = body.instagram.replace(/^@/, '');
-      if (body.address) updateFields.address = body.address;
-      if (body.address_number) updateFields.address_number = body.address_number;
-      if (body.address_complement) updateFields.address_complement = body.address_complement;
-      if (body.neighborhood) updateFields.neighborhood = body.neighborhood;
-      if (body.city) updateFields.city = body.city;
-      if (body.state) updateFields.state = body.state;
-      if (body.country) updateFields.country = body.country;
-      if (body.cep) updateFields.cep = body.cep;
-
-      // Merge custom fields with existing
-      if (body.custom_fields && Object.keys(body.custom_fields).length > 0) {
-        const { data: currentContact } = await supabase
-          .from('crm_contacts')
-          .select('custom_fields')
-          .eq('id', existingContact.id)
-          .single();
-        
-        updateFields.custom_fields = {
-          ...(currentContact?.custom_fields as Record<string, unknown> || {}),
-          ...body.custom_fields
-        };
-      }
-
-      // Merge tags (don't replace, add new ones)
-      const existingTags = existingContact.tags || [];
-      const allTags = [...existingTags, ...mergedTags]
-        .filter((tag, index, arr) => arr.indexOf(tag) === index);
-      if (allTags.length > 0) {
-        updateFields.tags = allTags;
-      }
-
-      const { data: updatedContact, error: updateError } = await supabase
-        .from('crm_contacts')
-        .update(updateFields)
-        .eq('id', existingContact.id)
-        .select('id, email, name, status, tags, created_at')
-        .single();
-
-      if (updateError) {
-        console.error('[CRM Webhook] Error updating contact:', updateError);
-        return new Response(
-          JSON.stringify({ error: 'Failed to update contact', details: updateError.message }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      contact = updatedContact;
-    }
-
-    // Always create an interaction record if we have UTM data
-    const hasUtmData = body.utm_source || body.utm_campaign || body.utm_medium || 
-                       body.utm_adset || body.utm_ad || body.utm_creative;
-    const hasInteractionData = body.page_name || body.page_url || body.launch_tag || body.interaction_type;
-    
-    if (hasUtmData || hasInteractionData) {
-      const interactionData = {
-        contact_id: contact.id,
-        project_id: webhookKey.project_id,
-        interaction_type: body.interaction_type || 'page_view',
-        page_name: body.page_name || null,
-        page_url: body.page_url || null,
-        utm_source: body.utm_source || null,
-        utm_campaign: body.utm_campaign || null,
-        utm_medium: body.utm_medium || null,
-        utm_content: body.utm_content || null,
-        utm_term: body.utm_term || null,
-        utm_adset: body.utm_adset || null,
-        utm_ad: body.utm_ad || null,
-        utm_creative: body.utm_creative || null,
-        utm_placement: body.utm_placement || null,
-        launch_tag: body.launch_tag || null,
-        meta_campaign_id: campaignId,
-        meta_adset_id: adsetId,
-        meta_ad_id: adId,
-        metadata: body.custom_fields || {},
-        interacted_at: now,
-      };
-
-      const { error: interactionError } = await supabase
-        .from('crm_contact_interactions')
-        .insert(interactionData);
-
-      if (interactionError) {
-        console.error('[CRM Webhook] Error creating interaction:', interactionError);
-        // Don't fail the request, just log the error
-      } else {
-        console.log('[CRM Webhook] Interaction created for contact:', contact.id);
-      }
-    }
-
-    // Update webhook key usage stats
-    await supabase
-      .from('crm_webhook_keys')
-      .update({
-        last_used_at: now,
-        usage_count: (webhookKey.usage_count || 0) + 1,
-      })
-      .eq('id', webhookKey.id);
-
-    console.log('[CRM Webhook] Contact saved:', contact.id, isNewContact ? '(new)' : '(updated)');
+    // Processar webhook
+    const { contact, isNewContact } = await processWebhook(supabase, webhookKey.project_id, webhookKey, body);
 
     return new Response(
       JSON.stringify({
@@ -671,12 +740,13 @@ serve(async (req) => {
           created_at: contact.created_at,
           is_new: isNewContact,
         },
+        warning: 'This endpoint is deprecated. Please migrate to: POST /crm-webhook/:project_code'
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('[CRM Webhook] Unexpected error:', error);
+    console.error('[CRM Webhook] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: errorMessage }),

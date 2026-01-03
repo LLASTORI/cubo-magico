@@ -122,7 +122,7 @@ interface MappingResult {
 
 interface WebhookTestDashboardProps {
   apiKey: string;
-  webhookUrl: string;
+  webhookUrl: string | null;
 }
 
 const EXAMPLE_PAYLOADS = {
@@ -219,8 +219,8 @@ export function WebhookTestDashboard({ apiKey, webhookUrl }: WebhookTestDashboar
   };
 
   const sendTestRequest = async () => {
-    if (!apiKey) {
-      toast.error("Nenhuma API key selecionada");
+    if (!apiKey || !webhookUrl) {
+      toast.error("API key ou URL não configurada");
       return;
     }
 

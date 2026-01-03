@@ -270,7 +270,13 @@ Deno.serve(async (req) => {
           const answer = processedAnswers[question.id];
           if (answer?.value) {
             const fieldName = question.identity_field_target;
-            const fieldValue = String(answer.value).trim();
+            let fieldValue = String(answer.value).trim();
+            
+            // Normalize Instagram: remove @ prefix if present
+            if (fieldName === 'instagram' && fieldValue.startsWith('@')) {
+              fieldValue = fieldValue.substring(1);
+            }
+            
             const previousValue = contact[fieldName];
 
             if (fieldValue && fieldValue !== previousValue) {

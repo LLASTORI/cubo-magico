@@ -8,6 +8,7 @@ interface QuestionTextProps {
   placeholder?: string;
   multiline?: boolean;
   primaryColor?: string;
+  secondaryColor?: string;
 }
 
 export function QuestionText({ 
@@ -15,7 +16,8 @@ export function QuestionText({
   onChange, 
   placeholder = "Digite sua resposta...",
   multiline = true,
-  primaryColor = '#6366f1'
+  primaryColor = '#6366f1',
+  secondaryColor = '#64748b'
 }: QuestionTextProps) {
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   
@@ -24,42 +26,56 @@ export function QuestionText({
   }, []);
   
   const baseClasses = cn(
-    "w-full bg-transparent border-0 border-b-2 border-muted",
-    "focus:border-primary focus:outline-none focus:ring-0",
-    "text-xl md:text-2xl font-light placeholder:text-muted-foreground/50",
+    "w-full bg-transparent border-0 border-b-2",
+    "focus:outline-none focus:ring-0",
+    "text-xl md:text-2xl font-light",
     "transition-all duration-300 py-4 px-0",
     "resize-none"
   );
   
   if (multiline) {
     return (
-      <motion.textarea
-        ref={inputRef as any}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={baseClasses}
-        rows={3}
-        style={{ borderColor: value ? primaryColor : undefined }}
-      />
+      <>
+        <motion.textarea
+          ref={inputRef as any}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={baseClasses}
+          rows={3}
+          style={{ borderColor: value ? primaryColor : secondaryColor }}
+        />
+        <style>{`
+          textarea::placeholder {
+            color: ${secondaryColor}80;
+          }
+        `}</style>
+      </>
     );
   }
   
   return (
-    <motion.input
-      ref={inputRef as any}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2 }}
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={baseClasses}
-      style={{ borderColor: value ? primaryColor : undefined }}
-    />
+    <>
+      <motion.input
+        ref={inputRef as any}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={baseClasses}
+        style={{ borderColor: value ? primaryColor : secondaryColor }}
+      />
+      <style>{`
+        input::placeholder {
+          color: ${secondaryColor}80;
+        }
+      `}</style>
+    </>
   );
 }

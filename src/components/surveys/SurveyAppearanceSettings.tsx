@@ -11,6 +11,7 @@ import { MediaPickerDialog } from './MediaPickerDialog';
 export interface SurveyTheme {
   primary_color: string;
   text_color: string;
+  secondary_text_color: string;
   background_color: string;
   background_image?: string;
   logo_url?: string;
@@ -33,6 +34,7 @@ interface SurveyAppearanceSettingsProps {
 const defaultTheme: SurveyTheme = {
   primary_color: '#6366f1',
   text_color: '#1e293b',
+  secondary_text_color: '#64748b',
   background_color: '#f8fafc',
   show_progress: true,
   one_question_per_page: true,
@@ -54,6 +56,13 @@ const textColorPresets = [
   { name: 'Preto', value: '#000000' },
   { name: 'Cinza', value: '#64748b' },
   { name: 'Branco', value: '#ffffff' },
+];
+
+const secondaryTextPresets = [
+  { name: 'Cinza', value: '#64748b' },
+  { name: 'Cinza claro', value: '#94a3b8' },
+  { name: 'Cinza escuro', value: '#475569' },
+  { name: 'Branco suave', value: '#cbd5e1' },
 ];
 
 export function SurveyAppearanceSettings({
@@ -152,6 +161,44 @@ export function SurveyAppearanceSettings({
             </div>
             <p className="text-xs text-muted-foreground">
               Cor de títulos e textos das perguntas
+            </p>
+          </div>
+
+          {/* Secondary Text Color */}
+          <div className="space-y-3">
+            <Label>Cor do Texto Secundário</Label>
+            <div className="flex flex-wrap gap-2">
+              {secondaryTextPresets.map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => updateTheme({ secondary_text_color: color.value })}
+                  className={`w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 ${
+                    currentTheme.secondary_text_color === color.value 
+                      ? 'border-foreground ring-2 ring-offset-2 ring-foreground/20' 
+                      : 'border-muted'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={currentTheme.secondary_text_color}
+                  onChange={(e) => updateTheme({ secondary_text_color: e.target.value })}
+                  className="w-10 h-10 p-1 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={currentTheme.secondary_text_color}
+                  onChange={(e) => updateTheme({ secondary_text_color: e.target.value })}
+                  className="w-24 font-mono text-sm"
+                  placeholder="#64748b"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cor de placeholders, indicadores, navegação e dicas
             </p>
           </div>
 

@@ -36,6 +36,7 @@ const MODULE_LABELS: Record<string, string> = {
   crm: 'CRM',
   insights: 'Insights',
   surveys: 'Pesquisas',
+  social_listening: 'Social Listening',
   hotmart: 'Hotmart (inclui Lançamentos)',
   meta_ads: 'Meta Ads',
   whatsapp: 'WhatsApp',

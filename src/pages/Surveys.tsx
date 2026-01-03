@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files } from 'lucide-react';
+import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
+import { useProjectModules } from '@/hooks/useProjectModules';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,9 +48,36 @@ export default function Surveys() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { surveys, isLoading, createSurvey, deleteSurvey } = useSurveys();
+  const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newSurvey, setNewSurvey] = useState({ name: '', description: '', objective: 'general' });
   const [isCloning, setIsCloning] = useState(false);
+
+  const surveysEnabled = isModuleEnabled('surveys');
+
+  // Show module disabled state
+  if (!isLoadingModules && !surveysEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader pageSubtitle="Pesquisa Inteligente" />
+        <CRMSubNav />
+        <main className="container mx-auto px-6 py-12">
+          <Card className="text-center py-12">
+            <CardContent>
+              <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
+              <p className="text-muted-foreground mb-4">
+                O módulo de Pesquisa Inteligente não está ativo para este projeto.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Entre em contato com o administrador para ativar este módulo.
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   const handleCreate = async () => {
     if (!newSurvey.name.trim()) {
@@ -151,7 +179,7 @@ export default function Surveys() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingModules) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Pesquisa Inteligente" />

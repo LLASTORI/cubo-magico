@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, Settings, Link2, 
   Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet,
-  Palette, Gift, Tag, Filter
+  Palette, Gift, Tag, Filter, Lock
 } from 'lucide-react';
+import { useProjectModules } from '@/hooks/useProjectModules';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -50,9 +51,34 @@ export default function SurveyEditor() {
   const { toast } = useToast();
   const { survey, isLoading, addQuestion, updateQuestion, deleteQuestion } = useSurvey(surveyId);
   const { webhookKeys, createWebhookKey, deleteWebhookKey } = useSurveyWebhookKeys(surveyId);
+  const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
   
   const [surveyData, setSurveyData] = useState({ name: '', description: '', objective: 'general', slug: '', status: 'draft', default_tags: [] as string[], default_funnel_id: '' });
   const [tagsInput, setTagsInput] = useState('');
+
+  const surveysEnabled = isModuleEnabled('surveys');
+
+  // Show module disabled state
+  if (!isLoadingModules && !surveysEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader pageSubtitle="Editor de Pesquisa" />
+        <main className="container mx-auto px-6 py-12">
+          <div className="text-center py-12 border rounded-lg bg-card">
+            <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
+            <p className="text-muted-foreground mb-4">
+              O módulo de Pesquisa Inteligente não está ativo para este projeto.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/surveys')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   // Fetch funnels for the project
   const { data: funnels } = useQuery({

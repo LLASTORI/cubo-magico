@@ -42,6 +42,7 @@ const MODULE_LABELS: Record<string, string> = {
   meta_ads: 'Meta Ads',
   whatsapp: 'WhatsApp',
   automations: 'Automações',
+  surveys: 'Pesquisas',
 };
 
 export const FeaturesManager = () => {

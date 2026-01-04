@@ -22,15 +22,50 @@ export interface AIAnalysisChange {
 }
 
 export interface AIAnalysisRisk {
-  tipo: 'refund' | 'chargeback' | 'inatividade' | 'outro';
+  tipo: 'refund' | 'chargeback' | 'inatividade' | 'criativo_saturado' | 'ltv_baixo' | 'outro';
   descricao: string;
   severidade: 'baixa' | 'media' | 'alta';
+}
+
+export interface AIPositionAnalysis {
+  resumo: string;
+  destaque_positivo: string;
+  destaque_negativo: string;
+}
+
+export interface AICreativeAnalysis {
+  top_performers: string;
+  underperformers: string;
+  padrao_identificado: string;
+}
+
+export interface AIPaymentAnalysis {
+  distribuicao: string;
+  ticket_por_metodo: string;
+  insight: string;
+}
+
+export interface AILTVAnalysis {
+  taxa_recompra: string;
+  concentracao_receita: string;
+  insight: string;
+}
+
+export interface AIFunnelConversionAnalysis {
+  gargalo_principal: string;
+  taxas: string;
+  insight: string;
 }
 
 export interface FunnelAIAnalysis {
   resumo_executivo: string;
   health_status: 'excellent' | 'good' | 'attention' | 'danger' | 'no-return' | 'inactive';
   health_explanation: string;
+  analise_posicoes?: AIPositionAnalysis;
+  analise_criativos?: AICreativeAnalysis;
+  analise_pagamentos?: AIPaymentAnalysis;
+  analise_ltv?: AILTVAnalysis;
+  funil_conversao?: AIFunnelConversionAnalysis;
   pontos_fortes: AIAnalysisStrength[];
   pontos_atencao: AIAnalysisConcern[];
   mudancas_periodo: AIAnalysisChange[];
@@ -55,7 +90,13 @@ export interface FunnelAIAnalysisResponse {
     total_sales: number;
   };
   analysis: FunnelAIAnalysis;
-  data_source?: 'client_payload' | 'database_views';
+  data_source?: 'enriched_payload' | 'basic_payload' | 'database_views';
+  data_summary?: {
+    positions: number;
+    campaigns: number;
+    ads: number;
+    payment_methods: number;
+  } | null;
 }
 
 export function useFunnelAIAnalysis() {
@@ -79,10 +120,17 @@ export function useFunnelAIAnalysis() {
         end_date: endDate,
       };
 
-      // If context is provided, include it in the request
+      // If context is provided, include ALL enriched data in the request
       if (context) {
         body.client_summary = context.client_summary;
         body.client_daily = context.client_daily;
+        body.position_breakdown = context.position_breakdown;
+        body.top_campaigns = context.top_campaigns;
+        body.top_adsets = context.top_adsets;
+        body.top_ads = context.top_ads;
+        body.payment_distribution = context.payment_distribution;
+        body.ltv_metrics = context.ltv_metrics;
+        body.conversion_funnel = context.conversion_funnel;
       }
 
       const { data, error: invokeError } = await supabase.functions.invoke('funnel-ai-analysis', {

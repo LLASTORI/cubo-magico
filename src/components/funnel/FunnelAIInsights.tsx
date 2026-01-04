@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Brain,
   RefreshCw,
@@ -20,6 +20,11 @@ import {
   Sparkles,
   Clock,
   CreditCard,
+  Layers,
+  Target,
+  Users,
+  ChevronDown,
+  BarChart3,
 } from 'lucide-react';
 import { useFunnelAIAnalysis, type FunnelAIAnalysisResponse } from '@/hooks/useFunnelAIAnalysis';
 import type { FunnelAIContext } from '@/hooks/useFunnelAIContext';
@@ -85,18 +90,20 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
           <div className="mb-4 rounded-full bg-primary/10 p-4">
             <Brain className="h-10 w-10 text-primary" />
           </div>
-          <h3 className="mb-2 text-lg font-semibold">Análise Inteligente do Funil</h3>
+          <h3 className="mb-2 text-lg font-semibold">Análise Inteligente Completa do Funil</h3>
           <p className="mb-6 max-w-md text-sm text-muted-foreground">
-            Obtenha uma leitura executiva do seu funil com interpretação contextualizada dos dados.
-            A IA analisa as métricas consolidadas e explica o que está acontecendo.
+            A IA analisará em profundidade: posições do funil, performance de criativos, 
+            métodos de pagamento, LTV, taxas de conversão e tendências do período.
           </p>
           <Button onClick={handleAnalyze} size="lg">
             <Sparkles className="mr-2 h-4 w-4" />
-            Gerar Análise
+            Gerar Análise Completa
           </Button>
-          <p className="mt-4 text-xs text-muted-foreground">
-            A análise é descritiva e baseada exclusivamente nos dados existentes.
-          </p>
+          {context && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              📊 {context.position_breakdown.length} posições • {context.top_ads.length} criativos • {context.payment_distribution.length} métodos de pagamento
+            </p>
+          )}
         </CardContent>
       </Card>
     );
@@ -109,14 +116,15 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
         <CardHeader>
           <div className="flex items-center gap-2">
             <Brain className="h-5 w-5 animate-pulse text-primary" />
-            <CardTitle>Analisando Funil...</CardTitle>
+            <CardTitle>Analisando Funil Completo...</CardTitle>
           </div>
-          <CardDescription>A IA está interpretando os dados do seu funil.</CardDescription>
+          <CardDescription>A IA está processando todos os dados do seu funil.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-24 w-full" />
         </CardContent>
       </Card>
     );
@@ -152,7 +160,7 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
     return null;
   }
 
-  const { analysis: ai, period, analysis_date } = analysis;
+  const { analysis: ai, period, analysis_date, data_source, data_summary } = analysis;
   const healthConfig = healthStatusConfig[ai.health_status] || healthStatusConfig.inactive;
   const HealthIcon = healthConfig.icon;
 
@@ -162,7 +170,7 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
         {/* Header with status */}
         <Card className={cn('border', healthConfig.bgColor)}>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-3">
                 <div className={cn('rounded-full p-2', healthConfig.bgColor)}>
                   <HealthIcon className={cn('h-6 w-6', healthConfig.color)} />
@@ -171,6 +179,11 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
                   <CardTitle className="text-lg">Status: {healthConfig.label}</CardTitle>
                   <CardDescription className="text-xs">
                     Análise gerada em {format(new Date(analysis_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    {data_summary && (
+                      <span className="ml-2 text-muted-foreground">
+                        • {data_summary.positions} posições • {data_summary.ads} criativos
+                      </span>
+                    )}
                   </CardDescription>
                 </div>
               </div>
@@ -203,6 +216,129 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
             <p className="text-sm leading-relaxed">{ai.resumo_executivo}</p>
           </CardContent>
         </Card>
+
+        {/* Position Analysis */}
+        {ai.analise_posicoes && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-purple-600" />
+                <CardTitle className="text-base">Análise por Posição do Funil</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{ai.analise_posicoes.resumo}</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
+                  <div className="mb-1 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Destaque Positivo</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{ai.analise_posicoes.destaque_positivo}</p>
+                </div>
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50/50 p-3">
+                  <div className="mb-1 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    <span className="text-sm font-medium text-yellow-700">Ponto de Atenção</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{ai.analise_posicoes.destaque_negativo}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Creative Analysis */}
+        {ai.analise_criativos && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-base">Análise de Criativos</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">Top Performers</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{ai.analise_criativos.top_performers}</p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                  <span className="text-sm font-medium text-red-700">Underperformers</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{ai.analise_criativos.underperformers}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/50 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Padrão Identificado</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{ai.analise_criativos.padrao_identificado}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Payment Analysis */}
+        {ai.analise_pagamentos && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-emerald-600" />
+                <CardTitle className="text-base">Análise de Pagamentos</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm"><strong>Distribuição:</strong> {ai.analise_pagamentos.distribuicao}</p>
+              <p className="text-sm"><strong>Ticket por Método:</strong> {ai.analise_pagamentos.ticket_por_metodo}</p>
+              <p className="text-sm text-muted-foreground italic">{ai.analise_pagamentos.insight}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* LTV Analysis */}
+        {ai.analise_ltv && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-orange-600" />
+                <CardTitle className="text-base">Análise de LTV e Retenção</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm"><strong>Taxa de Recompra:</strong> {ai.analise_ltv.taxa_recompra}</p>
+              <p className="text-sm"><strong>Concentração de Receita:</strong> {ai.analise_ltv.concentracao_receita}</p>
+              <p className="text-sm text-muted-foreground italic">{ai.analise_ltv.insight}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Conversion Funnel Analysis */}
+        {ai.funil_conversao && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-indigo-600" />
+                <CardTitle className="text-base">Funil de Conversão</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm font-medium text-red-700">Gargalo Principal</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{ai.funil_conversao.gargalo_principal}</p>
+              </div>
+              <p className="text-sm"><strong>Taxas:</strong> {ai.funil_conversao.taxas}</p>
+              <p className="text-sm text-muted-foreground italic">{ai.funil_conversao.insight}</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Strengths */}
         {ai.pontos_fortes && ai.pontos_fortes.length > 0 && (
@@ -333,8 +469,8 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
         {/* Disclaimer */}
         <div className="rounded-lg border border-dashed p-4 text-center">
           <p className="text-xs text-muted-foreground">
-            Esta análise é estritamente descritiva. Os valores exibidos são baseados exclusivamente nos dados consolidados do sistema.
-            A IA não recalcula métricas nem faz recomendações.
+            Esta análise é descritiva. Os valores são baseados exclusivamente nos dados do seu dashboard.
+            {data_source === 'enriched_payload' && ' ✓ Análise enriquecida com dados completos do frontend.'}
           </p>
         </div>
       </div>

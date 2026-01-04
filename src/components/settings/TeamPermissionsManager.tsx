@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Loader2, UserPlus, Crown, Settings2, Check } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, UserPlus, Crown, Settings2, Check, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -43,7 +44,7 @@ const defaultPermissions: InvitePermissions = {
 
 export const TeamPermissionsManager = () => {
   const { currentProject } = useProject();
-  const { members, invites, loading: membersLoading, inviteMember, cancelInvite, userRole } = useProjectMembers(currentProject?.id);
+  const { members, invites, loading: membersLoading, inviteMember, cancelInvite, userRole, memberCount, maxMembers, canInvite } = useProjectMembers(currentProject?.id);
   const { allPermissions, isLoading: permissionsLoading, updateMemberPermission, isUpdating } = useAllMembersPermissions();
   
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -131,12 +132,26 @@ export const TeamPermissionsManager = () => {
 
   return (
     <div className="space-y-6">
+      {/* Limit Alert */}
+      {memberCount >= maxMembers && isOwner && (
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            <span className="font-medium">Limite de membros atingido!</span> Este projeto possui {memberCount} de {maxMembers} membros permitidos. 
+            Para adicionar mais membros, faça upgrade do plano ou remova membros existentes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
               Gerenciamento de Equipe
+              <Badge variant="outline" className={memberCount >= maxMembers ? 'text-amber-500 border-amber-500/30' : ''}>
+                {memberCount}/{maxMembers} membros
+              </Badge>
             </CardTitle>
             <CardDescription>
               Configure as permissões de acesso por área para cada membro da equipe
@@ -145,7 +160,7 @@ export const TeamPermissionsManager = () => {
           {isOwner && (
             <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button disabled={!canInvite}>
                   <UserPlus className="h-4 w-4 mr-2" />
                   Adicionar Membro
                 </Button>

@@ -40,6 +40,7 @@ interface Project {
   updated_at: string;
   user_id: string;
   public_code: string;
+  max_members: number;
   owner_name: string | null;
   owner_email: string | null;
   member_count: number;
@@ -123,6 +124,7 @@ export const ProjectsManager = () => {
         owner_name: profileMap[p.user_id]?.full_name || null,
         owner_email: profileMap[p.user_id]?.email || null,
         member_count: memberCountMap[p.id] || 0,
+        max_members: p.max_members || 5,
       }));
 
       setProjects(enrichedProjects);
@@ -442,7 +444,9 @@ export const ProjectsManager = () => {
                       onClick={() => viewMembers(project)}
                     >
                       <Users className="w-4 h-4" />
-                      {project.member_count}
+                      <span className={project.member_count >= project.max_members ? 'text-amber-500 font-medium' : ''}>
+                        {project.member_count}/{project.max_members}
+                      </span>
                     </Button>
                   </TableCell>
                   <TableCell>

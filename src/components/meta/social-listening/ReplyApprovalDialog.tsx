@@ -254,8 +254,8 @@ export function ReplyApprovalDialog({
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <div className="flex gap-2 flex-1">
             <FeatureLockedButton
-              featureKey="ai_analysis.social_listening"
-              lockedMessage="IA no Social Listening está desabilitada para este projeto/plano."
+              featureKey="ai_analysis.social_listening_replies"
+              lockedMessage="Geração de respostas com IA está desabilitada para este projeto/plano."
               variant="outline"
               onClick={() => generateReply.mutate()}
               disabled={generateReply.isPending}

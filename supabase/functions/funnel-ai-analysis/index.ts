@@ -141,157 +141,163 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase: any = createClient(supabaseUrl, supabaseKey);
 
-    // 1. First validate the funnel exists (fast query)
+    // 1. Validate funnel exists (fast query)
     const { data: funnel, error: funnelError } = await supabase
       .from("funnels")
       .select("id, name, project_id, funnel_type, roas_target")
       .eq("id", funnel_id)
-      .single();
+      .maybeSingle();
 
-    if (funnelError || !funnel) {
-      console.error("Funnel not found:", funnelError);
+    if (funnelError) {
+      console.error("Error fetching funnels:", funnelError);
+      return new Response(
+        JSON.stringify({ error: "Erro ao validar funil", details: funnelError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!funnel) {
       return new Response(
         JSON.stringify({ error: "Funil não encontrado" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Try to fetch funnel summary (may timeout on complex views)
-    let funnelSummary: any = null;
-    try {
-      const { data, error: summaryError } = await supabase
-        .from("funnel_summary")
-        .select("*")
-        .eq("funnel_id", funnel_id)
-        .single();
+    // Helpers to avoid numeric/string surprises (PostgREST can return numerics as strings)
+    const toNumber = (v: any) => {
+      if (v === null || v === undefined) return null;
+      const n = typeof v === "number" ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
 
-      if (!summaryError && data) {
-        funnelSummary = data;
-      } else {
-        console.warn("Could not fetch funnel_summary, using fallback:", summaryError?.message);
-      }
-    } catch (e) {
-      console.warn("funnel_summary query failed:", e);
+    const formatBRL = (v: any) => {
+      const n = toNumber(v);
+      if (n === null) return "N/A";
+      return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    // 2. Fetch funnel summary from canonical view (NO fallback, NO recalculation)
+    const summarySelect = [
+      "project_id",
+      "funnel_id",
+      "funnel_name",
+      "funnel_type",
+      "roas_target",
+      "first_sale_date",
+      "last_sale_date",
+      "total_investment",
+      "total_gross_revenue",
+      "total_confirmed_sales",
+      "total_front_sales",
+      "total_refunds",
+      "total_chargebacks",
+      "overall_roas",
+      "overall_cpa",
+      "overall_avg_ticket",
+      "overall_refund_rate",
+      "overall_chargeback_rate",
+      "health_status",
+    ].join(",");
+
+    const { data: funnelSummary, error: summaryError } = await supabase
+      .from("funnel_summary")
+      .select(summarySelect)
+      .eq("funnel_id", funnel_id)
+      .maybeSingle();
+
+    if (summaryError) {
+      console.error("Error fetching funnel_summary:", summaryError);
+
+      const isTimeout = summaryError.code === "57014" || summaryError.message?.includes("statement timeout");
+      return new Response(
+        JSON.stringify({
+          error: isTimeout
+            ? "Tempo limite ao consultar o resumo do funil. Tente novamente."
+            : "Erro ao consultar o resumo do funil.",
+          details: summaryError.message,
+        }),
+        { status: isTimeout ? 504 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 3. If summary failed, build a minimal summary from offer_mappings + hotmart_sales
     if (!funnelSummary) {
-      console.log("Building fallback summary for funnel:", funnel_id);
-      
-      // Get offer codes mapped to this funnel
-      const { data: offerMappings } = await supabase
-        .from("offer_mappings")
-        .select("offer_code, product_code")
-        .eq("funnel_id", funnel_id);
-      
-      const offerCodes = (offerMappings || []).map((m: any) => m.offer_code).filter(Boolean);
-      const productCodes = (offerMappings || []).map((m: any) => m.product_code).filter(Boolean);
-      
-      console.log("Mapped offer codes:", offerCodes);
-      console.log("Mapped product codes:", productCodes);
-      
-      let salesData: any[] = [];
-      
-      if (offerCodes.length > 0 || productCodes.length > 0) {
-        // Query sales filtered by offer/product codes
-        const { data } = await supabase
-          .from("hotmart_sales")
-          .select("status, total_price_brl, net_revenue, offer_code, product_code")
-          .eq("project_id", funnel.project_id);
-        
-        // Filter by offer_code or product_code
-        salesData = (data || []).filter((s: any) => 
-          offerCodes.includes(s.offer_code) || productCodes.includes(s.product_code)
-        );
-      }
-      
-      console.log("Filtered sales count:", salesData.length);
-      
-      const approvedSales = salesData.filter((s: any) => s.status === "APPROVED");
-      const totalRevenue = approvedSales.reduce((sum: number, s: any) => sum + (s.net_revenue || s.total_price_brl || 0), 0);
-      const totalSales = approvedSales.length;
-
-      // Try to get investment from meta_ads_daily for this funnel's accounts
-      let totalInvestment = 0;
-      try {
-        const { data: funnelAccounts } = await supabase
-          .from("funnel_meta_accounts")
-          .select("meta_account_id")
-          .eq("funnel_id", funnel_id);
-        
-        if (funnelAccounts && funnelAccounts.length > 0) {
-          const accountIds = funnelAccounts.map((a: any) => a.meta_account_id);
-          const { data: metaData } = await supabase
-            .from("meta_ads_daily")
-            .select("spend")
-            .in("ad_account_id", accountIds);
-          
-          totalInvestment = (metaData || []).reduce((sum: number, m: any) => sum + (m.spend || 0), 0);
-        }
-      } catch (e) {
-        console.warn("Could not fetch meta investment:", e);
-      }
-      
-      const roas = totalInvestment > 0 ? totalRevenue / totalInvestment : 0;
-
-      funnelSummary = {
-        funnel_id: funnel.id,
-        funnel_name: funnel.name,
-        project_id: funnel.project_id,
-        funnel_type: funnel.funnel_type,
-        total_revenue: totalRevenue,
-        total_investment: totalInvestment,
-        roas: roas,
-        total_sales: totalSales,
-        health_status: roas >= 2 ? "good" : roas >= 1 ? "attention" : "danger",
-        data_limited: true,
-        note: "Dados calculados via fallback - view funnel_summary timeout"
-      };
-      
-      console.log("Fallback summary:", funnelSummary);
+      return new Response(
+        JSON.stringify({ error: "Resumo do funil não encontrado" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 2. Fetch daily metrics (last 30 days or custom range)
+    // 3. Date range
     const endDateParam = end_date || new Date().toISOString().split("T")[0];
-    const startDateParam = start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const startDateParam =
+      start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    const { data: dailyMetrics, error: dailyError } = await supabase
+    // 4. Fetch daily metrics from canonical view (best-effort)
+    const dailySelect = [
+      "metric_date",
+      "investment",
+      "confirmed_sales",
+      "front_sales",
+      "refunds",
+      "chargebacks",
+      "unique_buyers",
+      "gross_revenue",
+      "net_revenue",
+      "avg_ticket",
+      "roas",
+      "cpa_real",
+      "refund_rate",
+      "chargeback_rate",
+    ].join(",");
+
+    let dailyMetrics: any[] | null = null;
+    const { data: dailyData, error: dailyError } = await supabase
       .from("funnel_metrics_daily")
-      .select("*")
+      .select(dailySelect)
       .eq("funnel_id", funnel_id)
       .gte("metric_date", startDateParam)
       .lte("metric_date", endDateParam)
-      .order("metric_date", { ascending: false });
+      .order("metric_date", { ascending: false })
+      .limit(60);
 
     if (dailyError) {
       console.error("Error fetching funnel_metrics_daily:", dailyError);
+      const isTimeout = dailyError.code === "57014" || dailyError.message?.includes("statement timeout");
+      dailyMetrics = isTimeout ? null : (dailyData || null);
+    } else {
+      dailyMetrics = dailyData || [];
     }
 
-    // 3. Fetch metric definitions
+    // 5. Fetch metric definitions
     const { data: metricDefinitions, error: defError } = await supabase
       .from("metric_definitions")
-      .select("*")
-      .eq("is_active", true);
+      .select("metric_key, metric_name, description, formula, unit, category, display_order")
+      .order("display_order", { ascending: true });
 
     if (defError) {
       console.error("Error fetching metric_definitions:", defError);
     }
 
-    // 4. Fetch thresholds
+    // 6. Fetch thresholds
     const { data: thresholds, error: thresholdError } = await supabase
       .from("funnel_thresholds")
-      .select("*")
+      .select("threshold_key, threshold_value, category, description, project_id")
       .or(`project_id.is.null,project_id.eq.${funnelSummary.project_id}`);
 
     if (thresholdError) {
       console.error("Error fetching funnel_thresholds:", thresholdError);
     }
 
-    // 5. Format data for prompt
+    // 7. Format data for prompt
     const metricDefsText = (metricDefinitions || [])
-      .map((m: any) => `- ${m.metric_key}: ${m.display_name} - ${m.description}. Fórmula: ${m.formula || "N/A"}`)
+      .map((m: any) => {
+        const name = m.metric_name || m.metric_key;
+        const unit = m.unit ? ` Unidade: ${m.unit}.` : "";
+        const formula = m.formula ? ` Fórmula: ${m.formula}.` : "";
+        return `- ${m.metric_key}: ${name} - ${m.description || ""}.${formula}${unit}`;
+      })
       .join("\n");
 
     const thresholdsText = (thresholds || [])
@@ -300,15 +306,22 @@ serve(async (req) => {
 
     const funnelDataText = JSON.stringify(funnelSummary, null, 2);
 
-    const dailyMetricsText = (dailyMetrics || [])
-      .slice(0, 30) // Limit to 30 days
-      .map((d: any) => `${d.metric_date}: vendas=${d.total_sales}, receita=${d.total_revenue}, invest=${d.total_investment}, ROAS=${d.roas?.toFixed(2) || "N/A"}`)
-      .join("\n");
+    const dailyMetricsText =
+      dailyMetrics === null
+        ? "Sem dados diários disponíveis (timeout na view funnel_metrics_daily)"
+        : (dailyMetrics || [])
+            .slice(0, 30)
+            .map((d: any) => {
+              const roas = toNumber(d.roas);
+              const roasStr = roas === null ? "N/A" : roas.toFixed(2);
+              return `${d.metric_date}: vendas_confirmadas=${d.confirmed_sales ?? "N/A"}, receita_bruta=${formatBRL(d.gross_revenue)}, investimento=${formatBRL(d.investment)}, ROAS=${roasStr}`;
+            })
+            .join("\n");
 
-    // 6. Build final prompt
+    // 8. Build final prompt
     const finalPrompt = ANALYSIS_PROMPT_TEMPLATE
       .replace("{{METRIC_DEFINITIONS}}", metricDefsText || "Nenhuma definição encontrada")
-      .replace("{{THRESHOLDS}}", thresholdsText || "Usando thresholds padrão")
+      .replace("{{THRESHOLDS}}", thresholdsText || "Nenhum threshold encontrado")
       .replace("{{FUNNEL_DATA}}", funnelDataText)
       .replace("{{DAILY_METRICS}}", dailyMetricsText || "Sem dados diários disponíveis");
 
@@ -385,24 +398,26 @@ serve(async (req) => {
       };
     }
 
+    const currentMetrics = {
+      health_status: funnelSummary.health_status,
+      total_revenue: toNumber(funnelSummary.total_gross_revenue) ?? 0,
+      total_investment: toNumber(funnelSummary.total_investment) ?? 0,
+      roas: toNumber(funnelSummary.overall_roas) ?? 0,
+      total_sales: toNumber(funnelSummary.total_confirmed_sales) ?? 0,
+    };
+
     // 9. Return structured response
     return new Response(
       JSON.stringify({
         success: true,
         funnel_id,
-        funnel_name: funnelSummary.funnel_name,
+        funnel_name: funnelSummary.funnel_name || funnel.name,
         analysis_date: new Date().toISOString(),
         period: {
           start: startDateParam,
           end: endDateParam,
         },
-        current_metrics: {
-          health_status: funnelSummary.health_status,
-          total_revenue: funnelSummary.total_revenue,
-          total_investment: funnelSummary.total_investment,
-          roas: funnelSummary.roas,
-          total_sales: funnelSummary.total_sales,
-        },
+        current_metrics: currentMetrics,
         analysis,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

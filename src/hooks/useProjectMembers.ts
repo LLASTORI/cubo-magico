@@ -60,16 +60,28 @@ export const useProjectMembers = (projectId: string | null) => {
   const [userRole, setUserRole] = useState<ProjectRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberCount, setMemberCount] = useState(0);
+  const [maxMembers, setMaxMembers] = useState(5);
 
   const fetchMembers = useCallback(async () => {
     if (!projectId) {
       setMembers([]);
       setUserRole(null);
+      setMaxMembers(5);
       setLoading(false);
       return;
     }
 
     try {
+      // Fetch project's max_members limit
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('max_members')
+        .eq('id', projectId)
+        .single();
+      
+      if (projectData?.max_members) {
+        setMaxMembers(projectData.max_members);
+      }
       // Fetch members with profiles
       const { data: membersData, error: membersError } = await supabase
         .from('project_members')
@@ -139,8 +151,8 @@ export const useProjectMembers = (projectId: string | null) => {
     if (!projectId || !user) return { error: new Error('Projeto não selecionado') };
 
     // Check limit
-    if (memberCount >= 5) {
-      return { error: new Error('Limite de 5 membros atingido') };
+    if (memberCount >= maxMembers) {
+      return { error: new Error(`Limite de ${maxMembers} membros atingido`) };
     }
 
     // Check if already a member
@@ -285,8 +297,8 @@ export const useProjectMembers = (projectId: string | null) => {
     userRole,
     loading,
     memberCount,
-    maxMembers: 5,
-    canInvite: memberCount < 5 && (userRole === 'owner' || userRole === 'manager'),
+    maxMembers,
+    canInvite: memberCount < maxMembers && (userRole === 'owner' || userRole === 'manager'),
     inviteMember,
     cancelInvite,
     removeMember,

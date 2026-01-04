@@ -19,6 +19,7 @@ interface Plan {
   description: string | null;
   max_projects: number;
   max_users_per_project: number;
+  max_members: number;
   price_cents: number;
   type: 'monthly' | 'yearly' | 'lifetime' | 'trial';
   is_active: boolean;
@@ -46,6 +47,7 @@ export const PlansManager = () => {
     description: '',
     max_projects: 1,
     max_users_per_project: 5,
+    max_members: 5,
     price_cents: 0,
     type: 'monthly' as 'monthly' | 'yearly' | 'lifetime' | 'trial',
     is_active: true,
@@ -87,6 +89,7 @@ export const PlansManager = () => {
       description: '',
       max_projects: 1,
       max_users_per_project: 5,
+      max_members: 5,
       price_cents: 0,
       type: 'monthly',
       is_active: true,
@@ -108,6 +111,7 @@ export const PlansManager = () => {
       description: plan.description || '',
       max_projects: plan.max_projects,
       max_users_per_project: plan.max_users_per_project,
+      max_members: plan.max_members || 5,
       price_cents: plan.price_cents,
       type: plan.type,
       is_active: plan.is_active,
@@ -130,6 +134,7 @@ export const PlansManager = () => {
       description: formData.description.trim() || null,
       max_projects: formData.max_projects,
       max_users_per_project: formData.max_users_per_project,
+      max_members: formData.max_members,
       price_cents: formData.type === 'trial' ? 0 : formData.price_cents,
       type: formData.type,
       is_active: formData.is_active,
@@ -307,7 +312,7 @@ export const PlansManager = () => {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Preço</TableHead>
                 <TableHead className="text-center">Projetos</TableHead>
-                <TableHead className="text-center">Usuários/Proj</TableHead>
+                <TableHead className="text-center">Membros</TableHead>
                 <TableHead className="text-center">Trial</TableHead>
                 <TableHead className="text-center">Ativo</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -334,7 +339,7 @@ export const PlansManager = () => {
                     {plan.max_projects === 0 ? '∞' : plan.max_projects}
                   </TableCell>
                   <TableCell className="text-center">
-                    {plan.max_users_per_project}
+                    {plan.max_members || 5}
                   </TableCell>
                   <TableCell className="text-center">
                     {plan.is_trial_available ? (
@@ -466,16 +471,17 @@ export const PlansManager = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Usuários por Projeto</Label>
+                <Label>Max Membros por Projeto</Label>
                 <Input
                   type="number"
                   min="1"
-                  value={formData.max_users_per_project}
+                  value={formData.max_members}
                   onChange={(e) => setFormData({ 
                     ...formData, 
-                    max_users_per_project: parseInt(e.target.value || '5')
+                    max_members: parseInt(e.target.value || '5')
                   })}
                 />
+                <p className="text-xs text-muted-foreground">Limite de membros na equipe</p>
               </div>
             </div>
 

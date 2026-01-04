@@ -22,6 +22,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { useFunnelAIAnalysis, type FunnelAIAnalysisResponse } from '@/hooks/useFunnelAIAnalysis';
+import type { FunnelAIContext } from '@/hooks/useFunnelAIContext';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,6 +32,8 @@ interface FunnelAIInsightsProps {
   funnelName: string;
   startDate?: Date;
   endDate?: Date;
+  /** Pre-computed context from frontend data - avoids slow DB queries */
+  context?: FunnelAIContext | null;
 }
 
 const healthStatusConfig: Record<string, { label: string; color: string; bgColor: string; icon: React.ComponentType<any> }> = {
@@ -54,7 +57,7 @@ const riskSeverityConfig: Record<string, { label: string; color: string; bgColor
   alta: { label: 'Alta', color: 'text-red-700', bgColor: 'bg-red-100' },
 };
 
-export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate }: FunnelAIInsightsProps) {
+export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, context }: FunnelAIInsightsProps) {
   const { analyzeRunnel, analysis, isLoading, error, clearAnalysis } = useFunnelAIAnalysis();
   const [hasRequested, setHasRequested] = useState(false);
 
@@ -69,7 +72,8 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate }: F
     await analyzeRunnel(
       funnelId,
       startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
-      endDate ? format(endDate, 'yyyy-MM-dd') : undefined
+      endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
+      context
     );
   };
 

@@ -28,9 +28,9 @@ Você é uma IA ANALISTA DESCRITIVA DE FUNIS DE VENDAS PERPÉTUOS (Cubo Mágico)
 
 1. NUNCA recalcular métricas - Use EXATAMENTE os valores fornecidos
 2. NUNCA inventar números - Se algo não existir, diga explicitamente
-3. NUNCA usar dados fora das views canônicas - Não inferir dados de outras fontes
-4. NUNCA fazer recomendações - Nada de "deveria", "sugiro", "recomendo"
-5. NUNCA mascarar limitações - Se um dado estiver ausente ou inconsistente, mencione
+3. NUNCA fazer recomendações - Nada de "deveria", "sugiro", "recomendo"
+4. NUNCA mascarar limitações - Se um dado estiver ausente ou inconsistente, mencione
+5. Use EXATAMENTE o health_status informado nos dados
 
 # LIMITAÇÕES CONHECIDAS (VOCÊ DEVE RESPEITAR)
 
@@ -57,10 +57,10 @@ Você PODE:
 # THRESHOLDS DE CLASSIFICAÇÃO
 {{THRESHOLDS}}
 
-# DADOS CONSOLIDADOS DO FUNIL (funnel_summary)
+# DADOS CONSOLIDADOS DO FUNIL
 {{FUNNEL_DATA}}
 
-# HISTÓRICO DIÁRIO DO PERÍODO (funnel_metrics_daily)
+# HISTÓRICO DIÁRIO DO PERÍODO
 {{DAILY_METRICS}}
 
 # FORMATO DE RESPOSTA (OBRIGATÓRIO)
@@ -121,7 +121,7 @@ serve(async (req) => {
   }
 
   try {
-    const { funnel_id, start_date, end_date } = await req.json();
+    const { funnel_id, start_date, end_date, client_summary, client_daily } = await req.json();
 
     if (!funnel_id) {
       return new Response(
@@ -142,6 +142,10 @@ serve(async (req) => {
     }
 
     const supabase: any = createClient(supabaseUrl, supabaseKey);
+
+    // Check if we have client-provided data (from frontend)
+    const hasClientData = client_summary && typeof client_summary === 'object';
+    console.log(`[FunnelAI] Analysis mode: ${hasClientData ? 'CLIENT_PAYLOAD' : 'DATABASE_VIEWS'}`);
 
     // 1. Validate funnel exists (fast query)
     const { data: funnel, error: funnelError } = await supabase
@@ -165,7 +169,7 @@ serve(async (req) => {
       );
     }
 
-    // Helpers to avoid numeric/string surprises (PostgREST can return numerics as strings)
+    // Helpers
     const toNumber = (v: any) => {
       if (v === null || v === undefined) return null;
       const n = typeof v === "number" ? v : Number(v);
@@ -178,85 +182,137 @@ serve(async (req) => {
       return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    // 2. Fetch funnel summary directly from view (use service_role for higher timeout)
-    console.log("Fetching funnel_summary for:", funnel_id);
-    const { data: funnelSummary, error: summaryError } = await supabase
-      .from("funnel_summary")
-      .select("*")
-      .eq("funnel_id", funnel_id)
-      .maybeSingle();
-
-    if (summaryError) {
-      console.error("Error fetching funnel_summary:", summaryError);
-
-      const isTimeout = summaryError.code === "57014" || summaryError.message?.includes("statement timeout");
-      return new Response(
-        JSON.stringify({
-          error: isTimeout
-            ? "Tempo limite ao consultar o resumo do funil. Tente novamente em alguns segundos."
-            : "Erro ao consultar o resumo do funil.",
-          details: summaryError.message,
-        }),
-        { status: isTimeout ? 504 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!funnelSummary) {
-      return new Response(
-        JSON.stringify({ error: "Resumo do funil não encontrado" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    console.log("Successfully fetched funnel_summary:", funnelSummary.funnel_name);
-
-    // 3. Date range
+    // Date range
     const endDateParam = end_date || new Date().toISOString().split("T")[0];
     const startDateParam =
       start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    // 4. Fetch daily metrics directly from view
-    let dailyMetrics: any[] | null = null;
-    console.log("Fetching funnel_metrics_daily for:", funnel_id, "from", startDateParam, "to", endDateParam);
-    const { data: dailyData, error: dailyError } = await supabase
-      .from("funnel_metrics_daily")
-      .select("*")
-      .eq("funnel_id", funnel_id)
-      .gte("metric_date", startDateParam)
-      .lte("metric_date", endDateParam)
-      .order("metric_date", { ascending: false })
-      .limit(60);
+    // Build funnel data and daily metrics based on data source
+    let funnelDataText: string;
+    let dailyMetricsText: string;
+    let currentMetrics: any;
 
-    if (dailyError) {
-      console.error("Error fetching funnel_metrics_daily:", dailyError);
-      const isTimeout = dailyError.code === "57014" || dailyError.message?.includes("statement timeout");
-      dailyMetrics = isTimeout ? null : (dailyData || null);
+    if (hasClientData) {
+      // Use client-provided data (fast path - no DB queries for heavy views)
+      console.log("[FunnelAI] Using client payload:", JSON.stringify(client_summary, null, 2));
+      
+      funnelDataText = JSON.stringify({
+        funnel_id: funnel_id,
+        funnel_name: client_summary.funnel_name || funnel.name,
+        health_status: client_summary.health_status,
+        total_revenue: client_summary.total_revenue,
+        total_investment: client_summary.total_investment,
+        total_sales: client_summary.total_sales,
+        front_sales: client_summary.front_sales,
+        roas: client_summary.roas,
+        ticket_medio: client_summary.ticket_medio,
+        cpa_real: client_summary.cpa_real,
+        cpa_maximo: client_summary.cpa_maximo,
+        roas_target: client_summary.roas_target,
+        campaign_pattern_used: client_summary.campaign_pattern_used,
+      }, null, 2);
+
+      if (client_daily && Array.isArray(client_daily) && client_daily.length > 0) {
+        dailyMetricsText = client_daily
+          .slice(0, 30)
+          .map((d: any) => {
+            const roas = d.investment > 0 ? (d.revenue / d.investment).toFixed(2) : "N/A";
+            return `${d.date}: vendas=${d.sales}, receita=${formatBRL(d.revenue)}, investimento=${formatBRL(d.investment)}, ROAS=${roas}`;
+          })
+          .join("\n");
+      } else {
+        dailyMetricsText = "Dados diários não fornecidos pelo cliente";
+      }
+
+      currentMetrics = {
+        health_status: client_summary.health_status,
+        total_revenue: toNumber(client_summary.total_revenue) ?? 0,
+        total_investment: toNumber(client_summary.total_investment) ?? 0,
+        roas: toNumber(client_summary.roas) ?? 0,
+        total_sales: toNumber(client_summary.total_sales) ?? 0,
+      };
     } else {
-      dailyMetrics = dailyData || [];
-      console.log("Successfully fetched daily metrics:", (dailyMetrics || []).length, "rows");
+      // Fallback to database views (may be slow)
+      console.log("[FunnelAI] Fetching from database views...");
+
+      // Fetch funnel summary
+      const { data: funnelSummary, error: summaryError } = await supabase
+        .from("funnel_summary")
+        .select("*")
+        .eq("funnel_id", funnel_id)
+        .maybeSingle();
+
+      if (summaryError) {
+        console.error("Error fetching funnel_summary:", summaryError);
+        const isTimeout = summaryError.code === "57014" || summaryError.message?.includes("statement timeout");
+        return new Response(
+          JSON.stringify({
+            error: isTimeout
+              ? "Tempo limite ao consultar. Recarregue a página e tente novamente."
+              : "Erro ao consultar o resumo do funil.",
+            details: summaryError.message,
+          }),
+          { status: isTimeout ? 504 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!funnelSummary) {
+        return new Response(
+          JSON.stringify({ error: "Resumo do funil não encontrado. Sincronize os dados primeiro." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      funnelDataText = JSON.stringify(funnelSummary, null, 2);
+
+      // Fetch daily metrics
+      const { data: dailyData, error: dailyError } = await supabase
+        .from("funnel_metrics_daily")
+        .select("*")
+        .eq("funnel_id", funnel_id)
+        .gte("metric_date", startDateParam)
+        .lte("metric_date", endDateParam)
+        .order("metric_date", { ascending: false })
+        .limit(60);
+
+      if (dailyError) {
+        console.error("Error fetching funnel_metrics_daily:", dailyError);
+        dailyMetricsText = "Erro ao consultar dados diários";
+      } else if (!dailyData || dailyData.length === 0) {
+        dailyMetricsText = "Sem dados diários disponíveis para o período";
+      } else {
+        dailyMetricsText = dailyData
+          .slice(0, 30)
+          .map((d: any) => {
+            const roas = toNumber(d.roas);
+            const roasStr = roas === null ? "N/A" : roas.toFixed(2);
+            return `${d.metric_date}: vendas_confirmadas=${d.confirmed_sales ?? "N/A"}, receita_bruta=${formatBRL(d.gross_revenue)}, investimento=${formatBRL(d.investment)}, ROAS=${roasStr}`;
+          })
+          .join("\n");
+      }
+
+      currentMetrics = {
+        health_status: funnelSummary.health_status,
+        total_revenue: toNumber(funnelSummary.total_gross_revenue) ?? 0,
+        total_investment: toNumber(funnelSummary.total_investment) ?? 0,
+        roas: toNumber(funnelSummary.overall_roas) ?? 0,
+        total_sales: toNumber(funnelSummary.total_confirmed_sales) ?? 0,
+      };
     }
 
-    // 5. Fetch metric definitions
-    const { data: metricDefinitions, error: defError } = await supabase
+    // Fetch metric definitions (small, fast)
+    const { data: metricDefinitions } = await supabase
       .from("metric_definitions")
       .select("metric_key, metric_name, description, formula, unit, category, display_order")
       .order("display_order", { ascending: true });
 
-    if (defError) {
-      console.error("Error fetching metric_definitions:", defError);
-    }
-
-    // 6. Fetch thresholds
-    const { data: thresholds, error: thresholdError } = await supabase
+    // Fetch thresholds (small, fast)
+    const { data: thresholds } = await supabase
       .from("funnel_thresholds")
       .select("threshold_key, threshold_value, category, description, project_id")
-      .or(`project_id.is.null,project_id.eq.${funnelSummary.project_id}`);
+      .or(`project_id.is.null,project_id.eq.${funnel.project_id}`);
 
-    if (thresholdError) {
-      console.error("Error fetching funnel_thresholds:", thresholdError);
-    }
-
-    // 7. Format data for prompt
+    // Format data for prompt
     const metricDefsText = (metricDefinitions || [])
       .map((m: any) => {
         const name = m.metric_name || m.metric_key;
@@ -270,30 +326,16 @@ serve(async (req) => {
       .map((t: any) => `- ${t.threshold_key}: ${t.threshold_value} (${t.category}) - ${t.description || ""}`)
       .join("\n");
 
-    const funnelDataText = JSON.stringify(funnelSummary, null, 2);
-
-    const dailyMetricsText =
-      dailyMetrics === null
-        ? "Sem dados diários disponíveis (timeout na view funnel_metrics_daily)"
-        : (dailyMetrics || [])
-            .slice(0, 30)
-            .map((d: any) => {
-              const roas = toNumber(d.roas);
-              const roasStr = roas === null ? "N/A" : roas.toFixed(2);
-              return `${d.metric_date}: vendas_confirmadas=${d.confirmed_sales ?? "N/A"}, receita_bruta=${formatBRL(d.gross_revenue)}, investimento=${formatBRL(d.investment)}, ROAS=${roasStr}`;
-            })
-            .join("\n");
-
-    // 8. Build final prompt
+    // Build final prompt
     const finalPrompt = ANALYSIS_PROMPT_TEMPLATE
       .replace("{{METRIC_DEFINITIONS}}", metricDefsText || "Nenhuma definição encontrada")
       .replace("{{THRESHOLDS}}", thresholdsText || "Nenhum threshold encontrado")
       .replace("{{FUNNEL_DATA}}", funnelDataText)
       .replace("{{DAILY_METRICS}}", dailyMetricsText || "Sem dados diários disponíveis");
 
-    console.log("Calling Lovable AI for funnel analysis...");
+    console.log("[FunnelAI] Calling Lovable AI...");
 
-    // 7. Call Lovable AI
+    // Call Lovable AI
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -345,10 +387,9 @@ serve(async (req) => {
       );
     }
 
-    // 8. Parse AI response (extract JSON from markdown if needed)
+    // Parse AI response (extract JSON from markdown if needed)
     let analysis;
     try {
-      // Try to extract JSON from markdown code blocks
       const jsonMatch = aiContent.match(/```(?:json)?\s*([\s\S]*?)```/);
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : aiContent.trim();
       analysis = JSON.parse(jsonStr);
@@ -356,7 +397,6 @@ serve(async (req) => {
       console.error("Failed to parse AI response:", parseError);
       console.log("Raw AI content:", aiContent);
       
-      // Return raw content if parsing fails
       analysis = {
         resumo_executivo: aiContent,
         parse_error: true,
@@ -364,20 +404,14 @@ serve(async (req) => {
       };
     }
 
-    const currentMetrics = {
-      health_status: funnelSummary.health_status,
-      total_revenue: toNumber(funnelSummary.total_gross_revenue) ?? 0,
-      total_investment: toNumber(funnelSummary.total_investment) ?? 0,
-      roas: toNumber(funnelSummary.overall_roas) ?? 0,
-      total_sales: toNumber(funnelSummary.total_confirmed_sales) ?? 0,
-    };
+    console.log("[FunnelAI] Analysis complete, data_source:", hasClientData ? 'client_payload' : 'database_views');
 
-    // 9. Return structured response
+    // Return structured response
     return new Response(
       JSON.stringify({
         success: true,
         funnel_id,
-        funnel_name: funnelSummary.funnel_name || funnel.name,
+        funnel_name: hasClientData ? (client_summary.funnel_name || funnel.name) : funnel.name,
         analysis_date: new Date().toISOString(),
         period: {
           start: startDateParam,
@@ -385,6 +419,7 @@ serve(async (req) => {
         },
         current_metrics: currentMetrics,
         analysis,
+        data_source: hasClientData ? 'client_payload' : 'database_views',
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

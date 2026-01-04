@@ -26,7 +26,8 @@ import {
   Reply,
   Clock,
   Zap,
-  ClipboardList
+  ClipboardList,
+  Lock
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +48,7 @@ import { SocialListeningPagesManager } from './SocialListeningPagesManager';
 import { SocialListeningGuide } from './SocialListeningGuide';
 import { ReplyApprovalDialog } from './ReplyApprovalDialog';
 import { SendSurveyDialog } from './SendSurveyDialog';
-import { FeatureGate } from '@/components/FeatureGate';
+import { FeatureGate, useFeatureGate } from '@/components/FeatureGate';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -93,6 +95,9 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     name: string | null;
     email: string;
   } | null>(null);
+
+  // Check AI access for social listening
+  const { hasAccess: hasAIAccess, isLoading: aiAccessLoading } = useFeatureGate('ai_analysis.social_listening');
 
   // Check if pages are configured and get last sync time
   const { data: savedPages, isLoading: loadingPages, refetch: refetchPages } = useQuery({
@@ -237,9 +242,10 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
             <TrendingUp className="h-4 w-4" />
             Análise por Post
           </TabsTrigger>
-          <TabsTrigger value="ia" className="gap-2">
+          <TabsTrigger value="ia" className="gap-2" disabled={!hasAIAccess && !aiAccessLoading}>
             <Brain className="h-4 w-4" />
             Base IA
+            {!hasAIAccess && !aiAccessLoading && <Lock className="h-3 w-3 ml-1 text-muted-foreground" />}
           </TabsTrigger>
           <TabsTrigger value="guia" className="gap-2">
             <BookOpen className="h-4 w-4" />
@@ -544,7 +550,13 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
         </TabsContent>
 
         <TabsContent value="ia" className="mt-6">
-          <AIKnowledgeBaseSettings projectId={projectId} />
+          <FeatureGate 
+            featureKey="ai_analysis.social_listening" 
+            showLocked 
+            lockedMessage="IA no Social Listening requer o módulo AI Analysis habilitado"
+          >
+            <AIKnowledgeBaseSettings projectId={projectId} />
+          </FeatureGate>
         </TabsContent>
 
         <TabsContent value="guia" className="mt-6">

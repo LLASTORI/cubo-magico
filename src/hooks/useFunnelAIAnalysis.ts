@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import type { FunnelAIContext } from './useFunnelAIContext';
 
 export interface AIAnalysisStrength {
   metrica: string;
@@ -54,6 +55,7 @@ export interface FunnelAIAnalysisResponse {
     total_sales: number;
   };
   analysis: FunnelAIAnalysis;
+  data_source?: 'client_payload' | 'database_views';
 }
 
 export function useFunnelAIAnalysis() {
@@ -64,18 +66,27 @@ export function useFunnelAIAnalysis() {
   const analyzeRunnel = useCallback(async (
     funnelId: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    context?: FunnelAIContext | null
   ) => {
     setIsLoading(true);
     setError(null);
 
     try {
+      const body: Record<string, any> = {
+        funnel_id: funnelId,
+        start_date: startDate,
+        end_date: endDate,
+      };
+
+      // If context is provided, include it in the request
+      if (context) {
+        body.client_summary = context.client_summary;
+        body.client_daily = context.client_daily;
+      }
+
       const { data, error: invokeError } = await supabase.functions.invoke('funnel-ai-analysis', {
-        body: {
-          funnel_id: funnelId,
-          start_date: startDate,
-          end_date: endDate,
-        },
+        body,
       });
 
       if (invokeError) {

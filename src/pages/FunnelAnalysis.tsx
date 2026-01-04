@@ -30,20 +30,49 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays 
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
+import { computeFunnelAIContext } from "@/hooks/useFunnelAIContext";
 import { FeatureGate, FeatureLockedBadge } from "@/components/FeatureGate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Internal component for AI Insights tab with funnel selector
 interface AIInsightsTabProps {
-  funnels: Array<{ id: string; name: string }>;
+  funnels: Array<{ id: string; name: string; campaign_name_pattern?: string; roas_target?: number }>;
   startDate: Date;
   endDate: Date;
+  salesData: any[];
+  metaInsights: any[];
+  campaigns: any[];
+  offerMappings: any[];
 }
 
-function AIInsightsTab({ funnels, startDate, endDate }: AIInsightsTabProps) {
+function AIInsightsTab({ 
+  funnels, 
+  startDate, 
+  endDate,
+  salesData,
+  metaInsights,
+  campaigns,
+  offerMappings,
+}: AIInsightsTabProps) {
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>(funnels[0]?.id || '');
   
   const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
+  
+  // Compute AI context from frontend data - avoids slow DB queries
+  const context = useMemo(() => {
+    if (!selectedFunnel || !salesData || !metaInsights || !campaigns || !offerMappings) {
+      return null;
+    }
+    return computeFunnelAIContext(
+      selectedFunnel,
+      salesData,
+      metaInsights,
+      campaigns,
+      offerMappings,
+      startDate,
+      endDate
+    );
+  }, [selectedFunnel, salesData, metaInsights, campaigns, offerMappings, startDate, endDate]);
   
   return (
     <div className="space-y-6">
@@ -66,6 +95,14 @@ function AIInsightsTab({ funnels, startDate, endDate }: AIInsightsTabProps) {
             </SelectContent>
           </Select>
         </div>
+        {context && (
+          <div className="mt-3 text-xs text-muted-foreground flex flex-wrap gap-4">
+            <span>Receita: R$ {context.client_summary.total_revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span>Investimento: R$ {context.client_summary.total_investment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span>ROAS: {context.client_summary.roas.toFixed(2)}</span>
+            <span>Vendas FRONT: {context.client_summary.front_sales}</span>
+          </div>
+        )}
       </Card>
       
       {selectedFunnelId && selectedFunnel && (
@@ -74,6 +111,7 @@ function AIInsightsTab({ funnels, startDate, endDate }: AIInsightsTabProps) {
           funnelName={selectedFunnel.name}
           startDate={startDate}
           endDate={endDate}
+          context={context}
         />
       )}
     </div>
@@ -1267,6 +1305,10 @@ const FunnelAnalysis = () => {
                     funnels={funnels}
                     startDate={appliedStartDate}
                     endDate={appliedEndDate}
+                    salesData={salesData || []}
+                    metaInsights={metaInsights || []}
+                    campaigns={metaStructure?.campaigns || []}
+                    offerMappings={mappings || []}
                   />
                 ) : (
                   <Card className="p-12 text-center">

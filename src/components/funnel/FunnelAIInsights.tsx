@@ -42,24 +42,24 @@ interface FunnelAIInsightsProps {
 }
 
 const healthStatusConfig: Record<string, { label: string; color: string; bgColor: string; icon: React.ComponentType<any> }> = {
-  excellent: { label: 'Excelente', color: 'text-green-600', bgColor: 'bg-green-50 border-green-200', icon: CheckCircle2 },
-  good: { label: 'Bom', color: 'text-blue-600', bgColor: 'bg-blue-50 border-blue-200', icon: CheckCircle2 },
-  attention: { label: 'Atenção', color: 'text-yellow-600', bgColor: 'bg-yellow-50 border-yellow-200', icon: AlertTriangle },
-  danger: { label: 'Perigo', color: 'text-red-600', bgColor: 'bg-red-50 border-red-200', icon: XCircle },
-  'no-return': { label: 'Sem Retorno', color: 'text-red-700', bgColor: 'bg-red-100 border-red-300', icon: AlertOctagon },
-  inactive: { label: 'Inativo', color: 'text-muted-foreground', bgColor: 'bg-muted border-muted', icon: Minus },
+  excellent: { label: 'Excelente', color: 'text-green-400', bgColor: 'bg-green-500/10 border-green-500/30', icon: CheckCircle2 },
+  good: { label: 'Bom', color: 'text-blue-400', bgColor: 'bg-blue-500/10 border-blue-500/30', icon: CheckCircle2 },
+  attention: { label: 'Atenção', color: 'text-yellow-400', bgColor: 'bg-yellow-500/10 border-yellow-500/30', icon: AlertTriangle },
+  danger: { label: 'Perigo', color: 'text-red-400', bgColor: 'bg-red-500/10 border-red-500/30', icon: XCircle },
+  'no-return': { label: 'Sem Retorno', color: 'text-red-400', bgColor: 'bg-red-500/15 border-red-500/40', icon: AlertOctagon },
+  inactive: { label: 'Inativo', color: 'text-muted-foreground', bgColor: 'bg-muted border-border', icon: Minus },
 };
 
 const changeTypeConfig: Record<string, { label: string; icon: React.ComponentType<any>; color: string }> = {
-  melhoria: { label: 'Melhoria', icon: TrendingUp, color: 'text-green-600' },
-  piora: { label: 'Piora', icon: TrendingDown, color: 'text-red-600' },
+  melhoria: { label: 'Melhoria', icon: TrendingUp, color: 'text-green-400' },
+  piora: { label: 'Piora', icon: TrendingDown, color: 'text-red-400' },
   estavel: { label: 'Estável', icon: Minus, color: 'text-muted-foreground' },
 };
 
 const riskSeverityConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-  baixa: { label: 'Baixa', color: 'text-yellow-700', bgColor: 'bg-yellow-100' },
-  media: { label: 'Média', color: 'text-orange-700', bgColor: 'bg-orange-100' },
-  alta: { label: 'Alta', color: 'text-red-700', bgColor: 'bg-red-100' },
+  baixa: { label: 'Baixa', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  media: { label: 'Média', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  alta: { label: 'Alta', color: 'text-red-400', bgColor: 'bg-red-500/20' },
 };
 
 export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, context }: FunnelAIInsightsProps) {
@@ -229,19 +229,19 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">{ai.analise_posicoes.resumo}</p>
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
+                <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
                   <div className="mb-1 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium text-green-700">Destaque Positivo</span>
+                    <TrendingUp className="h-4 w-4 text-green-400" />
+                    <span className="text-sm font-medium text-green-400">Destaque Positivo</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{ai.analise_posicoes.destaque_positivo}</p>
+                  <p className="text-xs text-foreground/80">{ai.analise_posicoes.destaque_positivo}</p>
                 </div>
-                <div className="rounded-lg border border-yellow-200 bg-yellow-50/50 p-3">
+                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
                   <div className="mb-1 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm font-medium text-yellow-700">Ponto de Atenção</span>
+                    <AlertTriangle className="h-4 w-4 text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-400">Ponto de Atenção</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{ai.analise_posicoes.destaque_negativo}</p>
+                  <p className="text-xs text-foreground/80">{ai.analise_posicoes.destaque_negativo}</p>
                 </div>
               </div>
             </CardContent>
@@ -258,26 +258,26 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
                 <div className="mb-1 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-medium text-green-700">Top Performers</span>
+                  <TrendingUp className="h-4 w-4 text-green-400" />
+                  <span className="text-sm font-medium text-green-400">Top Performers</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{ai.analise_criativos.top_performers}</p>
+                <p className="text-xs text-foreground/80">{ai.analise_criativos.top_performers}</p>
               </div>
-              <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
                 <div className="mb-1 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-red-600" />
-                  <span className="text-sm font-medium text-red-700">Underperformers</span>
+                  <TrendingDown className="h-4 w-4 text-red-400" />
+                  <span className="text-sm font-medium text-red-400">Underperformers</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{ai.analise_criativos.underperformers}</p>
+                <p className="text-xs text-foreground/80">{ai.analise_criativos.underperformers}</p>
               </div>
-              <div className="rounded-lg border bg-muted/50 p-3">
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="mb-1 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Padrão Identificado</span>
+                  <span className="text-sm font-medium text-foreground">Padrão Identificado</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{ai.analise_criativos.padrao_identificado}</p>
+                <p className="text-xs text-foreground/80">{ai.analise_criativos.padrao_identificado}</p>
               </div>
             </CardContent>
           </Card>
@@ -327,12 +327,12 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
                 <div className="mb-1 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <span className="text-sm font-medium text-red-700">Gargalo Principal</span>
+                  <AlertTriangle className="h-4 w-4 text-red-400" />
+                  <span className="text-sm font-medium text-red-400">Gargalo Principal</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{ai.funil_conversao.gargalo_principal}</p>
+                <p className="text-xs text-foreground/80">{ai.funil_conversao.gargalo_principal}</p>
               </div>
               <p className="text-sm"><strong>Taxas:</strong> {ai.funil_conversao.taxas}</p>
               <p className="text-sm text-muted-foreground italic">{ai.funil_conversao.insight}</p>
@@ -345,20 +345,20 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CheckCircle2 className="h-5 w-5 text-green-400" />
                 <CardTitle className="text-base">Pontos Fortes</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {ai.pontos_fortes.map((ponto, idx) => (
-                <div key={idx} className="rounded-lg border border-green-200 bg-green-50/50 p-3">
+                <div key={idx} className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium">{ponto.metrica}</span>
-                    <Badge variant="outline" className="bg-green-100 text-green-700">
+                    <span className="text-sm font-medium text-foreground">{ponto.metrica}</span>
+                    <Badge variant="outline" className="border-green-500/50 bg-green-500/20 text-green-400">
                       {ponto.valor}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground">{ponto.explicacao}</p>
+                  <p className="text-xs text-foreground/80">{ponto.explicacao}</p>
                 </div>
               ))}
             </CardContent>
@@ -370,21 +370,21 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <AlertTriangle className="h-5 w-5 text-yellow-400" />
                 <CardTitle className="text-base">Pontos de Atenção</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {ai.pontos_atencao.map((ponto, idx) => (
-                <div key={idx} className="rounded-lg border border-yellow-200 bg-yellow-50/50 p-3">
+                <div key={idx} className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium">{ponto.metrica}</span>
-                    <Badge variant="outline" className="bg-yellow-100 text-yellow-700">
+                    <span className="text-sm font-medium text-foreground">{ponto.metrica}</span>
+                    <Badge variant="outline" className="border-yellow-500/50 bg-yellow-500/20 text-yellow-400">
                       {ponto.valor}
                     </Badge>
                   </div>
-                  <p className="mb-2 text-xs text-muted-foreground">{ponto.explicacao}</p>
-                  <p className="text-xs font-medium text-yellow-700">
+                  <p className="mb-2 text-xs text-foreground/80">{ponto.explicacao}</p>
+                  <p className="text-xs font-medium text-yellow-400">
                     Impacto: {ponto.impacto}
                   </p>
                 </div>
@@ -424,26 +424,26 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
 
         {/* Risk Alerts */}
         {ai.alertas_risco && ai.alertas_risco.length > 0 && (
-          <Card className="border-red-200">
+          <Card className="border-red-500/30">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <AlertOctagon className="h-5 w-5 text-red-600" />
-                <CardTitle className="text-base text-red-700">Alertas de Risco</CardTitle>
+                <AlertOctagon className="h-5 w-5 text-red-400" />
+                <CardTitle className="text-base text-red-400">Alertas de Risco</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {ai.alertas_risco.map((alerta, idx) => {
                 const severityConfig = riskSeverityConfig[alerta.severidade] || riskSeverityConfig.baixa;
                 return (
-                  <Alert key={idx} variant="destructive" className="border-red-200 bg-red-50">
+                  <Alert key={idx} variant="destructive" className="border-red-500/30 bg-red-500/10">
                     <AlertOctagon className="h-4 w-4" />
-                    <AlertTitle className="flex items-center gap-2">
+                    <AlertTitle className="flex items-center gap-2 text-foreground">
                       <span className="capitalize">{alerta.tipo}</span>
                       <Badge className={cn('text-xs', severityConfig.bgColor, severityConfig.color)}>
                         Severidade: {severityConfig.label}
                       </Badge>
                     </AlertTitle>
-                    <AlertDescription className="mt-1">{alerta.descricao}</AlertDescription>
+                    <AlertDescription className="mt-1 text-foreground/80">{alerta.descricao}</AlertDescription>
                   </Alert>
                 );
               })}

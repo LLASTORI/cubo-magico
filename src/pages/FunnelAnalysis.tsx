@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { 
-  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Zap
+  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Zap, Brain
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,12 +24,61 @@ import UTMAnalysis from "@/components/funnel/UTMAnalysis";
 import PaymentMethodAnalysis from "@/components/funnel/PaymentMethodAnalysis";
 import LTVAnalysis from "@/components/funnel/LTVAnalysis";
 import { CuboMagicoDashboard } from "@/components/funnel/CuboMagicoDashboard";
+import { FunnelAIInsights } from "@/components/funnel/FunnelAIInsights";
 import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
 import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
 import { FeatureGate, FeatureLockedBadge } from "@/components/FeatureGate";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Internal component for AI Insights tab with funnel selector
+interface AIInsightsTabProps {
+  funnels: Array<{ id: string; name: string }>;
+  startDate: Date;
+  endDate: Date;
+}
+
+function AIInsightsTab({ funnels, startDate, endDate }: AIInsightsTabProps) {
+  const [selectedFunnelId, setSelectedFunnelId] = useState<string>(funnels[0]?.id || '');
+  
+  const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
+  
+  return (
+    <div className="space-y-6">
+      <Card className="p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            <span className="font-medium">Selecione o Funil para Análise:</span>
+          </div>
+          <Select value={selectedFunnelId} onValueChange={setSelectedFunnelId}>
+            <SelectTrigger className="w-[300px]">
+              <SelectValue placeholder="Selecione um funil" />
+            </SelectTrigger>
+            <SelectContent>
+              {funnels.map(funnel => (
+                <SelectItem key={funnel.id} value={funnel.id}>
+                  {funnel.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+      
+      {selectedFunnelId && selectedFunnel && (
+        <FunnelAIInsights
+          funnelId={selectedFunnelId}
+          funnelName={selectedFunnel.name}
+          startDate={startDate}
+          endDate={endDate}
+        />
+      )}
+    </div>
+  );
+}
 
 const FunnelAnalysis = () => {
   const { currentProject } = useProject();
@@ -1080,6 +1129,10 @@ const FunnelAnalysis = () => {
                   <FeatureLockedBadge featureKey="ltv_analysis" className="ml-1" />
                 </TabsTrigger>
                 <TabsTrigger value="changelog">Histórico</TabsTrigger>
+                <TabsTrigger value="ai-insights" className="gap-1">
+                  <Brain className="w-3 h-3" />
+                  Análise IA
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -1203,6 +1256,26 @@ const FunnelAnalysis = () => {
                     </h3>
                     <p className="text-muted-foreground">
                       Configure campanhas no Meta Ads e sincronize para ver os dados aqui.
+                    </p>
+                  </Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="ai-insights">
+                {funnels.length > 0 ? (
+                  <AIInsightsTab 
+                    funnels={funnels}
+                    startDate={appliedStartDate}
+                    endDate={appliedEndDate}
+                  />
+                ) : (
+                  <Card className="p-12 text-center">
+                    <Brain className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground mb-2">
+                      Nenhum funil configurado
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Configure funis perpétuos para utilizar a análise por IA.
                     </p>
                   </Card>
                 )}

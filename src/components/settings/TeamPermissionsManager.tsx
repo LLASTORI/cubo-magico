@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useProjectMembers, ProjectMember, getRoleLabel } from '@/hooks/useProjectMembers';
 import { useAllMembersPermissions, PERMISSION_AREAS, PERMISSION_LEVELS, PermissionArea, PermissionLevel } from '@/hooks/useMemberPermissions';
+import { useProjectPlanInfo } from '@/hooks/useProjectPlanInfo';
 import { useProject } from '@/contexts/ProjectContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, UserPlus, Crown, Settings2, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, UserPlus, Crown, Settings2, Check, AlertTriangle, Package, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -46,6 +47,7 @@ export const TeamPermissionsManager = () => {
   const { currentProject } = useProject();
   const { members, invites, loading: membersLoading, inviteMember, cancelInvite, userRole, memberCount, maxMembers, canInvite } = useProjectMembers(currentProject?.id);
   const { allPermissions, isLoading: permissionsLoading, updateMemberPermission, isUpdating } = useAllMembersPermissions();
+  const { data: planInfo, isLoading: planLoading } = useProjectPlanInfo(currentProject?.id);
   
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -119,7 +121,7 @@ export const TeamPermissionsManager = () => {
     }));
   };
 
-  if (membersLoading || permissionsLoading) {
+  if (membersLoading || permissionsLoading || planLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -127,11 +129,82 @@ export const TeamPermissionsManager = () => {
     );
   }
 
+  const getPlanTypeLabel = (type: string | null) => {
+    if (!type) return '';
+    return type === 'monthly' ? 'Mensal' : type === 'yearly' ? 'Anual' : type;
+  };
+
+  const formatCurrency = (cents: number | null) => {
+    if (!cents) return 'R$ 0';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
+  };
+
   const nonOwnerMembers = members.filter(m => m.role !== 'owner');
   const ownerMember = members.find(m => m.role === 'owner');
 
   return (
     <div className="space-y-6">
+      {/* Plan Info Card */}
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">
+                {planInfo?.hasPlan ? (
+                  <>Plano {planInfo.planName} <span className="text-sm font-normal text-muted-foreground">({getPlanTypeLabel(planInfo.planType)})</span></>
+                ) : (
+                  'Plano não definido'
+                )}
+              </CardTitle>
+            </div>
+            {isOwner && (
+              <Button variant="outline" size="sm" className="gap-1">
+                <Sparkles className="h-3 w-3" />
+                Fazer Upgrade
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Membros</p>
+              <p className="font-medium">
+                {memberCount}/{maxMembers}
+                {planInfo?.hasManualOverride && (
+                  <span className="ml-1 text-xs text-amber-600">(ajustado)</span>
+                )}
+              </p>
+            </div>
+            {planInfo?.planMaxProjects && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Projetos</p>
+                <p className="font-medium">{planInfo.planMaxProjects}</p>
+              </div>
+            )}
+            {planInfo?.planPriceCents && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Valor</p>
+                <p className="font-medium">{formatCurrency(planInfo.planPriceCents)}/{planInfo.planType === 'yearly' ? 'ano' : 'mês'}</p>
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Status</p>
+              <Badge variant={planInfo?.subscriptionStatus === 'active' ? 'default' : planInfo?.subscriptionStatus === 'trial' ? 'secondary' : 'outline'}>
+                {planInfo?.subscriptionStatus === 'active' ? 'Ativo' : planInfo?.subscriptionStatus === 'trial' ? 'Trial' : 'Sem assinatura'}
+              </Badge>
+            </div>
+          </div>
+          {planInfo?.hasManualOverride && (
+            <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Limite de membros ajustado manualmente (padrão do plano: {planInfo.planDefaultMembers})
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Limit Alert */}
       {memberCount >= maxMembers && isOwner && (
         <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">

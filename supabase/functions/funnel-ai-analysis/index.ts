@@ -178,37 +178,14 @@ serve(async (req) => {
       return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    // 2. Fetch funnel summary from canonical view (NO fallback, NO recalculation)
-    const summarySelect = [
-      "project_id",
-      "funnel_id",
-      "funnel_name",
-      "funnel_type",
-      "roas_target",
-      "first_sale_date",
-      "last_sale_date",
-      "total_investment",
-      "total_gross_revenue",
-      "total_confirmed_sales",
-      "total_front_sales",
-      "total_refunds",
-      "total_chargebacks",
-      "overall_roas",
-      "overall_cpa",
-      "overall_avg_ticket",
-      "overall_refund_rate",
-      "overall_chargeback_rate",
-      "health_status",
-    ].join(",");
-
-    const { data: funnelSummary, error: summaryError } = await supabase
-      .from("funnel_summary")
-      .select(summarySelect)
-      .eq("funnel_id", funnel_id)
-      .maybeSingle();
+    // 2. Fetch funnel summary using RPC function (has 60s timeout)
+    const { data: summaryRows, error: summaryError } = await supabase.rpc(
+      "get_funnel_summary_by_id",
+      { p_funnel_id: funnel_id }
+    );
 
     if (summaryError) {
-      console.error("Error fetching funnel_summary:", summaryError);
+      console.error("Error fetching funnel_summary via RPC:", summaryError);
 
       const isTimeout = summaryError.code === "57014" || summaryError.message?.includes("statement timeout");
       return new Response(
@@ -222,6 +199,8 @@ serve(async (req) => {
       );
     }
 
+    const funnelSummary = summaryRows?.[0] || null;
+
     if (!funnelSummary) {
       return new Response(
         JSON.stringify({ error: "Resumo do funil não encontrado" }),
@@ -234,36 +213,19 @@ serve(async (req) => {
     const startDateParam =
       start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    // 4. Fetch daily metrics from canonical view (best-effort)
-    const dailySelect = [
-      "metric_date",
-      "investment",
-      "confirmed_sales",
-      "front_sales",
-      "refunds",
-      "chargebacks",
-      "unique_buyers",
-      "gross_revenue",
-      "net_revenue",
-      "avg_ticket",
-      "roas",
-      "cpa_real",
-      "refund_rate",
-      "chargeback_rate",
-    ].join(",");
-
+    // 4. Fetch daily metrics using RPC function (has 60s timeout)
     let dailyMetrics: any[] | null = null;
-    const { data: dailyData, error: dailyError } = await supabase
-      .from("funnel_metrics_daily")
-      .select(dailySelect)
-      .eq("funnel_id", funnel_id)
-      .gte("metric_date", startDateParam)
-      .lte("metric_date", endDateParam)
-      .order("metric_date", { ascending: false })
-      .limit(60);
+    const { data: dailyData, error: dailyError } = await supabase.rpc(
+      "get_funnel_metrics_daily_range",
+      {
+        p_funnel_id: funnel_id,
+        p_start: startDateParam,
+        p_end: endDateParam,
+      }
+    );
 
     if (dailyError) {
-      console.error("Error fetching funnel_metrics_daily:", dailyError);
+      console.error("Error fetching funnel_metrics_daily via RPC:", dailyError);
       const isTimeout = dailyError.code === "57014" || dailyError.message?.includes("statement timeout");
       dailyMetrics = isTimeout ? null : (dailyData || null);
     } else {

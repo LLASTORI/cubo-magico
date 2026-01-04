@@ -5267,6 +5267,51 @@ export type Database = {
         Returns: string
       }
       get_encryption_key: { Args: { p_key_name?: string }; Returns: string }
+      get_funnel_metrics_daily_range: {
+        Args: { p_end: string; p_funnel_id: string; p_start: string }
+        Returns: {
+          avg_ticket: number
+          chargeback_rate: number
+          chargebacks: number
+          confirmed_sales: number
+          cpa_real: number
+          front_sales: number
+          funnel_id: string
+          gross_revenue: number
+          investment: number
+          metric_date: string
+          net_revenue: number
+          project_id: string
+          refund_rate: number
+          refunds: number
+          roas: number
+          unique_buyers: number
+        }[]
+      }
+      get_funnel_summary_by_id: {
+        Args: { p_funnel_id: string }
+        Returns: {
+          first_sale_date: string
+          funnel_id: string
+          funnel_name: string
+          funnel_type: string
+          health_status: string
+          last_sale_date: string
+          overall_avg_ticket: number
+          overall_chargeback_rate: number
+          overall_cpa: number
+          overall_refund_rate: number
+          overall_roas: number
+          project_id: string
+          roas_target: number
+          total_chargebacks: number
+          total_confirmed_sales: number
+          total_front_sales: number
+          total_gross_revenue: number
+          total_investment: number
+          total_refunds: number
+        }[]
+      }
       get_next_available_agent: {
         Args: { p_department_id?: string; p_project_id: string }
         Returns: string

@@ -29,6 +29,11 @@ interface ProjectCredentialStatus {
   is_validated: boolean;
 }
 
+interface ProjectMemberCount {
+  current: number;
+  max: number;
+}
+
 interface ProjectWithRole extends Project {
   userRole?: ProjectRole;
 }
@@ -70,10 +75,11 @@ const Projects = () => {
   const [testing, setTesting] = useState(false);
   const [projectCredentials, setProjectCredentials] = useState<Record<string, ProjectCredentialStatus>>({});
   const [projectRoles, setProjectRoles] = useState<Record<string, ProjectRole>>({});
+  const [projectMemberCounts, setProjectMemberCounts] = useState<Record<string, ProjectMemberCount>>({});
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
-  // Fetch credentials status and user roles for all projects
+  // Fetch credentials status, user roles and member counts for all projects
   useEffect(() => {
     const fetchProjectData = async () => {
       if (projects.length === 0 || !user) return;
@@ -110,6 +116,30 @@ const Projects = () => {
           rolesMap[m.project_id] = m.role as ProjectRole;
         });
         setProjectRoles(rolesMap);
+      }
+
+      // Fetch member counts for each project
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('id, max_members')
+        .in('id', projectIds);
+
+      // Fetch member counts per project
+      const { data: memberCountsData } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .in('project_id', projectIds);
+
+      if (projectsData) {
+        const countsMap: Record<string, ProjectMemberCount> = {};
+        projectsData.forEach(p => {
+          const memberCount = memberCountsData?.filter(m => m.project_id === p.id).length || 0;
+          countsMap[p.id] = {
+            current: memberCount,
+            max: p.max_members || 5,
+          };
+        });
+        setProjectMemberCounts(countsMap);
       }
     };
     
@@ -643,14 +673,24 @@ const Projects = () => {
                         Acessar
                       </Button>
                       {canManageTeam && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => openTeamDialog(project)}
-                          title="Gerenciar equipe"
-                        >
-                          <Users className="w-3 h-3" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => openTeamDialog(project)}
+                              className="gap-1"
+                            >
+                              <Users className="w-3 h-3" />
+                              <span className="text-xs">
+                                {projectMemberCounts[project.id]?.current || 0}/{projectMemberCounts[project.id]?.max || 5}
+                              </span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Equipe: {projectMemberCounts[project.id]?.current || 0} de {projectMemberCounts[project.id]?.max || 5} membros
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {canEdit && (
                         <>

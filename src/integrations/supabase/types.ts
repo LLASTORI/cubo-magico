@@ -3112,6 +3112,7 @@ export type Database = {
           is_active: boolean | null
           is_public: boolean
           is_trial_available: boolean | null
+          max_members: number
           max_projects: number
           max_users_per_project: number
           name: string
@@ -3127,6 +3128,7 @@ export type Database = {
           is_active?: boolean | null
           is_public?: boolean
           is_trial_available?: boolean | null
+          max_members?: number
           max_projects?: number
           max_users_per_project?: number
           name: string
@@ -3142,6 +3144,7 @@ export type Database = {
           is_active?: boolean | null
           is_public?: boolean
           is_trial_available?: boolean | null
+          max_members?: number
           max_projects?: number
           max_users_per_project?: number
           name?: string
@@ -3510,6 +3513,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean | null
+          max_members: number
           name: string
           public_code: string
           updated_at: string
@@ -3520,6 +3524,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          max_members?: number
           name: string
           public_code: string
           updated_at?: string
@@ -3530,6 +3535,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          max_members?: number
           name?: string
           public_code?: string
           updated_at?: string

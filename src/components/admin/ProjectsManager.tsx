@@ -70,7 +70,7 @@ export const ProjectsManager = () => {
   // Edit dialog
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', description: '', is_active: true });
+  const [editForm, setEditForm] = useState({ name: '', description: '', is_active: true, max_members: 5 });
   const [saving, setSaving] = useState(false);
   
   // Members dialog
@@ -183,6 +183,7 @@ export const ProjectsManager = () => {
       name: project.name,
       description: project.description || '',
       is_active: project.is_active ?? true,
+      max_members: project.max_members || 5,
     });
     setIsEditOpen(true);
   };
@@ -198,6 +199,7 @@ export const ProjectsManager = () => {
           name: editForm.name,
           description: editForm.description || null,
           is_active: editForm.is_active,
+          max_members: editForm.max_members,
         })
         .eq('id', editingProject.id);
 
@@ -536,6 +538,27 @@ export const ProjectsManager = () => {
                 checked={editForm.is_active}
                 onCheckedChange={(checked) => setEditForm({ ...editForm, is_active: checked })}
               />
+            </div>
+            <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Limite de Membros</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Override manual do limite de membros (padrão do plano: {editingProject?.max_members || 5})
+                  </p>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={editForm.max_members}
+                  onChange={(e) => setEditForm({ ...editForm, max_members: parseInt(e.target.value) || 5 })}
+                  className="w-20"
+                />
+              </div>
+              <p className="text-xs text-amber-600">
+                ⚠️ Alterar este valor sobrescreve o limite definido pelo plano
+              </p>
             </div>
           </div>
           <DialogFooter>

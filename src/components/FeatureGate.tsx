@@ -210,6 +210,66 @@ export const FeatureUpgradeButton: React.FC<FeatureUpgradeButtonProps> = ({
 };
 
 /**
+ * FeatureLockedButton - Disables a button and shows a lock when feature is blocked.
+ * Use this for action buttons where you want a consistent "cadeado" visual.
+ */
+export type FeatureLockedButtonProps = React.ComponentProps<typeof Button> & {
+  featureKey: string;
+  lockedMessage?: string;
+  showLockIcon?: boolean;
+};
+
+export const FeatureLockedButton: React.FC<FeatureLockedButtonProps> = ({
+  featureKey,
+  lockedMessage,
+  showLockIcon = true,
+  children,
+  disabled,
+  ...buttonProps
+}) => {
+  const { canUse, isLoading, features } = useFeatureAccess();
+
+  if (isLoading) {
+    return null;
+  }
+
+  const hasAccess = canUse(featureKey);
+
+  if (hasAccess) {
+    return (
+      <Button {...buttonProps} disabled={disabled}>
+        {children}
+      </Button>
+    );
+  }
+
+  const feature = features.find(f => f.feature_key === featureKey);
+  const featureName = feature?.name || 'Este recurso';
+  const message = lockedMessage || `${featureName} está desabilitado para o seu projeto/plano.`;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* span needed because disabled buttons don't trigger pointer events */}
+          <span className="inline-block">
+            <Button {...buttonProps} disabled>
+              {children}
+              {showLockIcon ? (
+                <Lock className="h-3 w-3 ml-2 text-muted-foreground" />
+              ) : null}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{message}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
+/**
  * useFeatureGate - Hook for programmatic feature checking
  * Useful when you need to check features in event handlers or effects
  */

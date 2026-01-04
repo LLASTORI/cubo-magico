@@ -812,7 +812,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
           <TableHead className="text-right">Invest.</TableHead>
           <TableHead className="text-right">Receita</TableHead>
           <TableHead className="text-right">ROAS</TableHead>
-          <TableHead className="text-right">Vendas</TableHead>
+          <TableHead className="text-right">Prod.</TableHead>
           <TableHead className="text-right">%</TableHead>
         </TableRow>
       </TableHeader>
@@ -994,7 +994,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         <Card className="p-4 bg-muted/30">
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
             <Target className="w-4 h-4" />
-            <span>Vendas</span>
+            <span>Produtos Vendidos</span>
           </div>
           <p className="text-2xl font-bold">{analyzeUTM.totalSales}</p>
         </Card>

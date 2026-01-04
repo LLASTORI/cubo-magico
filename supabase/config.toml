@@ -56,3 +56,10 @@ verify_jwt = false
 
 [functions.survey-public]
 verify_jwt = false
+
+[functions.survey-ai-analysis]
+verify_jwt = true
+
+[functions.funnel-ai-analysis]
+verify_jwt = true
+max_duration = 120

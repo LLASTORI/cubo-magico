@@ -1920,6 +1920,47 @@ export type Database = {
           },
         ]
       }
+      funnel_thresholds: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          project_id: string | null
+          threshold_key: string
+          threshold_value: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          project_id?: string | null
+          threshold_key: string
+          threshold_value: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          project_id?: string | null
+          threshold_key?: string
+          threshold_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_thresholds_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnels: {
         Row: {
           campaign_name_pattern: string | null
@@ -2902,6 +2943,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      metric_definitions: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          display_order: number | null
+          formula: string | null
+          id: string
+          metric_key: string
+          metric_name: string
+          unit: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          formula?: string | null
+          id?: string
+          metric_key: string
+          metric_name: string
+          unit?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          formula?: string | null
+          id?: string
+          metric_key?: string
+          metric_name?: string
+          unit?: string | null
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -5047,6 +5124,48 @@ export type Database = {
       }
     }
     Views: {
+      canonical_sale_events: {
+        Row: {
+          affiliate_id: string | null
+          affiliate_name: string | null
+          canonical_status: string | null
+          checkout_origin: string | null
+          confirmation_date: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          currency: string | null
+          event_timestamp: string | null
+          event_type: string | null
+          external_id: string | null
+          funnel_id: string | null
+          funnel_position: string | null
+          funnel_position_order: number | null
+          gross_value_brl: number | null
+          installments_number: number | null
+          internal_id: string | null
+          is_subscription: boolean | null
+          net_value_brl: number | null
+          offer_code: string | null
+          offer_name: string | null
+          original_status: string | null
+          payment_method: string | null
+          payment_type: string | null
+          platform: string | null
+          product_code: string | null
+          product_name: string | null
+          project_id: string | null
+          purchase_date: string | null
+          recorded_at: string | null
+          sale_type: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Relationships: []
+      }
       contact_social_insights: {
         Row: {
           avg_intent_score: number | null
@@ -5072,6 +5191,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      funnel_metrics_daily: {
+        Row: {
+          avg_ticket: number | null
+          chargeback_rate: number | null
+          chargebacks: number | null
+          confirmed_sales: number | null
+          cpa_real: number | null
+          front_sales: number | null
+          funnel_id: string | null
+          gross_revenue: number | null
+          investment: number | null
+          metric_date: string | null
+          net_revenue: number | null
+          project_id: string | null
+          refund_rate: number | null
+          refunds: number | null
+          roas: number | null
+          unique_buyers: number | null
+        }
+        Relationships: []
+      }
+      funnel_summary: {
+        Row: {
+          first_sale_date: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          funnel_type: string | null
+          health_status: string | null
+          last_sale_date: string | null
+          overall_avg_ticket: number | null
+          overall_chargeback_rate: number | null
+          overall_cpa: number | null
+          overall_refund_rate: number | null
+          overall_roas: number | null
+          project_id: string | null
+          roas_target: number | null
+          total_chargebacks: number | null
+          total_confirmed_sales: number | null
+          total_front_sales: number | null
+          total_gross_revenue: number | null
+          total_investment: number | null
+          total_refunds: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {

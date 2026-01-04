@@ -39,6 +39,10 @@ interface FunnelAIInsightsProps {
   endDate?: Date;
   /** Pre-computed context from frontend data - avoids slow DB queries */
   context?: FunnelAIContext | null;
+  /** Cached analysis from parent to persist between tab changes */
+  cachedAnalysis?: FunnelAIAnalysisResponse | null;
+  /** Callback to save analysis in parent cache */
+  onAnalysisSave?: (analysis: FunnelAIAnalysisResponse) => void;
 }
 
 const healthStatusConfig: Record<string, { label: string; color: string; bgColor: string; icon: React.ComponentType<any> }> = {
@@ -62,28 +66,28 @@ const riskSeverityConfig: Record<string, { label: string; color: string; bgColor
   alta: { label: 'Alta', color: 'text-red-400', bgColor: 'bg-red-500/20' },
 };
 
-export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, context }: FunnelAIInsightsProps) {
-  const { analyzeRunnel, analysis, isLoading, error, clearAnalysis } = useFunnelAIAnalysis();
-  const [hasRequested, setHasRequested] = useState(false);
-
-  // Reset when funnel changes
-  useEffect(() => {
-    setHasRequested(false);
-    clearAnalysis();
-  }, [funnelId, clearAnalysis]);
+export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, context, cachedAnalysis, onAnalysisSave }: FunnelAIInsightsProps) {
+  const { analyzeRunnel, isLoading, error } = useFunnelAIAnalysis();
+  const [localAnalysis, setLocalAnalysis] = useState<FunnelAIAnalysisResponse | null>(null);
+  
+  // Use cached analysis from parent if available, otherwise use local
+  const analysis = cachedAnalysis || localAnalysis;
 
   const handleAnalyze = async () => {
-    setHasRequested(true);
-    await analyzeRunnel(
+    const result = await analyzeRunnel(
       funnelId,
       startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
       endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
       context
     );
+    if (result) {
+      setLocalAnalysis(result);
+      onAnalysisSave?.(result);
+    }
   };
 
-  // Initial state - invitation to analyze
-  if (!hasRequested && !analysis) {
+  // Initial state - invitation to analyze (only if no cached analysis)
+  if (!analysis) {
     return (
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -95,9 +99,18 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
             A IA analisará em profundidade: posições do funil, performance de criativos, 
             métodos de pagamento, LTV, taxas de conversão e tendências do período.
           </p>
-          <Button onClick={handleAnalyze} size="lg">
-            <Sparkles className="mr-2 h-4 w-4" />
-            Gerar Análise Completa
+          <Button onClick={handleAnalyze} size="lg" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Brain className="mr-2 h-4 w-4 animate-pulse" />
+                Analisando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Gerar Análise Completa
+              </>
+            )}
           </Button>
           {context && (
             <p className="mt-4 text-xs text-muted-foreground">
@@ -187,9 +200,9 @@ export function FunnelAIInsights({ funnelId, funnelName, startDate, endDate, con
                   </CardDescription>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleAnalyze}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Atualizar
+              <Button variant="ghost" size="sm" onClick={handleAnalyze} disabled={isLoading}>
+                <RefreshCw className={cn("mr-2 h-4 w-4", isLoading && "animate-spin")} />
+                {isLoading ? 'Atualizando...' : 'Atualizar'}
               </Button>
             </div>
           </CardHeader>

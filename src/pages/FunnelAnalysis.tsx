@@ -45,6 +45,9 @@ interface AIInsightsTabProps {
   offerMappings: any[];
   adsets?: any[];
   ads?: any[];
+  // Persist analysis state in parent
+  cachedAnalysis: Record<string, any>;
+  setCachedAnalysis: React.Dispatch<React.SetStateAction<Record<string, any>>>;
 }
 
 function AIInsightsTab({ 
@@ -57,6 +60,8 @@ function AIInsightsTab({
   offerMappings,
   adsets,
   ads,
+  cachedAnalysis,
+  setCachedAnalysis,
 }: AIInsightsTabProps) {
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>(funnels[0]?.id || '');
   
@@ -79,6 +84,14 @@ function AIInsightsTab({
       ads
     );
   }, [selectedFunnel, salesData, metaInsights, campaigns, offerMappings, startDate, endDate, adsets, ads]);
+
+  // Callback to save analysis in cache
+  const handleAnalysisSave = useCallback((funnelId: string, analysis: any) => {
+    setCachedAnalysis(prev => ({
+      ...prev,
+      [funnelId]: analysis
+    }));
+  }, [setCachedAnalysis]);
   
   return (
     <div className="space-y-6">
@@ -120,6 +133,8 @@ function AIInsightsTab({
           startDate={startDate}
           endDate={endDate}
           context={context}
+          cachedAnalysis={cachedAnalysis[selectedFunnelId]}
+          onAnalysisSave={(analysis) => handleAnalysisSave(selectedFunnelId, analysis)}
         />
       )}
     </div>
@@ -147,6 +162,9 @@ const FunnelAnalysis = () => {
   const [dataGaps, setDataGaps] = useState<{ missingDays: number; completeness: number; missingRanges: string[]; missingDateRanges: Array<{start: string, end: string}> } | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cache for AI analysis to persist between tab changes
+  const [cachedAIAnalysis, setCachedAIAnalysis] = useState<Record<string, any>>({});
 
   // Use centralized hook for ALL data
   const {
@@ -1319,6 +1337,8 @@ const FunnelAnalysis = () => {
                     offerMappings={mappings || []}
                     adsets={metaStructure?.adsets || []}
                     ads={metaStructure?.ads || []}
+                    cachedAnalysis={cachedAIAnalysis}
+                    setCachedAnalysis={setCachedAIAnalysis}
                   />
                 ) : (
                   <Card className="p-12 text-center">

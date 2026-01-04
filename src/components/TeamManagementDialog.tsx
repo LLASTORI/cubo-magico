@@ -6,10 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectMembers, ProjectRole, getRoleLabel, canManageRole } from '@/hooks/useProjectMembers';
-import { Users, UserPlus, Mail, Crown, Shield, User, Trash2, Loader2, LogOut, ArrowRightLeft } from 'lucide-react';
+import { Users, UserPlus, Mail, Crown, Shield, User, Trash2, Loader2, LogOut, ArrowRightLeft, AlertTriangle } from 'lucide-react';
 import { z } from 'zod';
 
 interface TeamManagementDialogProps {
@@ -141,6 +142,17 @@ export const TeamManagementDialog = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Limit Reached Alert */}
+          {memberCount >= maxMembers && (userRole === 'owner' || userRole === 'manager') && (
+            <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                <span className="font-medium">Limite de membros atingido!</span> Este projeto possui {memberCount} de {maxMembers} membros permitidos pelo plano. 
+                Para adicionar mais membros, faça upgrade do plano ou remova membros existentes.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Invite Section */}
           {canInvite && (
             <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
@@ -171,9 +183,6 @@ export const TeamManagementDialog = ({
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Convidar'}
                 </Button>
               </div>
-              {memberCount >= maxMembers && (
-                <p className="text-xs text-amber-600">Limite de {maxMembers} membros atingido</p>
-              )}
             </div>
           )}
 

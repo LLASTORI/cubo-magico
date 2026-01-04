@@ -48,7 +48,7 @@ import { SocialListeningPagesManager } from './SocialListeningPagesManager';
 import { SocialListeningGuide } from './SocialListeningGuide';
 import { ReplyApprovalDialog } from './ReplyApprovalDialog';
 import { SendSurveyDialog } from './SendSurveyDialog';
-import { FeatureGate, useFeatureGate } from '@/components/FeatureGate';
+import { FeatureGate, FeatureLockedButton, useFeatureGate } from '@/components/FeatureGate';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -529,13 +529,14 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           <Users className={`h-4 w-4 mr-2 ${isLinking ? 'animate-pulse' : ''}`} />
           {isLinking ? 'Vinculando...' : 'Vincular ao CRM'}
         </Button>
-        <Button 
+        <FeatureLockedButton
+          featureKey="ai_analysis.social_listening"
           onClick={handleProcessAI}
           disabled={isProcessing || (stats?.pendingAI === 0)}
         >
           <Brain className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-pulse' : ''}`} />
           {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
-        </Button>
+        </FeatureLockedButton>
       </div>
         </TabsContent>
 

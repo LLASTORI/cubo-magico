@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { FeatureLockedButton } from '@/components/FeatureGate';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
@@ -252,7 +253,9 @@ export function ReplyApprovalDialog({
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <div className="flex gap-2 flex-1">
-            <Button
+            <FeatureLockedButton
+              featureKey="ai_analysis.social_listening"
+              lockedMessage="IA no Social Listening está desabilitada para este projeto/plano."
               variant="outline"
               onClick={() => generateReply.mutate()}
               disabled={generateReply.isPending}
@@ -260,7 +263,7 @@ export function ReplyApprovalDialog({
             >
               <RefreshCw className={`h-4 w-4 ${generateReply.isPending ? 'animate-spin' : ''}`} />
               {hasReply ? 'Regenerar' : 'Gerar com IA'}
-            </Button>
+            </FeatureLockedButton>
             
             {hasReply && (
               <Button

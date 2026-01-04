@@ -119,11 +119,10 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
       
       setIsSuperAdmin(!!roleData);
 
-      // Fetch all features - cast to bypass type issues with new tables
+      // Fetch all features (including inactive, so global disable works)
       const { data: featuresData, error: featuresError } = await supabase
         .from('features' as any)
         .select('*')
-        .eq('is_active', true)
         .order('module_key', { ascending: true }) as { data: DbFeature[] | null; error: any };
 
       if (featuresError) throw featuresError;
@@ -259,18 +258,17 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
   }, [fetchFeatureData]);
 
   const canUse = useCallback((featureKey: string): boolean => {
-    // Super admin always has access
-    if (isSuperAdmin) {
-      return true;
+    const feature = features.find(f => f.feature_key === featureKey);
+
+    // Global kill-switch: if a feature exists but is inactive, deny for everyone
+    if (feature && feature.is_active === false) {
+      return false;
     }
 
-    // Find feature to get its module_key
-    const feature = features.find(f => f.feature_key === featureKey);
     const moduleKey = feature?.module_key || featureKey.split('.')[0];
 
-    // "core" module features are always available (dashboard, settings, etc.)
+    // "core" module features are always available by default
     if (moduleKey === 'core') {
-      // Still check plan features and overrides for core features
       const userOverride = overrides.find(o => o.feature_key === featureKey);
       if (userOverride !== undefined) {
         return userOverride.enabled;
@@ -279,19 +277,23 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
       if (planFeature !== undefined) {
         return planFeature.enabled;
       }
-      // Core features are available by default
       return true;
     }
 
-    // Check if module is active in project
+    // Check if module is active in project (applies to everyone, including super admin)
     if (currentProject && !activeModules.includes(moduleKey)) {
       return false;
     }
 
-    // Check user override (highest priority)
+    // Check override (highest priority)
     const userOverride = overrides.find(o => o.feature_key === featureKey);
     if (userOverride !== undefined) {
       return userOverride.enabled;
+    }
+
+    // Super admin bypasses plan gating, but NOT module activation or is_active
+    if (isSuperAdmin) {
+      return true;
     }
 
     // Check plan features
@@ -306,7 +308,7 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     }
 
     return false;
-  }, [isSuperAdmin, currentProject, activeModules, overrides, planFeatures]);
+  }, [features, isSuperAdmin, currentProject, activeModules, overrides, planFeatures]);
 
   const canUseAny = useCallback((featureKeys: string[]): boolean => {
     return featureKeys.some(key => canUse(key));

@@ -236,7 +236,7 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
           .from('project_modules' as any)
           .select('module_key')
           .eq('project_id', currentProject.id)
-          .eq('is_active', true) as { data: DbProjectModule[] | null; error: any };
+          .eq('is_enabled', true) as { data: DbProjectModule[] | null; error: any };
 
         if (modulesError) {
           console.error('Error fetching modules:', modulesError);

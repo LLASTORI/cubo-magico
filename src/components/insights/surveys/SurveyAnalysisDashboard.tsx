@@ -12,10 +12,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { useSurveyAnalysisStats, useProcessSurveyAI } from '@/hooks/useSurveyAnalysis';
+import { FeatureLockedButton } from '@/components/FeatureGate';
 
 interface SurveyAnalysisDashboardProps {
   projectId: string;
@@ -68,7 +68,9 @@ export function SurveyAnalysisDashboard({ projectId }: SurveyAnalysisDashboardPr
             Visão consolidada de todas as pesquisas do projeto
           </p>
         </div>
-        <Button 
+        <FeatureLockedButton 
+          featureKey="ai_analysis.surveys"
+          lockedMessage="Análise de Pesquisas com IA está desabilitada para este projeto/plano."
           onClick={handleProcessAI} 
           disabled={processAI.isPending}
           className="gap-2"
@@ -79,7 +81,7 @@ export function SurveyAnalysisDashboard({ projectId }: SurveyAnalysisDashboardPr
             <Brain className="h-4 w-4" />
           )}
           {processAI.isPending ? 'Processando...' : 'Classificar com IA'}
-        </Button>
+        </FeatureLockedButton>
       </div>
 
       {/* KPI Cards */}

@@ -20,6 +20,7 @@ import { useSurveyAnalysisResponses, useProcessSurveyAI } from '@/hooks/useSurve
 import { useSurveys } from '@/hooks/useSurveys';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { FeatureLockedButton } from '@/components/FeatureGate';
 
 interface SurveyAnalysisBySurveyProps {
   projectId: string;
@@ -94,7 +95,9 @@ export function SurveyAnalysisBySurvey({ projectId }: SurveyAnalysisBySurveyProp
             Visão detalhada das respostas classificadas por IA
           </p>
         </div>
-        <Button 
+        <FeatureLockedButton 
+          featureKey="ai_analysis.surveys"
+          lockedMessage="Análise de Pesquisas com IA está desabilitada para este projeto/plano."
           onClick={handleProcessAI} 
           disabled={processAI.isPending}
           className="gap-2"
@@ -105,7 +108,7 @@ export function SurveyAnalysisBySurvey({ projectId }: SurveyAnalysisBySurveyProp
             <Brain className="h-4 w-4" />
           )}
           {processAI.isPending ? 'Processando...' : 'Classificar com IA'}
-        </Button>
+        </FeatureLockedButton>
       </div>
 
       {/* Filters */}

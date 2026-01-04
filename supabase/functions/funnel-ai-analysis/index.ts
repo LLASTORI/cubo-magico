@@ -176,17 +176,65 @@ serve(async (req) => {
       console.warn("funnel_summary query failed:", e);
     }
 
-    // 3. If summary failed, build a minimal summary from other sources
+    // 3. If summary failed, build a minimal summary from offer_mappings + hotmart_sales
     if (!funnelSummary) {
-      // Fetch basic metrics from hotmart_sales directly
-      const { data: salesData } = await supabase
-        .from("hotmart_sales")
-        .select("status, total_price_brl, net_revenue")
-        .eq("project_id", funnel.project_id);
-
-      const approvedSales = (salesData || []).filter((s: any) => s.status === "APPROVED");
+      console.log("Building fallback summary for funnel:", funnel_id);
+      
+      // Get offer codes mapped to this funnel
+      const { data: offerMappings } = await supabase
+        .from("offer_mappings")
+        .select("offer_code, product_code")
+        .eq("funnel_id", funnel_id);
+      
+      const offerCodes = (offerMappings || []).map((m: any) => m.offer_code).filter(Boolean);
+      const productCodes = (offerMappings || []).map((m: any) => m.product_code).filter(Boolean);
+      
+      console.log("Mapped offer codes:", offerCodes);
+      console.log("Mapped product codes:", productCodes);
+      
+      let salesData: any[] = [];
+      
+      if (offerCodes.length > 0 || productCodes.length > 0) {
+        // Query sales filtered by offer/product codes
+        const { data } = await supabase
+          .from("hotmart_sales")
+          .select("status, total_price_brl, net_revenue, offer_code, product_code")
+          .eq("project_id", funnel.project_id);
+        
+        // Filter by offer_code or product_code
+        salesData = (data || []).filter((s: any) => 
+          offerCodes.includes(s.offer_code) || productCodes.includes(s.product_code)
+        );
+      }
+      
+      console.log("Filtered sales count:", salesData.length);
+      
+      const approvedSales = salesData.filter((s: any) => s.status === "APPROVED");
       const totalRevenue = approvedSales.reduce((sum: number, s: any) => sum + (s.net_revenue || s.total_price_brl || 0), 0);
       const totalSales = approvedSales.length;
+
+      // Try to get investment from meta_ads_daily for this funnel's accounts
+      let totalInvestment = 0;
+      try {
+        const { data: funnelAccounts } = await supabase
+          .from("funnel_meta_accounts")
+          .select("meta_account_id")
+          .eq("funnel_id", funnel_id);
+        
+        if (funnelAccounts && funnelAccounts.length > 0) {
+          const accountIds = funnelAccounts.map((a: any) => a.meta_account_id);
+          const { data: metaData } = await supabase
+            .from("meta_ads_daily")
+            .select("spend")
+            .in("ad_account_id", accountIds);
+          
+          totalInvestment = (metaData || []).reduce((sum: number, m: any) => sum + (m.spend || 0), 0);
+        }
+      } catch (e) {
+        console.warn("Could not fetch meta investment:", e);
+      }
+      
+      const roas = totalInvestment > 0 ? totalRevenue / totalInvestment : 0;
 
       funnelSummary = {
         funnel_id: funnel.id,
@@ -194,13 +242,15 @@ serve(async (req) => {
         project_id: funnel.project_id,
         funnel_type: funnel.funnel_type,
         total_revenue: totalRevenue,
-        total_investment: 0,
-        roas: 0,
+        total_investment: totalInvestment,
+        roas: roas,
         total_sales: totalSales,
-        health_status: "attention",
+        health_status: roas >= 2 ? "good" : roas >= 1 ? "attention" : "danger",
         data_limited: true,
-        note: "Dados simplificados - view funnel_summary não disponível"
+        note: "Dados calculados via fallback - view funnel_summary timeout"
       };
+      
+      console.log("Fallback summary:", funnelSummary);
     }
 
     // 2. Fetch daily metrics (last 30 days or custom range)

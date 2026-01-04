@@ -6,50 +6,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Base prompt template for descriptive funnel analysis
+// Enhanced prompt template for comprehensive funnel analysis
 const ANALYSIS_PROMPT_TEMPLATE = `# PAPEL DA IA
 
 Você é uma IA ANALISTA DESCRITIVA DE FUNIS DE VENDAS PERPÉTUOS (Cubo Mágico).
 
 ## Seu papel é:
-- Interpretar
-- Explicar
-- Contextualizar
-- Descrever tendências
+- Interpretar TODOS os dados fornecidos em profundidade
+- Explicar padrões de conversão por posição (FRONT, OB, UPSELL)
+- Analisar performance de criativos/campanhas
+- Identificar padrões de pagamento
+- Avaliar retenção e LTV
+- Identificar gargalos no funil de conversão
 
 ## Você NÃO deve:
-- Recomendar ações
-- Prescrever estratégias
-- Inventar causas não evidentes
-- Criar métricas novas
-- Recalcular valores existentes
+- Recomendar ações prescritivas ("você deveria fazer X")
+- Inventar causas não evidenciadas nos dados
+- Criar métricas novas ou recalcular valores existentes
+- Mascarar limitações dos dados
 
 # REGRAS ABSOLUTAS (NÃO QUEBRAR)
 
 1. NUNCA recalcular métricas - Use EXATAMENTE os valores fornecidos
-2. NUNCA inventar números - Se algo não existir, diga explicitamente
-3. NUNCA fazer recomendações - Nada de "deveria", "sugiro", "recomendo"
-4. NUNCA mascarar limitações - Se um dado estiver ausente ou inconsistente, mencione
-5. Use EXATAMENTE o health_status informado nos dados
-
-# LIMITAÇÕES CONHECIDAS (VOCÊ DEVE RESPEITAR)
-
-- front_sales pode estar zerado
-- overall_cpa pode ser NULL
-- Apenas dados da Hotmart estão presentes
-- Métricas de conversão Meta não estão disponíveis nas views
-
-👉 Não tente corrigir isso via interpretação.
+2. NUNCA inventar números - Se algo não existir, mencione explicitamente
+3. Use EXATAMENTE o health_status informado nos dados
+4. CITE DADOS ESPECÍFICOS ao analisar (ex: "o orderbump X tem taxa de 53%")
+5. COMPARE elementos similares (ex: "criativo A vs B")
 
 # O QUE VOCÊ PODE FAZER
 
-Você PODE:
+Você PODE e DEVE:
 - Explicar o health_status do funil
-- Dizer por que o funil está saudável ou não
-- Identificar tendências (melhora, piora, estabilidade)
-- Comparar o início e o fim do período
-- Apontar métricas que sustentam o status atual
-- Alertar sobre riscos apenas se os dados mostrarem claramente
+- Identificar QUAL posição (FRONT, OB, US) performa melhor/pior
+- Apontar os TOP 3 criativos por ROAS e explicar por quê
+- Identificar o criativo com PIOR performance
+- Analisar distribuição de pagamento (PIX vs cartão)
+- Comentar sobre LTV e taxa de recompra
+- Identificar gargalos no funil de conversão (onde perde mais leads)
+- Comparar início vs fim do período
 
 # DEFINIÇÕES DE MÉTRICAS (Dicionário Semântico)
 {{METRIC_DEFINITIONS}}
@@ -60,6 +54,24 @@ Você PODE:
 # DADOS CONSOLIDADOS DO FUNIL
 {{FUNNEL_DATA}}
 
+# BREAKDOWN POR POSIÇÃO DO FUNIL
+{{POSITION_BREAKDOWN}}
+
+# TOP CAMPANHAS
+{{TOP_CAMPAIGNS}}
+
+# TOP CRIATIVOS
+{{TOP_ADS}}
+
+# DISTRIBUIÇÃO DE PAGAMENTOS
+{{PAYMENT_DISTRIBUTION}}
+
+# MÉTRICAS DE LTV E RETENÇÃO
+{{LTV_METRICS}}
+
+# FUNIL DE CONVERSÃO META
+{{CONVERSION_FUNNEL}}
+
 # HISTÓRICO DIÁRIO DO PERÍODO
 {{DAILY_METRICS}}
 
@@ -68,9 +80,34 @@ Você PODE:
 Responda EXATAMENTE neste JSON válido:
 
 {
-  "resumo_executivo": "Resumo claro e objetivo da situação atual do funil em 2–3 frases.",
+  "resumo_executivo": "Resumo claro e objetivo (3-5 frases) mencionando: receita total, ROAS, status de saúde, e 1-2 destaques principais.",
   "health_status": "excellent | good | attention | danger | no-return | inactive",
-  "health_explanation": "Explicação detalhada do motivo deste status, citando métricas reais.",
+  "health_explanation": "Explicação detalhada do motivo deste status, citando CPA real vs máximo, ROAS vs alvo.",
+  "analise_posicoes": {
+    "resumo": "Visão geral do funil por posição (FRONT→OB→US)",
+    "destaque_positivo": "Qual posição/produto converte melhor e por quê",
+    "destaque_negativo": "Qual posição/produto precisa atenção e por quê"
+  },
+  "analise_criativos": {
+    "top_performers": "Análise dos 3 melhores criativos com métricas específicas",
+    "underperformers": "Análise dos criativos com baixo desempenho",
+    "padrao_identificado": "Padrão observado (tipo de criativo, tema, etc) que funciona melhor"
+  },
+  "analise_pagamentos": {
+    "distribuicao": "Como as vendas se dividem por método",
+    "ticket_por_metodo": "Diferença de ticket médio entre métodos",
+    "insight": "Insight sobre preferência do público"
+  },
+  "analise_ltv": {
+    "taxa_recompra": "Análise da taxa de recompra",
+    "concentracao_receita": "Análise da contribuição dos top 20%",
+    "insight": "Insight sobre retenção/fidelização"
+  },
+  "funil_conversao": {
+    "gargalo_principal": "Onde o funil perde mais leads (clique→landing, landing→checkout, checkout→compra)",
+    "taxas": "Descrição das taxas de cada etapa",
+    "insight": "Insight sobre otimização possível"
+  },
   "pontos_fortes": [
     {
       "metrica": "nome_da_metrica",
@@ -80,7 +117,7 @@ Responda EXATAMENTE neste JSON válido:
   ],
   "pontos_atencao": [
     {
-      "metrica": "nome_da_metrica",
+      "metrica": "nome_da_metrica", 
       "valor": "valor_formatado",
       "explicacao": "por que este ponto merece atenção",
       "impacto": "qual o risco se isso continuar"
@@ -94,26 +131,25 @@ Responda EXATAMENTE neste JSON válido:
   ],
   "alertas_risco": [
     {
-      "tipo": "refund | chargeback | inatividade | outro",
+      "tipo": "refund | chargeback | inatividade | criativo_saturado | ltv_baixo | outro",
       "descricao": "descrição objetiva do risco",
       "severidade": "baixa | media | alta"
     }
   ],
-  "observacoes_adicionais": "Insights relevantes que não envolvem recomendações."
+  "observacoes_adicionais": "Insights finais que conectam os diferentes aspectos analisados."
 }
 
 # TOM E LINGUAGEM
 
 - Português brasileiro
 - Linguagem executiva e clara
-- Sem jargões técnicos excessivos
-- Foco em clareza e confiança
+- Sempre cite números específicos (não "bom ROAS", mas "ROAS de 2.5")
+- Foco em insights acionáveis através da descrição
 - Sempre explicável para um gestor
 
 # LEMBRETE FINAL
 
-Esta IA é DESCRITIVA, não diagnóstica nem prescritiva.
-O sucesso dela é não errar, não "parecer inteligente".`;
+Esta IA é DESCRITIVA e ANALÍTICA. O sucesso dela é fornecer insights profundos baseados em TODOS os dados disponíveis.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -121,7 +157,20 @@ serve(async (req) => {
   }
 
   try {
-    const { funnel_id, start_date, end_date, client_summary, client_daily } = await req.json();
+    const { 
+      funnel_id, 
+      start_date, 
+      end_date, 
+      client_summary, 
+      client_daily,
+      position_breakdown,
+      top_campaigns,
+      top_adsets,
+      top_ads,
+      payment_distribution,
+      ltv_metrics,
+      conversion_funnel,
+    } = await req.json();
 
     if (!funnel_id) {
       return new Response(
@@ -143,9 +192,14 @@ serve(async (req) => {
 
     const supabase: any = createClient(supabaseUrl, supabaseKey);
 
-    // Check if we have client-provided data (from frontend)
+    // Check if we have comprehensive client-provided data
     const hasClientData = client_summary && typeof client_summary === 'object';
-    console.log(`[FunnelAI] Analysis mode: ${hasClientData ? 'CLIENT_PAYLOAD' : 'DATABASE_VIEWS'}`);
+    const hasEnrichedData = hasClientData && position_breakdown && top_ads;
+    console.log(`[FunnelAI] Analysis mode: ${hasEnrichedData ? 'ENRICHED_PAYLOAD' : hasClientData ? 'BASIC_PAYLOAD' : 'DATABASE_VIEWS'}`);
+    
+    if (hasEnrichedData) {
+      console.log(`[FunnelAI] Enriched data: ${position_breakdown?.length || 0} positions, ${top_campaigns?.length || 0} campaigns, ${top_ads?.length || 0} ads`);
+    }
 
     // 1. Validate funnel exists (fast query)
     const { data: funnel, error: funnelError } = await supabase
@@ -182,14 +236,26 @@ serve(async (req) => {
       return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
+    const formatPercent = (v: any) => {
+      const n = toNumber(v);
+      if (n === null) return "N/A";
+      return `${n.toFixed(1)}%`;
+    };
+
     // Date range
     const endDateParam = end_date || new Date().toISOString().split("T")[0];
     const startDateParam =
       start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    // Build funnel data and daily metrics based on data source
+    // Build all data sections based on data source
     let funnelDataText: string;
     let dailyMetricsText: string;
+    let positionBreakdownText: string;
+    let topCampaignsText: string;
+    let topAdsText: string;
+    let paymentDistributionText: string;
+    let ltvMetricsText: string;
+    let conversionFunnelText: string;
     let currentMetrics: any;
 
     if (hasClientData) {
@@ -212,6 +278,71 @@ serve(async (req) => {
         campaign_pattern_used: client_summary.campaign_pattern_used,
       }, null, 2);
 
+      // Position breakdown
+      if (position_breakdown && Array.isArray(position_breakdown) && position_breakdown.length > 0) {
+        positionBreakdownText = position_breakdown.map((p: any) => {
+          const produtosList = p.produtos?.map((prod: any) => 
+            `    - ${prod.nome_produto}: ${prod.vendas} vendas, ${formatBRL(prod.receita)}`
+          ).join('\n') || '';
+          return `${p.tipo} (ordem ${p.ordem}): ${p.vendas} vendas, ${formatBRL(p.receita)}, taxa conversão: ${formatPercent(p.taxaConversao)}\n${produtosList}`;
+        }).join('\n\n');
+      } else {
+        positionBreakdownText = "Dados de posição não fornecidos";
+      }
+
+      // Top campaigns
+      if (top_campaigns && Array.isArray(top_campaigns) && top_campaigns.length > 0) {
+        topCampaignsText = top_campaigns.slice(0, 10).map((c: any, idx: number) => 
+          `${idx + 1}. ${c.name} | Gasto: ${formatBRL(c.spend)} | ROAS: ${c.roas?.toFixed(2) || 'N/A'} | CTR: ${formatPercent(c.ctr)} | Status: ${c.status || 'N/A'}`
+        ).join('\n');
+      } else {
+        topCampaignsText = "Dados de campanhas não fornecidos";
+      }
+
+      // Top ads (creatives)
+      if (top_ads && Array.isArray(top_ads) && top_ads.length > 0) {
+        topAdsText = top_ads.slice(0, 15).map((a: any, idx: number) => 
+          `${idx + 1}. ${a.name} | Gasto: ${formatBRL(a.spend)} | ROAS: ${a.roas?.toFixed(2) || 'N/A'} | CPC: ${formatBRL(a.cpc)} | CTR: ${formatPercent(a.ctr)}`
+        ).join('\n');
+      } else {
+        topAdsText = "Dados de criativos não fornecidos";
+      }
+
+      // Payment distribution
+      if (payment_distribution && Array.isArray(payment_distribution) && payment_distribution.length > 0) {
+        paymentDistributionText = payment_distribution.map((p: any) => 
+          `${p.method}: ${p.sales} vendas (${formatPercent(p.percentage)}), Receita: ${formatBRL(p.revenue)}, Ticket Médio: ${formatBRL(p.avg_ticket)}${p.avg_installments ? `, Parcelas médias: ${p.avg_installments.toFixed(1)}` : ''}`
+        ).join('\n');
+      } else {
+        paymentDistributionText = "Dados de pagamento não fornecidos";
+      }
+
+      // LTV metrics
+      if (ltv_metrics && typeof ltv_metrics === 'object') {
+        ltvMetricsText = `
+Total de clientes: ${ltv_metrics.total_customers || 0}
+LTV médio: ${formatBRL(ltv_metrics.avg_ltv)}
+Taxa de recompra: ${formatPercent(ltv_metrics.repeat_rate)}
+Compras por cliente: ${ltv_metrics.avg_purchases_per_customer?.toFixed(2) || 'N/A'}
+Contribuição top 20%: ${formatPercent(ltv_metrics.top_20_contribution)}
+        `.trim();
+      } else {
+        ltvMetricsText = "Dados de LTV não fornecidos";
+      }
+
+      // Conversion funnel
+      if (conversion_funnel && typeof conversion_funnel === 'object') {
+        conversionFunnelText = `
+Link Clicks: ${conversion_funnel.link_clicks || 0}
+Landing Page Views: ${conversion_funnel.landing_page_views || 0} (Connect Rate: ${formatPercent(conversion_funnel.connect_rate)})
+Initiate Checkouts: ${conversion_funnel.initiate_checkouts || 0} (Taxa página→checkout: ${formatPercent(conversion_funnel.tx_pagina_checkout)})
+Purchases: ${conversion_funnel.purchases || 0} (Taxa checkout→compra: ${formatPercent(conversion_funnel.tx_checkout_compra)})
+        `.trim();
+      } else {
+        conversionFunnelText = "Dados de funil de conversão não fornecidos";
+      }
+
+      // Daily metrics
       if (client_daily && Array.isArray(client_daily) && client_daily.length > 0) {
         dailyMetricsText = client_daily
           .slice(0, 30)
@@ -291,6 +422,14 @@ serve(async (req) => {
           .join("\n");
       }
 
+      // Set defaults for enriched data when using DB fallback
+      positionBreakdownText = "Dados de posição não disponíveis (modo DB)";
+      topCampaignsText = "Dados de campanhas não disponíveis (modo DB)";
+      topAdsText = "Dados de criativos não disponíveis (modo DB)";
+      paymentDistributionText = "Dados de pagamento não disponíveis (modo DB)";
+      ltvMetricsText = "Dados de LTV não disponíveis (modo DB)";
+      conversionFunnelText = "Dados de funil de conversão não disponíveis (modo DB)";
+
       currentMetrics = {
         health_status: funnelSummary.health_status,
         total_revenue: toNumber(funnelSummary.total_gross_revenue) ?? 0,
@@ -326,14 +465,20 @@ serve(async (req) => {
       .map((t: any) => `- ${t.threshold_key}: ${t.threshold_value} (${t.category}) - ${t.description || ""}`)
       .join("\n");
 
-    // Build final prompt
+    // Build final prompt with all data sections
     const finalPrompt = ANALYSIS_PROMPT_TEMPLATE
       .replace("{{METRIC_DEFINITIONS}}", metricDefsText || "Nenhuma definição encontrada")
       .replace("{{THRESHOLDS}}", thresholdsText || "Nenhum threshold encontrado")
       .replace("{{FUNNEL_DATA}}", funnelDataText)
+      .replace("{{POSITION_BREAKDOWN}}", positionBreakdownText)
+      .replace("{{TOP_CAMPAIGNS}}", topCampaignsText)
+      .replace("{{TOP_ADS}}", topAdsText)
+      .replace("{{PAYMENT_DISTRIBUTION}}", paymentDistributionText)
+      .replace("{{LTV_METRICS}}", ltvMetricsText)
+      .replace("{{CONVERSION_FUNNEL}}", conversionFunnelText)
       .replace("{{DAILY_METRICS}}", dailyMetricsText || "Sem dados diários disponíveis");
 
-    console.log("[FunnelAI] Calling Lovable AI...");
+    console.log("[FunnelAI] Calling Lovable AI with enriched prompt...");
 
     // Call Lovable AI
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -347,7 +492,7 @@ serve(async (req) => {
         messages: [
           { 
             role: "system", 
-            content: "Você é uma IA analista descritiva de funis de vendas. Seu papel é APENAS interpretar e explicar dados já calculados. NUNCA recalcule métricas, NUNCA faça recomendações, NUNCA invente números. Responda SEMPRE em JSON válido seguindo exatamente o formato solicitado." 
+            content: "Você é uma IA analista descritiva de funis de vendas. Seu papel é interpretar e explicar dados já calculados com profundidade. NUNCA recalcule métricas, NUNCA faça recomendações prescritivas, NUNCA invente números. SEMPRE cite dados específicos. Responda SEMPRE em JSON válido seguindo exatamente o formato solicitado." 
           },
           { role: "user", content: finalPrompt },
         ],
@@ -404,7 +549,7 @@ serve(async (req) => {
       };
     }
 
-    console.log("[FunnelAI] Analysis complete, data_source:", hasClientData ? 'client_payload' : 'database_views');
+    console.log("[FunnelAI] Analysis complete, data_source:", hasEnrichedData ? 'enriched_payload' : hasClientData ? 'basic_payload' : 'database_views');
 
     // Return structured response
     return new Response(
@@ -419,7 +564,13 @@ serve(async (req) => {
         },
         current_metrics: currentMetrics,
         analysis,
-        data_source: hasClientData ? 'client_payload' : 'database_views',
+        data_source: hasEnrichedData ? 'enriched_payload' : hasClientData ? 'basic_payload' : 'database_views',
+        data_summary: hasEnrichedData ? {
+          positions: position_breakdown?.length || 0,
+          campaigns: top_campaigns?.length || 0,
+          ads: top_ads?.length || 0,
+          payment_methods: payment_distribution?.length || 0,
+        } : null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

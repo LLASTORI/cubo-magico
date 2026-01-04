@@ -43,6 +43,8 @@ interface AIInsightsTabProps {
   metaInsights: any[];
   campaigns: any[];
   offerMappings: any[];
+  adsets?: any[];
+  ads?: any[];
 }
 
 function AIInsightsTab({ 
@@ -53,12 +55,14 @@ function AIInsightsTab({
   metaInsights,
   campaigns,
   offerMappings,
+  adsets,
+  ads,
 }: AIInsightsTabProps) {
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>(funnels[0]?.id || '');
   
   const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
   
-  // Compute AI context from frontend data - avoids slow DB queries
+  // Compute COMPREHENSIVE AI context from frontend data - includes all metrics
   const context = useMemo(() => {
     if (!selectedFunnel || !salesData || !metaInsights || !campaigns || !offerMappings) {
       return null;
@@ -70,14 +74,16 @@ function AIInsightsTab({
       campaigns,
       offerMappings,
       startDate,
-      endDate
+      endDate,
+      adsets,
+      ads
     );
-  }, [selectedFunnel, salesData, metaInsights, campaigns, offerMappings, startDate, endDate]);
+  }, [selectedFunnel, salesData, metaInsights, campaigns, offerMappings, startDate, endDate, adsets, ads]);
   
   return (
     <div className="space-y-6">
       <Card className="p-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
             <span className="font-medium">Selecione o Funil para Análise:</span>
@@ -96,11 +102,13 @@ function AIInsightsTab({
           </Select>
         </div>
         {context && (
-          <div className="mt-3 text-xs text-muted-foreground flex flex-wrap gap-4">
+          <div className="mt-3 text-xs text-muted-foreground grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
             <span>Receita: R$ {context.client_summary.total_revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
             <span>Investimento: R$ {context.client_summary.total_investment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
             <span>ROAS: {context.client_summary.roas.toFixed(2)}</span>
             <span>Vendas FRONT: {context.client_summary.front_sales}</span>
+            <span>Posições: {context.position_breakdown.length}</span>
+            <span>Criativos: {context.top_ads.length}</span>
           </div>
         )}
       </Card>
@@ -1309,6 +1317,8 @@ const FunnelAnalysis = () => {
                     metaInsights={metaInsights || []}
                     campaigns={metaStructure?.campaigns || []}
                     offerMappings={mappings || []}
+                    adsets={metaStructure?.adsets || []}
+                    ads={metaStructure?.ads || []}
                   />
                 ) : (
                   <Card className="p-12 text-center">

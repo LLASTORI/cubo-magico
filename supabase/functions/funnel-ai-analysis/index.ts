@@ -143,19 +143,64 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch funnel summary
-    const { data: funnelSummary, error: summaryError } = await supabase
-      .from("funnel_summary")
-      .select("*")
-      .eq("funnel_id", funnel_id)
+    // 1. First validate the funnel exists (fast query)
+    const { data: funnel, error: funnelError } = await supabase
+      .from("funnels")
+      .select("id, name, project_id, funnel_type, roas_target")
+      .eq("id", funnel_id)
       .single();
 
-    if (summaryError) {
-      console.error("Error fetching funnel_summary:", summaryError);
+    if (funnelError || !funnel) {
+      console.error("Funnel not found:", funnelError);
       return new Response(
-        JSON.stringify({ error: "Funil não encontrado", details: summaryError.message }),
+        JSON.stringify({ error: "Funil não encontrado" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // 2. Try to fetch funnel summary (may timeout on complex views)
+    let funnelSummary: any = null;
+    try {
+      const { data, error: summaryError } = await supabase
+        .from("funnel_summary")
+        .select("*")
+        .eq("funnel_id", funnel_id)
+        .single();
+
+      if (!summaryError && data) {
+        funnelSummary = data;
+      } else {
+        console.warn("Could not fetch funnel_summary, using fallback:", summaryError?.message);
+      }
+    } catch (e) {
+      console.warn("funnel_summary query failed:", e);
+    }
+
+    // 3. If summary failed, build a minimal summary from other sources
+    if (!funnelSummary) {
+      // Fetch basic metrics from hotmart_sales directly
+      const { data: salesData } = await supabase
+        .from("hotmart_sales")
+        .select("status, total_price_brl, net_revenue")
+        .eq("project_id", funnel.project_id);
+
+      const approvedSales = (salesData || []).filter((s: any) => s.status === "APPROVED");
+      const totalRevenue = approvedSales.reduce((sum: number, s: any) => sum + (s.net_revenue || s.total_price_brl || 0), 0);
+      const totalSales = approvedSales.length;
+
+      funnelSummary = {
+        funnel_id: funnel.id,
+        funnel_name: funnel.name,
+        project_id: funnel.project_id,
+        funnel_type: funnel.funnel_type,
+        total_revenue: totalRevenue,
+        total_investment: 0,
+        roas: 0,
+        total_sales: totalSales,
+        health_status: "attention",
+        data_limited: true,
+        note: "Dados simplificados - view funnel_summary não disponível"
+      };
     }
 
     // 2. Fetch daily metrics (last 30 days or custom range)

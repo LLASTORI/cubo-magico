@@ -178,20 +178,22 @@ serve(async (req) => {
       return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    // 2. Fetch funnel summary using RPC function (has 60s timeout)
-    const { data: summaryRows, error: summaryError } = await supabase.rpc(
-      "get_funnel_summary_by_id",
-      { p_funnel_id: funnel_id }
-    );
+    // 2. Fetch funnel summary directly from view (use service_role for higher timeout)
+    console.log("Fetching funnel_summary for:", funnel_id);
+    const { data: funnelSummary, error: summaryError } = await supabase
+      .from("funnel_summary")
+      .select("*")
+      .eq("funnel_id", funnel_id)
+      .maybeSingle();
 
     if (summaryError) {
-      console.error("Error fetching funnel_summary via RPC:", summaryError);
+      console.error("Error fetching funnel_summary:", summaryError);
 
       const isTimeout = summaryError.code === "57014" || summaryError.message?.includes("statement timeout");
       return new Response(
         JSON.stringify({
           error: isTimeout
-            ? "Tempo limite ao consultar o resumo do funil. Tente novamente."
+            ? "Tempo limite ao consultar o resumo do funil. Tente novamente em alguns segundos."
             : "Erro ao consultar o resumo do funil.",
           details: summaryError.message,
         }),
@@ -199,37 +201,39 @@ serve(async (req) => {
       );
     }
 
-    const funnelSummary = summaryRows?.[0] || null;
-
     if (!funnelSummary) {
       return new Response(
         JSON.stringify({ error: "Resumo do funil não encontrado" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    console.log("Successfully fetched funnel_summary:", funnelSummary.funnel_name);
 
     // 3. Date range
     const endDateParam = end_date || new Date().toISOString().split("T")[0];
     const startDateParam =
       start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    // 4. Fetch daily metrics using RPC function (has 60s timeout)
+    // 4. Fetch daily metrics directly from view
     let dailyMetrics: any[] | null = null;
-    const { data: dailyData, error: dailyError } = await supabase.rpc(
-      "get_funnel_metrics_daily_range",
-      {
-        p_funnel_id: funnel_id,
-        p_start: startDateParam,
-        p_end: endDateParam,
-      }
-    );
+    console.log("Fetching funnel_metrics_daily for:", funnel_id, "from", startDateParam, "to", endDateParam);
+    const { data: dailyData, error: dailyError } = await supabase
+      .from("funnel_metrics_daily")
+      .select("*")
+      .eq("funnel_id", funnel_id)
+      .gte("metric_date", startDateParam)
+      .lte("metric_date", endDateParam)
+      .order("metric_date", { ascending: false })
+      .limit(60);
 
     if (dailyError) {
-      console.error("Error fetching funnel_metrics_daily via RPC:", dailyError);
+      console.error("Error fetching funnel_metrics_daily:", dailyError);
       const isTimeout = dailyError.code === "57014" || dailyError.message?.includes("statement timeout");
       dailyMetrics = isTimeout ? null : (dailyData || null);
     } else {
       dailyMetrics = dailyData || [];
+      console.log("Successfully fetched daily metrics:", (dailyMetrics || []).length, "rows");
     }
 
     // 5. Fetch metric definitions

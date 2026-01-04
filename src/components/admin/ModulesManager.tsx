@@ -22,7 +22,8 @@ import {
   MessageCircle,
   Workflow,
   ClipboardList,
-  Lightbulb
+  Lightbulb,
+  Brain
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -49,6 +50,7 @@ const MODULE_ICONS: Record<ModuleKey, React.ReactNode> = {
   automation: <Workflow className="w-4 h-4" />,
   surveys: <ClipboardList className="w-4 h-4" />,
   social_listening: <MessageCircle className="w-4 h-4" />,
+  ai_analysis: <Brain className="w-4 h-4" />,
 };
 
 export const ModulesManager = () => {

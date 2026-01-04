@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
 import { computeFunnelAIContext } from "@/hooks/useFunnelAIContext";
 import { FeatureGate, FeatureLockedBadge } from "@/components/FeatureGate";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Internal component for AI Insights tab with funnel selector
@@ -1326,31 +1327,37 @@ const FunnelAnalysis = () => {
               </TabsContent>
 
               <TabsContent value="ai-insights">
-                {funnels.length > 0 ? (
-                  <AIInsightsTab 
-                    funnels={funnels}
-                    startDate={appliedStartDate}
-                    endDate={appliedEndDate}
-                    salesData={salesData || []}
-                    metaInsights={metaInsights || []}
-                    campaigns={metaStructure?.campaigns || []}
-                    offerMappings={mappings || []}
-                    adsets={metaStructure?.adsets || []}
-                    ads={metaStructure?.ads || []}
-                    cachedAnalysis={cachedAIAnalysis}
-                    setCachedAnalysis={setCachedAIAnalysis}
-                  />
-                ) : (
-                  <Card className="p-12 text-center">
-                    <Brain className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-foreground mb-2">
-                      Nenhum funil configurado
-                    </h3>
-                    <p className="text-muted-foreground">
-                      Configure funis perpétuos para utilizar a análise por IA.
-                    </p>
-                  </Card>
-                )}
+                <FeatureGate 
+                  featureKey="ai_analysis.funnel" 
+                  showLocked 
+                  lockedMessage="Análise de Funil com IA requer ativação do módulo ou upgrade do plano"
+                >
+                  {funnels.length > 0 ? (
+                    <AIInsightsTab 
+                      funnels={funnels}
+                      startDate={appliedStartDate}
+                      endDate={appliedEndDate}
+                      salesData={salesData || []}
+                      metaInsights={metaInsights || []}
+                      campaigns={metaStructure?.campaigns || []}
+                      offerMappings={mappings || []}
+                      adsets={metaStructure?.adsets || []}
+                      ads={metaStructure?.ads || []}
+                      cachedAnalysis={cachedAIAnalysis}
+                      setCachedAnalysis={setCachedAIAnalysis}
+                    />
+                  ) : (
+                    <Card className="p-12 text-center">
+                      <Brain className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-foreground mb-2">
+                        Nenhum funil configurado
+                      </h3>
+                      <p className="text-muted-foreground">
+                        Configure funis perpétuos para utilizar a análise por IA.
+                      </p>
+                    </Card>
+                  )}
+                </FeatureGate>
               </TabsContent>
             </Tabs>
           )}

@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights' | 'social_listening';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights' | 'social_listening' | 'ai_analysis';
 
 export interface ProjectModule {
   id: string;
@@ -78,6 +78,12 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     description: 'Monitoramento de comentários e interações em redes sociais',
     icon: 'message-circle',
     requiresModule: 'insights',
+  },
+  {
+    key: 'ai_analysis',
+    name: 'Análise com IA',
+    description: 'Análises inteligentes de funis, lançamentos e CRM usando IA',
+    icon: 'brain',
   },
 ];
 

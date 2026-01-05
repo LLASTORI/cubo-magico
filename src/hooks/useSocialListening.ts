@@ -167,7 +167,20 @@ export function useSocialListening(projectId: string | undefined) {
       });
 
       if (error) throw error;
-      return data as SocialStats;
+      
+      // Map API response to SocialStats format
+      // API returns: { total, pending, processed, sentiment: {positive, neutral, negative}, classification: {...} }
+      // Expected: { totalComments, pendingAI, sentimentDistribution, classificationDistribution }
+      return {
+        totalComments: data?.total || 0,
+        pendingAI: data?.pending || 0,
+        sentimentDistribution: {
+          positive: data?.sentiment?.positive || 0,
+          neutral: data?.sentiment?.neutral || 0,
+          negative: data?.sentiment?.negative || 0,
+        },
+        classificationDistribution: data?.classification || {},
+      } as SocialStats;
     },
     enabled: !!projectId,
     refetchInterval: 10000, // Auto-refresh every 10 seconds

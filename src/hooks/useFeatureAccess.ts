@@ -24,6 +24,20 @@ export interface FeatureOverride {
   expires_at: string | null;
 }
 
+export type PermissionLevel = 'none' | 'view' | 'edit' | 'admin';
+
+export interface MemberPermissions {
+  dashboard: PermissionLevel;
+  analise: PermissionLevel;
+  crm: PermissionLevel;
+  automacoes: PermissionLevel;
+  chat_ao_vivo: PermissionLevel;
+  meta_ads: PermissionLevel;
+  ofertas: PermissionLevel;
+  lancamentos: PermissionLevel;
+  configuracoes: PermissionLevel;
+}
+
 interface UseFeatureAccessReturn {
   /** Check if user can use a specific feature */
   canUse: (featureKey: string) => boolean;
@@ -34,6 +48,8 @@ interface UseFeatureAccessReturn {
   getModuleFeatures: (moduleKey: string) => Feature[];
   /** Get enabled features for current plan */
   getPlanFeatures: () => PlanFeature[];
+  /** Check if user has permission for an area at a specific level */
+  hasAreaPermission: (area: keyof MemberPermissions, minLevel?: PermissionLevel) => boolean;
   /** Loading state */
   isLoading: boolean;
   /** Error state */
@@ -50,6 +66,10 @@ interface UseFeatureAccessReturn {
   hasSubscription: boolean;
   /** Whether user is super admin */
   isSuperAdmin: boolean;
+  /** Whether user is project owner */
+  isProjectOwner: boolean;
+  /** User's member permissions for current project */
+  memberPermissions: MemberPermissions | null;
 }
 
 // Raw database types for queries
@@ -86,6 +106,34 @@ interface DbProjectModule {
   module_key: string;
 }
 
+// Map feature module_key to permission area
+const MODULE_TO_AREA_MAP: Record<string, keyof MemberPermissions> = {
+  'core': 'dashboard',
+  'dashboard': 'dashboard',
+  'funnel': 'analise',
+  'analysis': 'analise',
+  'crm': 'crm',
+  'automations': 'automacoes',
+  'whatsapp': 'chat_ao_vivo',
+  'meta_ads': 'meta_ads',
+  'meta': 'meta_ads',
+  'offers': 'ofertas',
+  'launch': 'lancamentos',
+  'settings': 'configuracoes',
+  'surveys': 'analise',
+  'ai_analysis': 'analise',
+  'social_listening': 'meta_ads',
+};
+
+// Map action in feature_key to required permission level
+const getRequiredLevelFromFeatureKey = (featureKey: string): PermissionLevel => {
+  const lowerKey = featureKey.toLowerCase();
+  if (lowerKey.includes('.admin') || lowerKey.includes('.manage')) return 'admin';
+  if (lowerKey.includes('.edit') || lowerKey.includes('.create') || lowerKey.includes('.delete') || lowerKey.includes('.execute')) return 'edit';
+  if (lowerKey.includes('.view')) return 'view';
+  return 'view'; // Default to view
+};
+
 export const useFeatureAccess = (): UseFeatureAccessReturn => {
   const { user } = useAuth();
   const { currentProject } = useProject();
@@ -96,6 +144,8 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
   const [activeModules, setActiveModules] = useState<string[]>([]);
   const [hasSubscription, setHasSubscription] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isProjectOwner, setIsProjectOwner] = useState(false);
+  const [memberPermissions, setMemberPermissions] = useState<MemberPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,6 +168,51 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
         .maybeSingle();
       
       setIsSuperAdmin(!!roleData);
+
+      // Check if user is project owner and get member permissions
+      if (currentProject) {
+        const { data: memberData } = await supabase
+          .from('project_members')
+          .select('role')
+          .eq('project_id', currentProject.id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const ownerStatus = memberData?.role === 'owner';
+        setIsProjectOwner(ownerStatus);
+
+        // Fetch member permissions if not owner
+        if (!ownerStatus) {
+          const { data: permData, error: permError } = await supabase
+            .from('project_member_permissions')
+            .select('dashboard, analise, crm, automacoes, chat_ao_vivo, meta_ads, ofertas, lancamentos, configuracoes')
+            .eq('project_id', currentProject.id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (permError) {
+            console.error('Error fetching member permissions:', permError);
+          }
+          
+          setMemberPermissions(permData as MemberPermissions | null);
+        } else {
+          // Owner has full permissions
+          setMemberPermissions({
+            dashboard: 'admin',
+            analise: 'admin',
+            crm: 'admin',
+            automacoes: 'admin',
+            chat_ao_vivo: 'admin',
+            meta_ads: 'admin',
+            ofertas: 'admin',
+            lancamentos: 'admin',
+            configuracoes: 'admin',
+          });
+        }
+      } else {
+        setIsProjectOwner(false);
+        setMemberPermissions(null);
+      }
 
       // Fetch all features (including inactive, so global disable works)
       const { data: featuresData, error: featuresError } = await supabase
@@ -257,6 +352,24 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     fetchFeatureData();
   }, [fetchFeatureData]);
 
+  // Helper to check area permission level
+  const hasAreaPermission = useCallback((area: keyof MemberPermissions, minLevel: PermissionLevel = 'view'): boolean => {
+    // Super admin and owner bypass area permissions
+    if (isSuperAdmin || isProjectOwner) return true;
+
+    // If no permissions data, deny access
+    if (!memberPermissions) return false;
+
+    const currentLevel = memberPermissions[area];
+    if (!currentLevel || currentLevel === 'none') return false;
+
+    const levelOrder: PermissionLevel[] = ['none', 'view', 'edit', 'admin'];
+    const currentIndex = levelOrder.indexOf(currentLevel);
+    const requiredIndex = levelOrder.indexOf(minLevel);
+
+    return currentIndex >= requiredIndex;
+  }, [isSuperAdmin, isProjectOwner, memberPermissions]);
+
   const canUse = useCallback((featureKey: string): boolean => {
     const feature = features.find(f => f.feature_key === featureKey);
 
@@ -266,6 +379,15 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     }
 
     const moduleKey = feature?.module_key || featureKey.split('.')[0];
+
+    // Check member permissions for the corresponding area
+    const permissionArea = MODULE_TO_AREA_MAP[moduleKey];
+    if (permissionArea && currentProject) {
+      const requiredLevel = getRequiredLevelFromFeatureKey(featureKey);
+      if (!hasAreaPermission(permissionArea, requiredLevel)) {
+        return false;
+      }
+    }
 
     // "core" module features are always available by default
     if (moduleKey === 'core') {
@@ -308,7 +430,7 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     }
 
     return false;
-  }, [features, isSuperAdmin, currentProject, activeModules, overrides, planFeatures]);
+  }, [features, isSuperAdmin, currentProject, activeModules, overrides, planFeatures, hasAreaPermission]);
 
   const canUseAny = useCallback((featureKeys: string[]): boolean => {
     return featureKeys.some(key => canUse(key));
@@ -332,6 +454,7 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     canUseAll,
     getModuleFeatures,
     getPlanFeatures,
+    hasAreaPermission,
     isLoading,
     error,
     refresh: fetchFeatureData,
@@ -339,6 +462,8 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     planFeatures,
     overrides,
     hasSubscription,
-    isSuperAdmin
+    isSuperAdmin,
+    isProjectOwner,
+    memberPermissions
   };
 };

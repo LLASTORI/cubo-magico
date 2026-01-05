@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
@@ -168,12 +167,23 @@ export const useAllMembersPermissions = () => {
 export const useHasPermission = (area: PermissionArea, minLevel: PermissionLevel = 'view') => {
   const { currentProject } = useProject();
   const { user } = useAuth();
-  const [isOwner, setIsOwner] = useState(false);
 
-  const { data: permissions, isLoading } = useQuery({
-    queryKey: ['my-permissions', currentProject?.id, user?.id],
+  const { data, isLoading } = useQuery({
+    queryKey: ['my-permissions-check', currentProject?.id, user?.id, area, minLevel],
     queryFn: async () => {
-      if (!currentProject?.id || !user?.id) return null;
+      if (!currentProject?.id || !user?.id) return { hasPermission: false, isOwner: false };
+
+      // Check if user is super admin
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'super_admin')
+        .maybeSingle();
+
+      if (roleData) {
+        return { hasPermission: true, isOwner: false, isSuperAdmin: true };
+      }
 
       // Check if user is owner
       const { data: memberData } = await supabase
@@ -184,33 +194,49 @@ export const useHasPermission = (area: PermissionArea, minLevel: PermissionLevel
         .maybeSingle();
 
       if (memberData?.role === 'owner') {
-        setIsOwner(true);
-        return null; // Owner has full access
+        return { hasPermission: true, isOwner: true };
       }
 
-      const { data, error } = await supabase
+      // Get member permissions
+      const { data: permData, error } = await supabase
         .from('project_member_permissions')
         .select('*')
         .eq('project_id', currentProject.id)
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
-      return data as MemberPermissions | null;
+      if (error) {
+        console.error('Error fetching permissions:', error);
+        return { hasPermission: false, isOwner: false };
+      }
+
+      // If no permission record exists, deny access
+      if (!permData) {
+        return { hasPermission: false, isOwner: false };
+      }
+
+      const permissions = permData as MemberPermissions;
+      const currentLevel = permissions[area];
+      
+      // If level is undefined or 'none', deny access
+      if (!currentLevel || currentLevel === 'none') {
+        return { hasPermission: false, isOwner: false };
+      }
+
+      const levelOrder: PermissionLevel[] = ['none', 'view', 'edit', 'admin'];
+      const currentIndex = levelOrder.indexOf(currentLevel);
+      const requiredIndex = levelOrder.indexOf(minLevel);
+
+      return { hasPermission: currentIndex >= requiredIndex, isOwner: false };
     },
     enabled: !!currentProject?.id && !!user?.id,
   });
 
-  if (isOwner) return { hasPermission: true, isLoading: false };
-
-  if (isLoading || !permissions) return { hasPermission: false, isLoading };
-
-  const currentLevel = permissions[area];
-  const levelOrder: PermissionLevel[] = ['none', 'view', 'edit', 'admin'];
-  const currentIndex = levelOrder.indexOf(currentLevel);
-  const requiredIndex = levelOrder.indexOf(minLevel);
-
-  return { hasPermission: currentIndex >= requiredIndex, isLoading: false };
+  return { 
+    hasPermission: data?.hasPermission ?? false, 
+    isLoading,
+    isOwner: data?.isOwner ?? false
+  };
 };
 
 // Hook to get all permissions for current user

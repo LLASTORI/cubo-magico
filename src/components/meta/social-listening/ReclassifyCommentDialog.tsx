@@ -65,8 +65,8 @@ export function ReclassifyCommentDialog({
         .update({
           sentiment: newSentiment as 'positive' | 'neutral' | 'negative',
           classification: newClassification as 'commercial_interest' | 'complaint' | 'praise' | 'question' | 'spam' | 'other' | 'negative_feedback',
-          manually_classified: true,
-        })
+          manually_classified: true as unknown,
+        } as Record<string, unknown>)
         .eq('id', comment.id);
       
       if (error) throw error;

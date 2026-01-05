@@ -15,7 +15,10 @@ export type PermissionArea =
   | 'meta_ads'
   | 'ofertas'
   | 'lancamentos'
-  | 'configuracoes';
+  | 'configuracoes'
+  | 'insights'
+  | 'pesquisas'
+  | 'social_listening';
 
 export interface MemberPermissions {
   id: string;
@@ -30,6 +33,9 @@ export interface MemberPermissions {
   ofertas: PermissionLevel;
   lancamentos: PermissionLevel;
   configuracoes: PermissionLevel;
+  insights: PermissionLevel;
+  pesquisas: PermissionLevel;
+  social_listening: PermissionLevel;
   created_at: string;
   updated_at: string;
 }
@@ -43,6 +49,9 @@ export const PERMISSION_AREAS: { key: PermissionArea; label: string; description
   { key: 'meta_ads', label: 'Meta Ads', description: 'Campanhas e métricas do Meta Ads' },
   { key: 'ofertas', label: 'Ofertas', description: 'Mapeamento de ofertas e produtos' },
   { key: 'lancamentos', label: 'Lançamentos', description: 'Dashboard e fases de lançamento' },
+  { key: 'insights', label: 'Insights', description: 'Análises e insights do projeto' },
+  { key: 'pesquisas', label: 'Pesquisas', description: 'Pesquisas de satisfação e coleta de dados' },
+  { key: 'social_listening', label: 'Social Listening', description: 'Monitoramento de redes sociais' },
   { key: 'configuracoes', label: 'Configurações', description: 'Configurações do projeto' },
 ];
 
@@ -270,6 +279,9 @@ export const useMyPermissions = () => {
           ofertas: 'admin' as PermissionLevel,
           lancamentos: 'admin' as PermissionLevel,
           configuracoes: 'admin' as PermissionLevel,
+          insights: 'admin' as PermissionLevel,
+          pesquisas: 'admin' as PermissionLevel,
+          social_listening: 'admin' as PermissionLevel,
         };
       }
 

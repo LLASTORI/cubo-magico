@@ -3352,6 +3352,9 @@ export type Database = {
           permissions_dashboard:
             | Database["public"]["Enums"]["permission_level"]
             | null
+          permissions_insights:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           permissions_lancamentos:
             | Database["public"]["Enums"]["permission_level"]
             | null
@@ -3359,6 +3362,12 @@ export type Database = {
             | Database["public"]["Enums"]["permission_level"]
             | null
           permissions_ofertas:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_pesquisas:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_social_listening:
             | Database["public"]["Enums"]["permission_level"]
             | null
           project_id: string
@@ -3390,6 +3399,9 @@ export type Database = {
           permissions_dashboard?:
             | Database["public"]["Enums"]["permission_level"]
             | null
+          permissions_insights?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           permissions_lancamentos?:
             | Database["public"]["Enums"]["permission_level"]
             | null
@@ -3397,6 +3409,12 @@ export type Database = {
             | Database["public"]["Enums"]["permission_level"]
             | null
           permissions_ofertas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_pesquisas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_social_listening?:
             | Database["public"]["Enums"]["permission_level"]
             | null
           project_id: string
@@ -3428,6 +3446,9 @@ export type Database = {
           permissions_dashboard?:
             | Database["public"]["Enums"]["permission_level"]
             | null
+          permissions_insights?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           permissions_lancamentos?:
             | Database["public"]["Enums"]["permission_level"]
             | null
@@ -3435,6 +3456,12 @@ export type Database = {
             | Database["public"]["Enums"]["permission_level"]
             | null
           permissions_ofertas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_pesquisas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          permissions_social_listening?:
             | Database["public"]["Enums"]["permission_level"]
             | null
           project_id?: string
@@ -3462,10 +3489,15 @@ export type Database = {
           crm: Database["public"]["Enums"]["permission_level"]
           dashboard: Database["public"]["Enums"]["permission_level"]
           id: string
+          insights: Database["public"]["Enums"]["permission_level"] | null
           lancamentos: Database["public"]["Enums"]["permission_level"]
           meta_ads: Database["public"]["Enums"]["permission_level"]
           ofertas: Database["public"]["Enums"]["permission_level"]
+          pesquisas: Database["public"]["Enums"]["permission_level"] | null
           project_id: string
+          social_listening:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           updated_at: string
           user_id: string
         }
@@ -3478,10 +3510,15 @@ export type Database = {
           crm?: Database["public"]["Enums"]["permission_level"]
           dashboard?: Database["public"]["Enums"]["permission_level"]
           id?: string
+          insights?: Database["public"]["Enums"]["permission_level"] | null
           lancamentos?: Database["public"]["Enums"]["permission_level"]
           meta_ads?: Database["public"]["Enums"]["permission_level"]
           ofertas?: Database["public"]["Enums"]["permission_level"]
+          pesquisas?: Database["public"]["Enums"]["permission_level"] | null
           project_id: string
+          social_listening?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           updated_at?: string
           user_id: string
         }
@@ -3494,10 +3531,15 @@ export type Database = {
           crm?: Database["public"]["Enums"]["permission_level"]
           dashboard?: Database["public"]["Enums"]["permission_level"]
           id?: string
+          insights?: Database["public"]["Enums"]["permission_level"] | null
           lancamentos?: Database["public"]["Enums"]["permission_level"]
           meta_ads?: Database["public"]["Enums"]["permission_level"]
           ofertas?: Database["public"]["Enums"]["permission_level"]
+          pesquisas?: Database["public"]["Enums"]["permission_level"] | null
           project_id?: string
+          social_listening?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
           updated_at?: string
           user_id?: string
         }

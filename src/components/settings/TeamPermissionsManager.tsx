@@ -29,6 +29,9 @@ interface InvitePermissions {
   ofertas: PermissionLevel;
   lancamentos: PermissionLevel;
   configuracoes: PermissionLevel;
+  insights: PermissionLevel;
+  pesquisas: PermissionLevel;
+  social_listening: PermissionLevel;
 }
 
 const defaultPermissions: InvitePermissions = {
@@ -41,6 +44,9 @@ const defaultPermissions: InvitePermissions = {
   ofertas: 'none',
   lancamentos: 'none',
   configuracoes: 'none',
+  insights: 'none',
+  pesquisas: 'none',
+  social_listening: 'none',
 };
 
 export const TeamPermissionsManager = () => {
@@ -81,6 +87,9 @@ export const TeamPermissionsManager = () => {
             permissions_ofertas: invitePermissions.ofertas,
             permissions_lancamentos: invitePermissions.lancamentos,
             permissions_configuracoes: invitePermissions.configuracoes,
+            permissions_insights: invitePermissions.insights,
+            permissions_pesquisas: invitePermissions.pesquisas,
+            permissions_social_listening: invitePermissions.social_listening,
           })
           .eq('project_id', currentProject.id)
           .eq('email', inviteEmail.toLowerCase().trim())

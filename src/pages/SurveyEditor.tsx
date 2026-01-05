@@ -73,13 +73,53 @@ export default function SurveyEditor() {
   
   const [surveyData, setSurveyData] = useState({ name: '', description: '', objective: 'general', slug: '', status: 'draft', default_tags: [] as string[], default_funnel_id: '' });
   const [tagsInput, setTagsInput] = useState('');
+  const [surveySettings, setSurveySettings] = useState<{
+    welcome_message?: string;
+    thank_you_message?: string;
+    theme?: SurveyTheme;
+    completion?: CompletionSettings;
+  }>({});
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
+  const [newWebhookName, setNewWebhookName] = useState('');
 
   // Check if we're in the /insights route
   const isInsightsRoute = location.pathname.startsWith('/insights');
   const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
   const insightsEnabled = isModuleEnabled('insights');
 
-  // Show module disabled state
+  // Fetch funnels for the project - MUST be before conditional returns
+  const { data: funnels } = useQuery({
+    queryKey: ['funnels-for-survey', survey?.project_id],
+    queryFn: async () => {
+      if (!survey?.project_id) return [];
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name')
+        .eq('project_id', survey.project_id)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!survey?.project_id,
+  });
+
+  // Fetch project public_code for URL generation - MUST be before conditional returns
+  const { data: projectData } = useQuery({
+    queryKey: ['project-public-code', survey?.project_id],
+    queryFn: async () => {
+      if (!survey?.project_id) return null;
+      const { data, error } = await supabase
+        .from('projects')
+        .select('public_code')
+        .eq('id', survey.project_id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!survey?.project_id,
+  });
+
+  // Show module disabled state - AFTER all hooks
   if (!isLoadingModules && !insightsEnabled) {
     return (
       <div className="min-h-screen bg-background">
@@ -100,46 +140,6 @@ export default function SurveyEditor() {
       </div>
     );
   }
-
-  // Fetch funnels for the project
-  const { data: funnels } = useQuery({
-    queryKey: ['funnels-for-survey', survey?.project_id],
-    queryFn: async () => {
-      if (!survey?.project_id) return [];
-      const { data, error } = await supabase
-        .from('funnels')
-        .select('id, name')
-        .eq('project_id', survey.project_id)
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!survey?.project_id,
-  });
-
-  // Fetch project public_code for URL generation
-  const { data: projectData } = useQuery({
-    queryKey: ['project-public-code', survey?.project_id],
-    queryFn: async () => {
-      if (!survey?.project_id) return null;
-      const { data, error } = await supabase
-        .from('projects')
-        .select('public_code')
-        .eq('id', survey.project_id)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!survey?.project_id,
-  });
-  const [surveySettings, setSurveySettings] = useState<{
-    welcome_message?: string;
-    thank_you_message?: string;
-    theme?: SurveyTheme;
-    completion?: CompletionSettings;
-  }>({});
-  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
-  const [newWebhookName, setNewWebhookName] = useState('');
 
   useEffect(() => {
     if (survey) {

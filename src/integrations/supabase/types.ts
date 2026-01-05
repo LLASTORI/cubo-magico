@@ -88,6 +88,7 @@ export type Database = {
           faqs: Json | null
           id: string
           min_intent_score_for_crm: number | null
+          praise_keywords: string[] | null
           products_services: string | null
           project_id: string
           spam_keywords: string[] | null
@@ -105,6 +106,7 @@ export type Database = {
           faqs?: Json | null
           id?: string
           min_intent_score_for_crm?: number | null
+          praise_keywords?: string[] | null
           products_services?: string | null
           project_id: string
           spam_keywords?: string[] | null
@@ -122,6 +124,7 @@ export type Database = {
           faqs?: Json | null
           id?: string
           min_intent_score_for_crm?: number | null
+          praise_keywords?: string[] | null
           products_services?: string | null
           project_id?: string
           spam_keywords?: string[] | null

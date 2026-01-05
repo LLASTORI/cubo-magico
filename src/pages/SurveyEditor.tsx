@@ -119,28 +119,6 @@ export default function SurveyEditor() {
     enabled: !!survey?.project_id,
   });
 
-  // Show module disabled state - AFTER all hooks
-  if (!isLoadingModules && !insightsEnabled) {
-    return (
-      <div className="min-h-screen bg-background">
-        <AppHeader pageSubtitle="Editor de Pesquisa" />
-        <main className="container mx-auto px-6 py-12">
-          <div className="text-center py-12 border rounded-lg bg-card">
-            <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
-            <p className="text-muted-foreground mb-4">
-              O módulo de Pesquisas não está ativo para este projeto.
-            </p>
-            <Button variant="outline" onClick={() => navigate(basePath)}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   useEffect(() => {
     if (survey) {
       setSurveyData({
@@ -163,6 +141,28 @@ export default function SurveyEditor() {
       });
     }
   }, [survey]);
+
+  // Show module disabled state - AFTER all hooks
+  if (!isLoadingModules && !insightsEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader pageSubtitle="Editor de Pesquisa" />
+        <main className="container mx-auto px-6 py-12">
+          <div className="text-center py-12 border rounded-lg bg-card">
+            <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Módulo não habilitado</h3>
+            <p className="text-muted-foreground mb-4">
+              O módulo de Pesquisas não está ativo para este projeto.
+            </p>
+            <Button variant="outline" onClick={() => navigate(basePath)}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const saveSurvey = async () => {
     if (!surveyId) return;

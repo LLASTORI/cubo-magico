@@ -484,6 +484,55 @@ const Admin = () => {
           </CardContent>
         </Card>
 
+        {/* Role Levels Legend */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Legenda de Níveis de Acesso (Roles)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-secondary/30">
+                <Badge variant="secondary" className="shrink-0 mt-0.5">Usuário</Badge>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Acesso Padrão</p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    <li>• Acesso aos próprios projetos</li>
+                    <li>• Permissões definidas por projeto</li>
+                    <li>• Pode criar projetos (se habilitado)</li>
+                    <li>• Sem acesso ao painel admin</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-primary/5">
+                <Badge variant="default" className="shrink-0 mt-0.5">Admin</Badge>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Administrador</p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    <li>• Acesso ao painel administrativo</li>
+                    <li>• Visualizar todos os usuários</li>
+                    <li>• Gerenciar configurações globais</li>
+                    <li>• Não pode alterar roles de outros</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/5">
+                <Badge variant="destructive" className="shrink-0 mt-0.5">Super Admin</Badge>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Controle Total</p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    <li>• Todas as permissões de Admin</li>
+                    <li>• Alterar roles de qualquer usuário</li>
+                    <li>• Gerenciar planos e módulos</li>
+                    <li>• Acesso irrestrito a todas as áreas</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
             {/* Edit Dialog */}
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
               <DialogContent>

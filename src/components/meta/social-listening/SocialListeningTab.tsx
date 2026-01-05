@@ -460,7 +460,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           <CardTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5" />
             Comentários
-            {comments && <Badge variant="secondary">{comments.length}</Badge>}
+            <Badge variant="secondary">{stats?.totalComments || comments?.length || 0}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

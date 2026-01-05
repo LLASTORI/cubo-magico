@@ -6,6 +6,23 @@ import {
   Type, ListChecks, Hash, UserCircle, ChevronDown, ChevronUp, Copy, FileSpreadsheet,
   Palette, Gift, Tag, Filter, Lock
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -50,7 +67,7 @@ export default function SurveyEditor() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { survey, isLoading, addQuestion, updateQuestion, deleteQuestion } = useSurvey(surveyId);
+  const { survey, isLoading, addQuestion, updateQuestion, deleteQuestion, reorderQuestions } = useSurvey(surveyId);
   const { webhookKeys, createWebhookKey, deleteWebhookKey } = useSurveyWebhookKeys(surveyId);
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
   
@@ -251,6 +268,33 @@ export default function SurveyEditor() {
     });
   };
 
+  // DnD sensors for reordering questions
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id && survey?.survey_questions) {
+      const oldIndex = survey.survey_questions.findIndex(q => q.id === active.id);
+      const newIndex = survey.survey_questions.findIndex(q => q.id === over.id);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(survey.survey_questions, oldIndex, newIndex);
+        const updates = reordered.map((q, idx) => ({ id: q.id, position: idx }));
+        reorderQuestions.mutate(updates);
+      }
+    }
+  };
+
   const handleCreateWebhook = async () => {
     if (!newWebhookName.trim()) {
       toast({ title: 'Nome obrigatório', variant: 'destructive' });
@@ -375,19 +419,30 @@ export default function SurveyEditor() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {survey.survey_questions?.map((question, index) => (
-                  <QuestionCard
-                    key={question.id}
-                    question={question}
-                    index={index}
-                    isExpanded={expandedQuestions.has(question.id)}
-                    onToggle={() => toggleQuestionExpanded(question.id)}
-                    onUpdate={(data) => handleUpdateQuestion(question.id, data)}
-                    onDelete={() => handleDeleteQuestion(question.id)}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={survey.survey_questions?.map(q => q.id) || []}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {survey.survey_questions?.map((question, index) => (
+                      <SortableQuestionCard
+                        key={question.id}
+                        question={question}
+                        index={index}
+                        isExpanded={expandedQuestions.has(question.id)}
+                        onToggle={() => toggleQuestionExpanded(question.id)}
+                        onUpdate={(data) => handleUpdateQuestion(question.id, data)}
+                        onDelete={() => handleDeleteQuestion(question.id)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </TabsContent>
 
@@ -649,9 +704,34 @@ interface QuestionCardProps {
   onToggle: () => void;
   onUpdate: (data: Partial<SurveyQuestion>) => void;
   onDelete: () => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
-function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelete }: QuestionCardProps) {
+// Sortable wrapper using @dnd-kit
+function SortableQuestionCard(props: Omit<QuestionCardProps, 'dragHandleProps'>) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.question.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <QuestionCard {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelete, dragHandleProps }: QuestionCardProps) {
   const questionType = QUESTION_TYPES.find(t => t.value === question.question_type);
   const Icon = questionType?.icon || Type;
   
@@ -671,7 +751,9 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
     <Card>
       <Collapsible open={isExpanded} onOpenChange={onToggle}>
         <div className="flex items-center gap-3 p-4">
-          <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
+          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing touch-none">
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
           <span className="text-sm font-medium text-muted-foreground w-6">{index + 1}</span>
           <Icon className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1">

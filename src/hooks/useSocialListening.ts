@@ -147,7 +147,7 @@ export function useSocialListening(projectId: string | undefined) {
           query = query.eq('social_posts.is_ad', false);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await query.limit(1000);
         if (error) throw error;
         return (data || []) as SocialComment[];
       },

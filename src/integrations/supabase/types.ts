@@ -3991,6 +3991,7 @@ export type Database = {
           intent_score: number | null
           is_deleted: boolean | null
           is_hidden: boolean | null
+          is_own_account: boolean | null
           is_replied: boolean | null
           like_count: number | null
           manually_classified: boolean | null
@@ -4031,6 +4032,7 @@ export type Database = {
           intent_score?: number | null
           is_deleted?: boolean | null
           is_hidden?: boolean | null
+          is_own_account?: boolean | null
           is_replied?: boolean | null
           like_count?: number | null
           manually_classified?: boolean | null
@@ -4071,6 +4073,7 @@ export type Database = {
           intent_score?: number | null
           is_deleted?: boolean | null
           is_hidden?: boolean | null
+          is_own_account?: boolean | null
           is_replied?: boolean | null
           like_count?: number | null
           manually_classified?: boolean | null

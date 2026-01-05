@@ -771,6 +771,25 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
   if (authorUsername && platform === 'instagram') {
     crmContactId = await findCRMContactByInstagram(supabase, projectId, authorUsername)
   }
+
+  // Check if this comment is from the connected account (own account)
+  let isOwnAccount = false
+  if (authorUsername) {
+    const { data: pages } = await supabase
+      .from('social_listening_pages')
+      .select('instagram_username, page_name')
+      .eq('project_id', projectId)
+    
+    const normalizedAuthor = authorUsername.toLowerCase().replace(/^@/, '')
+    isOwnAccount = pages?.some((p: any) => {
+      const pageUsername = (p.instagram_username || p.page_name || '').toLowerCase().replace(/^@/, '')
+      return pageUsername && pageUsername === normalizedAuthor
+    }) || false
+    
+    if (isOwnAccount) {
+      console.log(`[SYNC] Own account comment detected: @${authorUsername}`)
+    }
+  }
   
   const commentData: any = {
     project_id: projectId,
@@ -784,9 +803,10 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
     like_count: comment.like_count || 0,
     reply_count: comment.comment_count || comment.replies?.data?.length || 0,
     comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
-    ai_processing_status: 'pending',
+    ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
     crm_contact_id: crmContactId,
     is_deleted: false,
+    is_own_account: isOwnAccount,
   }
 
   const { error } = await supabase
@@ -900,12 +920,13 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
     .eq('project_id', projectId)
     .maybeSingle()
 
-  // Get pending comments
+  // Get pending comments (exclude own account comments)
   const { data: comments, error } = await supabase
     .from('social_comments')
     .select('id, text, post_id, social_posts!inner(message)')
     .eq('project_id', projectId)
     .eq('ai_processing_status', 'pending')
+    .eq('is_own_account', false)
     .limit(batchSize)
 
   if (error || !comments?.length) {

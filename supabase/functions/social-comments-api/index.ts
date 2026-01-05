@@ -9,6 +9,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const GRAPH_API_VERSION = 'v19.0'
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -16,7 +17,98 @@ const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// AI Classification prompt - will be enhanced with knowledge base context
+// ============= KEYWORD CLASSIFICATION (NO AI) =============
+// Keywords for automatic classification without AI
+
+const COMMERCIAL_KEYWORDS = [
+  'quero', 'queria', 'interessei', 'interessado', 'interessada', 'comprar', 'adquirir',
+  'preço', 'preco', 'valor', 'quanto custa', 'quanto é', 'quanto e', 'quanto ta',
+  'como faço', 'como faco', 'onde compro', 'tem link', 'passa o link', 'manda o link',
+  'link do', 'quero comprar', 'vou comprar', 'me interessa', 'como adquiro', 'como conseguir',
+  'como comprar', 'onde acho', 'tem disponível', 'disponivel', 'ainda tem', 'tem estoque',
+  'como participar', 'quero participar', 'me inscrever', 'inscrição', 'inscricao',
+  'entrar', 'fazer parte', 'cadastrar', 'como entrar', 'quero entrar', 'vagas',
+  'tem vaga', 'onde compra', 'pix', 'parcela', 'parcelado', 'cartão', 'boleto'
+]
+
+const PRAISE_KEYWORDS = [
+  'top', 'topp', 'toppp', 'lindo', 'linda', 'lindooo', 'lindaaa', 'amei', 'ameii', 'ameiiii',
+  'show', 'showw', 'showww', 'maravilhoso', 'maravilhosa', 'perfeito', 'perfeita', 'incrível',
+  'incrivel', 'demais', 'sensacional', 'parabéns', 'parabens', 'sucesso', 'arrasou', 'arrasa',
+  'espetacular', 'lindo demais', 'muito bom', 'mto bom', 'mt bom', 'excelente', 'top demais',
+  'massa', 'foda', 'dahora', 'maravilindo', 'obrigado', 'obrigada', 'gratidão', 'gratidao',
+  'muito obrigado', 'muito obrigada', 'adorei', 'adoro', 'amo', 'lacrou', 'lacrou demais'
+]
+
+const IGNORABLE_PATTERNS = [
+  /^[@\s]+$/,  // Only mentions
+  /^[\p{Emoji}\s]+$/u,  // Only emojis
+  /^[🔥❤️💪👏👍😍🙏💕💖💗💙💚💛🧡💜🖤🤍🤎]+$/u,  // Common reaction emojis
+  /^\.+$/,  // Only dots
+  /^!+$/,  // Only exclamation marks
+]
+
+interface KeywordClassificationResult {
+  classified: boolean
+  sentiment?: string
+  classification?: string
+  intent_score?: number
+  summary?: string
+}
+
+function classifyByKeywords(text: string): KeywordClassificationResult {
+  if (!text || text.trim().length === 0) {
+    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio' }
+  }
+
+  const normalizedText = text.toLowerCase().trim()
+
+  // Check ignorable patterns first
+  for (const pattern of IGNORABLE_PATTERNS) {
+    if (pattern.test(normalizedText)) {
+      return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Emoji/menção' }
+    }
+  }
+
+  // Very short comments (1-2 characters)
+  if (normalizedText.length <= 2) {
+    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário muito curto' }
+  }
+
+  // Check commercial keywords
+  for (const keyword of COMMERCIAL_KEYWORDS) {
+    if (normalizedText.includes(keyword)) {
+      return { 
+        classified: true, 
+        sentiment: 'positive', 
+        classification: 'commercial_interest', 
+        intent_score: 95, 
+        summary: 'Interesse comercial detectado por keyword' 
+      }
+    }
+  }
+
+  // Check praise keywords (only if comment is short - less than 50 chars)
+  if (normalizedText.length <= 50) {
+    for (const keyword of PRAISE_KEYWORDS) {
+      if (normalizedText.includes(keyword) || normalizedText === keyword) {
+        return { 
+          classified: true, 
+          sentiment: 'positive', 
+          classification: 'praise', 
+          intent_score: 20, 
+          summary: 'Elogio simples' 
+        }
+      }
+    }
+  }
+
+  // Not classified by keywords - needs AI
+  return { classified: false }
+}
+
+// ============= AI PROMPT BUILDERS =============
+
 function buildClassificationPrompt(knowledgeBase?: any) {
   const businessContext = knowledgeBase ? `
 CONTEXTO DO NEGÓCIO:
@@ -28,7 +120,6 @@ ${knowledgeBase.commercial_keywords?.length ? `- Palavras comerciais: ${knowledg
 ${knowledgeBase.spam_keywords?.length ? `- Palavras de spam: ${knowledgeBase.spam_keywords.join(', ')}` : ''}
 ` : ''
 
-  // Get categories from knowledge base or use defaults
   const defaultCategories = {
     product_question: 'Dúvida de Produto - perguntas sobre características, uso, benefícios',
     purchase_question: 'Dúvida de Compra/Preço - perguntas sobre preço, pagamento, entrega',
@@ -63,6 +154,176 @@ Comentário para análise:
 Responda APENAS em JSON válido no formato:
 {"sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}`
 }
+
+// Build batch prompt for OpenAI (more cost-effective)
+function buildBatchPrompt(comments: Array<{id: string, text: string, postContext: string}>, knowledgeBase?: any) {
+  const businessContext = knowledgeBase ? `
+CONTEXTO DO NEGÓCIO:
+- Nome: ${knowledgeBase.business_name || 'Não informado'}
+- Descrição: ${knowledgeBase.business_description || 'Não informado'}
+- Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
+` : ''
+
+  const commentsText = comments.map((c, i) => 
+    `[${i+1}] ID: ${c.id}
+Contexto do post: ${c.postContext || 'N/A'}
+Comentário: "${c.text}"`
+  ).join('\n\n')
+
+  return `${businessContext}
+
+Analise os ${comments.length} comentários abaixo de redes sociais. Para cada um, forneça:
+- sentiment: "positive", "neutral" ou "negative"
+- classification: "product_question", "purchase_question", "commercial_interest", "praise", "complaint", "contact_request", "friend_tag", "spam" ou "other"
+- intent_score: 0-100 (intenção comercial)
+- summary: resumo de 1 linha (máx 80 caracteres)
+
+${commentsText}
+
+Responda em JSON array válido no formato:
+[{"id": "...", "sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}, ...]`
+}
+
+// ============= AI CLASSIFICATION FUNCTIONS =============
+
+// Classify using OpenAI gpt-4o-mini (cheaper)
+async function classifyWithOpenAI(comments: Array<{id: string, text: string, postContext: string}>, knowledgeBase?: any) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY not configured')
+  }
+
+  const prompt = buildBatchPrompt(comments, knowledgeBase)
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Você é um especialista em análise de comentários de redes sociais para negócios digitais brasileiros. Responda sempre em JSON válido.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('OpenAI API error:', response.status, errorText)
+    throw new Error(`OpenAI API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const content = data.choices?.[0]?.message?.content || ''
+  
+  // Extract JSON array from response
+  const jsonMatch = content.match(/\[[\s\S]*\]/)
+  if (!jsonMatch) {
+    console.error('Invalid OpenAI response:', content)
+    throw new Error('Invalid OpenAI response format')
+  }
+
+  const results = JSON.parse(jsonMatch[0])
+  
+  // Calculate token usage and cost
+  const inputTokens = data.usage?.prompt_tokens || 0
+  const outputTokens = data.usage?.completion_tokens || 0
+  const cost = (inputTokens * 0.00000015) + (outputTokens * 0.0000006) // gpt-4o-mini pricing
+
+  return { results, inputTokens, outputTokens, cost }
+}
+
+// Classify using Lovable AI (fallback)
+async function classifyWithLovableAI(commentText: string, postContext: string, classificationPrompt: string) {
+  const prompt = classificationPrompt
+    .replace('{post_context}', postContext)
+    .replace('{comment_text}', commentText)
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 500,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Lovable AI error: ${response.status} - ${errorText}`)
+  }
+
+  const data = await response.json()
+  const content = data.choices?.[0]?.message?.content || ''
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+
+  if (!jsonMatch) {
+    throw new Error('Invalid AI response format')
+  }
+
+  return JSON.parse(jsonMatch[0])
+}
+
+// ============= QUOTA AND TRACKING FUNCTIONS =============
+
+async function checkAndUseQuota(supabase: any, projectId: string, itemsCount: number) {
+  const { data, error } = await supabase.rpc('check_and_use_ai_quota', {
+    p_project_id: projectId,
+    p_items_count: itemsCount
+  })
+
+  if (error) {
+    console.error('Error checking AI quota:', error)
+    // If quota check fails, allow processing (don't block)
+    return { allowed: true, error: error.message }
+  }
+
+  return data
+}
+
+async function trackAIUsage(supabase: any, projectId: string, params: {
+  feature: string
+  action: string
+  provider: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  itemsProcessed: number
+  costEstimate: number
+  success: boolean
+  errorMessage?: string
+}) {
+  const { error } = await supabase
+    .from('ai_usage_tracking')
+    .insert({
+      project_id: projectId,
+      feature: params.feature,
+      action: params.action,
+      provider: params.provider,
+      model: params.model,
+      input_tokens: params.inputTokens,
+      output_tokens: params.outputTokens,
+      items_processed: params.itemsProcessed,
+      cost_estimate: params.costEstimate,
+      success: params.success,
+      error_message: params.errorMessage,
+    })
+
+  if (error) {
+    console.error('Error tracking AI usage:', error)
+  }
+}
+
+// ============= MAIN REQUEST HANDLER =============
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -158,6 +419,14 @@ Deno.serve(async (req) => {
         result = await generateReply(serviceSupabase, projectId, commentId)
         break
 
+      case 'get_ai_usage':
+        result = await getAIUsage(supabase, projectId)
+        break
+
+      case 'get_ai_quota':
+        result = await getAIQuota(supabase, projectId)
+        break
+
       default:
         return new Response(JSON.stringify({ error: 'Ação inválida' }), {
           status: 400,
@@ -179,17 +448,16 @@ Deno.serve(async (req) => {
   }
 })
 
-// Sync posts from Facebook Pages and Instagram - using SAVED pages only
+// ============= POST SYNC FUNCTIONS =============
+
 async function syncPosts(supabase: any, projectId: string, accessToken: string) {
   console.log('='.repeat(60))
   console.log('[SYNC_POSTS] Starting sync for project:', projectId)
-  console.log('[SYNC_POSTS] Access token preview:', accessToken?.substring(0, 20) + '...')
   
   let totalPosts = 0
   const errors: string[] = []
 
   try {
-    // Get SAVED pages from database (not all user pages)
     const { data: savedPages, error: pagesError } = await supabase
       .from('social_listening_pages')
       .select('*')
@@ -206,10 +474,7 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       return { success: false, error: 'Nenhuma página configurada. Adicione páginas primeiro.', postsSynced: 0 }
     }
 
-    console.log(`[SYNC_POSTS] Found ${savedPages.length} saved pages to sync:`)
-    savedPages.forEach((p: any, i: number) => {
-      console.log(`  [${i + 1}] ${p.page_name} (${p.platform}) - pageId: ${p.page_id}, igId: ${p.instagram_account_id || 'N/A'}`)
-    })
+    console.log(`[SYNC_POSTS] Found ${savedPages.length} saved pages to sync`)
 
     for (const savedPage of savedPages) {
       const pageToken = savedPage.page_access_token
@@ -218,24 +483,11 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
       const instagramAccountId = savedPage.instagram_account_id
       const platform = savedPage.platform
 
-      // Extract original page ID (remove _facebook or _instagram suffix if present)
       const originalPageId = rawPageId.replace(/_facebook$/, '').replace(/_instagram$/, '')
 
-      console.log('-'.repeat(40))
-      console.log(`[SYNC_PAGE] Processing: ${pageName}`)
-      console.log(`[SYNC_PAGE] Platform: ${platform}`)
-      console.log(`[SYNC_PAGE] Raw Page ID: ${rawPageId}`)
-      console.log(`[SYNC_PAGE] Original Page ID (for API): ${originalPageId}`)
-      console.log(`[SYNC_PAGE] Instagram Account ID: ${instagramAccountId || 'N/A'}`)
-      console.log(`[SYNC_PAGE] Token preview: ${pageToken?.substring(0, 20)}...`)
-
-      // Sync based on platform
       if (platform === 'facebook' || (!platform && !instagramAccountId)) {
-        // Sync Facebook Page posts
         try {
-          console.log(`[SYNC_PAGE] Fetching Facebook posts using ID: ${originalPageId}`)
           const fbPosts = await fetchFacebookPosts(originalPageId, pageToken)
-          console.log(`[SYNC_PAGE] Fetched ${fbPosts.length} Facebook posts for ${pageName}`)
           for (const post of fbPosts) {
             await upsertPost(supabase, projectId, 'facebook', post, pageName, originalPageId)
             totalPosts++
@@ -246,17 +498,9 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
         }
       }
 
-      // Sync Instagram posts if this is an Instagram page or has Instagram connected
       if (platform === 'instagram' && instagramAccountId) {
         try {
-          console.log(`[SYNC_PAGE] Fetching Instagram posts for IG Account: ${instagramAccountId}`)
           const igPosts = await fetchInstagramPosts(instagramAccountId, pageToken, accessToken)
-          console.log(`[SYNC_PAGE] Fetched ${igPosts.length} Instagram posts for ${pageName}`)
-          
-          if (igPosts.length === 0) {
-            console.log(`[SYNC_PAGE] WARNING: No Instagram posts returned. Check token permissions.`)
-          }
-          
           for (const post of igPosts) {
             await upsertPost(supabase, projectId, 'instagram', post, pageName, instagramAccountId)
             totalPosts++
@@ -267,29 +511,18 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
         }
       }
 
-      // Update last_synced_at
       await supabase
         .from('social_listening_pages')
         .update({ last_synced_at: new Date().toISOString() })
         .eq('id', savedPage.id)
 
-      await delay(500) // Rate limiting
+      await delay(500)
     }
 
-    console.log('='.repeat(60))
     console.log(`[SYNC_POSTS] COMPLETED: ${totalPosts} posts synced, ${errors.length} errors`)
-    if (errors.length > 0) {
-      console.log(`[SYNC_POSTS] Errors:`, errors)
 
-      // If nothing was synced and we have errors, surface it to the UI
-      if (totalPosts === 0) {
-        return {
-          success: false,
-          error: errors[0],
-          postsSynced: totalPosts,
-          errors,
-        }
-      }
+    if (totalPosts === 0 && errors.length > 0) {
+      return { success: false, error: errors[0], postsSynced: totalPosts, errors }
     }
 
     return { success: true, postsSynced: totalPosts, errors }
@@ -301,13 +534,11 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
 
 async function fetchFacebookPosts(pageId: string, pageToken: string): Promise<any[]> {
   const posts: any[] = []
-  // Updated fields - removed deprecated 'shares' and 'type' fields (deprecated in v3.3+)
-  // Using 'status_type' instead of 'type', and getting share count from insights if needed
   let nextUrl: string | null = `${GRAPH_API_BASE}/${pageId}/posts?fields=id,message,created_time,permalink_url,status_type,full_picture&limit=50&access_token=${pageToken}`
 
   while (nextUrl !== null && posts.length < 100) {
     const currentUrl = nextUrl
-    nextUrl = null // Reset before fetch to avoid circular reference
+    nextUrl = null
     
     const fetchResponse: Response = await fetch(currentUrl)
     const fetchData: any = await fetchResponse.json()
@@ -325,14 +556,7 @@ async function fetchFacebookPosts(pageId: string, pageToken: string): Promise<an
 }
 
 async function fetchInstagramPosts(igAccountId: string, pageToken: string, mainAccessToken?: string) {
-  console.log(`[FETCH_IG_POSTS] Starting for IG Account: ${igAccountId}`)
-
-  // Try with page token first, then fall back to main access token
-  const tokensToTry: Array<{ token: string; name: string }> = [
-    { token: pageToken, name: 'page_access_token' },
-  ]
-
-  // Add main access token as fallback if available and different
+  const tokensToTry = [{ token: pageToken, name: 'page_access_token' }]
   if (mainAccessToken && mainAccessToken !== pageToken) {
     tokensToTry.push({ token: mainAccessToken, name: 'main_access_token' })
   }
@@ -341,75 +565,28 @@ async function fetchInstagramPosts(igAccountId: string, pageToken: string, mainA
 
   for (let i = 0; i < tokensToTry.length; i++) {
     const { token, name } = tokensToTry[i]
-
-    console.log(`[FETCH_IG_POSTS] Trying with ${name}...`)
-    console.log(`[FETCH_IG_POSTS] Token preview: ${token?.substring(0, 20)}...`)
-
     const url = `${GRAPH_API_BASE}/${igAccountId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=50&access_token=${token}`
-    console.log(`[FETCH_IG_POSTS] Request URL (token hidden): ${url.replace(token, 'TOKEN_HIDDEN')}`)
 
     try {
       const response = await fetch(url)
-      const statusCode = response.status
       const data = await response.json()
 
-      console.log(`[FETCH_IG_POSTS] Response status: ${statusCode}`)
-      console.log(
-        `[FETCH_IG_POSTS] Response data:`,
-        JSON.stringify({
-          hasData: !!data.data,
-          dataLength: data.data?.length,
-          error: data.error,
-          firstPostId: data.data?.[0]?.id,
-        })
-      )
-
       if (data.error) {
-        console.error(`[FETCH_IG_POSTS] API Error with ${name}:`, JSON.stringify(data.error))
-
-        const err = new Error(`${data.error.message} (code: ${data.error.code})`)
-        lastError = err
-
-        // Common auth/permission errors. If we have another token to try, continue.
+        lastError = new Error(`${data.error.message} (code: ${data.error.code})`)
         if ([10, 190, 200].includes(data.error.code) && i < tokensToTry.length - 1) {
-          console.log(`[FETCH_IG_POSTS] Permission/auth error, trying next token...`)
           continue
         }
-
-        throw err
+        throw lastError
       }
 
-      const posts = data.data || []
-      console.log(`[FETCH_IG_POSTS] SUCCESS with ${name}: Found ${posts.length} posts`)
-
-      if (posts.length > 0) {
-        console.log(
-          `[FETCH_IG_POSTS] First post sample:`,
-          JSON.stringify({
-            id: posts[0].id,
-            caption: posts[0].caption?.substring(0, 50),
-            media_type: posts[0].media_type,
-            timestamp: posts[0].timestamp,
-          })
-        )
-      }
-
-      return posts
+      return data.data || []
     } catch (fetchError: any) {
-      const err = fetchError instanceof Error ? fetchError : new Error(String(fetchError))
-      lastError = err
-      console.error(`[FETCH_IG_POSTS] Fetch error with ${name}:`, err.message)
-
-      if (i < tokensToTry.length - 1) {
-        continue
-      }
-
-      throw err
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError))
+      if (i < tokensToTry.length - 1) continue
+      throw lastError
     }
   }
 
-  // If we got here, nothing worked.
-  console.log(`[FETCH_IG_POSTS] All tokens failed`) 
   throw lastError || new Error('Falha ao buscar posts do Instagram')
 }
 
@@ -418,7 +595,7 @@ async function upsertPost(supabase: any, projectId: string, platform: string, po
     project_id: projectId,
     platform,
     post_id_meta: post.id,
-    page_id: pageId || null, // Store page_id for token lookup later
+    page_id: pageId || null,
     page_name: pageName,
     post_type: 'organic',
     message: platform === 'instagram' ? post.caption : post.message,
@@ -440,14 +617,14 @@ async function upsertPost(supabase: any, projectId: string, platform: string, po
   }
 }
 
-// Sync comments for posts
+// ============= COMMENT SYNC FUNCTIONS =============
+
 async function syncComments(supabase: any, projectId: string, accessToken: string, specificPostId?: string) {
   console.log('Syncing comments for project:', projectId)
 
   let totalComments = 0
   const errors: string[] = []
 
-  // Get posts to sync
   let posts: any[] = []
 
   if (specificPostId) {
@@ -464,9 +641,7 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
 
     posts = data
   } else {
-    // Get posts with existing comments (to check for deleted comments) + recent posts
-    // This ensures we detect deleted comments even on older posts
-    const [fbRes, igRes, postsWithCommentsRes] = await Promise.all([
+    const [fbRes, igRes] = await Promise.all([
       supabase
         .from('social_posts')
         .select('*')
@@ -481,222 +656,88 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
         .eq('platform', 'instagram')
         .order('published_at', { ascending: false })
         .limit(25),
-      // Also get posts that have non-deleted comments (to verify if they were deleted from Meta)
-      supabase
-        .from('social_comments')
-        .select('post_id')
-        .eq('project_id', projectId)
-        .eq('is_deleted', false)
-        .order('comment_timestamp', { ascending: false })
-        .limit(100),
     ])
 
-    if (fbRes.error || igRes.error) {
-      return { success: false, error: 'Erro ao buscar posts para sincronizar comentários' }
-    }
-
-    // Combine recent posts
-    const recentPosts = [...(fbRes.data || []), ...(igRes.data || [])]
-    const recentPostIds = new Set(recentPosts.map(p => p.id))
-
-    // Get unique post IDs from comments that aren't already in recent posts
-    const commentPostIds = new Set<string>()
-    for (const comment of postsWithCommentsRes.data || []) {
-      if (!recentPostIds.has(comment.post_id)) {
-        commentPostIds.add(comment.post_id)
-      }
-    }
-
-    // Fetch additional posts that have comments but aren't in recent posts
-    let additionalPosts: any[] = []
-    if (commentPostIds.size > 0) {
-      const { data: extraPosts } = await supabase
-        .from('social_posts')
-        .select('*')
-        .eq('project_id', projectId)
-        .in('id', Array.from(commentPostIds))
-        .limit(50)
-      
-      additionalPosts = extraPosts || []
-      console.log(`[SYNC_COMMENTS] Adding ${additionalPosts.length} posts with existing comments`)
-    }
-
-    posts = [...recentPosts, ...additionalPosts]
+    posts = [...(fbRes.data || []), ...(igRes.data || [])]
   }
 
-  if (!posts || posts.length === 0) {
-    return { success: true, commentsSynced: 0, errors: [] }
+  if (posts.length === 0) {
+    return { success: true, commentsSynced: 0, message: 'Nenhum post para sincronizar' }
   }
 
-  console.log(`[SYNC_COMMENTS] Found ${posts.length} posts to sync comments`)
-
-  // Get saved pages with their tokens for this project
+  // Get page tokens
+  const pageIds = [...new Set(posts.map(p => p.page_id).filter(Boolean))]
   const { data: savedPages } = await supabase
     .from('social_listening_pages')
-    .select('page_id, page_access_token, instagram_account_id, platform')
+    .select('page_id, instagram_account_id, page_access_token')
     .eq('project_id', projectId)
-    .eq('is_active', true)
+    .in('page_id', pageIds.length > 0 ? pageIds : ['none'])
 
-  // Build token map: page_id -> token (for both FB page ID and IG account ID)
   const pageTokenMap = new Map<string, string>()
   for (const page of savedPages || []) {
-    // Store by raw page_id (with suffix)
-    if (page.page_access_token) {
-      pageTokenMap.set(page.page_id, page.page_access_token)
-      // Also store by original ID (without suffix) for lookup
-      const originalId = page.page_id.replace(/_facebook$/, '').replace(/_instagram$/, '')
-      pageTokenMap.set(originalId, page.page_access_token)
-      // Store by IG account ID if available
-      if (page.instagram_account_id) {
-        pageTokenMap.set(page.instagram_account_id, page.page_access_token)
-      }
-    }
+    if (page.page_id) pageTokenMap.set(page.page_id, page.page_access_token)
+    if (page.instagram_account_id) pageTokenMap.set(page.instagram_account_id, page.page_access_token)
   }
 
-  console.log(`[SYNC_COMMENTS] Built token map with ${pageTokenMap.size} entries`)
-
-  let deletedComments = 0
-
   for (const post of posts) {
-    try {
-      // Determine the correct token to use for this post
-      let tokenToUse = accessToken // fallback to user token
-      
-      if (post.page_id) {
-        const pageToken = pageTokenMap.get(post.page_id)
-        if (pageToken) {
-          tokenToUse = pageToken
-          console.log(`[SYNC_COMMENTS] Using page token for post ${post.post_id_meta} (page: ${post.page_id})`)
-        } else {
-          console.log(`[SYNC_COMMENTS] No page token found for page_id: ${post.page_id}, using user token`)
-        }
-      } else {
-        // Try to extract page ID from post_id_meta (format: pageId_postId for FB)
-        if (post.platform === 'facebook' && post.post_id_meta.includes('_')) {
-          const extractedPageId = post.post_id_meta.split('_')[0]
-          const pageToken = pageTokenMap.get(extractedPageId)
-          if (pageToken) {
-            tokenToUse = pageToken
-            console.log(`[SYNC_COMMENTS] Extracted page ID ${extractedPageId} from post_id_meta, using page token`)
-          }
-        }
-      }
+    const pageToken = pageTokenMap.get(post.page_id) || accessToken
 
-      const comments = await fetchCommentsForPost(post, tokenToUse)
-      
-      // Collect all meta IDs from API (including replies)
-      const metaCommentIds = new Set<string>()
-      
-      for (const comment of comments) {
-        metaCommentIds.add(comment.id)
-        await upsertComment(supabase, projectId, post.id, post.platform, comment)
+    try {
+      const apiComments = await fetchCommentsForPost(post, pageToken, accessToken)
+
+      for (const comment of apiComments) {
+        await upsertComment(supabase, projectId, post.id, post.platform, comment, null)
         totalComments++
 
-        // Also sync replies
         if (comment.replies?.data) {
           for (const reply of comment.replies.data) {
-            metaCommentIds.add(reply.id)
-            const parentComment = await getCommentByMetaId(supabase, projectId, comment.id)
-            await upsertComment(supabase, projectId, post.id, post.platform, reply, parentComment?.id)
+            await upsertComment(supabase, projectId, post.id, post.platform, reply, comment.id)
             totalComments++
           }
         }
       }
-
-      // Detect deleted comments: compare DB comments with API comments
-      const deletedCount = await markDeletedComments(supabase, projectId, post.id, metaCommentIds)
-      deletedComments += deletedCount
-      
     } catch (e: any) {
-      console.warn(`[SYNC_COMMENTS] Error for post ${post.post_id_meta}: ${e.message}`)
-      errors.push(`Post ${post.post_id_meta}: ${e.message}`)
+      console.error(`Error syncing comments for post ${post.id}:`, e.message)
+      errors.push(`Post ${post.id}: ${e.message}`)
     }
-    await delay(150)
+
+    await delay(300)
   }
 
-  console.log(`[SYNC_COMMENTS] Completed: ${totalComments} comments synced, ${deletedComments} marked as deleted, ${errors.length} errors`)
-  return { success: true, commentsSynced: totalComments, deletedComments, errors }
+  return { success: true, commentsSynced: totalComments, errors }
 }
 
-async function fetchCommentsForPost(post: any, accessToken: string) {
-  const comments: any[] = []
-  
-  const fields = post.platform === 'instagram' 
-    ? 'id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}'
-    : 'id,message,created_time,from,like_count,comment_count,comments{id,message,created_time,from,like_count}'
+async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken: string): Promise<any[]> {
+  const platform = post.platform
+  const postIdMeta = post.post_id_meta
 
-  const url = `${GRAPH_API_BASE}/${post.post_id_meta}/comments?fields=${fields}&limit=100&access_token=${accessToken}`
-  
+  let url: string
+  if (platform === 'instagram') {
+    url = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}&limit=100&access_token=${pageToken}`
+  } else {
+    url = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=id,message,created_time,from,like_count,comment_count,comments{id,message,created_time,from,like_count}&limit=100&access_token=${pageToken}`
+  }
+
   const response = await fetch(url)
   const data = await response.json()
 
   if (data.error) {
-    // Some posts may not have comment access
-    console.warn(`Comments fetch warning for post ${post.post_id_meta}:`, data.error.message)
-    return []
+    if (data.error.code === 190 || data.error.code === 10) {
+      const retryUrl = url.replace(pageToken, fallbackToken)
+      const retryResponse = await fetch(retryUrl)
+      const retryData = await retryResponse.json()
+      if (retryData.error) throw new Error(retryData.error.message)
+      return retryData.data || []
+    }
+    throw new Error(data.error.message)
   }
 
   return data.data || []
 }
 
-async function getCommentByMetaId(supabase: any, projectId: string, metaId: string) {
-  const { data } = await supabase
-    .from('social_comments')
-    .select('id')
-    .eq('project_id', projectId)
-    .eq('comment_id_meta', metaId)
-    .single()
-  
-  return data
-}
-
-// Mark comments as deleted if they no longer exist in the Meta API
-async function markDeletedComments(supabase: any, projectId: string, postId: string, metaCommentIds: Set<string>): Promise<number> {
-  // Get all existing comments for this post that are not already marked as deleted
-  const { data: existingComments, error } = await supabase
-    .from('social_comments')
-    .select('id, comment_id_meta')
-    .eq('project_id', projectId)
-    .eq('post_id', postId)
-    .eq('is_deleted', false)
-
-  if (error || !existingComments) {
-    console.error('[MARK_DELETED] Error fetching existing comments:', error)
-    return 0
-  }
-
-  // Find comments that exist in DB but not in API response (they were deleted)
-  const deletedCommentIds: string[] = []
-  for (const comment of existingComments) {
-    if (!metaCommentIds.has(comment.comment_id_meta)) {
-      deletedCommentIds.push(comment.id)
-    }
-  }
-
-  if (deletedCommentIds.length === 0) {
-    return 0
-  }
-
-  console.log(`[MARK_DELETED] Found ${deletedCommentIds.length} deleted comments for post ${postId}`)
-
-  // Mark them as deleted
-  const { error: updateError } = await supabase
-    .from('social_comments')
-    .update({ is_deleted: true, updated_at: new Date().toISOString() })
-    .in('id', deletedCommentIds)
-
-  if (updateError) {
-    console.error('[MARK_DELETED] Error marking comments as deleted:', updateError)
-    return 0
-  }
-
-  return deletedCommentIds.length
-}
-
-async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any, parentId?: string) {
+async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any, parentId: string | null) {
   const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
   
-  // Try to match with CRM contact by Instagram username
   let crmContactId: string | null = null
   if (authorUsername && platform === 'instagram') {
     crmContactId = await findCRMContactByInstagram(supabase, projectId, authorUsername)
@@ -716,7 +757,7 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
     comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
     ai_processing_status: 'pending',
     crm_contact_id: crmContactId,
-    is_deleted: false, // Ensure comment is marked as not deleted when it exists in API
+    is_deleted: false,
   }
 
   const { error } = await supabase
@@ -728,11 +769,9 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
   }
 }
 
-// Find CRM contact by Instagram username
 async function findCRMContactByInstagram(supabase: any, projectId: string, instagramUsername: string): Promise<string | null> {
   if (!instagramUsername) return null
   
-  // Normalize username (remove @ if present)
   const normalizedUsername = instagramUsername.replace(/^@/, '').toLowerCase()
   
   const { data, error } = await supabase
@@ -748,21 +787,15 @@ async function findCRMContactByInstagram(supabase: any, projectId: string, insta
     return null
   }
   
-  if (data) {
-    console.log(`Matched Instagram @${normalizedUsername} to CRM contact: ${data.id}`)
-  }
-  
   return data?.id || null
 }
 
-// Link existing comments to CRM contacts (batch operation)
 async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
   console.log('Linking existing comments to CRM contacts for project:', projectId)
   
   let linked = 0
   let notFound = 0
   
-  // Get comments without CRM link that have Instagram usernames
   const { data: comments, error } = await supabase
     .from('social_comments')
     .select('id, author_username, platform')
@@ -772,33 +805,16 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
     .not('author_username', 'is', null)
     .limit(500)
   
-  if (error) {
-    console.error('Error fetching comments for CRM linking:', error)
-    return { success: false, error: error.message }
-  }
-  
-  if (!comments || comments.length === 0) {
+  if (error || !comments?.length) {
     return { success: true, linked: 0, message: 'Nenhum comentário pendente para vincular' }
   }
   
-  console.log(`Found ${comments.length} comments to try linking`)
-  
-  // Get all unique usernames
-  const uniqueUsernames = [...new Set(comments.map((c: any) => c.author_username?.toLowerCase()?.replace(/^@/, '')))]
-  
-  // Get all CRM contacts with Instagram usernames for this project
-  const { data: contacts, error: contactsError } = await supabase
+  const { data: contacts } = await supabase
     .from('crm_contacts')
     .select('id, instagram')
     .eq('project_id', projectId)
     .not('instagram', 'is', null)
   
-  if (contactsError) {
-    console.error('Error fetching CRM contacts:', contactsError)
-    return { success: false, error: contactsError.message }
-  }
-  
-  // Create a map for fast lookup (normalize Instagram usernames)
   const contactMap = new Map<string, string>()
   for (const contact of contacts || []) {
     if (contact.instagram) {
@@ -807,9 +823,6 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
     }
   }
   
-  console.log(`Found ${contactMap.size} CRM contacts with Instagram usernames`)
-  
-  // Update comments with matched CRM contact IDs
   for (const comment of comments) {
     if (!comment.author_username) continue
     
@@ -822,28 +835,24 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
         .update({ crm_contact_id: contactId })
         .eq('id', comment.id)
       
-      if (!updateError) {
-        linked++
-      }
+      if (!updateError) linked++
     } else {
       notFound++
     }
   }
   
-  console.log(`Linked ${linked} comments to CRM contacts. ${notFound} usernames not found in CRM.`)
-  
   return { success: true, linked, notFound, totalProcessed: comments.length }
 }
 
-// Process comments with AI - now uses knowledge base for context
-async function processCommentsWithAI(supabase: any, projectId: string, limit: number) {
-  // Use larger batch size for efficiency
-  const batchSize = Math.max(limit, 100)
-  console.log(`Processing up to ${batchSize} comments with AI for project:`, projectId)
+// ============= AI PROCESSING (WITH KEYWORDS + OPENAI) =============
 
-  // First, reset any comments stuck in 'processing' status (from previous failed runs)
+async function processCommentsWithAI(supabase: any, projectId: string, limit: number) {
+  const batchSize = Math.min(limit, 100)
+  console.log(`[AI_PROCESS] Processing up to ${batchSize} comments for project:`, projectId)
+
+  // Reset stuck comments
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-  const { data: stuckComments, error: stuckError } = await supabase
+  const { data: stuckComments } = await supabase
     .from('social_comments')
     .update({ ai_processing_status: 'pending' })
     .eq('project_id', projectId)
@@ -852,858 +861,604 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
     .select('id')
   
   if (stuckComments?.length > 0) {
-    console.log(`Reset ${stuckComments.length} stuck comments from 'processing' to 'pending'`)
+    console.log(`[AI_PROCESS] Reset ${stuckComments.length} stuck comments`)
   }
 
-  // Fetch knowledge base for this project
+  // Fetch knowledge base
   const { data: knowledgeBase } = await supabase
     .from('ai_knowledge_base')
     .select('*')
     .eq('project_id', projectId)
     .maybeSingle()
 
-  console.log(`Knowledge base found: ${!!knowledgeBase}`)
-
   // Get pending comments
   const { data: comments, error } = await supabase
     .from('social_comments')
-    .select(`
-      id,
-      text,
-      post_id,
-      social_posts!inner(message)
-    `)
+    .select('id, text, post_id, social_posts!inner(message)')
     .eq('project_id', projectId)
     .eq('ai_processing_status', 'pending')
     .limit(batchSize)
 
-  if (error || !comments || comments.length === 0) {
+  if (error || !comments?.length) {
     return { success: true, processed: 0, message: 'Nenhum comentário pendente' }
   }
 
-  console.log(`Found ${comments.length} comments to process`)
+  console.log(`[AI_PROCESS] Found ${comments.length} comments to process`)
 
-  // Get count of remaining pending after this batch
-  const { count: remainingCount } = await supabase
-    .from('social_comments')
-    .select('id', { count: 'exact', head: true })
-    .eq('project_id', projectId)
-    .eq('ai_processing_status', 'pending')
-
-  let processed = 0
+  let keywordClassified = 0
+  let aiProcessed = 0
   let failed = 0
 
-  // Build prompt once with knowledge base context
-  const classificationPrompt = buildClassificationPrompt(knowledgeBase)
+  // ============= PHASE 1: KEYWORD CLASSIFICATION =============
+  const commentsForAI: Array<{id: string, text: string, postContext: string}> = []
 
-  // Process comments in parallel batches of 5 for speed
-  const parallelBatchSize = 5
-  for (let i = 0; i < comments.length; i += parallelBatchSize) {
-    const batch = comments.slice(i, i + parallelBatchSize)
+  for (const comment of comments) {
+    const keywordResult = classifyByKeywords(comment.text || '')
+
+    if (keywordResult.classified) {
+      // Classify by keyword (no AI needed)
+      await supabase
+        .from('social_comments')
+        .update({
+          sentiment: keywordResult.sentiment,
+          classification: keywordResult.classification,
+          classification_key: keywordResult.classification,
+          intent_score: keywordResult.intent_score,
+          ai_summary: keywordResult.summary,
+          ai_processing_status: 'completed',
+          ai_processed_at: new Date().toISOString(),
+        })
+        .eq('id', comment.id)
+
+      keywordClassified++
+    } else {
+      // Needs AI classification
+      commentsForAI.push({
+        id: comment.id,
+        text: comment.text || '',
+        postContext: comment.social_posts?.message || ''
+      })
+    }
+  }
+
+  console.log(`[AI_PROCESS] Keyword classified: ${keywordClassified}, Needs AI: ${commentsForAI.length}`)
+
+  // ============= PHASE 2: AI CLASSIFICATION (OpenAI or Lovable) =============
+  if (commentsForAI.length > 0) {
+    // Check quota
+    const quotaResult = await checkAndUseQuota(supabase, projectId, commentsForAI.length)
     
-    const results = await Promise.allSettled(
-      batch.map(async (comment: any) => {
+    if (!quotaResult.allowed) {
+      console.log(`[AI_PROCESS] Quota exceeded:`, quotaResult.reason)
+      return {
+        success: true,
+        processed: keywordClassified,
+        keywordClassified,
+        aiProcessed: 0,
+        failed: 0,
+        quotaExceeded: true,
+        quotaInfo: quotaResult
+      }
+    }
+
+    // Mark as processing
+    await supabase
+      .from('social_comments')
+      .update({ ai_processing_status: 'processing' })
+      .in('id', commentsForAI.map(c => c.id))
+
+    // Try OpenAI first (batch processing)
+    const useOpenAI = !!OPENAI_API_KEY
+
+    if (useOpenAI) {
+      try {
+        // Process in batches of 15 for OpenAI
+        const openAIBatchSize = 15
+        for (let i = 0; i < commentsForAI.length; i += openAIBatchSize) {
+          const batch = commentsForAI.slice(i, i + openAIBatchSize)
+          
+          const { results, inputTokens, outputTokens, cost } = await classifyWithOpenAI(batch, knowledgeBase)
+
+          // Track usage
+          await trackAIUsage(supabase, projectId, {
+            feature: 'social_listening',
+            action: 'batch_classify',
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            inputTokens,
+            outputTokens,
+            itemsProcessed: batch.length,
+            costEstimate: cost,
+            success: true
+          })
+
+          // Update comments with results
+          for (const result of results) {
+            await supabase
+              .from('social_comments')
+              .update({
+                sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
+                classification: result.classification || 'other',
+                classification_key: result.classification || 'other',
+                intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
+                ai_summary: (result.summary || '').substring(0, 100),
+                ai_processing_status: 'completed',
+                ai_processed_at: new Date().toISOString(),
+              })
+              .eq('id', result.id)
+
+            aiProcessed++
+          }
+
+          if (i + openAIBatchSize < commentsForAI.length) {
+            await delay(500) // Rate limiting between batches
+          }
+        }
+      } catch (openaiError: any) {
+        console.error('[AI_PROCESS] OpenAI error, falling back to Lovable AI:', openaiError.message)
+        
+        // Track failed usage
+        await trackAIUsage(supabase, projectId, {
+          feature: 'social_listening',
+          action: 'batch_classify',
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          inputTokens: 0,
+          outputTokens: 0,
+          itemsProcessed: commentsForAI.length,
+          costEstimate: 0,
+          success: false,
+          errorMessage: openaiError.message
+        })
+
+        // Fallback to Lovable AI (individual processing)
+        const classificationPrompt = buildClassificationPrompt(knowledgeBase)
+        
+        for (const comment of commentsForAI) {
+          try {
+            const result = await classifyWithLovableAI(comment.text, comment.postContext, classificationPrompt)
+            
+            await supabase
+              .from('social_comments')
+              .update({
+                sentiment: result.sentiment,
+                classification: result.classification,
+                classification_key: result.classification,
+                intent_score: result.intent_score,
+                ai_summary: result.summary,
+                ai_processing_status: 'completed',
+                ai_processed_at: new Date().toISOString(),
+              })
+              .eq('id', comment.id)
+
+            aiProcessed++
+          } catch (lovableError: any) {
+            console.error(`[AI_PROCESS] Lovable AI error for ${comment.id}:`, lovableError.message)
+            
+            await supabase
+              .from('social_comments')
+              .update({
+                ai_processing_status: 'failed',
+                ai_error: lovableError.message
+              })
+              .eq('id', comment.id)
+
+            failed++
+          }
+
+          await delay(200)
+        }
+      }
+    } else {
+      // No OpenAI key, use Lovable AI directly
+      const classificationPrompt = buildClassificationPrompt(knowledgeBase)
+      
+      for (const comment of commentsForAI) {
         try {
-          // Mark as processing
-          await supabase
-            .from('social_comments')
-            .update({ ai_processing_status: 'processing' })
-            .eq('id', comment.id)
-
-          // Call AI with knowledge base enhanced prompt
-          const postContext = comment.social_posts?.message || 'Contexto não disponível'
-          const aiResult = await classifyComment(comment.text, postContext, classificationPrompt, knowledgeBase)
-
-          // Update with results
+          const result = await classifyWithLovableAI(comment.text, comment.postContext, classificationPrompt)
+          
           await supabase
             .from('social_comments')
             .update({
-              sentiment: aiResult.sentiment,
-              classification: aiResult.classification,
-              classification_key: aiResult.classification,
-              intent_score: aiResult.intent_score,
-              ai_summary: aiResult.summary,
+              sentiment: result.sentiment,
+              classification: result.classification,
+              classification_key: result.classification,
+              intent_score: result.intent_score,
+              ai_summary: result.summary,
               ai_processing_status: 'completed',
               ai_processed_at: new Date().toISOString(),
             })
             .eq('id', comment.id)
 
-          return true
+          aiProcessed++
         } catch (e: any) {
-          console.error(`Error processing comment ${comment.id}:`, e.message)
-          
           await supabase
             .from('social_comments')
             .update({
               ai_processing_status: 'failed',
-              ai_error: e.message,
+              ai_error: e.message
             })
             .eq('id', comment.id)
 
-          throw e
+          failed++
         }
-      })
-    )
 
-    // Count results
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        processed++
-      } else {
-        failed++
+        await delay(200)
       }
-    }
-
-    // Small delay between batches to avoid rate limiting
-    if (i + parallelBatchSize < comments.length) {
-      await delay(300)
     }
   }
 
-  const remaining = (remainingCount || 0) - processed
-  console.log(`Processed ${processed} comments, ${failed} failed, ~${remaining} remaining`)
+  const totalProcessed = keywordClassified + aiProcessed
+  console.log(`[AI_PROCESS] Completed: ${totalProcessed} total (${keywordClassified} keyword, ${aiProcessed} AI), ${failed} failed`)
 
   return { 
     success: true, 
-    processed, 
-    failed, 
-    total: comments.length,
-    remaining: Math.max(0, remaining)
+    processed: totalProcessed,
+    keywordClassified,
+    aiProcessed,
+    failed,
+    total: comments.length
   }
 }
 
-async function classifyComment(commentText: string, postContext: string, classificationPrompt: string, knowledgeBase?: any) {
-  const prompt = classificationPrompt
-    .replace('{post_context}', postContext)
-    .replace('{comment_text}', commentText)
+// ============= STATS AND USAGE =============
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 500,
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI API error: ${response.status} - ${errorText}`)
-  }
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || ''
-
-  // Parse JSON from response
-  const jsonMatch = content.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Invalid AI response format')
-  }
-
-  const result = JSON.parse(jsonMatch[0])
-
-  // Get valid classification keys from knowledge base or use defaults
-  const validClassifications = knowledgeBase?.custom_categories 
-    ? Object.keys(knowledgeBase.custom_categories)
-    : ['product_question', 'purchase_question', 'commercial_interest', 'praise', 'complaint', 'contact_request', 'friend_tag', 'spam', 'other']
-
-  // Validate and normalize
-  return {
-    sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) 
-      ? result.sentiment 
-      : 'neutral',
-    classification: validClassifications.includes(result.classification)
-      ? result.classification
-      : 'other',
-    intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
-    summary: (result.summary || '').substring(0, 100),
-  }
-}
-
-// Get stats for dashboard
 async function getStats(supabase: any, projectId: string) {
-  const { data: totalComments } = await supabase
-    .from('social_comments')
-    .select('id', { count: 'exact' })
-    .eq('project_id', projectId)
-    .eq('is_deleted', false)
+  const [totalRes, pendingRes, sentimentRes, classificationRes] = await Promise.all([
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('ai_processing_status', 'pending'),
+    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('ai_processing_status', 'completed'),
+  ])
 
-  const { data: pendingAI } = await supabase
-    .from('social_comments')
-    .select('id', { count: 'exact' })
-    .eq('project_id', projectId)
-    .eq('ai_processing_status', 'pending')
+  const sentimentCounts: Record<string, number> = {}
+  for (const item of sentimentRes.data || []) {
+    sentimentCounts[item.sentiment || 'unknown'] = (sentimentCounts[item.sentiment || 'unknown'] || 0) + 1
+  }
 
-  const { data: sentimentStats } = await supabase
-    .from('social_comments')
-    .select('sentiment')
-    .eq('project_id', projectId)
-    .not('sentiment', 'is', null)
-
-  const { data: classificationStats } = await supabase
-    .from('social_comments')
-    .select('classification')
-    .eq('project_id', projectId)
-    .not('classification', 'is', null)
-
-  // Calculate distributions
-  const sentimentDist = { positive: 0, neutral: 0, negative: 0 }
-  const classificationDist: Record<string, number> = {}
-
-  sentimentStats?.forEach((c: any) => {
-    if (c.sentiment) sentimentDist[c.sentiment as keyof typeof sentimentDist]++
-  })
-
-  classificationStats?.forEach((c: any) => {
-    if (c.classification) {
-      classificationDist[c.classification] = (classificationDist[c.classification] || 0) + 1
-    }
-  })
+  const classificationCounts: Record<string, number> = {}
+  for (const item of classificationRes.data || []) {
+    classificationCounts[item.classification || 'unknown'] = (classificationCounts[item.classification || 'unknown'] || 0) + 1
+  }
 
   return {
-    totalComments: totalComments?.length || 0,
-    pendingAI: pendingAI?.length || 0,
-    sentimentDistribution: sentimentDist,
-    classificationDistribution: classificationDist,
+    total: totalRes.count || 0,
+    pending: pendingRes.count || 0,
+    processed: (totalRes.count || 0) - (pendingRes.count || 0),
+    sentiment: sentimentCounts,
+    classification: classificationCounts,
   }
 }
 
-// Get available Facebook Pages and Instagram accounts
+async function getAIUsage(supabase: any, projectId: string) {
+  const today = new Date()
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
+
+  const [dailyRes, monthlyRes, recentRes] = await Promise.all([
+    supabase
+      .from('ai_usage_tracking')
+      .select('items_processed, cost_estimate')
+      .eq('project_id', projectId)
+      .gte('created_at', startOfDay),
+    supabase
+      .from('ai_usage_tracking')
+      .select('items_processed, cost_estimate')
+      .eq('project_id', projectId)
+      .gte('created_at', startOfMonth),
+    supabase
+      .from('ai_usage_tracking')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
+
+  const dailyItems = (dailyRes.data || []).reduce((sum: number, r: any) => sum + (r.items_processed || 0), 0)
+  const dailyCost = (dailyRes.data || []).reduce((sum: number, r: any) => sum + parseFloat(r.cost_estimate || 0), 0)
+  const monthlyItems = (monthlyRes.data || []).reduce((sum: number, r: any) => sum + (r.items_processed || 0), 0)
+  const monthlyCost = (monthlyRes.data || []).reduce((sum: number, r: any) => sum + parseFloat(r.cost_estimate || 0), 0)
+
+  return {
+    daily: { items: dailyItems, cost: dailyCost.toFixed(4) },
+    monthly: { items: monthlyItems, cost: monthlyCost.toFixed(4) },
+    recent: recentRes.data || [],
+  }
+}
+
+async function getAIQuota(supabase: any, projectId: string) {
+  const { data, error } = await supabase
+    .from('ai_project_quotas')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle()
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return data || {
+    daily_limit: 100,
+    monthly_limit: 3000,
+    current_daily_usage: 0,
+    current_monthly_usage: 0,
+    is_unlimited: false,
+    provider_preference: 'openai'
+  }
+}
+
+// ============= PAGE MANAGEMENT =============
+
 async function getAvailablePages(accessToken: string) {
-  console.log('Getting available pages for user')
-  
-  try {
-    // First, check token permissions
-    const debugUrl = `${GRAPH_API_BASE}/debug_token?input_token=${accessToken}&access_token=${accessToken}`
-    const debugResponse = await fetch(debugUrl)
-    const debugData = await debugResponse.json()
-    
-    console.log('Token debug info:', JSON.stringify({
-      isValid: debugData.data?.is_valid,
-      scopes: debugData.data?.scopes,
-      expiresAt: debugData.data?.expires_at,
-      userId: debugData.data?.user_id,
-    }))
-    
-    // Get user pages - with pagination support
-    const allPages: any[] = []
-    let nextUrl: string | null = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&limit=100&access_token=${accessToken}`
-    
-    while (nextUrl) {
-      console.log('Fetching pages from:', nextUrl.replace(accessToken, 'TOKEN_HIDDEN'))
-      
-      const response: Response = await fetch(nextUrl)
-      const data: any = await response.json()
+  const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
+  const response = await fetch(pagesUrl)
+  const data = await response.json()
 
-      console.log('Pages API response:', JSON.stringify({
-        hasData: !!data.data,
-        dataLength: data.data?.length,
-        error: data.error,
-        hasNextPage: !!data.paging?.next,
-      }))
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
 
-      if (data.error) {
-        console.error('Meta API error:', data.error)
-        return { 
-          success: false, 
-          error: data.error.message,
-          errorCode: data.error.code,
-          errorType: data.error.type,
-          pages: [] 
-        }
-      }
+  const pages: any[] = []
+  for (const page of data.data || []) {
+    pages.push({
+      id: `${page.id}_facebook`,
+      page_id: page.id,
+      name: `${page.name} (Facebook)`,
+      platform: 'facebook',
+      access_token: page.access_token,
+    })
 
-      if (data.data) {
-        allPages.push(...data.data)
-      }
-      
-      // Check for next page
-      nextUrl = data.paging?.next || null
-      
-      // Safety limit to prevent infinite loops (max 500 pages)
-      if (allPages.length >= 500) {
-        console.log('Reached max pages limit (500)')
-        break
-      }
-    }
-
-    // Create separate entries for Facebook and Instagram
-    const pages: any[] = []
-    
-    for (const page of allPages) {
-      // Always add Facebook page entry
+    if (page.instagram_business_account) {
       pages.push({
-        pageId: page.id,
-        pageName: page.name,
-        pageAccessToken: page.access_token,
-        pagePicture: page.picture?.data?.url,
-        platform: 'facebook',
-        instagramAccountId: null,
-        instagramUsername: null,
-        instagramPicture: null,
+        id: `${page.id}_instagram`,
+        page_id: page.id,
+        instagram_account_id: page.instagram_business_account.id,
+        name: `@${page.instagram_business_account.username || page.name} (Instagram)`,
+        platform: 'instagram',
+        access_token: page.access_token,
+        profile_picture: page.instagram_business_account.profile_picture_url,
       })
-      
-      // If page has Instagram Business Account, add separate Instagram entry
-      if (page.instagram_business_account?.id) {
-        pages.push({
-          pageId: page.id, // Same page ID, but will be saved with platform: instagram
-          pageName: page.name,
-          pageAccessToken: page.access_token,
-          pagePicture: page.picture?.data?.url,
-          platform: 'instagram',
-          instagramAccountId: page.instagram_business_account.id,
-          instagramUsername: page.instagram_business_account.username,
-          instagramPicture: page.instagram_business_account.profile_picture_url,
-        })
-      }
     }
-
-    console.log(`Found ${allPages.length} Facebook pages, expanded to ${pages.length} entries (FB + IG)`)
-    
-    // If no pages found, check if user has pages but no permission
-    if (pages.length === 0) {
-      console.log('No pages found. This could mean:')
-      console.log('1. User has no Facebook Pages')
-      console.log('2. User did not grant pages_show_list permission')
-      console.log('3. User did not grant pages_read_engagement permission')
-      console.log('Token scopes:', debugData.data?.scopes)
-    }
-    
-    return { success: true, pages, scopes: debugData.data?.scopes, totalFetched: pages.length }
-  } catch (error: any) {
-    console.error('Error getting pages:', error)
-    return { success: false, error: error.message, pages: [] }
   }
+
+  return { pages }
 }
 
-// Save selected pages to database
 async function saveSelectedPages(supabase: any, projectId: string, accessToken: string, pages: any[]) {
-  console.log(`Saving ${pages.length} pages for project:`, projectId)
-
-  const errors: string[] = []
-  let saved = 0
-
   for (const page of pages) {
-    try {
-      // Use platform from the page object, or determine from instagramAccountId
-      const platform = page.platform || (page.instagramAccountId ? 'instagram' : 'facebook')
-      
-      // Create unique identifier: page_id + platform
-      const uniquePageId = `${page.pageId}_${platform}`
-      
-      const pageData: any = {
+    const { error } = await supabase
+      .from('social_listening_pages')
+      .upsert({
         project_id: projectId,
-        platform: platform,
-        page_id: uniquePageId, // Use unique ID with platform suffix
-        page_name: page.pageName,
-        page_access_token: page.pageAccessToken,
-        instagram_account_id: page.instagramAccountId || null,
-        instagram_username: page.instagramUsername || null,
+        page_id: page.id,
+        page_name: page.name,
+        platform: page.platform,
+        page_access_token: page.access_token,
+        instagram_account_id: page.instagram_account_id || null,
         is_active: true,
-      }
+      }, { onConflict: 'project_id,page_id' })
 
-      const { error } = await supabase
-        .from('social_listening_pages')
-        .upsert(pageData, { onConflict: 'project_id,page_id' })
-
-      if (error) {
-        errors.push(`${page.pageName} (${platform}): ${error.message}`)
-      } else {
-        saved++
-      }
-    } catch (e: any) {
-      errors.push(`${page.pageName}: ${e.message}`)
+    if (error) {
+      console.error('Error saving page:', error)
     }
   }
 
-  return { success: errors.length === 0, saved, errors }
+  return { success: true, savedCount: pages.length }
 }
 
-// Get saved pages from database
 async function getSavedPages(supabase: any, projectId: string) {
   const { data, error } = await supabase
     .from('social_listening_pages')
     .select('*')
     .eq('project_id', projectId)
-    .order('created_at', { ascending: true })
+    .eq('is_active', true)
 
   if (error) {
-    return { success: false, error: error.message, pages: [] }
+    throw new Error(error.message)
   }
 
-  return { success: true, pages: data || [] }
+  return { pages: data || [] }
 }
 
-// Remove a page from monitoring
 async function removePage(supabase: any, projectId: string, pageId: string) {
-  console.log(`Removing page ${pageId} from project ${projectId}`)
-  
   const { error } = await supabase
     .from('social_listening_pages')
-    .delete()
+    .update({ is_active: false })
     .eq('project_id', projectId)
     .eq('page_id', pageId)
 
   if (error) {
-    console.error('Error removing page:', error)
-    return { success: false, error: error.message }
+    throw new Error(error.message)
   }
 
   return { success: true }
 }
 
-// Sync ad comments from Meta Ads - fetches ads and their comments
-async function syncAdComments(supabase: any, projectId: string, accessToken: string) {
-  console.log('='.repeat(60))
-  console.log('[SYNC_AD_COMMENTS] Starting for project:', projectId)
+// ============= AD COMMENTS SYNC =============
 
-  let totalAds = 0
+async function syncAdComments(supabase: any, projectId: string, accessToken: string) {
+  console.log('Syncing ad comments for project:', projectId)
+
   let totalComments = 0
-  let deletedComments = 0
   const errors: string[] = []
 
   try {
-    // Get active ad accounts from meta_ad_accounts table
-    const { data: adAccounts, error: accountsError } = await supabase
+    const { data: adAccounts } = await supabase
       .from('meta_ad_accounts')
-      .select('account_id, account_name')
+      .select('account_id')
       .eq('project_id', projectId)
-      .eq('is_active', true)
+      .eq('is_selected', true)
 
-    if (accountsError || !adAccounts || adAccounts.length === 0) {
-      console.log('[SYNC_AD_COMMENTS] No ad accounts configured')
-      return {
-        success: false,
-        error: 'Nenhuma conta de anúncios ativa. Configure uma conta de anúncios no Meta Ads primeiro.',
-        adsSynced: 0,
-        commentsSynced: 0,
-        deletedComments: 0,
-      }
+    if (!adAccounts?.length) {
+      return { success: true, commentsSynced: 0, message: 'Nenhuma conta de anúncio configurada' }
     }
 
-    console.log(`[SYNC_AD_COMMENTS] Found ${adAccounts.length} active ad accounts`)
+    for (const account of adAccounts) {
+      try {
+        const adsUrl = `${GRAPH_API_BASE}/${account.account_id}/ads?fields=id,name,effective_status,creative{effective_object_story_id}&limit=50&access_token=${accessToken}`
+        const adsResponse = await fetch(adsUrl)
+        const adsData = await adsResponse.json()
 
-    // Get saved pages with tokens for comment fetching - separate FB and IG
-    const { data: savedPages } = await supabase
-      .from('social_listening_pages')
-      .select('page_id, page_access_token, platform')
-      .eq('project_id', projectId)
-      .eq('is_active', true)
-
-    // Get tokens by platform
-    const fbPage = savedPages?.find((p: any) => p.platform === 'facebook')
-    const igPage = savedPages?.find((p: any) => p.platform === 'instagram')
-    const fbPageToken = fbPage?.page_access_token || accessToken
-    const igPageToken = igPage?.page_access_token || accessToken
-
-    console.log(`[SYNC_AD_COMMENTS] FB token available: ${!!fbPage}, IG token available: ${!!igPage}`)
-
-    const processedAdPostUuids = new Set<string>()
-
-    const syncCommentsForAdPost = async (params: {
-      postUuid: string
-      platform: 'facebook' | 'instagram'
-      postIdMeta: string
-      label: string
-    }): Promise<{ commentsSynced: number; deletedCount: number }> => {
-      const { postUuid, platform, postIdMeta, label } = params
-
-      // Fetch comments for this ad post - use appropriate token per platform
-      let commentsUrl: string
-      let tokenToUse: string
-
-      if (platform === 'facebook') {
-        tokenToUse = fbPageToken
-        commentsUrl = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=id,message,from{id,name},created_time,like_count,comment_count&limit=100&access_token=${tokenToUse}`
-      } else {
-        tokenToUse = igPageToken
-        commentsUrl = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=id,text,username,timestamp,like_count,replies{id,text,username,timestamp,like_count}&limit=100&access_token=${tokenToUse}`
-      }
-
-      const commentsResponse = await fetch(commentsUrl)
-      const commentsData = await commentsResponse.json()
-
-      if (commentsData.error) {
-        console.log(`[SYNC_AD_COMMENTS] Error fetching comments (${label}) for ${postIdMeta}:`, commentsData.error.message)
-        return { commentsSynced: 0, deletedCount: 0 }
-      }
-
-      const comments = commentsData.data || []
-      console.log(`[SYNC_AD_COMMENTS] (${label}) ${platform.toUpperCase()} ${postIdMeta}: ${comments.length} comments from API`)
-
-      const metaCommentIds = new Set<string>()
-      let synced = 0
-
-      for (const comment of comments) {
-        metaCommentIds.add(comment.id)
-
-        const commentData: any = {
-          project_id: projectId,
-          post_id: postUuid,
-          platform,
-          comment_id_meta: comment.id,
-          text: platform === 'instagram' ? comment.text : comment.message,
-          author_username: platform === 'instagram' ? comment.username : null,
-          author_name: platform === 'facebook' ? comment.from?.name : comment.username,
-          author_id: platform === 'facebook' ? comment.from?.id : null,
-          like_count: comment.like_count || 0,
-          reply_count: platform === 'facebook' ? (comment.comment_count || 0) : (comment.replies?.data?.length || 0),
-          comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
-          is_deleted: false,
-        }
-
-        const { error: commentError } = await supabase
-          .from('social_comments')
-          .upsert(commentData, { onConflict: 'project_id,platform,comment_id_meta' })
-
-        if (!commentError) {
-          synced++
-        }
-
-        // Handle IG replies
-        if (platform === 'instagram' && comment.replies?.data) {
-          for (const reply of comment.replies.data) {
-            metaCommentIds.add(reply.id)
-
-            const replyData: any = {
-              project_id: projectId,
-              post_id: postUuid,
-              platform,
-              comment_id_meta: reply.id,
-              parent_comment_id: comment.id,
-              text: reply.text,
-              author_username: reply.username,
-              author_name: reply.username,
-              like_count: reply.like_count || 0,
-              reply_count: 0,
-              comment_timestamp: reply.timestamp,
-              is_deleted: false,
-            }
-
-            const { error: replyError } = await supabase
-              .from('social_comments')
-              .upsert(replyData, { onConflict: 'project_id,platform,comment_id_meta' })
-
-            if (!replyError) {
-              synced++
-            }
-          }
-        }
-      }
-
-      const deletedCount = await markDeletedComments(supabase, projectId, postUuid, metaCommentIds)
-      return { commentsSynced: synced, deletedCount }
-    }
-
-    // Recheck existing ad posts that already have complaint comments.
-    // This avoids missing older ads when the API returns only the last 50 ads.
-    const { data: complaintPostCandidates } = await supabase
-      .from('social_comments')
-      .select('post_id')
-      .eq('project_id', projectId)
-      .eq('is_deleted', false)
-      .eq('classification', 'complaint')
-      .order('comment_timestamp', { ascending: false })
-      .limit(50)
-
-    const complaintPostIds = Array.from(
-      new Set((complaintPostCandidates || []).map((c: any) => c.post_id).filter(Boolean)),
-    )
-
-    if (complaintPostIds.length > 0) {
-      const { data: adPostsToRecheck } = await supabase
-        .from('social_posts')
-        .select('id, platform, post_id_meta')
-        .eq('project_id', projectId)
-        .eq('is_ad', true)
-        .in('id', complaintPostIds)
-        .limit(50)
-
-      if (adPostsToRecheck?.length) {
-        console.log(`[SYNC_AD_COMMENTS] Rechecking ${adPostsToRecheck.length} existing ad posts with complaint comments`)
-
-        for (const post of adPostsToRecheck) {
-          if (!post?.id || !post?.platform || !post?.post_id_meta) continue
-
-          processedAdPostUuids.add(post.id)
-          const { commentsSynced, deletedCount } = await syncCommentsForAdPost({
-            postUuid: post.id,
-            platform: post.platform,
-            postIdMeta: post.post_id_meta,
-            label: 'recheck',
-          })
-          totalComments += commentsSynced
-          deletedComments += deletedCount
-          await delay(80)
-        }
-      }
-    }
-
-    // Process each ad account
-    for (const adAccount of adAccounts) {
-      const rawAccountId = adAccount.account_id
-      // Remove 'act_' prefix if present for the API call
-      const adAccountId = rawAccountId.replace('act_', '')
-      console.log(`[SYNC_AD_COMMENTS] Processing account: ${adAccount.account_name} (${adAccountId})`)
-
-      // Fetch ads with their effective_object_story_id (post_id), instagram info, campaign/adset info AND thumbnail
-      // Limit to 50 ads per sync to avoid timeout (each ad may be processed for both FB and IG)
-      const adsUrl = `${GRAPH_API_BASE}/act_${adAccountId}/ads?fields=id,name,adset_id,adset{id,name,campaign_id},campaign_id,campaign{id,name},effective_object_story_id,creative{object_story_id,effective_object_story_id,instagram_permalink_url,effective_instagram_media_id,thumbnail_url,image_url}&limit=50&access_token=${accessToken}`
-      console.log('[SYNC_AD_COMMENTS] Fetching ads...')
-
-      const adsResponse = await fetch(adsUrl)
-      const adsData = await adsResponse.json()
-
-      if (adsData.error) {
-        console.error('[SYNC_AD_COMMENTS] Ads API error:', adsData.error)
-        errors.push(`${adAccount.account_name}: ${adsData.error.message}`)
-        continue
-      }
-
-      const ads = adsData.data || []
-      console.log(`[SYNC_AD_COMMENTS] Found ${ads.length} ads for account ${adAccount.account_name}`)
-
-      for (const ad of ads) {
-        // Check for both Instagram media and Facebook post
-        const instagramMediaId = ad.creative?.effective_instagram_media_id
-        const instagramPermalink = ad.creative?.instagram_permalink_url
-        const facebookPostId = ad.effective_object_story_id || ad.creative?.effective_object_story_id || ad.creative?.object_story_id
-
-        // Get thumbnail from creative
-        const thumbnailUrl = ad.creative?.thumbnail_url || ad.creative?.image_url || null
-
-        // Extract campaign and adset info (common to both platforms)
-        const campaignId = ad.campaign_id || ad.campaign?.id || null
-        const campaignName = ad.campaign?.name || null
-        const adsetId = ad.adset_id || ad.adset?.id || null
-        const adsetName = ad.adset?.name || null
-        const adName = ad.name || null
-
-        // Build list of platforms to process for this ad
-        const platformsToProcess: Array<{
-          postId: string
-          platform: 'facebook' | 'instagram'
-          permalink: string | null
-        }> = []
-
-        // Add Facebook if available
-        if (facebookPostId) {
-          let fbPermalink: string | null = null
-          if (facebookPostId.includes('_')) {
-            const [pageId, postIdPart] = facebookPostId.split('_')
-            fbPermalink = `https://www.facebook.com/${pageId}/posts/${postIdPart}`
-          }
-          platformsToProcess.push({
-            postId: facebookPostId,
-            platform: 'facebook',
-            permalink: fbPermalink,
-          })
-        }
-
-        // Add Instagram if available
-        if (instagramMediaId) {
-          platformsToProcess.push({
-            postId: instagramMediaId,
-            platform: 'instagram',
-            permalink: instagramPermalink || null,
-          })
-        }
-
-        if (platformsToProcess.length === 0) {
-          console.log(`[SYNC_AD_COMMENTS] Ad ${ad.id} has no associated post/media, skipping`)
+        if (adsData.error) {
+          errors.push(`Account ${account.account_id}: ${adsData.error.message}`)
           continue
         }
 
-        // Process each platform for this ad
-        for (const platformData of platformsToProcess) {
-          const { postId, platform, permalink } = platformData
-          console.log(
-            `[SYNC_AD_COMMENTS] Processing ${platform.toUpperCase()} ad: ${ad.id} with ${platform === 'instagram' ? 'media' : 'post'}: ${postId}`,
-          )
+        for (const ad of adsData.data || []) {
+          const storyId = ad.creative?.effective_object_story_id
+          if (!storyId) continue
 
           try {
-            // First, create/update the post as an ad with full info
-            const postData: any = {
-              project_id: projectId,
-              platform,
-              post_id_meta: postId,
-              post_type: 'ad',
-              is_ad: true,
-              meta_ad_id: ad.id,
-              meta_campaign_id: campaignId,
-              campaign_id: campaignId,
-              campaign_name: campaignName,
-              adset_id: adsetId,
-              adset_name: adsetName,
-              ad_id: ad.id,
-              ad_name: adName,
-              message: adName || 'Anúncio',
-              permalink: permalink,
-              thumbnail_url: thumbnailUrl,
-              last_synced_at: new Date().toISOString(),
-            }
+            const commentsUrl = `${GRAPH_API_BASE}/${storyId}/comments?fields=id,message,created_time,from,like_count,comment_count&limit=100&access_token=${accessToken}`
+            const commentsResponse = await fetch(commentsUrl)
+            const commentsData = await commentsResponse.json()
 
-            const { error: upsertError } = await supabase
-              .from('social_posts')
-              .upsert(postData, { onConflict: 'project_id,platform,post_id_meta' })
+            if (commentsData.error) continue
 
-            if (upsertError) {
-              console.error(`[SYNC_AD_COMMENTS] Error upserting ad post:`, upsertError)
-              errors.push(`Ad ${ad.id}: ${upsertError.message}`)
-              continue
-            }
-
-            totalAds++
-
-            // Get the post record to have its UUID
-            const { data: postRecord } = await supabase
+            let postId: string | null = null
+            const { data: existingPost } = await supabase
               .from('social_posts')
               .select('id')
               .eq('project_id', projectId)
-              .eq('post_id_meta', postId)
+              .eq('post_id_meta', storyId)
               .maybeSingle()
 
-            if (!postRecord?.id) {
-              console.log(`[SYNC_AD_COMMENTS] Could not find post record for ${postId}`)
-              continue
+            if (existingPost) {
+              postId = existingPost.id
+            } else {
+              const { data: newPost } = await supabase
+                .from('social_posts')
+                .insert({
+                  project_id: projectId,
+                  platform: 'facebook',
+                  post_id_meta: storyId,
+                  post_type: 'ad',
+                  message: ad.name,
+                  ad_id: ad.id,
+                  last_synced_at: new Date().toISOString(),
+                })
+                .select('id')
+                .single()
+
+              postId = newPost?.id
             }
 
-            processedAdPostUuids.add(postRecord.id)
-
-            const { commentsSynced, deletedCount } = await syncCommentsForAdPost({
-              postUuid: postRecord.id,
-              platform,
-              postIdMeta: postId,
-              label: `ad-${ad.id}`,
-            })
-
-            totalComments += commentsSynced
-            deletedComments += deletedCount
-
-            await delay(100) // Rate limiting - reduced for faster processing
-          } catch (e: any) {
-            console.error(`[SYNC_AD_COMMENTS] Error processing ad ${ad.id} on ${platform}:`, e.message)
-            errors.push(`Ad ${ad.id} (${platform}): ${e.message}`)
+            if (postId) {
+              for (const comment of commentsData.data || []) {
+                await upsertComment(supabase, projectId, postId, 'facebook', comment, null)
+                totalComments++
+              }
+            }
+          } catch (commentError: any) {
+            console.error(`Error syncing comments for ad ${ad.id}:`, commentError.message)
           }
-        } // end for platformsToProcess
-      } // end for ads
 
-      await delay(200) // Rate limiting between accounts - reduced
+          await delay(200)
+        }
+      } catch (accountError: any) {
+        errors.push(`Account ${account.account_id}: ${accountError.message}`)
+      }
+
+      await delay(500)
     }
 
-    console.log('='.repeat(60))
-    console.log(`[SYNC_AD_COMMENTS] COMPLETED: ${totalAds} ads, ${totalComments} comments synced, ${deletedComments} marked as deleted`)
-
-    return {
-      success: true,
-      adsSynced: totalAds,
-      commentsSynced: totalComments,
-      deletedComments,
-      errors,
-    }
+    return { success: true, commentsSynced: totalComments, errors }
   } catch (error: any) {
-    console.error('[SYNC_AD_COMMENTS] FATAL ERROR:', error)
-    return {
-      success: false,
-      error: error.message,
-      adsSynced: 0,
-      commentsSynced: 0,
-      deletedComments: 0,
-      errors,
-    }
+    return { success: false, error: error.message, errors }
   }
 }
 
+// ============= REPLY GENERATION =============
 
-// Generate AI reply for a comment
 async function generateReply(supabase: any, projectId: string, commentId: string) {
-  console.log('[GENERATE_REPLY] Starting for comment:', commentId)
-  
-  if (!commentId) {
-    throw new Error('ID do comentário é obrigatório')
-  }
-
-  // Fetch the comment with post context
-  const { data: comment, error: commentError } = await supabase
+  const { data: comment, error } = await supabase
     .from('social_comments')
-    .select(`
-      id,
-      text,
-      author_name,
-      sentiment,
-      classification,
-      ai_summary,
-      post_id,
-      social_posts(message, page_name)
-    `)
+    .select('*, social_posts!inner(message)')
     .eq('id', commentId)
     .single()
 
-  if (commentError || !comment) {
-    console.error('[GENERATE_REPLY] Comment not found:', commentError)
+  if (error || !comment) {
     throw new Error('Comentário não encontrado')
   }
 
-  // Fetch knowledge base for context
   const { data: knowledgeBase } = await supabase
     .from('ai_knowledge_base')
     .select('*')
     .eq('project_id', projectId)
     .maybeSingle()
 
-  // Build reply generation prompt
   const businessContext = knowledgeBase ? `
 CONTEXTO DO NEGÓCIO:
 - Nome: ${knowledgeBase.business_name || 'Não informado'}
-- Descrição: ${knowledgeBase.business_description || 'Não informado'}
+- Tom de voz: ${knowledgeBase.tone_of_voice || 'Profissional e amigável'}
 - Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
-- Tom de voz: ${knowledgeBase.tone_of_voice || 'Amigável e profissional'}
-${knowledgeBase.faqs ? `- FAQs: ${JSON.stringify(knowledgeBase.faqs)}` : ''}
 ` : ''
 
-  const classificationActions: Record<string, string> = {
-    'commercial_interest': 'Responda de forma calorosa, confirme o interesse e direcione para a compra ou contato.',
-    'purchase_question': 'Responda a dúvida sobre preço/pagamento/entrega de forma clara e objetiva.',
-    'product_question': 'Responda a dúvida técnica com informações úteis sobre o produto/serviço.',
-    'contact_request': 'Forneça o canal de contato solicitado (WhatsApp, email, DM).',
-    'praise': 'Agradeça o elogio de forma genuína e, se apropriado, peça uma avaliação.',
-    'complaint': 'Responda com empatia, peça desculpas pelo inconveniente e ofereça resolver em privado.',
-    'friend_tag': 'Cumprimente também os amigos marcados de forma simpática.',
-    'spam': 'Não responda.',
-    'other': 'Responda de forma educada e relevante.'
+  const prompt = `${businessContext}
+
+Você é um especialista em atendimento ao cliente em redes sociais. Gere uma resposta curta e profissional para o comentário abaixo.
+
+Classificação do comentário: ${comment.classification || 'não classificado'}
+Sentimento: ${comment.sentiment || 'neutro'}
+Contexto do post: ${comment.social_posts?.message || 'N/A'}
+
+Comentário: "${comment.text}"
+
+Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja empático e útil.`
+
+  // Try OpenAI first, then fallback to Lovable AI
+  let reply: string
+
+  if (OPENAI_API_KEY) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 200,
+        }),
+      })
+
+      const data = await response.json()
+      reply = data.choices?.[0]?.message?.content || ''
+
+      // Track usage
+      const inputTokens = data.usage?.prompt_tokens || 0
+      const outputTokens = data.usage?.completion_tokens || 0
+      await trackAIUsage(supabase, projectId, {
+        feature: 'social_listening',
+        action: 'generate_reply',
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        inputTokens,
+        outputTokens,
+        itemsProcessed: 1,
+        costEstimate: (inputTokens * 0.00000015) + (outputTokens * 0.0000006),
+        success: true
+      })
+    } catch (openaiError) {
+      console.error('OpenAI error, falling back to Lovable AI:', openaiError)
+      reply = await generateReplyWithLovableAI(prompt)
+    }
+  } else {
+    reply = await generateReplyWithLovableAI(prompt)
   }
 
-  const actionGuide = classificationActions[comment.classification || 'other'] || classificationActions['other']
+  await supabase
+    .from('social_comments')
+    .update({ suggested_reply: reply })
+    .eq('id', commentId)
 
-  const prompt = `Você é um especialista em atendimento ao cliente em redes sociais.
-${businessContext}
+  return { success: true, reply }
+}
 
-CONTEXTO DO POST: "${comment.social_posts?.message || 'Não disponível'}"
-
-COMENTÁRIO DO USUÁRIO: "${comment.text}"
-- Autor: ${comment.author_name || 'Usuário'}
-- Sentimento: ${comment.sentiment || 'Não analisado'}
-- Classificação: ${comment.classification || 'Não classificado'}
-${comment.ai_summary ? `- Resumo IA: ${comment.ai_summary}` : ''}
-
-ORIENTAÇÃO: ${actionGuide}
-
-Gere uma resposta curta (máximo 3 frases), amigável e profissional.
-- Use o nome do usuário se disponível
-- Seja natural, evite parecer robótico
-- Inclua emoji relevante quando apropriado
-- Se for interesse comercial, inclua call-to-action
-
-Responda APENAS com o texto da resposta, sem explicações adicionais.`
-
-  // Call AI
+async function generateReplyWithLovableAI(prompt: string): Promise<string> {
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1712,49 +1467,16 @@ Responda APENAS com o texto da resposta, sem explicações adicionais.`
     },
     body: JSON.stringify({
       model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'user', content: prompt }
-      ],
+      messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
-      max_tokens: 300,
+      max_tokens: 200,
     }),
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    console.error('[GENERATE_REPLY] AI API error:', response.status, errorText)
-    
-    if (response.status === 429) {
-      throw new Error('Limite de requisições excedido. Tente novamente em alguns segundos.')
-    }
-    if (response.status === 402) {
-      throw new Error('Créditos de IA esgotados. Entre em contato com o suporte.')
-    }
-    throw new Error(`Erro na API de IA: ${response.status}`)
+    throw new Error('Failed to generate reply')
   }
 
   const data = await response.json()
-  const reply = data.choices?.[0]?.message?.content?.trim() || ''
-
-  if (!reply) {
-    throw new Error('A IA não gerou uma resposta válida')
-  }
-
-  console.log('[GENERATE_REPLY] Generated reply:', reply.substring(0, 100) + '...')
-
-  // Update comment with suggested reply
-  const { error: updateError } = await supabase
-    .from('social_comments')
-    .update({
-      ai_suggested_reply: reply,
-      reply_status: 'pending'
-    })
-    .eq('id', commentId)
-
-  if (updateError) {
-    console.error('[GENERATE_REPLY] Error updating comment:', updateError)
-    throw new Error('Erro ao salvar resposta')
-  }
-
-  return { success: true, reply }
+  return data.choices?.[0]?.message?.content || ''
 }

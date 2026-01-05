@@ -8,6 +8,8 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -17,10 +19,85 @@ interface SyncResult {
   success: boolean
   postsSynced: number
   commentsSynced: number
+  keywordClassified: number
   aiProcessed: number
   stuckReset: number
   error?: string
 }
+
+// ============= KEYWORD CLASSIFICATION (NO AI) =============
+
+const COMMERCIAL_KEYWORDS = [
+  'quero', 'queria', 'interessei', 'interessado', 'interessada', 'comprar', 'adquirir',
+  'preço', 'preco', 'valor', 'quanto custa', 'quanto é', 'quanto e', 'quanto ta',
+  'como faço', 'como faco', 'onde compro', 'tem link', 'passa o link', 'manda o link',
+  'link do', 'quero comprar', 'vou comprar', 'me interessa', 'como adquiro', 'como conseguir',
+  'como comprar', 'onde acho', 'tem disponível', 'disponivel', 'ainda tem', 'tem estoque',
+  'como participar', 'quero participar', 'me inscrever', 'inscrição', 'inscricao',
+  'entrar', 'fazer parte', 'cadastrar', 'como entrar', 'quero entrar', 'vagas',
+  'tem vaga', 'onde compra', 'pix', 'parcela', 'parcelado', 'cartão', 'boleto'
+]
+
+const PRAISE_KEYWORDS = [
+  'top', 'topp', 'toppp', 'lindo', 'linda', 'lindooo', 'lindaaa', 'amei', 'ameii', 'ameiiii',
+  'show', 'showw', 'showww', 'maravilhoso', 'maravilhosa', 'perfeito', 'perfeita', 'incrível',
+  'incrivel', 'demais', 'sensacional', 'parabéns', 'parabens', 'sucesso', 'arrasou', 'arrasa',
+  'espetacular', 'lindo demais', 'muito bom', 'mto bom', 'mt bom', 'excelente', 'top demais',
+  'massa', 'foda', 'dahora', 'maravilindo', 'obrigado', 'obrigada', 'gratidão', 'gratidao',
+  'muito obrigado', 'muito obrigada', 'adorei', 'adoro', 'amo', 'lacrou', 'lacrou demais'
+]
+
+const IGNORABLE_PATTERNS = [
+  /^[@\s]+$/,
+  /^[\p{Emoji}\s]+$/u,
+  /^[🔥❤️💪👏👍😍🙏💕💖💗💙💚💛🧡💜🖤🤍🤎]+$/u,
+  /^\.+$/,
+  /^!+$/,
+]
+
+interface KeywordResult {
+  classified: boolean
+  sentiment?: string
+  classification?: string
+  intent_score?: number
+  summary?: string
+}
+
+function classifyByKeywords(text: string): KeywordResult {
+  if (!text || text.trim().length === 0) {
+    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio' }
+  }
+
+  const normalizedText = text.toLowerCase().trim()
+
+  for (const pattern of IGNORABLE_PATTERNS) {
+    if (pattern.test(normalizedText)) {
+      return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Emoji/menção' }
+    }
+  }
+
+  if (normalizedText.length <= 2) {
+    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário muito curto' }
+  }
+
+  for (const keyword of COMMERCIAL_KEYWORDS) {
+    if (normalizedText.includes(keyword)) {
+      return { classified: true, sentiment: 'positive', classification: 'commercial_interest', intent_score: 95, summary: 'Interesse comercial detectado' }
+    }
+  }
+
+  if (normalizedText.length <= 50) {
+    for (const keyword of PRAISE_KEYWORDS) {
+      if (normalizedText.includes(keyword) || normalizedText === keyword) {
+        return { classified: true, sentiment: 'positive', classification: 'praise', intent_score: 20, summary: 'Elogio simples' }
+      }
+    }
+  }
+
+  return { classified: false }
+}
+
+// ============= MAIN CRON HANDLER =============
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,7 +109,6 @@ Deno.serve(async (req) => {
   console.log('[SOCIAL-LISTENING-CRON] Starting automatic sync at', new Date().toISOString())
 
   try {
-    // Validate request - accept cron secret or service role key
     const authHeader = req.headers.get('Authorization')
     const cronSecret = Deno.env.get('CRON_SECRET')
     
@@ -50,7 +126,6 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Get all projects with active social listening pages
     const { data: activeProjects, error: projectsError } = await supabase
       .from('social_listening_pages')
       .select('project_id, projects!inner(id, name)')
@@ -61,7 +136,6 @@ Deno.serve(async (req) => {
       throw new Error('Erro ao buscar projetos ativos')
     }
 
-    // Get unique project IDs
     const projectIds = [...new Set((activeProjects || []).map(p => p.project_id))]
     console.log(`[SOCIAL-LISTENING-CRON] Found ${projectIds.length} projects with active social listening`)
 
@@ -80,19 +154,17 @@ Deno.serve(async (req) => {
         success: true,
         postsSynced: 0,
         commentsSynced: 0,
+        keywordClassified: 0,
         aiProcessed: 0,
         stuckReset: 0,
       }
 
       try {
-        // Step 1: Reset stuck comments (processing for more than 2 minutes)
+        // Step 1: Reset stuck comments
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
         const { data: stuckComments } = await supabase
           .from('social_comments')
-          .update({ 
-            ai_processing_status: 'pending',
-            updated_at: new Date().toISOString()
-          })
+          .update({ ai_processing_status: 'pending', updated_at: new Date().toISOString() })
           .eq('project_id', projectId)
           .eq('ai_processing_status', 'processing')
           .lt('updated_at', twoMinutesAgo)
@@ -103,7 +175,7 @@ Deno.serve(async (req) => {
           console.log(`[SOCIAL-LISTENING-CRON] Reset ${result.stuckReset} stuck comments`)
         }
 
-        // Step 2: Get Meta credentials for this project
+        // Step 2: Get Meta credentials
         const { data: credentials, error: credError } = await supabase
           .from('meta_credentials')
           .select('*')
@@ -117,23 +189,20 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Step 3: Sync posts from all configured pages
+        // Step 3: Sync posts
         const postsResult = await syncPostsForProject(supabase, projectId, credentials.access_token)
         result.postsSynced = postsResult.postsSynced || 0
-        
-        if (!postsResult.success && postsResult.error) {
-          console.log(`[SOCIAL-LISTENING-CRON] Posts sync warning: ${postsResult.error}`)
-        }
 
-        // Step 4: Sync comments for recent posts
+        // Step 4: Sync comments
         const commentsResult = await syncCommentsForProject(supabase, projectId, credentials.access_token)
         result.commentsSynced = commentsResult.commentsSynced || 0
 
-        // Step 5: Process pending comments with AI (max 50 per run to avoid timeout)
+        // Step 5: Process pending comments with AI (max 50 per run)
         const aiResult = await processAIForProject(supabase, projectId, 50)
-        result.aiProcessed = aiResult.processed || 0
+        result.keywordClassified = aiResult.keywordClassified || 0
+        result.aiProcessed = aiResult.aiProcessed || 0
 
-        // Update last sync timestamp on pages
+        // Update last sync timestamp
         await supabase
           .from('social_listening_pages')
           .update({ last_synced_at: new Date().toISOString() })
@@ -143,6 +212,7 @@ Deno.serve(async (req) => {
         console.log(`[SOCIAL-LISTENING-CRON] Project ${projectName} completed:`, {
           posts: result.postsSynced,
           comments: result.commentsSynced,
+          keyword: result.keywordClassified,
           ai: result.aiProcessed,
           stuck: result.stuckReset
         })
@@ -154,8 +224,6 @@ Deno.serve(async (req) => {
       }
 
       results.push(result)
-      
-      // Rate limiting between projects
       await delay(1000)
     }
 
@@ -163,12 +231,14 @@ Deno.serve(async (req) => {
     const successCount = results.filter(r => r.success).length
     const totalPosts = results.reduce((sum, r) => sum + r.postsSynced, 0)
     const totalComments = results.reduce((sum, r) => sum + r.commentsSynced, 0)
+    const totalKeyword = results.reduce((sum, r) => sum + r.keywordClassified, 0)
     const totalAI = results.reduce((sum, r) => sum + r.aiProcessed, 0)
 
     console.log('='.repeat(60))
     console.log(`[SOCIAL-LISTENING-CRON] COMPLETED in ${duration}s`)
     console.log(`[SOCIAL-LISTENING-CRON] Projects: ${successCount}/${results.length} successful`)
-    console.log(`[SOCIAL-LISTENING-CRON] Total: ${totalPosts} posts, ${totalComments} comments, ${totalAI} AI processed`)
+    console.log(`[SOCIAL-LISTENING-CRON] Total: ${totalPosts} posts, ${totalComments} comments`)
+    console.log(`[SOCIAL-LISTENING-CRON] Classification: ${totalKeyword} keyword, ${totalAI} AI`)
 
     return new Response(JSON.stringify({
       success: true,
@@ -177,6 +247,7 @@ Deno.serve(async (req) => {
       projectsSuccessful: successCount,
       totalPostsSynced: totalPosts,
       totalCommentsSynced: totalComments,
+      totalKeywordClassified: totalKeyword,
       totalAIProcessed: totalAI,
       results,
     }), {
@@ -185,17 +256,15 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error('[SOCIAL-LISTENING-CRON] FATAL ERROR:', error.message)
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message,
-    }), {
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 })
 
-// Sync posts from saved pages
+// ============= POST SYNC =============
+
 async function syncPostsForProject(supabase: any, projectId: string, accessToken: string) {
   const GRAPH_API_VERSION = 'v19.0'
   const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -220,7 +289,6 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
 
       try {
         if (page.platform === 'facebook' || (!page.platform && !page.instagram_account_id)) {
-          // Facebook posts
           const url = `${GRAPH_API_BASE}/${originalPageId}/posts?fields=id,message,created_time,permalink_url,status_type,full_picture&limit=20&access_token=${pageToken}`
           const response = await fetch(url)
           const data = await response.json()
@@ -234,7 +302,6 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
         }
 
         if (page.platform === 'instagram' && page.instagram_account_id) {
-          // Instagram posts
           const url = `${GRAPH_API_BASE}/${page.instagram_account_id}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=20&access_token=${pageToken}`
           const response = await fetch(url)
           const data = await response.json()
@@ -298,7 +365,8 @@ async function upsertPostIG(supabase: any, projectId: string, post: any, pageNam
     }, { onConflict: 'project_id,platform,post_id_meta' })
 }
 
-// Sync comments for recent posts
+// ============= COMMENT SYNC =============
+
 async function syncCommentsForProject(supabase: any, projectId: string, accessToken: string) {
   const GRAPH_API_VERSION = 'v19.0'
   const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -306,7 +374,6 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
   let totalComments = 0
 
   try {
-    // Get recent posts from both platforms
     const { data: posts } = await supabase
       .from('social_posts')
       .select('*, social_listening_pages!inner(page_access_token)')
@@ -395,10 +462,9 @@ async function upsertCommentIG(supabase: any, projectId: string, postId: string,
     }, { onConflict: 'project_id,platform,comment_id_meta' })
 }
 
-// Process pending comments with AI
+// ============= AI PROCESSING WITH KEYWORDS + OPENAI =============
+
 async function processAIForProject(supabase: any, projectId: string, limit: number) {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!
-  
   try {
     // Get knowledge base
     const { data: knowledgeBase } = await supabase
@@ -416,100 +482,277 @@ async function processAIForProject(supabase: any, projectId: string, limit: numb
       .limit(limit)
 
     if (!comments?.length) {
-      return { success: true, processed: 0 }
+      return { success: true, keywordClassified: 0, aiProcessed: 0 }
     }
 
-    let processed = 0
+    let keywordClassified = 0
+    let aiProcessed = 0
 
-    // Process in small batches with timeout
+    // Phase 1: Keyword classification
+    const commentsForAI: Array<{id: string, text: string, postContext: string}> = []
+
     for (const comment of comments) {
-      try {
+      const keywordResult = classifyByKeywords(comment.text || '')
+
+      if (keywordResult.classified) {
         await supabase
           .from('social_comments')
-          .update({ ai_processing_status: 'processing' })
+          .update({
+            sentiment: keywordResult.sentiment,
+            classification: keywordResult.classification,
+            classification_key: keywordResult.classification,
+            intent_score: keywordResult.intent_score,
+            ai_summary: keywordResult.summary,
+            ai_processing_status: 'completed',
+            ai_processed_at: new Date().toISOString(),
+          })
           .eq('id', comment.id)
 
-        const postContext = comment.social_posts?.message || ''
-        const prompt = buildPrompt(comment.text, postContext, knowledgeBase)
-
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
-
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-lite',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.3,
-            max_tokens: 300,
-          }),
-          signal: controller.signal,
+        keywordClassified++
+      } else {
+        commentsForAI.push({
+          id: comment.id,
+          text: comment.text || '',
+          postContext: comment.social_posts?.message || ''
         })
+      }
+    }
 
-        clearTimeout(timeoutId)
+    console.log(`[AI_PROCESS] Keyword: ${keywordClassified}, Needs AI: ${commentsForAI.length}`)
 
-        if (response.ok) {
-          const data = await response.json()
-          const content = data.choices?.[0]?.message?.content || ''
-          const jsonMatch = content.match(/\{[\s\S]*\}/)
+    // Phase 2: AI classification
+    if (commentsForAI.length > 0) {
+      // Check quota
+      const { data: quotaResult } = await supabase.rpc('check_and_use_ai_quota', {
+        p_project_id: projectId,
+        p_items_count: commentsForAI.length
+      })
 
-          if (jsonMatch) {
-            const result = JSON.parse(jsonMatch[0])
+      if (quotaResult && !quotaResult.allowed) {
+        console.log(`[AI_PROCESS] Quota exceeded:`, quotaResult.reason)
+        return { success: true, keywordClassified, aiProcessed: 0, quotaExceeded: true }
+      }
+
+      // Mark as processing
+      await supabase
+        .from('social_comments')
+        .update({ ai_processing_status: 'processing' })
+        .in('id', commentsForAI.map(c => c.id))
+
+      // Try OpenAI batch processing
+      if (OPENAI_API_KEY) {
+        try {
+          const batchSize = 15
+          for (let i = 0; i < commentsForAI.length; i += batchSize) {
+            const batch = commentsForAI.slice(i, i + batchSize)
+            const { results, inputTokens, outputTokens, cost } = await classifyBatchWithOpenAI(batch, knowledgeBase)
+
+            // Track usage
+            await supabase.from('ai_usage_tracking').insert({
+              project_id: projectId,
+              feature: 'social_listening',
+              action: 'batch_classify',
+              provider: 'openai',
+              model: 'gpt-4o-mini',
+              input_tokens: inputTokens,
+              output_tokens: outputTokens,
+              items_processed: batch.length,
+              cost_estimate: cost,
+              success: true
+            })
+
+            for (const result of results) {
+              await supabase
+                .from('social_comments')
+                .update({
+                  sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
+                  classification: result.classification || 'other',
+                  classification_key: result.classification || 'other',
+                  intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
+                  ai_summary: (result.summary || '').substring(0, 100),
+                  ai_processing_status: 'completed',
+                  ai_processed_at: new Date().toISOString(),
+                })
+                .eq('id', result.id)
+
+              aiProcessed++
+            }
+
+            if (i + batchSize < commentsForAI.length) {
+              await delay(500)
+            }
+          }
+        } catch (openaiError: any) {
+          console.error('[AI_PROCESS] OpenAI error, falling back:', openaiError.message)
+          
+          // Fallback to Lovable AI
+          for (const comment of commentsForAI) {
+            try {
+              const result = await classifyWithLovableAI(comment.text, comment.postContext, knowledgeBase)
+              
+              await supabase
+                .from('social_comments')
+                .update({
+                  sentiment: result.sentiment,
+                  classification: result.classification,
+                  classification_key: result.classification,
+                  intent_score: result.intent_score,
+                  ai_summary: result.summary,
+                  ai_processing_status: 'completed',
+                  ai_processed_at: new Date().toISOString(),
+                })
+                .eq('id', comment.id)
+
+              aiProcessed++
+            } catch (e: any) {
+              await supabase
+                .from('social_comments')
+                .update({ ai_processing_status: 'failed', ai_error: e.message })
+                .eq('id', comment.id)
+            }
+
+            await delay(200)
+          }
+        }
+      } else {
+        // No OpenAI, use Lovable AI
+        for (const comment of commentsForAI) {
+          try {
+            const result = await classifyWithLovableAI(comment.text, comment.postContext, knowledgeBase)
             
             await supabase
               .from('social_comments')
               .update({
-                sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
-                classification: result.classification || 'other',
-                classification_key: result.classification || 'other',
-                intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
-                ai_summary: (result.summary || '').substring(0, 100),
+                sentiment: result.sentiment,
+                classification: result.classification,
+                classification_key: result.classification,
+                intent_score: result.intent_score,
+                ai_summary: result.summary,
                 ai_processing_status: 'completed',
                 ai_processed_at: new Date().toISOString(),
               })
               .eq('id', comment.id)
 
-            processed++
-          } else {
-            throw new Error('Invalid AI response')
+            aiProcessed++
+          } catch (e: any) {
+            await supabase
+              .from('social_comments')
+              .update({ ai_processing_status: 'failed', ai_error: e.message })
+              .eq('id', comment.id)
           }
-        } else {
-          throw new Error(`AI API error: ${response.status}`)
-        }
-      } catch (commentError: any) {
-        await supabase
-          .from('social_comments')
-          .update({
-            ai_processing_status: 'failed',
-            ai_error: commentError.message?.substring(0, 200),
-          })
-          .eq('id', comment.id)
-      }
 
-      await delay(100)
+          await delay(200)
+        }
+      }
     }
 
-    return { success: true, processed }
+    return { success: true, keywordClassified, aiProcessed }
   } catch (error: any) {
-    return { success: false, processed: 0, error: error.message }
+    console.error('[AI_PROCESS] Error:', error.message)
+    return { success: false, keywordClassified: 0, aiProcessed: 0, error: error.message }
   }
 }
 
-function buildPrompt(text: string, postContext: string, kb?: any) {
-  const businessContext = kb ? `
-CONTEXTO: ${kb.business_name || ''} - ${kb.business_description || ''}
+async function classifyBatchWithOpenAI(comments: Array<{id: string, text: string, postContext: string}>, knowledgeBase?: any) {
+  const businessContext = knowledgeBase ? `
+CONTEXTO DO NEGÓCIO:
+- Nome: ${knowledgeBase.business_name || 'Não informado'}
+- Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
 ` : ''
 
-  return `${businessContext}
-Analise o comentário e responda em JSON:
-{"sentiment": "positive/neutral/negative", "classification": "product_question/purchase_question/commercial_interest/praise/complaint/contact_request/friend_tag/spam/other", "intent_score": 0-100, "summary": "resumo curto"}
+  const commentsText = comments.map((c, i) => 
+    `[${i+1}] ID: ${c.id}
+Contexto: ${c.postContext || 'N/A'}
+Comentário: "${c.text}"`
+  ).join('\n\n')
 
-Post: "${postContext?.substring(0, 200)}"
+  const prompt = `${businessContext}
+
+Analise os ${comments.length} comentários abaixo. Para cada um, forneça:
+- sentiment: "positive", "neutral" ou "negative"
+- classification: "product_question", "purchase_question", "commercial_interest", "praise", "complaint", "contact_request", "friend_tag", "spam" ou "other"
+- intent_score: 0-100 (intenção comercial)
+- summary: resumo de 1 linha (máx 80 caracteres)
+
+${commentsText}
+
+Responda em JSON array:
+[{"id": "...", "sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}, ...]`
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Você é um especialista em análise de comentários de redes sociais. Responda sempre em JSON válido.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`OpenAI API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const content = data.choices?.[0]?.message?.content || ''
+  
+  const jsonMatch = content.match(/\[[\s\S]*\]/)
+  if (!jsonMatch) {
+    throw new Error('Invalid OpenAI response format')
+  }
+
+  const results = JSON.parse(jsonMatch[0])
+  const inputTokens = data.usage?.prompt_tokens || 0
+  const outputTokens = data.usage?.completion_tokens || 0
+  const cost = (inputTokens * 0.00000015) + (outputTokens * 0.0000006)
+
+  return { results, inputTokens, outputTokens, cost }
+}
+
+async function classifyWithLovableAI(text: string, postContext: string, knowledgeBase?: any) {
+  const prompt = `Analise o comentário abaixo e forneça em JSON:
+- sentiment: "positive", "neutral" ou "negative"
+- classification: "product_question", "purchase_question", "commercial_interest", "praise", "complaint", "contact_request", "friend_tag", "spam" ou "other"
+- intent_score: 0-100 (intenção comercial)
+- summary: resumo de 1 linha (máx 80 caracteres)
+
+Contexto do post: ${postContext || 'N/A'}
 Comentário: "${text}"
 
-JSON:`
+Responda APENAS em JSON: {"sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}`
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash-lite',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 300,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Lovable AI error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const content = data.choices?.[0]?.message?.content || ''
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+
+  if (!jsonMatch) {
+    throw new Error('Invalid AI response')
+  }
+
+  return JSON.parse(jsonMatch[0])
 }

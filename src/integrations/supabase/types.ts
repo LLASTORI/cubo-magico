@@ -5403,15 +5403,25 @@ export type Database = {
         Returns: boolean
       }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
-      has_area_permission: {
-        Args: {
-          _area: string
-          _min_level?: Database["public"]["Enums"]["permission_level"]
-          _project_id: string
-          _user_id: string
-        }
-        Returns: boolean
-      }
+      has_area_permission:
+        | {
+            Args: {
+              _area: string
+              _min_level?: Database["public"]["Enums"]["permission_level"]
+              _project_id: string
+              _user_id: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              _area: string
+              _min_level?: string
+              _project_id: string
+              _user_id: string
+            }
+            Returns: boolean
+          }
       has_project_access: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean

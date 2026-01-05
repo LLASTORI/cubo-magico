@@ -36,6 +36,9 @@ export interface MemberPermissions {
   ofertas: PermissionLevel;
   lancamentos: PermissionLevel;
   configuracoes: PermissionLevel;
+  insights: PermissionLevel;
+  pesquisas: PermissionLevel;
+  social_listening: PermissionLevel;
 }
 
 interface UseFeatureAccessReturn {
@@ -114,15 +117,18 @@ const MODULE_TO_AREA_MAP: Record<string, keyof MemberPermissions> = {
   'analysis': 'analise',
   'crm': 'crm',
   'automations': 'automacoes',
+  'automation': 'automacoes',
   'whatsapp': 'chat_ao_vivo',
   'meta_ads': 'meta_ads',
   'meta': 'meta_ads',
   'offers': 'ofertas',
+  'hotmart': 'ofertas',
   'launch': 'lancamentos',
   'settings': 'configuracoes',
-  'surveys': 'analise',
-  'ai_analysis': 'analise',
-  'social_listening': 'meta_ads',
+  'surveys': 'pesquisas',
+  'insights': 'insights',
+  'ai_analysis': 'insights',
+  'social_listening': 'social_listening',
 };
 
 // Map action in feature_key to required permission level
@@ -207,6 +213,9 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
             ofertas: 'admin',
             lancamentos: 'admin',
             configuracoes: 'admin',
+            insights: 'admin',
+            pesquisas: 'admin',
+            social_listening: 'admin',
           });
         }
       } else {

@@ -27,7 +27,8 @@ import {
   Clock,
   Zap,
   ClipboardList,
-  Lock
+  Lock,
+  Edit3
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ import { PostAnalysisDashboard } from './PostAnalysisDashboard';
 import { SocialListeningPagesManager } from './SocialListeningPagesManager';
 import { SocialListeningGuide } from './SocialListeningGuide';
 import { ReplyApprovalDialog } from './ReplyApprovalDialog';
+import { ReclassifyCommentDialog } from './ReclassifyCommentDialog';
 import { SendSurveyDialog } from './SendSurveyDialog';
 import { FeatureGate, FeatureLockedButton, useFeatureGate } from '@/components/FeatureGate';
 import { format } from 'date-fns';
@@ -89,6 +91,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   });
   const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [reclassifyDialogOpen, setReclassifyDialogOpen] = useState(false);
   const [surveyDialogOpen, setSurveyDialogOpen] = useState(false);
   const [selectedContactForSurvey, setSelectedContactForSurvey] = useState<{
     id: string;
@@ -213,6 +216,11 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
   const handleOpenReply = (comment: SocialComment) => {
     setSelectedComment(comment);
     setReplyDialogOpen(true);
+  };
+
+  const handleOpenReclassify = (comment: SocialComment) => {
+    setSelectedComment(comment);
+    setReclassifyDialogOpen(true);
   };
 
   const handleOpenSurvey = (contact: { id: string; name: string | null; email: string }) => {
@@ -482,7 +490,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
                 </TableHeader>
                 <TableBody>
                   {comments.map((comment) => (
-                    <CommentRow key={comment.id} comment={comment} onOpenReply={handleOpenReply} onOpenSurvey={handleOpenSurvey} />
+                    <CommentRow key={comment.id} comment={comment} onOpenReply={handleOpenReply} onOpenReclassify={handleOpenReclassify} onOpenSurvey={handleOpenSurvey} />
                   ))}
                 </TableBody>
               </Table>
@@ -580,6 +588,13 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
         projectId={projectId}
       />
 
+      {/* Reclassify Dialog */}
+      <ReclassifyCommentDialog
+        comment={selectedComment}
+        open={reclassifyDialogOpen}
+        onOpenChange={setReclassifyDialogOpen}
+      />
+
       {/* Send Survey Dialog */}
       {selectedContactForSurvey && (
         <SendSurveyDialog
@@ -602,9 +617,10 @@ const replyStatusConfig: Record<string, { label: string; color: string }> = {
   sent: { label: 'Enviada', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 };
 
-function CommentRow({ comment, onOpenReply, onOpenSurvey }: { 
+function CommentRow({ comment, onOpenReply, onOpenReclassify, onOpenSurvey }: { 
   comment: SocialComment; 
   onOpenReply: (comment: SocialComment) => void;
+  onOpenReclassify: (comment: SocialComment) => void;
   onOpenSurvey: (contact: { id: string; name: string | null; email: string }) => void;
 }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
@@ -803,6 +819,15 @@ function CommentRow({ comment, onOpenReply, onOpenSurvey }: {
             title="Gerar resposta com IA"
           >
             <Reply className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onOpenReclassify(comment)}
+            title="Reclassificar comentário"
+          >
+            <Edit3 className="h-4 w-4" />
           </Button>
           {crmContact && (
             <Button

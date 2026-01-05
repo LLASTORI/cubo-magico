@@ -280,8 +280,10 @@ export default function SurveyPublic() {
         return (
           <QuestionMultipleChoice
             options={(currentQuestion.options as string[]) || []}
-            value={answers[currentQuestion.id] || ''}
+            value={answers[currentQuestion.id] || (currentQuestion.settings?.allow_multiple ? [] : '')}
             onChange={(value) => updateAnswer(currentQuestion.id, value)}
+            allowMultiple={currentQuestion.settings?.allow_multiple || false}
+            maxSelections={currentQuestion.settings?.max_selections || 0}
             {...questionProps}
           />
         );

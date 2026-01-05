@@ -841,20 +841,69 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
                 )}
 
                 {question.question_type === 'multiple_choice' && (
-                  <div className="space-y-2">
-                    <Label>Opções (uma por linha)</Label>
-                    <Textarea
-                      value={localOptions}
-                      onChange={(e) => setLocalOptions(e.target.value)}
-                      onBlur={() => {
-                        const newOptions = localOptions.split('\n').filter(Boolean);
-                        const currentOptions = (question.options as string[]) || [];
-                        if (JSON.stringify(newOptions) !== JSON.stringify(currentOptions)) {
-                          onUpdate({ options: newOptions });
-                        }
-                      }}
-                      placeholder="Opção 1&#10;Opção 2&#10;Opção 3"
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Opções (uma por linha)</Label>
+                      <Textarea
+                        value={localOptions}
+                        onChange={(e) => setLocalOptions(e.target.value)}
+                        onBlur={() => {
+                          const newOptions = localOptions.split('\n').filter(Boolean);
+                          const currentOptions = (question.options as string[]) || [];
+                          if (JSON.stringify(newOptions) !== JSON.stringify(currentOptions)) {
+                            onUpdate({ options: newOptions });
+                          }
+                        }}
+                        placeholder="Opção 1&#10;Opção 2&#10;Opção 3"
+                      />
+                    </div>
+                    
+                    {/* Multiple selection settings */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div>
+                        <Label className="text-sm font-medium">Permitir múltiplas respostas</Label>
+                        <p className="text-xs text-muted-foreground">O respondente pode selecionar mais de uma opção</p>
+                      </div>
+                      <Switch
+                        checked={(question.settings as any)?.allow_multiple || false}
+                        onCheckedChange={(checked) => onUpdate({ 
+                          settings: { 
+                            ...question.settings, 
+                            allow_multiple: checked,
+                            max_selections: checked ? ((question.settings as any)?.max_selections || 0) : 0
+                          } 
+                        })}
+                      />
+                    </div>
+                    
+                    {(question.settings as any)?.allow_multiple && (
+                      <div className="space-y-2 pl-4 border-l-2 border-primary/30">
+                        <Label className="text-sm">Máximo de seleções</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={((question.options as string[]) || []).length || 10}
+                            value={(question.settings as any)?.max_selections || 0}
+                            onChange={(e) => onUpdate({ 
+                              settings: { 
+                                ...question.settings, 
+                                max_selections: parseInt(e.target.value) || 0
+                              } 
+                            })}
+                            className="w-24"
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {(question.settings as any)?.max_selections === 0 
+                              ? 'Sem limite' 
+                              : `Até ${(question.settings as any)?.max_selections} opções`}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Use 0 para permitir selecionar quantas quiser
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 

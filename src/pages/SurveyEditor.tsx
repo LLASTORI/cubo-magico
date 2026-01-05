@@ -54,6 +54,7 @@ import { SurveyCSVImportLocal } from '@/components/surveys/SurveyCSVImportLocal'
 import { SurveyAppearanceSettings, SurveyTheme, SurveyMessages } from '@/components/surveys/SurveyAppearanceSettings';
 import { SurveyCompletionSettings, CompletionSettings } from '@/components/surveys/SurveyCompletionSettings';
 import { SurveyPreview } from '@/components/surveys/SurveyPreview';
+import { EditorPresenceIndicator } from '@/components/surveys/EditorPresenceIndicator';
 
 const QUESTION_TYPES = [
   { value: 'text', label: 'Texto Livre', icon: Type },
@@ -358,15 +359,18 @@ export default function SurveyEditor() {
               {survey.status === 'active' ? 'Ativa' : survey.status === 'draft' ? 'Rascunho' : 'Arquivada'}
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => navigate(`${basePath}/${surveyId}/responses`)}>
-              <Eye className="h-4 w-4 mr-2" />
-              Ver Respostas
-            </Button>
-            <Button onClick={saveSurvey}>
-              <Save className="h-4 w-4 mr-2" />
-              Salvar
-            </Button>
+          <div className="flex items-center gap-3">
+            <EditorPresenceIndicator surveyId={surveyId} />
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => navigate(`${basePath}/${surveyId}/responses`)}>
+                <Eye className="h-4 w-4 mr-2" />
+                Ver Respostas
+              </Button>
+              <Button onClick={saveSurvey}>
+                <Save className="h-4 w-4 mr-2" />
+                Salvar
+              </Button>
+            </div>
           </div>
         </div>
       </div>

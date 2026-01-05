@@ -3647,6 +3647,7 @@ export type Database = {
           is_hidden: boolean | null
           is_replied: boolean | null
           like_count: number | null
+          manually_classified: boolean | null
           parent_comment_id: string | null
           platform: Database["public"]["Enums"]["social_platform"]
           post_id: string
@@ -3686,6 +3687,7 @@ export type Database = {
           is_hidden?: boolean | null
           is_replied?: boolean | null
           like_count?: number | null
+          manually_classified?: boolean | null
           parent_comment_id?: string | null
           platform: Database["public"]["Enums"]["social_platform"]
           post_id: string
@@ -3725,6 +3727,7 @@ export type Database = {
           is_hidden?: boolean | null
           is_replied?: boolean | null
           like_count?: number | null
+          manually_classified?: boolean | null
           parent_comment_id?: string | null
           platform?: Database["public"]["Enums"]["social_platform"]
           post_id?: string

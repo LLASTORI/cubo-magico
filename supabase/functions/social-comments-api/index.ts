@@ -54,11 +54,18 @@ interface KeywordClassificationResult {
   classification?: string
   intent_score?: number
   summary?: string
+  classificationMethod?: string
 }
 
-function classifyByKeywords(text: string): KeywordClassificationResult {
+interface CustomKeywords {
+  commercial: string[]
+  praise: string[]
+  spam: string[]
+}
+
+function classifyByKeywords(text: string, customKeywords?: CustomKeywords): KeywordClassificationResult {
   if (!text || text.trim().length === 0) {
-    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio' }
+    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio', classificationMethod: 'keyword_empty' }
   }
 
   const normalizedText = text.toLowerCase().trim()
@@ -66,38 +73,60 @@ function classifyByKeywords(text: string): KeywordClassificationResult {
   // Check ignorable patterns first
   for (const pattern of IGNORABLE_PATTERNS) {
     if (pattern.test(normalizedText)) {
-      return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Emoji/menção' }
+      return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Emoji/menção', classificationMethod: 'keyword_pattern' }
     }
   }
 
   // Very short comments (1-2 characters)
   if (normalizedText.length <= 2) {
-    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário muito curto' }
+    return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário muito curto', classificationMethod: 'keyword_short' }
   }
 
-  // Check commercial keywords
-  for (const keyword of COMMERCIAL_KEYWORDS) {
-    if (normalizedText.includes(keyword)) {
+  // Combine hardcoded keywords with database-configured ones
+  const spamKeywords = customKeywords?.spam || []
+  const commercialKeywords = [...COMMERCIAL_KEYWORDS, ...(customKeywords?.commercial || [])]
+  const praiseKeywords = [...PRAISE_KEYWORDS, ...(customKeywords?.praise || [])]
+
+  // PRIORITY 1: Check spam keywords first
+  for (const keyword of spamKeywords) {
+    if (keyword && normalizedText.includes(keyword.toLowerCase())) {
+      return { 
+        classified: true, 
+        sentiment: 'negative', 
+        classification: 'spam', 
+        intent_score: 0, 
+        summary: 'Spam detectado por keyword',
+        classificationMethod: 'keyword_spam'
+      }
+    }
+  }
+
+  // PRIORITY 2: Check commercial keywords (higher business value)
+  for (const keyword of commercialKeywords) {
+    if (normalizedText.includes(keyword.toLowerCase())) {
       return { 
         classified: true, 
         sentiment: 'positive', 
         classification: 'commercial_interest', 
         intent_score: 95, 
-        summary: 'Interesse comercial detectado por keyword' 
+        summary: 'Interesse comercial detectado por keyword',
+        classificationMethod: 'keyword_commercial'
       }
     }
   }
 
-  // Check praise keywords (only if comment is short - less than 50 chars)
-  if (normalizedText.length <= 50) {
-    for (const keyword of PRAISE_KEYWORDS) {
-      if (normalizedText.includes(keyword) || normalizedText === keyword) {
+  // PRIORITY 3: Check praise keywords (only if comment is short - 25 chars or less)
+  // Longer praise comments go to AI to detect other signals (like "amei essa cor, onde compro")
+  if (normalizedText.length <= 25) {
+    for (const keyword of praiseKeywords) {
+      if (normalizedText.includes(keyword.toLowerCase()) || normalizedText === keyword.toLowerCase()) {
         return { 
           classified: true, 
           sentiment: 'positive', 
           classification: 'praise', 
           intent_score: 20, 
-          summary: 'Elogio simples' 
+          summary: 'Elogio simples',
+          classificationMethod: 'keyword_praise'
         }
       }
     }
@@ -892,8 +921,21 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
   // ============= PHASE 1: KEYWORD CLASSIFICATION =============
   const commentsForAI: Array<{id: string, text: string, postContext: string}> = []
 
+  // Prepare custom keywords from database
+  const customKeywords: CustomKeywords | undefined = knowledgeBase ? {
+    commercial: knowledgeBase.commercial_keywords || [],
+    praise: knowledgeBase.praise_keywords || [],
+    spam: knowledgeBase.spam_keywords || []
+  } : undefined
+
+  console.log(`[AI_PROCESS] Custom keywords loaded:`, {
+    commercial: customKeywords?.commercial?.length || 0,
+    praise: customKeywords?.praise?.length || 0,
+    spam: customKeywords?.spam?.length || 0
+  })
+
   for (const comment of comments) {
-    const keywordResult = classifyByKeywords(comment.text || '')
+    const keywordResult = classifyByKeywords(comment.text || '', customKeywords)
 
     if (keywordResult.classified) {
       // Classify by keyword (no AI needed)
@@ -911,6 +953,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
         .eq('id', comment.id)
 
       keywordClassified++
+      console.log(`[AI_PROCESS] Keyword classified: "${(comment.text || '').substring(0, 30)}..." -> ${keywordResult.classification} (${keywordResult.classificationMethod})`)
     } else {
       // Needs AI classification
       commentsForAI.push({

@@ -5870,7 +5870,12 @@ export type Database = {
     }
     Enums: {
       agent_status: "online" | "away" | "offline" | "busy"
-      ai_processing_status: "pending" | "processing" | "completed" | "failed"
+      ai_processing_status:
+        | "pending"
+        | "processing"
+        | "completed"
+        | "failed"
+        | "skipped"
       app_role: "admin" | "user" | "super_admin"
       comment_classification:
         | "question"
@@ -6023,7 +6028,13 @@ export const Constants = {
   public: {
     Enums: {
       agent_status: ["online", "away", "offline", "busy"],
-      ai_processing_status: ["pending", "processing", "completed", "failed"],
+      ai_processing_status: [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "skipped",
+      ],
       app_role: ["admin", "user", "super_admin"],
       comment_classification: [
         "question",

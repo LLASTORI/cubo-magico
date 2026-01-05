@@ -1,28 +1,79 @@
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Check, Clock, ScrollText } from 'lucide-react';
 
 interface TermsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAccept?: (data: { scrolledToEnd: boolean; timeSpentSeconds: number }) => void;
+  mode?: 'view' | 'accept';
 }
 
-export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
+export const TermsDialog = ({ 
+  open, 
+  onOpenChange, 
+  onAccept,
+  mode = 'view' 
+}: TermsDialogProps) => {
+  const [scrolledToEnd, setScrolledToEnd] = useState(false);
+  const [acceptChecked, setAcceptChecked] = useState(false);
+  const [startTime] = useState(Date.now());
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset state when dialog opens
+  useEffect(() => {
+    if (open) {
+      setScrolledToEnd(false);
+      setAcceptChecked(false);
+    }
+  }, [open]);
+
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLDivElement;
+    const scrollPercentage = (target.scrollTop + target.clientHeight) / target.scrollHeight;
+    
+    // Consider scrolled to end when at 95% or more
+    if (scrollPercentage >= 0.95) {
+      setScrolledToEnd(true);
+    }
+  };
+
+  const handleAccept = () => {
+    const timeSpentSeconds = Math.floor((Date.now() - startTime) / 1000);
+    onAccept?.({ scrolledToEnd, timeSpentSeconds });
+    onOpenChange(false);
+  };
+
+  const canAccept = mode === 'accept' ? scrolledToEnd && acceptChecked : true;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh]">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Termos de Uso e Política de Privacidade</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <ScrollText className="h-5 w-5" />
+            Termos de Uso e Política de Privacidade
+          </DialogTitle>
           <DialogDescription>
-            Versão 1.0 - Última atualização: Dezembro de 2024
+            Versão 1.0 - Última atualização: Janeiro de 2025
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-[60vh] pr-4">
+        
+        <ScrollArea 
+          className="flex-1 pr-4 max-h-[50vh]" 
+          onScrollCapture={handleScroll}
+          ref={scrollRef}
+        >
           <div className="space-y-6 text-sm text-muted-foreground">
             <section>
               <h3 className="text-base font-semibold text-foreground mb-2">1. Aceitação dos Termos</h3>
@@ -71,29 +122,39 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
                 Coletamos e processamos os seguintes tipos de dados:
               </p>
               <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Dados de cadastro:</strong> nome, email, informações de perfil;</li>
+                <li><strong>Dados de cadastro:</strong> nome, email, telefone, informações de perfil;</li>
                 <li><strong>Dados de uso:</strong> logs de acesso, interações com a Plataforma;</li>
                 <li><strong>Dados de integrações:</strong> informações de vendas, campanhas publicitárias, dados de clientes obtidos através das integrações autorizadas;</li>
                 <li><strong>Dados técnicos:</strong> endereço IP, tipo de navegador, dispositivo utilizado.</li>
               </ul>
               <p className="mt-2">
                 Esses dados são utilizados para fornecer e melhorar nossos serviços, gerar relatórios 
-                e análises, e cumprir obrigações legais.
+                e análises, enviar notificações importantes, e cumprir obrigações legais.
               </p>
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">6. Proteção de Dados</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">6. Comunicações via WhatsApp</h3>
+              <p>
+                Ao fornecer seu número de telefone e optar por receber notificações via WhatsApp, você 
+                autoriza o envio de mensagens relacionadas a: alertas de vendas, resumos de desempenho, 
+                notificações do projeto, e comunicações importantes sobre sua conta. Você pode desativar 
+                essas notificações a qualquer momento nas configurações do seu perfil.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="text-base font-semibold text-foreground mb-2">7. Proteção de Dados</h3>
               <p>
                 Implementamos medidas técnicas e organizacionais adequadas para proteger seus dados contra 
-                acesso não autorizado, alteração, divulgação ou destruição. No entanto, nenhum sistema é 
-                100% seguro, e não podemos garantir a segurança absoluta das informações transmitidas 
-                pela internet.
+                acesso não autorizado, alteração, divulgação ou destruição. Utilizamos criptografia para 
+                dados sensíveis e seguimos as melhores práticas de segurança da informação. No entanto, 
+                nenhum sistema é 100% seguro.
               </p>
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">7. Limitação de Responsabilidade</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">8. Limitação de Responsabilidade</h3>
               <p className="mb-2 font-medium text-foreground">
                 AVISO IMPORTANTE: A Plataforma Cubo Mágico é fornecida "como está" e "conforme disponível". 
                 Em nenhuma circunstância a Plataforma, seus proprietários, diretores, funcionários ou 
@@ -106,14 +167,12 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
                 <li>Decisões comerciais baseadas nos dados ou análises fornecidos pela Plataforma;</li>
                 <li>Erros, imprecisões ou inconsistências nos dados obtidos de integrações de terceiros;</li>
                 <li>Falhas de serviços de terceiros integrados (Hotmart, Meta, etc.);</li>
-                <li>Acesso não autorizado às suas credenciais por negligência do usuário;</li>
-                <li>Danos causados por vírus ou outros materiais maliciosos;</li>
-                <li>Qualquer conteúdo de terceiros acessado através da Plataforma.</li>
+                <li>Acesso não autorizado às suas credenciais por negligência do usuário.</li>
               </ul>
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">8. Isenção de Garantias</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">9. Isenção de Garantias</h3>
               <p>
                 A Plataforma não garante que: (a) o serviço atenderá a todos os seus requisitos específicos; 
                 (b) o serviço será ininterrupto, pontual, seguro ou livre de erros; (c) os resultados obtidos 
@@ -122,7 +181,7 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">9. Indenização</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">10. Indenização</h3>
               <p>
                 Você concorda em defender, indenizar e isentar a Plataforma, seus proprietários, diretores, 
                 funcionários e parceiros de todas e quaisquer reivindicações, danos, obrigações, perdas, 
@@ -132,7 +191,7 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">10. Propriedade Intelectual</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">11. Propriedade Intelectual</h3>
               <p>
                 Todo o conteúdo, design, logos, marcas e propriedade intelectual da Plataforma pertencem 
                 exclusivamente à Cubo Mágico. É vedada a reprodução, distribuição ou modificação sem 
@@ -141,7 +200,7 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">11. Rescisão</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">12. Rescisão</h3>
               <p>
                 Podemos suspender ou encerrar seu acesso à Plataforma a qualquer momento, com ou sem motivo, 
                 com ou sem aviso prévio. Você pode encerrar sua conta a qualquer momento. Após o encerramento, 
@@ -150,28 +209,29 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">12. Modificações dos Termos</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">13. Modificações dos Termos</h3>
               <p>
                 Reservamo-nos o direito de modificar estes Termos a qualquer momento. As alterações entrarão 
-                em vigor imediatamente após sua publicação. O uso continuado da Plataforma após modificações 
-                constitui aceitação dos novos termos.
+                em vigor imediatamente após sua publicação. Quando houver alterações significativas que 
+                requeiram novo aceite, você será notificado e precisará aceitar os novos termos para 
+                continuar usando a Plataforma.
               </p>
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">13. Legislação Aplicável</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">14. Legislação Aplicável</h3>
               <p>
                 Estes Termos serão regidos e interpretados de acordo com as leis da República Federativa 
-                do Brasil. Qualquer disputa será resolvida no foro da comarca de São Paulo, SP, com 
-                exclusão de qualquer outro, por mais privilegiado que seja.
+                do Brasil, incluindo a Lei Geral de Proteção de Dados (LGPD). Qualquer disputa será 
+                resolvida no foro da comarca de São Paulo, SP, com exclusão de qualquer outro.
               </p>
             </section>
 
             <section>
-              <h3 className="text-base font-semibold text-foreground mb-2">14. Contato</h3>
+              <h3 className="text-base font-semibold text-foreground mb-2">15. Contato</h3>
               <p>
-                Para questões relacionadas a estes Termos, entre em contato através dos canais oficiais 
-                de suporte disponíveis na Plataforma.
+                Para questões relacionadas a estes Termos ou sobre proteção de dados, entre em contato 
+                através dos canais oficiais de suporte disponíveis na Plataforma.
               </p>
             </section>
 
@@ -183,6 +243,50 @@ export const TermsDialog = ({ open, onOpenChange }: TermsDialogProps) => {
             </section>
           </div>
         </ScrollArea>
+
+        {mode === 'accept' && (
+          <DialogFooter className="flex-col gap-4 sm:flex-col">
+            {/* Scroll indicator */}
+            <div className={`flex items-center gap-2 text-sm ${scrolledToEnd ? 'text-green-600' : 'text-muted-foreground'}`}>
+              {scrolledToEnd ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span>Você leu todo o documento</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="h-4 w-4" />
+                  <span>Role até o final para aceitar os termos</span>
+                </>
+              )}
+            </div>
+
+            {/* Accept checkbox */}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="accept-terms-checkbox"
+                checked={acceptChecked}
+                onCheckedChange={(checked) => setAcceptChecked(checked === true)}
+                disabled={!scrolledToEnd}
+              />
+              <label
+                htmlFor="accept-terms-checkbox"
+                className={`text-sm cursor-pointer ${!scrolledToEnd ? 'text-muted-foreground' : ''}`}
+              >
+                Li e compreendi os Termos de Uso e Política de Privacidade e concordo integralmente
+              </label>
+            </div>
+
+            <div className="flex gap-2 justify-end w-full">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleAccept} disabled={!canAccept}>
+                Aceitar Termos
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

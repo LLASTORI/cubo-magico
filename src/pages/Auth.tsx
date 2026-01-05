@@ -237,11 +237,23 @@ const Auth = () => {
     // Record terms acceptance after successful signup
     if (signUpData.user) {
       try {
+        // Try to get client IP
+        let clientIp = null;
+        try {
+          const { data: ipData } = await supabase.functions.invoke('get-client-ip');
+          clientIp = ipData?.ip || null;
+        } catch (ipError) {
+          console.error('Failed to get client IP:', ipError);
+        }
+
         await supabase.from('terms_acceptances').insert({
           user_id: signUpData.user.id,
           terms_version: '1.0',
-          ip_address: null, // Could be obtained from a service if needed
+          ip_address: clientIp,
           user_agent: navigator.userAgent,
+          acceptance_method: 'checkbox',
+          scrolled_to_end: false, // Will be tracked in future with scroll detection
+          time_spent_seconds: null,
         });
       } catch (termsError) {
         console.error('Failed to record terms acceptance:', termsError);
@@ -252,9 +264,9 @@ const Auth = () => {
     setLoading(false);
     toast({
       title: 'Conta criada!',
-      description: 'Você foi autenticado automaticamente.',
+      description: 'Complete seu perfil para uma melhor experiência.',
     });
-    navigate('/projects');
+    navigate('/onboarding');
   };
 
   const handleMFASuccess = async () => {

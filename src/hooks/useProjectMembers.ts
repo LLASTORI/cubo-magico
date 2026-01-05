@@ -455,6 +455,32 @@ export const useMyInvites = () => {
         .eq('user_id', user.id);
     }
 
+    // Create CRM contact for team member with "Equipe" tag
+    try {
+      // Get user profile for name and phone
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, email, phone, phone_ddd, phone_country_code')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        // Call the database function to create team member contact
+        await supabase.rpc('create_team_member_contact', {
+          p_project_id: invite.project_id,
+          p_user_id: user.id,
+          p_email: profile.email || user.email || '',
+          p_name: profile.full_name || '',
+          p_phone: profile.phone || null,
+          p_phone_ddd: profile.phone_ddd || null,
+          p_phone_country_code: profile.phone_country_code || '55',
+        });
+      }
+    } catch (contactError) {
+      console.error('Error creating team member contact:', contactError);
+      // Don't fail the invite acceptance if contact creation fails
+    }
+
     await fetchInvites();
     return { error: null };
   };

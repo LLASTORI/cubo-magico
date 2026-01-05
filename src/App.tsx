@@ -50,6 +50,7 @@ import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import DataDeletion from "./pages/DataDeletion";
+import Onboarding from "./pages/Onboarding";
 
 const queryClient = new QueryClient();
 
@@ -81,6 +82,11 @@ const App = () => (
                 <Route path="/busca-rapida" element={
                   <ProtectedRoute>
                     <BuscaRapida />
+                  </ProtectedRoute>
+                } />
+                <Route path="/onboarding" element={
+                  <ProtectedRoute>
+                    <Onboarding />
                   </ProtectedRoute>
                 } />
                 <Route path="/projects" element={

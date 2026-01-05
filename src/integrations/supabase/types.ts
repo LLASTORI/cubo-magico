@@ -1106,6 +1106,7 @@ export type Database = {
           has_pending_payment: boolean | null
           id: string
           instagram: string | null
+          is_team_member: boolean | null
           last_activity_at: string
           last_name: string | null
           last_offer_code: string | null
@@ -1134,6 +1135,7 @@ export type Database = {
           total_purchases: number | null
           total_revenue: number | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           address?: string | null
@@ -1167,6 +1169,7 @@ export type Database = {
           has_pending_payment?: boolean | null
           id?: string
           instagram?: string | null
+          is_team_member?: boolean | null
           last_activity_at?: string
           last_name?: string | null
           last_offer_code?: string | null
@@ -1195,6 +1198,7 @@ export type Database = {
           total_purchases?: number | null
           total_revenue?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           address?: string | null
@@ -1228,6 +1232,7 @@ export type Database = {
           has_pending_payment?: boolean | null
           id?: string
           instagram?: string | null
+          is_team_member?: boolean | null
           last_activity_at?: string
           last_name?: string | null
           last_offer_code?: string | null
@@ -1256,6 +1261,7 @@ export type Database = {
           total_purchases?: number | null
           total_revenue?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -3236,38 +3242,65 @@ export type Database = {
         Row: {
           avatar_url: string | null
           can_create_projects: boolean | null
+          company_name: string | null
+          company_role: string | null
           created_at: string
+          crm_contact_id: string | null
           email: string | null
           full_name: string | null
           id: string
           is_active: boolean | null
           last_login_at: string | null
           max_projects: number | null
+          onboarding_completed: boolean | null
+          phone: string | null
+          phone_country_code: string | null
+          phone_ddd: string | null
+          timezone: string | null
           updated_at: string
+          whatsapp_opt_in: boolean | null
         }
         Insert: {
           avatar_url?: string | null
           can_create_projects?: boolean | null
+          company_name?: string | null
+          company_role?: string | null
           created_at?: string
+          crm_contact_id?: string | null
           email?: string | null
           full_name?: string | null
           id: string
           is_active?: boolean | null
           last_login_at?: string | null
           max_projects?: number | null
+          onboarding_completed?: boolean | null
+          phone?: string | null
+          phone_country_code?: string | null
+          phone_ddd?: string | null
+          timezone?: string | null
           updated_at?: string
+          whatsapp_opt_in?: boolean | null
         }
         Update: {
           avatar_url?: string | null
           can_create_projects?: boolean | null
+          company_name?: string | null
+          company_role?: string | null
           created_at?: string
+          crm_contact_id?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           is_active?: boolean | null
           last_login_at?: string | null
           max_projects?: number | null
+          onboarding_completed?: boolean | null
+          phone?: string | null
+          phone_country_code?: string | null
+          phone_ddd?: string | null
+          timezone?: string | null
           updated_at?: string
+          whatsapp_opt_in?: boolean | null
         }
         Relationships: []
       }
@@ -4758,31 +4791,73 @@ export type Database = {
       }
       terms_acceptances: {
         Row: {
+          acceptance_method: string | null
           accepted_at: string
           created_at: string
           id: string
           ip_address: string | null
+          scrolled_to_end: boolean | null
           terms_version: string
+          time_spent_seconds: number | null
           user_agent: string | null
           user_id: string
         }
         Insert: {
+          acceptance_method?: string | null
           accepted_at?: string
           created_at?: string
           id?: string
           ip_address?: string | null
+          scrolled_to_end?: boolean | null
           terms_version?: string
+          time_spent_seconds?: number | null
           user_agent?: string | null
           user_id: string
         }
         Update: {
+          acceptance_method?: string | null
           accepted_at?: string
           created_at?: string
           id?: string
           ip_address?: string | null
+          scrolled_to_end?: boolean | null
           terms_version?: string
+          time_spent_seconds?: number | null
           user_agent?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      terms_versions: {
+        Row: {
+          content: string
+          created_at: string | null
+          effective_date: string
+          id: string
+          is_active: boolean | null
+          requires_reaccept: boolean | null
+          title: string
+          version: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          effective_date: string
+          id?: string
+          is_active?: boolean | null
+          requires_reaccept?: boolean | null
+          title: string
+          version: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          effective_date?: string
+          id?: string
+          is_active?: boolean | null
+          requires_reaccept?: boolean | null
+          title?: string
+          version?: string
         }
         Relationships: []
       }
@@ -5467,6 +5542,18 @@ export type Database = {
       create_default_recovery_stages: {
         Args: { _project_id: string }
         Returns: undefined
+      }
+      create_team_member_contact: {
+        Args: {
+          p_email: string
+          p_name: string
+          p_phone?: string
+          p_phone_country_code?: string
+          p_phone_ddd?: string
+          p_project_id: string
+          p_user_id: string
+        }
+        Returns: string
       }
       decrypt_sensitive: { Args: { p_encrypted_data: string }; Returns: string }
       encrypt_sensitive: { Args: { p_data: string }; Returns: string }

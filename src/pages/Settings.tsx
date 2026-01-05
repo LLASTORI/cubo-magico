@@ -20,6 +20,7 @@ import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useTheme } from 'next-themes';
 import { TeamPermissionsManager } from '@/components/settings/TeamPermissionsManager';
+import { MemberRoleManager } from '@/components/settings/MemberRoleManager';
 import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
 
@@ -567,7 +568,8 @@ const Settings = () => {
           </TabsContent>
 
           {/* Team Tab */}
-          <TabsContent value="team">
+          <TabsContent value="team" className="space-y-6">
+            <MemberRoleManager />
             <TeamPermissionsManager />
           </TabsContent>
 

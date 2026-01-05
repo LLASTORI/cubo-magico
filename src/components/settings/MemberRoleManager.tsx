@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Users, Crown, Shield, User, Settings2, Loader2, 
   AlertTriangle, CheckCircle2
@@ -86,10 +87,10 @@ export function MemberRoleManager() {
     refresh();
   };
 
-  const getTemplateName = (memberId: string) => {
+  const getTemplateInfo = (memberId: string) => {
     const templateId = memberTemplates[memberId];
     if (!templateId) return null;
-    return templates.find(t => t.id === templateId)?.name;
+    return templates.find(t => t.id === templateId);
   };
 
   const membersWithoutTemplate = members.filter(m => 
@@ -130,78 +131,107 @@ export function MemberRoleManager() {
           </Alert>
         )}
 
-        <div className="space-y-2">
-          {members.map(member => {
-            const templateName = getTemplateName(member.id);
-            const isOwner = member.role === 'owner';
-            
-            return (
-              <div 
-                key={member.id}
-                className="flex items-center justify-between p-3 border rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={member.profile?.avatar_url || undefined} />
-                    <AvatarFallback>
-                      {(member.profile?.full_name || member.profile?.email || '?')[0].toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">
-                      {member.profile?.full_name || member.profile?.email || 'Usuário'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {member.profile?.email}
-                    </p>
+        <TooltipProvider>
+          <div className="space-y-2">
+            {members.map(member => {
+              const templateInfo = getTemplateInfo(member.id);
+              const isOwner = member.role === 'owner';
+              
+              return (
+                <div 
+                  key={member.id}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={member.profile?.avatar_url || undefined} />
+                      <AvatarFallback>
+                        {(member.profile?.full_name || member.profile?.email || '?')[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">
+                        {member.profile?.full_name || member.profile?.email || 'Usuário'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {member.profile?.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {isOwner ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge className="gap-1 cursor-default">
+                            <Crown className="w-3 h-3" />
+                            Proprietário
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="font-medium">Proprietário do projeto</p>
+                          <p className="text-xs text-muted-foreground">Acesso total a todas as funcionalidades</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : templateInfo ? (
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="gap-1 cursor-default">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {templateInfo.name}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p className="font-medium">{templateInfo.name}</p>
+                            <p className="text-xs text-muted-foreground">{templateInfo.description}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        {canManage && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleOpenDialog(member)}
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="outline" className="gap-1 text-muted-foreground cursor-default">
+                              {getRoleIcon(member.role)}
+                              {getRoleLabel(member.role)}
+                              <span className="text-xs">(legado)</span>
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="font-medium">Cargo legado</p>
+                            <p className="text-xs text-muted-foreground">
+                              Este membro foi adicionado antes do sistema de cargos. 
+                              Clique em "Definir Cargo" para configurar suas permissões.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                        {canManage && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleOpenDialog(member)}
+                          >
+                            Definir Cargo
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3">
-                  {isOwner ? (
-                    <Badge className="gap-1">
-                      <Crown className="w-3 h-3" />
-                      Proprietário
-                    </Badge>
-                  ) : templateName ? (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        {templateName}
-                      </Badge>
-                      {canManage && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleOpenDialog(member)}
-                        >
-                          <Settings2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="gap-1 text-muted-foreground">
-                        {getRoleIcon(member.role)}
-                        {getRoleLabel(member.role)}
-                        <span className="text-xs">(legado)</span>
-                      </Badge>
-                      {canManage && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleOpenDialog(member)}
-                        >
-                          Definir Cargo
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </TooltipProvider>
 
         {/* Dialog para definir/alterar cargo */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

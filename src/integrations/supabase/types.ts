@@ -139,6 +139,118 @@ export type Database = {
           },
         ]
       }
+      ai_project_quotas: {
+        Row: {
+          created_at: string
+          current_daily_usage: number
+          current_monthly_usage: number
+          daily_limit: number
+          id: string
+          is_unlimited: boolean
+          last_daily_reset: string
+          last_monthly_reset: string
+          monthly_limit: number
+          project_id: string
+          provider_preference: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_daily_usage?: number
+          current_monthly_usage?: number
+          daily_limit?: number
+          id?: string
+          is_unlimited?: boolean
+          last_daily_reset?: string
+          last_monthly_reset?: string
+          monthly_limit?: number
+          project_id: string
+          provider_preference?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_daily_usage?: number
+          current_monthly_usage?: number
+          daily_limit?: number
+          id?: string
+          is_unlimited?: boolean
+          last_daily_reset?: string
+          last_monthly_reset?: string
+          monthly_limit?: number
+          project_id?: string
+          provider_preference?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_project_quotas_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_usage_tracking: {
+        Row: {
+          action: string
+          cost_estimate: number | null
+          created_at: string
+          error_message: string | null
+          feature: string
+          id: string
+          input_tokens: number | null
+          items_processed: number | null
+          metadata: Json | null
+          model: string | null
+          output_tokens: number | null
+          project_id: string
+          provider: string
+          success: boolean | null
+        }
+        Insert: {
+          action: string
+          cost_estimate?: number | null
+          created_at?: string
+          error_message?: string | null
+          feature: string
+          id?: string
+          input_tokens?: number | null
+          items_processed?: number | null
+          metadata?: Json | null
+          model?: string | null
+          output_tokens?: number | null
+          project_id: string
+          provider: string
+          success?: boolean | null
+        }
+        Update: {
+          action?: string
+          cost_estimate?: number | null
+          created_at?: string
+          error_message?: string | null
+          feature?: string
+          id?: string
+          input_tokens?: number | null
+          items_processed?: number | null
+          metadata?: Json | null
+          model?: string | null
+          output_tokens?: number | null
+          project_id?: string
+          provider?: string
+          success?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_tracking_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_executions: {
         Row: {
           completed_at: string | null
@@ -5531,6 +5643,10 @@ export type Database = {
       can_view_conversation: {
         Args: { p_conversation_id: string; p_user_id: string }
         Returns: boolean
+      }
+      check_and_use_ai_quota: {
+        Args: { p_items_count?: number; p_project_id: string }
+        Returns: Json
       }
       cleanup_old_webhook_metrics: { Args: never; Returns: undefined }
       count_project_members: { Args: { _project_id: string }; Returns: number }

@@ -53,6 +53,7 @@ interface KnowledgeBase {
   custom_categories: CustomCategory[];
   faqs: FAQ[];
   commercial_keywords: string[];
+  praise_keywords?: string[];
   spam_keywords: string[];
   auto_classify_new_comments: boolean;
   min_intent_score_for_crm: number;
@@ -81,12 +82,14 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
     custom_categories: defaultCategories,
     faqs: [],
     commercial_keywords: ['preço', 'valor', 'quanto custa', 'comprar', 'quero', 'onde compro', 'link', 'tem disponível'],
+    praise_keywords: ['parabéns', 'excelente', 'incrível', 'maravilhoso', 'amei', 'adorei', 'perfeito', 'sensacional'],
     spam_keywords: ['ganhe dinheiro', 'clique aqui', 'sorteio', 'promoção fake'],
     auto_classify_new_comments: false,
     min_intent_score_for_crm: 50,
   });
 
   const [newKeyword, setNewKeyword] = useState('');
+  const [newPraiseKeyword, setNewPraiseKeyword] = useState('');
   const [newSpamKeyword, setNewSpamKeyword] = useState('');
   const [newFaq, setNewFaq] = useState<FAQ>({ question: '', answer: '' });
 
@@ -120,6 +123,7 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
         custom_categories: knowledgeBase.custom_categories || defaultCategories,
         faqs: knowledgeBase.faqs || [],
         commercial_keywords: knowledgeBase.commercial_keywords || [],
+        praise_keywords: (knowledgeBase as any).praise_keywords || [],
         spam_keywords: knowledgeBase.spam_keywords || [],
       });
     }
@@ -138,6 +142,7 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
         custom_categories: JSON.parse(JSON.stringify(formData.custom_categories || [])),
         faqs: JSON.parse(JSON.stringify(formData.faqs || [])),
         commercial_keywords: formData.commercial_keywords,
+        praise_keywords: formData.praise_keywords,
         spam_keywords: formData.spam_keywords,
         auto_classify_new_comments: formData.auto_classify_new_comments,
         min_intent_score_for_crm: formData.min_intent_score_for_crm,
@@ -173,6 +178,23 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
     setFormData({
       ...formData,
       commercial_keywords: formData.commercial_keywords?.filter(k => k !== keyword),
+    });
+  };
+
+  const addPraiseKeyword = () => {
+    if (newPraiseKeyword.trim() && !formData.praise_keywords?.includes(newPraiseKeyword.trim())) {
+      setFormData({
+        ...formData,
+        praise_keywords: [...(formData.praise_keywords || []), newPraiseKeyword.trim()],
+      });
+      setNewPraiseKeyword('');
+    }
+  };
+
+  const removePraiseKeyword = (keyword: string) => {
+    setFormData({
+      ...formData,
+      praise_keywords: formData.praise_keywords?.filter(k => k !== keyword),
     });
   };
 
@@ -394,6 +416,41 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
                   className="max-w-xs"
                 />
                 <Button variant="outline" size="sm" onClick={addCommercialKeyword}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Praise Keywords */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-amber-500">
+                <Sparkles className="h-4 w-4" />
+                Elogio / Feedback Positivo
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Palavras que indicam elogios ou feedback positivo
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {formData.praise_keywords?.map((keyword) => (
+                  <Badge key={keyword} variant="outline" className="gap-1 border-amber-500 text-amber-500">
+                    {keyword}
+                    <button onClick={() => removePraiseKeyword(keyword)}>
+                      <Trash2 className="h-3 w-3 hover:text-destructive" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nova palavra de elogio..."
+                  value={newPraiseKeyword}
+                  onChange={(e) => setNewPraiseKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addPraiseKeyword()}
+                  className="max-w-xs"
+                />
+                <Button variant="outline" size="sm" onClick={addPraiseKeyword}>
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>

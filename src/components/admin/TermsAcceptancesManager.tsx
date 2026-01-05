@@ -5,9 +5,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Search, Loader2, CheckCircle, Calendar, Globe, Monitor } from 'lucide-react';
+import { FileText, Search, Loader2, CheckCircle, Calendar, Globe, Monitor, Clock, ScrollText, MousePointer } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface TermsAcceptance {
   id: string;
@@ -16,6 +17,9 @@ interface TermsAcceptance {
   accepted_at: string;
   ip_address: string | null;
   user_agent: string | null;
+  acceptance_method: string | null;
+  scrolled_to_end: boolean | null;
+  time_spent_seconds: number | null;
   user_email?: string;
   user_name?: string;
 }
@@ -83,6 +87,23 @@ export const TermsAcceptancesManager = () => {
     if (ua.includes('Safari')) return 'Safari';
     if (ua.includes('Edge')) return 'Edge';
     return 'Outro';
+  };
+
+  const formatTimeSpent = (seconds: number | null) => {
+    if (!seconds) return '-';
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  };
+
+  const getMethodLabel = (method: string | null) => {
+    switch (method) {
+      case 'checkbox': return 'Checkbox';
+      case 'button': return 'Botão';
+      case 'scroll': return 'Scroll + Aceite';
+      default: return method || 'Padrão';
+    }
   };
 
   if (loading) {
@@ -180,6 +201,9 @@ export const TermsAcceptancesManager = () => {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Versão</TableHead>
                   <TableHead>Data do Aceite</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead>Tempo</TableHead>
+                  <TableHead>Leu Tudo</TableHead>
                   <TableHead>IP</TableHead>
                   <TableHead>Navegador</TableHead>
                 </TableRow>
@@ -203,6 +227,41 @@ export const TermsAcceptancesManager = () => {
                         <Calendar className="w-4 h-4 text-muted-foreground" />
                         {format(new Date(acceptance.accepted_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2">
+                              <MousePointer className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-sm">{getMethodLabel(acceptance.acceptance_method)}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Método de aceite: {getMethodLabel(acceptance.acceptance_method)}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm">{formatTimeSpent(acceptance.time_spent_seconds)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {acceptance.scrolled_to_end === true ? (
+                        <Badge variant="default" className="bg-green-500/10 text-green-600 hover:bg-green-500/20">
+                          <ScrollText className="w-3 h-3 mr-1" />
+                          Sim
+                        </Badge>
+                      ) : acceptance.scrolled_to_end === false ? (
+                        <Badge variant="secondary">
+                          Não
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

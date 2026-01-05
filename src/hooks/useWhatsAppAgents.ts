@@ -4,6 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/hooks/use-toast';
 
 export type AgentStatus = 'online' | 'away' | 'offline' | 'busy';
+export type VisibilityMode = 'all' | 'department' | 'assigned_only' | 'department_and_unassigned';
 
 export interface WhatsAppAgent {
   id: string;
@@ -14,6 +15,7 @@ export interface WhatsAppAgent {
   max_concurrent_chats: number;
   is_supervisor: boolean;
   is_active: boolean;
+  visibility_mode: VisibilityMode;
   work_hours: Record<string, { start: string; end: string }> | null;
   last_activity_at: string | null;
   created_at: string;
@@ -30,6 +32,7 @@ export interface CreateAgentInput {
   display_name?: string;
   max_concurrent_chats?: number;
   is_supervisor?: boolean;
+  visibility_mode?: VisibilityMode;
   department_ids?: string[];
 }
 
@@ -40,6 +43,7 @@ export interface UpdateAgentInput {
   max_concurrent_chats?: number;
   is_supervisor?: boolean;
   is_active?: boolean;
+  visibility_mode?: VisibilityMode;
   work_hours?: Record<string, { start: string; end: string }>;
   department_ids?: string[];
 }
@@ -141,6 +145,7 @@ export function useWhatsAppAgents() {
         max_concurrent_chats: agent.max_concurrent_chats,
         is_supervisor: agent.is_supervisor,
         is_active: agent.is_active,
+        visibility_mode: (agent as any).visibility_mode as VisibilityMode || 'all',
         work_hours: agent.work_hours as Record<string, { start: string; end: string }> | null,
         last_activity_at: agent.last_activity_at,
         created_at: agent.created_at,
@@ -166,6 +171,7 @@ export function useWhatsAppAgents() {
           display_name: input.display_name || null,
           max_concurrent_chats: input.max_concurrent_chats || 5,
           is_supervisor: input.is_supervisor || false,
+          visibility_mode: input.visibility_mode || 'assigned_only',
         })
         .select()
         .single();

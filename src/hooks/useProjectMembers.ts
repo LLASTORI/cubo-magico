@@ -147,7 +147,7 @@ export const useProjectMembers = (projectId: string | null) => {
     fetchMembers();
   }, [fetchMembers]);
 
-  const inviteMember = async (email: string, role: ProjectRole, projectName?: string): Promise<{ error: any }> => {
+  const inviteMember = async (email: string, role: ProjectRole, projectName?: string, roleTemplateId?: string): Promise<{ error: any }> => {
     if (!projectId || !user) return { error: new Error('Projeto não selecionado') };
 
     // Check limit
@@ -174,6 +174,7 @@ export const useProjectMembers = (projectId: string | null) => {
         email: email.toLowerCase().trim(),
         invited_by: user.id,
         role,
+        role_template_id: roleTemplateId || null,
       })
       .select()
       .single();
@@ -354,6 +355,15 @@ export const useMyInvites = () => {
   const acceptInvite = async (invite: ProjectInvite): Promise<{ error: any }> => {
     if (!user) return { error: new Error('Usuário não autenticado') };
 
+    // Get full invite data with role_template_id
+    const { data: fullInvite, error: fetchError } = await supabase
+      .from('project_invites')
+      .select('*, role_template:role_templates(*)')
+      .eq('id', invite.id)
+      .single();
+
+    if (fetchError) return { error: fetchError };
+
     // Update invite status
     const { error: updateError } = await supabase
       .from('project_invites')
@@ -365,32 +375,66 @@ export const useMyInvites = () => {
 
     if (updateError) return { error: updateError };
 
-    // Add as member
-    const { error: memberError } = await supabase
+    // Add as member with role_template_id
+    const { data: memberData, error: memberError } = await supabase
       .from('project_members')
       .insert({
         project_id: invite.project_id,
         user_id: user.id,
         role: invite.role,
-      });
+        role_template_id: fullInvite?.role_template_id || null,
+      })
+      .select()
+      .single();
 
     if (memberError) return { error: memberError };
 
-    // Get full invite data with permissions
-    const { data: fullInvite } = await supabase
-      .from('project_invites')
-      .select('*')
-      .eq('id', invite.id)
-      .single();
+    // If there's a role template, apply its permissions
+    const template = fullInvite?.role_template;
+    if (template) {
+      // Apply permissions from template
+      const permissionAreas = [
+        'dashboard', 'analise', 'crm', 'automacoes', 'chat_ao_vivo',
+        'meta_ads', 'ofertas', 'lancamentos', 'configuracoes',
+        'insights', 'pesquisas', 'social_listening'
+      ];
 
-    // Apply permissions from invite if they exist
-    if (fullInvite) {
+      for (const area of permissionAreas) {
+        const permKey = `perm_${area}`;
+        const level = template[permKey] || 'none';
+
+        await supabase
+          .from('project_member_permissions')
+          .upsert({
+            project_id: invite.project_id,
+            user_id: user.id,
+            area,
+            level,
+          }, {
+            onConflict: 'project_id,user_id,area',
+          });
+      }
+
+      // If template has chat_ao_vivo enabled and whatsapp_auto_create_agent, create agent
+      if (template.perm_chat_ao_vivo !== 'none' && template.whatsapp_auto_create_agent) {
+        await supabase
+          .from('whatsapp_agents')
+          .insert({
+            project_id: invite.project_id,
+            user_id: user.id,
+            visibility_mode: template.whatsapp_visibility_mode || 'assigned_only',
+            max_chats: template.whatsapp_max_chats || 5,
+            is_supervisor: template.whatsapp_is_supervisor || false,
+            is_active: true,
+          });
+      }
+    } else if (fullInvite) {
+      // Fallback to legacy permission fields if no template
       const permissionsData: Record<string, any> = {
         project_id: invite.project_id,
         user_id: user.id,
       };
 
-      // Copy permission fields from invite
       const permissionFields = [
         'permissions_dashboard', 'permissions_analise', 'permissions_crm',
         'permissions_automacoes', 'permissions_chat_ao_vivo', 'permissions_meta_ads',
@@ -404,7 +448,6 @@ export const useMyInvites = () => {
         }
       });
 
-      // Update permissions (the trigger already created the record with defaults)
       await supabase
         .from('project_member_permissions')
         .update(permissionsData)

@@ -3,14 +3,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectMembers, ProjectRole, getRoleLabel, canManageRole } from '@/hooks/useProjectMembers';
-import { Users, UserPlus, Mail, Crown, Shield, User, Trash2, Loader2, LogOut, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { useRoleTemplates, RoleTemplate } from '@/hooks/useRoleTemplates';
+import { RoleTemplateSelector } from '@/components/settings/RoleTemplateSelector';
+import { Users, UserPlus, Mail, Crown, Shield, User, Trash2, Loader2, LogOut, ArrowRightLeft, AlertTriangle, Settings2 } from 'lucide-react';
 import { z } from 'zod';
 
 interface TeamManagementDialogProps {
@@ -62,9 +63,13 @@ export const TeamManagementDialog = ({
     leaveProject,
   } = useProjectMembers(projectId);
 
+  const { templates } = useRoleTemplates(projectId);
+
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<ProjectRole>('operator');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 
   const handleInvite = async () => {
     const validation = emailSchema.safeParse(inviteEmail);
@@ -73,8 +78,14 @@ export const TeamManagementDialog = ({
       return;
     }
 
+    if (!selectedTemplateId || !selectedTemplate) {
+      toast({ title: 'Selecione um cargo', variant: 'destructive' });
+      return;
+    }
+
     setSubmitting(true);
-    const { error } = await inviteMember(inviteEmail, inviteRole, projectName);
+    // Use o base_role do template selecionado
+    const { error } = await inviteMember(inviteEmail, selectedTemplate.base_role, projectName, selectedTemplateId);
     setSubmitting(false);
 
     if (error) {
@@ -82,7 +93,7 @@ export const TeamManagementDialog = ({
     } else {
       toast({ title: 'Convite enviado!', description: 'Um email foi enviado para o convidado.' });
       setInviteEmail('');
-      setInviteRole('operator');
+      setSelectedTemplateId('');
     }
   };
 
@@ -124,13 +135,9 @@ export const TeamManagementDialog = ({
     }
   };
 
-  const availableRoles: ProjectRole[] = userRole === 'owner' 
-    ? ['manager', 'operator'] 
-    : ['operator'];
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
@@ -160,27 +167,24 @@ export const TeamManagementDialog = ({
                 <UserPlus className="w-4 h-4" />
                 Convidar Membro
               </div>
-              <div className="flex gap-2">
+              <div className="space-y-3">
                 <Input
                   placeholder="email@exemplo.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="flex-1"
                 />
-                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as ProjectRole)}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRoles.map(role => (
-                      <SelectItem key={role} value={role}>
-                        {getRoleLabel(role)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleInvite} disabled={submitting || !inviteEmail}>
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Convidar'}
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Cargo</Label>
+                  <RoleTemplateSelector
+                    value={selectedTemplateId}
+                    onValueChange={setSelectedTemplateId}
+                    projectId={projectId}
+                    showPreview={true}
+                  />
+                </div>
+                <Button onClick={handleInvite} disabled={submitting || !inviteEmail || !selectedTemplateId} className="w-full">
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                  Convidar
                 </Button>
               </div>
             </div>

@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2, Edit, User, Shield, MessageSquare, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit, User, Shield, MessageSquare, Loader2, Eye, Users, UserCheck } from 'lucide-react';
 import { MultiSelect } from '@/components/ui/multi-select';
 
 const STATUS_CONFIG: Record<AgentStatus, { label: string; color: string }> = {
@@ -20,6 +20,31 @@ const STATUS_CONFIG: Record<AgentStatus, { label: string; color: string }> = {
   away: { label: 'Ausente', color: 'bg-yellow-500' },
   busy: { label: 'Ocupado', color: 'bg-orange-500' },
   offline: { label: 'Offline', color: 'bg-gray-400' },
+};
+
+type VisibilityMode = 'all' | 'department' | 'assigned_only' | 'department_and_unassigned';
+
+const VISIBILITY_CONFIG: Record<VisibilityMode, { label: string; description: string; icon: React.ReactNode }> = {
+  all: { 
+    label: 'Todas as conversas', 
+    description: 'Vê todas as conversas do projeto',
+    icon: <Eye className="h-4 w-4" />,
+  },
+  department: { 
+    label: 'Departamento', 
+    description: 'Vê apenas conversas do seu departamento',
+    icon: <Users className="h-4 w-4" />,
+  },
+  assigned_only: { 
+    label: 'Apenas atribuídas', 
+    description: 'Vê apenas conversas atribuídas a ele',
+    icon: <UserCheck className="h-4 w-4" />,
+  },
+  department_and_unassigned: { 
+    label: 'Departamento + Fila', 
+    description: 'Vê conversas do departamento e não atribuídas',
+    icon: <Users className="h-4 w-4" />,
+  },
 };
 
 export function WhatsAppAgentsManager() {
@@ -36,6 +61,7 @@ export function WhatsAppAgentsManager() {
   const [displayName, setDisplayName] = useState('');
   const [maxChats, setMaxChats] = useState('5');
   const [isSupervisor, setIsSupervisor] = useState(false);
+  const [visibilityMode, setVisibilityMode] = useState<VisibilityMode>('assigned_only');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
   const resetForm = () => {
@@ -43,6 +69,7 @@ export function WhatsAppAgentsManager() {
     setDisplayName('');
     setMaxChats('5');
     setIsSupervisor(false);
+    setVisibilityMode('assigned_only');
     setSelectedDepartments([]);
     setEditingAgent(null);
   };
@@ -56,6 +83,7 @@ export function WhatsAppAgentsManager() {
         setDisplayName(agent.display_name || '');
         setMaxChats(agent.max_concurrent_chats.toString());
         setIsSupervisor(agent.is_supervisor);
+        setVisibilityMode((agent as any).visibility_mode || 'all');
         setSelectedDepartments(agent.departments?.map(d => d.id) || []);
       }
     } else {
@@ -71,6 +99,7 @@ export function WhatsAppAgentsManager() {
         display_name: displayName || undefined,
         max_concurrent_chats: parseInt(maxChats),
         is_supervisor: isSupervisor,
+        visibility_mode: visibilityMode,
         department_ids: selectedDepartments,
       });
     } else {
@@ -80,6 +109,7 @@ export function WhatsAppAgentsManager() {
         display_name: displayName || undefined,
         max_concurrent_chats: parseInt(maxChats),
         is_supervisor: isSupervisor,
+        visibility_mode: visibilityMode,
         department_ids: selectedDepartments,
       });
     }
@@ -180,6 +210,28 @@ export function WhatsAppAgentsManager() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Visibilidade de Conversas</Label>
+                  <Select value={visibilityMode} onValueChange={(v) => setVisibilityMode(v as VisibilityMode)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(VISIBILITY_CONFIG).map(([key, config]) => (
+                        <SelectItem key={key} value={key}>
+                          <div className="flex items-center gap-2">
+                            {config.icon}
+                            <div>
+                              <p className="font-medium">{config.label}</p>
+                              <p className="text-xs text-muted-foreground">{config.description}</p>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Departamentos</Label>
                   <MultiSelect
                     options={departmentOptions}
@@ -193,7 +245,7 @@ export function WhatsAppAgentsManager() {
                   <div className="space-y-0.5">
                     <Label>Supervisor</Label>
                     <p className="text-sm text-muted-foreground">
-                      Pode ver todos os chats do departamento
+                      Pode ver todos os chats (ignora visibilidade)
                     </p>
                   </div>
                   <Switch
@@ -228,6 +280,7 @@ export function WhatsAppAgentsManager() {
               <TableRow>
                 <TableHead>Atendente</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Visibilidade</TableHead>
                 <TableHead>Departamentos</TableHead>
                 <TableHead>Chats</TableHead>
                 <TableHead className="w-[100px]">Ações</TableHead>
@@ -256,6 +309,11 @@ export function WhatsAppAgentsManager() {
                       <div className={`h-2 w-2 rounded-full ${STATUS_CONFIG[agent.status].color}`} />
                       <span className="text-sm">{STATUS_CONFIG[agent.status].label}</span>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {VISIBILITY_CONFIG[agent.visibility_mode]?.label || 'Todas'}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">

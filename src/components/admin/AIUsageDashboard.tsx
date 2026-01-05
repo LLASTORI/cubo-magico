@@ -1,16 +1,21 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CubeLoader } from '@/components/CubeLoader';
-import { Brain, TrendingUp, DollarSign, Activity, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Brain, TrendingUp, DollarSign, Activity, RefreshCw, AlertTriangle, CheckCircle2, Settings, RotateCcw, Infinity } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
 
 interface AIUsageDashboardProps {
   projectId?: string;
@@ -18,6 +23,15 @@ interface AIUsageDashboardProps {
 
 export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(projectId);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    daily_limit: 100,
+    monthly_limit: 3000,
+    is_unlimited: false,
+  });
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch projects for dropdown
   const { data: projects } = useQuery({
@@ -91,7 +105,7 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
   });
 
   // Fetch AI quota
-  const { data: quotaData, isLoading: quotaLoading } = useQuery({
+  const { data: quotaData, isLoading: quotaLoading, refetch: refetchQuota } = useQuery({
     queryKey: ['ai-quota', selectedProjectId],
     queryFn: async () => {
       if (!selectedProjectId) return null;
@@ -115,6 +129,113 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
     },
     enabled: !!selectedProjectId,
   });
+
+  // Update quota mutation
+  const updateQuotaMutation = useMutation({
+    mutationFn: async (values: { daily_limit: number; monthly_limit: number; is_unlimited: boolean }) => {
+      if (!selectedProjectId) throw new Error('Projeto não selecionado');
+
+      const { data: existing } = await supabase
+        .from('ai_project_quotas')
+        .select('id')
+        .eq('project_id', selectedProjectId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('ai_project_quotas')
+          .update({
+            daily_limit: values.daily_limit,
+            monthly_limit: values.monthly_limit,
+            is_unlimited: values.is_unlimited,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('project_id', selectedProjectId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('ai_project_quotas')
+          .insert({
+            project_id: selectedProjectId,
+            daily_limit: values.daily_limit,
+            monthly_limit: values.monthly_limit,
+            is_unlimited: values.is_unlimited,
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast({ title: 'Cota atualizada com sucesso!' });
+      setEditDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['ai-quota', selectedProjectId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar cota', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Reset daily usage mutation
+  const resetDailyMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedProjectId) throw new Error('Projeto não selecionado');
+      
+      const { error } = await supabase
+        .from('ai_project_quotas')
+        .update({
+          current_daily_usage: 0,
+          last_daily_reset: new Date().toISOString(),
+        })
+        .eq('project_id', selectedProjectId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Uso diário resetado!' });
+      queryClient.invalidateQueries({ queryKey: ['ai-quota', selectedProjectId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao resetar', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Reset monthly usage mutation
+  const resetMonthlyMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedProjectId) throw new Error('Projeto não selecionado');
+      
+      const { error } = await supabase
+        .from('ai_project_quotas')
+        .update({
+          current_monthly_usage: 0,
+          last_monthly_reset: new Date().toISOString(),
+        })
+        .eq('project_id', selectedProjectId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Uso mensal resetado!' });
+      queryClient.invalidateQueries({ queryKey: ['ai-quota', selectedProjectId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao resetar', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const openEditDialog = () => {
+    if (quotaData) {
+      setEditForm({
+        daily_limit: quotaData.daily_limit || 100,
+        monthly_limit: quotaData.monthly_limit || 3000,
+        is_unlimited: quotaData.is_unlimited || false,
+      });
+    }
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveQuota = () => {
+    updateQuotaMutation.mutate(editForm);
+  };
 
   const isLoading = usageLoading || quotaLoading;
 
@@ -157,7 +278,7 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={() => refetchUsage()}>
+          <Button variant="outline" size="icon" onClick={() => { refetchUsage(); refetchQuota(); }}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -176,6 +297,73 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
 
       {selectedProjectId && !isLoading && (
         <>
+          {/* Quota Management Card */}
+          <Card className="border-primary/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Gerenciar Cotas de IA
+                </CardTitle>
+                <CardDescription>
+                  Configure os limites de uso de IA para este projeto
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => resetDailyMutation.mutate()} disabled={resetDailyMutation.isPending}>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset Diário
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => resetMonthlyMutation.mutate()} disabled={resetMonthlyMutation.isPending}>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset Mensal
+                </Button>
+                <Button size="sm" onClick={openEditDialog}>
+                  <Settings className="h-4 w-4 mr-1" />
+                  Editar Limites
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Limite Diário:</span>
+                  <span className="ml-2 font-medium">
+                    {quotaData?.is_unlimited ? (
+                      <Badge variant="secondary" className="gap-1"><Infinity className="h-3 w-3" />Ilimitado</Badge>
+                    ) : (
+                      quotaData?.daily_limit || 100
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Limite Mensal:</span>
+                  <span className="ml-2 font-medium">
+                    {quotaData?.is_unlimited ? (
+                      <Badge variant="secondary" className="gap-1"><Infinity className="h-3 w-3" />Ilimitado</Badge>
+                    ) : (
+                      quotaData?.monthly_limit || 3000
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className="ml-2">
+                    {quotaData?.is_unlimited ? (
+                      <Badge className="bg-green-500">Sem Limites</Badge>
+                    ) : dailyProgress >= 100 ? (
+                      <Badge variant="destructive">Cota Excedida</Badge>
+                    ) : dailyProgress >= 80 ? (
+                      <Badge variant="secondary" className="bg-yellow-500 text-white">Quase no Limite</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-green-600 border-green-600">Normal</Badge>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Quota Overview */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
@@ -372,6 +560,72 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
           </Card>
         </>
       )}
+
+      {/* Edit Quota Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Limites de Cota IA</DialogTitle>
+            <DialogDescription>
+              Configure os limites diários e mensais de chamadas de IA para este projeto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Uso Ilimitado</Label>
+                <p className="text-sm text-muted-foreground">
+                  Remover todos os limites de uso
+                </p>
+              </div>
+              <Switch
+                checked={editForm.is_unlimited}
+                onCheckedChange={(checked) => setEditForm({ ...editForm, is_unlimited: checked })}
+              />
+            </div>
+            
+            {!editForm.is_unlimited && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="daily_limit">Limite Diário</Label>
+                  <Input
+                    id="daily_limit"
+                    type="number"
+                    value={editForm.daily_limit}
+                    onChange={(e) => setEditForm({ ...editForm, daily_limit: parseInt(e.target.value) || 0 })}
+                    min={0}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Número máximo de chamadas de IA por dia
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monthly_limit">Limite Mensal</Label>
+                  <Input
+                    id="monthly_limit"
+                    type="number"
+                    value={editForm.monthly_limit}
+                    onChange={(e) => setEditForm({ ...editForm, monthly_limit: parseInt(e.target.value) || 0 })}
+                    min={0}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Número máximo de chamadas de IA por mês
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveQuota} disabled={updateQuotaMutation.isPending}>
+              {updateQuotaMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

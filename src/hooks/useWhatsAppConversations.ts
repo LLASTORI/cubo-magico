@@ -52,6 +52,9 @@ export function useWhatsAppConversations(filters?: {
   status?: string;
   department_id?: string;
   assigned_to?: string;
+  visibility_mode?: 'all' | 'department' | 'assigned_only' | 'department_and_unassigned';
+  current_agent_id?: string;
+  agent_department_ids?: string[];
 }) {
   const { currentProject } = useProject();
   const { toast } = useToast();

@@ -3373,6 +3373,7 @@ export type Database = {
           project_id: string
           responded_at: string | null
           role: Database["public"]["Enums"]["project_role"]
+          role_template_id: string | null
           status: Database["public"]["Enums"]["invite_status"]
         }
         Insert: {
@@ -3420,6 +3421,7 @@ export type Database = {
           project_id: string
           responded_at?: string | null
           role?: Database["public"]["Enums"]["project_role"]
+          role_template_id?: string | null
           status?: Database["public"]["Enums"]["invite_status"]
         }
         Update: {
@@ -3467,6 +3469,7 @@ export type Database = {
           project_id?: string
           responded_at?: string | null
           role?: Database["public"]["Enums"]["project_role"]
+          role_template_id?: string | null
           status?: Database["public"]["Enums"]["invite_status"]
         }
         Relationships: [
@@ -3475,6 +3478,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_invites_role_template_id_fkey"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -3559,6 +3569,7 @@ export type Database = {
           joined_at: string
           project_id: string
           role: Database["public"]["Enums"]["project_role"]
+          role_template_id: string | null
           user_id: string
         }
         Insert: {
@@ -3566,6 +3577,7 @@ export type Database = {
           joined_at?: string
           project_id: string
           role?: Database["public"]["Enums"]["project_role"]
+          role_template_id?: string | null
           user_id: string
         }
         Update: {
@@ -3573,6 +3585,7 @@ export type Database = {
           joined_at?: string
           project_id?: string
           role?: Database["public"]["Enums"]["project_role"]
+          role_template_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -3581,6 +3594,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_role_template_id_fkey"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -3661,6 +3681,142 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      role_templates: {
+        Row: {
+          base_role: Database["public"]["Enums"]["project_role"] | null
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          icon: string | null
+          id: string
+          is_custom: boolean | null
+          is_system_default: boolean | null
+          name: string
+          perm_analise: Database["public"]["Enums"]["permission_level"] | null
+          perm_automacoes:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_chat_ao_vivo:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_configuracoes:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_crm: Database["public"]["Enums"]["permission_level"] | null
+          perm_dashboard: Database["public"]["Enums"]["permission_level"] | null
+          perm_insights: Database["public"]["Enums"]["permission_level"] | null
+          perm_lancamentos:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_meta_ads: Database["public"]["Enums"]["permission_level"] | null
+          perm_ofertas: Database["public"]["Enums"]["permission_level"] | null
+          perm_pesquisas: Database["public"]["Enums"]["permission_level"] | null
+          perm_social_listening:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          project_id: string | null
+          updated_at: string | null
+          whatsapp_auto_create_agent: boolean | null
+          whatsapp_is_supervisor: boolean | null
+          whatsapp_max_chats: number | null
+          whatsapp_visibility_mode: string | null
+        }
+        Insert: {
+          base_role?: Database["public"]["Enums"]["project_role"] | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_custom?: boolean | null
+          is_system_default?: boolean | null
+          name: string
+          perm_analise?: Database["public"]["Enums"]["permission_level"] | null
+          perm_automacoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_chat_ao_vivo?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_configuracoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_crm?: Database["public"]["Enums"]["permission_level"] | null
+          perm_dashboard?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_insights?: Database["public"]["Enums"]["permission_level"] | null
+          perm_lancamentos?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_meta_ads?: Database["public"]["Enums"]["permission_level"] | null
+          perm_ofertas?: Database["public"]["Enums"]["permission_level"] | null
+          perm_pesquisas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_social_listening?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          project_id?: string | null
+          updated_at?: string | null
+          whatsapp_auto_create_agent?: boolean | null
+          whatsapp_is_supervisor?: boolean | null
+          whatsapp_max_chats?: number | null
+          whatsapp_visibility_mode?: string | null
+        }
+        Update: {
+          base_role?: Database["public"]["Enums"]["project_role"] | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_custom?: boolean | null
+          is_system_default?: boolean | null
+          name?: string
+          perm_analise?: Database["public"]["Enums"]["permission_level"] | null
+          perm_automacoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_chat_ao_vivo?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_configuracoes?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_crm?: Database["public"]["Enums"]["permission_level"] | null
+          perm_dashboard?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_insights?: Database["public"]["Enums"]["permission_level"] | null
+          perm_lancamentos?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_meta_ads?: Database["public"]["Enums"]["permission_level"] | null
+          perm_ofertas?: Database["public"]["Enums"]["permission_level"] | null
+          perm_pesquisas?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          perm_social_listening?:
+            | Database["public"]["Enums"]["permission_level"]
+            | null
+          project_id?: string | null
+          updated_at?: string | null
+          whatsapp_auto_create_agent?: boolean | null
+          whatsapp_is_supervisor?: boolean | null
+          whatsapp_max_chats?: number | null
+          whatsapp_visibility_mode?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_templates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       social_comments: {
         Row: {
@@ -4824,6 +4980,7 @@ export type Database = {
           status: Database["public"]["Enums"]["agent_status"]
           updated_at: string
           user_id: string
+          visibility_mode: string | null
           work_hours: Json | null
         }
         Insert: {
@@ -4838,6 +4995,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["agent_status"]
           updated_at?: string
           user_id: string
+          visibility_mode?: string | null
           work_hours?: Json | null
         }
         Update: {
@@ -4852,6 +5010,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["agent_status"]
           updated_at?: string
           user_id?: string
+          visibility_mode?: string | null
           work_hours?: Json | null
         }
         Relationships: [
@@ -5294,6 +5453,10 @@ export type Database = {
         Returns: boolean
       }
       can_user_create_project: { Args: { _user_id: string }; Returns: boolean }
+      can_view_conversation: {
+        Args: { p_conversation_id: string; p_user_id: string }
+        Returns: boolean
+      }
       cleanup_old_webhook_metrics: { Args: never; Returns: undefined }
       count_project_members: { Args: { _project_id: string }; Returns: number }
       count_user_projects: { Args: { _user_id: string }; Returns: number }

@@ -64,17 +64,15 @@ const handler = async (req: Request): Promise<Response> => {
       minute: '2-digit'
     });
 
-    // Different CTA based on whether user exists
-    const ctaUrl = isExistingUser 
-      ? `${appUrl}/projects`
-      : `${appUrl}/accept-invite?token=${inviteId}&email=${encodeURIComponent(email)}`;
+    // Always use /accept-invite URL - the page handles login vs signup
+    const ctaUrl = `${appUrl}/accept-invite?token=${inviteId}&email=${encodeURIComponent(email)}`;
     
     const ctaText = isExistingUser 
-      ? "Acessar Meus Projetos"
+      ? "Fazer Login e Aceitar Convite"
       : "Criar Conta e Aceitar Convite";
 
     const instructionText = isExistingUser
-      ? "Para aceitar o convite, acesse sua conta no Cubo Mágico e vá até a seção de projetos. O convite aparecerá automaticamente para você aceitar."
+      ? "Clique no botão abaixo para fazer login e aceitar o convite."
       : "Clique no botão abaixo para criar sua conta e aceitar o convite automaticamente.";
 
     const emailResponse = await resend.emails.send({

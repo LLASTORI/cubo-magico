@@ -286,6 +286,17 @@ async function classifyWithLovableAI(commentText: string, postContext: string, c
     }),
   })
 
+  // Handle credit exhaustion and rate limit errors
+  if (response.status === 402) {
+    console.error('[LOVABLE_AI] Credits exhausted (402 Payment Required)')
+    throw new Error('LOVABLE_CREDITS_EXHAUSTED')
+  }
+  
+  if (response.status === 429) {
+    console.error('[LOVABLE_AI] Rate limit exceeded (429)')
+    throw new Error('LOVABLE_RATE_LIMITED')
+  }
+
   if (!response.ok) {
     const errorText = await response.text()
     throw new Error(`Lovable AI error: ${response.status} - ${errorText}`)
@@ -1001,7 +1012,21 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
         aiProcessed: 0,
         failed: 0,
         quotaExceeded: true,
-        quotaInfo: quotaResult
+        quotaInfo: quotaResult,
+        lovableRemaining: quotaResult.lovable_remaining || 0
+      }
+    }
+
+    // Check if we need to use fallback provider (Lovable credits exhausted)
+    let useFallbackProvider = quotaResult.use_fallback_provider || null
+    if (useFallbackProvider === 'openai' && !OPENAI_API_KEY) {
+      console.log('[AI_PROCESS] Lovable credits exhausted and no OpenAI key configured')
+      return {
+        success: false,
+        error: 'Créditos de IA esgotados. Configure uma API Key OpenAI para continuar processando.',
+        quotaExceeded: true,
+        lovableRemaining: 0,
+        noFallbackAvailable: true
       }
     }
 
@@ -1011,20 +1036,14 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
       .update({ ai_processing_status: 'processing' })
       .in('id', commentsForAI.map(c => c.id))
 
-    // Get provider preference from ai_project_quotas
-    const { data: quotaSettings } = await supabase
-      .from('ai_project_quotas')
-      .select('provider_preference')
-      .eq('project_id', projectId)
-      .maybeSingle()
-
-    const providerPreference = quotaSettings?.provider_preference || 'lovable'
+    // Get provider preference from quota result or ai_project_quotas
+    const providerPreference = quotaResult.provider_preference || 'lovable'
     
-    // Determine which provider to use based on preference and availability
-    const useOpenAI = providerPreference === 'openai' && !!OPENAI_API_KEY
-    const useLovableFirst = providerPreference === 'lovable' || !OPENAI_API_KEY
+    // Determine which provider to use based on preference, availability, and fallback
+    const useOpenAI = useFallbackProvider === 'openai' || (providerPreference === 'openai' && !!OPENAI_API_KEY)
+    const useLovableFirst = !useOpenAI && (providerPreference === 'lovable' || !OPENAI_API_KEY)
     
-    console.log(`[AI_PROCESS] Provider preference: ${providerPreference}, Using OpenAI: ${useOpenAI}, Using Lovable First: ${useLovableFirst}`)
+    console.log(`[AI_PROCESS] Provider preference: ${providerPreference}, Fallback: ${useFallbackProvider}, Using OpenAI: ${useOpenAI}, Using Lovable First: ${useLovableFirst}`)
 
     if (useLovableFirst) {
       // Use Lovable AI as primary
@@ -1066,6 +1085,20 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
           aiProcessed++
         } catch (lovableError: any) {
           console.error(`[AI_PROCESS] Lovable AI error for ${comment.id}:`, lovableError.message)
+          
+          // Check if credits exhausted or rate limited - mark in database
+          if (lovableError.message === 'LOVABLE_CREDITS_EXHAUSTED' || lovableError.message === 'LOVABLE_RATE_LIMITED') {
+            console.log('[AI_PROCESS] Lovable credits exhausted/rate limited, marking and switching to fallback')
+            
+            // Update quota to mark Lovable as exhausted
+            await supabase
+              .from('ai_project_quotas')
+              .update({ 
+                lovable_credits_used: supabase.raw('lovable_credits_limit'),
+                updated_at: new Date().toISOString() 
+              })
+              .eq('project_id', projectId)
+          }
           
           // Try OpenAI as fallback if available
           if (OPENAI_API_KEY) {

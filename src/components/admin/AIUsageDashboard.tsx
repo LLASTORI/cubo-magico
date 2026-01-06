@@ -519,18 +519,44 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
                       <Zap className="h-4 w-4 text-purple-500" />
                       Créditos Lovable AI
+                      {(() => {
+                        const remaining = (quotaData?.lovable_credits_limit || 1000) - (quotaData?.lovable_credits_used || 0);
+                        const percentRemaining = (remaining / (quotaData?.lovable_credits_limit || 1000)) * 100;
+                        if (remaining <= 0) return <Badge variant="destructive" className="ml-auto">Esgotado</Badge>;
+                        if (percentRemaining <= 20) return <Badge className="ml-auto bg-orange-500">Crítico</Badge>;
+                        if (percentRemaining <= 50) return <Badge className="ml-auto bg-yellow-500">Atenção</Badge>;
+                        return <Badge variant="outline" className="ml-auto text-green-600 border-green-600">Normal</Badge>;
+                      })()}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>{quotaData?.lovable_credits_used || 0} usados</span>
-                        <span className="text-muted-foreground">de {quotaData?.lovable_credits_limit || 1000}</span>
+                    <div className="space-y-3">
+                      {/* Used / Remaining / Limit */}
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-xl font-bold text-muted-foreground">{quotaData?.lovable_credits_used || 0}</div>
+                          <div className="text-xs text-muted-foreground">Usados</div>
+                        </div>
+                        <div>
+                          <div className="text-xl font-bold text-primary">
+                            {Math.max(0, (quotaData?.lovable_credits_limit || 1000) - (quotaData?.lovable_credits_used || 0))}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Restantes</div>
+                        </div>
+                        <div>
+                          <div className="text-xl font-bold">{quotaData?.lovable_credits_limit || 1000}</div>
+                          <div className="text-xs text-muted-foreground">Limite</div>
+                        </div>
                       </div>
                       <Progress value={lovableCreditsProgress} className="h-2" />
-                      {lovableCreditsProgress >= 80 && (
-                        <p className="text-xs text-yellow-600">
-                          {lovableCreditsProgress >= 100 ? 'Limite atingido! Sistema usará fallback se disponível.' : 'Quase no limite!'}
+                      {lovableCreditsProgress >= 80 && lovableCreditsProgress < 100 && (
+                        <p className="text-xs text-yellow-600 text-center">
+                          ⚠️ Quase no limite! Considere usar OpenAI como fallback.
+                        </p>
+                      )}
+                      {lovableCreditsProgress >= 100 && (
+                        <p className="text-xs text-red-600 text-center font-medium">
+                          ❌ Créditos esgotados! {hasOpenAIKey ? 'Sistema usando OpenAI automaticamente.' : 'Configure uma API Key OpenAI.'}
                         </p>
                       )}
                     </div>
@@ -584,6 +610,17 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Critical Alert when both providers unavailable */}
+              {lovableCreditsProgress >= 100 && !hasOpenAIKey && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Processamento de IA pausado!</strong> Os créditos Lovable AI estão esgotados e não há API Key OpenAI configurada como fallback. 
+                    Configure uma API Key OpenAI ou aguarde o próximo mês para que os créditos sejam resetados automaticamente.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Info Card */}
               <Alert>

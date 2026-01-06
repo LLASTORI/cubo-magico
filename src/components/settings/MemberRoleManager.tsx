@@ -4,6 +4,7 @@ import { useRoleTemplates, RoleTemplate, useApplyRoleTemplate } from '@/hooks/us
 import { useProjectPlanInfo } from '@/hooks/useProjectPlanInfo';
 import { useProject } from '@/contexts/ProjectContext';
 import { RoleTemplateSelector } from './RoleTemplateSelector';
+import { MemberPermissionsDialog } from './MemberPermissionsDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Users, Crown, Shield, User, Settings2, Loader2, 
-  AlertTriangle, CheckCircle2, UserPlus, Package, Sparkles, Trash2, Mail
+  AlertTriangle, CheckCircle2, UserPlus, Package, Sparkles, Trash2, Mail, SlidersHorizontal
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -49,6 +50,11 @@ export function MemberRoleManager() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteTemplateId, setInviteTemplateId] = useState<string>('');
   const [isInviting, setIsInviting] = useState(false);
+
+  // Permissions dialog state
+  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
+  const [permissionsMember, setPermissionsMember] = useState<typeof members[0] | null>(null);
+  const [permissionsTemplateName, setPermissionsTemplateName] = useState<string | null>(null);
 
   // Fetch current role_template_id for members
   const [memberTemplates, setMemberTemplates] = useState<Record<string, string | null>>({});
@@ -146,6 +152,13 @@ export function MemberRoleManager() {
     const templateId = memberTemplates[memberId];
     if (!templateId) return null;
     return templates.find(t => t.id === templateId);
+  };
+
+  const handleOpenPermissionsDialog = (member: typeof members[0]) => {
+    const template = getTemplateInfo(member.id);
+    setPermissionsMember(member);
+    setPermissionsTemplateName(template?.name || null);
+    setIsPermissionsDialogOpen(true);
   };
 
   const membersWithoutTemplate = members.filter(m => 
@@ -339,13 +352,34 @@ export function MemberRoleManager() {
                             </TooltipContent>
                           </Tooltip>
                           {canManage && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleOpenDialog(member)}
-                            >
-                              <Settings2 className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleOpenDialog(member)}
+                                  >
+                                    <Settings2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Alterar cargo</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleOpenPermissionsDialog(member)}
+                                  >
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ajustar permissões</TooltipContent>
+                              </Tooltip>
+                            </>
                           )}
                         </div>
                       ) : (
@@ -367,13 +401,28 @@ export function MemberRoleManager() {
                             </TooltipContent>
                           </Tooltip>
                           {canManage && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleOpenDialog(member)}
-                            >
-                              Definir Cargo
-                            </Button>
+                            <>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleOpenDialog(member)}
+                              >
+                                Definir Cargo
+                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleOpenPermissionsDialog(member)}
+                                  >
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ajustar permissões</TooltipContent>
+                              </Tooltip>
+                            </>
                           )}
                         </div>
                       )}
@@ -515,6 +564,14 @@ export function MemberRoleManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para permissões granulares */}
+      <MemberPermissionsDialog
+        open={isPermissionsDialogOpen}
+        onOpenChange={setIsPermissionsDialogOpen}
+        member={permissionsMember}
+        templateName={permissionsTemplateName}
+      />
     </div>
   );
 }

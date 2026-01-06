@@ -66,6 +66,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Always use /accept-invite URL - the page handles login vs signup
     const ctaUrl = `${appUrl}/accept-invite?token=${inviteId}&email=${encodeURIComponent(email)}`;
+    // Escape URL for HTML email clients (ensures & is encoded as &amp;)
+    const safeCtaUrl = escapeHtml(ctaUrl);
     
     const ctaText = isExistingUser 
       ? "Fazer Login e Aceitar Convite"
@@ -130,7 +132,7 @@ const handler = async (req: Request): Promise<Response> => {
                       </p>
                       
                       <div style="text-align: center;">
-                        <a href="${ctaUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px;">
+                        <a href="${safeCtaUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px;">
                           ${ctaText}
                         </a>
                       </div>

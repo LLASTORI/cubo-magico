@@ -36,7 +36,7 @@ export interface ProjectInvite {
 const ROLE_LABELS: Record<ProjectRole, string> = {
   owner: 'Proprietário',
   manager: 'Gerente',
-  operator: 'Operador',
+  operator: 'Visitante',
 };
 
 const ROLE_HIERARCHY: Record<ProjectRole, number> = {

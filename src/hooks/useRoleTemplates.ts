@@ -270,27 +270,49 @@ export function useApplyRoleTemplate() {
 
       const userId = memberData.user_id;
 
-      // 3. Atualizar permissões granulares
-      const permissionAreas = [
-        'dashboard', 'analise', 'crm', 'automacoes', 'chat_ao_vivo',
-        'meta_ads', 'ofertas', 'lancamentos', 'configuracoes',
-        'insights', 'pesquisas', 'social_listening'
-      ];
+      // 3. Atualizar permissões granulares - todas as colunas de uma vez
+      const permissionsUpdate = {
+        dashboard: template.perm_dashboard,
+        analise: template.perm_analise,
+        crm: template.perm_crm,
+        automacoes: template.perm_automacoes,
+        chat_ao_vivo: template.perm_chat_ao_vivo,
+        meta_ads: template.perm_meta_ads,
+        ofertas: template.perm_ofertas,
+        lancamentos: template.perm_lancamentos,
+        configuracoes: template.perm_configuracoes,
+        insights: template.perm_insights,
+        pesquisas: template.perm_pesquisas,
+        social_listening: template.perm_social_listening,
+        updated_at: new Date().toISOString(),
+      };
 
-      for (const area of permissionAreas) {
-        const permKey = `perm_${area}` as keyof RoleTemplate;
-        const level = template[permKey] as PermissionLevel;
+      // Tentar update primeiro, se não existir, fazer insert
+      const { data: existingPerm } = await supabase
+        .from('project_member_permissions')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .maybeSingle();
 
-        await supabase
+      if (existingPerm) {
+        const { error: permError } = await supabase
           .from('project_member_permissions')
-          .upsert({
+          .update(permissionsUpdate)
+          .eq('project_id', projectId)
+          .eq('user_id', userId);
+
+        if (permError) throw permError;
+      } else {
+        const { error: permError } = await supabase
+          .from('project_member_permissions')
+          .insert({
             project_id: projectId,
             user_id: userId,
-            area,
-            level,
-          }, {
-            onConflict: 'project_id,user_id,area',
+            ...permissionsUpdate,
           });
+
+        if (permError) throw permError;
       }
 
       // 4. Se template tem chat_ao_vivo habilitado e whatsapp_auto_create_agent, criar/atualizar agente

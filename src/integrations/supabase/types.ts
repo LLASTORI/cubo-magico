@@ -5660,7 +5660,7 @@ export type Database = {
         Returns: boolean
       }
       check_and_use_ai_quota: {
-        Args: { p_items_count?: number; p_project_id: string }
+        Args: { p_items_count: number; p_project_id: string }
         Returns: Json
       }
       cleanup_old_webhook_metrics: { Args: never; Returns: undefined }

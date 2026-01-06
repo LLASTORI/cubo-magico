@@ -167,6 +167,15 @@ export const useProjectMembers = (projectId: string | null) => {
       return { error: new Error('Já existe um convite pendente para este email') };
     }
 
+    // Check if user already exists in the system
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+
+    const isExistingUser = !!existingProfile;
+
     const { data: insertedInvite, error } = await supabase
       .from('project_invites')
       .insert({
@@ -199,6 +208,7 @@ export const useProjectMembers = (projectId: string | null) => {
             inviterName,
             role,
             expiresAt: insertedInvite.expires_at,
+            isExistingUser, // New flag to customize email
           },
         });
       } catch (emailError) {

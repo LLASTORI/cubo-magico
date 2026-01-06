@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2, Crown, Database, Brain } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2, Crown, Database, Brain, Trash2, AlertTriangle } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -64,6 +64,12 @@ const Admin = () => {
     is_active: true,
     role: 'user' as string,
   });
+
+  // Delete user state
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Check if current user is admin or super_admin
   useEffect(() => {
@@ -188,7 +194,55 @@ const Admin = () => {
     }
   };
 
-  const filteredUsers = users.filter(u => 
+  const openDeleteDialog = (userProfile: UserProfile) => {
+    setDeletingUser(userProfile);
+    setDeleteConfirmEmail('');
+    setIsDeleteOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser || !isSuperAdmin) return;
+
+    if (deleteConfirmEmail.toLowerCase() !== deletingUser.email?.toLowerCase()) {
+      toast({ 
+        title: 'Email não confere', 
+        description: 'Digite o email exato do usuário para confirmar a exclusão',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: {
+          userId: deletingUser.id,
+          confirmEmail: deleteConfirmEmail,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({ 
+        title: 'Usuário excluído', 
+        description: `${deletingUser.email} foi removido completamente do sistema.`
+      });
+      setIsDeleteOpen(false);
+      setDeletingUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      toast({ 
+        title: 'Erro ao excluir', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const filteredUsers = users.filter(u =>
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -475,14 +529,26 @@ const Admin = () => {
                     </TableCell>
                     <TableCell>{u.project_count}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(u)}
-                        disabled={u.id === user?.id}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(u)}
+                          disabled={u.id === user?.id}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        {isSuperAdmin && u.id !== user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openDeleteDialog(u)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -619,6 +685,70 @@ const Admin = () => {
                   <Button onClick={handleSave} disabled={saving}>
                     {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                     Salvar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete User Confirmation Dialog */}
+            <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="w-5 h-5" />
+                    Excluir Usuário Permanentemente
+                  </DialogTitle>
+                  <DialogDescription>
+                    Esta ação é <strong>irreversível</strong>. Todos os dados do usuário serão excluídos.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">Dados que serão excluídos:</p>
+                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                      <li>Conta de autenticação</li>
+                      <li>Perfil e dados pessoais</li>
+                      <li>Participações em projetos</li>
+                      <li>Assinaturas</li>
+                      <li>Convites pendentes</li>
+                      <li>Histórico de atividades</li>
+                      <li>Notificações</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      Usuário: <strong>{deletingUser?.full_name || 'Sem nome'}</strong>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Email: <strong>{deletingUser?.email}</strong>
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-email">
+                      Digite o email do usuário para confirmar:
+                    </Label>
+                    <Input
+                      id="confirm-email"
+                      type="email"
+                      placeholder={deletingUser?.email || ''}
+                      value={deleteConfirmEmail}
+                      onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleDeleteUser} 
+                    disabled={isDeleting || deleteConfirmEmail.toLowerCase() !== deletingUser?.email?.toLowerCase()}
+                  >
+                    {isDeleting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Excluir Permanentemente
                   </Button>
                 </DialogFooter>
               </DialogContent>

@@ -112,7 +112,6 @@ export function useSocialListening(projectId: string | undefined) {
     postId?: string;
     search?: string;
     postType?: string; // 'organic' | 'ad' | 'all'
-    authorUsername?: string;
   }) => {
     return useQuery({
       queryKey: ['social_comments', projectId, filters],
@@ -138,13 +137,10 @@ export function useSocialListening(projectId: string | undefined) {
         if (filters?.postId) {
           query = query.eq('post_id', filters.postId);
         }
+        // Combined search: text OR username
         if (filters?.search) {
-          query = query.ilike('text', `%${filters.search}%`);
-        }
-        // Filter by author username (@ search)
-        if (filters?.authorUsername) {
-          const cleanUsername = filters.authorUsername.replace(/^@/, '');
-          query = query.ilike('author_username', `%${cleanUsername}%`);
+          const searchTerm = filters.search.replace(/^@/, '');
+          query = query.or(`text.ilike.%${searchTerm}%,author_username.ilike.%${searchTerm}%`);
         }
         // Filter by post type (organic vs ad)
         if (filters?.postType === 'ad') {

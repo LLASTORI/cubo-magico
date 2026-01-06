@@ -88,7 +88,6 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     postType: 'all',
     search: '',
     postId: '',
-    authorUsername: '',
   });
   const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
@@ -371,24 +370,14 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar no texto..."
+                placeholder="Buscar texto ou @usuário..."
                 className="pl-9"
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              />
-            </div>
-            
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">@</span>
-              <Input
-                placeholder="Buscar usuário..."
-                className="pl-8"
-                value={filters.authorUsername}
-                onChange={(e) => setFilters({ ...filters, authorUsername: e.target.value })}
               />
             </div>
 
@@ -457,7 +446,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
 
             <Button 
               variant="ghost" 
-              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', postType: 'all', search: '', postId: '', authorUsername: '' })}
+              onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', postType: 'all', search: '', postId: '' })}
             >
               Limpar
             </Button>

@@ -74,22 +74,33 @@ const AcceptInvite = () => {
 
   useEffect(() => {
     const checkInvite = async () => {
+      // Diagnostic logs
+      console.log('[AcceptInvite] Starting invite check...');
+      console.log('[AcceptInvite] Token from URL:', inviteToken);
+      console.log('[AcceptInvite] Email from URL:', inviteEmail);
+
       if (!inviteToken || !inviteEmail) {
+        console.warn('[AcceptInvite] Missing token or email in URL params');
         setCheckingInvite(false);
         return;
       }
 
       const normalizedEmail = inviteEmail.toLowerCase().trim();
+      console.log('[AcceptInvite] Normalized email:', normalizedEmail);
 
       try {
+        console.log('[AcceptInvite] Calling RPC get_project_invite_public...');
         // Use public RPC function to get invite details (works for anonymous users)
         const { data, error } = await supabase.rpc('get_project_invite_public', {
           p_invite_id: inviteToken,
           p_email: normalizedEmail,
         });
 
+        console.log('[AcceptInvite] RPC response - data:', JSON.stringify(data, null, 2));
+        console.log('[AcceptInvite] RPC response - error:', error);
+
         if (error) {
-          console.error('Error fetching invite:', error);
+          console.error('[AcceptInvite] RPC error:', error.message, error.code, error.details);
           toast({
             title: 'Erro ao verificar convite',
             description: 'Não foi possível verificar o convite. Tente novamente.',
@@ -100,8 +111,10 @@ const AcceptInvite = () => {
         }
 
         const result = data as { success: boolean; error?: string; invite?: any; has_account?: boolean };
+        console.log('[AcceptInvite] Parsed result - success:', result.success, '| error:', result.error, '| has_account:', result.has_account);
 
         if (!result.success) {
+          console.warn('[AcceptInvite] Invite validation failed with error:', result.error);
           let errorTitle = 'Convite inválido';
           let errorDescription = 'Este convite não existe, já foi usado ou expirou.';
           
@@ -116,6 +129,7 @@ const AcceptInvite = () => {
             errorDescription = 'O convite não foi encontrado. Verifique se o link está correto ou solicite um novo convite.';
           }
 
+          console.log('[AcceptInvite] Showing error toast:', errorTitle, '-', errorDescription);
           toast({
             title: errorTitle,
             description: errorDescription,
@@ -126,6 +140,7 @@ const AcceptInvite = () => {
         }
 
         const inviteInfo = result.invite;
+        console.log('[AcceptInvite] Invite found successfully:', inviteInfo);
         setInvite({
           id: inviteInfo.id,
           email: inviteInfo.email,
@@ -136,8 +151,9 @@ const AcceptInvite = () => {
         });
 
         setHasAccount(result.has_account ?? false);
+        console.log('[AcceptInvite] User has existing account:', result.has_account);
       } catch (error) {
-        console.error('Error checking invite:', error);
+        console.error('[AcceptInvite] Unexpected error:', error);
         toast({
           title: 'Erro',
           description: 'Ocorreu um erro ao verificar o convite.',

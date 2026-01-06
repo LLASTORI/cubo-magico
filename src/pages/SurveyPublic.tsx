@@ -284,6 +284,8 @@ export default function SurveyPublic() {
             onChange={(value) => updateAnswer(currentQuestion.id, value)}
             allowMultiple={currentQuestion.settings?.allow_multiple || false}
             maxSelections={currentQuestion.settings?.max_selections || 0}
+            allowOther={currentQuestion.settings?.allow_other || false}
+            otherPlaceholder={currentQuestion.settings?.other_placeholder}
             {...questionProps}
           />
         );

@@ -257,6 +257,45 @@ export function useSocialListening(projectId: string | undefined) {
     },
     onSuccess: (data) => {
       const remaining = data.remaining || 0;
+      
+      // Check if quota was exceeded
+      if (data.quotaExceeded) {
+        const quotaReason = data.quotaInfo?.reason || 'daily_limit_exceeded';
+        let quotaMessage = 'Limite de IA atingido.';
+        
+        if (quotaReason === 'daily_limit_exceeded') {
+          quotaMessage = 'Limite diário de classificações IA atingido. Aguarde o reset amanhã ou aumente seu limite.';
+        } else if (quotaReason === 'monthly_limit_exceeded') {
+          quotaMessage = 'Limite mensal de classificações IA atingido. Aguarde o próximo mês ou aumente seu limite.';
+        } else if (quotaReason === 'lovable_credits_exhausted') {
+          quotaMessage = 'Créditos Lovable AI esgotados. Configure uma API Key OpenAI para continuar.';
+        }
+        
+        const processedPart = data.processed > 0 ? `${data.processed} classificados. ` : '';
+        
+        toast({
+          title: 'Limite de IA atingido',
+          description: `${processedPart}${quotaMessage}`,
+          variant: 'destructive',
+        });
+        queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['social_stats', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['ai-usage', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['ai-quota', projectId] });
+        return;
+      }
+      
+      // Check if no fallback available (Lovable exhausted + no OpenAI key)
+      if (data.noFallbackAvailable) {
+        toast({
+          title: 'Créditos de IA esgotados',
+          description: 'Créditos Lovable AI esgotados e nenhuma API Key OpenAI configurada. Configure uma chave nas configurações.',
+          variant: 'destructive',
+        });
+        queryClient.invalidateQueries({ queryKey: ['ai-usage', projectId] });
+        return;
+      }
+      
       const description = remaining > 0 
         ? `${data.processed} comentários classificados. Ainda restam ~${remaining} pendentes.`
         : `${data.processed} comentários classificados. Todos processados!`;

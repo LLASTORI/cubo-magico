@@ -131,6 +131,11 @@ const MODULE_TO_AREA_MAP: Record<string, keyof MemberPermissions> = {
   'social_listening': 'social_listening',
 };
 
+// Map feature module_key to project_modules.module_key (handles plural/singular differences)
+const FEATURE_MODULE_TO_PROJECT_MODULE: Record<string, string> = {
+  'automations': 'automation', // features use 'automations', project_modules uses 'automation'
+};
+
 // Map action in feature_key to required permission level
 const getRequiredLevelFromFeatureKey = (featureKey: string): PermissionLevel => {
   const lowerKey = featureKey.toLowerCase();
@@ -412,7 +417,9 @@ export const useFeatureAccess = (): UseFeatureAccessReturn => {
     }
 
     // Check if module is active in project (applies to everyone, including super admin)
-    if (currentProject && !activeModules.includes(moduleKey)) {
+    // Map feature module_key to project_modules.module_key if needed (e.g., 'automations' -> 'automation')
+    const projectModuleKey = FEATURE_MODULE_TO_PROJECT_MODULE[moduleKey] || moduleKey;
+    if (currentProject && !activeModules.includes(projectModuleKey)) {
       return false;
     }
 

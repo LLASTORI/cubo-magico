@@ -139,32 +139,41 @@ const AcceptInvite = () => {
   }, [inviteToken, inviteEmail, user]);
 
   const acceptInviteForLoggedUser = async () => {
-    if (!inviteToken || !user) return;
+    if (!inviteToken || !user) {
+      setCheckingInvite(false);
+      return;
+    }
 
     setLoading(true);
     try {
-      const { error } = await supabase.rpc('accept_project_invite', {
+      const { data, error } = await supabase.rpc('accept_project_invite', {
         p_invite_id: inviteToken,
         p_user_id: user.id,
       });
 
       if (error) throw error;
+      if ((data as any)?.success === false) {
+        throw new Error((data as any)?.error || 'Falha ao aceitar convite');
+      }
+
+      // Force access re-check (membership/subscription can change during this flow)
+      window.dispatchEvent(new Event('access-control:refresh'));
 
       toast({
         title: 'Convite aceito!',
         description: 'Você agora faz parte do projeto.',
       });
 
-      navigate('/projects');
+      navigate('/projects', { replace: true });
     } catch (error: any) {
       toast({
         title: 'Erro ao aceitar convite',
         description: error.message,
         variant: 'destructive',
       });
-      navigate('/projects');
     } finally {
       setLoading(false);
+      setCheckingInvite(false);
     }
   };
 
@@ -236,21 +245,25 @@ const AcceptInvite = () => {
         }
 
         // Accept the invite
-        const { error: acceptError } = await supabase.rpc('accept_project_invite', {
+        const { data: acceptData, error: acceptError } = await supabase.rpc('accept_project_invite', {
           p_invite_id: invite.id,
           p_user_id: signUpData.user.id,
         });
 
-        if (acceptError) {
-          console.error('Error accepting invite:', acceptError);
+        if (acceptError) throw acceptError;
+        if ((acceptData as any)?.success === false) {
+          throw new Error((acceptData as any)?.error || 'Falha ao aceitar convite');
         }
+
+        // Force access re-check (membership/subscription can change during this flow)
+        window.dispatchEvent(new Event('access-control:refresh'));
 
         toast({
           title: 'Conta criada com sucesso!',
           description: 'Você agora faz parte do projeto.',
         });
 
-        navigate('/projects');
+        navigate('/projects', { replace: true });
       }
     } catch (error: any) {
       toast({
@@ -295,14 +308,18 @@ const AcceptInvite = () => {
       // Accept the invite - get current user id from session
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
-        const { error: acceptError } = await supabase.rpc('accept_project_invite', {
+        const { data: acceptData, error: acceptError } = await supabase.rpc('accept_project_invite', {
           p_invite_id: invite.id,
           p_user_id: currentUser.id,
         });
 
-        if (acceptError) {
-          console.error('Error accepting invite:', acceptError);
+        if (acceptError) throw acceptError;
+        if ((acceptData as any)?.success === false) {
+          throw new Error((acceptData as any)?.error || 'Falha ao aceitar convite');
         }
+
+        // Force access re-check (membership/subscription can change during this flow)
+        window.dispatchEvent(new Event('access-control:refresh'));
       }
 
       toast({
@@ -310,7 +327,7 @@ const AcceptInvite = () => {
         description: 'Você agora faz parte do projeto.',
       });
 
-      navigate('/projects');
+      navigate('/projects', { replace: true });
     } catch (error: any) {
       toast({
         title: 'Erro ao fazer login',

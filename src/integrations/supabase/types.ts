@@ -5645,6 +5645,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_project_invite: {
+        Args: { p_invite_id: string; p_user_id: string }
+        Returns: Json
+      }
       aggregate_comment_metrics_daily: {
         Args: { p_date: string; p_project_id: string }
         Returns: undefined

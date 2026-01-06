@@ -1,18 +1,14 @@
-import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { useProjectMembers, ProjectRole, getRoleLabel, canManageRole } from '@/hooks/useProjectMembers';
-import { useRoleTemplates, RoleTemplate } from '@/hooks/useRoleTemplates';
-import { RoleTemplateSelector } from '@/components/settings/RoleTemplateSelector';
-import { Users, UserPlus, Mail, Crown, Shield, User, Trash2, Loader2, LogOut, ArrowRightLeft, AlertTriangle, Settings2 } from 'lucide-react';
-import { z } from 'zod';
+import { useProjectMembers, ProjectRole, getRoleLabel } from '@/hooks/useProjectMembers';
+import { useRoleTemplates } from '@/hooks/useRoleTemplates';
+import { Users, Mail, Crown, Shield, User, Trash2, LogOut, ArrowRightLeft, Settings2 } from 'lucide-react';
 
 interface TeamManagementDialogProps {
   projectId: string;
@@ -21,8 +17,6 @@ interface TeamManagementDialogProps {
   onOpenChange: (open: boolean) => void;
   onLeaveProject?: () => void;
 }
-
-const emailSchema = z.string().email('Email inválido');
 
 const getRoleIcon = (role: ProjectRole) => {
   switch (role) {
@@ -55,8 +49,6 @@ export const TeamManagementDialog = ({
     loading,
     memberCount,
     maxMembers,
-    canInvite,
-    inviteMember,
     cancelInvite,
     removeMember,
     transferOwnership,
@@ -65,36 +57,10 @@ export const TeamManagementDialog = ({
 
   const { templates } = useRoleTemplates(projectId);
 
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
-
-  const handleInvite = async () => {
-    const validation = emailSchema.safeParse(inviteEmail);
-    if (!validation.success) {
-      toast({ title: 'Email inválido', variant: 'destructive' });
-      return;
-    }
-
-    if (!selectedTemplateId || !selectedTemplate) {
-      toast({ title: 'Selecione um cargo', variant: 'destructive' });
-      return;
-    }
-
-    setSubmitting(true);
-    // Use o base_role do template selecionado
-    const { error } = await inviteMember(inviteEmail, selectedTemplate.base_role, projectName, selectedTemplateId);
-    setSubmitting(false);
-
-    if (error) {
-      toast({ title: 'Erro ao convidar', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'Convite enviado!', description: 'Um email foi enviado para o convidado.' });
-      setInviteEmail('');
-      setSelectedTemplateId('');
-    }
+  // Get template info for members
+  const getMemberTemplate = (member: typeof members[0]) => {
+    // We don't have role_template_id directly, but we can show the role
+    return null;
   };
 
   const handleCancelInvite = async (inviteId: string) => {
@@ -135,6 +101,8 @@ export const TeamManagementDialog = ({
     }
   };
 
+  const canManage = userRole === 'owner' || userRole === 'manager';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -149,45 +117,15 @@ export const TeamManagementDialog = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Limit Reached Alert */}
-          {memberCount >= maxMembers && (userRole === 'owner' || userRole === 'manager') && (
-            <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
-                <span className="font-medium">Limite de membros atingido!</span> Este projeto possui {memberCount} de {maxMembers} membros permitidos pelo plano. 
-                Para adicionar mais membros, faça upgrade do plano ou remova membros existentes.
+          {/* Info about managing in settings */}
+          {canManage && (
+            <Alert className="border-primary/30 bg-primary/5">
+              <Settings2 className="h-4 w-4 text-primary" />
+              <AlertDescription className="text-muted-foreground">
+                Para convidar novos membros ou gerenciar cargos, acesse{' '}
+                <span className="font-medium text-foreground">Configurações → Equipe</span>.
               </AlertDescription>
             </Alert>
-          )}
-
-          {/* Invite Section */}
-          {canInvite && (
-            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <UserPlus className="w-4 h-4" />
-                Convidar Membro
-              </div>
-              <div className="space-y-3">
-                <Input
-                  placeholder="email@exemplo.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Cargo</Label>
-                  <RoleTemplateSelector
-                    value={selectedTemplateId}
-                    onValueChange={setSelectedTemplateId}
-                    projectId={projectId}
-                    showPreview={true}
-                  />
-                </div>
-                <Button onClick={handleInvite} disabled={submitting || !inviteEmail || !selectedTemplateId} className="w-full">
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
-                  Convidar
-                </Button>
-              </div>
-            </div>
           )}
 
           {/* Members List */}
@@ -222,7 +160,7 @@ export const TeamManagementDialog = ({
                     </Badge>
                     
                     {/* Actions for non-owner members */}
-                    {member.role !== 'owner' && userRole && canManageRole(userRole, member.role) && (
+                    {member.role !== 'owner' && userRole && canManage && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -307,14 +245,16 @@ export const TeamManagementDialog = ({
                         {getRoleIcon(invite.role)}
                         {getRoleLabel(invite.role)}
                       </Badge>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8"
-                        onClick={() => handleCancelInvite(invite.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                      {canManage && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => handleCancelInvite(invite.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

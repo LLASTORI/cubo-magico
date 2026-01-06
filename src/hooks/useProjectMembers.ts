@@ -355,104 +355,22 @@ export const useMyInvites = () => {
   const acceptInvite = async (invite: ProjectInvite): Promise<{ error: any }> => {
     if (!user) return { error: new Error('Usuário não autenticado') };
 
-    // Get full invite data with role_template_id
-    const { data: fullInvite, error: fetchError } = await supabase
-      .from('project_invites')
-      .select('*, role_template:role_templates(*)')
-      .eq('id', invite.id)
-      .single();
-
-    if (fetchError) return { error: fetchError };
-
-    // Update invite status
-    const { error: updateError } = await supabase
-      .from('project_invites')
-      .update({ 
-        status: 'accepted',
-        responded_at: new Date().toISOString(),
-      })
-      .eq('id', invite.id);
-
-    if (updateError) return { error: updateError };
-
-    // Add as member with role_template_id
-    const { data: memberData, error: memberError } = await supabase
-      .from('project_members')
-      .insert({
-        project_id: invite.project_id,
-        user_id: user.id,
-        role: invite.role,
-        role_template_id: fullInvite?.role_template_id || null,
-      })
-      .select()
-      .single();
-
-    if (memberError) return { error: memberError };
-
-    // If there's a role template, apply its permissions
-    const template = fullInvite?.role_template;
-    if (template) {
-      // Apply permissions from template
-      const permissionAreas = [
-        'dashboard', 'analise', 'crm', 'automacoes', 'chat_ao_vivo',
-        'meta_ads', 'ofertas', 'lancamentos', 'configuracoes',
-        'insights', 'pesquisas', 'social_listening'
-      ];
-
-      for (const area of permissionAreas) {
-        const permKey = `perm_${area}`;
-        const level = template[permKey] || 'none';
-
-        await supabase
-          .from('project_member_permissions')
-          .upsert({
-            project_id: invite.project_id,
-            user_id: user.id,
-            area,
-            level,
-          }, {
-            onConflict: 'project_id,user_id,area',
-          });
-      }
-
-      // If template has chat_ao_vivo enabled and whatsapp_auto_create_agent, create agent
-      if (template.perm_chat_ao_vivo !== 'none' && template.whatsapp_auto_create_agent) {
-        await supabase
-          .from('whatsapp_agents')
-          .insert({
-            project_id: invite.project_id,
-            user_id: user.id,
-            visibility_mode: template.whatsapp_visibility_mode || 'assigned_only',
-            max_chats: template.whatsapp_max_chats || 5,
-            is_supervisor: template.whatsapp_is_supervisor || false,
-            is_active: true,
-          });
-      }
-    } else if (fullInvite) {
-      // Fallback to legacy permission fields if no template
-      const permissionsData: Record<string, any> = {
-        project_id: invite.project_id,
-        user_id: user.id,
-      };
-
-      const permissionFields = [
-        'permissions_dashboard', 'permissions_analise', 'permissions_crm',
-        'permissions_automacoes', 'permissions_chat_ao_vivo', 'permissions_meta_ads',
-        'permissions_ofertas', 'permissions_lancamentos', 'permissions_configuracoes'
-      ];
-
-      permissionFields.forEach(field => {
-        const areaName = field.replace('permissions_', '');
-        if (fullInvite[field]) {
-          permissionsData[areaName] = fullInvite[field];
-        }
+    // Usar função RPC atômica para aceitar convite
+    const { data, error } = await supabase
+      .rpc('accept_project_invite', {
+        p_invite_id: invite.id,
+        p_user_id: user.id,
       });
 
-      await supabase
-        .from('project_member_permissions')
-        .update(permissionsData)
-        .eq('project_id', invite.project_id)
-        .eq('user_id', user.id);
+    if (error) {
+      console.error('Error accepting invite via RPC:', error);
+      return { error };
+    }
+
+    const result = data as { success: boolean; error?: string; member_id?: string; project_id?: string };
+
+    if (!result.success) {
+      return { error: new Error(result.error || 'Erro ao aceitar convite') };
     }
 
     // Create CRM contact for team member with "Equipe" tag
@@ -464,10 +382,10 @@ export const useMyInvites = () => {
         .eq('id', user.id)
         .single();
 
-      if (profile) {
+      if (profile && result.project_id) {
         // Call the database function to create team member contact
         await supabase.rpc('create_team_member_contact', {
-          p_project_id: invite.project_id,
+          p_project_id: result.project_id,
           p_user_id: user.id,
           p_email: profile.email || user.email || '',
           p_name: profile.full_name || '',

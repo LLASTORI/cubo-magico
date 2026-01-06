@@ -702,7 +702,9 @@ serve(async (req) => {
                       full_name: buyer?.name || 'Cliente Hotmart',
                       is_active: true,
                       can_create_projects: true,
-                      max_projects: 0
+                      max_projects: 0,
+                      signup_source: 'hotmart',
+                      account_activated: false
                     })
                     .select('id, email')
                     .single();

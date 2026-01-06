@@ -332,9 +332,8 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-1">
               <TabsTrigger value="login">Entrar</TabsTrigger>
-              <TabsTrigger value="signup">Criar Conta</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
@@ -384,97 +383,13 @@ const Auth = () => {
                 </Button>
               </form>
             </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">Nome completo</Label>
-                  <Input
-                    id="signup-name"
-                    type="text"
-                    placeholder="João Silva"
-                    value={signupData.fullName}
-                    onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
-                  />
-                  {errors.fullName && <p className="text-sm text-destructive">{errors.fullName}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={signupData.email}
-                    onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
-                  />
-                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Senha</Label>
-                  <div className="relative">
-                    <Input
-                      id="signup-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Ex: Cubo2024"
-                      value={signupData.password}
-                      onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Mínimo 8 caracteres com letras e números</p>
-                  {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-confirm">Confirmar senha</Label>
-                  <Input
-                    id="signup-confirm"
-                    type="password"
-                    placeholder="••••••••"
-                    value={signupData.confirmPassword}
-                    onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
-                  />
-                  {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword}</p>}
-                </div>
-
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="accept-terms"
-                    checked={signupData.acceptTerms}
-                    onCheckedChange={(checked) => setSignupData({ ...signupData, acceptTerms: checked === true })}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <label
-                      htmlFor="accept-terms"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Li e aceito os{' '}
-                      <button
-                        type="button"
-                        onClick={() => setShowTerms(true)}
-                        className="text-primary hover:underline"
-                      >
-                        Termos de Uso e Política de Privacidade
-                      </button>
-                    </label>
-                    {errors.acceptTerms && <p className="text-sm text-destructive">{errors.acceptTerms}</p>}
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Criar Conta
-                </Button>
-              </form>
-            </TabsContent>
+            
+            {/* Info box explaining access */}
+            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground text-center">
+                Para acessar o Cubo Mágico, você precisa ser <strong>convidado para um projeto</strong> ou <strong>adquirir uma assinatura</strong>.
+              </p>
+            </div>
           </Tabs>
         </CardContent>
       </Card>

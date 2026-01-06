@@ -310,7 +310,7 @@ export const ProjectsManager = () => {
       case 'manager':
         return <Badge variant="secondary">Gerente</Badge>;
       case 'operator':
-        return <Badge variant="outline">Operador</Badge>;
+        return <Badge variant="outline">Visitante</Badge>;
       default:
         return <Badge variant="outline">{role}</Badge>;
     }

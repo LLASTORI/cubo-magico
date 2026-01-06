@@ -413,9 +413,11 @@ const AcceptInvite = () => {
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
       owner: 'Proprietário',
+      manager: 'Gerente',
+      operator: 'Visitante',
       admin: 'Administrador',
       editor: 'Editor',
-      viewer: 'Visualizador',
+      viewer: 'Visitante',
     };
     return labels[role] || role;
   };

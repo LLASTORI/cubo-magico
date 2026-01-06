@@ -611,7 +611,7 @@ function ActionNodeConfig({ config, setConfig }: { config: any; setConfig: (c: a
                         </p>
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        {member.role === 'owner' ? 'Dono' : member.role === 'manager' ? 'Gerente' : 'Operador'}
+                        {member.role === 'owner' ? 'Dono' : member.role === 'manager' ? 'Gerente' : 'Visitante'}
                       </Badge>
                     </div>
                   ))}

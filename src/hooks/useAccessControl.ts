@@ -15,6 +15,7 @@ interface AccessControlState {
 
 export const useAccessControl = () => {
   const { user } = useAuth();
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [state, setState] = useState<AccessControlState>({
     loading: true,
     hasAccess: false,
@@ -26,68 +27,94 @@ export const useAccessControl = () => {
     needsActivation: false,
   });
 
+  // Allow other parts of the app to force a re-check (e.g. after accepting an invite)
+  useEffect(() => {
+    const handler = () => setRefreshNonce((n) => n + 1);
+    window.addEventListener('access-control:refresh', handler);
+    return () => window.removeEventListener('access-control:refresh', handler);
+  }, []);
+
   useEffect(() => {
     if (!user) {
-      setState(prev => ({ ...prev, loading: false, hasAccess: false }));
+      setState((prev) => ({ ...prev, loading: false, hasAccess: false }));
       return;
     }
 
     const checkAccess = async () => {
       try {
-        // Get profile info
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('account_activated, signup_source')
-          .eq('id', user.id)
-          .single();
+        const [
+          profileRes,
+          isSuperAdminRes,
+          hasAdminRoleRes,
+          subscriptionRes,
+          projectMemberRes,
+          ownedProjectRes,
+        ] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('account_activated, signup_source')
+            .eq('id', user.id)
+            .maybeSingle(),
+          supabase.rpc('is_super_admin', { _user_id: user.id }),
+          supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' }),
+          supabase
+            .from('subscriptions')
+            .select('id, status')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .maybeSingle(),
+          supabase
+            .from('project_members')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('projects')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
-        // Check if user is admin
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        const signupSource = profileRes.data?.signup_source ?? null;
+        // Default to "true" when missing, and only gate access for hotmart users that truly need activation.
+        const accountActivated = profileRes.data?.account_activated ?? true;
 
-        const isAdmin = roleData?.role === 'admin' || roleData?.role === 'super_admin';
+        const isLegacy = signupSource === 'legacy';
+        const needsActivation = signupSource === 'hotmart' && accountActivated === false;
 
-        // Check for active subscription
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('id, status')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
+        const isAdmin = !!isSuperAdminRes.data || !!hasAdminRoleRes.data;
+        const hasActiveSubscription = !!subscriptionRes.data;
+        const isMemberOfAnyProject = !!projectMemberRes.data;
+        const ownsAnyProject = !!ownedProjectRes.data;
 
-        // Check if member of any project
-        const { data: projectMember } = await supabase
-          .from('project_members')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
+        const hasAccess = !needsActivation && (
+          isAdmin ||
+          isLegacy ||
+          ownsAnyProject ||
+          hasActiveSubscription ||
+          isMemberOfAnyProject
+        );
 
-        // Legacy users and admin always have access
-        const isLegacy = profile?.signup_source === 'legacy';
-        const accountActivated = profile?.account_activated ?? false;
-        const hasActiveSubscription = !!subscription;
-        const isMemberOfAnyProject = !!projectMember;
-        
-        // Determine if user needs to activate their account
-        const needsActivation = !accountActivated && profile?.signup_source === 'hotmart';
-
-        // Has access if:
-        // 1. Is admin
-        // 2. Is legacy user (existing before this change)
-        // 3. Has active subscription AND account is activated
-        // 4. Is member of at least one project AND account is activated
-        const hasAccess = isAdmin || isLegacy || 
-          ((hasActiveSubscription || isMemberOfAnyProject) && accountActivated);
+        console.info('[AccessControl] computed:', {
+          userId: user.id,
+          signupSource,
+          accountActivated,
+          needsActivation,
+          isAdmin,
+          isLegacy,
+          ownsAnyProject,
+          hasActiveSubscription,
+          isMemberOfAnyProject,
+          hasAccess,
+        });
 
         setState({
           loading: false,
           hasAccess,
           accountActivated,
-          signupSource: profile?.signup_source || null,
+          signupSource,
           hasActiveSubscription,
           isMemberOfAnyProject,
           isAdmin,
@@ -95,12 +122,20 @@ export const useAccessControl = () => {
         });
       } catch (error) {
         console.error('Error checking access:', error);
-        setState(prev => ({ ...prev, loading: false, hasAccess: false }));
+        // Fail open for authenticated users to avoid locking everyone out due to transient issues.
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          hasAccess: true,
+          isAdmin: prev.isAdmin,
+          needsActivation: prev.needsActivation,
+        }));
       }
     };
 
     checkAccess();
-  }, [user]);
+  }, [user, refreshNonce]);
 
   return state;
 };
+

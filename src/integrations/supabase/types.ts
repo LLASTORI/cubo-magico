@@ -5814,6 +5814,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_lovable_credits: {
+        Args: { p_count?: number; p_project_id: string }
+        Returns: undefined
+      }
+      increment_openai_credits: {
+        Args: { p_count?: number; p_project_id: string }
+        Returns: undefined
+      }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       log_user_activity: {
         Args: {

@@ -79,59 +79,81 @@ const AcceptInvite = () => {
         return;
       }
 
-      try {
-        // Get invite details
-        const { data: inviteData, error: inviteError } = await supabase
-          .from('project_invites')
-          .select(`
-            id,
-            email,
-            role,
-            project_id,
-            projects:project_id (name),
-            profiles:invited_by (full_name)
-          `)
-          .eq('id', inviteToken)
-          .eq('email', inviteEmail)
-          .eq('status', 'pending')
-          .single();
+      const normalizedEmail = inviteEmail.toLowerCase().trim();
 
-        if (inviteError || !inviteData) {
+      try {
+        // Use public RPC function to get invite details (works for anonymous users)
+        const { data, error } = await supabase.rpc('get_project_invite_public', {
+          p_invite_id: inviteToken,
+          p_email: normalizedEmail,
+        });
+
+        if (error) {
+          console.error('Error fetching invite:', error);
           toast({
-            title: 'Convite inválido',
-            description: 'Este convite não existe, já foi usado ou expirou.',
+            title: 'Erro ao verificar convite',
+            description: 'Não foi possível verificar o convite. Tente novamente.',
             variant: 'destructive',
           });
           setCheckingInvite(false);
           return;
         }
 
+        const result = data as { success: boolean; error?: string; invite?: any; has_account?: boolean };
+
+        if (!result.success) {
+          let errorTitle = 'Convite inválido';
+          let errorDescription = 'Este convite não existe, já foi usado ou expirou.';
+          
+          if (result.error === 'expired') {
+            errorTitle = 'Convite expirado';
+            errorDescription = 'Este convite expirou. Solicite um novo convite.';
+          } else if (result.error === 'already_used') {
+            errorTitle = 'Convite já utilizado';
+            errorDescription = 'Este convite já foi aceito anteriormente.';
+          } else if (result.error === 'not_found') {
+            errorTitle = 'Convite não encontrado';
+            errorDescription = 'O convite não foi encontrado. Verifique se o link está correto ou solicite um novo convite.';
+          }
+
+          toast({
+            title: errorTitle,
+            description: errorDescription,
+            variant: 'destructive',
+          });
+          setCheckingInvite(false);
+          return;
+        }
+
+        const inviteInfo = result.invite;
         setInvite({
-          id: inviteData.id,
-          email: inviteData.email,
-          role: inviteData.role,
-          project_id: inviteData.project_id,
-          project_name: (inviteData.projects as any)?.name,
-          inviter_name: (inviteData.profiles as any)?.full_name,
+          id: inviteInfo.id,
+          email: inviteInfo.email,
+          role: inviteInfo.role,
+          project_id: inviteInfo.project_id,
+          project_name: inviteInfo.project_name,
+          inviter_name: inviteInfo.inviter_name,
         });
 
-        // Check if email already has an account
-        const { data: existingUser } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', inviteEmail)
-          .maybeSingle();
-
-        setHasAccount(!!existingUser);
+        setHasAccount(result.has_account ?? false);
       } catch (error) {
         console.error('Error checking invite:', error);
+        toast({
+          title: 'Erro',
+          description: 'Ocorreu um erro ao verificar o convite.',
+          variant: 'destructive',
+        });
       } finally {
         setCheckingInvite(false);
       }
     };
 
+    // Normalize email for comparison
+    const normalizedInviteEmail = inviteEmail?.toLowerCase().trim();
+    const normalizedUserEmail = user?.email?.toLowerCase().trim();
+
     // If user is already logged in with the right email, accept invite directly
-    if (user && user.email === inviteEmail) {
+    if (user && normalizedUserEmail === normalizedInviteEmail) {
       acceptInviteForLoggedUser();
     } else {
       checkInvite();

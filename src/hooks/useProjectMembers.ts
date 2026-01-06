@@ -150,19 +150,22 @@ export const useProjectMembers = (projectId: string | null) => {
   const inviteMember = async (email: string, role: ProjectRole, projectName?: string, roleTemplateId?: string): Promise<{ error: any }> => {
     if (!projectId || !user) return { error: new Error('Projeto não selecionado') };
 
+    // Normalize email early to avoid duplicates due to case/whitespace
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check limit
     if (memberCount >= maxMembers) {
       return { error: new Error(`Limite de ${maxMembers} membros atingido`) };
     }
 
-    // Check if already a member
-    const existingMember = members.find(m => m.profile?.email === email);
+    // Check if already a member (case-insensitive)
+    const existingMember = members.find(m => m.profile?.email?.toLowerCase().trim() === normalizedEmail);
     if (existingMember) {
       return { error: new Error('Usuário já é membro do projeto') };
     }
 
-    // Check for pending invite
-    const existingInvite = invites.find(i => i.email === email);
+    // Check for pending invite (case-insensitive)
+    const existingInvite = invites.find(i => i.email?.toLowerCase().trim() === normalizedEmail);
     if (existingInvite) {
       return { error: new Error('Já existe um convite pendente para este email') };
     }

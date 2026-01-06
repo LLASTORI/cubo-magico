@@ -5768,6 +5768,10 @@ export type Database = {
           validated_at: string
         }[]
       }
+      get_project_invite_public: {
+        Args: { p_email: string; p_invite_id: string }
+        Returns: Json
+      }
       get_queue_position: {
         Args: { p_department_id?: string; p_project_id: string }
         Returns: number

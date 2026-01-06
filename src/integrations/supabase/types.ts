@@ -3364,6 +3364,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_activated: boolean | null
           avatar_url: string | null
           can_create_projects: boolean | null
           company_name: string | null
@@ -3380,11 +3381,13 @@ export type Database = {
           phone: string | null
           phone_country_code: string | null
           phone_ddd: string | null
+          signup_source: string | null
           timezone: string | null
           updated_at: string
           whatsapp_opt_in: boolean | null
         }
         Insert: {
+          account_activated?: boolean | null
           avatar_url?: string | null
           can_create_projects?: boolean | null
           company_name?: string | null
@@ -3401,11 +3404,13 @@ export type Database = {
           phone?: string | null
           phone_country_code?: string | null
           phone_ddd?: string | null
+          signup_source?: string | null
           timezone?: string | null
           updated_at?: string
           whatsapp_opt_in?: boolean | null
         }
         Update: {
+          account_activated?: boolean | null
           avatar_url?: string | null
           can_create_projects?: boolean | null
           company_name?: string | null
@@ -3422,6 +3427,7 @@ export type Database = {
           phone?: string | null
           phone_country_code?: string | null
           phone_ddd?: string | null
+          signup_source?: string | null
           timezone?: string | null
           updated_at?: string
           whatsapp_opt_in?: boolean | null

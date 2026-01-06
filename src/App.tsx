@@ -51,6 +51,9 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import DataDeletion from "./pages/DataDeletion";
 import Onboarding from "./pages/Onboarding";
+import NoAccess from "./pages/NoAccess";
+import ActivateAccount from "./pages/ActivateAccount";
+import AcceptInvite from "./pages/AcceptInvite";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +73,9 @@ const App = () => (
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/terms-of-service" element={<TermsOfService />} />
                 <Route path="/data-deletion" element={<DataDeletion />} />
+                <Route path="/no-access" element={<NoAccess />} />
+                <Route path="/activate" element={<ActivateAccount />} />
+                <Route path="/accept-invite" element={<AcceptInvite />} />
                 {/* Survey Public Routes - Multi-tenant */}
                 <Route path="/s/:code/:slug" element={<SurveyPublic />} />
                 {/* Legacy route for backward compatibility */}

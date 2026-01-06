@@ -152,7 +152,10 @@ export type Database = {
           is_unlimited: boolean
           last_daily_reset: string
           last_monthly_reset: string
+          lovable_credits_limit: number | null
+          lovable_credits_used: number | null
           monthly_limit: number
+          openai_credits_used: number | null
           project_id: string
           provider_preference: string
           updated_at: string
@@ -166,7 +169,10 @@ export type Database = {
           is_unlimited?: boolean
           last_daily_reset?: string
           last_monthly_reset?: string
+          lovable_credits_limit?: number | null
+          lovable_credits_used?: number | null
           monthly_limit?: number
+          openai_credits_used?: number | null
           project_id: string
           provider_preference?: string
           updated_at?: string
@@ -180,7 +186,10 @@ export type Database = {
           is_unlimited?: boolean
           last_daily_reset?: string
           last_monthly_reset?: string
+          lovable_credits_limit?: number | null
+          lovable_credits_used?: number | null
           monthly_limit?: number
+          openai_credits_used?: number | null
           project_id?: string
           provider_preference?: string
           updated_at?: string

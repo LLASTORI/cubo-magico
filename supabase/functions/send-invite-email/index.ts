@@ -15,6 +15,7 @@ interface InviteEmailRequest {
   inviterName: string;
   role: string;
   expiresAt: string;
+  isExistingUser?: boolean;
 }
 
 // HTML escape function to prevent XSS/HTML injection
@@ -45,9 +46,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { inviteId, email, projectName, inviterName, role, expiresAt }: InviteEmailRequest = await req.json();
+    const { inviteId, email, projectName, inviterName, role, expiresAt, isExistingUser }: InviteEmailRequest = await req.json();
 
-    console.log(`Sending invite email to ${email} for project ${projectName}`);
+    console.log(`Sending invite email to ${email} for project ${projectName} (existing user: ${isExistingUser})`);
 
     // Escape user-controlled values to prevent HTML injection
     const safeInviterName = escapeHtml(inviterName);
@@ -62,6 +63,19 @@ const handler = async (req: Request): Promise<Response> => {
       hour: '2-digit',
       minute: '2-digit'
     });
+
+    // Different CTA based on whether user exists
+    const ctaUrl = isExistingUser 
+      ? `${appUrl}/projects`
+      : `${appUrl}/accept-invite?token=${inviteId}&email=${encodeURIComponent(email)}`;
+    
+    const ctaText = isExistingUser 
+      ? "Acessar Meus Projetos"
+      : "Criar Conta e Aceitar Convite";
+
+    const instructionText = isExistingUser
+      ? "Para aceitar o convite, acesse sua conta no Cubo Mágico e vá até a seção de projetos. O convite aparecerá automaticamente para você aceitar."
+      : "Clique no botão abaixo para criar sua conta e aceitar o convite automaticamente.";
 
     const emailResponse = await resend.emails.send({
       from: "Cubo Mágico <noreply@cubomagico.leandrolastori.com.br>",
@@ -114,12 +128,12 @@ const handler = async (req: Request): Promise<Response> => {
                       </div>
                       
                       <p style="margin: 0 0 30px; color: #52525b; font-size: 16px; line-height: 1.6;">
-                        Para aceitar o convite, acesse sua conta no Cubo Mágico e vá até a seção de projetos.
+                        ${instructionText}
                       </p>
                       
                       <div style="text-align: center;">
-                        <a href="${appUrl}/projects" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px;">
-                          Acessar Cubo Mágico
+                        <a href="${ctaUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px;">
+                          ${ctaText}
                         </a>
                       </div>
                       

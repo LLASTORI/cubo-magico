@@ -63,3 +63,6 @@ verify_jwt = true
 [functions.funnel-ai-analysis]
 verify_jwt = true
 max_duration = 120
+
+[functions.delete-user]
+verify_jwt = false

@@ -910,6 +910,40 @@ function QuestionCard({ question, index, isExpanded, onToggle, onUpdate, onDelet
                         </p>
                       </div>
                     )}
+                    
+                    {/* Other option */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div>
+                        <Label className="text-sm font-medium">Incluir opção "Outro"</Label>
+                        <p className="text-xs text-muted-foreground">Permite resposta personalizada em texto</p>
+                      </div>
+                      <Switch
+                        checked={(question.settings as any)?.allow_other || false}
+                        onCheckedChange={(checked) => onUpdate({ 
+                          settings: { 
+                            ...question.settings, 
+                            allow_other: checked,
+                            other_placeholder: checked ? 'Digite sua resposta...' : undefined
+                          } 
+                        })}
+                      />
+                    </div>
+                    
+                    {(question.settings as any)?.allow_other && (
+                      <div className="space-y-2 pl-4 border-l-2 border-primary/30">
+                        <Label className="text-sm">Placeholder do campo "Outro"</Label>
+                        <Input
+                          value={(question.settings as any)?.other_placeholder || 'Digite sua resposta...'}
+                          onChange={(e) => onUpdate({ 
+                            settings: { 
+                              ...question.settings, 
+                              other_placeholder: e.target.value 
+                            } 
+                          })}
+                          placeholder="Ex: Descreva aqui..."
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 

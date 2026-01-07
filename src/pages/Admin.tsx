@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2, Crown, Database, Brain, Trash2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, CheckCircle, XCircle, Pencil, Search, Shield, ShieldCheck, UserCog, Activity, CreditCard, Bell, FolderKanban, Boxes, FileText, History, MessageCircle, Sparkles, Grid3X3, ShieldAlert, Link2, Crown, Database, Brain, Trash2, AlertTriangle, BadgeCheck } from 'lucide-react';
 import { CuboBrand } from '@/components/CuboLogo';
 import { CubeLoader } from '@/components/CubeLoader';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -32,6 +32,7 @@ import { HotmartProductPlansManager } from '@/components/admin/HotmartProductPla
 import { PlansManager } from '@/components/admin/PlansManager';
 import { DataAuditManager } from '@/components/admin/DataAuditManager';
 import { AIUsageDashboard } from '@/components/admin/AIUsageDashboard';
+import { RoleTemplatesManager } from '@/components/admin/RoleTemplatesManager';
 
 interface UserProfile {
   id: string;
@@ -300,7 +301,7 @@ const Admin = () => {
 
       <main className="container mx-auto px-6 py-8 space-y-6">
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="users" className="gap-2">
               <Users className="h-4 w-4" />
               Usuários
@@ -309,6 +310,12 @@ const Admin = () => {
               <CreditCard className="h-4 w-4" />
               Assinaturas
             </TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger value="roles" className="gap-2">
+                <BadgeCheck className="h-4 w-4" />
+                Cargos
+              </TabsTrigger>
+            )}
             {isSuperAdmin && (
               <TabsTrigger value="plans" className="gap-2">
                 <Crown className="h-4 w-4" />
@@ -766,6 +773,12 @@ const Admin = () => {
           <TabsContent value="subscriptions">
             <SubscriptionsManager />
           </TabsContent>
+
+          {isSuperAdmin && (
+            <TabsContent value="roles">
+              <RoleTemplatesManager />
+            </TabsContent>
+          )}
 
           {isSuperAdmin && (
             <TabsContent value="plans">

@@ -57,7 +57,8 @@ const AcceptInvite = () => {
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [hasAccount, setHasAccount] = useState<boolean | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+  const [inviteDebug, setInviteDebug] = useState<any>(null);
+
   const [signupData, setSignupData] = useState({
     fullName: '',
     password: '',

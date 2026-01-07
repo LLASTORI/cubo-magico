@@ -8,11 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Shield, Pencil, Trash2, Plus, Lock, Info, ChevronRight, Settings2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -539,8 +538,8 @@ export function RoleTemplatesManager() {
 
       {/* Edit/Create Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
             <DialogTitle>
               {isCreating ? 'Criar Novo Cargo' : `Editar Cargo: ${editingTemplate?.name}`}
             </DialogTitle>
@@ -550,8 +549,8 @@ export function RoleTemplatesManager() {
           </DialogHeader>
 
           {editingTemplate && (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 px-6">
+              <TabsList className="grid w-full grid-cols-3 shrink-0">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="areas">Áreas</TabsTrigger>
                 <TabsTrigger value="features" className="gap-2">
@@ -560,7 +559,7 @@ export function RoleTemplatesManager() {
                 </TabsTrigger>
               </TabsList>
 
-              <ScrollArea className="flex-1 mt-4">
+              <ScrollArea className="flex-1 min-h-0 mt-4 pr-4">
                 <TabsContent value="info" className="mt-0 space-y-6">
                   {/* Basic Info */}
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -753,22 +752,22 @@ export function RoleTemplatesManager() {
             </Tabs>
           )}
 
-          <Separator className="my-4" />
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSave}
-              disabled={updateMutation.isPending || createMutation.isPending}
-            >
-              {(updateMutation.isPending || createMutation.isPending) && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Salvar Alterações
-            </Button>
-          </DialogFooter>
+          <div className="shrink-0 px-6 pb-6 pt-4 border-t bg-background">
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSave}
+                disabled={updateMutation.isPending || createMutation.isPending}
+              >
+                {(updateMutation.isPending || createMutation.isPending) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                Salvar Alterações
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -374,6 +374,21 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
   let totalComments = 0
 
   try {
+    // Get connected pages to identify own account comments
+    const { data: pages } = await supabase
+      .from('social_listening_pages')
+      .select('page_id, instagram_username, page_name')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+    
+    // Build lists of connected page IDs and Instagram usernames
+    const connectedPageIds: string[] = (pages || []).map((p: any) => p.page_id).filter(Boolean)
+    const connectedUsernames: string[] = (pages || [])
+      .map((p: any) => (p.instagram_username || p.page_name || '').toLowerCase().replace(/^@/, ''))
+      .filter(Boolean)
+    
+    console.log(`[SYNC_COMMENTS] Connected pages: ${connectedPageIds.length}, IG usernames: ${connectedUsernames.join(', ')}`)
+
     const { data: posts } = await supabase
       .from('social_posts')
       .select('*, social_listening_pages!inner(page_access_token)')
@@ -396,7 +411,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
 
           if (!data.error && data.data) {
             for (const comment of data.data) {
-              await upsertComment(supabase, projectId, post.id, 'facebook', comment)
+              await upsertComment(supabase, projectId, post.id, 'facebook', comment, connectedPageIds)
               totalComments++
             }
           }
@@ -407,7 +422,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
 
           if (!data.error && data.data) {
             for (const comment of data.data) {
-              await upsertCommentIG(supabase, projectId, post.id, comment)
+              await upsertCommentIG(supabase, projectId, post.id, comment, connectedUsernames)
               totalComments++
             }
           }
@@ -425,7 +440,17 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
   }
 }
 
-async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any) {
+async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any, connectedPageIds: string[]) {
+  const authorId = comment.from?.id
+  const authorName = comment.from?.name
+  
+  // Check if comment is from the connected page (own account)
+  const isOwnAccount = authorId ? connectedPageIds.includes(authorId) : false
+  
+  if (isOwnAccount) {
+    console.log(`[SYNC] Own account comment detected (FB): ${authorName} (${authorId})`)
+  }
+  
   await supabase
     .from('social_comments')
     .upsert({
@@ -434,17 +459,28 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
       platform,
       comment_id_meta: comment.id,
       text: comment.message,
-      author_name: comment.from?.name,
-      author_id: comment.from?.id,
+      author_name: authorName,
+      author_id: authorId,
       likes_count: comment.like_count || 0,
       replies_count: comment.comment_count || 0,
       comment_timestamp: comment.created_time,
       is_deleted: false,
-      ai_processing_status: 'pending',
+      is_own_account: isOwnAccount,
+      ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
     }, { onConflict: 'project_id,platform,comment_id_meta' })
 }
 
-async function upsertCommentIG(supabase: any, projectId: string, postId: string, comment: any) {
+async function upsertCommentIG(supabase: any, projectId: string, postId: string, comment: any, connectedUsernames: string[]) {
+  const authorUsername = comment.username
+  
+  // Check if comment is from the connected Instagram account (own account)
+  const normalizedAuthor = (authorUsername || '').toLowerCase().replace(/^@/, '')
+  const isOwnAccount = connectedUsernames.some(u => u === normalizedAuthor)
+  
+  if (isOwnAccount) {
+    console.log(`[SYNC] Own account comment detected (IG): @${authorUsername}`)
+  }
+  
   await supabase
     .from('social_comments')
     .upsert({
@@ -453,12 +489,13 @@ async function upsertCommentIG(supabase: any, projectId: string, postId: string,
       platform: 'instagram',
       comment_id_meta: comment.id,
       text: comment.text,
-      author_username: comment.username,
+      author_username: authorUsername,
       likes_count: comment.like_count || 0,
       replies_count: comment.replies?.data?.length || 0,
       comment_timestamp: comment.timestamp,
       is_deleted: false,
-      ai_processing_status: 'pending',
+      is_own_account: isOwnAccount,
+      ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
     }, { onConflict: 'project_id,platform,comment_id_meta' })
 }
 

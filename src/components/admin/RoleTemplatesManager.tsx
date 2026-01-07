@@ -195,27 +195,95 @@ export function RoleTemplatesManager() {
       if (error) throw error;
 
       // Save feature permissions
-      if (Object.keys(featurePermissions).length > 0) {
-        // Delete existing and insert new
-        await supabase
+      // Delete existing and insert new
+      await supabase
+        .from('role_template_feature_permissions')
+        .delete()
+        .eq('role_template_id', id);
+
+      const permissionsToInsert = Object.entries(featurePermissions)
+        .filter(([_, level]) => level !== 'none')
+        .map(([featureId, level]) => ({
+          role_template_id: id,
+          feature_id: featureId,
+          permission_level: level,
+        }));
+
+      if (permissionsToInsert.length > 0) {
+        const { error: permError } = await supabase
           .from('role_template_feature_permissions')
-          .delete()
-          .eq('role_template_id', id);
+          .insert(permissionsToInsert);
+        
+        if (permError) throw permError;
+      }
 
-        const permissionsToInsert = Object.entries(featurePermissions)
-          .filter(([_, level]) => level !== 'none')
-          .map(([featureId, level]) => ({
-            role_template_id: id,
-            feature_id: featureId,
-            permission_level: level,
-          }));
+      // Propagar alterações para todos os membros que usam este template
+      const { data: members } = await supabase
+        .from('project_members')
+        .select('id, user_id, project_id')
+        .eq('role_template_id', id);
 
-        if (permissionsToInsert.length > 0) {
-          const { error: permError } = await supabase
-            .from('role_template_feature_permissions')
-            .insert(permissionsToInsert);
-          
-          if (permError) throw permError;
+      if (members && members.length > 0) {
+        const permissionsUpdate = {
+          dashboard: template.perm_dashboard,
+          analise: template.perm_analise,
+          crm: template.perm_crm,
+          automacoes: template.perm_automacoes,
+          chat_ao_vivo: template.perm_chat_ao_vivo,
+          meta_ads: template.perm_meta_ads,
+          ofertas: template.perm_ofertas,
+          lancamentos: template.perm_lancamentos,
+          configuracoes: template.perm_configuracoes,
+          insights: template.perm_insights,
+          pesquisas: template.perm_pesquisas,
+          social_listening: template.perm_social_listening,
+          updated_at: new Date().toISOString(),
+        };
+
+        for (const member of members) {
+          // Atualizar permissões por área
+          const { data: existingPerm } = await supabase
+            .from('project_member_permissions')
+            .select('id')
+            .eq('project_id', member.project_id)
+            .eq('user_id', member.user_id)
+            .maybeSingle();
+
+          if (existingPerm) {
+            await supabase
+              .from('project_member_permissions')
+              .update(permissionsUpdate)
+              .eq('project_id', member.project_id)
+              .eq('user_id', member.user_id);
+          } else {
+            await supabase
+              .from('project_member_permissions')
+              .insert({
+                project_id: member.project_id,
+                user_id: member.user_id,
+                ...permissionsUpdate,
+              });
+          }
+
+          // Atualizar permissões de features
+          if (permissionsToInsert.length > 0) {
+            await (supabase as any)
+              .from('project_member_feature_permissions')
+              .delete()
+              .eq('project_id', member.project_id)
+              .eq('user_id', member.user_id);
+
+            const featurePermsToInsert = permissionsToInsert.map(fp => ({
+              project_id: member.project_id,
+              user_id: member.user_id,
+              feature_id: fp.feature_id,
+              permission_level: fp.permission_level,
+            }));
+
+            await (supabase as any)
+              .from('project_member_feature_permissions')
+              .insert(featurePermsToInsert);
+          }
         }
       }
     },
@@ -223,7 +291,11 @@ export function RoleTemplatesManager() {
       queryClient.invalidateQueries({ queryKey: ['role-templates-all'] });
       queryClient.invalidateQueries({ queryKey: ['role-templates'] });
       queryClient.invalidateQueries({ queryKey: ['role-template-feature-permissions'] });
-      toast({ title: 'Cargo atualizado com sucesso!' });
+      queryClient.invalidateQueries({ queryKey: ['project-members'] });
+      queryClient.invalidateQueries({ queryKey: ['member-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['all-member-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['header-permissions'] });
+      toast({ title: 'Cargo atualizado com sucesso!', description: 'As permissões foram propagadas para todos os membros.' });
       setIsDialogOpen(false);
       setEditingTemplate(null);
       setFeaturePermissions({});

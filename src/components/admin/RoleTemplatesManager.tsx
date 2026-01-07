@@ -120,8 +120,7 @@ export function RoleTemplatesManager() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (template: RoleTemplate) => {
-      const { id, created_at, updated_at, ...data } = template;
+    mutationFn: async (data: Omit<RoleTemplate, 'id' | 'created_at' | 'updated_at'>) => {
       const { error } = await supabase
         .from('role_templates')
         .insert(data);

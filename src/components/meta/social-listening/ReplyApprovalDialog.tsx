@@ -7,7 +7,8 @@ import {
   Check, 
   RefreshCw,
   Edit3,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -124,6 +125,29 @@ export function ReplyApprovalDialog({
         description: 'O comentário foi marcado como não respondido.',
       });
       onOpenChange(false);
+    }
+  });
+
+  // Reset to pending mutation
+  const resetToPending = useMutation({
+    mutationFn: async () => {
+      if (!comment) throw new Error('Comentário não selecionado');
+      
+      const { error } = await supabase
+        .from('social_comments')
+        .update({
+          reply_status: 'pending'
+        })
+        .eq('id', comment.id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['social_comments'] });
+      toast({
+        title: 'Status resetado',
+        description: 'O comentário voltou para pendente.',
+      });
     }
   });
 
@@ -293,14 +317,28 @@ export function ReplyApprovalDialog({
               </Button>
             )}
             
-            <Button
-              variant="ghost"
-              onClick={() => rejectReply.mutate()}
-              disabled={rejectReply.isPending}
-            >
-              <X className="h-4 w-4 mr-2" />
-              Rejeitar
-            </Button>
+            {(replyStatus === 'approved' || replyStatus === 'rejected' || replyStatus === 'sent') && (
+              <Button
+                variant="outline"
+                onClick={() => resetToPending.mutate()}
+                disabled={resetToPending.isPending}
+                title="Voltar para pendente"
+              >
+                <RotateCcw className={`h-4 w-4 mr-2 ${resetToPending.isPending ? 'animate-spin' : ''}`} />
+                Pendente
+              </Button>
+            )}
+
+            {replyStatus !== 'rejected' && (
+              <Button
+                variant="ghost"
+                onClick={() => rejectReply.mutate()}
+                disabled={rejectReply.isPending}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Rejeitar
+              </Button>
+            )}
             
             <Button
               onClick={handleApprove}

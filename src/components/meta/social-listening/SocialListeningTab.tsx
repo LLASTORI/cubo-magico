@@ -630,7 +630,10 @@ function CommentRow({ comment, onOpenReply, onOpenReclassify, onOpenSurvey }: {
   const postPermalink = postData?.permalink;
   const postThumbnail = postData?.thumbnail_url;
   const isAd = postData?.is_ad ?? false;
-  const replyStatus = comment.reply_status ? replyStatusConfig[comment.reply_status] : null;
+  // Show pending badge if there's a suggested reply but no status yet
+  const hasAiReply = !!comment.ai_suggested_reply;
+  const effectiveStatus = comment.reply_status || (hasAiReply ? 'pending' : null);
+  const replyStatus = effectiveStatus ? replyStatusConfig[effectiveStatus] : null;
 
   // Build permalink URL - ensure it's absolute, or generate fallback for ads
   const getPostUrl = () => {

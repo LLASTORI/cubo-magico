@@ -36,9 +36,23 @@ export const useAccessControl = () => {
 
   useEffect(() => {
     if (!user) {
-      setState((prev) => ({ ...prev, loading: false, hasAccess: false }));
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        hasAccess: false,
+        accountActivated: false,
+        signupSource: null,
+        hasActiveSubscription: false,
+        isMemberOfAnyProject: false,
+        isAdmin: false,
+        needsActivation: false,
+      }));
       return;
     }
+
+    // IMPORTANT: when the user is restored after a refresh, mark as loading BEFORE querying.
+    // Otherwise ProtectedRoute may read stale "hasAccess=false" and redirect to /no-access.
+    setState((prev) => ({ ...prev, loading: true }));
 
     const checkAccess = async () => {
       try {
@@ -76,6 +90,20 @@ export const useAccessControl = () => {
             .limit(1)
             .maybeSingle(),
         ]);
+
+        const errors = [
+          profileRes.error,
+          isSuperAdminRes.error,
+          hasAdminRoleRes.error,
+          subscriptionRes.error,
+          projectMemberRes.error,
+          ownedProjectRes.error,
+        ].filter(Boolean) as any[];
+
+        if (errors.length) {
+          console.error('[AccessControl] query errors:', errors);
+          throw errors[0];
+        }
 
         const signupSource = profileRes.data?.signup_source ?? null;
         // Default to "true" when missing, and only gate access for hotmart users that truly need activation.

@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useHeaderPermissions } from '@/hooks/useHeaderPermissions';
 import { useTheme } from 'next-themes';
 import { MemberRoleManager } from '@/components/settings/MemberRoleManager';
 import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
@@ -35,12 +36,16 @@ const Settings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isSuperAdmin } = useUserPermissions();
+  const { permissions } = useHeaderPermissions();
   const { theme, setTheme } = useTheme();
   
   const [fullName, setFullName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Check if user has access to team/settings tabs
+  const canAccessTeamSettings = permissions.configuracoes || permissions.isOwner || permissions.isSuperAdmin;
 
   // Handle OAuth callback params
   useEffect(() => {
@@ -393,27 +398,36 @@ const Settings = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className={`grid w-full max-w-4xl ${isSuperAdmin ? 'grid-cols-7' : 'grid-cols-6'}`}>
+          <TabsList className={`grid w-full max-w-4xl ${
+            isSuperAdmin ? 'grid-cols-7' : 
+            canAccessTeamSettings ? 'grid-cols-6' : 'grid-cols-3'
+          }`}>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Perfil</span>
             </TabsTrigger>
-            <TabsTrigger value="team" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Equipe</span>
-            </TabsTrigger>
+            {canAccessTeamSettings && (
+              <TabsTrigger value="team" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Equipe</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <span className="hidden sm:inline">Notificações</span>
             </TabsTrigger>
-            <TabsTrigger value="media" className="flex items-center gap-2">
-              <HardDrive className="h-4 w-4" />
-              <span className="hidden sm:inline">Mídias</span>
-            </TabsTrigger>
-            <TabsTrigger value="integrations" className="flex items-center gap-2">
-              <Link2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Integrações</span>
-            </TabsTrigger>
+            {canAccessTeamSettings && (
+              <TabsTrigger value="media" className="flex items-center gap-2">
+                <HardDrive className="h-4 w-4" />
+                <span className="hidden sm:inline">Mídias</span>
+              </TabsTrigger>
+            )}
+            {canAccessTeamSettings && (
+              <TabsTrigger value="integrations" className="flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Integrações</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="security" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Segurança</span>

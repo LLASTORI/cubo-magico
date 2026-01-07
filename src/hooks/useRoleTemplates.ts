@@ -89,6 +89,123 @@ export const ROLE_ICON_MAP: Record<string, string> = {
   user: 'User',
 };
 
+// Função para propagar mudanças do template para todos os membros que o utilizam
+async function propagateTemplateToMembers(template: RoleTemplate) {
+  // Buscar todos os membros que usam este template
+  const { data: members, error: membersError } = await supabase
+    .from('project_members')
+    .select('id, user_id, project_id')
+    .eq('role_template_id', template.id);
+
+  if (membersError) {
+    console.error('Erro ao buscar membros:', membersError);
+    throw membersError;
+  }
+
+  if (!members || members.length === 0) {
+    return; // Nenhum membro usa este template
+  }
+
+  // Preparar as permissões base do template
+  const permissionsUpdate = {
+    dashboard: template.perm_dashboard,
+    analise: template.perm_analise,
+    crm: template.perm_crm,
+    automacoes: template.perm_automacoes,
+    chat_ao_vivo: template.perm_chat_ao_vivo,
+    meta_ads: template.perm_meta_ads,
+    ofertas: template.perm_ofertas,
+    lancamentos: template.perm_lancamentos,
+    configuracoes: template.perm_configuracoes,
+    insights: template.perm_insights,
+    pesquisas: template.perm_pesquisas,
+    social_listening: template.perm_social_listening,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Buscar permissões de features do template
+  const { data: templateFeaturePerms } = await supabase
+    .from('role_template_feature_permissions')
+    .select('feature_id, permission_level')
+    .eq('role_template_id', template.id);
+
+  // Atualizar cada membro
+  for (const member of members) {
+    // Atualizar role base
+    await supabase
+      .from('project_members')
+      .update({ role: template.base_role })
+      .eq('id', member.id);
+
+    // Atualizar permissões por área
+    const { data: existingPerm } = await supabase
+      .from('project_member_permissions')
+      .select('id')
+      .eq('project_id', member.project_id)
+      .eq('user_id', member.user_id)
+      .maybeSingle();
+
+    if (existingPerm) {
+      await supabase
+        .from('project_member_permissions')
+        .update(permissionsUpdate)
+        .eq('project_id', member.project_id)
+        .eq('user_id', member.user_id);
+    } else {
+      await supabase
+        .from('project_member_permissions')
+        .insert({
+          project_id: member.project_id,
+          user_id: member.user_id,
+          ...permissionsUpdate,
+        });
+    }
+
+    // Atualizar permissões de features
+    if (templateFeaturePerms && templateFeaturePerms.length > 0) {
+      // Deletar permissões existentes
+      await (supabase as any)
+        .from('project_member_feature_permissions')
+        .delete()
+        .eq('project_id', member.project_id)
+        .eq('user_id', member.user_id);
+
+      // Inserir novas permissões
+      const featurePermsToInsert = templateFeaturePerms.map(fp => ({
+        project_id: member.project_id,
+        user_id: member.user_id,
+        feature_id: fp.feature_id,
+        permission_level: fp.permission_level,
+      }));
+
+      await (supabase as any)
+        .from('project_member_feature_permissions')
+        .insert(featurePermsToInsert);
+    }
+
+    // Atualizar configurações de WhatsApp se aplicável
+    if (template.perm_chat_ao_vivo !== 'none' && template.whatsapp_auto_create_agent) {
+      const { data: existingAgent } = await supabase
+        .from('whatsapp_agents')
+        .select('id')
+        .eq('project_id', member.project_id)
+        .eq('user_id', member.user_id)
+        .maybeSingle();
+
+      if (existingAgent) {
+        await supabase
+          .from('whatsapp_agents')
+          .update({
+            visibility_mode: template.whatsapp_visibility_mode,
+            max_chats: template.whatsapp_max_chats,
+            is_supervisor: template.whatsapp_is_supervisor,
+          })
+          .eq('id', existingAgent.id);
+      }
+    }
+  }
+}
+
 export function useRoleTemplates(projectId?: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -178,13 +295,22 @@ export function useRoleTemplates(projectId?: string) {
         .single();
 
       if (error) throw error;
+      
+      // Propagar alterações para todos os membros que usam este template
+      const template = data as RoleTemplate;
+      await propagateTemplateToMembers(template);
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['project-members'] });
+      queryClient.invalidateQueries({ queryKey: ['member-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['all-member-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['header-permissions'] });
       toast({
         title: 'Cargo atualizado',
-        description: 'O cargo foi atualizado com sucesso.',
+        description: 'O cargo foi atualizado com sucesso e propagado para todos os membros.',
       });
     },
     onError: (error: any) => {

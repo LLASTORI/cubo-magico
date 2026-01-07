@@ -82,6 +82,7 @@ export const useAccessControl = () => {
         const accountActivated = profileRes.data?.account_activated ?? true;
 
         const isLegacy = signupSource === 'legacy';
+        const isInvited = signupSource === 'invited';
         const needsActivation = signupSource === 'hotmart' && accountActivated === false;
 
         const isAdmin = !!isSuperAdminRes.data || !!hasAdminRoleRes.data;
@@ -89,9 +90,12 @@ export const useAccessControl = () => {
         const isMemberOfAnyProject = !!projectMemberRes.data;
         const ownsAnyProject = !!ownedProjectRes.data;
 
+        // Grant access if user meets any of these conditions:
+        // - Not needing activation AND (is admin, legacy, invited, owns project, has subscription, or is member of any project)
         const hasAccess = !needsActivation && (
           isAdmin ||
           isLegacy ||
+          isInvited ||
           ownsAnyProject ||
           hasActiveSubscription ||
           isMemberOfAnyProject
@@ -104,6 +108,7 @@ export const useAccessControl = () => {
           needsActivation,
           isAdmin,
           isLegacy,
+          isInvited,
           ownsAnyProject,
           hasActiveSubscription,
           isMemberOfAnyProject,

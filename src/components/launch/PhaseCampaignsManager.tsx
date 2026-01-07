@@ -72,10 +72,18 @@ export const PhaseCampaignsManager = ({
   // Get campaigns matching the pattern (automatic)
   const patternMatchedCampaigns = useMemo(() => {
     if (!phase.campaign_name_pattern?.trim()) return [];
-    const patternLower = phase.campaign_name_pattern.toLowerCase();
-    return allCampaigns.filter(c => 
-      c.campaign_name?.toLowerCase().includes(patternLower)
-    );
+    // Normalize to handle special characters like Ç, Ã, etc.
+    const patternNormalized = phase.campaign_name_pattern
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    return allCampaigns.filter(c => {
+      const campaignNormalized = c.campaign_name
+        ?.normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      return campaignNormalized?.includes(patternNormalized);
+    });
   }, [allCampaigns, phase.campaign_name_pattern]);
 
   // Combined: pattern matched + manually linked (unique)
@@ -98,10 +106,18 @@ export const PhaseCampaignsManager = ({
   // Preview of what the current pattern would match
   const patternPreview = useMemo(() => {
     if (!pattern.trim()) return [];
-    const patternLower = pattern.toLowerCase();
-    return allCampaigns.filter(c => 
-      c.campaign_name?.toLowerCase().includes(patternLower)
-    );
+    // Normalize to handle special characters like Ç, Ã, etc.
+    const patternNormalized = pattern
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    return allCampaigns.filter(c => {
+      const campaignNormalized = c.campaign_name
+        ?.normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      return campaignNormalized?.includes(patternNormalized);
+    });
   }, [allCampaigns, pattern]);
 
   const handleSavePattern = async () => {

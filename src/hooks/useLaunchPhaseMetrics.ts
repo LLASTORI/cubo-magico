@@ -150,9 +150,17 @@ export const useLaunchPhaseMetrics = ({
       // Get campaigns for this phase (pattern + manual)
       const campaignIdsFromPattern: string[] = [];
       if (phase.campaign_name_pattern?.trim()) {
-        const patternLower = phase.campaign_name_pattern.toLowerCase();
+        // Normalize to handle special characters like Ç, Ã, etc.
+        const patternNormalized = phase.campaign_name_pattern
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
         allCampaigns.forEach((c) => {
-          if (c.campaign_name?.toLowerCase().includes(patternLower)) {
+          const campaignNormalized = c.campaign_name
+            ?.normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase();
+          if (campaignNormalized?.includes(patternNormalized)) {
             campaignIdsFromPattern.push(c.campaign_id);
           }
         });

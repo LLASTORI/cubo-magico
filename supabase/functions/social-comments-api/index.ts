@@ -1578,6 +1578,8 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
 // ============= REPLY GENERATION =============
 
 async function generateReply(supabase: any, projectId: string, commentId: string) {
+  console.log('[GENERATE_REPLY] Starting for comment:', commentId, 'project:', projectId)
+  
   const { data: comment, error } = await supabase
     .from('social_comments')
     .select('*, social_posts!inner(message)')
@@ -1585,8 +1587,19 @@ async function generateReply(supabase: any, projectId: string, commentId: string
     .single()
 
   if (error || !comment) {
+    console.error('[GENERATE_REPLY] Comment not found:', error)
     throw new Error('Comentário não encontrado')
   }
+
+  // Get provider preference from project quotas
+  const { data: quotaData } = await supabase
+    .from('ai_project_quotas')
+    .select('provider_preference')
+    .eq('project_id', projectId)
+    .maybeSingle()
+  
+  const providerPreference = quotaData?.provider_preference || 'lovable'
+  console.log('[GENERATE_REPLY] Provider preference:', providerPreference)
 
   const { data: knowledgeBase } = await supabase
     .from('ai_knowledge_base')
@@ -1613,10 +1626,12 @@ Comentário: "${comment.text}"
 
 Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja empático e útil.`
 
-  // Try OpenAI first, then fallback to Lovable AI
-  let reply: string
+  let reply: string = ''
+  let usedProvider: string = 'lovable'
 
-  if (OPENAI_API_KEY) {
+  // Respect provider preference
+  if (providerPreference === 'openai' && OPENAI_API_KEY) {
+    console.log('[GENERATE_REPLY] Using OpenAI as preferred provider')
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -1632,8 +1647,16 @@ Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja emp�
         }),
       })
 
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[GENERATE_REPLY] OpenAI API error:', response.status, errorText)
+        throw new Error(`OpenAI error: ${response.status}`)
+      }
+
       const data = await response.json()
       reply = data.choices?.[0]?.message?.content || ''
+      usedProvider = 'openai'
+      console.log('[GENERATE_REPLY] OpenAI reply generated, length:', reply.length)
 
       // Track usage
       const inputTokens = data.usage?.prompt_tokens || 0
@@ -1650,22 +1673,34 @@ Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja emp�
         success: true
       })
     } catch (openaiError) {
-      console.error('OpenAI error, falling back to Lovable AI:', openaiError)
-      reply = await generateReplyWithLovableAI(prompt)
+      console.error('[GENERATE_REPLY] OpenAI error, falling back to Lovable AI:', openaiError)
+      reply = await generateReplyWithLovableAI(prompt, supabase, projectId)
+      usedProvider = 'lovable'
     }
   } else {
-    reply = await generateReplyWithLovableAI(prompt)
+    console.log('[GENERATE_REPLY] Using Lovable AI as preferred provider')
+    reply = await generateReplyWithLovableAI(prompt, supabase, projectId)
+    usedProvider = 'lovable'
   }
 
-  await supabase
+  console.log('[GENERATE_REPLY] Final reply length:', reply.length, 'provider:', usedProvider)
+
+  // Save to ai_suggested_reply field (not suggested_reply)
+  const { error: updateError } = await supabase
     .from('social_comments')
-    .update({ suggested_reply: reply })
+    .update({ ai_suggested_reply: reply })
     .eq('id', commentId)
 
-  return { success: true, reply }
+  if (updateError) {
+    console.error('[GENERATE_REPLY] Error saving reply:', updateError)
+  }
+
+  return { success: true, reply, provider: usedProvider }
 }
 
-async function generateReplyWithLovableAI(prompt: string): Promise<string> {
+async function generateReplyWithLovableAI(prompt: string, supabase?: any, projectId?: string): Promise<string> {
+  console.log('[LOVABLE_AI] Generating reply...')
+  
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1680,10 +1715,40 @@ async function generateReplyWithLovableAI(prompt: string): Promise<string> {
     }),
   })
 
+  if (response.status === 402) {
+    console.error('[LOVABLE_AI] Credits exhausted (402)')
+    throw new Error('Créditos de IA esgotados. Adicione créditos para continuar.')
+  }
+  
+  if (response.status === 429) {
+    console.error('[LOVABLE_AI] Rate limit exceeded (429)')
+    throw new Error('Limite de requisições excedido. Aguarde alguns segundos.')
+  }
+
   if (!response.ok) {
-    throw new Error('Failed to generate reply')
+    const errorText = await response.text()
+    console.error('[LOVABLE_AI] Error:', response.status, errorText)
+    throw new Error('Falha ao gerar resposta com IA')
   }
 
   const data = await response.json()
-  return data.choices?.[0]?.message?.content || ''
+  const reply = data.choices?.[0]?.message?.content || ''
+  console.log('[LOVABLE_AI] Reply generated, length:', reply.length)
+
+  // Track usage if supabase and projectId provided
+  if (supabase && projectId) {
+    await trackAIUsage(supabase, projectId, {
+      feature: 'social_listening',
+      action: 'generate_reply',
+      provider: 'lovable',
+      model: 'google/gemini-2.5-flash',
+      inputTokens: 0,
+      outputTokens: 0,
+      itemsProcessed: 1,
+      costEstimate: 0,
+      success: true
+    })
+  }
+
+  return reply
 }

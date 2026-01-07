@@ -3,6 +3,9 @@ import { useProject } from "@/contexts/ProjectContext";
 import { CuboLogo } from "@/components/CuboLogo";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
 interface HeroSectionProps {
   startDate: string;
   endDate: string;
@@ -17,8 +20,26 @@ export const HeroSection = ({
   const {
     currentProject
   } = useProject();
+
+  // Fetch profile to get the correct full_name
+  const { data: profile } = useQuery({
+    queryKey: ['profile-name', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
   const getFirstName = () => {
-    const fullName = user?.user_metadata?.full_name;
+    // First try profile.full_name, then user_metadata, then email
+    const fullName = profile?.full_name || user?.user_metadata?.full_name;
     if (fullName) {
       return fullName.split(' ')[0];
     }

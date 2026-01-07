@@ -275,6 +275,13 @@ const AcceptInvite = () => {
 
       navigate('/projects', { replace: true });
     } catch (error: any) {
+      // If error is about invite already used/accepted, still redirect - this is expected
+      const errorMessage = error.message?.toLowerCase() || '';
+      if (errorMessage.includes('already') || errorMessage.includes('já') || errorMessage.includes('aceito')) {
+        // Invite was already accepted, redirect to projects
+        navigate('/projects', { replace: true });
+        return;
+      }
       toast({
         title: 'Erro ao aceitar convite',
         description: error.message,

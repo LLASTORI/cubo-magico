@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAccessControl } from '@/hooks/useAccessControl';
+import { CubeLoader } from '@/components/CubeLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CuboBrand } from '@/components/CuboLogo';
@@ -7,7 +9,33 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { ShieldX, LogOut, ExternalLink, Mail } from 'lucide-react';
 
 const NoAccess = () => {
+  const location = useLocation();
   const { signOut, user } = useAuth();
+  const { loading: accessLoading, hasAccess, isAdmin, needsActivation } = useAccessControl();
+
+  // If the user is not authenticated, this page doesn't make sense.
+  if (!user) {
+    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+  }
+
+  // If the account needs activation, send to activation flow.
+  if (needsActivation) {
+    return <Navigate to="/activate" replace />;
+  }
+
+  // While access is being computed, never show the "no access" screen.
+  if (accessLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <CubeLoader message="Verificando acesso..." />
+      </div>
+    );
+  }
+
+  // If access is actually OK, don't leave the user stuck on /no-access.
+  if (hasAccess || isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleLogout = async () => {
     await signOut();
@@ -22,11 +50,11 @@ const NoAccess = () => {
       <div className="fixed top-4 right-4 z-20">
         <ThemeToggle />
       </div>
-      
+
       {/* Decorative cube elements */}
       <div className="fixed top-10 left-10 w-20 h-20 bg-cube-blue/10 rounded-lg rotate-12 blur-sm" />
       <div className="fixed bottom-20 right-20 w-16 h-16 bg-cube-orange/10 rounded-lg -rotate-12 blur-sm" />
-      
+
       <Card className="w-full max-w-md shadow-cube border-2 border-primary/20 relative z-10">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-4">
@@ -38,9 +66,7 @@ const NoAccess = () => {
             </div>
           </div>
           <CardTitle className="text-xl">Acesso Não Autorizado</CardTitle>
-          <CardDescription className="text-base mt-2">
-            Sua conta não possui acesso ao Cubo Mágico.
-          </CardDescription>
+          <CardDescription className="text-base mt-2">Sua conta não possui acesso ao Cubo Mágico.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
@@ -53,21 +79,14 @@ const NoAccess = () => {
           </div>
 
           <div className="space-y-3">
-            <p className="text-sm text-center text-muted-foreground">
-              Para ter acesso, você pode:
-            </p>
-            
-            <Button 
-              className="w-full" 
-              onClick={() => window.open(hotmartCheckoutUrl, '_blank')}
-            >
+            <p className="text-sm text-center text-muted-foreground">Para ter acesso, você pode:</p>
+
+            <Button className="w-full" onClick={() => window.open(hotmartCheckoutUrl, '_blank')}>
               <ExternalLink className="h-4 w-4 mr-2" />
               Adquirir uma Assinatura
             </Button>
 
-            <div className="text-center text-sm text-muted-foreground">
-              ou
-            </div>
+            <div className="text-center text-sm text-muted-foreground">ou</div>
 
             <div className="bg-muted/30 rounded-lg p-3 text-sm text-center">
               <Mail className="h-4 w-4 inline mr-2" />
@@ -80,11 +99,7 @@ const NoAccess = () => {
               <span>Logado como:</span>
               <span className="font-medium">{user?.email}</span>
             </div>
-            <Button 
-              variant="outline" 
-              className="w-full" 
-              onClick={handleLogout}
-            >
+            <Button variant="outline" className="w-full" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />
               Sair da Conta
             </Button>

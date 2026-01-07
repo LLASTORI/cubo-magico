@@ -17,8 +17,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     isAdmin 
   } = useAccessControl();
 
-  // Show loading while checking auth or access
-  if (authLoading || (user && accessLoading)) {
+  // Show loading while checking auth
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <CubeLoader message="Carregando..." />
@@ -29,6 +29,15 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   // Not logged in - redirect to auth
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Show loading while checking access control (user is authenticated)
+  if (accessLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <CubeLoader message="Verificando acesso..." />
+      </div>
+    );
   }
 
   // User needs to activate account (Hotmart user who hasn't set password)

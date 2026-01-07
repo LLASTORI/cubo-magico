@@ -74,12 +74,26 @@ const AcceptInvite = () => {
   const inviteEmail = searchParams.get('email');
   const debugEnabled = searchParams.get('debug') === '1';
 
+  // Always show debug info on screen for troubleshooting
+  const [debugInfo, setDebugInfo] = useState<any>({
+    step: 'init',
+    timestamp: new Date().toISOString(),
+  });
+
   useEffect(() => {
     const checkInvite = async () => {
       // Diagnostic logs
       console.log('[AcceptInvite] Starting invite check...');
       console.log('[AcceptInvite] Token from URL:', inviteToken);
       console.log('[AcceptInvite] Email from URL:', inviteEmail);
+
+      setDebugInfo((prev: any) => ({
+        ...prev,
+        step: 'starting',
+        token: inviteToken,
+        email: inviteEmail,
+        url: window.location.href,
+      }));
 
       if (debugEnabled) {
         setInviteDebug({
@@ -92,12 +106,15 @@ const AcceptInvite = () => {
 
       if (!inviteToken || !inviteEmail) {
         console.warn('[AcceptInvite] Missing token or email in URL params');
+        setDebugInfo((prev: any) => ({ ...prev, step: 'missing_params' }));
         setCheckingInvite(false);
         return;
       }
 
       const normalizedEmail = inviteEmail.toLowerCase().trim();
       console.log('[AcceptInvite] Normalized email:', normalizedEmail);
+
+      setDebugInfo((prev: any) => ({ ...prev, normalizedEmail, step: 'calling_rpc' }));
 
       if (debugEnabled) {
         setInviteDebug((prev: any) => ({ ...(prev ?? {}), normalizedEmail }));
@@ -113,6 +130,13 @@ const AcceptInvite = () => {
 
         console.log('[AcceptInvite] RPC response - data:', JSON.stringify(data, null, 2));
         console.log('[AcceptInvite] RPC response - error:', error);
+
+        setDebugInfo((prev: any) => ({
+          ...prev,
+          step: 'rpc_completed',
+          rpcData: data,
+          rpcError: error ? { message: error.message, code: (error as any).code } : null,
+        }));
 
         if (debugEnabled) {
           setInviteDebug((prev: any) => ({
@@ -133,6 +157,7 @@ const AcceptInvite = () => {
 
         if (error) {
           console.error('[AcceptInvite] RPC error:', error.message, error.code, error.details);
+          setDebugInfo((prev: any) => ({ ...prev, step: 'rpc_error' }));
           toast({
             title: 'Erro ao verificar convite',
             description: 'Não foi possível verificar o convite. Tente novamente.',
@@ -145,8 +170,18 @@ const AcceptInvite = () => {
         const result = data as { success: boolean; error?: string; invite?: any; has_account?: boolean };
         console.log('[AcceptInvite] Parsed result - success:', result.success, '| error:', result.error, '| has_account:', result.has_account);
 
+        setDebugInfo((prev: any) => ({
+          ...prev,
+          step: 'parsing_result',
+          resultSuccess: result.success,
+          resultError: result.error,
+          hasAccount: result.has_account,
+        }));
+
         if (!result.success) {
           console.warn('[AcceptInvite] Invite validation failed with error:', result.error);
+          setDebugInfo((prev: any) => ({ ...prev, step: 'invite_invalid', reason: result.error }));
+          
           let errorTitle = 'Convite inválido';
           let errorDescription = 'Este convite não existe, já foi usado ou expirou.';
           
@@ -173,6 +208,8 @@ const AcceptInvite = () => {
 
         const inviteInfo = result.invite;
         console.log('[AcceptInvite] Invite found successfully:', inviteInfo);
+        setDebugInfo((prev: any) => ({ ...prev, step: 'invite_valid', inviteInfo }));
+        
         setInvite({
           id: inviteInfo.id,
           email: inviteInfo.email,
@@ -184,8 +221,9 @@ const AcceptInvite = () => {
 
         setHasAccount(result.has_account ?? false);
         console.log('[AcceptInvite] User has existing account:', result.has_account);
-      } catch (error) {
+      } catch (error: any) {
         console.error('[AcceptInvite] Unexpected error:', error);
+        setDebugInfo((prev: any) => ({ ...prev, step: 'exception', errorMessage: error?.message }));
         toast({
           title: 'Erro',
           description: 'Ocorreu um erro ao verificar o convite.',
@@ -202,6 +240,7 @@ const AcceptInvite = () => {
 
     // If user is already logged in with the right email, accept invite directly
     if (user && normalizedUserEmail === normalizedInviteEmail) {
+      setDebugInfo((prev: any) => ({ ...prev, step: 'user_logged_in_matching', userEmail: normalizedUserEmail }));
       acceptInviteForLoggedUser();
     } else {
       checkInvite();
@@ -446,29 +485,31 @@ const AcceptInvite = () => {
               Se você acredita que isso é um erro, entre em contato com quem te enviou o convite.
             </p>
 
-            {debugEnabled && (
-              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="font-medium">Debug</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(JSON.stringify(inviteDebug, null, 2));
-                        toast({ title: 'Debug copiado' });
-                      } catch (e) {
-                        console.error('Failed to copy debug:', e);
-                      }
-                    }}
-                  >
-                    Copiar
-                  </Button>
-                </div>
-                <pre className="whitespace-pre-wrap break-words">{JSON.stringify(inviteDebug, null, 2)}</pre>
+            {/* Always show debug info to troubleshoot the issue */}
+            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-medium text-amber-600">🔍 Diagnóstico</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const fullDebug = { debugInfo, inviteDebug };
+                      await navigator.clipboard.writeText(JSON.stringify(fullDebug, null, 2));
+                      toast({ title: 'Diagnóstico copiado!' });
+                    } catch (e) {
+                      console.error('Failed to copy debug:', e);
+                    }
+                  }}
+                >
+                  Copiar
+                </Button>
               </div>
-            )}
+              <pre className="whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </div>
 
             <Button 
               variant="outline" 

@@ -3845,6 +3845,48 @@ export type Database = {
         }
         Relationships: []
       }
+      role_template_feature_permissions: {
+        Row: {
+          created_at: string
+          feature_id: string
+          id: string
+          permission_level: string
+          role_template_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          feature_id: string
+          id?: string
+          permission_level?: string
+          role_template_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          feature_id?: string
+          id?: string
+          permission_level?: string
+          role_template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_template_feature_permissions_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_template_feature_permissions_role_template_id_fkey"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_templates: {
         Row: {
           base_role: Database["public"]["Enums"]["project_role"] | null

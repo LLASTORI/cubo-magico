@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useProject } from "@/contexts/ProjectContext";
-import { useMonthlyAnalysis, MonthlyData, FunnelMonthlyData } from "@/hooks/useMonthlyAnalysis";
+import { useMonthlyAnalysis, MonthlyData, FunnelMonthlyData, DailyData } from "@/hooks/useMonthlyAnalysis";
 import { AppHeader } from "@/components/AppHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CubeLoader } from "@/components/CubeLoader";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, TrendingDown, DollarSign, Target, ShoppingCart, BarChart3, GitCompare, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Target, ShoppingCart, BarChart3, GitCompare, ArrowUpRight, ArrowDownRight, Minus, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { MonthlyRevenueDetailDialog } from "@/components/analise/MonthlyRevenueDetailDialog";
 import { MonthlyInvestmentDetailDialog } from "@/components/analise/MonthlyInvestmentDetailDialog";
@@ -56,6 +56,21 @@ const getVariationIndicator = (current: number, previous: number) => {
   if (variation < 0) return { icon: ArrowDownRight, color: 'text-red-400', value: `${variation.toFixed(1)}%` };
   return { icon: Minus, color: 'text-muted-foreground', value: '0%' };
 };
+
+const monthNames = [
+  { value: '1', label: 'Janeiro' },
+  { value: '2', label: 'Fevereiro' },
+  { value: '3', label: 'Março' },
+  { value: '4', label: 'Abril' },
+  { value: '5', label: 'Maio' },
+  { value: '6', label: 'Junho' },
+  { value: '7', label: 'Julho' },
+  { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' },
+];
 
 interface MonthlyTableProps {
   data: MonthlyData[];
@@ -156,6 +171,83 @@ const MonthlyTable = ({ data, totals, title, showAgencyResult, year, projectId, 
                     {formatCurrency(totals.grossProfit * 0.1)}
                   </TableCell>
                 )}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+interface DailyTableProps {
+  data: DailyData[];
+  totals: {
+    investment: number;
+    revenue: number;
+    grossProfit: number;
+    roas: number;
+    sales: number;
+  };
+  title: string;
+}
+
+const DailyTable = ({ data, totals, title }: DailyTableProps) => {
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-primary" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto max-h-[400px]">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-semibold">Dia</TableHead>
+                <TableHead className="text-right font-semibold">Invest.</TableHead>
+                <TableHead className="text-right font-semibold">Faturado</TableHead>
+                <TableHead className="text-right font-semibold">Lucro</TableHead>
+                <TableHead className="text-right font-semibold">ROAS</TableHead>
+                <TableHead className="text-right font-semibold">Vendas</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((row) => (
+                <TableRow 
+                  key={row.day} 
+                  className={`hover:bg-muted/30 transition-colors ${row.revenue === 0 && row.investment === 0 ? 'opacity-50' : ''}`}
+                >
+                  <TableCell className="font-medium">{row.dayNumber}</TableCell>
+                  <TableCell className="text-right text-blue-400">{formatCompactCurrency(row.investment)}</TableCell>
+                  <TableCell className="text-right text-orange-400">{formatCompactCurrency(row.revenue)}</TableCell>
+                  <TableCell className={`text-right ${row.grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatCompactCurrency(row.grossProfit)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getRoasBadgeClass(row.roas)}`}>
+                      {row.roas.toFixed(2)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right text-purple-400">{row.sales}</TableCell>
+                </TableRow>
+              ))}
+              {/* Total Row */}
+              <TableRow className="bg-primary/10 border-t-2 border-primary/30 font-bold sticky bottom-0">
+                <TableCell className="font-bold text-primary">TOTAL</TableCell>
+                <TableCell className="text-right text-blue-400 font-bold">{formatCompactCurrency(totals.investment)}</TableCell>
+                <TableCell className="text-right text-orange-400 font-bold">{formatCompactCurrency(totals.revenue)}</TableCell>
+                <TableCell className={`text-right font-bold ${totals.grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {formatCompactCurrency(totals.grossProfit)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold border ${getRoasBadgeClass(totals.roas)}`}>
+                    {totals.roas.toFixed(2)}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right text-purple-400 font-bold">{totals.sales}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -512,6 +604,104 @@ const MonthlyChart = ({ data, title }: MonthlyChartProps) => {
   );
 };
 
+interface DailyChartProps {
+  data: DailyData[];
+  title: string;
+}
+
+const DailyChart = ({ data, title }: DailyChartProps) => {
+  const chartData = data.map(d => ({
+    name: d.dayNumber.toString(),
+    investimento: d.investment,
+    faturado: d.revenue,
+    lucro: d.grossProfit,
+    roas: d.roas,
+  }));
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="name" className="text-xs" />
+              <YAxis 
+                yAxisId="left" 
+                tickFormatter={(v) => formatCompactCurrency(v)}
+                className="text-xs"
+              />
+              <YAxis 
+                yAxisId="right" 
+                orientation="right" 
+                domain={[0, 'auto']}
+                className="text-xs"
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }}
+                formatter={(value: number, name: string) => {
+                  if (name === 'roas') return [value.toFixed(2), 'ROAS'];
+                  return [formatCurrency(value), name.charAt(0).toUpperCase() + name.slice(1)];
+                }}
+              />
+              <Legend />
+              <ReferenceLine yAxisId="left" y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+              <Bar yAxisId="left" dataKey="investimento" fill="hsl(217, 91%, 60%)" name="Investimento" radius={[2, 2, 0, 0]} />
+              <Bar yAxisId="left" dataKey="faturado" fill="hsl(25, 95%, 53%)" name="Faturado" radius={[2, 2, 0, 0]} />
+              <Bar yAxisId="left" dataKey="lucro" fill="hsl(48, 96%, 53%)" name="Lucro" radius={[2, 2, 0, 0]} />
+              <Line yAxisId="right" type="monotone" dataKey="roas" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={false} name="ROAS" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const DailyRoasChart = ({ data }: { data: DailyData[] }) => {
+  const chartData = data.map(d => ({
+    name: d.dayNumber.toString(),
+    roas: d.roas,
+  }));
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold">ROAS Diário</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="name" className="text-xs" />
+              <YAxis domain={[0, 'auto']} className="text-xs" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }}
+                formatter={(value: number) => [value.toFixed(2), 'ROAS']}
+              />
+              <ReferenceLine y={1} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: 'Break-even', fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+              <ReferenceLine y={2} stroke="hsl(142, 76%, 36%)" strokeDasharray="3 3" label={{ value: 'Meta', fill: 'hsl(142, 76%, 36%)', fontSize: 10 }} />
+              <Line type="monotone" dataKey="roas" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const RoasChart = ({ data }: { data: MonthlyData[] }) => {
   const chartData = data.map(d => ({
     name: d.monthLabel.substring(0, 3),
@@ -556,6 +746,7 @@ const AnaliseMensal = () => {
   const [selectedFunnel, setSelectedFunnel] = useState<string>('all');
   const [compareMode, setCompareMode] = useState(false);
   const [comparisonYear, setComparisonYear] = useState<number>(new Date().getFullYear() - 1);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   
   // Dialog state for revenue detail
   const [revenueDetailDialog, setRevenueDetailDialog] = useState<{
@@ -585,17 +776,24 @@ const AnaliseMensal = () => {
     generalTotals, 
     comparisonMonthlyData,
     comparisonTotals,
+    dailyData,
+    selectedMonthData,
+    selectedMonthTotals,
     isLoading, 
     funnels 
   } = useMonthlyAnalysis({
     projectId: currentProject?.id,
     year: selectedYear,
     comparisonYear: compareMode ? comparisonYear : null,
+    selectedMonth,
   });
 
   // Generate year options (last 5 years)
   const currentYear = new Date().getFullYear();
   const yearOptions = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3, currentYear - 4];
+
+  // Get selected month label
+  const selectedMonthLabel = selectedMonth ? monthNames.find(m => m.value === selectedMonth.toString())?.label : null;
 
   if (!currentProject) {
     return (
@@ -634,21 +832,32 @@ const AnaliseMensal = () => {
         {/* Header with filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Índices Mensais</h1>
-            <p className="text-muted-foreground">Análise detalhada mês a mês do seu projeto</p>
+            <h1 className="text-3xl font-bold text-foreground">
+              {selectedMonth ? `${selectedMonthLabel} de ${selectedYear}` : 'Índices Mensais'}
+            </h1>
+            <p className="text-muted-foreground">
+              {selectedMonth 
+                ? 'Análise diária do mês selecionado'
+                : 'Análise detalhada mês a mês do seu projeto'}
+            </p>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
             {/* Compare Mode Toggle */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg">
-              <GitCompare className="w-4 h-4 text-muted-foreground" />
-              <Label htmlFor="compare-mode" className="text-sm cursor-pointer">Comparar</Label>
-              <Switch
-                id="compare-mode"
-                checked={compareMode}
-                onCheckedChange={setCompareMode}
-              />
-            </div>
+            {!selectedMonth && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg">
+                <GitCompare className="w-4 h-4 text-muted-foreground" />
+                <Label htmlFor="compare-mode" className="text-sm cursor-pointer">Comparar</Label>
+                <Switch
+                  id="compare-mode"
+                  checked={compareMode}
+                  onCheckedChange={(checked) => {
+                    setCompareMode(checked);
+                    if (checked) setSelectedMonth(null);
+                  }}
+                />
+              </div>
+            )}
 
             <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
               <SelectTrigger className="w-[120px]">
@@ -676,8 +885,27 @@ const AnaliseMensal = () => {
                 </Select>
               </>
             )}
-            
+
+            {/* Month Filter - only show when not in compare mode */}
             {!compareMode && (
+              <Select 
+                value={selectedMonth?.toString() || 'all'} 
+                onValueChange={(v) => setSelectedMonth(v === 'all' ? null : parseInt(v))}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Ano Completo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Ano Completo</SelectItem>
+                  {monthNames.map(month => (
+                    <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            
+            {!compareMode && !selectedMonth && (
               <Select value={selectedFunnel} onValueChange={setSelectedFunnel}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Todos os funis" />
@@ -725,8 +953,87 @@ const AnaliseMensal = () => {
               previousYear={comparisonYear}
             />
           </>
+        ) : selectedMonth && selectedMonthTotals ? (
+          <>
+            {/* Monthly View - Daily Data */}
+            {/* Summary Cards for Selected Month */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+              <Card className="border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-blue-400 mb-2">
+                    <DollarSign className="w-4 h-4" />
+                    <span className="text-xs font-medium">Investimento</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-400">{formatCompactCurrency(selectedMonthTotals.investment)}</p>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-orange-400 mb-2">
+                    <TrendingUp className="w-4 h-4" />
+                    <span className="text-xs font-medium">Faturamento</span>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-400">{formatCompactCurrency(selectedMonthTotals.revenue)}</p>
+                </CardContent>
+              </Card>
+              
+              <Card className={`border-${selectedMonthTotals.grossProfit >= 0 ? 'green' : 'red'}-500/30 bg-gradient-to-br from-${selectedMonthTotals.grossProfit >= 0 ? 'green' : 'red'}-500/10 to-transparent`}>
+                <CardContent className="p-4">
+                  <div className={`flex items-center gap-2 ${selectedMonthTotals.grossProfit >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
+                    {selectedMonthTotals.grossProfit >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    <span className="text-xs font-medium">Lucro Bruto</span>
+                  </div>
+                  <p className={`text-2xl font-bold ${selectedMonthTotals.grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatCompactCurrency(selectedMonthTotals.grossProfit)}
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-primary mb-2">
+                    <Target className="w-4 h-4" />
+                    <span className="text-xs font-medium">ROAS Médio</span>
+                  </div>
+                  <p className={`text-2xl font-bold ${getRoasColor(selectedMonthTotals.roas)}`}>
+                    {selectedMonthTotals.roas.toFixed(2)}x
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-transparent">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-purple-400 mb-2">
+                    <ShoppingCart className="w-4 h-4" />
+                    <span className="text-xs font-medium">Vendas</span>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-400">{selectedMonthTotals.sales}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Daily Content */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+              <div className="xl:col-span-1">
+                <DailyTable 
+                  data={dailyData} 
+                  totals={selectedMonthTotals}
+                  title={`Dia a Dia - ${selectedMonthLabel}`}
+                />
+              </div>
+              <div className="xl:col-span-2 space-y-6">
+                <DailyChart 
+                  data={dailyData} 
+                  title="Investimento, Faturamento e Lucro Diário" 
+                />
+                <DailyRoasChart data={dailyData} />
+              </div>
+            </div>
+          </>
         ) : (
           <>
+            {/* Yearly View - Monthly Data */}
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
               <Card className="border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-transparent">

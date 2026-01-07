@@ -1,18 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
-import { format, startOfYear, endOfYear, parseISO, eachMonthOfInterval } from "date-fns";
+import { format, startOfYear, endOfYear, parseISO, eachMonthOfInterval, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface UseMonthlyAnalysisProps {
   projectId: string | undefined;
   year: number;
   comparisonYear?: number | null;
+  selectedMonth?: number | null; // 1-12 for month, null for full year
 }
 
 export interface MonthlyData {
   month: string;
   monthLabel: string;
+  investment: number;
+  revenue: number;
+  grossProfit: number;
+  roas: number;
+  sales: number;
+}
+
+export interface DailyData {
+  day: string;
+  dayLabel: string;
+  dayNumber: number;
   investment: number;
   revenue: number;
   grossProfit: number;
@@ -34,12 +46,16 @@ export interface FunnelMonthlyData {
   };
 }
 
-export const useMonthlyAnalysis = ({ projectId, year, comparisonYear }: UseMonthlyAnalysisProps) => {
+export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMonth }: UseMonthlyAnalysisProps) => {
   const startDate = startOfYear(new Date(year, 0, 1));
   const endDate = endOfYear(new Date(year, 0, 1));
   
   const compStartDate = comparisonYear ? startOfYear(new Date(comparisonYear, 0, 1)) : null;
   const compEndDate = comparisonYear ? endOfYear(new Date(comparisonYear, 0, 1)) : null;
+
+  // Calculate month date range when a specific month is selected
+  const monthStartDate = selectedMonth ? startOfMonth(new Date(year, selectedMonth - 1, 1)) : null;
+  const monthEndDate = selectedMonth ? endOfMonth(new Date(year, selectedMonth - 1, 1)) : null;
 
   // Fetch sales data for primary year
   const { data: salesData, isLoading: loadingSales } = useQuery({
@@ -254,6 +270,16 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear }: UseMonth
     }));
   }, [comparisonYear]);
 
+  // Generate all days for the selected month
+  const daysOfMonth = useMemo(() => {
+    if (!monthStartDate || !monthEndDate) return [];
+    return eachDayOfInterval({ start: monthStartDate, end: monthEndDate }).map(date => ({
+      day: format(date, 'yyyy-MM-dd'),
+      dayNumber: date.getDate(),
+      dayLabel: format(date, 'dd/MM', { locale: ptBR }),
+    }));
+  }, [selectedMonth, year]);
+
   // Helper function to calculate monthly data
   const calculateMonthlyData = (
     sales: any[] | undefined,
@@ -289,6 +315,42 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear }: UseMonth
     });
   };
 
+  // Helper function to calculate daily data
+  const calculateDailyData = (
+    sales: any[] | undefined,
+    insights: any[] | undefined,
+    days: { day: string; dayNumber: number; dayLabel: string }[]
+  ): DailyData[] => {
+    if (!sales || !insights) return [];
+
+    return days.map(({ day, dayNumber, dayLabel }) => {
+      const daySales = sales.filter(sale => {
+        if (!sale.sale_date) return false;
+        return format(parseISO(sale.sale_date), 'yyyy-MM-dd') === day;
+      });
+
+      const dayInsights = insights.filter(insight => {
+        return format(parseISO(insight.date_start), 'yyyy-MM-dd') === day;
+      });
+
+      const revenue = daySales.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0);
+      const investment = dayInsights.reduce((sum, insight) => sum + (insight.spend || 0), 0);
+      const grossProfit = revenue - investment;
+      const roas = investment > 0 ? revenue / investment : 0;
+
+      return {
+        day,
+        dayLabel,
+        dayNumber,
+        investment,
+        revenue,
+        grossProfit,
+        roas,
+        sales: daySales.length,
+      };
+    });
+  };
+
   // Calculate general monthly data (all funnels combined)
   const generalMonthlyData = useMemo(() => {
     return calculateMonthlyData(salesData, metaInsights, monthsOfYear);
@@ -299,6 +361,32 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear }: UseMonth
     if (!comparisonYear) return [];
     return calculateMonthlyData(comparisonSalesData, comparisonMetaInsights, comparisonMonthsOfYear);
   }, [comparisonSalesData, comparisonMetaInsights, comparisonMonthsOfYear, comparisonYear]);
+
+  // Calculate daily data for selected month
+  const dailyData = useMemo((): DailyData[] => {
+    if (!selectedMonth || !salesData || !metaInsights) return [];
+    
+    // Filter sales for the selected month
+    const monthSales = salesData.filter(sale => {
+      if (!sale.sale_date) return false;
+      const saleDate = parseISO(sale.sale_date);
+      return saleDate.getMonth() + 1 === selectedMonth && saleDate.getFullYear() === year;
+    });
+
+    // Filter insights for the selected month
+    const monthInsights = metaInsights.filter(insight => {
+      const insightDate = parseISO(insight.date_start);
+      return insightDate.getMonth() + 1 === selectedMonth && insightDate.getFullYear() === year;
+    });
+
+    return calculateDailyData(monthSales, monthInsights, daysOfMonth);
+  }, [salesData, metaInsights, selectedMonth, year, daysOfMonth]);
+
+  // Get selected month data
+  const selectedMonthData = useMemo(() => {
+    if (!selectedMonth) return null;
+    return generalMonthlyData.find((_, index) => index === selectedMonth - 1) || null;
+  }, [generalMonthlyData, selectedMonth]);
 
   // Calculate per-funnel monthly data
   const funnelMonthlyData = useMemo((): FunnelMonthlyData[] => {
@@ -380,8 +468,29 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear }: UseMonth
     };
   };
 
+  // Helper to calculate daily totals
+  const calculateDailyTotals = (data: DailyData[]) => {
+    const totals = data.reduce(
+      (acc, d) => ({
+        investment: acc.investment + d.investment,
+        revenue: acc.revenue + d.revenue,
+        grossProfit: acc.grossProfit + d.grossProfit,
+        sales: acc.sales + d.sales,
+      }),
+      { investment: 0, revenue: 0, grossProfit: 0, sales: 0 }
+    );
+    return {
+      ...totals,
+      roas: totals.investment > 0 ? totals.revenue / totals.investment : 0,
+    };
+  };
+
   const generalTotals = useMemo(() => calculateTotals(generalMonthlyData), [generalMonthlyData]);
   const comparisonTotals = useMemo(() => calculateTotals(comparisonMonthlyData), [comparisonMonthlyData]);
+  const selectedMonthTotals = useMemo(() => {
+    if (!selectedMonth || !dailyData.length) return null;
+    return calculateDailyTotals(dailyData);
+  }, [dailyData, selectedMonth]);
 
   return {
     generalMonthlyData,
@@ -389,6 +498,9 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear }: UseMonth
     generalTotals,
     comparisonMonthlyData,
     comparisonTotals,
+    dailyData,
+    selectedMonthData,
+    selectedMonthTotals,
     isLoading: loadingSales || loadingInsights || loadingCompSales || loadingCompInsights,
     funnels,
   };

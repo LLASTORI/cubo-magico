@@ -130,7 +130,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['launch-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['launch-phases'] });
       toast.success('Fase criada com sucesso');
     },
     onError: (error: Error) => {
@@ -151,7 +151,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['launch-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['launch-phases'] });
       toast.success('Fase atualizada');
     },
     onError: (error: Error) => {
@@ -169,7 +169,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['launch-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['launch-phases'] });
       toast.success('Fase removida');
     },
     onError: (error: Error) => {
@@ -191,7 +191,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['launch-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['launch-phases'] });
     },
     onError: (error: Error) => {
       toast.error('Erro ao reordenar fases: ' + error.message);
@@ -211,7 +211,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phase-campaigns', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['phase-campaigns'] });
     },
   });
 
@@ -226,7 +226,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phase-campaigns', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['phase-campaigns'] });
     },
   });
 

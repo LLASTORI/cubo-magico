@@ -322,8 +322,9 @@ export function useApplyRoleTemplate() {
         .eq('role_template_id', template.id);
 
       if (templateFeaturePerms && templateFeaturePerms.length > 0) {
-        // Delete existing feature permissions for this user/project
-        await supabase
+        // Delete existing feature permissions for this user/project using raw query
+        // Using type assertion since table was just created
+        await (supabase as any)
           .from('project_member_feature_permissions')
           .delete()
           .eq('project_id', projectId)
@@ -337,7 +338,7 @@ export function useApplyRoleTemplate() {
           permission_level: fp.permission_level,
         }));
 
-        await supabase
+        await (supabase as any)
           .from('project_member_feature_permissions')
           .insert(featurePermsToInsert);
       }

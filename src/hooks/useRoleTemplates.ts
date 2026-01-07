@@ -270,7 +270,7 @@ export function useApplyRoleTemplate() {
 
       const userId = memberData.user_id;
 
-      // 3. Atualizar permissões granulares - todas as colunas de uma vez
+      // 3. Atualizar permissões granulares por área
       const permissionsUpdate = {
         dashboard: template.perm_dashboard,
         analise: template.perm_analise,
@@ -315,7 +315,34 @@ export function useApplyRoleTemplate() {
         if (permError) throw permError;
       }
 
-      // 4. Se template tem chat_ao_vivo habilitado e whatsapp_auto_create_agent, criar/atualizar agente
+      // 4. Buscar e aplicar permissões de features do template
+      const { data: templateFeaturePerms } = await supabase
+        .from('role_template_feature_permissions')
+        .select('feature_id, permission_level')
+        .eq('role_template_id', template.id);
+
+      if (templateFeaturePerms && templateFeaturePerms.length > 0) {
+        // Delete existing feature permissions for this user/project
+        await supabase
+          .from('project_member_feature_permissions')
+          .delete()
+          .eq('project_id', projectId)
+          .eq('user_id', userId);
+
+        // Insert new permissions based on template
+        const featurePermsToInsert = templateFeaturePerms.map(fp => ({
+          project_id: projectId,
+          user_id: userId,
+          feature_id: fp.feature_id,
+          permission_level: fp.permission_level,
+        }));
+
+        await supabase
+          .from('project_member_feature_permissions')
+          .insert(featurePermsToInsert);
+      }
+
+      // 5. Se template tem chat_ao_vivo habilitado e whatsapp_auto_create_agent, criar/atualizar agente
       if (template.perm_chat_ao_vivo !== 'none' && template.whatsapp_auto_create_agent) {
         // Verificar se já existe agente
         const { data: existingAgent } = await supabase
@@ -323,7 +350,7 @@ export function useApplyRoleTemplate() {
           .select('id')
           .eq('project_id', projectId)
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
 
         if (existingAgent) {
           // Atualizar agente existente
@@ -356,6 +383,8 @@ export function useApplyRoleTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-members'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-agents'] });
+      queryClient.invalidateQueries({ queryKey: ['member-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['header-permissions'] });
       toast({
         title: 'Cargo aplicado',
         description: 'O cargo foi aplicado ao membro com sucesso.',

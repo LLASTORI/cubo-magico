@@ -282,19 +282,20 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteProject = async (id: string) => {
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', id);
+    const { data, error } = await supabase.functions.invoke('delete-project', {
+      body: { projectId: id },
+    });
 
-    if (!error) {
+    const finalError = error || (data?.error ? new Error(data.error) : null);
+
+    if (!finalError) {
       if (currentProject?.id === id) {
         setCurrentProject(null);
       }
       await refreshProjects();
     }
 
-    return { error };
+    return { error: finalError };
   };
 
   const saveCredentials = async (projectId: string, creds: Partial<ProjectCredential>) => {

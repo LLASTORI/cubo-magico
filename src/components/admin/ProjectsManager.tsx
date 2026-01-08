@@ -237,16 +237,18 @@ export const ProjectsManager = () => {
         owner_email: deletingProject.owner_email,
       });
 
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', deletingProject.id);
+      const { data, error } = await supabase.functions.invoke('delete-project', {
+        body: { projectId: deletingProject.id },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: 'Projeto excluído com sucesso!' });
       setDeletingProject(null);
       fetchProjects();
+      // Sync projects list in context as well
+      refreshProjects();
     } catch (error: any) {
       toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
     } finally {

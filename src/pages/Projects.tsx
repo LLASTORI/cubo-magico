@@ -78,6 +78,7 @@ const Projects = () => {
   const [projectMemberCounts, setProjectMemberCounts] = useState<Record<string, ProjectMemberCount>>({});
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch credentials status, user roles and member counts for all projects
   useEffect(() => {
@@ -193,13 +194,34 @@ const Projects = () => {
   const handleDeleteProject = async () => {
     if (!projectToDelete) return;
     
-    const { error } = await deleteProject(projectToDelete.id);
-    if (error) {
-      toast({ title: 'Erro ao excluir projeto', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'Projeto excluído' });
+    setIsDeleting(true);
+    try {
+      // Use edge function for batch deletion to avoid timeout
+      const { data, error } = await supabase.functions.invoke('delete-project', {
+        body: { projectId: projectToDelete.id }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      toast({ title: 'Projeto excluído com sucesso!' });
       setProjectToDelete(null);
       setDeleteConfirmName('');
+      await refreshProjects();
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      toast({ 
+        title: 'Erro ao excluir projeto', 
+        description: error.message || 'Erro desconhecido', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -885,15 +907,22 @@ const Projects = () => {
               className="mt-2"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setProjectToDelete(null); setDeleteConfirmName(''); }}>
+              <AlertDialogCancel onClick={() => { setProjectToDelete(null); setDeleteConfirmName(''); }} disabled={isDeleting}>
                 Cancelar
               </AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleDeleteProject}
-                disabled={deleteConfirmName !== projectToDelete?.name}
+                disabled={deleteConfirmName !== projectToDelete?.name || isDeleting}
                 className="bg-destructive hover:bg-destructive/90"
               >
-                Excluir permanentemente
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Excluindo...
+                  </>
+                ) : (
+                  'Excluir permanentemente'
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

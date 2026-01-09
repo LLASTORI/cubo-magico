@@ -100,7 +100,7 @@ async function fetchWithRetry(
   const response = await fetch(url)
   const data = await response.json()
 
-  // Check for rate limit error (code 4)
+  // Check for rate limit error (code 4 - general rate limit)
   if (data.error && data.error.code === 4) {
     if (retryCount >= MAX_RETRIES) {
       console.error(`${context}: Max retries (${MAX_RETRIES}) reached for rate limit`)
@@ -110,6 +110,24 @@ async function fetchWithRetry(
     // Calculate exponential backoff delay
     const delayMs = Math.min(INITIAL_DELAY_MS * Math.pow(2, retryCount), MAX_DELAY_MS)
     console.warn(`${context}: Rate limited (code 4). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delayMs}ms`)
+    
+    await delay(delayMs)
+    return fetchWithRetry(url, context, retryCount + 1)
+  }
+  
+  // Check for ad-account level rate limit (code 80004) - "too many calls to this ad-account"
+  // This is more severe than code 4, requires longer wait
+  if (data.error && data.error.code === 80004) {
+    if (retryCount >= MAX_RETRIES) {
+      console.error(`${context}: Max retries (${MAX_RETRIES}) reached for ad-account rate limit (80004)`)
+      // Return empty data instead of throwing to allow sync to continue with partial data
+      console.warn(`${context}: Skipping due to rate limit - will be synced later`)
+      return { data: [], paging: {} }
+    }
+
+    // Use longer delay for ad-account level limits (they are more strict)
+    const delayMs = Math.min(INITIAL_DELAY_MS * 2 * Math.pow(2, retryCount), MAX_DELAY_MS)
+    console.warn(`${context}: Ad-account rate limited (code 80004). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delayMs}ms`)
     
     await delay(delayMs)
     return fetchWithRetry(url, context, retryCount + 1)

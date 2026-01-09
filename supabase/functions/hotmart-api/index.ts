@@ -413,14 +413,27 @@ const ALL_TRANSACTION_STATUSES = [
   'WAITING_PAYMENT',
 ];
 
+// PRIMARY statuses for quick search - most relevant for real-time analysis
+// These cover 95%+ of sales and are fastest to fetch
+// Other statuses can be synced via webhook or background cron
+const PRIMARY_TRANSACTION_STATUSES = [
+  'APPROVED',      // Vendas aprovadas
+  'COMPLETE',      // Vendas completas
+  'WAITING_PAYMENT', // Boletos/Pix aguardando
+  'CANCELLED',     // Cancelamentos
+  'REFUNDED',      // Reembolsos
+  'CHARGEBACK',    // Chargebacks
+];
+
 // Sync sales to database - OPTIMIZED with batch upsert
-// Now fetches ALL statuses to ensure complete data
+// Supports 'quick' mode (primary statuses only) or 'full' mode (all statuses)
 async function syncSales(
   projectId: string,
   startDate: number,
   endDate: number,
   status?: string,
-  fetchAllStatuses: boolean = true
+  fetchAllStatuses: boolean = true,
+  quickMode: boolean = false
 ): Promise<{ synced: number; updated: number; errors: number; categoryStats: Record<string, number> }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -432,6 +445,7 @@ async function syncSales(
   
   // Fetch sales from Hotmart
   console.log(`Syncing sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`);
+  console.log(`Mode: ${quickMode ? 'QUICK (primary statuses)' : 'FULL (all statuses)'}`);
   
   let allSales: HotmartSale[] = [];
   
@@ -440,10 +454,11 @@ async function syncSales(
     allSales = await fetchAllSales(token, startDate, endDate, status);
     console.log(`Sales fetched for status ${status || 'all'}: ${allSales.length}`);
   } else {
-    // Fetch ALL statuses separately to ensure we get cancelled/chargeback/refunded
-    console.log('Fetching sales for all statuses...');
+    // Choose which statuses to fetch based on mode
+    const statusesToFetch = quickMode ? PRIMARY_TRANSACTION_STATUSES : ALL_TRANSACTION_STATUSES;
+    console.log(`Fetching sales for ${statusesToFetch.length} statuses (${quickMode ? 'quick' : 'full'} mode)...`);
     
-    for (const txStatus of ALL_TRANSACTION_STATUSES) {
+    for (const txStatus of statusesToFetch) {
       try {
         console.log(`  Fetching status: ${txStatus}...`);
         const salesForStatus = await fetchAllSales(token, startDate, endDate, txStatus);
@@ -455,10 +470,10 @@ async function syncSales(
       }
       
       // Small delay between status calls to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 150));
     }
     
-    console.log(`Total sales fetched across all statuses: ${allSales.length}`);
+    console.log(`Total sales fetched across ${statusesToFetch.length} statuses: ${allSales.length}`);
   }
   
   if (allSales.length === 0) {
@@ -854,8 +869,8 @@ serve(async (req) => {
   }
 
   try {
-    const { endpoint, params, apiType, projectId, action, startDate, endDate, status } = await req.json();
-    console.log('Hotmart API request:', { endpoint, apiType, projectId, action });
+    const { endpoint, params, apiType, projectId, action, startDate, endDate, status, quickMode } = await req.json();
+    console.log('Hotmart API request:', { endpoint, apiType, projectId, action, quickMode });
 
     if (!projectId) {
       throw new Error('Project ID is required');
@@ -914,7 +929,8 @@ serve(async (req) => {
           const chunk = chunks[i];
           console.log(`Processing chunk ${i + 1}/${chunks.length}: ${new Date(chunk.start).toISOString()} to ${new Date(chunk.end).toISOString()}`);
           
-          const result = await syncSales(projectId, chunk.start, chunk.end, status);
+          // Pass quickMode to syncSales
+          const result = await syncSales(projectId, chunk.start, chunk.end, status, true, quickMode === true);
           totalSynced += result.synced;
           totalErrors += result.errors;
           
@@ -942,8 +958,8 @@ serve(async (req) => {
         });
       }
       
-      // Small period - sync directly
-      const result = await syncSales(projectId, startDate, endDate, status);
+      // Small period - sync directly with quickMode
+      const result = await syncSales(projectId, startDate, endDate, status, true, quickMode === true);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

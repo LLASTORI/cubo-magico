@@ -26,8 +26,9 @@ import LTVAnalysis from "@/components/funnel/LTVAnalysis";
 import { CuboMagicoDashboard } from "@/components/funnel/CuboMagicoDashboard";
 import { FunnelAIInsights } from "@/components/funnel/FunnelAIInsights";
 import { MetaHierarchyAnalysis } from "@/components/meta/MetaHierarchyAnalysis";
-import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
 import { computeFunnelAIContext } from "@/hooks/useFunnelAIContext";
@@ -142,6 +143,9 @@ function AIInsightsTab({
   );
 }
 
+const BRAZIL_TZ = "America/Sao_Paulo";
+const formatBrazilDate = (date: Date) => formatInTimeZone(date, BRAZIL_TZ, "yyyy-MM-dd");
+
 const FunnelAnalysis = () => {
   const { currentProject } = useProject();
   const { isModuleEnabled } = useProjectModules();
@@ -255,18 +259,14 @@ const FunnelAnalysis = () => {
     console.log('[DataGaps] Checking gaps for period:', dateStart, 'to', dateStop);
     console.log('[DataGaps] Active accounts:', activeAccountIds);
     
-    // Calculate today's date in Brazil timezone (UTC-3)
-    const now = new Date();
-    const brazilOffset = -3 * 60; // Brazil is UTC-3
-    const localOffset = now.getTimezoneOffset();
-    const brazilNow = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
-    const todayStr = format(brazilNow, 'yyyy-MM-dd');
-    
-    // IMPORTANT: Exclude today from gap checking since Meta rarely has data for today
-    // Meta's attribution data typically requires 24-48h to consolidate
+    // Hoje no fuso do Brasil (America/Sao_Paulo)
+    const todayStr = formatBrazilDate(new Date());
+
+    // IMPORTANTE: por padrão, a checagem de lacunas ignora "hoje" para não
+    // gerar alertas falsos; a sincronização, porém, pode (e deve) incluir "hoje".
     const isEndDateToday = dateStop === todayStr;
-    const effectiveDateStop = isEndDateToday 
-      ? format(subDays(brazilNow, 1), 'yyyy-MM-dd') // Use yesterday if end is today
+    const effectiveDateStop = isEndDateToday
+      ? formatBrazilDate(subDays(new Date(), 1)) // ontem no fuso do Brasil
       : dateStop;
     
     // If we're only checking today, no gaps to worry about
@@ -410,31 +410,36 @@ const FunnelAnalysis = () => {
     console.log(`[Polling] Starting intelligent polling.`);
     console.log(`[Polling] Period: ${dateStart} to ${dateStop} (${days} days)`);
 
-    // Calculate expected days (excluding future dates AND today)
-    // Meta rarely has data for the current day, so exclude it from completeness check
-    const now = new Date();
-    const brazilOffset = -3 * 60; // Brazil is UTC-3
-    const localOffset = now.getTimezoneOffset();
-    const brazilNow = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
-    const todayStr = format(brazilNow, 'yyyy-MM-dd');
-    
-    const endDateObj = new Date(dateStop);
+    // Datas de referência no fuso do Brasil (Meta geralmente usa o fuso da conta,
+    // mas aqui usamos o mesmo padrão do app para construir as queries e o polling).
+    const todayStr = formatBrazilDate(new Date());
+    const includesToday = dateStart <= todayStr && dateStop >= todayStr;
+
+    // Para medir "completude" sem ficar refém do dia atual (que pode estar em processamento),
+    // usamos um cálculo separado excluindo hoje.
+    const yesterdayStr = formatBrazilDate(subDays(new Date(), 1));
+    const effectiveEndExclTodayStr = includesToday ? yesterdayStr : dateStop;
+
     const startDateObj = new Date(dateStart);
-    
-    // Effective end excludes today since Meta rarely has current day data
-    const yesterdayStr = format(subDays(brazilNow, 1), 'yyyy-MM-dd');
-    const effectiveEndStr = dateStop >= todayStr ? yesterdayStr : dateStop;
-    const effectiveEnd = new Date(effectiveEndStr);
-    
-    // If start is after effective end (e.g., only checking today), expect 0 days
-    const expectedDays = startDateObj <= effectiveEnd 
-      ? Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-      : 0;
-    
-    console.log(`[Polling] Today (Brazil): ${todayStr}, Effective end (excl. today): ${effectiveEndStr}, Expected days: ${expectedDays}`);
+    const effectiveEndExclToday = new Date(effectiveEndExclTodayStr);
+
+    const expectedDaysExclToday =
+      startDateObj <= effectiveEndExclToday
+        ? Math.max(
+            0,
+            Math.floor(
+              (effectiveEndExclToday.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)
+            ) + 1
+          )
+        : 0;
+
+    console.log(
+      `[Polling] Today (BR): ${todayStr} | includesToday=${includesToday} | effectiveEndExclToday=${effectiveEndExclTodayStr} | expectedDaysExclToday=${expectedDaysExclToday}`
+    );
+
+    const isOnlyToday = includesToday && dateStart === todayStr && dateStop === todayStr;
 
     // Optimized cache check - single query with aggregation
-    // Excludes today since Meta rarely has current day data
     const checkCacheCompleteness = async () => {
       const { data } = await supabase
         .from('meta_insights')
@@ -443,48 +448,72 @@ const FunnelAnalysis = () => {
         .in('ad_account_id', accountIds)
         .not('ad_id', 'is', null)
         .gte('date_start', dateStart)
-        .lte('date_start', effectiveEndStr); // Use effective end (excludes today)
-      
-      // Count unique dates excluding today
-      const uniqueDates = new Set(
-        (data || [])
-          .map(d => d.date_start)
-          .filter(d => d !== todayStr)
+        .lte('date_start', dateStop);
+
+      const rows = data || [];
+
+      const uniqueDatesAll = new Set(rows.map(r => r.date_start));
+      const uniqueDatesExclToday = new Set(
+        rows
+          .map(r => r.date_start)
+          .filter(d => !(includesToday && d === todayStr))
       );
-      const cachedDaysCount = uniqueDates.size;
-      const totalSpend = data?.reduce((sum, row) => sum + (row.spend || 0), 0) || 0;
-      const completeness = expectedDays > 0 ? cachedDaysCount / expectedDays : (expectedDays === 0 ? 1 : 0);
-      
-      return { 
-        cachedDaysCount, 
-        completeness, 
-        isComplete: expectedDays === 0 || completeness >= 0.95, // Complete if no days expected OR 95%+ 
+
+      const cachedDaysAllCount = uniqueDatesAll.size;
+      const cachedDaysExclTodayCount = uniqueDatesExclToday.size;
+
+      const totalSpend = rows.reduce((sum, row) => sum + (row.spend || 0), 0);
+
+      const todayRows = includesToday ? rows.filter(r => r.date_start === todayStr) : [];
+      const todayCount = todayRows.length;
+      const todaySpend = todayRows.reduce((sum, row) => sum + (row.spend || 0), 0);
+
+      const completenessExclToday =
+        expectedDaysExclToday > 0 ? cachedDaysExclTodayCount / expectedDaysExclToday : 1;
+
+      const baseComplete = expectedDaysExclToday === 0 || completenessExclToday >= 0.95;
+
+      return {
+        count: rows.length,
         totalSpend,
-        count: data?.length || 0
+        cachedDaysAllCount,
+        cachedDaysExclTodayCount,
+        completenessExclToday,
+        baseComplete,
+        todayCount,
+        todaySpend,
       };
     };
 
     // Initial cache check
     const initialCacheStatus = await checkCacheCompleteness();
-    console.log(`[Polling] Cache: ${initialCacheStatus.cachedDaysCount}/${expectedDays} days, ${initialCacheStatus.count} records, R$${initialCacheStatus.totalSpend.toFixed(2)}`);
-    
-    // Special case: if only checking "today", consider it complete immediately
-    // since Meta rarely has current day data
-    if (expectedDays === 0) {
-      console.log(`[Polling] Only checking today - skipping sync (Meta data not available yet)`);
+    console.log(
+      `[Polling] Cache: ${initialCacheStatus.cachedDaysExclTodayCount}/${expectedDaysExclToday} dias (excl. hoje), ` +
+        `${initialCacheStatus.count} registros, total R$${initialCacheStatus.totalSpend.toFixed(2)}` +
+        (includesToday
+          ? ` | hoje: ${initialCacheStatus.todayCount} regs, R$${initialCacheStatus.todaySpend.toFixed(2)}`
+          : '')
+    );
+
+    const initialIsReady =
+      initialCacheStatus.baseComplete &&
+      initialCacheStatus.count > 0 &&
+      (!isOnlyToday || initialCacheStatus.todayCount > 0);
+
+    // Use cache if already ready
+    if (initialIsReady) {
+      console.log(`[Polling] Cache pronto! Usando dados em cache.`);
       setMetaSyncInProgress(false);
       setMetaSyncStatus('done');
-      toast.info('Meta Ads: Dados do dia atual geralmente ficam disponíveis após 24-48h');
-      await refetchAll();
-      return;
-    }
-    
-    // Use cache if complete (95%+)
-    if (initialCacheStatus.isComplete && initialCacheStatus.count > 0) {
-      console.log(`[Polling] Cache complete! Using cached data.`);
-      setMetaSyncInProgress(false);
-      setMetaSyncStatus('done');
-      toast.success(`Meta Ads: Dados carregados (R$ ${initialCacheStatus.totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+
+      if (includesToday && !isOnlyToday && initialCacheStatus.todayCount === 0) {
+        toast.info('Meta Ads: dados de hoje ainda não apareceram (dias anteriores ok).');
+      } else {
+        toast.success(
+          `Meta Ads: Dados carregados (R$ ${initialCacheStatus.totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
+        );
+      }
+
       await refetchAll();
       return;
     }
@@ -500,31 +529,44 @@ const FunnelAnalysis = () => {
       elapsed = Math.floor((Date.now() - startTime) / 1000);
       setSyncProgress(prev => ({ ...prev, elapsed }));
 
-      // Use optimized check function
-      const status = await checkCacheCompleteness();
-      const { count: currentCount, totalSpend } = status;
+       // Use optimized check function
+       const status = await checkCacheCompleteness();
+       const { count: currentCount, totalSpend } = status;
 
-      console.log(`[Polling] ${elapsed}s: ${currentCount} records, R$${totalSpend.toFixed(2)}, ${status.cachedDaysCount}/${expectedDays} days`);
+       console.log(
+         `[Polling] ${elapsed}s: ${currentCount} registros, R$${totalSpend.toFixed(2)}, ` +
+           `${status.cachedDaysExclTodayCount}/${expectedDaysExclToday} dias (excl. hoje)` +
+           (includesToday
+             ? ` | hoje: ${status.todayCount} regs, R$${status.todaySpend.toFixed(2)}`
+             : '')
+       );
 
-      // Check for stability (both count AND spend must be stable)
-      const dataStable = currentCount === lastCount && Math.abs(totalSpend - lastSpend) < 0.01;
-      
-      if (currentCount > 0 && dataStable) {
-        stableCount++;
-        
-        // Complete when stable and cache is reasonably complete
-        if (stableCount >= STABLE_CYCLES_REQUIRED && status.completeness >= 0.9) {
-          stopPolling();
-          setMetaSyncInProgress(false);
-          setMetaSyncStatus('done');
-          toast.success(`Meta Ads: ${currentCount} registros (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
-          console.log(`[Polling] Complete! ${status.cachedDaysCount}/${expectedDays} days (${(status.completeness * 100).toFixed(0)}%)`);
-          await refetchAll();
-          return;
-        }
-      } else if (currentCount > lastCount || totalSpend > lastSpend + 1) {
-        stableCount = 0; // Reset on data change
-      }
+       // Check for stability (both count AND spend must be stable)
+       const dataStable = currentCount === lastCount && Math.abs(totalSpend - lastSpend) < 0.01;
+       
+       if (currentCount > 0 && dataStable) {
+         stableCount++;
+
+         const meetsCompleteness = status.completenessExclToday >= 0.9 || expectedDaysExclToday === 0;
+         const meetsTodayRequirement = !isOnlyToday || status.todayCount > 0;
+         
+         // Complete when stable and cache is reasonably complete
+         if (stableCount >= STABLE_CYCLES_REQUIRED && meetsCompleteness && meetsTodayRequirement) {
+           stopPolling();
+           setMetaSyncInProgress(false);
+           setMetaSyncStatus('done');
+           toast.success(`Meta Ads: ${currentCount} registros (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+           console.log(
+             `[Polling] Complete! ${status.cachedDaysExclTodayCount}/${expectedDaysExclToday} dias (excl. hoje) ` +
+               `(${(status.completenessExclToday * 100).toFixed(0)}%)` +
+               (includesToday ? ` | hoje: ${status.todayCount} regs` : '')
+           );
+           await refetchAll();
+           return;
+         }
+       } else if (currentCount > lastCount || totalSpend > lastSpend + 1) {
+         stableCount = 0; // Reset on data change
+       }
       
       lastCount = currentCount;
       lastSpend = totalSpend;
@@ -535,22 +577,31 @@ const FunnelAnalysis = () => {
         setMetaSyncInProgress(false);
         setMetaSyncStatus('done');
         
-        if (currentCount > 0) {
-          const finalCacheStatus = await checkCacheCompleteness();
-          
-          // Check for gaps in the data
-          const missingDays = expectedDays - finalCacheStatus.cachedDaysCount;
-          if (missingDays > 0 && finalCacheStatus.completeness < 0.95) {
-            toast.warning(`Meta Ads: ${currentCount} registros. Atenção: ${missingDays} dias faltando (${(finalCacheStatus.completeness * 100).toFixed(0)}% completo)`);
-            console.log(`[Polling] WARNING: Missing ${missingDays} days. Consider re-syncing the period.`);
-          } else {
-            toast.success(`Meta Ads: ${currentCount} registros carregados (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
-          }
-          console.log(`[Polling] Timeout with ${currentCount} records. Cache: ${(finalCacheStatus.completeness * 100).toFixed(0)}%`);
-        } else {
-          toast.warning('Tempo limite atingido. Verifique se há dados para o período selecionado.');
-          console.log(`[Polling] Timeout reached. No data detected.`);
-        }
+         if (currentCount > 0) {
+           const finalCacheStatus = await checkCacheCompleteness();
+           
+           const missingDaysExclToday = expectedDaysExclToday - finalCacheStatus.cachedDaysExclTodayCount;
+           
+           if (missingDaysExclToday > 0 && finalCacheStatus.completenessExclToday < 0.95) {
+             toast.warning(
+               `Meta Ads: ${currentCount} registros. Atenção: ${missingDaysExclToday} dias faltando (${(finalCacheStatus.completenessExclToday * 100).toFixed(0)}% completo, excl. hoje)`
+             );
+             console.log(`[Polling] WARNING: Missing ${missingDaysExclToday} days (excl. today). Consider re-syncing the period.`);
+           } else if (isOnlyToday && finalCacheStatus.todayCount === 0) {
+             toast.warning('Meta Ads: ainda sem dados para hoje após tentar sincronizar.');
+           } else {
+             toast.success(`Meta Ads: ${currentCount} registros carregados (R$ ${totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+           }
+           
+           console.log(`[Polling] Timeout with ${currentCount} records. Cache (excl. hoje): ${(finalCacheStatus.completenessExclToday * 100).toFixed(0)}%`);
+         } else {
+           if (isOnlyToday) {
+             toast.warning('Meta Ads: nenhum dado retornado para hoje (tente novamente em alguns minutos).');
+           } else {
+             toast.warning('Tempo limite atingido. Verifique se há dados para o período selecionado.');
+           }
+           console.log(`[Polling] Timeout reached. No data detected.`);
+         }
         
         await refetchAll();
       }
@@ -574,15 +625,23 @@ const FunnelAnalysis = () => {
     setMetaSyncInProgress(true);
     stopPolling();
 
-    // Consolidate all gaps into a single range (earliest start to latest end)
-    // This avoids multiple API calls that cause rate limiting
-    const allDates = dataGaps.missingDateRanges.flatMap(r => [r.start, r.end]);
-    const earliestDate = allDates.sort()[0];
-    const latestDate = allDates.sort().reverse()[0];
+     // Consolidate all gaps into a single range (earliest start to latest end)
+     // This avoids multiple API calls that cause rate limiting
+     const allDates = dataGaps.missingDateRanges.flatMap(r => [r.start, r.end]).sort();
+     const earliestDate = allDates[0];
+     let latestDate = allDates[allDates.length - 1];
 
-    toast.info(`Preenchendo ${dataGaps.missingDays} dias faltantes (${earliestDate} a ${latestDate})...`);
-    console.log('[FillGaps] Consolidated range:', earliestDate, 'to', latestDate);
-    console.log('[FillGaps] Original ranges:', dataGaps.missingDateRanges);
+     // Se o período aplicado termina "hoje", inclua "hoje" nessa mesma sincronização
+     // para evitar precisar rodar múltiplas vezes (lacunas + dia atual).
+     const todayStr = formatBrazilDate(new Date());
+     const appliedEndStr = formatBrazilDate(appliedEndDate);
+     if (appliedEndStr === todayStr && latestDate < todayStr) {
+       latestDate = todayStr;
+     }
+
+     toast.info(`Preenchendo ${dataGaps.missingDays} dias faltantes (${earliestDate} a ${latestDate})...`);
+     console.log('[FillGaps] Consolidated range:', earliestDate, 'to', latestDate);
+     console.log('[FillGaps] Original ranges:', dataGaps.missingDateRanges);
 
     try {
       // Single API call for the entire gap period
@@ -911,12 +970,8 @@ const FunnelAnalysis = () => {
   
   // Check if end date is "today" - Meta typically doesn't have data for the current day
   const isEndDateToday = useMemo(() => {
-    const now = new Date();
-    const brazilOffset = -3 * 60;
-    const localOffset = now.getTimezoneOffset();
-    const brazilNow = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
-    const todayStr = format(brazilNow, 'yyyy-MM-dd');
-    const appliedEndStr = format(appliedEndDate, 'yyyy-MM-dd');
+    const todayStr = formatBrazilDate(new Date());
+    const appliedEndStr = formatBrazilDate(appliedEndDate);
     return appliedEndStr === todayStr;
   }, [appliedEndDate]);
 

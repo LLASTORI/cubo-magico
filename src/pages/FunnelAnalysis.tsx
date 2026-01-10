@@ -245,6 +245,7 @@ const FunnelAnalysis = () => {
   }, []);
 
   // Check for data gaps in the selected period - query DB directly for accuracy
+  // IMPORTANT: Excludes "today" since Meta rarely has consolidated data for the current day
   const checkDataGaps = useCallback(async () => {
     if (!currentProject?.id || activeAccountIds.length === 0) return;
     
@@ -254,8 +255,37 @@ const FunnelAnalysis = () => {
     console.log('[DataGaps] Checking gaps for period:', dateStart, 'to', dateStop);
     console.log('[DataGaps] Active accounts:', activeAccountIds);
     
+    // Calculate today's date in Brazil timezone (UTC-3)
+    const now = new Date();
+    const brazilOffset = -3 * 60; // Brazil is UTC-3
+    const localOffset = now.getTimezoneOffset();
+    const brazilNow = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
+    const todayStr = format(brazilNow, 'yyyy-MM-dd');
+    
+    // IMPORTANT: Exclude today from gap checking since Meta rarely has data for today
+    // Meta's attribution data typically requires 24-48h to consolidate
+    const isEndDateToday = dateStop === todayStr;
+    const effectiveDateStop = isEndDateToday 
+      ? format(subDays(brazilNow, 1), 'yyyy-MM-dd') // Use yesterday if end is today
+      : dateStop;
+    
+    // If we're only checking today, no gaps to worry about
+    if (dateStart === todayStr && isEndDateToday) {
+      console.log('[DataGaps] Only checking today - skipping gap check (Meta data not available)');
+      setDataGaps(null);
+      return;
+    }
+    
+    // If start is after effective stop, no valid range to check
+    if (dateStart > effectiveDateStop) {
+      console.log('[DataGaps] No valid date range to check for gaps');
+      setDataGaps(null);
+      return;
+    }
+    
+    console.log('[DataGaps] Effective date range (excluding today):', dateStart, 'to', effectiveDateStop);
+    
     // Query ALL unique dates - use pagination to get beyond 1000 limit
-    // First, get count and unique dates in a more efficient way
     let allDates: string[] = [];
     let offset = 0;
     const pageSize = 1000;
@@ -268,7 +298,7 @@ const FunnelAnalysis = () => {
         .eq('project_id', currentProject.id)
         .in('ad_account_id', activeAccountIds)
         .gte('date_start', dateStart)
-        .lte('date_start', dateStop)
+        .lte('date_start', effectiveDateStop)
         .range(offset, offset + pageSize - 1);
       
       if (error) {
@@ -289,15 +319,12 @@ const FunnelAnalysis = () => {
     const cachedDates = new Set(allDates);
     console.log('[DataGaps] Unique dates found in DB:', cachedDates.size, 'Total records fetched:', allDates.length);
     
-    // Calculate expected days (excluding future)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endDateObj = new Date(dateStop);
+    // Calculate expected days (excluding future and today)
     const startDateObj = new Date(dateStart);
-    const effectiveEnd = endDateObj > today ? today : endDateObj;
-    const expectedDays = Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const effectiveEndObj = new Date(effectiveDateStop);
+    const expectedDays = Math.max(0, Math.floor((effectiveEndObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     
-    console.log('[DataGaps] Expected days:', expectedDays, 'Found:', cachedDates.size);
+    console.log('[DataGaps] Expected days (excl. today):', expectedDays, 'Found:', cachedDates.size);
     
     const missingDays = expectedDays - cachedDates.size;
     const completeness = expectedDays > 0 ? cachedDates.size / expectedDays : 1;
@@ -310,7 +337,7 @@ const FunnelAnalysis = () => {
       let rangeStart: string | null = null;
       let rangeEnd: string | null = null;
       
-      for (let d = new Date(startDateObj); d <= effectiveEnd; d.setDate(d.getDate() + 1)) {
+      for (let d = new Date(startDateObj); d <= effectiveEndObj; d.setDate(d.getDate() + 1)) {
         const dateStr = format(d, 'yyyy-MM-dd');
         if (!cachedDates.has(dateStr)) {
           if (!rangeStart) rangeStart = dateStr;
@@ -383,15 +410,31 @@ const FunnelAnalysis = () => {
     console.log(`[Polling] Starting intelligent polling.`);
     console.log(`[Polling] Period: ${dateStart} to ${dateStop} (${days} days)`);
 
-    // Calculate expected days (excluding future dates)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Calculate expected days (excluding future dates AND today)
+    // Meta rarely has data for the current day, so exclude it from completeness check
+    const now = new Date();
+    const brazilOffset = -3 * 60; // Brazil is UTC-3
+    const localOffset = now.getTimezoneOffset();
+    const brazilNow = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
+    const todayStr = format(brazilNow, 'yyyy-MM-dd');
+    
     const endDateObj = new Date(dateStop);
     const startDateObj = new Date(dateStart);
-    const effectiveEnd = endDateObj > today ? today : endDateObj;
-    const expectedDays = Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    // Effective end excludes today since Meta rarely has current day data
+    const yesterdayStr = format(subDays(brazilNow, 1), 'yyyy-MM-dd');
+    const effectiveEndStr = dateStop >= todayStr ? yesterdayStr : dateStop;
+    const effectiveEnd = new Date(effectiveEndStr);
+    
+    // If start is after effective end (e.g., only checking today), expect 0 days
+    const expectedDays = startDateObj <= effectiveEnd 
+      ? Math.max(0, Math.floor((effectiveEnd.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+      : 0;
+    
+    console.log(`[Polling] Today (Brazil): ${todayStr}, Effective end (excl. today): ${effectiveEndStr}, Expected days: ${expectedDays}`);
 
     // Optimized cache check - single query with aggregation
+    // Excludes today since Meta rarely has current day data
     const checkCacheCompleteness = async () => {
       const { data } = await supabase
         .from('meta_insights')
@@ -400,17 +443,22 @@ const FunnelAnalysis = () => {
         .in('ad_account_id', accountIds)
         .not('ad_id', 'is', null)
         .gte('date_start', dateStart)
-        .lte('date_start', dateStop);
+        .lte('date_start', effectiveEndStr); // Use effective end (excludes today)
       
-      const uniqueDates = new Set(data?.map(d => d.date_start) || []);
+      // Count unique dates excluding today
+      const uniqueDates = new Set(
+        (data || [])
+          .map(d => d.date_start)
+          .filter(d => d !== todayStr)
+      );
       const cachedDaysCount = uniqueDates.size;
       const totalSpend = data?.reduce((sum, row) => sum + (row.spend || 0), 0) || 0;
-      const completeness = expectedDays > 0 ? cachedDaysCount / expectedDays : 0;
+      const completeness = expectedDays > 0 ? cachedDaysCount / expectedDays : (expectedDays === 0 ? 1 : 0);
       
       return { 
         cachedDaysCount, 
         completeness, 
-        isComplete: completeness >= 0.95, // 95% for more accuracy
+        isComplete: expectedDays === 0 || completeness >= 0.95, // Complete if no days expected OR 95%+ 
         totalSpend,
         count: data?.length || 0
       };
@@ -419,6 +467,17 @@ const FunnelAnalysis = () => {
     // Initial cache check
     const initialCacheStatus = await checkCacheCompleteness();
     console.log(`[Polling] Cache: ${initialCacheStatus.cachedDaysCount}/${expectedDays} days, ${initialCacheStatus.count} records, R$${initialCacheStatus.totalSpend.toFixed(2)}`);
+    
+    // Special case: if only checking "today", consider it complete immediately
+    // since Meta rarely has current day data
+    if (expectedDays === 0) {
+      console.log(`[Polling] Only checking today - skipping sync (Meta data not available yet)`);
+      setMetaSyncInProgress(false);
+      setMetaSyncStatus('done');
+      toast.info('Meta Ads: Dados do dia atual geralmente ficam disponíveis após 24-48h');
+      await refetchAll();
+      return;
+    }
     
     // Use cache if complete (95%+)
     if (initialCacheStatus.isComplete && initialCacheStatus.count > 0) {
@@ -849,6 +908,17 @@ const FunnelAnalysis = () => {
 
   const isRefreshingAll = isSyncing;
   const datesChanged = startDate.getTime() !== appliedStartDate.getTime() || endDate.getTime() !== appliedEndDate.getTime();
+  
+  // Check if end date is "today" - Meta typically doesn't have data for the current day
+  const isEndDateToday = useMemo(() => {
+    const now = new Date();
+    const brazilOffset = -3 * 60;
+    const localOffset = now.getTimezoneOffset();
+    const brazilNow = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
+    const todayStr = format(brazilNow, 'yyyy-MM-dd');
+    const appliedEndStr = format(appliedEndDate, 'yyyy-MM-dd');
+    return appliedEndStr === todayStr;
+  }, [appliedEndDate]);
 
   // Consolidated status for visual feedback
   const dataStatus = useMemo(() => {
@@ -1130,12 +1200,23 @@ const FunnelAnalysis = () => {
             </Alert>
           )}
 
+          {/* Info when end date is today - Meta data may not be available yet */}
+          {isEndDateToday && !metaSyncInProgress && !loadingInsights && !dataGaps && (
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <Clock className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-400">
+                <strong>Período inclui "hoje".</strong> Dados do Meta Ads para o dia atual geralmente ficam disponíveis após 24-48h. 
+                Vendas do Hotmart aparecem em tempo real, mas investimento do Meta pode estar incompleto.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Warning when no Meta investment data */}
-          {!loadingSales && !metaSyncInProgress && !loadingInsights && summaryMetrics.investimento === 0 && activeAccountIds.length > 0 && (
+          {!loadingSales && !metaSyncInProgress && !loadingInsights && summaryMetrics.investimento === 0 && activeAccountIds.length > 0 && !isEndDateToday && (
             <Alert variant="destructive" className="border-yellow-500/50 bg-yellow-500/10">
               <AlertTriangle className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                <strong>Sem dados de investimento Meta Ads para o período selecionado.</strong> Clique em "Atualizar" para sincronizar os dados.
+                <strong>Sem dados de investimento Meta Ads para o período selecionado.</strong> Clique em "Sincronizar APIs" para buscar os dados.
               </AlertDescription>
             </Alert>
           )}

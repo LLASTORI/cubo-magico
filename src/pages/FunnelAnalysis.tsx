@@ -32,6 +32,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
 import { useFunnelData } from "@/hooks/useFunnelData";
 import { computeFunnelAIContext } from "@/hooks/useFunnelAIContext";
+import { useFunnelAnalysisState } from "@/hooks/useFunnelAnalysisState";
 import { FeatureGate, FeatureLockedBadge } from "@/components/FeatureGate";
 import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -151,25 +152,28 @@ const FunnelAnalysis = () => {
   const { isModuleEnabled } = useProjectModules();
   const isMetaAdsEnabled = isModuleEnabled('meta_ads');
   
-  // Single source of truth for dates
-  const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
-  const [endDate, setEndDate] = useState<Date>(new Date());
-  const [appliedStartDate, setAppliedStartDate] = useState<Date>(subDays(new Date(), 7));
+  // Persisted state - survives navigation between tabs
+  const {
+    startDate, setStartDate,
+    endDate, setEndDate,
+    appliedStartDate, setAppliedStartDate,
+    appliedEndDate, setAppliedEndDate,
+    selectedPeriod, setSelectedPeriod,
+    activeTab, setActiveTab,
+    metaSyncInProgress, setMetaSyncInProgress,
+    cachedAIAnalysis, setCachedAIAnalysis,
+  } = useFunnelAnalysisState(currentProject?.id);
+
   const [endDatePopoverOpen, setEndDatePopoverOpen] = useState(false);
-  const [appliedEndDate, setAppliedEndDate] = useState<Date>(new Date());
   
-  // Sync states
+  // Sync states (transient - ok to reset on navigation)
   const [isSyncing, setIsSyncing] = useState(false);
   const [hotmartSyncStatus, setHotmartSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [metaSyncStatus, setMetaSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
-  const [metaSyncInProgress, setMetaSyncInProgress] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ elapsed: 0, estimated: 60 });
   const [dataGaps, setDataGaps] = useState<{ missingDays: number; completeness: number; missingRanges: string[]; missingDateRanges: Array<{start: string, end: string}> } | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Cache for AI analysis to persist between tab changes
-  const [cachedAIAnalysis, setCachedAIAnalysis] = useState<Record<string, any>>({});
 
   // Use centralized hook for ALL data
   const {
@@ -193,9 +197,7 @@ const FunnelAnalysis = () => {
     startDate: appliedStartDate,
     endDate: appliedEndDate,
   });
-
-  // Quick date setters with period tracking
-  const [selectedPeriod, setSelectedPeriod] = useState<string | null>('7d'); // Default 7 days
+  // Quick date setters
 
   const setQuickDate = (days: number) => {
     setEndDate(new Date());
@@ -1291,7 +1293,7 @@ const FunnelAnalysis = () => {
               <CubeLoader message="Carregando dados..." size="lg" />
             </div>
           ) : (
-            <Tabs defaultValue="overview" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="flex flex-wrap w-full max-w-5xl gap-1">
                 <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                 <Tooltip>

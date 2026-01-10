@@ -1355,18 +1355,10 @@ async function syncInsightsSmartOptimized(
       }
     }
     
-    // STEP 5b: ALWAYS sync adsets/ads on every sync to keep hierarchy fresh
-    // Status can change at any time, so we need to keep it updated
-    // This ensures status is always accurate in the UI
-    console.log('Syncing adsets/ads hierarchy to keep status accurate...')
-    
-    // Sync adsets directly from API
-    console.log('Syncing adsets from Meta API...')
-    await syncAdsets(supabase, projectId, accessToken, accountIds)
-    
-    // Sync ads directly from API
-    console.log('Syncing ads from Meta API...')
-    await syncAds(supabase, projectId, accessToken, accountIds)
+    // STEP 5b: SKIP full adsets/ads sync during insights sync (too slow - 22k+ ads)
+    // The hierarchy will be synced on-demand when user requests full sync
+    // or periodically via a separate action
+    console.log('⚡ OPTIMIZED: Skipping full adsets/ads sync during insights sync for speed')
 
     // STEP 6: Fetch and insert insights INCREMENTALLY
     // IMPORTANT: Only fetch AD-LEVEL insights (most granular)

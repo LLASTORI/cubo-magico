@@ -18,7 +18,8 @@ import {
   Route,
   Kanban,
   Lightbulb,
-  ClipboardList
+  ClipboardList,
+  FileQuestion
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -77,7 +78,7 @@ export const AppHeader = ({
   const isInBuscaRapida = currentPath === '/busca-rapida' || currentPath === '/meta-ads';
   const isInAnalytics = currentPath === '/funnel-analysis' || currentPath === '/analise-mensal' || currentPath === '/launch-dashboard' || currentPath === '/undefined-offers';
   const isInCRM = currentPath === '/crm' || currentPath.startsWith('/crm/') || currentPath === '/automations' || currentPath.startsWith('/automations/') || currentPath === '/whatsapp' || currentPath === '/crm/kanban';
-  const isInInsights = currentPath === '/insights' || currentPath.startsWith('/insights/');
+  const isInInsights = currentPath === '/insights' || currentPath.startsWith('/insights/') || currentPath.startsWith('/quizzes');
   
   const handleLogout = async () => {
     await signOut();
@@ -352,6 +353,15 @@ export const AppHeader = ({
                         >
                           <ClipboardList className="w-4 h-4" />
                           Pesquisas
+                        </DropdownMenuItem>
+                      )}
+                      {canAccessInsights && (
+                        <DropdownMenuItem 
+                          onClick={() => navigate('/quizzes')} 
+                          className={`gap-2 cursor-pointer ${currentPath.startsWith('/quizzes') ? 'bg-muted' : ''}`}
+                        >
+                          <FileQuestion className="w-4 h-4" />
+                          Quizzes
                         </DropdownMenuItem>
                       )}
                       {canAccessSocialListening && (

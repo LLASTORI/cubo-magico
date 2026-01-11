@@ -4004,9 +4004,12 @@ export type Database = {
       quiz_options: {
         Row: {
           created_at: string
+          end_quiz: boolean | null
           id: string
           intent_vector: Json | null
           label: string
+          next_block_id: string | null
+          next_question_id: string | null
           order_index: number
           question_id: string
           traits_vector: Json | null
@@ -4015,9 +4018,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          end_quiz?: boolean | null
           id?: string
           intent_vector?: Json | null
           label: string
+          next_block_id?: string | null
+          next_question_id?: string | null
           order_index?: number
           question_id: string
           traits_vector?: Json | null
@@ -4026,9 +4032,12 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          end_quiz?: boolean | null
           id?: string
           intent_vector?: Json | null
           label?: string
+          next_block_id?: string | null
+          next_question_id?: string | null
           order_index?: number
           question_id?: string
           traits_vector?: Json | null
@@ -4037,7 +4046,68 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "quiz_options_next_block_id_fkey"
+            columns: ["next_block_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_options_next_question_id_fkey"
+            columns: ["next_question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "quiz_options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_question_conditions: {
+        Row: {
+          condition_payload: Json
+          condition_type: string
+          created_at: string
+          group_id: string | null
+          id: string
+          is_active: boolean
+          logical_operator: string
+          order_index: number
+          question_id: string
+          updated_at: string
+        }
+        Insert: {
+          condition_payload?: Json
+          condition_type: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          is_active?: boolean
+          logical_operator?: string
+          order_index?: number
+          question_id: string
+          updated_at?: string
+        }
+        Update: {
+          condition_payload?: Json
+          condition_type?: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          is_active?: boolean
+          logical_operator?: string
+          order_index?: number
+          question_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_question_conditions_question_id_fkey"
             columns: ["question_id"]
             isOneToOne: false
             referencedRelation: "quiz_questions"
@@ -4049,35 +4119,44 @@ export type Database = {
         Row: {
           config: Json | null
           created_at: string
+          dynamic_weight_rules: Json | null
           id: string
+          is_hidden: boolean
           is_required: boolean
           order_index: number
           quiz_id: string
           subtitle: string | null
           title: string
           type: Database["public"]["Enums"]["quiz_question_type"]
+          visibility_type: string
         }
         Insert: {
           config?: Json | null
           created_at?: string
+          dynamic_weight_rules?: Json | null
           id?: string
+          is_hidden?: boolean
           is_required?: boolean
           order_index?: number
           quiz_id: string
           subtitle?: string | null
           title: string
           type?: Database["public"]["Enums"]["quiz_question_type"]
+          visibility_type?: string
         }
         Update: {
           config?: Json | null
           created_at?: string
+          dynamic_weight_rules?: Json | null
           id?: string
+          is_hidden?: boolean
           is_required?: boolean
           order_index?: number
           quiz_id?: string
           subtitle?: string | null
           title?: string
           type?: Database["public"]["Enums"]["quiz_question_type"]
+          visibility_type?: string
         }
         Relationships: [
           {
@@ -4091,33 +4170,51 @@ export type Database = {
       }
       quiz_results: {
         Row: {
+          confidence_score: number | null
           created_at: string
+          decision_path: Json | null
+          entropy_score: number | null
+          flow_type: string | null
           id: string
           intent_vector: Json | null
           normalized_score: Json | null
           project_id: string
+          questions_answered: number | null
+          questions_skipped: number | null
           raw_score: Json | null
           session_id: string
           summary: string | null
           traits_vector: Json | null
         }
         Insert: {
+          confidence_score?: number | null
           created_at?: string
+          decision_path?: Json | null
+          entropy_score?: number | null
+          flow_type?: string | null
           id?: string
           intent_vector?: Json | null
           normalized_score?: Json | null
           project_id: string
+          questions_answered?: number | null
+          questions_skipped?: number | null
           raw_score?: Json | null
           session_id: string
           summary?: string | null
           traits_vector?: Json | null
         }
         Update: {
+          confidence_score?: number | null
           created_at?: string
+          decision_path?: Json | null
+          entropy_score?: number | null
+          flow_type?: string | null
           id?: string
           intent_vector?: Json | null
           normalized_score?: Json | null
           project_id?: string
+          questions_answered?: number | null
+          questions_skipped?: number | null
           raw_score?: Json | null
           session_id?: string
           summary?: string | null
@@ -4142,43 +4239,64 @@ export type Database = {
       }
       quiz_sessions: {
         Row: {
+          accumulated_vectors: Json | null
           completed_at: string | null
           contact_id: string | null
           created_at: string
+          current_question_id: string | null
+          decision_path: Json | null
+          flow_metadata: Json | null
           id: string
+          injected_question_ids: string[] | null
           ip_hash: string | null
           project_id: string
           quiz_id: string
+          skipped_question_ids: string[] | null
           started_at: string
           status: Database["public"]["Enums"]["quiz_session_status"]
           user_agent: string | null
           utm_data: Json | null
+          visited_question_ids: string[] | null
         }
         Insert: {
+          accumulated_vectors?: Json | null
           completed_at?: string | null
           contact_id?: string | null
           created_at?: string
+          current_question_id?: string | null
+          decision_path?: Json | null
+          flow_metadata?: Json | null
           id?: string
+          injected_question_ids?: string[] | null
           ip_hash?: string | null
           project_id: string
           quiz_id: string
+          skipped_question_ids?: string[] | null
           started_at?: string
           status?: Database["public"]["Enums"]["quiz_session_status"]
           user_agent?: string | null
           utm_data?: Json | null
+          visited_question_ids?: string[] | null
         }
         Update: {
+          accumulated_vectors?: Json | null
           completed_at?: string | null
           contact_id?: string | null
           created_at?: string
+          current_question_id?: string | null
+          decision_path?: Json | null
+          flow_metadata?: Json | null
           id?: string
+          injected_question_ids?: string[] | null
           ip_hash?: string | null
           project_id?: string
           quiz_id?: string
+          skipped_question_ids?: string[] | null
           started_at?: string
           status?: Database["public"]["Enums"]["quiz_session_status"]
           user_agent?: string | null
           utm_data?: Json | null
+          visited_question_ids?: string[] | null
         }
         Relationships: [
           {
@@ -4193,6 +4311,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_current_question_id_fkey"
+            columns: ["current_question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
             referencedColumns: ["id"]
           },
           {
@@ -4213,10 +4338,12 @@ export type Database = {
       }
       quizzes: {
         Row: {
+          adaptive_config: Json | null
           allow_anonymous: boolean
           created_at: string
           description: string | null
           end_screen_config: Json | null
+          flow_type: string
           id: string
           is_active: boolean
           name: string
@@ -4227,10 +4354,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          adaptive_config?: Json | null
           allow_anonymous?: boolean
           created_at?: string
           description?: string | null
           end_screen_config?: Json | null
+          flow_type?: string
           id?: string
           is_active?: boolean
           name: string
@@ -4241,10 +4370,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          adaptive_config?: Json | null
           allow_anonymous?: boolean
           created_at?: string
           description?: string | null
           end_screen_config?: Json | null
+          flow_type?: string
           id?: string
           is_active?: boolean
           name?: string

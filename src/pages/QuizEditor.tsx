@@ -465,6 +465,9 @@ export default function QuizEditor() {
           logo_url: tc.logo_url,
           show_progress: tc.show_progress !== false,
           one_question_per_page: tc.one_question_per_page !== false,
+
+          benefits_text_color: tc.benefits_text_color || tc.secondary_text_color || DEFAULT_THEME.benefits_text_color,
+          benefits_icon_color: tc.benefits_icon_color || tc.primary_color || DEFAULT_THEME.benefits_icon_color,
         });
       }
       

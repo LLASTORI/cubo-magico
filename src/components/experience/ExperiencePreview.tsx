@@ -224,11 +224,11 @@ export function ExperiencePreview({
                         <div 
                           key={i} 
                           className="flex items-center gap-2 text-xs"
-                          style={{ color: currentTheme.secondary_text_color }}
+                          style={{ color: currentTheme.benefits_text_color || currentTheme.secondary_text_color }}
                         >
                           <CheckCircle 
                             className="h-3 w-3 shrink-0" 
-                            style={{ color: currentTheme.primary_color }}
+                            style={{ color: currentTheme.benefits_icon_color || currentTheme.primary_color }}
                           />
                           <span>{benefit}</span>
                         </div>

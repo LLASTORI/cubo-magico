@@ -87,3 +87,6 @@ verify_jwt = false
 
 [functions.quiz-mark-abandoned]
 verify_jwt = false
+
+[functions.quiz-reprocess-scores]
+verify_jwt = true

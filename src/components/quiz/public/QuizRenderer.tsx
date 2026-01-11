@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QuizStartScreen } from './QuizStartScreen';
 import { QuizEndScreen } from './QuizEndScreen';
@@ -9,8 +9,10 @@ import { CubeLoader } from '@/components/CubeLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuizEventDispatcher } from '@/hooks/useQuizEventDispatcher';
+
 interface QuizRendererProps {
-  quizId: string;
+  quizIdentifier: string; // Can be UUID or slug
+  projectCode?: string; // Optional project code for multi-tenant lookup
 }
 
 interface QuizState {
@@ -29,9 +31,21 @@ interface QuizState {
   error: string | null;
 }
 
-export function QuizRenderer({ quizId }: QuizRendererProps) {
+interface ThemeConfig {
+  primary_color?: string;
+  text_color?: string;
+  secondary_text_color?: string;
+  input_text_color?: string;
+  background_color?: string;
+  background_image?: string;
+  logo_url?: string;
+  show_progress?: boolean;
+}
+
+export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps) {
   const { toast } = useToast();
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
+  const [quizId, setQuizId] = useState<string | undefined>(undefined);
   const [state, setState] = useState<QuizState>({
     sessionId: null,
     currentQuestionIndex: 0,
@@ -57,6 +71,47 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
     trackOutcomeSelected,
   } = useQuizEventDispatcher(projectId, quizId);
 
+  // Extract theme from quiz config
+  const theme: ThemeConfig = useMemo(() => {
+    if (!state.quizConfig?.theme_config) return {};
+    return state.quizConfig.theme_config as ThemeConfig;
+  }, [state.quizConfig?.theme_config]);
+
+  // Generate CSS variables for theming
+  const themeStyles = useMemo(() => {
+    const styles: Record<string, string> = {};
+    
+    if (theme.primary_color) {
+      styles['--quiz-primary'] = theme.primary_color;
+    }
+    if (theme.text_color) {
+      styles['--quiz-text'] = theme.text_color;
+    }
+    if (theme.secondary_text_color) {
+      styles['--quiz-text-secondary'] = theme.secondary_text_color;
+    }
+    if (theme.background_color) {
+      styles['--quiz-background'] = theme.background_color;
+    }
+    
+    return styles;
+  }, [theme]);
+
+  // Background style with optional image
+  const backgroundStyle = useMemo(() => {
+    const style: React.CSSProperties = {
+      backgroundColor: theme.background_color || undefined,
+    };
+    
+    if (theme.background_image) {
+      style.backgroundImage = `url(${theme.background_image})`;
+      style.backgroundSize = 'cover';
+      style.backgroundPosition = 'center';
+    }
+    
+    return style;
+  }, [theme.background_color, theme.background_image]);
+
   // Get UTM data from URL
   const getUtmData = () => {
     const params = new URLSearchParams(window.location.search);
@@ -69,8 +124,63 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
     };
   };
 
+  // Load quiz on mount
+  useEffect(() => {
+    const loadQuiz = async () => {
+      try {
+        // First, resolve the quiz ID from identifier
+        let resolvedQuizId = quizIdentifier;
+        
+        // Check if it's a UUID (36 chars with dashes)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quizIdentifier);
+        
+        if (!isUUID) {
+          // It's a slug - need to look up the quiz
+          let query = supabase
+            .from('quizzes')
+            .select('id, project_id')
+            .eq('slug', quizIdentifier);
+          
+          // If we have a project code, filter by it
+          if (projectCode) {
+            const { data: project } = await supabase
+              .from('projects')
+              .select('id')
+              .eq('code', projectCode)
+              .single();
+            
+            if (project) {
+              query = query.eq('project_id', project.id);
+            }
+          }
+          
+          const { data: quizData, error: lookupError } = await query.single();
+          
+          if (lookupError || !quizData) {
+            setState(s => ({ ...s, error: 'Quiz não encontrado', isLoading: false }));
+            return;
+          }
+          
+          resolvedQuizId = quizData.id;
+          setProjectId(quizData.project_id);
+        }
+        
+        setQuizId(resolvedQuizId);
+        setState(s => ({ ...s, isLoading: false }));
+        
+      } catch (err: any) {
+        console.error('Error loading quiz:', err);
+        setState(s => ({ ...s, error: err.message, isLoading: false }));
+      }
+    };
+    
+    loadQuiz();
+  }, [quizIdentifier, projectCode]);
+
   // Start quiz
   const startQuiz = async () => {
+    if (!quizId) return;
+    
     try {
       setState(s => ({ ...s, isLoading: true }));
       
@@ -252,15 +362,16 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
     }
   };
 
-  // Initial load - just set loading false
-  useEffect(() => {
-    setState(s => ({ ...s, isLoading: false }));
-  }, []);
+  // Show progress bar based on theme config
+  const showProgress = theme.show_progress !== false;
 
   // Loading state
   if (state.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
+      <div 
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted"
+        style={backgroundStyle}
+      >
         <CubeLoader size="lg" />
       </div>
     );
@@ -270,14 +381,28 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
   if (state.error) {
     const isInactiveError = state.error.includes('inativo') || state.error.includes('não encontrado');
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-6">
+      <div 
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-6"
+        style={backgroundStyle}
+      >
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-foreground mb-4">
+          <h1 
+            className="text-2xl font-bold mb-4"
+            style={{ color: theme.text_color }}
+          >
             {isInactiveError ? 'Quiz indisponível' : 'Ops!'}
           </h1>
-          <p className="text-muted-foreground mb-6">{state.error}</p>
+          <p 
+            className="mb-6"
+            style={{ color: theme.secondary_text_color }}
+          >
+            {state.error}
+          </p>
           {isInactiveError && (
-            <p className="text-sm text-muted-foreground">
+            <p 
+              className="text-sm"
+              style={{ color: theme.secondary_text_color }}
+            >
               Este quiz pode estar temporariamente desativado ou o link não é válido.
             </p>
           )}
@@ -291,7 +416,9 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
     return (
       <QuizStartScreen
         config={state.quizConfig?.start_screen_config}
+        theme={theme}
         quizName={state.quizConfig?.name || 'Quiz'}
+        logoUrl={theme.logo_url}
         onStart={startQuiz}
       />
     );
@@ -304,6 +431,7 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
         isOpen={true}
         onSubmit={identifyLead}
         onSkip={state.quizConfig?.allow_anonymous ? () => completeQuiz(state.answers) : undefined}
+        theme={theme}
       />
     );
   }
@@ -313,7 +441,9 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
     return (
       <QuizEndScreen
         config={state.quizConfig?.end_screen_config}
+        theme={theme}
         result={state.result}
+        logoUrl={theme.logo_url}
       />
     );
   }
@@ -323,18 +453,45 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
 
   if (!currentQuestion) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-6">
+      <div 
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-6"
+        style={backgroundStyle}
+      >
         <div className="text-center">
-          <p className="text-muted-foreground">Nenhuma pergunta encontrada</p>
+          <p style={{ color: theme.secondary_text_color }}>
+            Nenhuma pergunta encontrada
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-background to-muted">
+    <div 
+      className="min-h-screen flex flex-col"
+      style={{
+        ...backgroundStyle,
+        ...themeStyles as React.CSSProperties,
+      }}
+    >
       {/* Progress bar */}
-      <QuizProgressBar progress={state.progress} />
+      {showProgress && (
+        <QuizProgressBar 
+          progress={state.progress} 
+          primaryColor={theme.primary_color}
+        />
+      )}
+
+      {/* Logo */}
+      {theme.logo_url && (
+        <div className="flex justify-center pt-6">
+          <img 
+            src={theme.logo_url} 
+            alt="Logo" 
+            className="h-12 object-contain"
+          />
+        </div>
+      )}
 
       {/* Question content */}
       <div className="flex-1 flex items-center justify-center p-6">
@@ -352,6 +509,7 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
               questionNumber={state.currentQuestionIndex + 1}
               totalQuestions={state.questions.length}
               onAnswer={(answer) => answerQuestion(currentQuestion.id, answer)}
+              theme={theme}
             />
           </motion.div>
         </AnimatePresence>

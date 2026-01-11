@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, 
@@ -50,12 +50,27 @@ import { useQuizOutcomes } from '@/hooks/useQuizOutcomes';
 import { QuizVectorEditor } from '@/components/quiz/QuizVectorEditor';
 import { QuizOutcomeEditor } from '@/components/quiz/QuizOutcomeEditor';
 import { QuizCognitiveHealth, QuizSimulator } from '@/components/quiz/copilot';
-import { QuizRenderer } from '@/components/quiz/public';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useProjectModules } from '@/hooks/useProjectModules';
+import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Json } from '@/integrations/supabase/types';
+
+// Experience Engine unified components
+import {
+  ExperienceAppearanceSettings,
+  ExperienceStartScreenSettings,
+  ExperienceEndScreenSettings,
+  ExperienceSlugSettings,
+  ExperiencePreview,
+  ExperienceTheme,
+  ExperienceStartScreen,
+  ExperienceEndScreen,
+  DEFAULT_THEME,
+  DEFAULT_START_SCREEN,
+  DEFAULT_END_SCREEN,
+} from '@/components/experience';
 
 // Sortable Question Card Component
 function SortableQuestionCard({
@@ -290,6 +305,7 @@ export default function QuizEditor() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { selectedProject } = useProject();
   const { quiz, isLoading, error: quizError, refetch, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addOption, updateOption, deleteOption } = useQuiz(quizId);
   const { updateQuiz } = useQuizzes();
   const { outcomes } = useQuizOutcomes(quizId);
@@ -305,19 +321,13 @@ export default function QuizEditor() {
     allow_anonymous: false,
     is_active: false,
   });
-  const [startScreen, setStartScreen] = useState<Record<string, any>>({
-    headline: '',
-    subheadline: '',
-    cta_text: 'Começar',
-    image_url: '',
-  });
-  const [endScreen, setEndScreen] = useState<Record<string, any>>({
-    headline: 'Obrigado!',
-    subheadline: 'Sua participação é muito importante.',
-    cta_text: '',
-    cta_url: '',
-    show_summary: false,
-  });
+  
+  // Experience Engine unified state
+  const [slug, setSlug] = useState('');
+  const [theme, setTheme] = useState<ExperienceTheme>(DEFAULT_THEME);
+  const [startScreen, setStartScreen] = useState<ExperienceStartScreen>(DEFAULT_START_SCREEN);
+  const [endScreen, setEndScreen] = useState<ExperienceEndScreen>(DEFAULT_END_SCREEN);
+  
   const [isCreatingFromArchitecture, setIsCreatingFromArchitecture] = useState(false);
   const architectureProcessed = useRef(false);
 
@@ -427,6 +437,7 @@ export default function QuizEditor() {
     processArchitecture();
   }, [quiz, quizId, location.state, addQuestion, addOption, toast]);
 
+  // Load quiz data into state
   useEffect(() => {
     if (quiz) {
       setQuizData({
@@ -437,11 +448,52 @@ export default function QuizEditor() {
         allow_anonymous: quiz.allow_anonymous,
         is_active: quiz.is_active,
       });
-      if (quiz.start_screen_config) {
-        setStartScreen(quiz.start_screen_config as unknown as Record<string, any>);
+      
+      // Load slug
+      setSlug(quiz.slug || '');
+      
+      // Load theme from theme_config
+      if (quiz.theme_config) {
+        const tc = quiz.theme_config as Record<string, any>;
+        setTheme({
+          primary_color: tc.primary_color || DEFAULT_THEME.primary_color,
+          text_color: tc.text_color || DEFAULT_THEME.text_color,
+          secondary_text_color: tc.secondary_text_color || DEFAULT_THEME.secondary_text_color,
+          input_text_color: tc.input_text_color || DEFAULT_THEME.input_text_color,
+          background_color: tc.background_color || DEFAULT_THEME.background_color,
+          background_image: tc.background_image,
+          logo_url: tc.logo_url,
+          show_progress: tc.show_progress !== false,
+          one_question_per_page: tc.one_question_per_page !== false,
+        });
       }
+      
+      // Load start screen
+      if (quiz.start_screen_config) {
+        const ssc = quiz.start_screen_config as Record<string, any>;
+        setStartScreen({
+          headline: ssc.headline || '',
+          subheadline: ssc.subheadline || '',
+          description: ssc.description || '',
+          image_url: ssc.image_url || '',
+          cta_text: ssc.cta_text || 'Começar',
+          estimated_time: ssc.estimated_time || '2 minutos',
+          benefits: ssc.benefits || [],
+        });
+      }
+      
+      // Load end screen
       if (quiz.end_screen_config) {
-        setEndScreen(quiz.end_screen_config as unknown as Record<string, any>);
+        const esc = quiz.end_screen_config as Record<string, any>;
+        setEndScreen({
+          headline: esc.headline || 'Obrigado!',
+          subheadline: esc.subheadline || 'Sua participação é muito importante.',
+          image_url: esc.image_url || '',
+          cta_text: esc.cta_text || '',
+          cta_url: esc.cta_url || '',
+          show_results: esc.show_results || esc.show_summary || false,
+          show_share: esc.show_share !== false,
+        });
       }
     }
   }, [quiz]);
@@ -472,6 +524,8 @@ export default function QuizEditor() {
     await updateQuiz.mutateAsync({
       id: quizId,
       ...quizData,
+      slug: slug || null,
+      theme_config: theme as Record<string, unknown>,
       start_screen_config: startScreen as Record<string, unknown>,
       end_screen_config: endScreen as Record<string, unknown>,
     });
@@ -514,12 +568,37 @@ export default function QuizEditor() {
     });
   };
 
+  // Generate public URL based on project code and slug
+  const getPublicUrl = useCallback(() => {
+    if (!quizId) return '';
+    const code = selectedProject?.code || '';
+    const slugPart = slug || quizId;
+    return code ? `/q/${code}/${slugPart}` : `/q/${quizId}`;
+  }, [quizId, slug, selectedProject?.code]);
+
   const copyPublicLink = () => {
-    if (!quizId) return;
-    const url = `${window.location.origin}/q/${quizId}`;
+    const url = `${window.location.origin}${getPublicUrl()}`;
     navigator.clipboard.writeText(url);
     toast({ title: 'Link copiado!' });
   };
+
+  // Preview data - memoized to prevent re-renders
+  const previewConfig = useMemo(() => ({
+    theme,
+    startScreen,
+    endScreen,
+    name: quizData.name || 'Quiz',
+    questions: quiz?.quiz_questions?.map(q => ({
+      id: q.id,
+      title: q.title,
+      subtitle: q.subtitle,
+      type: q.type,
+      options: q.quiz_options?.map(o => ({
+        id: o.id,
+        label: o.label,
+      })) || [],
+    })) || [],
+  }), [theme, startScreen, endScreen, quizData.name, quiz?.quiz_questions]);
 
   if (!isLoadingModules && !insightsEnabled) {
     return (
@@ -608,7 +687,7 @@ export default function QuizEditor() {
               <Copy className="h-4 w-4 mr-2" />
               Copiar Link
             </Button>
-            <Button variant="outline" size="sm" onClick={() => window.open(`/q/${quizId}`, '_blank')}>
+            <Button variant="outline" size="sm" onClick={() => window.open(getPublicUrl(), '_blank')}>
               <ExternalLink className="h-4 w-4 mr-2" />
               Visualizar
             </Button>
@@ -628,19 +707,20 @@ export default function QuizEditor() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="info">1. Informações</TabsTrigger>
-            <TabsTrigger value="questions">2. Perguntas</TabsTrigger>
-            <TabsTrigger value="options">3. Opções & Vetores</TabsTrigger>
-            <TabsTrigger value="screens">4. Telas</TabsTrigger>
-            <TabsTrigger value="outcomes">5. Outcomes</TabsTrigger>
+            <TabsTrigger value="appearance">2. Aparência</TabsTrigger>
+            <TabsTrigger value="screens">3. Telas</TabsTrigger>
+            <TabsTrigger value="questions">4. Perguntas</TabsTrigger>
+            <TabsTrigger value="options">5. Opções & Vetores</TabsTrigger>
+            <TabsTrigger value="outcomes">6. Outcomes</TabsTrigger>
             <TabsTrigger value="cognitive" className="flex items-center gap-1">
               <Brain className="h-3 w-3" />
-              6. Saúde Cognitiva
+              7. Saúde Cognitiva
             </TabsTrigger>
             <TabsTrigger value="simulator" className="flex items-center gap-1">
               <Play className="h-3 w-3" />
-              7. Simulador
+              8. Simulador
             </TabsTrigger>
-            <TabsTrigger value="preview">8. Preview</TabsTrigger>
+            <TabsTrigger value="preview">9. Preview</TabsTrigger>
           </TabsList>
 
           {/* Step 1: General Info */}
@@ -692,6 +772,15 @@ export default function QuizEditor() {
                   />
                 </div>
 
+                {/* Slug Settings - Experience Engine unified */}
+                <ExperienceSlugSettings
+                  experienceType="quiz"
+                  experienceId={quizId!}
+                  projectId={selectedProject?.id || ''}
+                  slug={slug}
+                  onSlugChange={setSlug}
+                />
+
                 <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                   <div className="flex items-center justify-between p-4 rounded-lg border">
                     <div className="space-y-0.5">
@@ -728,7 +817,32 @@ export default function QuizEditor() {
             </Card>
           </TabsContent>
 
-          {/* Step 2: Questions */}
+          {/* Step 2: Appearance - Experience Engine unified */}
+          <TabsContent value="appearance" className="space-y-6">
+            <ExperienceAppearanceSettings
+              theme={theme}
+              onThemeChange={setTheme}
+              projectId={selectedProject?.id || ''}
+            />
+          </TabsContent>
+
+          {/* Step 3: Screens - Experience Engine unified */}
+          <TabsContent value="screens" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ExperienceStartScreenSettings
+                config={startScreen}
+                onChange={setStartScreen}
+                projectId={selectedProject?.id || ''}
+              />
+              <ExperienceEndScreenSettings
+                config={endScreen}
+                onChange={setEndScreen}
+                projectId={selectedProject?.id || ''}
+              />
+            </div>
+          </TabsContent>
+
+          {/* Step 4: Questions */}
           <TabsContent value="questions" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium">Perguntas ({quiz.quiz_questions?.length || 0})</h2>
@@ -789,7 +903,7 @@ export default function QuizEditor() {
             )}
           </TabsContent>
 
-          {/* Step 3: Options & Vectors */}
+          {/* Step 5: Options & Vectors */}
           <TabsContent value="options" className="space-y-4">
             <Card>
               <CardHeader>
@@ -839,110 +953,12 @@ export default function QuizEditor() {
             </Card>
           </TabsContent>
 
-          {/* Step 4: Screens */}
-          <TabsContent value="screens" className="space-y-6">
-            <div className="grid grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tela Inicial</CardTitle>
-                  <CardDescription>Primeira tela que o lead vê antes de começar</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Título</Label>
-                    <Input
-                      value={startScreen.headline || ''}
-                      onChange={(e) => setStartScreen({ ...startScreen, headline: e.target.value })}
-                      placeholder="Título chamativo..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Subtítulo</Label>
-                    <Textarea
-                      value={startScreen.subheadline || ''}
-                      onChange={(e) => setStartScreen({ ...startScreen, subheadline: e.target.value })}
-                      placeholder="Descrição breve..."
-                      rows={2}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Texto do Botão</Label>
-                    <Input
-                      value={startScreen.cta_text || ''}
-                      onChange={(e) => setStartScreen({ ...startScreen, cta_text: e.target.value })}
-                      placeholder="Começar"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>URL da Imagem (opcional)</Label>
-                    <Input
-                      value={startScreen.image_url || ''}
-                      onChange={(e) => setStartScreen({ ...startScreen, image_url: e.target.value })}
-                      placeholder="https://..."
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tela Final</CardTitle>
-                  <CardDescription>Tela exibida após completar o quiz</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Título</Label>
-                    <Input
-                      value={endScreen.headline || ''}
-                      onChange={(e) => setEndScreen({ ...endScreen, headline: e.target.value })}
-                      placeholder="Obrigado!"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Subtítulo</Label>
-                    <Textarea
-                      value={endScreen.subheadline || ''}
-                      onChange={(e) => setEndScreen({ ...endScreen, subheadline: e.target.value })}
-                      placeholder="Mensagem de agradecimento..."
-                      rows={2}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Texto do CTA (opcional)</Label>
-                      <Input
-                        value={endScreen.cta_text || ''}
-                        onChange={(e) => setEndScreen({ ...endScreen, cta_text: e.target.value })}
-                        placeholder="Saiba mais"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>URL do CTA</Label>
-                      <Input
-                        value={endScreen.cta_url || ''}
-                        onChange={(e) => setEndScreen({ ...endScreen, cta_url: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-2">
-                    <Switch
-                      checked={endScreen.show_summary || false}
-                      onCheckedChange={(checked) => setEndScreen({ ...endScreen, show_summary: checked })}
-                    />
-                    <Label>Mostrar resumo do resultado</Label>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Step 5: Outcomes (Funnel Brain) */}
+          {/* Step 6: Outcomes (Funnel Brain) */}
           <TabsContent value="outcomes" className="space-y-4">
             <QuizOutcomeEditor quizId={quizId!} />
           </TabsContent>
 
-          {/* Step 6: Cognitive Health */}
+          {/* Step 7: Cognitive Health */}
           <TabsContent value="cognitive" className="space-y-4">
             <Card>
               <CardHeader>
@@ -969,7 +985,7 @@ export default function QuizEditor() {
             </Card>
           </TabsContent>
 
-          {/* Step 7: Simulator */}
+          {/* Step 8: Simulator */}
           <TabsContent value="simulator" className="space-y-4">
             <Card>
               <CardHeader>
@@ -997,35 +1013,13 @@ export default function QuizEditor() {
             </Card>
           </TabsContent>
 
-          {/* Step 8: Preview */}
+          {/* Step 9: Preview - Experience Engine unified */}
           <TabsContent value="preview" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Preview do Quiz</CardTitle>
-                <CardDescription>
-                  Visualize como o quiz aparecerá para o lead. Salve as alterações antes de visualizar.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-center gap-4">
-                  <Button onClick={() => window.open(`/q/${quizId}`, '_blank')}>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Abrir em Nova Aba
-                  </Button>
-                  <Button variant="outline" onClick={copyPublicLink}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copiar Link Público
-                  </Button>
-                </div>
-                <div className="mt-6 border rounded-lg overflow-hidden bg-muted/50" style={{ height: '600px' }}>
-                  <iframe
-                    src={`/q/${quizId}`}
-                    className="w-full h-full"
-                    title="Quiz Preview"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <ExperiencePreview
+              experienceType="quiz"
+              config={previewConfig}
+              publicUrl={getPublicUrl()}
+            />
           </TabsContent>
         </Tabs>
       </main>

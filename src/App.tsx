@@ -46,6 +46,10 @@ import SurveyPublicLegacy from "./pages/SurveyPublicLegacy";
 import InsightsDashboard from "./pages/InsightsDashboard";
 import SocialListeningPage from "./pages/SocialListeningPage";
 import SurveyAnalysisPage from "./pages/SurveyAnalysisPage";
+import Quizzes from "./pages/Quizzes";
+import QuizEditor from "./pages/QuizEditor";
+import QuizResults from "./pages/QuizResults";
+import QuizPublic from "./pages/QuizPublic";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -80,6 +84,8 @@ const App = () => (
                 <Route path="/s/:code/:slug" element={<SurveyPublic />} />
                 {/* Legacy route for backward compatibility */}
                 <Route path="/s/:slug" element={<SurveyPublicLegacy />} />
+                {/* Quiz Public Route */}
+                <Route path="/q/:quizId" element={<QuizPublic />} />
                 <Route path="/" element={
                   <ProtectedRoute>
                     <ProjectOverview />
@@ -239,6 +245,22 @@ const App = () => (
                 <Route path="/surveys/:surveyId/responses" element={
                   <ProtectedRoute>
                     <SurveyResponses />
+                  </ProtectedRoute>
+                } />
+                {/* Quiz Routes */}
+                <Route path="/quizzes" element={
+                  <ProtectedRoute>
+                    <Quizzes />
+                  </ProtectedRoute>
+                } />
+                <Route path="/quizzes/:quizId" element={
+                  <ProtectedRoute>
+                    <QuizEditor />
+                  </ProtectedRoute>
+                } />
+                <Route path="/quizzes/:quizId/results" element={
+                  <ProtectedRoute>
+                    <QuizResults />
                   </ProtectedRoute>
                 } />
                 {/* Insights Module Routes */}

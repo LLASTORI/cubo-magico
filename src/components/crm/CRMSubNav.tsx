@@ -9,7 +9,8 @@ import {
   MessageCircle,
   Plus,
   Settings,
-  BarChart3
+  BarChart3,
+  FileQuestion
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,6 +51,12 @@ const navItems: NavItem[] = [
     icon: RefreshCcw, 
     path: '/crm/recovery',
     matchPaths: ['/crm/recovery', '/crm/recovery/kanban', '/crm/recovery/settings']
+  },
+  { 
+    label: 'Quizzes', 
+    icon: FileQuestion, 
+    path: '/quizzes',
+    matchPaths: ['/quizzes']
   },
   { 
     label: 'Automações', 

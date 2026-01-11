@@ -784,6 +784,76 @@ export type Database = {
           },
         ]
       }
+      contact_predictions: {
+        Row: {
+          confidence: number
+          contact_id: string
+          created_at: string
+          expires_at: string | null
+          explanation: Json
+          id: string
+          is_active: boolean
+          prediction_type: string
+          project_id: string
+          recommended_actions: Json
+          risk_level: string
+          updated_at: string
+          urgency_score: number
+        }
+        Insert: {
+          confidence?: number
+          contact_id: string
+          created_at?: string
+          expires_at?: string | null
+          explanation?: Json
+          id?: string
+          is_active?: boolean
+          prediction_type: string
+          project_id: string
+          recommended_actions?: Json
+          risk_level?: string
+          updated_at?: string
+          urgency_score?: number
+        }
+        Update: {
+          confidence?: number
+          contact_id?: string
+          created_at?: string
+          expires_at?: string | null
+          explanation?: Json
+          id?: string
+          is_active?: boolean
+          prediction_type?: string
+          project_id?: string
+          recommended_actions?: Json
+          risk_level?: string
+          updated_at?: string
+          urgency_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_predictions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_predictions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_predictions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_profile_history: {
         Row: {
           confidence_delta: number
@@ -4734,6 +4804,77 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "quizzes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recommendation_logs: {
+        Row: {
+          action_data: Json
+          action_type: string
+          contact_id: string
+          created_at: string
+          id: string
+          outcome: string | null
+          outcome_data: Json | null
+          outcome_recorded_at: string | null
+          performed_by: string | null
+          prediction_id: string | null
+          project_id: string
+        }
+        Insert: {
+          action_data?: Json
+          action_type: string
+          contact_id: string
+          created_at?: string
+          id?: string
+          outcome?: string | null
+          outcome_data?: Json | null
+          outcome_recorded_at?: string | null
+          performed_by?: string | null
+          prediction_id?: string | null
+          project_id: string
+        }
+        Update: {
+          action_data?: Json
+          action_type?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+          outcome?: string | null
+          outcome_data?: Json | null
+          outcome_recorded_at?: string | null
+          performed_by?: string | null
+          prediction_id?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendation_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "recommendation_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recommendation_logs_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "contact_predictions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recommendation_logs_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

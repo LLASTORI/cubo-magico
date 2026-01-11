@@ -784,6 +784,136 @@ export type Database = {
           },
         ]
       }
+      contact_profile_history: {
+        Row: {
+          confidence_delta: number
+          contact_profile_id: string
+          created_at: string
+          delta_intent_vector: Json
+          delta_trait_vector: Json
+          entropy_delta: number
+          id: string
+          metadata: Json | null
+          profile_snapshot: Json
+          project_id: string
+          source: string
+          source_id: string | null
+          source_name: string | null
+        }
+        Insert: {
+          confidence_delta?: number
+          contact_profile_id: string
+          created_at?: string
+          delta_intent_vector?: Json
+          delta_trait_vector?: Json
+          entropy_delta?: number
+          id?: string
+          metadata?: Json | null
+          profile_snapshot?: Json
+          project_id: string
+          source: string
+          source_id?: string | null
+          source_name?: string | null
+        }
+        Update: {
+          confidence_delta?: number
+          contact_profile_id?: string
+          created_at?: string
+          delta_intent_vector?: Json
+          delta_trait_vector?: Json
+          entropy_delta?: number
+          id?: string
+          metadata?: Json | null
+          profile_snapshot?: Json
+          project_id?: string
+          source?: string
+          source_id?: string | null
+          source_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_profile_history_contact_profile_id_fkey"
+            columns: ["contact_profile_id"]
+            isOneToOne: false
+            referencedRelation: "contact_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_profile_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_profiles: {
+        Row: {
+          confidence_score: number
+          contact_id: string
+          created_at: string
+          entropy_score: number
+          id: string
+          intent_vector: Json
+          last_updated_at: string
+          project_id: string
+          signal_sources: Json
+          total_signals: number
+          trait_vector: Json
+          volatility_score: number
+        }
+        Insert: {
+          confidence_score?: number
+          contact_id: string
+          created_at?: string
+          entropy_score?: number
+          id?: string
+          intent_vector?: Json
+          last_updated_at?: string
+          project_id: string
+          signal_sources?: Json
+          total_signals?: number
+          trait_vector?: Json
+          volatility_score?: number
+        }
+        Update: {
+          confidence_score?: number
+          contact_id?: string
+          created_at?: string
+          entropy_score?: number
+          id?: string
+          intent_vector?: Json
+          last_updated_at?: string
+          project_id?: string
+          signal_sources?: Json
+          total_signals?: number
+          trait_vector?: Json
+          volatility_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_profiles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_activities: {
         Row: {
           activity_type: string

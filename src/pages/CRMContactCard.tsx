@@ -56,6 +56,7 @@ import { ContactIdentityTab } from '@/components/crm/ContactIdentityTab';
 import { ContactSurveysTab } from '@/components/crm/ContactSurveysTab';
 import { ContactSocialTab } from '@/components/crm/ContactSocialTab';
 import { ContactQuizzesTab } from '@/components/crm/ContactQuizzesTab';
+import { ContactCognitiveProfile } from '@/components/crm/ContactCognitiveProfile';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -517,6 +518,9 @@ export default function CRMContactCard() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Cognitive Profile */}
+            <ContactCognitiveProfile contactId={contactId!} />
 
             {/* Financial Info */}
             <Card>

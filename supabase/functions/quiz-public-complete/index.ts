@@ -197,6 +197,253 @@ function calculateScores(
   };
 }
 
+// ===== COGNITIVE PROFILE ENGINE =====
+
+function mergeVectors(
+  existing: Record<string, number>,
+  incoming: Record<string, number>,
+  incomingWeight: number
+): Record<string, number> {
+  const result: Record<string, number> = { ...existing };
+  const existingWeight = 1 - incomingWeight;
+  
+  const allKeys = new Set([...Object.keys(existing), ...Object.keys(incoming)]);
+  
+  for (const key of allKeys) {
+    const existingValue = existing[key] || 0;
+    const incomingValue = incoming[key] || 0;
+    result[key] = (existingValue * existingWeight) + (incomingValue * incomingWeight);
+  }
+  
+  return result;
+}
+
+function normalizeProfileVector(vector: Record<string, number>): Record<string, number> {
+  const total = Object.values(vector).reduce((sum, val) => sum + Math.abs(val), 0);
+  if (total === 0) return {};
+  
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(vector)) {
+    result[key] = Math.round((value / total) * 10000) / 10000;
+  }
+  return result;
+}
+
+function calculateProfileEntropy(vector: Record<string, number>): number {
+  const values = Object.values(vector).filter(v => v > 0);
+  if (values.length === 0) return 0;
+  
+  const total = values.reduce((sum, v) => sum + v, 0);
+  if (total === 0) return 0;
+  
+  let entropy = 0;
+  for (const value of values) {
+    const p = value / total;
+    if (p > 0) {
+      entropy -= p * Math.log2(p);
+    }
+  }
+  
+  const maxEntropy = Math.log2(values.length);
+  return maxEntropy > 0 ? entropy / maxEntropy : 0;
+}
+
+function calculateProfileConfidence(
+  totalSignals: number,
+  entropy: number
+): number {
+  const signalConfidence = 1 - Math.exp(-totalSignals / 5);
+  const entropyConfidence = 1 - entropy;
+  return Math.round((signalConfidence * 0.6 + entropyConfidence * 0.4) * 10000) / 10000;
+}
+
+function calculateVectorDelta(
+  before: Record<string, number>,
+  after: Record<string, number>
+): Record<string, number> {
+  const delta: Record<string, number> = {};
+  const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  
+  for (const key of allKeys) {
+    const beforeVal = before[key] || 0;
+    const afterVal = after[key] || 0;
+    const diff = afterVal - beforeVal;
+    if (Math.abs(diff) > 0.0001) {
+      delta[key] = Math.round(diff * 10000) / 10000;
+    }
+  }
+  
+  return delta;
+}
+
+async function updateCognitiveProfile(
+  supabase: any,
+  contactId: string,
+  projectId: string,
+  quizId: string,
+  quizName: string,
+  normalizedScore: Record<string, any>
+) {
+  try {
+    const intentVector = normalizedScore.intents || {};
+    const traitVector = normalizedScore.traits || {};
+
+    // Fetch existing profile
+    const { data: existingProfile } = await supabase
+      .from('contact_profiles')
+      .select('*')
+      .eq('contact_id', contactId)
+      .maybeSingle();
+
+    let newProfile;
+    let profileId: string;
+    let deltaIntent: Record<string, number> = {};
+    let deltaTrait: Record<string, number> = {};
+    let confidenceDelta = 0;
+    let entropyDelta = 0;
+
+    if (existingProfile) {
+      // Merge with existing profile
+      const existingIntent = existingProfile.intent_vector || {};
+      const existingTrait = existingProfile.trait_vector || {};
+      const totalSignals = (existingProfile.total_signals || 0) + 1;
+      
+      // Calculate adjusted weight based on existing signals
+      const adjustedWeight = Math.min(0.8 / (1 + existingProfile.total_signals * 0.1), 0.5);
+      
+      // Merge vectors
+      const mergedIntent = mergeVectors(existingIntent, intentVector, adjustedWeight);
+      const mergedTrait = mergeVectors(existingTrait, traitVector, adjustedWeight);
+      
+      // Normalize
+      const normalizedIntent = normalizeProfileVector(mergedIntent);
+      const normalizedTrait = normalizeProfileVector(mergedTrait);
+      
+      // Calculate deltas
+      deltaIntent = calculateVectorDelta(existingIntent, normalizedIntent);
+      deltaTrait = calculateVectorDelta(existingTrait, normalizedTrait);
+      
+      // Calculate new metrics
+      const intentEntropy = calculateProfileEntropy(normalizedIntent);
+      const traitEntropy = calculateProfileEntropy(normalizedTrait);
+      const newEntropy = (intentEntropy + traitEntropy) / 2;
+      const newConfidence = calculateProfileConfidence(totalSignals, newEntropy);
+      
+      // Calculate volatility (change magnitude)
+      const intentChange = Object.values(deltaIntent).reduce((sum, v) => sum + Math.abs(v), 0);
+      const traitChange = Object.values(deltaTrait).reduce((sum, v) => sum + Math.abs(v), 0);
+      const newVolatility = ((intentChange + traitChange) / 2) * adjustedWeight;
+      const blendedVolatility = (existingProfile.volatility_score || 0) * 0.7 + newVolatility * 0.3;
+      
+      confidenceDelta = newConfidence - (existingProfile.confidence_score || 0);
+      entropyDelta = newEntropy - (existingProfile.entropy_score || 0);
+      
+      // Update signal sources
+      const existingSources = existingProfile.signal_sources || [];
+      const signalSources = [...new Set([...existingSources, 'quiz'])];
+      
+      // Update profile
+      const { data: updated } = await supabase
+        .from('contact_profiles')
+        .update({
+          intent_vector: normalizedIntent,
+          trait_vector: normalizedTrait,
+          confidence_score: newConfidence,
+          volatility_score: Math.round(blendedVolatility * 10000) / 10000,
+          entropy_score: Math.round(newEntropy * 10000) / 10000,
+          total_signals: totalSignals,
+          signal_sources: signalSources,
+          last_updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingProfile.id)
+        .select()
+        .single();
+      
+      newProfile = updated;
+      profileId = existingProfile.id;
+    } else {
+      // Create new profile
+      const intentEntropy = calculateProfileEntropy(intentVector);
+      const traitEntropy = calculateProfileEntropy(traitVector);
+      const entropy = (intentEntropy + traitEntropy) / 2;
+      const confidence = calculateProfileConfidence(1, entropy);
+      
+      const normalizedIntent = normalizeProfileVector(intentVector);
+      const normalizedTrait = normalizeProfileVector(traitVector);
+      
+      deltaIntent = normalizedIntent;
+      deltaTrait = normalizedTrait;
+      confidenceDelta = confidence;
+      entropyDelta = entropy;
+      
+      const { data: created } = await supabase
+        .from('contact_profiles')
+        .insert({
+          contact_id: contactId,
+          project_id: projectId,
+          intent_vector: normalizedIntent,
+          trait_vector: normalizedTrait,
+          confidence_score: confidence,
+          volatility_score: 0,
+          entropy_score: Math.round(entropy * 10000) / 10000,
+          total_signals: 1,
+          signal_sources: ['quiz'],
+        })
+        .select()
+        .single();
+      
+      newProfile = created;
+      profileId = created?.id;
+    }
+
+    // Record history entry
+    if (profileId) {
+      await supabase
+        .from('contact_profile_history')
+        .insert({
+          contact_profile_id: profileId,
+          project_id: projectId,
+          source: 'quiz',
+          source_id: quizId,
+          source_name: quizName,
+          delta_intent_vector: deltaIntent,
+          delta_trait_vector: deltaTrait,
+          confidence_delta: Math.round(confidenceDelta * 10000) / 10000,
+          entropy_delta: Math.round(entropyDelta * 10000) / 10000,
+          profile_snapshot: newProfile || {},
+          metadata: {
+            quiz_id: quizId,
+            quiz_name: quizName,
+            normalized_score: normalizedScore,
+          },
+        });
+
+      // Log CRM event
+      await supabase
+        .from('crm_activities')
+        .insert({
+          project_id: projectId,
+          contact_id: contactId,
+          activity_type: 'profile_updated_from_quiz',
+          description: `Perfil cognitivo atualizado via quiz: ${quizName}`,
+          metadata: {
+            quiz_id: quizId,
+            quiz_name: quizName,
+            delta_intent: deltaIntent,
+            delta_trait: deltaTrait,
+            new_confidence: newProfile?.confidence_score,
+          },
+        });
+    }
+
+    console.log(`[quiz-public-complete] Perfil cognitivo atualizado para contato ${contactId}`);
+    return newProfile;
+  } catch (error) {
+    console.error('[quiz-public-complete] Erro ao atualizar perfil cognitivo:', error);
+    return null;
+  }
+}
+
 // ===== CRM INTEGRATION =====
 
 async function updateContactWithQuizResult(
@@ -260,21 +507,15 @@ async function updateContactWithQuizResult(
       })
       .eq('id', contactId);
 
-    // Registrar atividade no CRM
-    await supabase
-      .from('crm_activities')
-      .insert({
-        project_id: projectId,
-        contact_id: contactId,
-        activity_type: 'quiz_completed',
-        description: `Respondeu quiz: ${quizName}`,
-        metadata: {
-          quiz_id: quizId,
-          quiz_name: quizName,
-          profile: summary.profile,
-          normalized_score: normalizedScore,
-        },
-      });
+    // Atualizar Perfil Cognitivo (Phase 7)
+    await updateCognitiveProfile(
+      supabase,
+      contactId,
+      projectId,
+      quizId,
+      quizName,
+      normalizedScore
+    );
 
     console.log(`[quiz-public-complete] CRM atualizado para contato ${contactId}`);
   } catch (error) {

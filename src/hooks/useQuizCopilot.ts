@@ -83,6 +83,27 @@ export interface GeneratedQuiz {
   type: string;
   questions: GeneratedQuestion[];
   outcomes: GeneratedOutcome[];
+  
+  // Experience Engine suggestions (optional, from Co-Pilot)
+  suggestedTemplateSlug?: string;
+  suggestedTheme?: {
+    primary_color: string;
+    background_color: string;
+    text_color: string;
+  };
+  suggestedStartScreen?: {
+    headline?: string;
+    subheadline?: string;
+    cta_text?: string;
+    estimated_time?: string;
+    benefits?: string[];
+  };
+  suggestedEndScreen?: {
+    headline?: string;
+    subheadline?: string;
+    cta_text?: string;
+    cta_url?: string;
+  };
 }
 
 export interface ValidationReport {

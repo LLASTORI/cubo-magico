@@ -70,7 +70,10 @@ import {
   DEFAULT_THEME,
   DEFAULT_START_SCREEN,
   DEFAULT_END_SCREEN,
+  ThemeSelector,
+  TemplateSelector,
 } from '@/components/experience';
+import { useExperienceTemplates, ExperienceTemplateRecord } from '@/hooks/useExperienceTemplates';
 
 // Sortable Question Card Component
 function SortableQuestionCard({
@@ -327,6 +330,10 @@ export default function QuizEditor() {
   const [theme, setTheme] = useState<ExperienceTheme>(DEFAULT_THEME);
   const [startScreen, setStartScreen] = useState<ExperienceStartScreen>(DEFAULT_START_SCREEN);
   const [endScreen, setEndScreen] = useState<ExperienceEndScreen>(DEFAULT_END_SCREEN);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  
+  // Experience Engine hooks
+  const { templates, getDefaultTemplate } = useExperienceTemplates();
   
   const [isCreatingFromArchitecture, setIsCreatingFromArchitecture] = useState(false);
   const architectureProcessed = useRef(false);
@@ -838,9 +845,23 @@ export default function QuizEditor() {
 
           {/* Step 2: Appearance - Experience Engine unified */}
           <TabsContent value="appearance" className="space-y-6">
+            {/* Template Selector */}
+            <TemplateSelector
+              selectedTemplateId={selectedTemplateId}
+              onTemplateSelect={(template) => setSelectedTemplateId(template.id)}
+            />
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Settings Column */}
-              <div>
+              <div className="space-y-6">
+                {/* Theme Selector - Saved Themes */}
+                <ThemeSelector
+                  currentTheme={theme}
+                  onThemeSelect={setTheme}
+                  onThemeChange={setTheme}
+                />
+                
+                {/* Appearance Settings */}
                 <ExperienceAppearanceSettings
                   theme={theme}
                   messages={{}}

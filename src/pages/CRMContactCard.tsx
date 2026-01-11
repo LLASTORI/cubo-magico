@@ -57,6 +57,7 @@ import { ContactSurveysTab } from '@/components/crm/ContactSurveysTab';
 import { ContactSocialTab } from '@/components/crm/ContactSocialTab';
 import { ContactQuizzesTab } from '@/components/crm/ContactQuizzesTab';
 import { ContactCognitiveProfile } from '@/components/crm/ContactCognitiveProfile';
+import { ContactAIRecommendations } from '@/components/crm/ContactAIRecommendations';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -626,6 +627,9 @@ export default function CRMContactCard() {
 
             {/* UTM Attribution - Expanded */}
             <ContactAttributionCard contact={contact} />
+
+            {/* AI Recommendations */}
+            <ContactAIRecommendations contactId={contactId!} />
 
             {/* Segment Insights */}
             <ContactSegmentInsights 

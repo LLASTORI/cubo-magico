@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FileQuestion, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock, Play, Pause } from 'lucide-react';
+import { Plus, FileQuestion, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock, Play, Pause, Brain, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
@@ -38,6 +38,8 @@ import { useQuizzes, QUIZ_TYPES } from '@/hooks/useQuizzes';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useProject } from '@/contexts/ProjectContext';
+import { QuizCopilotWizard } from '@/components/quiz/copilot';
+import { QuizArchitecture } from '@/lib/quizCopilotEngine';
 
 export default function Quizzes() {
   const navigate = useNavigate();
@@ -46,6 +48,7 @@ export default function Quizzes() {
   const { quizzes, isLoading, questionCounts, responseCounts, createQuiz, deleteQuiz, updateQuiz } = useQuizzes();
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCopilotWizard, setShowCopilotWizard] = useState(false);
   const [newQuiz, setNewQuiz] = useState({ 
     name: '', 
     description: '', 
@@ -121,6 +124,36 @@ export default function Quizzes() {
     toast({ title: 'Link copiado!' });
   };
 
+  const handleCopilotComplete = async (architecture: QuizArchitecture) => {
+    try {
+      // Create the quiz with the generated architecture
+      const result = await createQuiz.mutateAsync({
+        name: architecture.name,
+        description: architecture.description,
+        type: architecture.type as 'lead' | 'qualification' | 'diagnostic' | 'onboarding' | 'feedback' | 'nps',
+        requires_identification: true,
+        allow_anonymous: false,
+      });
+      
+      setShowCopilotWizard(false);
+      toast({ 
+        title: 'Quiz criado com Co-Pilot!', 
+        description: 'Agora adicione as perguntas geradas.',
+      });
+      
+      // Navigate to editor with the architecture in state
+      await new Promise(resolve => setTimeout(resolve, 200));
+      navigate(`/quizzes/${result.id}`, { state: { architecture } });
+    } catch (error: any) {
+      console.error('[Quizzes] Error creating quiz with Co-Pilot:', error);
+      toast({ 
+        title: 'Erro ao criar quiz', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    }
+  };
+
   if (isLoading || isLoadingModules) {
     return (
       <div className="min-h-screen bg-background">
@@ -138,10 +171,16 @@ export default function Quizzes() {
       <AppHeader pageSubtitle="Quizzes" />
       <InsightsSubNav 
         rightContent={
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Quiz
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowCopilotWizard(true)}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              Criar com Co-Pilot
+            </Button>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Quiz
+            </Button>
+          </div>
         }
       />
 
@@ -149,15 +188,21 @@ export default function Quizzes() {
         {quizzes && quizzes.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
-              <FileQuestion className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">Nenhum quiz criado</h3>
               <p className="text-muted-foreground mb-4">
                 Crie seu primeiro quiz para qualificar leads e entender o perfil dos seus contatos.
               </p>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Quiz
-              </Button>
+              <div className="flex justify-center gap-3">
+                <Button variant="outline" onClick={() => setShowCopilotWizard(true)}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Criar com Co-Pilot
+                </Button>
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar Manualmente
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -317,6 +362,25 @@ export default function Quizzes() {
               {createQuiz.isPending ? 'Criando...' : 'Criar Quiz'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Co-Pilot Wizard Dialog */}
+      <Dialog open={showCopilotWizard} onOpenChange={setShowCopilotWizard}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Quiz Co-Pilot
+            </DialogTitle>
+            <DialogDescription>
+              Crie um quiz inteligente a partir de objetivos cognitivos
+            </DialogDescription>
+          </DialogHeader>
+          <QuizCopilotWizard
+            onComplete={handleCopilotComplete}
+            onCancel={() => setShowCopilotWizard(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>

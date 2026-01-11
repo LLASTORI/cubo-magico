@@ -138,7 +138,7 @@ export default function Quizzes() {
       setShowCopilotWizard(false);
       toast({ 
         title: 'Quiz criado com Co-Pilot!', 
-        description: 'Agora adicione as perguntas geradas.',
+        description: 'Gerando perguntas automaticamente...',
       });
       
       // Navigate to editor with the architecture in state

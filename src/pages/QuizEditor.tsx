@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, 
   ChevronDown, ChevronUp, Copy, ExternalLink, Lock, Check,
-  Brain, Activity, Play
+  Brain, Activity, Play, Loader2
 } from 'lucide-react';
+import { QuizArchitecture } from '@/lib/quizCopilotEngine';
 import {
   DndContext,
   closestCenter,
@@ -317,8 +318,114 @@ export default function QuizEditor() {
     cta_url: '',
     show_summary: false,
   });
+  const [isCreatingFromArchitecture, setIsCreatingFromArchitecture] = useState(false);
+  const architectureProcessed = useRef(false);
 
   const insightsEnabled = isModuleEnabled('insights');
+
+  // Process architecture from Co-Pilot if provided
+  useEffect(() => {
+    const processArchitecture = async () => {
+      const architecture = location.state?.architecture as QuizArchitecture | undefined;
+      
+      if (!architecture || !quiz || !quizId || architectureProcessed.current) return;
+      if (quiz.quiz_questions && quiz.quiz_questions.length > 0) return; // Already has questions
+      
+      architectureProcessed.current = true;
+      setIsCreatingFromArchitecture(true);
+      
+      try {
+        console.log('[QuizEditor] Processing Co-Pilot architecture:', architecture);
+        
+        // Create questions from architecture
+        for (let i = 0; i < architecture.questions.length; i++) {
+          const q = architecture.questions[i];
+          
+          // Add question
+          const questionResult = await addQuestion.mutateAsync({
+            type: q.type as QuizQuestion['type'],
+            title: q.suggestedTitle || `Pergunta ${i + 1}`,
+            subtitle: q.suggestedSubtitle || q.purpose,
+            order_index: i,
+            is_required: q.isRequired,
+          });
+          
+          // Add options for choice questions
+          if ((q.type === 'single_choice' || q.type === 'multiple_choice') && questionResult?.id) {
+            // Use suggested options if available
+            if (q.suggestedOptions && q.suggestedOptions.length > 0) {
+              for (let j = 0; j < q.suggestedOptions.length; j++) {
+                const opt = q.suggestedOptions[j];
+                await addOption.mutateAsync({
+                  questionId: questionResult.id,
+                  label: opt.label,
+                  value: opt.value || `option_${j + 1}`,
+                  order_index: j,
+                  weight: opt.weight || q.weight || 1,
+                  traits_vector: opt.traitsVector || {},
+                  intent_vector: opt.intentVector || {},
+                });
+              }
+            } else {
+              // Generate default options based on traits/intents impact
+              const defaultOptions = [
+                { label: 'Sim, com certeza', weight: 1 },
+                { label: 'Talvez, estou avaliando', weight: 0.5 },
+                { label: 'Não, ainda não', weight: 0 },
+                { label: 'Preciso de mais informações', weight: 0.25 },
+              ];
+              
+              for (let j = 0; j < defaultOptions.length; j++) {
+                const traitsVector: Record<string, number> = {};
+                const intentVector: Record<string, number> = {};
+                
+                // Apply weights from archetype
+                Object.entries(q.traitsImpact || {}).forEach(([key, val]) => {
+                  traitsVector[key] = (val as number) * defaultOptions[j].weight;
+                });
+                Object.entries(q.intentsImpact || {}).forEach(([key, val]) => {
+                  intentVector[key] = (val as number) * defaultOptions[j].weight;
+                });
+                
+                await addOption.mutateAsync({
+                  questionId: questionResult.id,
+                  label: defaultOptions[j].label,
+                  value: `option_${j + 1}`,
+                  order_index: j,
+                  weight: q.weight || 1,
+                  traits_vector: traitsVector,
+                  intent_vector: intentVector,
+                });
+              }
+            }
+          }
+        }
+        
+        toast({ 
+          title: 'Perguntas criadas com sucesso!', 
+          description: `${architecture.questions.length} perguntas foram adicionadas automaticamente.` 
+        });
+        
+        // Clear the state to prevent re-processing
+        window.history.replaceState({}, document.title);
+        
+        // Switch to questions tab
+        setActiveTab('questions');
+        
+      } catch (error: any) {
+        console.error('[QuizEditor] Error processing architecture:', error);
+        toast({ 
+          title: 'Erro ao criar perguntas', 
+          description: error.message,
+          variant: 'destructive' 
+        });
+      } finally {
+        setIsCreatingFromArchitecture(false);
+      }
+    };
+    
+    processArchitecture();
+  }, [quiz, quizId, location.state, addQuestion, addOption, toast]);
 
   useEffect(() => {
     if (quiz) {
@@ -434,13 +541,19 @@ export default function QuizEditor() {
     );
   }
 
-  if (isLoading || isLoadingModules) {
+  if (isLoading || isLoadingModules || isCreatingFromArchitecture) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Editor de Quiz" />
         <InsightsSubNav />
-        <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
           <CubeLoader size="lg" />
+          {isCreatingFromArchitecture && (
+            <div className="text-center">
+              <p className="text-lg font-medium">Criando perguntas do Co-Pilot...</p>
+              <p className="text-sm text-muted-foreground">Isso pode levar alguns segundos</p>
+            </div>
+          )}
         </div>
       </div>
     );

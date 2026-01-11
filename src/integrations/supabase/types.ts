@@ -6745,10 +6745,13 @@ export type Database = {
           event_name: string
           external_dispatch_status: Json
           id: string
+          parent_event_id: string | null
           payload: Json
+          priority: number | null
           project_id: string
           session_id: string | null
           source: string
+          triggered_events: string[] | null
         }
         Insert: {
           contact_id?: string | null
@@ -6756,10 +6759,13 @@ export type Database = {
           event_name: string
           external_dispatch_status?: Json
           id?: string
+          parent_event_id?: string | null
           payload?: Json
+          priority?: number | null
           project_id: string
           session_id?: string | null
           source: string
+          triggered_events?: string[] | null
         }
         Update: {
           contact_id?: string | null
@@ -6767,10 +6773,13 @@ export type Database = {
           event_name?: string
           external_dispatch_status?: Json
           id?: string
+          parent_event_id?: string | null
           payload?: Json
+          priority?: number | null
           project_id?: string
           session_id?: string | null
           source?: string
+          triggered_events?: string[] | null
         }
         Relationships: [
           {
@@ -6788,7 +6797,76 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "system_events_parent_event_id_fkey"
+            columns: ["parent_event_id"]
+            isOneToOne: false
+            referencedRelation: "system_events"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "system_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_learnings: {
+        Row: {
+          affected_contacts_count: number | null
+          applied_at: string | null
+          category: string
+          confidence: number | null
+          created_at: string
+          description: string
+          evidence: Json | null
+          id: string
+          impact_score: number | null
+          learning_type: string
+          project_id: string
+          status: string | null
+          title: string
+          updated_at: string
+          validated_at: string | null
+        }
+        Insert: {
+          affected_contacts_count?: number | null
+          applied_at?: string | null
+          category: string
+          confidence?: number | null
+          created_at?: string
+          description: string
+          evidence?: Json | null
+          id?: string
+          impact_score?: number | null
+          learning_type: string
+          project_id: string
+          status?: string | null
+          title: string
+          updated_at?: string
+          validated_at?: string | null
+        }
+        Update: {
+          affected_contacts_count?: number | null
+          applied_at?: string | null
+          category?: string
+          confidence?: number | null
+          created_at?: string
+          description?: string
+          evidence?: Json | null
+          id?: string
+          impact_score?: number | null
+          learning_type?: string
+          project_id?: string
+          status?: string | null
+          title?: string
+          updated_at?: string
+          validated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_learnings_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

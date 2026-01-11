@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 
-interface ExperienceSlugSettingsProps {
+export interface ExperienceSlugSettingsProps {
   slug: string;
   projectId: string;
   experienceId: string;
@@ -33,6 +33,15 @@ export function ExperienceSlugSettings({
   const [isChecking, setIsChecking] = useState(false);
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync local slug with prop when it changes (e.g., after save)
+  useEffect(() => {
+    setLocalSlug(slug || '');
+    // If slug exists and matches, it's already available (current value)
+    if (slug) {
+      setIsAvailable(true);
+    }
+  }, [slug]);
 
   const typeLabel = type === 'quiz' ? 'quiz' : 'pesquisa';
   const routePrefix = type === 'quiz' ? 'q' : 's';

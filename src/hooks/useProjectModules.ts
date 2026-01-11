@@ -4,7 +4,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights' | 'social_listening' | 'ai_analysis';
+export type ModuleKey = 'crm' | 'meta_ads' | 'hotmart' | 'whatsapp' | 'automation' | 'surveys' | 'insights' | 'social_listening' | 'ai_analysis' | 'quiz';
 
 export interface ProjectModule {
   id: string;
@@ -84,6 +84,13 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
     name: 'Análise com IA',
     description: 'Análises inteligentes de funis, lançamentos e CRM usando IA',
     icon: 'brain',
+  },
+  {
+    key: 'quiz',
+    name: 'Quiz Interativo',
+    description: 'Questionários inteligentes para qualificação de leads, perfil e intent score',
+    icon: 'clipboard-list',
+    requiresModule: 'insights',
   },
 ];
 

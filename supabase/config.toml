@@ -66,3 +66,18 @@ max_duration = 120
 
 [functions.delete-user]
 verify_jwt = false
+
+[functions.delete-project]
+verify_jwt = true
+
+[functions.get-client-ip]
+verify_jwt = false
+
+[functions.quiz-public-start]
+verify_jwt = false
+
+[functions.quiz-public-answer]
+verify_jwt = false
+
+[functions.quiz-public-complete]
+verify_jwt = false

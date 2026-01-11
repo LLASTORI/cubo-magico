@@ -3890,6 +3890,380 @@ export type Database = {
         }
         Relationships: []
       }
+      quiz_answers: {
+        Row: {
+          answer_text: string | null
+          answer_value: number | null
+          created_at: string
+          id: string
+          option_id: string | null
+          question_id: string
+          session_id: string
+        }
+        Insert: {
+          answer_text?: string | null
+          answer_value?: number | null
+          created_at?: string
+          id?: string
+          option_id?: string | null
+          question_id: string
+          session_id: string
+        }
+        Update: {
+          answer_text?: string | null
+          answer_value?: number | null
+          created_at?: string
+          id?: string
+          option_id?: string | null
+          question_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_answers_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_answers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_events: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          event_name: string
+          id: string
+          payload: Json | null
+          project_id: string
+          session_id: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          event_name: string
+          id?: string
+          payload?: Json | null
+          project_id: string
+          session_id: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          event_name?: string
+          id?: string
+          payload?: Json | null
+          project_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_options: {
+        Row: {
+          created_at: string
+          id: string
+          intent_vector: Json | null
+          label: string
+          order_index: number
+          question_id: string
+          traits_vector: Json | null
+          value: string
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intent_vector?: Json | null
+          label: string
+          order_index?: number
+          question_id: string
+          traits_vector?: Json | null
+          value: string
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intent_vector?: Json | null
+          label?: string
+          order_index?: number
+          question_id?: string
+          traits_vector?: Json | null
+          value?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_questions: {
+        Row: {
+          config: Json | null
+          created_at: string
+          id: string
+          is_required: boolean
+          order_index: number
+          quiz_id: string
+          subtitle: string | null
+          title: string
+          type: Database["public"]["Enums"]["quiz_question_type"]
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          order_index?: number
+          quiz_id: string
+          subtitle?: string | null
+          title: string
+          type?: Database["public"]["Enums"]["quiz_question_type"]
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          order_index?: number
+          quiz_id?: string
+          subtitle?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["quiz_question_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_questions_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_results: {
+        Row: {
+          created_at: string
+          id: string
+          intent_vector: Json | null
+          normalized_score: Json | null
+          project_id: string
+          raw_score: Json | null
+          session_id: string
+          summary: string | null
+          traits_vector: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intent_vector?: Json | null
+          normalized_score?: Json | null
+          project_id: string
+          raw_score?: Json | null
+          session_id: string
+          summary?: string | null
+          traits_vector?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intent_vector?: Json | null
+          normalized_score?: Json | null
+          project_id?: string
+          raw_score?: Json | null
+          session_id?: string
+          summary?: string | null
+          traits_vector?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_results_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_results_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_sessions: {
+        Row: {
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          ip_hash: string | null
+          project_id: string
+          quiz_id: string
+          started_at: string
+          status: Database["public"]["Enums"]["quiz_session_status"]
+          user_agent: string | null
+          utm_data: Json | null
+        }
+        Insert: {
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          project_id: string
+          quiz_id: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["quiz_session_status"]
+          user_agent?: string | null
+          utm_data?: Json | null
+        }
+        Update: {
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          project_id?: string
+          quiz_id?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["quiz_session_status"]
+          user_agent?: string | null
+          utm_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quizzes: {
+        Row: {
+          allow_anonymous: boolean
+          created_at: string
+          description: string | null
+          end_screen_config: Json | null
+          id: string
+          is_active: boolean
+          name: string
+          project_id: string
+          requires_identification: boolean
+          start_screen_config: Json | null
+          type: Database["public"]["Enums"]["quiz_type"]
+          updated_at: string
+        }
+        Insert: {
+          allow_anonymous?: boolean
+          created_at?: string
+          description?: string | null
+          end_screen_config?: Json | null
+          id?: string
+          is_active?: boolean
+          name: string
+          project_id: string
+          requires_identification?: boolean
+          start_screen_config?: Json | null
+          type?: Database["public"]["Enums"]["quiz_type"]
+          updated_at?: string
+        }
+        Update: {
+          allow_anonymous?: boolean
+          created_at?: string
+          description?: string | null
+          end_screen_config?: Json | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          project_id?: string
+          requires_identification?: boolean
+          start_screen_config?: Json | null
+          type?: Database["public"]["Enums"]["quiz_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_template_feature_permissions: {
         Row: {
           created_at: string
@@ -6012,6 +6386,21 @@ export type Database = {
       permission_level: "none" | "view" | "edit" | "admin"
       plan_type: "trial" | "monthly" | "yearly" | "lifetime"
       project_role: "owner" | "manager" | "operator"
+      quiz_question_type:
+        | "single_choice"
+        | "multiple_choice"
+        | "scale"
+        | "text"
+        | "number"
+      quiz_session_status: "started" | "in_progress" | "completed" | "abandoned"
+      quiz_type:
+        | "lead"
+        | "qualification"
+        | "funnel"
+        | "onboarding"
+        | "entertainment"
+        | "viral"
+        | "research"
       social_platform: "instagram" | "facebook"
       social_post_type: "organic" | "ad"
       subscription_origin: "hotmart" | "manual" | "stripe" | "other"
@@ -6172,6 +6561,23 @@ export const Constants = {
       permission_level: ["none", "view", "edit", "admin"],
       plan_type: ["trial", "monthly", "yearly", "lifetime"],
       project_role: ["owner", "manager", "operator"],
+      quiz_question_type: [
+        "single_choice",
+        "multiple_choice",
+        "scale",
+        "text",
+        "number",
+      ],
+      quiz_session_status: ["started", "in_progress", "completed", "abandoned"],
+      quiz_type: [
+        "lead",
+        "qualification",
+        "funnel",
+        "onboarding",
+        "entertainment",
+        "viral",
+        "research",
+      ],
       social_platform: ["instagram", "facebook"],
       social_post_type: ["organic", "ad"],
       subscription_origin: ["hotmart", "manual", "stripe", "other"],

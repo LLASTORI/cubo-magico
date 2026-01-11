@@ -51,6 +51,7 @@ const MODULE_ICONS: Record<ModuleKey, React.ReactNode> = {
   surveys: <ClipboardList className="w-4 h-4" />,
   social_listening: <MessageCircle className="w-4 h-4" />,
   ai_analysis: <Brain className="w-4 h-4" />,
+  quiz: <ClipboardList className="w-4 h-4" />,
 };
 
 export const ModulesManager = () => {

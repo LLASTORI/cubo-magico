@@ -117,8 +117,15 @@ export default function Quizzes() {
     await updateQuiz.mutateAsync({ id: quiz.id, is_active: !quiz.is_active });
   };
 
+  const getQuizPublicUrl = (quiz: any) => {
+    const code = currentProject?.public_code;
+    const slugPart = quiz.slug || quiz.id;
+    const baseUrl = 'https://cubomagico.leandrolastori.com.br';
+    return code ? `${baseUrl}/q/${code}/${slugPart}` : `${baseUrl}/q/${quiz.id}`;
+  };
+
   const copyPublicLink = (quiz: any) => {
-    const url = `${window.location.origin}/q/${quiz.id}`;
+    const url = getQuizPublicUrl(quiz);
     navigator.clipboard.writeText(url);
     toast({ title: 'Link copiado!' });
   };
@@ -210,7 +217,7 @@ export default function Quizzes() {
                           <Copy className="h-4 w-4 mr-2" />
                           Copiar Link
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => window.open(`/q/${quiz.id}`, '_blank')}>
+                        <DropdownMenuItem onClick={() => window.open(getQuizPublicUrl(quiz), '_blank')}>
                           <ExternalLink className="h-4 w-4 mr-2" />
                           Abrir Quiz
                         </DropdownMenuItem>

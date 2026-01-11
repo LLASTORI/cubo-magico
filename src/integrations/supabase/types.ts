@@ -77,6 +77,173 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_decisions_log: {
+        Row: {
+          agent_id: string
+          approved_at: string | null
+          approved_by: string | null
+          confidence: number
+          contact_id: string | null
+          created_at: string
+          decision_data: Json
+          decision_type: string
+          executed_at: string | null
+          explanation: Json
+          id: string
+          outcome: string | null
+          outcome_data: Json | null
+          prediction_id: string | null
+          project_id: string
+          rejected_reason: string | null
+          reward_score: number | null
+          risk_score: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          approved_at?: string | null
+          approved_by?: string | null
+          confidence?: number
+          contact_id?: string | null
+          created_at?: string
+          decision_data?: Json
+          decision_type: string
+          executed_at?: string | null
+          explanation?: Json
+          id?: string
+          outcome?: string | null
+          outcome_data?: Json | null
+          prediction_id?: string | null
+          project_id: string
+          rejected_reason?: string | null
+          reward_score?: number | null
+          risk_score?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          confidence?: number
+          contact_id?: string | null
+          created_at?: string
+          decision_data?: Json
+          decision_type?: string
+          executed_at?: string | null
+          explanation?: Json
+          id?: string
+          outcome?: string | null
+          outcome_data?: Json | null
+          prediction_id?: string | null
+          project_id?: string
+          rejected_reason?: string | null
+          reward_score?: number | null
+          risk_score?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_decisions_log_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_decisions_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "agent_decisions_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_decisions_log_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "contact_predictions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_decisions_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agents: {
+        Row: {
+          allowed_actions: Json
+          boundaries: Json
+          confidence_threshold: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          max_actions_per_day: number | null
+          name: string
+          objective: string
+          project_id: string
+          require_human_approval: boolean
+          trigger_on: Json
+          updated_at: string
+        }
+        Insert: {
+          allowed_actions?: Json
+          boundaries?: Json
+          confidence_threshold?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          max_actions_per_day?: number | null
+          name: string
+          objective: string
+          project_id: string
+          require_human_approval?: boolean
+          trigger_on?: Json
+          updated_at?: string
+        }
+        Update: {
+          allowed_actions?: Json
+          boundaries?: Json
+          confidence_threshold?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          max_actions_per_day?: number | null
+          name?: string
+          objective?: string
+          project_id?: string
+          require_human_approval?: boolean
+          trigger_on?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_knowledge_base: {
         Row: {
           auto_classify_new_comments: boolean | null

@@ -12,6 +12,7 @@ interface CompleteQuizRequest {
     name?: string;
     email?: string;
     phone?: string;
+    instagram?: string;
   };
 }
 
@@ -52,19 +53,42 @@ serve(async (req) => {
       );
     }
 
+    // Validar status da sessão
+    if (session.status === 'abandoned') {
+      return new Response(
+        JSON.stringify({ error: 'Sessão foi abandonada. Inicie um novo quiz.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (session.status === 'completed') {
       // Retornar resultado existente se já completou
       const { data: existingResult } = await supabase
         .from('quiz_results')
-        .select('*')
+        .select('id, traits_vector, intent_vector, normalized_score, summary')
         .eq('session_id', session_id)
+        .single();
+
+      const { data: quiz } = await supabase
+        .from('quizzes')
+        .select('end_screen_config')
+        .eq('id', session.quiz_id)
         .single();
 
       return new Response(
         JSON.stringify({
-          success: true,
+          session_id,
           already_completed: true,
           result: existingResult,
+          end_screen_config: quiz?.end_screen_config || {},
+          contact_id: session.contact_id,
+          progress: {
+            answered_questions: 0,
+            total_questions: 0,
+            progress_percentage: 100,
+          },
+          is_last_question: true,
+          requires_identification: false,
         }),
         { 
           status: 200, 
@@ -73,7 +97,32 @@ serve(async (req) => {
       );
     }
 
-    // 2. Buscar todas as respostas e calcular scores
+    // 2. Buscar quiz para validar
+    const { data: quiz, error: quizError } = await supabase
+      .from('quizzes')
+      .select('id, name, requires_identification, allow_anonymous, end_screen_config')
+      .eq('id', session.quiz_id)
+      .single();
+
+    if (quizError || !quiz) {
+      return new Response(
+        JSON.stringify({ error: 'Quiz não encontrado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 3. Verificar se requer identificação e não tem contato
+    if (quiz.requires_identification && !quiz.allow_anonymous && !session.contact_id && !contact_data?.email) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Identificação obrigatória',
+          requires_identification: true 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. Buscar todas as respostas e calcular scores
     const { data: answers, error: answersError } = await supabase
       .from('quiz_answers')
       .select(`
@@ -95,7 +144,7 @@ serve(async (req) => {
       console.error('[quiz-public-complete] Erro ao buscar respostas:', answersError);
     }
 
-    // 3. Calcular vetores de traits e intent agregados
+    // 5. Calcular vetores de traits e intent agregados
     const traitsVector: Record<string, number> = {};
     const intentVector: Record<string, number> = {};
     const rawScore: Record<string, any> = {
@@ -131,7 +180,7 @@ serve(async (req) => {
       }
     }
 
-    // 4. Normalizar scores (0-1)
+    // 6. Normalizar scores (0-1)
     const normalizedScore: Record<string, any> = {
       traits: {},
       intents: {},
@@ -149,57 +198,94 @@ serve(async (req) => {
       normalizedScore.intents[intent] = Math.round((value / maxIntent) * 100) / 100;
     }
 
-    // 5. Criar/atualizar contato se dados foram fornecidos
+    // 7. Criar/atualizar contato se dados foram fornecidos
     let contactId = session.contact_id;
     
     if (contact_data && (contact_data.email || contact_data.phone)) {
-      // Buscar contato existente por email ou criar novo
-      const { data: existingContact } = await supabase
-        .from('crm_contacts')
-        .select('id')
-        .eq('project_id', session.project_id)
-        .eq('email', contact_data.email)
-        .maybeSingle();
-
-      if (existingContact) {
-        contactId = existingContact.id;
-        // Atualizar contato com dados do quiz
-        await supabase
+      // Buscar contato existente por email
+      if (contact_data.email) {
+        const { data: existingContact } = await supabase
           .from('crm_contacts')
-          .update({
-            name: contact_data.name || undefined,
-            phone: contact_data.phone || undefined,
-          })
-          .eq('id', contactId);
-      } else {
-        // Criar novo contato
-        const { data: newContact, error: contactError } = await supabase
-          .from('crm_contacts')
-          .insert({
-            project_id: session.project_id,
-            name: contact_data.name || 'Anônimo',
-            email: contact_data.email,
-            phone: contact_data.phone,
-            source: 'quiz',
-          })
           .select('id')
-          .single();
+          .eq('project_id', session.project_id)
+          .eq('email', contact_data.email)
+          .maybeSingle();
 
-        if (!contactError && newContact) {
-          contactId = newContact.id;
+        if (existingContact) {
+          contactId = existingContact.id;
+          // Atualizar contato com dados do quiz
+          await supabase
+            .from('crm_contacts')
+            .update({
+              name: contact_data.name || undefined,
+              phone: contact_data.phone || undefined,
+              instagram: contact_data.instagram || undefined,
+              last_activity_at: new Date().toISOString(),
+            })
+            .eq('id', contactId);
+        } else {
+          // Criar novo contato
+          const { data: newContact, error: contactError } = await supabase
+            .from('crm_contacts')
+            .insert({
+              project_id: session.project_id,
+              name: contact_data.name || null,
+              email: contact_data.email,
+              phone: contact_data.phone || null,
+              instagram: contact_data.instagram || null,
+              source: 'quiz',
+              tags: ['quiz'],
+            })
+            .select('id')
+            .single();
+
+          if (!contactError && newContact) {
+            contactId = newContact.id;
+          }
         }
       }
 
-      // Atualizar sessão com contact_id
+      // Atualizar sessão com contact_id e registrar evento quiz_identified
       if (contactId && contactId !== session.contact_id) {
         await supabase
           .from('quiz_sessions')
           .update({ contact_id: contactId })
           .eq('id', session_id);
+
+        // Registrar evento de identificação
+        await supabase
+          .from('quiz_events')
+          .insert({
+            project_id: session.project_id,
+            session_id: session_id,
+            contact_id: contactId,
+            event_name: 'quiz_identified',
+            payload: {
+              quiz_id: session.quiz_id,
+              has_email: !!contact_data.email,
+              has_phone: !!contact_data.phone,
+              has_instagram: !!contact_data.instagram,
+            },
+          });
       }
     }
 
-    // 6. Criar resultado
+    // 8. Gerar summary stub (será preenchido por IA futuramente)
+    const summary = {
+      generated_at: new Date().toISOString(),
+      type: 'stub',
+      message: 'Summary será gerado por IA em versão futura',
+      top_traits: Object.entries(normalizedScore.traits)
+        .sort(([,a], [,b]) => (b as number) - (a as number))
+        .slice(0, 3)
+        .map(([trait, score]) => ({ trait, score })),
+      top_intents: Object.entries(normalizedScore.intents)
+        .sort(([,a], [,b]) => (b as number) - (a as number))
+        .slice(0, 3)
+        .map(([intent, score]) => ({ intent, score })),
+    };
+
+    // 9. Criar resultado
     const { data: result, error: resultError } = await supabase
       .from('quiz_results')
       .insert({
@@ -209,9 +295,9 @@ serve(async (req) => {
         intent_vector: intentVector,
         raw_score: rawScore,
         normalized_score: normalizedScore,
-        summary: null, // Será preenchido por IA futuramente
+        summary: summary,
       })
-      .select('id, traits_vector, intent_vector, normalized_score')
+      .select('id, traits_vector, intent_vector, normalized_score, summary')
       .single();
 
     if (resultError) {
@@ -222,7 +308,7 @@ serve(async (req) => {
       );
     }
 
-    // 7. Atualizar sessão para completed
+    // 10. Atualizar sessão para completed
     await supabase
       .from('quiz_sessions')
       .update({ 
@@ -232,14 +318,7 @@ serve(async (req) => {
       })
       .eq('id', session_id);
 
-    // 8. Buscar configuração de tela final
-    const { data: quiz } = await supabase
-      .from('quizzes')
-      .select('end_screen_config')
-      .eq('id', session.quiz_id)
-      .single();
-
-    // 9. Registrar evento de conclusão
+    // 11. Registrar evento quiz_completed
     await supabase
       .from('quiz_events')
       .insert({
@@ -249,6 +328,7 @@ serve(async (req) => {
         event_name: 'quiz_completed',
         payload: {
           quiz_id: session.quiz_id,
+          quiz_name: quiz.name,
           total_answers: answers?.length || 0,
           has_contact: !!contactId,
           normalized_score: normalizedScore,
@@ -257,17 +337,32 @@ serve(async (req) => {
 
     console.log(`[quiz-public-complete] Sessão ${session_id} finalizada com sucesso`);
 
+    // 12. Buscar progresso final
+    const { count: totalQuestions } = await supabase
+      .from('quiz_questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('quiz_id', session.quiz_id);
+
+    // 13. Retornar estrutura padronizada
     return new Response(
       JSON.stringify({
-        success: true,
+        session_id,
         result: {
           id: result.id,
           traits_vector: result.traits_vector,
           intent_vector: result.intent_vector,
           normalized_score: result.normalized_score,
+          summary: result.summary,
         },
-        end_screen_config: quiz?.end_screen_config || {},
+        end_screen_config: quiz.end_screen_config || {},
         contact_id: contactId,
+        progress: {
+          answered_questions: totalQuestions || 0,
+          total_questions: totalQuestions || 0,
+          progress_percentage: 100,
+        },
+        is_last_question: true,
+        requires_identification: false,
       }),
       { 
         status: 200, 

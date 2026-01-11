@@ -84,7 +84,9 @@ const App = () => (
                 <Route path="/s/:code/:slug" element={<SurveyPublic />} />
                 {/* Legacy route for backward compatibility */}
                 <Route path="/s/:slug" element={<SurveyPublicLegacy />} />
-                {/* Quiz Public Route */}
+                {/* Quiz Public Routes - Multi-tenant */}
+                <Route path="/q/:code/:slug" element={<QuizPublic />} />
+                {/* Legacy quiz route for backward compatibility */}
                 <Route path="/q/:quizId" element={<QuizPublic />} />
                 <Route path="/" element={
                   <ProtectedRoute>

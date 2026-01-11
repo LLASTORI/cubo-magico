@@ -3,12 +3,20 @@ import { QuizRenderer } from '@/components/quiz/public/QuizRenderer';
 
 /**
  * Public quiz page - mobile-first, accessible, modern UX
- * Route: /q/:quizId
+ * Routes:
+ *   /q/:code/:slug - New multi-tenant route with project code and slug
+ *   /q/:quizId - Legacy fallback with UUID
  */
 export default function QuizPublic() {
-  const { quizId } = useParams<{ quizId: string }>();
+  const { quizId, code, slug } = useParams<{ quizId?: string; code?: string; slug?: string }>();
 
-  if (!quizId) {
+  // Determine which identifier to use
+  // New format: /q/:code/:slug
+  // Legacy format: /q/:quizId (UUID)
+  const identifier = slug || quizId;
+  const projectCode = code;
+
+  if (!identifier) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-6">
         <div className="text-center">
@@ -19,5 +27,5 @@ export default function QuizPublic() {
     );
   }
 
-  return <QuizRenderer quizId={quizId} />;
+  return <QuizRenderer quizIdentifier={identifier} projectCode={projectCode} />;
 }

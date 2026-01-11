@@ -73,8 +73,8 @@ serve(async (req) => {
       .select(`
         id, project_id, name, is_active, 
         requires_identification, allow_anonymous, 
-        start_screen_config, end_screen_config,
-        flow_type, adaptive_config
+        theme_config, start_screen_config, end_screen_config,
+        flow_type, adaptive_config, enable_pixel_events
       `)
       .eq('id', quiz_id)
       .eq('is_active', true)
@@ -239,12 +239,15 @@ serve(async (req) => {
         quiz: {
           id: quiz.id,
           name: quiz.name,
+          project_id: quiz.project_id,
           requires_identification: quiz.requires_identification,
           allow_anonymous: quiz.allow_anonymous,
+          theme_config: quiz.theme_config,
           start_screen_config: quiz.start_screen_config,
           end_screen_config: quiz.end_screen_config,
           flow_type: quiz.flow_type,
           adaptive_config: quiz.adaptive_config,
+          enable_pixel_events: quiz.enable_pixel_events,
         },
         first_question_id: firstQuestion?.id || null,
         current_question: firstQuestion,

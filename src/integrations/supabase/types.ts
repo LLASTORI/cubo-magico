@@ -3727,6 +3727,165 @@ export type Database = {
           },
         ]
       }
+      personalization_contexts: {
+        Row: {
+          channel: string
+          contact_id: string | null
+          created_at: string
+          current_intent: string | null
+          dominant_trait: string | null
+          excluded_memory_types: string[] | null
+          expires_at: string
+          human_override: Json | null
+          id: string
+          memory_signals: Json
+          personalization_depth: string
+          prediction_signals: Json
+          profile_snapshot: Json
+          project_id: string
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          contact_id?: string | null
+          created_at?: string
+          current_intent?: string | null
+          dominant_trait?: string | null
+          excluded_memory_types?: string[] | null
+          expires_at?: string
+          human_override?: Json | null
+          id?: string
+          memory_signals?: Json
+          personalization_depth?: string
+          prediction_signals?: Json
+          profile_snapshot?: Json
+          project_id: string
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          contact_id?: string | null
+          created_at?: string
+          current_intent?: string | null
+          dominant_trait?: string | null
+          excluded_memory_types?: string[] | null
+          expires_at?: string
+          human_override?: Json | null
+          id?: string
+          memory_signals?: Json
+          personalization_depth?: string
+          prediction_signals?: Json
+          profile_snapshot?: Json
+          project_id?: string
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personalization_contexts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "personalization_contexts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "personalization_contexts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personalization_logs: {
+        Row: {
+          applied: boolean
+          channel: string
+          contact_id: string | null
+          content_original: string | null
+          content_personalized: string | null
+          context_id: string | null
+          created_at: string
+          directives: Json
+          id: string
+          outcome: string | null
+          outcome_data: Json | null
+          project_id: string
+          session_id: string | null
+          tokens_resolved: Json
+        }
+        Insert: {
+          applied?: boolean
+          channel: string
+          contact_id?: string | null
+          content_original?: string | null
+          content_personalized?: string | null
+          context_id?: string | null
+          created_at?: string
+          directives?: Json
+          id?: string
+          outcome?: string | null
+          outcome_data?: Json | null
+          project_id: string
+          session_id?: string | null
+          tokens_resolved?: Json
+        }
+        Update: {
+          applied?: boolean
+          channel?: string
+          contact_id?: string | null
+          content_original?: string | null
+          content_personalized?: string | null
+          context_id?: string | null
+          created_at?: string
+          directives?: Json
+          id?: string
+          outcome?: string | null
+          outcome_data?: Json | null
+          project_id?: string
+          session_id?: string | null
+          tokens_resolved?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personalization_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "personalization_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "personalization_logs_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "personalization_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "personalization_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       phase_campaigns: {
         Row: {
           campaign_id: string

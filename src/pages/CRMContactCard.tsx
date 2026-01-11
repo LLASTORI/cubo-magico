@@ -55,6 +55,7 @@ import { ContactSegmentInsights } from '@/components/crm/ContactSegmentInsights'
 import { ContactIdentityTab } from '@/components/crm/ContactIdentityTab';
 import { ContactSurveysTab } from '@/components/crm/ContactSurveysTab';
 import { ContactSocialTab } from '@/components/crm/ContactSocialTab';
+import { ContactQuizzesTab } from '@/components/crm/ContactQuizzesTab';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -377,6 +378,7 @@ export default function CRMContactCard() {
                 <TabsTrigger value="transactions">Transações</TabsTrigger>
                 <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
                 <TabsTrigger value="identity">Identidade</TabsTrigger>
+                <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
                 <TabsTrigger value="surveys">Pesquisas</TabsTrigger>
                 <TabsTrigger value="social">Social</TabsTrigger>
                 <TabsTrigger value="notes">Notas</TabsTrigger>
@@ -430,6 +432,10 @@ export default function CRMContactCard() {
 
               <TabsContent value="surveys" className="mt-4">
                 <ContactSurveysTab contactId={contactId!} />
+              </TabsContent>
+
+              <TabsContent value="quizzes" className="mt-4">
+                <ContactQuizzesTab contactId={contactId!} />
               </TabsContent>
 
               <TabsContent value="social" className="mt-4">

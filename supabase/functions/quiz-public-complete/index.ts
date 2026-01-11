@@ -560,6 +560,41 @@ serve(async (req) => {
         normalizedScore,
         summary
       );
+
+      // 11.1 Registrar evento quiz_attached_to_contact
+      await supabase
+        .from('quiz_events')
+        .insert({
+          project_id: session.project_id,
+          session_id: session_id,
+          contact_id: contactId,
+          event_name: 'quiz_attached_to_contact',
+          payload: {
+            quiz_id: session.quiz_id,
+            quiz_name: quiz.name,
+            traits_vector: traitsVector,
+            intent_vector: intentVector,
+            normalized_score: normalizedScore,
+            summary: summary,
+          },
+        });
+
+      // 11.2 Registrar atividade no CRM
+      await supabase
+        .from('crm_activities')
+        .insert({
+          project_id: session.project_id,
+          contact_id: contactId,
+          activity_type: 'quiz_completed',
+          description: `Lead respondeu ao quiz: ${quiz.name}`,
+          metadata: {
+            quiz_id: session.quiz_id,
+            session_id: session_id,
+            result_id: result.id,
+            dominant_trait: normalizedScore.meta?.dominant_trait,
+            dominant_intent: normalizedScore.meta?.dominant_intent,
+          },
+        });
     }
 
     console.log(`[quiz-public-complete] Sessão ${session_id} finalizada com sucesso`);

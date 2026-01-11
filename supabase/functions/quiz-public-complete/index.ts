@@ -840,13 +840,78 @@ serve(async (req) => {
 
     console.log(`[quiz-public-complete] Sessão ${session_id} finalizada com sucesso`);
 
-    // 12. Buscar total de perguntas
+    // 12. Evaluate Outcomes (Funnel Brain)
+    let selectedOutcome = null;
+    let outcomeEndScreen = null;
+
+    try {
+      const { data: outcomes } = await supabase
+        .from('quiz_outcomes')
+        .select('*')
+        .eq('quiz_id', session.quiz_id)
+        .eq('is_active', true)
+        .order('priority', { ascending: false });
+
+      if (outcomes && outcomes.length > 0) {
+        // Simple outcome evaluation - find first matching
+        for (const outcome of outcomes) {
+          const conditions = outcome.conditions || [];
+          let passed = true;
+
+          for (const cond of conditions) {
+            const normalized = normalizedScore || {};
+            if (cond.type === 'intent_percentage') {
+              const val = ((normalized.intents || {})[cond.field] || 0) * 100;
+              if (cond.operator === 'gte' && val < cond.value) passed = false;
+              if (cond.operator === 'lte' && val > cond.value) passed = false;
+            } else if (cond.type === 'trait_percentage') {
+              const val = ((normalized.traits || {})[cond.field] || 0) * 100;
+              if (cond.operator === 'gte' && val < cond.value) passed = false;
+              if (cond.operator === 'lte' && val > cond.value) passed = false;
+            }
+          }
+
+          if (passed || conditions.length === 0) {
+            selectedOutcome = outcome;
+            outcomeEndScreen = outcome.end_screen_override;
+
+            // Log outcome decision
+            await supabase.from('quiz_outcome_logs').insert({
+              quiz_session_id: session_id,
+              outcome_id: outcome.id,
+              project_id: session.project_id,
+              contact_id: contactId,
+              decision_trace: { conditions_evaluated: conditions.length, passed: true },
+              actions_executed: outcome.actions || [],
+            });
+
+            // Log CRM event
+            if (contactId) {
+              await supabase.from('crm_activities').insert({
+                project_id: session.project_id,
+                contact_id: contactId,
+                activity_type: 'quiz_outcome_triggered',
+                description: `Outcome "${outcome.name}" ativado no quiz`,
+                metadata: { outcome_id: outcome.id, outcome_name: outcome.name },
+              });
+            }
+
+            console.log(`[quiz-public-complete] Outcome "${outcome.name}" ativado`);
+            break;
+          }
+        }
+      }
+    } catch (outcomeError) {
+      console.error('[quiz-public-complete] Erro ao avaliar outcomes:', outcomeError);
+    }
+
+    // 13. Buscar total de perguntas
     const { count: totalQuestions } = await supabase
       .from('quiz_questions')
       .select('id', { count: 'exact', head: true })
       .eq('quiz_id', session.quiz_id);
 
-    // 13. Retornar estrutura padronizada
+    // 14. Retornar estrutura padronizada
     return new Response(
       JSON.stringify({
         session_id,
@@ -857,7 +922,8 @@ serve(async (req) => {
           normalized_score: result.normalized_score,
           summary: result.summary,
         },
-        end_screen_config: quiz.end_screen_config || {},
+        end_screen_config: outcomeEndScreen || quiz.end_screen_config || {},
+        outcome: selectedOutcome ? { id: selectedOutcome.id, name: selectedOutcome.name } : null,
         contact_id: contactId,
         progress: {
           answered_questions: totalQuestions || 0,

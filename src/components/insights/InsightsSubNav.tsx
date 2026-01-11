@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ClipboardList, MessageCircle } from 'lucide-react';
+import { ClipboardList, MessageCircle, FileQuestion } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -15,6 +15,12 @@ const navItems: NavItem[] = [
     icon: ClipboardList, 
     path: '/insights/surveys',
     matchPaths: ['/insights/surveys']
+  },
+  { 
+    label: 'Quizzes', 
+    icon: FileQuestion, 
+    path: '/quizzes',
+    matchPaths: ['/quizzes']
   },
   { 
     label: 'Social Listening', 

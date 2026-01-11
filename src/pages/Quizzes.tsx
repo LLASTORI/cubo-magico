@@ -38,8 +38,7 @@ import { useQuizzes, QUIZ_TYPES } from '@/hooks/useQuizzes';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useProject } from '@/contexts/ProjectContext';
-import { QuizCopilotWizard } from '@/components/quiz/copilot';
-import { QuizArchitecture } from '@/lib/quizCopilotEngine';
+import { CognitiveQuizArchitect } from '@/components/quiz/copilot';
 
 export default function Quizzes() {
   const navigate = useNavigate();
@@ -124,34 +123,9 @@ export default function Quizzes() {
     toast({ title: 'Link copiado!' });
   };
 
-  const handleCopilotComplete = async (architecture: QuizArchitecture) => {
-    try {
-      // Create the quiz with the generated architecture
-      const result = await createQuiz.mutateAsync({
-        name: architecture.name,
-        description: architecture.description,
-        type: architecture.type as 'lead' | 'qualification' | 'diagnostic' | 'onboarding' | 'feedback' | 'nps',
-        requires_identification: true,
-        allow_anonymous: false,
-      });
-      
-      setShowCopilotWizard(false);
-      toast({ 
-        title: 'Quiz criado com Co-Pilot!', 
-        description: 'Gerando perguntas automaticamente...',
-      });
-      
-      // Navigate to editor with the architecture in state
-      await new Promise(resolve => setTimeout(resolve, 200));
-      navigate(`/quizzes/${result.id}`, { state: { architecture } });
-    } catch (error: any) {
-      console.error('[Quizzes] Error creating quiz with Co-Pilot:', error);
-      toast({ 
-        title: 'Erro ao criar quiz', 
-        description: error.message,
-        variant: 'destructive' 
-      });
-    }
+  const handleCopilotComplete = (quizId: string) => {
+    setShowCopilotWizard(false);
+    navigate(`/quizzes/${quizId}`);
   };
 
   if (isLoading || isLoadingModules) {
@@ -365,19 +339,19 @@ export default function Quizzes() {
         </DialogContent>
       </Dialog>
 
-      {/* Co-Pilot Wizard Dialog */}
+      {/* Cognitive Quiz Architect Dialog */}
       <Dialog open={showCopilotWizard} onOpenChange={setShowCopilotWizard}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              Quiz Co-Pilot
+              <Brain className="h-5 w-5 text-primary" />
+              Arquiteto Cognitivo de Quizzes
             </DialogTitle>
             <DialogDescription>
-              Crie um quiz inteligente a partir de objetivos cognitivos
+              Vou te entrevistar para criar um quiz perfeito para seus objetivos
             </DialogDescription>
           </DialogHeader>
-          <QuizCopilotWizard
+          <CognitiveQuizArchitect
             onComplete={handleCopilotComplete}
             onCancel={() => setShowCopilotWizard(false)}
           />

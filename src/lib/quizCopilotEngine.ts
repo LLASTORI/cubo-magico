@@ -639,15 +639,16 @@ function generateQuizDescription(objective: QuizObjective): string {
 }
 
 function mapObjectiveToQuizType(objective: ObjectiveType): string {
+  // Valid database enum values: lead, qualification, funnel, onboarding, entertainment, viral, research
   const mapping: Record<ObjectiveType, string> = {
     classify_intent: 'lead',
-    measure_maturity: 'assessment',
-    profile_emotional: 'personality',
+    measure_maturity: 'research',
+    profile_emotional: 'lead',
     detect_objections: 'qualification',
     assess_awareness: 'funnel',
     qualify_lead: 'qualification',
     segment_audience: 'lead',
-    understand_pain_points: 'assessment',
+    understand_pain_points: 'research',
   };
   
   return mapping[objective] || 'lead';

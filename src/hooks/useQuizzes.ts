@@ -53,13 +53,15 @@ export interface QuizWithQuestions extends Quiz {
   quiz_questions: (QuizQuestion & { quiz_options: QuizOption[] })[];
 }
 
+// Valid database enum values: lead, qualification, funnel, onboarding, entertainment, viral, research
 export const QUIZ_TYPES = [
   { value: 'lead', label: 'Qualificação de Lead' },
-  { value: 'funnel', label: 'Funil de Vendas' },
   { value: 'qualification', label: 'Qualificação' },
-  { value: 'personality', label: 'Perfil/Personalidade' },
-  { value: 'assessment', label: 'Avaliação' },
-  { value: 'engagement', label: 'Engajamento' },
+  { value: 'funnel', label: 'Funil de Vendas' },
+  { value: 'onboarding', label: 'Onboarding' },
+  { value: 'entertainment', label: 'Entretenimento' },
+  { value: 'viral', label: 'Viral' },
+  { value: 'research', label: 'Pesquisa/Avaliação' },
 ];
 
 export const QUESTION_TYPES = [

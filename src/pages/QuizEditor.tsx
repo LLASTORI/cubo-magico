@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, 
-  ChevronDown, ChevronUp, Copy, ExternalLink, Lock, Check
+  ChevronDown, ChevronUp, Copy, ExternalLink, Lock, Check,
+  Brain, Activity, Play
 } from 'lucide-react';
 import {
   DndContext,
@@ -44,8 +45,10 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { useQuiz, useQuizzes, QUIZ_TYPES, QUESTION_TYPES, QuizQuestion, QuizOption } from '@/hooks/useQuizzes';
+import { useQuizOutcomes } from '@/hooks/useQuizOutcomes';
 import { QuizVectorEditor } from '@/components/quiz/QuizVectorEditor';
 import { QuizOutcomeEditor } from '@/components/quiz/QuizOutcomeEditor';
+import { QuizCognitiveHealth, QuizSimulator } from '@/components/quiz/copilot';
 import { QuizRenderer } from '@/components/quiz/public';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -284,9 +287,11 @@ function OptionEditor({
 export default function QuizEditor() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { quiz, isLoading, error: quizError, refetch, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addOption, updateOption, deleteOption } = useQuiz(quizId);
   const { updateQuiz } = useQuizzes();
+  const { outcomes } = useQuizOutcomes(quizId);
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
 
   const [activeTab, setActiveTab] = useState('info');
@@ -508,13 +513,21 @@ export default function QuizEditor() {
 
       <main className="container mx-auto px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="info">1. Informações</TabsTrigger>
             <TabsTrigger value="questions">2. Perguntas</TabsTrigger>
             <TabsTrigger value="options">3. Opções & Vetores</TabsTrigger>
             <TabsTrigger value="screens">4. Telas</TabsTrigger>
             <TabsTrigger value="outcomes">5. Outcomes</TabsTrigger>
-            <TabsTrigger value="preview">6. Preview</TabsTrigger>
+            <TabsTrigger value="cognitive" className="flex items-center gap-1">
+              <Brain className="h-3 w-3" />
+              6. Saúde Cognitiva
+            </TabsTrigger>
+            <TabsTrigger value="simulator" className="flex items-center gap-1">
+              <Play className="h-3 w-3" />
+              7. Simulador
+            </TabsTrigger>
+            <TabsTrigger value="preview">8. Preview</TabsTrigger>
           </TabsList>
 
           {/* Step 1: General Info */}
@@ -816,7 +829,62 @@ export default function QuizEditor() {
             <QuizOutcomeEditor quizId={quizId!} />
           </TabsContent>
 
-          {/* Step 6: Preview */}
+          {/* Step 6: Cognitive Health */}
+          <TabsContent value="cognitive" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5" />
+                  Saúde Cognitiva
+                </CardTitle>
+                <CardDescription>
+                  Análise da qualidade cognitiva do quiz: cobertura, sinais, discriminação e ambiguidade.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {quiz && (
+                  <QuizCognitiveHealth 
+                    quiz={quiz} 
+                    outcomes={outcomes.map(o => ({
+                      id: o.id,
+                      name: o.name,
+                      conditions: o.conditions,
+                    }))} 
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Step 7: Simulator */}
+          <TabsContent value="simulator" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Play className="h-5 w-5" />
+                  Simulador de Personas
+                </CardTitle>
+                <CardDescription>
+                  Simule como diferentes perfis responderiam ao quiz para validar outcomes e vetores.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {quiz && (
+                  <QuizSimulator 
+                    quiz={quiz} 
+                    outcomes={outcomes.map(o => ({
+                      id: o.id,
+                      name: o.name,
+                      priority: o.priority,
+                      conditions: o.conditions,
+                    }))} 
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Step 8: Preview */}
           <TabsContent value="preview" className="space-y-4">
             <Card>
               <CardHeader>

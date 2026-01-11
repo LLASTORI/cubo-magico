@@ -168,7 +168,7 @@ serve(async (req) => {
         visibility_type,
         config,
         dynamic_weight_rules,
-        quiz_options (
+        quiz_options!quiz_options_question_id_fkey (
           id,
           label,
           value,

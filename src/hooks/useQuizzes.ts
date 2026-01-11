@@ -247,7 +247,7 @@ export function useQuiz(quizId: string | undefined) {
           *,
           quiz_questions (
             *,
-            quiz_options (*)
+            quiz_options!quiz_options_question_id_fkey (*)
           )
         `)
         .eq('id', quizId);

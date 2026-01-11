@@ -628,7 +628,7 @@ serve(async (req) => {
         answer_text,
         answer_value,
         created_at,
-        quiz_options (
+        quiz_options!quiz_answers_option_id_fkey (
           id,
           label,
           value,

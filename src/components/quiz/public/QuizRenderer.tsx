@@ -268,22 +268,30 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
 
   // Error state
   if (state.error) {
+    const isInactiveError = state.error.includes('inativo') || state.error.includes('não encontrado');
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-6">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-foreground mb-4">Ops!</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-4">
+            {isInactiveError ? 'Quiz indisponível' : 'Ops!'}
+          </h1>
           <p className="text-muted-foreground mb-6">{state.error}</p>
+          {isInactiveError && (
+            <p className="text-sm text-muted-foreground">
+              Este quiz pode estar temporariamente desativado ou o link não é válido.
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
-  // Start screen
+  // Start screen - show before quiz is fetched
   if (state.showStart) {
     return (
       <QuizStartScreen
         config={state.quizConfig?.start_screen_config}
-        quizName={state.quizConfig?.name}
+        quizName={state.quizConfig?.name || 'Quiz'}
         onStart={startQuiz}
       />
     );

@@ -86,10 +86,23 @@ export default function Quizzes() {
       return;
     }
 
-    const result = await createQuiz.mutateAsync(newQuiz);
-    setShowCreateDialog(false);
-    setNewQuiz({ name: '', description: '', type: 'lead', requires_identification: true, allow_anonymous: false });
-    navigate(`/quizzes/${result.id}`);
+    try {
+      const result = await createQuiz.mutateAsync(newQuiz);
+      setShowCreateDialog(false);
+      setNewQuiz({ name: '', description: '', type: 'lead', requires_identification: true, allow_anonymous: false });
+      
+      // Small delay to ensure database has propagated the insert
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      navigate(`/quizzes/${result.id}`);
+    } catch (error: any) {
+      console.error('[Quizzes] Error creating quiz:', error);
+      toast({ 
+        title: 'Erro ao criar quiz', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    }
   };
 
   const handleDelete = async (quiz: any) => {

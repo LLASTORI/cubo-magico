@@ -359,8 +359,8 @@ export default function QuizEditor() {
     await updateQuiz.mutateAsync({
       id: quizId,
       ...quizData,
-      start_screen_config: startScreen as unknown as Json,
-      end_screen_config: endScreen as unknown as Json,
+      start_screen_config: startScreen as Record<string, unknown>,
+      end_screen_config: endScreen as Record<string, unknown>,
     });
     toast({ title: 'Quiz salvo com sucesso' });
   };

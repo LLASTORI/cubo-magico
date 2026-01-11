@@ -951,6 +951,92 @@ export type Database = {
           },
         ]
       }
+      contact_memory: {
+        Row: {
+          confidence: number
+          contact_id: string
+          content: Json
+          contradicted_by: string | null
+          created_at: string
+          id: string
+          is_contradicted: boolean
+          is_locked: boolean
+          last_reinforced_at: string
+          memory_type: string
+          project_id: string
+          reinforcement_count: number
+          source: string
+          source_id: string | null
+          source_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          contact_id: string
+          content?: Json
+          contradicted_by?: string | null
+          created_at?: string
+          id?: string
+          is_contradicted?: boolean
+          is_locked?: boolean
+          last_reinforced_at?: string
+          memory_type: string
+          project_id: string
+          reinforcement_count?: number
+          source: string
+          source_id?: string | null
+          source_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          contact_id?: string
+          content?: Json
+          contradicted_by?: string | null
+          created_at?: string
+          id?: string
+          is_contradicted?: boolean
+          is_locked?: boolean
+          last_reinforced_at?: string
+          memory_type?: string
+          project_id?: string
+          reinforcement_count?: number
+          source?: string
+          source_id?: string | null
+          source_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_memory_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_memory_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_memory_contradicted_by_fkey"
+            columns: ["contradicted_by"]
+            isOneToOne: false
+            referencedRelation: "contact_memory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_memory_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_predictions: {
         Row: {
           confidence: number

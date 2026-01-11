@@ -19,13 +19,30 @@ interface QuizQuestion {
   title: string;
   subtitle: string | null;
   is_required: boolean;
+  is_hidden: boolean;
+  visibility_type: string;
   config: Record<string, any> | null;
+  dynamic_weight_rules: any[];
   quiz_options: Array<{
     id: string;
     label: string;
     value: string;
     order_index: number;
+    next_question_id: string | null;
+    next_block_id: string | null;
+    end_quiz: boolean;
   }>;
+}
+
+interface QuizCondition {
+  id: string;
+  question_id: string;
+  condition_type: string;
+  condition_payload: Record<string, any>;
+  logical_operator: string;
+  group_id: string | null;
+  order_index: number;
+  is_active: boolean;
 }
 
 serve(async (req) => {
@@ -53,7 +70,12 @@ serve(async (req) => {
     // 1. Verificar se o quiz existe e está ativo
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
-      .select('id, project_id, name, is_active, requires_identification, allow_anonymous, start_screen_config, end_screen_config')
+      .select(`
+        id, project_id, name, is_active, 
+        requires_identification, allow_anonymous, 
+        start_screen_config, end_screen_config,
+        flow_type, adaptive_config
+      `)
       .eq('id', quiz_id)
       .eq('is_active', true)
       .single();
@@ -89,12 +111,18 @@ serve(async (req) => {
         title,
         subtitle,
         is_required,
+        is_hidden,
+        visibility_type,
         config,
+        dynamic_weight_rules,
         quiz_options (
           id,
           label,
           value,
-          order_index
+          order_index,
+          next_question_id,
+          next_block_id,
+          end_quiz
         )
       `)
       .eq('quiz_id', quiz_id)
@@ -108,21 +136,49 @@ serve(async (req) => {
       );
     }
 
-    const sortedQuestions: QuizQuestion[] = (questions || []).map(q => ({
+    const allQuestions: QuizQuestion[] = (questions || []).map(q => ({
       ...q,
+      is_hidden: q.is_hidden || false,
+      visibility_type: q.visibility_type || 'visible',
+      dynamic_weight_rules: q.dynamic_weight_rules || [],
       quiz_options: (q.quiz_options || []).sort((a: any, b: any) => a.order_index - b.order_index)
     }));
 
-    const totalQuestions = sortedQuestions.length;
+    // Filter visible questions for public display
+    const visibleQuestions = allQuestions.filter(q => !q.is_hidden && q.visibility_type === 'visible');
+    const totalQuestions = visibleQuestions.length;
 
     if (totalQuestions === 0) {
       return new Response(
-        JSON.stringify({ error: 'Quiz não possui perguntas' }),
+        JSON.stringify({ error: 'Quiz não possui perguntas visíveis' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 4. Criar sessão com status = started
+    // 4. Buscar condições das perguntas (para fluxos adaptativos)
+    let conditions: QuizCondition[] = [];
+    if (quiz.flow_type !== 'linear') {
+      const questionIds = allQuestions.map(q => q.id);
+      const { data: conditionsData } = await supabase
+        .from('quiz_question_conditions')
+        .select('*')
+        .in('question_id', questionIds)
+        .eq('is_active', true)
+        .order('order_index', { ascending: true });
+      
+      conditions = conditionsData || [];
+    }
+
+    // 5. Determinar primeira pergunta
+    const firstQuestion = findFirstVisibleQuestion(visibleQuestions, conditions, {
+      contact_id: contact_id || null,
+      answers: new Map(),
+      accumulated_vectors: { traits: {}, intents: {} },
+      visited_question_ids: [],
+      skipped_question_ids: [],
+    });
+
+    // 6. Criar sessão com status = started
     const { data: session, error: sessionError } = await supabase
       .from('quiz_sessions')
       .insert({
@@ -134,6 +190,16 @@ serve(async (req) => {
         ip_hash: ipHash,
         utm_data: utm_data || {},
         started_at: new Date().toISOString(),
+        current_question_id: firstQuestion?.id || null,
+        visited_question_ids: [],
+        skipped_question_ids: [],
+        injected_question_ids: [],
+        decision_path: [],
+        accumulated_vectors: { traits: {}, intents: {} },
+        flow_metadata: {
+          flow_type: quiz.flow_type,
+          adaptive_config: quiz.adaptive_config,
+        },
       })
       .select('id, status, started_at')
       .single();
@@ -146,7 +212,7 @@ serve(async (req) => {
       );
     }
 
-    // 5. Registrar evento quiz_started
+    // 7. Registrar evento quiz_started
     await supabase
       .from('quiz_events')
       .insert({
@@ -157,16 +223,16 @@ serve(async (req) => {
         payload: {
           quiz_id: quiz.id,
           quiz_name: quiz.name,
+          flow_type: quiz.flow_type,
           utm_data: utm_data || {},
           total_questions: totalQuestions,
+          first_question_id: firstQuestion?.id,
         },
       });
 
-    console.log(`[quiz-public-start] Sessão ${session.id} criada com ${totalQuestions} perguntas`);
+    console.log(`[quiz-public-start] Sessão ${session.id} criada. Flow: ${quiz.flow_type}, ${totalQuestions} perguntas visíveis`);
 
-    // 6. Retornar estrutura padronizada
-    const firstQuestion = sortedQuestions[0];
-
+    // 8. Retornar estrutura padronizada
     return new Response(
       JSON.stringify({
         session_id: session.id,
@@ -177,7 +243,10 @@ serve(async (req) => {
           allow_anonymous: quiz.allow_anonymous,
           start_screen_config: quiz.start_screen_config,
           end_screen_config: quiz.end_screen_config,
+          flow_type: quiz.flow_type,
+          adaptive_config: quiz.adaptive_config,
         },
+        first_question_id: firstQuestion?.id || null,
         current_question: firstQuestion,
         progress: {
           answered_questions: 0,
@@ -186,7 +255,8 @@ serve(async (req) => {
         },
         is_last_question: totalQuestions === 1,
         requires_identification: quiz.requires_identification,
-        questions: sortedQuestions, // Todas as perguntas para navegação
+        // Return visible questions for linear flows, or just first for adaptive
+        questions: quiz.flow_type === 'linear' ? visibleQuestions : [firstQuestion].filter(Boolean),
       }),
       { 
         status: 200, 
@@ -202,3 +272,126 @@ serve(async (req) => {
     );
   }
 });
+
+/**
+ * Find the first visible question that passes all conditions
+ */
+function findFirstVisibleQuestion(
+  questions: QuizQuestion[],
+  conditions: QuizCondition[],
+  context: {
+    contact_id: string | null;
+    answers: Map<string, any>;
+    accumulated_vectors: { traits: Record<string, number>; intents: Record<string, number> };
+    visited_question_ids: string[];
+    skipped_question_ids: string[];
+  }
+): QuizQuestion | null {
+  for (const question of questions) {
+    const questionConditions = conditions.filter(c => c.question_id === question.id);
+    
+    // If no conditions, question is always available
+    if (questionConditions.length === 0) {
+      return question;
+    }
+
+    // Evaluate conditions
+    const passed = evaluateConditions(questionConditions, context);
+    if (passed) {
+      return question;
+    }
+  }
+  
+  // Fallback to first question if all conditions fail
+  return questions[0] || null;
+}
+
+/**
+ * Simplified condition evaluation for start (full evaluation in answer endpoint)
+ */
+function evaluateConditions(
+  conditions: QuizCondition[],
+  context: {
+    contact_id: string | null;
+    answers: Map<string, any>;
+    accumulated_vectors: { traits: Record<string, number>; intents: Record<string, number> };
+    visited_question_ids: string[];
+    skipped_question_ids: string[];
+  }
+): boolean {
+  if (conditions.length === 0) return true;
+
+  for (const condition of conditions) {
+    if (!condition.is_active) continue;
+
+    const passed = evaluateSingleCondition(condition, context);
+    
+    // For AND logic, all must pass
+    if (condition.logical_operator === 'AND' && !passed) {
+      return false;
+    }
+    
+    // For OR logic, at least one must pass
+    if (condition.logical_operator === 'OR' && passed) {
+      return true;
+    }
+  }
+
+  // Default to true for AND (all passed), false for OR (none passed)
+  return conditions[0]?.logical_operator === 'AND';
+}
+
+function evaluateSingleCondition(
+  condition: QuizCondition,
+  context: {
+    contact_id: string | null;
+    answers: Map<string, any>;
+    accumulated_vectors: { traits: Record<string, number>; intents: Record<string, number> };
+    visited_question_ids: string[];
+    skipped_question_ids: string[];
+  }
+): boolean {
+  const { condition_type, condition_payload } = condition;
+
+  switch (condition_type) {
+    case 'is_identified':
+      return context.contact_id !== null;
+
+    case 'is_anonymous':
+      return context.contact_id === null;
+
+    case 'question_answered':
+      return context.answers.has(condition_payload.question_id);
+
+    case 'question_skipped':
+      return context.skipped_question_ids.includes(condition_payload.question_id);
+
+    case 'trait_gt':
+      return (context.accumulated_vectors.traits[condition_payload.trait_name] ?? 0) > condition_payload.threshold;
+
+    case 'trait_lt':
+      return (context.accumulated_vectors.traits[condition_payload.trait_name] ?? 0) < condition_payload.threshold;
+
+    case 'intent_gt':
+      return (context.accumulated_vectors.intents[condition_payload.intent_name] ?? 0) > condition_payload.threshold;
+
+    case 'intent_lt':
+      return (context.accumulated_vectors.intents[condition_payload.intent_name] ?? 0) < condition_payload.threshold;
+
+    case 'intent_range': {
+      const intentValue = context.accumulated_vectors.intents[condition_payload.intent_name] ?? 0;
+      return intentValue >= condition_payload.min && intentValue <= condition_payload.max;
+    }
+
+    case 'answer_equals': {
+      const answer = context.answers.get(condition_payload.question_id);
+      if (!answer) return false;
+      return answer.option_id === condition_payload.option_id || 
+             (answer.option_ids || []).includes(condition_payload.option_id);
+    }
+
+    default:
+      // Unknown conditions pass by default (fail-open for start)
+      return true;
+  }
+}

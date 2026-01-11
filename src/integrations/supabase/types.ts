@@ -5487,6 +5487,7 @@ export type Database = {
         Row: {
           adaptive_config: Json | null
           allow_anonymous: boolean
+          completion_config: Json | null
           created_at: string
           description: string | null
           enable_pixel_events: boolean
@@ -5498,13 +5499,16 @@ export type Database = {
           pixel_event_overrides: Json
           project_id: string
           requires_identification: boolean
+          slug: string | null
           start_screen_config: Json | null
+          theme_config: Json | null
           type: Database["public"]["Enums"]["quiz_type"]
           updated_at: string
         }
         Insert: {
           adaptive_config?: Json | null
           allow_anonymous?: boolean
+          completion_config?: Json | null
           created_at?: string
           description?: string | null
           enable_pixel_events?: boolean
@@ -5516,13 +5520,16 @@ export type Database = {
           pixel_event_overrides?: Json
           project_id: string
           requires_identification?: boolean
+          slug?: string | null
           start_screen_config?: Json | null
+          theme_config?: Json | null
           type?: Database["public"]["Enums"]["quiz_type"]
           updated_at?: string
         }
         Update: {
           adaptive_config?: Json | null
           allow_anonymous?: boolean
+          completion_config?: Json | null
           created_at?: string
           description?: string | null
           enable_pixel_events?: boolean
@@ -5534,7 +5541,9 @@ export type Database = {
           pixel_event_overrides?: Json
           project_id?: string
           requires_identification?: boolean
+          slug?: string | null
           start_screen_config?: Json | null
+          theme_config?: Json | null
           type?: Database["public"]["Enums"]["quiz_type"]
           updated_at?: string
         }

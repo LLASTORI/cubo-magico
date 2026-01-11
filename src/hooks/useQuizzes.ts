@@ -16,9 +16,12 @@ export interface Quiz {
   name: string;
   description: string | null;
   type: string;
+  slug: string | null;
   is_active: boolean;
   requires_identification: boolean;
   allow_anonymous: boolean;
+  theme_config: Record<string, any> | null;
+  completion_config: Record<string, any> | null;
   start_screen_config: Record<string, any> | null;
   end_screen_config: Record<string, any> | null;
   created_at: string;

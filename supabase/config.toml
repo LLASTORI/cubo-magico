@@ -90,3 +90,6 @@ verify_jwt = false
 
 [functions.quiz-reprocess-scores]
 verify_jwt = true
+
+[functions.quiz-copilot]
+verify_jwt = false

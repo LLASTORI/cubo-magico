@@ -2447,6 +2447,94 @@ export type Database = {
           },
         ]
       }
+      funnel_experiments: {
+        Row: {
+          confidence_threshold: number | null
+          control_config: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ended_at: string | null
+          funnel_performance_id: string | null
+          id: string
+          min_sample_size: number | null
+          name: string
+          project_id: string
+          results: Json | null
+          started_at: string | null
+          status: string
+          suggestion_id: string | null
+          traffic_split: number | null
+          updated_at: string
+          variant_config: Json
+          winner: string | null
+        }
+        Insert: {
+          confidence_threshold?: number | null
+          control_config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          ended_at?: string | null
+          funnel_performance_id?: string | null
+          id?: string
+          min_sample_size?: number | null
+          name: string
+          project_id: string
+          results?: Json | null
+          started_at?: string | null
+          status?: string
+          suggestion_id?: string | null
+          traffic_split?: number | null
+          updated_at?: string
+          variant_config?: Json
+          winner?: string | null
+        }
+        Update: {
+          confidence_threshold?: number | null
+          control_config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          ended_at?: string | null
+          funnel_performance_id?: string | null
+          id?: string
+          min_sample_size?: number | null
+          name?: string
+          project_id?: string
+          results?: Json | null
+          started_at?: string | null
+          status?: string
+          suggestion_id?: string | null
+          traffic_split?: number | null
+          updated_at?: string
+          variant_config?: Json
+          winner?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_experiments_funnel_performance_id_fkey"
+            columns: ["funnel_performance_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_performance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_experiments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_experiments_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_optimization_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_meta_accounts: {
         Row: {
           created_at: string
@@ -2486,6 +2574,162 @@ export type Database = {
           },
           {
             foreignKeyName: "funnel_meta_accounts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funnel_optimization_suggestions: {
+        Row: {
+          applied_at: string | null
+          confidence: number | null
+          created_at: string
+          description: string | null
+          evidence: Json | null
+          funnel_performance_id: string | null
+          id: string
+          impact_estimate: number | null
+          outcome: Json | null
+          project_id: string
+          recommended_action: Json | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          suggestion_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          description?: string | null
+          evidence?: Json | null
+          funnel_performance_id?: string | null
+          id?: string
+          impact_estimate?: number | null
+          outcome?: Json | null
+          project_id: string
+          recommended_action?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          suggestion_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          description?: string | null
+          evidence?: Json | null
+          funnel_performance_id?: string | null
+          id?: string
+          impact_estimate?: number | null
+          outcome?: Json | null
+          project_id?: string
+          recommended_action?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          suggestion_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_optimization_suggestions_funnel_performance_id_fkey"
+            columns: ["funnel_performance_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_performance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_optimization_suggestions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funnel_performance: {
+        Row: {
+          avg_time_to_convert: unknown
+          churn_rate: number | null
+          confidence: number | null
+          conversion_rate: number | null
+          created_at: string
+          funnel_id: string | null
+          id: string
+          last_updated_at: string
+          path_name: string | null
+          path_signature: Json
+          path_type: string
+          performance_score: number | null
+          project_id: string
+          revenue_per_user: number | null
+          sample_size: number | null
+          total_churns: number | null
+          total_conversions: number | null
+          total_entries: number | null
+          trend: string | null
+        }
+        Insert: {
+          avg_time_to_convert?: unknown
+          churn_rate?: number | null
+          confidence?: number | null
+          conversion_rate?: number | null
+          created_at?: string
+          funnel_id?: string | null
+          id?: string
+          last_updated_at?: string
+          path_name?: string | null
+          path_signature?: Json
+          path_type?: string
+          performance_score?: number | null
+          project_id: string
+          revenue_per_user?: number | null
+          sample_size?: number | null
+          total_churns?: number | null
+          total_conversions?: number | null
+          total_entries?: number | null
+          trend?: string | null
+        }
+        Update: {
+          avg_time_to_convert?: unknown
+          churn_rate?: number | null
+          confidence?: number | null
+          conversion_rate?: number | null
+          created_at?: string
+          funnel_id?: string | null
+          id?: string
+          last_updated_at?: string
+          path_name?: string | null
+          path_signature?: Json
+          path_type?: string
+          performance_score?: number | null
+          project_id?: string
+          revenue_per_user?: number | null
+          sample_size?: number | null
+          total_churns?: number | null
+          total_conversions?: number | null
+          total_entries?: number | null
+          trend?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_performance_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_performance_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3720,6 +3964,87 @@ export type Database = {
           },
           {
             foreignKeyName: "offer_mappings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      path_events: {
+        Row: {
+          contact_id: string | null
+          conversion_value: number | null
+          created_at: string
+          event_data: Json | null
+          event_type: string
+          experiment_id: string | null
+          funnel_performance_id: string | null
+          id: string
+          path_signature: Json
+          project_id: string
+          time_in_path: unknown
+          variant: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          conversion_value?: number | null
+          created_at?: string
+          event_data?: Json | null
+          event_type: string
+          experiment_id?: string | null
+          funnel_performance_id?: string | null
+          id?: string
+          path_signature?: Json
+          project_id: string
+          time_in_path?: unknown
+          variant?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          conversion_value?: number | null
+          created_at?: string
+          event_data?: Json | null
+          event_type?: string
+          experiment_id?: string | null
+          funnel_performance_id?: string | null
+          id?: string
+          path_signature?: Json
+          project_id?: string
+          time_in_path?: unknown
+          variant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "path_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "path_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "path_events_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_experiments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "path_events_funnel_performance_id_fkey"
+            columns: ["funnel_performance_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_performance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "path_events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

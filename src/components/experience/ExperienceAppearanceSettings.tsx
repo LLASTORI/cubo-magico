@@ -333,42 +333,6 @@ export function ExperienceAppearanceSettings({
               </Button>
             </div>
           </div>
-              <Input
-                type="color"
-                value={currentTheme.background_color}
-                onChange={(e) => updateTheme({ background_color: e.target.value })}
-                className="w-10 h-10 p-1 cursor-pointer"
-              />
-              <Input
-                type="text"
-                value={currentTheme.background_color}
-                onChange={(e) => updateTheme({ background_color: e.target.value })}
-                className="w-24 font-mono text-sm"
-                placeholder="#f8fafc"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => updateTheme({ background_color: '#ffffff' })}
-              >
-                Branco
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => updateTheme({ background_color: '#f8fafc' })}
-              >
-                Cinza claro
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => updateTheme({ background_color: '#0f172a' })}
-              >
-                Escuro
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

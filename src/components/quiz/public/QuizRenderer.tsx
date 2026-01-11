@@ -8,7 +8,7 @@ import { QuizIdentificationModal } from './QuizIdentificationModal';
 import { CubeLoader } from '@/components/CubeLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
+import { useQuizEventDispatcher } from '@/hooks/useQuizEventDispatcher';
 interface QuizRendererProps {
   quizId: string;
 }
@@ -31,6 +31,7 @@ interface QuizState {
 
 export function QuizRenderer({ quizId }: QuizRendererProps) {
   const { toast } = useToast();
+  const [projectId, setProjectId] = useState<string | undefined>(undefined);
   const [state, setState] = useState<QuizState>({
     sessionId: null,
     currentQuestionIndex: 0,
@@ -46,6 +47,15 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
     isLoading: true,
     error: null,
   });
+
+  // Event dispatcher for pixel tracking
+  const {
+    trackQuizStarted,
+    trackQuestionAnswered,
+    trackQuizCompleted,
+    trackLeadIdentified,
+    trackOutcomeSelected,
+  } = useQuizEventDispatcher(projectId, quizId);
 
   // Get UTM data from URL
   const getUtmData = () => {
@@ -74,6 +84,11 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
+      // Set project ID for event dispatcher
+      if (data.quiz?.project_id) {
+        setProjectId(data.quiz.project_id);
+      }
+
       setState(s => ({
         ...s,
         sessionId: data.session_id,
@@ -84,6 +99,14 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
         showStart: false,
         isLoading: false,
       }));
+
+      // Track quiz started event
+      if (data.quiz?.enable_pixel_events !== false) {
+        trackQuizStarted(data.quiz?.name || 'Quiz', {
+          session_id: data.session_id,
+          total_questions: data.questions?.length || 0,
+        });
+      }
     } catch (err: any) {
       console.error('Error starting quiz:', err);
       setState(s => ({ ...s, error: err.message, isLoading: false }));
@@ -106,6 +129,14 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
+
+      // Track question answered event
+      if (state.quizConfig?.enable_pixel_events !== false) {
+        trackQuestionAnswered(questionId, state.currentQuestionIndex, {
+          session_id: state.sessionId,
+          answer_value: answer.selected_option_id || answer.text_value,
+        });
+      }
 
       const newAnswers = { ...state.answers, [questionId]: answer };
       const nextIndex = state.currentQuestionIndex + 1;
@@ -155,6 +186,14 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
+      // Track lead identified event
+      if (state.quizConfig?.enable_pixel_events !== false && data.contact_id) {
+        trackLeadIdentified(data.contact_id, {
+          session_id: state.sessionId,
+          email: identityData.email,
+        });
+      }
+
       setState(s => ({ ...s, showIdentification: false }));
       await completeQuiz(state.answers, data.contact_id);
     } catch (err: any) {
@@ -180,6 +219,24 @@ export function QuizRenderer({ quizId }: QuizRendererProps) {
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
+
+      // Track quiz completed event
+      if (state.quizConfig?.enable_pixel_events !== false) {
+        trackQuizCompleted(state.sessionId!, {
+          total_questions: state.questions.length,
+          score: data.result?.score,
+          confidence: data.result?.confidence,
+        });
+
+        // Track outcome selected if applicable
+        if (data.result?.outcome) {
+          trackOutcomeSelected(
+            data.result.outcome.id,
+            data.result.outcome.name,
+            { session_id: state.sessionId }
+          );
+        }
+      }
 
       setState(s => ({
         ...s,

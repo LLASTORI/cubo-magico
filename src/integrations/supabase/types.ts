@@ -1950,6 +1950,50 @@ export type Database = {
         }
         Relationships: []
       }
+      event_dispatch_rules: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          payload_mapping: Json
+          project_id: string
+          provider: string
+          provider_event_name: string
+          system_event: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          payload_mapping?: Json
+          project_id: string
+          provider: string
+          provider_event_name: string
+          system_event: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          payload_mapping?: Json
+          project_id?: string
+          provider?: string
+          provider_event_name?: string
+          system_event?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_dispatch_rules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_overrides: {
         Row: {
           created_at: string
@@ -3984,6 +4028,50 @@ export type Database = {
           },
         ]
       }
+      project_tracking_settings: {
+        Row: {
+          created_at: string
+          enable_browser_events: boolean
+          enable_server_events: boolean
+          gtag_id: string | null
+          id: string
+          meta_pixel_id: string | null
+          project_id: string
+          tiktok_pixel_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enable_browser_events?: boolean
+          enable_server_events?: boolean
+          gtag_id?: string | null
+          id?: string
+          meta_pixel_id?: string | null
+          project_id: string
+          tiktok_pixel_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enable_browser_events?: boolean
+          enable_server_events?: boolean
+          gtag_id?: string | null
+          id?: string
+          meta_pixel_id?: string | null
+          project_id?: string
+          tiktok_pixel_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tracking_settings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
@@ -4594,11 +4682,13 @@ export type Database = {
           allow_anonymous: boolean
           created_at: string
           description: string | null
+          enable_pixel_events: boolean
           end_screen_config: Json | null
           flow_type: string
           id: string
           is_active: boolean
           name: string
+          pixel_event_overrides: Json
           project_id: string
           requires_identification: boolean
           start_screen_config: Json | null
@@ -4610,11 +4700,13 @@ export type Database = {
           allow_anonymous?: boolean
           created_at?: string
           description?: string | null
+          enable_pixel_events?: boolean
           end_screen_config?: Json | null
           flow_type?: string
           id?: string
           is_active?: boolean
           name: string
+          pixel_event_overrides?: Json
           project_id: string
           requires_identification?: boolean
           start_screen_config?: Json | null
@@ -4626,11 +4718,13 @@ export type Database = {
           allow_anonymous?: boolean
           created_at?: string
           description?: string | null
+          enable_pixel_events?: boolean
           end_screen_config?: Json | null
           flow_type?: string
           id?: string
           is_active?: boolean
           name?: string
+          pixel_event_overrides?: Json
           project_id?: string
           requires_identification?: boolean
           start_screen_config?: Json | null
@@ -5759,6 +5853,64 @@ export type Database = {
           },
           {
             foreignKeyName: "surveys_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_events: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          event_name: string
+          external_dispatch_status: Json
+          id: string
+          payload: Json
+          project_id: string
+          session_id: string | null
+          source: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          event_name: string
+          external_dispatch_status?: Json
+          id?: string
+          payload?: Json
+          project_id: string
+          session_id?: string | null
+          source: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          event_name?: string
+          external_dispatch_status?: Json
+          id?: string
+          payload?: Json
+          project_id?: string
+          session_id?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "system_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

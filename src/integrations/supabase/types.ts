@@ -2317,6 +2317,103 @@ export type Database = {
           },
         ]
       }
+      experience_templates: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          is_system: boolean
+          name: string
+          preview_image_url: string | null
+          project_id: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name: string
+          preview_image_url?: string | null
+          project_id?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name?: string
+          preview_image_url?: string | null
+          project_id?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experience_templates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experience_themes: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experience_themes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_overrides: {
         Row: {
           created_at: string
@@ -5501,7 +5598,9 @@ export type Database = {
           requires_identification: boolean
           slug: string | null
           start_screen_config: Json | null
+          template_id: string | null
           theme_config: Json | null
+          theme_id: string | null
           type: Database["public"]["Enums"]["quiz_type"]
           updated_at: string
         }
@@ -5522,7 +5621,9 @@ export type Database = {
           requires_identification?: boolean
           slug?: string | null
           start_screen_config?: Json | null
+          template_id?: string | null
           theme_config?: Json | null
+          theme_id?: string | null
           type?: Database["public"]["Enums"]["quiz_type"]
           updated_at?: string
         }
@@ -5543,7 +5644,9 @@ export type Database = {
           requires_identification?: boolean
           slug?: string | null
           start_screen_config?: Json | null
+          template_id?: string | null
           theme_config?: Json | null
+          theme_id?: string | null
           type?: Database["public"]["Enums"]["quiz_type"]
           updated_at?: string
         }
@@ -5553,6 +5656,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quizzes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "experience_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quizzes_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "experience_themes"
             referencedColumns: ["id"]
           },
         ]

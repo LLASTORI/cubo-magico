@@ -26,6 +26,10 @@ export interface Quiz {
   end_screen_config: Record<string, any> | null;
   created_at: string;
   updated_at: string;
+  
+  // Experience Engine references
+  theme_id?: string | null;
+  template_id?: string | null;
 }
 
 export interface QuizQuestion {

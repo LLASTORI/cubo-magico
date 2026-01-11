@@ -134,12 +134,32 @@ REGRAS CRÍTICAS:
 2. Cada opção deve ter vetores de traços e intenções calculados
 3. Os outcomes devem ter condições lógicas baseadas nos vetores
 4. O quiz deve ser usável imediatamente, sem edição manual
+5. INCLUA sugestões de Experience Engine (template e tema)
 
 Retorne um JSON com a estrutura:
 {
   "name": "nome do quiz",
   "description": "descrição detalhada",
   "type": "lead|qualification|funnel|onboarding|entertainment|viral|research",
+  
+  "suggestedTemplateSlug": "conversational|card|minimal|story|diagnostic",
+  "suggestedTheme": {
+    "primary_color": "#hex",
+    "background_color": "#hex",
+    "text_color": "#hex"
+  },
+  "suggestedStartScreen": {
+    "headline": "título impactante",
+    "subheadline": "subtítulo explicativo",
+    "cta_text": "texto do botão",
+    "estimated_time": "X minutos",
+    "benefits": ["benefício 1", "benefício 2", "benefício 3"]
+  },
+  "suggestedEndScreen": {
+    "headline": "Mensagem de agradecimento",
+    "subheadline": "Próximos passos ou CTA"
+  },
+  
   "questions": [
     {
       "type": "single_choice|multiple_choice|scale|text",
@@ -186,6 +206,13 @@ Retorne um JSON com a estrutura:
   ]
 }
 
+Templates disponíveis e quando usar:
+- conversational: Quizzes de qualificação, B2B, tickets altos (layout focado)
+- card: Quizzes visuais, entretenimento, múltiplas opções (layout em cards)
+- minimal: Pesquisas simples, formulários diretos (layout limpo)
+- story: Quizzes virais, mobile-first, engajamento (layout fullscreen)
+- diagnostic: Avaliações profissionais, diagnósticos (layout com sidebar)
+
 Traços disponíveis: analytical, emotional, impulsive, methodical, social, autonomous, risk_taker, conservative
 Intenções disponíveis: purchase, learn, compare, support, churn, upgrade, refer
 
@@ -193,7 +220,8 @@ IMPORTANTE:
 - Valores de vetores devem estar entre -1 e 1
 - Cada pergunta deve contribuir para pelo menos uma dimensão
 - Os outcomes devem ser mutuamente exclusivos quando possível
-- Gere copy real e profissional em português brasileiro`;
+- Gere copy real e profissional em português brasileiro
+- Escolha cores que combinem com o perfil do negócio (B2B = corporativas, B2C = vibrantes)`;
 
 const VALIDATION_PROMPT = `Você é um auditor de qualidade de quizzes cognitivos. Analise o quiz gerado e identifique:
 

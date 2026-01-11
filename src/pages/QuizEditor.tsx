@@ -568,17 +568,32 @@ export default function QuizEditor() {
     });
   };
 
-  // Generate public URL based on project code and slug
+  // Generate URLs for quiz
+  const getBaseUrl = useCallback(() => {
+    const origin = window.location.origin;
+    if (origin.includes('lovable.app') || origin.includes('lovableproject.com')) {
+      return 'https://cubomagico.leandrolastori.com.br';
+    }
+    return origin;
+  }, []);
+
   const getPublicUrl = useCallback(() => {
     if (!quizId) return '';
     const code = currentProject?.public_code || '';
     const slugPart = slug || quizId;
-    return code ? `/q/${code}/${slugPart}` : `/q/${quizId}`;
+    const baseUrl = getBaseUrl();
+    return code ? `${baseUrl}/q/${code}/${slugPart}` : `${baseUrl}/q/${quizId}`;
+  }, [quizId, slug, currentProject?.public_code, getBaseUrl]);
+
+  const getPreviewUrl = useCallback(() => {
+    if (!quizId) return '';
+    const code = currentProject?.public_code || '';
+    const slugPart = slug || quizId;
+    return code ? `${window.location.origin}/q/${code}/${slugPart}` : `${window.location.origin}/q/${quizId}`;
   }, [quizId, slug, currentProject?.public_code]);
 
   const copyPublicLink = () => {
-    const url = `${window.location.origin}${getPublicUrl()}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(getPublicUrl());
     toast({ title: 'Link copiado!' });
   };
 
@@ -820,13 +835,51 @@ export default function QuizEditor() {
 
           {/* Step 2: Appearance - Experience Engine unified */}
           <TabsContent value="appearance" className="space-y-6">
-            <ExperienceAppearanceSettings
-              theme={theme}
-              messages={{}}
-              onThemeChange={setTheme}
-              onMessagesChange={() => {}}
-              type="quiz"
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Settings Column */}
+              <div>
+                <ExperienceAppearanceSettings
+                  theme={theme}
+                  messages={{}}
+                  onThemeChange={setTheme}
+                  onMessagesChange={() => {}}
+                  type="quiz"
+                />
+              </div>
+
+              {/* Preview Column */}
+              <div className="lg:sticky lg:top-6 lg:self-start">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Eye className="h-5 w-5" />
+                      Preview
+                    </CardTitle>
+                    <CardDescription>
+                      Visualize como o quiz ficará para os respondentes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ExperiencePreview
+                      type="quiz"
+                      name={quizData.name}
+                      description={quizData.description}
+                      theme={theme}
+                      startScreen={startScreen}
+                      endScreen={endScreen}
+                      questions={quiz?.quiz_questions?.map(q => ({
+                        id: q.id,
+                        title: q.title,
+                        type: q.type,
+                        options: q.quiz_options?.map(o => ({ label: o.label })),
+                      })) || []}
+                      previewUrl={getPreviewUrl()}
+                      publicUrl={getPublicUrl()}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Step 3: Screens - Experience Engine unified */}
@@ -1031,6 +1084,7 @@ export default function QuizEditor() {
                 type: q.type,
                 options: q.quiz_options?.map(o => ({ label: o.label })),
               })) || []}
+              previewUrl={getPreviewUrl()}
               publicUrl={getPublicUrl()}
             />
           </TabsContent>

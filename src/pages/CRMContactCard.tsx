@@ -58,6 +58,7 @@ import { ContactSocialTab } from '@/components/crm/ContactSocialTab';
 import { ContactQuizzesTab } from '@/components/crm/ContactQuizzesTab';
 import { ContactCognitiveProfile } from '@/components/crm/ContactCognitiveProfile';
 import { ContactAIRecommendations } from '@/components/crm/ContactAIRecommendations';
+import { ContactAgentSuggestions } from '@/components/crm/ContactAgentSuggestions';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -630,6 +631,9 @@ export default function CRMContactCard() {
 
             {/* AI Recommendations */}
             <ContactAIRecommendations contactId={contactId!} />
+
+            {/* AI Agent Suggestions */}
+            <ContactAgentSuggestions contactId={contactId!} />
 
             {/* Segment Insights */}
             <ContactSegmentInsights 

@@ -385,8 +385,7 @@ export function useAgentDecisions(contactId?: string) {
 
       const { error } = await supabase
         .from('agent_decisions_log')
-        .insert(insertData as any
-        });
+        .insert(insertData as any);
 
       if (error) throw error;
     },

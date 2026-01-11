@@ -499,7 +499,7 @@ function generateDecision(
   };
 }
 
-function generateReasoning(agent: Agent, outcome: SimulatedOutcome, prediction: Prediction): string {
+function generateReasoning(agent: Agent, outcome: SimulatedOutcome, prediction: AgentPrediction): string {
   const actionDescriptions: Record<AgentActionType, string> = {
     send_whatsapp: 'enviar mensagem WhatsApp',
     send_email: 'enviar email',

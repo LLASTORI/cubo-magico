@@ -473,8 +473,23 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
     );
   }
 
-  // Question screen
-  const currentQuestion = state.questions[state.currentQuestionIndex];
+  // Question screen - normalize question data from edge function format
+  const rawQuestion = state.questions[state.currentQuestionIndex];
+  
+  // Normalize the question to the expected format for QuestionRenderer
+  const currentQuestion = rawQuestion ? {
+    id: rawQuestion.id,
+    question_text: rawQuestion.title || rawQuestion.question_text,
+    description: rawQuestion.subtitle || rawQuestion.description,
+    question_type: rawQuestion.type || rawQuestion.question_type,
+    is_required: rawQuestion.is_required ?? true,
+    config: rawQuestion.config,
+    quiz_options: (rawQuestion.quiz_options || []).map((opt: any) => ({
+      id: opt.id,
+      option_text: opt.label || opt.option_text,
+      position: opt.order_index ?? opt.position ?? 0,
+    })),
+  } : null;
 
   if (!currentQuestion) {
     return (

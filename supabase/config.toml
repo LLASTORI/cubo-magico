@@ -81,3 +81,9 @@ verify_jwt = false
 
 [functions.quiz-public-complete]
 verify_jwt = false
+
+[functions.quiz-identify]
+verify_jwt = false
+
+[functions.quiz-mark-abandoned]
+verify_jwt = false

@@ -12,6 +12,22 @@ interface StartQuizRequest {
   contact_id?: string;
 }
 
+interface QuizQuestion {
+  id: string;
+  order_index: number;
+  type: string;
+  title: string;
+  subtitle: string | null;
+  is_required: boolean;
+  config: Record<string, any> | null;
+  quiz_options: Array<{
+    id: string;
+    label: string;
+    value: string;
+    order_index: number;
+  }>;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -37,7 +53,7 @@ serve(async (req) => {
     // 1. Verificar se o quiz existe e está ativo
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
-      .select('id, project_id, name, is_active, requires_identification, allow_anonymous, start_screen_config')
+      .select('id, project_id, name, is_active, requires_identification, allow_anonymous, start_screen_config, end_screen_config')
       .eq('id', quiz_id)
       .eq('is_active', true)
       .single();
@@ -63,7 +79,50 @@ serve(async (req) => {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const ipHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
 
-    // 3. Criar sessão
+    // 3. Buscar perguntas do quiz (ordenadas)
+    const { data: questions, error: questionsError } = await supabase
+      .from('quiz_questions')
+      .select(`
+        id,
+        order_index,
+        type,
+        title,
+        subtitle,
+        is_required,
+        config,
+        quiz_options (
+          id,
+          label,
+          value,
+          order_index
+        )
+      `)
+      .eq('quiz_id', quiz_id)
+      .order('order_index', { ascending: true });
+
+    if (questionsError) {
+      console.error('[quiz-public-start] Erro ao buscar perguntas:', questionsError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao carregar quiz' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const sortedQuestions: QuizQuestion[] = (questions || []).map(q => ({
+      ...q,
+      quiz_options: (q.quiz_options || []).sort((a: any, b: any) => a.order_index - b.order_index)
+    }));
+
+    const totalQuestions = sortedQuestions.length;
+
+    if (totalQuestions === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Quiz não possui perguntas' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. Criar sessão com status = started
     const { data: session, error: sessionError } = await supabase
       .from('quiz_sessions')
       .insert({
@@ -87,7 +146,7 @@ serve(async (req) => {
       );
     }
 
-    // 4. Registrar evento de início
+    // 5. Registrar evento quiz_started
     await supabase
       .from('quiz_events')
       .insert({
@@ -99,41 +158,14 @@ serve(async (req) => {
           quiz_id: quiz.id,
           quiz_name: quiz.name,
           utm_data: utm_data || {},
+          total_questions: totalQuestions,
         },
       });
 
-    // 5. Buscar perguntas do quiz
-    const { data: questions, error: questionsError } = await supabase
-      .from('quiz_questions')
-      .select(`
-        id,
-        order_index,
-        type,
-        title,
-        subtitle,
-        is_required,
-        config,
-        quiz_options (
-          id,
-          label,
-          value,
-          order_index
-        )
-      `)
-      .eq('quiz_id', quiz_id)
-      .order('order_index', { ascending: true });
+    console.log(`[quiz-public-start] Sessão ${session.id} criada com ${totalQuestions} perguntas`);
 
-    if (questionsError) {
-      console.error('[quiz-public-start] Erro ao buscar perguntas:', questionsError);
-    }
-
-    // Ordenar opções dentro de cada pergunta
-    const sortedQuestions = (questions || []).map(q => ({
-      ...q,
-      quiz_options: (q.quiz_options || []).sort((a: any, b: any) => a.order_index - b.order_index)
-    }));
-
-    console.log(`[quiz-public-start] Sessão ${session.id} criada com ${sortedQuestions.length} perguntas`);
+    // 6. Retornar estrutura padronizada
+    const firstQuestion = sortedQuestions[0];
 
     return new Response(
       JSON.stringify({
@@ -144,8 +176,17 @@ serve(async (req) => {
           requires_identification: quiz.requires_identification,
           allow_anonymous: quiz.allow_anonymous,
           start_screen_config: quiz.start_screen_config,
+          end_screen_config: quiz.end_screen_config,
         },
-        questions: sortedQuestions,
+        current_question: firstQuestion,
+        progress: {
+          answered_questions: 0,
+          total_questions: totalQuestions,
+          progress_percentage: 0,
+        },
+        is_last_question: totalQuestions === 1,
+        requires_identification: quiz.requires_identification,
+        questions: sortedQuestions, // Todas as perguntas para navegação
       }),
       { 
         status: 200, 

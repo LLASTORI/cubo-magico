@@ -147,6 +147,8 @@ export function useQuizzes() {
     }) => {
       if (!projectId || !user?.id) throw new Error('Projeto não selecionado');
 
+      console.log('[useQuizzes] Creating quiz for project:', projectId);
+      
       const { data: quiz, error } = await supabase
         .from('quizzes')
         .insert({
@@ -156,15 +158,23 @@ export function useQuizzes() {
           type: (data.type || 'lead') as any,
           requires_identification: data.requires_identification ?? true,
           allow_anonymous: data.allow_anonymous ?? false,
+          is_active: true, // Default to active so it can be tested immediately
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[useQuizzes] Create quiz error:', error);
+        throw error;
+      }
+      
+      console.log('[useQuizzes] Quiz created successfully:', quiz.id);
       return quiz as Quiz;
     },
-    onSuccess: () => {
+    onSuccess: (quiz) => {
       queryClient.invalidateQueries({ queryKey: ['quizzes', projectId] });
+      // Also pre-populate the quiz cache for immediate navigation
+      queryClient.setQueryData(['quiz', quiz.id, projectId], { ...quiz, quiz_questions: [] });
       toast({ title: 'Quiz criado com sucesso' });
     },
     onError: (error: any) => {
@@ -220,15 +230,18 @@ export function useQuizzes() {
 }
 
 export function useQuiz(quizId: string | undefined) {
+  const { currentProject } = useProject();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const projectId = currentProject?.id;
 
-  const { data: quiz, isLoading } = useQuery({
-    queryKey: ['quiz', quizId],
+  const { data: quiz, isLoading, error: queryError, refetch } = useQuery({
+    queryKey: ['quiz', quizId, projectId],
     queryFn: async () => {
       if (!quizId) return null;
 
-      const { data, error } = await supabase
+      // Build query - if we have projectId, filter by it for extra safety
+      let query = supabase
         .from('quizzes')
         .select(`
           *,
@@ -237,10 +250,19 @@ export function useQuiz(quizId: string | undefined) {
             quiz_options (*)
           )
         `)
-        .eq('id', quizId)
-        .single();
+        .eq('id', quizId);
+      
+      // Add project_id filter if available (for admin pages)
+      if (projectId) {
+        query = query.eq('project_id', projectId);
+      }
 
-      if (error) throw error;
+      const { data, error } = await query.single();
+
+      if (error) {
+        console.error('[useQuiz] Error fetching quiz:', error);
+        throw error;
+      }
       
       if (data?.quiz_questions) {
         data.quiz_questions.sort((a: any, b: any) => a.order_index - b.order_index);
@@ -254,6 +276,8 @@ export function useQuiz(quizId: string | undefined) {
       return data as unknown as QuizWithQuestions;
     },
     enabled: !!quizId,
+    retry: 1,
+    staleTime: 30000, // 30 seconds - prevent excessive refetching
   });
 
   const addQuestion = useMutation({
@@ -404,6 +428,8 @@ export function useQuiz(quizId: string | undefined) {
   return {
     quiz,
     isLoading,
+    error: queryError,
+    refetch,
     addQuestion,
     updateQuestion,
     deleteQuestion,

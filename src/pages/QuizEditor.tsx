@@ -285,7 +285,7 @@ export default function QuizEditor() {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { quiz, isLoading, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addOption, updateOption, deleteOption } = useQuiz(quizId);
+  const { quiz, isLoading, error: quizError, refetch, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addOption, updateOption, deleteOption } = useQuiz(quizId);
   const { updateQuiz } = useQuizzes();
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
 
@@ -447,10 +447,20 @@ export default function QuizEditor() {
         <AppHeader pageSubtitle="Editor de Quiz" />
         <InsightsSubNav />
         <div className="container mx-auto px-6 py-12 text-center">
-          <p className="text-muted-foreground">Quiz não encontrado</p>
-          <Button variant="outline" onClick={() => navigate('/quizzes')} className="mt-4">
-            Voltar para Quizzes
-          </Button>
+          <div className="max-w-md mx-auto">
+            <p className="text-lg font-medium text-foreground mb-2">Quiz não encontrado</p>
+            <p className="text-muted-foreground mb-4">
+              {quizError?.message || 'O quiz pode ter sido excluído ou você não tem acesso a ele.'}
+            </p>
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" onClick={() => refetch()}>
+                Tentar novamente
+              </Button>
+              <Button onClick={() => navigate('/quizzes')}>
+                Voltar para Quizzes
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     );

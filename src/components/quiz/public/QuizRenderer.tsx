@@ -124,49 +124,65 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
     };
   };
 
-  // Load quiz on mount
+  // Load quiz on mount - fetch quiz data with theme config for start screen
   useEffect(() => {
     const loadQuiz = async () => {
       try {
-        // First, resolve the quiz ID from identifier
         let resolvedQuizId = quizIdentifier;
+        let resolvedProjectId: string | null = null;
         
         // Check if it's a UUID (36 chars with dashes)
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quizIdentifier);
         
-        if (!isUUID) {
-          // It's a slug - need to look up the quiz
-          let query = supabase
-            .from('quizzes')
-            .select('id, project_id')
-            .eq('slug', quizIdentifier);
+        if (!isUUID && projectCode) {
+          // It's a slug with project code - look up the project first
+          const { data: projectData } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('public_code', projectCode)
+            .maybeSingle();
           
-          // If we have a project code, filter by it
-          if (projectCode) {
-            const { data: projectData } = await supabase
-              .from('projects')
-              .select('id')
-              .eq('public_code', projectCode)
-              .maybeSingle();
-            
-            if (projectData) {
-              query = query.eq('project_id', projectData.id);
-            }
+          if (projectData) {
+            resolvedProjectId = projectData.id;
           }
-          
-          const { data: quizData, error: lookupError } = await query.single();
-          
-          if (lookupError || !quizData) {
-            setState(s => ({ ...s, error: 'Quiz não encontrado', isLoading: false }));
-            return;
-          }
-          
-          resolvedQuizId = quizData.id;
-          setProjectId(quizData.project_id);
         }
         
+        // Fetch quiz with all config data needed for rendering
+        let quizQuery = supabase
+          .from('quizzes')
+          .select('id, project_id, name, description, is_active, requires_identification, allow_anonymous, theme_config, start_screen_config, end_screen_config, enable_pixel_events');
+        
+        if (isUUID) {
+          quizQuery = quizQuery.eq('id', quizIdentifier);
+        } else {
+          quizQuery = quizQuery.eq('slug', quizIdentifier);
+          if (resolvedProjectId) {
+            quizQuery = quizQuery.eq('project_id', resolvedProjectId);
+          }
+        }
+        
+        const { data: quizData, error: quizError } = await quizQuery.maybeSingle();
+        
+        if (quizError || !quizData) {
+          setState(s => ({ ...s, error: 'Quiz não encontrado', isLoading: false }));
+          return;
+        }
+        
+        if (!quizData.is_active) {
+          setState(s => ({ ...s, error: 'Este quiz está inativo', isLoading: false }));
+          return;
+        }
+        
+        resolvedQuizId = quizData.id;
         setQuizId(resolvedQuizId);
-        setState(s => ({ ...s, isLoading: false }));
+        setProjectId(quizData.project_id);
+        
+        // Set quiz config so theme and start screen are available immediately
+        setState(s => ({ 
+          ...s, 
+          quizConfig: quizData,
+          isLoading: false 
+        }));
         
       } catch (err: any) {
         console.error('Error loading quiz:', err);
@@ -194,16 +210,26 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      // Set project ID for event dispatcher
-      if (data.quiz?.project_id) {
+      // Set project ID for event dispatcher if not already set
+      if (data.quiz?.project_id && !projectId) {
         setProjectId(data.quiz.project_id);
       }
+
+      // Merge incoming quiz data with existing config (preserve theme, start/end screen configs)
+      const mergedConfig = {
+        ...state.quizConfig,
+        ...data.quiz,
+        // Preserve local configs if the function didn't return them
+        theme_config: data.quiz?.theme_config || state.quizConfig?.theme_config,
+        start_screen_config: data.quiz?.start_screen_config || state.quizConfig?.start_screen_config,
+        end_screen_config: data.quiz?.end_screen_config || state.quizConfig?.end_screen_config,
+      };
 
       setState(s => ({
         ...s,
         sessionId: data.session_id,
         questions: data.questions || [],
-        quizConfig: data.quiz,
+        quizConfig: mergedConfig,
         currentQuestionIndex: 0,
         progress: 0,
         showStart: false,
@@ -211,8 +237,8 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
       }));
 
       // Track quiz started event
-      if (data.quiz?.enable_pixel_events !== false) {
-        trackQuizStarted(data.quiz?.name || 'Quiz', {
+      if (mergedConfig?.enable_pixel_events !== false) {
+        trackQuizStarted(mergedConfig?.name || 'Quiz', {
           session_id: data.session_id,
           total_questions: data.questions?.length || 0,
         });

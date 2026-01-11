@@ -15,6 +15,10 @@ export interface ExperienceTheme {
   logo_url?: string;
   show_progress: boolean;
   one_question_per_page: boolean;
+
+  /** Start screen benefits list colors (Quiz) */
+  benefits_text_color?: string;
+  benefits_icon_color?: string;
 }
 
 export interface CTAButton {
@@ -75,6 +79,9 @@ export const DEFAULT_THEME: ExperienceTheme = {
   background_color: '#f8fafc',
   show_progress: true,
   one_question_per_page: true,
+
+  benefits_text_color: '#64748b',
+  benefits_icon_color: '#6366f1',
 };
 
 export const DEFAULT_COMPLETION_CONFIG: ExperienceCompletionConfig = {

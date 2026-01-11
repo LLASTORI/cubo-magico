@@ -8,6 +8,8 @@ interface ThemeConfig {
   secondary_text_color?: string;
   background_color?: string;
   background_image?: string;
+  benefits_text_color?: string;
+  benefits_icon_color?: string;
 }
 
 interface QuizStartScreenProps {
@@ -41,7 +43,7 @@ export function QuizStartScreen({ config, theme, quizName, logoUrl, onStart }: Q
   const backgroundStyle: React.CSSProperties = {
     backgroundColor: theme?.background_color || undefined,
   };
-  
+
   if (theme?.background_image) {
     backgroundStyle.backgroundImage = `url(${theme.background_image})`;
     backgroundStyle.backgroundSize = 'cover';
@@ -54,11 +56,17 @@ export function QuizStartScreen({ config, theme, quizName, logoUrl, onStart }: Q
     borderColor: theme.primary_color,
   } : {};
 
+  // Fix: when user sets background color/image, remove gradient background-image from Tailwind
+  const hasCustomBackground = Boolean(theme?.background_color || theme?.background_image);
+  const containerClass = `min-h-screen flex items-center justify-center p-6 ${
+    hasCustomBackground ? '' : 'bg-gradient-to-br from-background via-background to-muted'
+  }`;
+
+  const benefitsIconColor = theme?.benefits_icon_color || theme?.primary_color || 'hsl(var(--success))';
+  const benefitsTextColor = theme?.benefits_text_color || theme?.secondary_text_color;
+
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-6"
-      style={backgroundStyle}
-    >
+    <div className={containerClass} style={backgroundStyle}>
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -142,23 +150,23 @@ export function QuizStartScreen({ config, theme, quizName, logoUrl, onStart }: Q
             transition={{ delay: 0.4 }}
             className="space-y-2"
           >
-            {benefits.map((benefit, index) => (
-              <div 
-                key={index} 
-                className="flex items-center gap-2 text-left justify-center"
-              >
-                <CheckCircle 
-                  className="h-4 w-4 shrink-0" 
-                  style={{ color: theme?.primary_color || 'hsl(var(--success))' }}
-                />
-                <span 
-                  className="text-sm"
-                  style={{ color: theme?.secondary_text_color }}
+              {benefits.map((benefit, index) => (
+                <div 
+                  key={index} 
+                  className="flex items-center gap-2 text-left justify-center"
                 >
-                  {benefit}
-                </span>
-              </div>
-            ))}
+                  <CheckCircle 
+                    className="h-4 w-4 shrink-0" 
+                    style={{ color: benefitsIconColor }}
+                  />
+                  <span 
+                    className="text-sm"
+                    style={{ color: benefitsTextColor }}
+                  >
+                    {benefit}
+                  </span>
+                </div>
+              ))}
           </motion.div>
         )}
 

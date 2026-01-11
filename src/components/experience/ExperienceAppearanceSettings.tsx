@@ -227,10 +227,112 @@ export function ExperienceAppearanceSettings({
             </p>
           </div>
 
+          {/* Benefits list colors (Quiz start screen) */}
+          {type === 'quiz' && (
+            <div className="space-y-3 pt-2 border-t">
+              <div className="space-y-1">
+                <Label>Lista de Benefícios</Label>
+                <p className="text-xs text-muted-foreground">
+                  Configure as cores do texto e do ícone do bloco de benefícios na tela inicial
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm">Cor do Ícone</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="color"
+                      value={currentTheme.benefits_icon_color || currentTheme.primary_color}
+                      onChange={(e) => updateTheme({ benefits_icon_color: e.target.value })}
+                      className="w-10 h-10 p-1 cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={currentTheme.benefits_icon_color || currentTheme.primary_color}
+                      onChange={(e) => updateTheme({ benefits_icon_color: e.target.value })}
+                      className="w-24 font-mono text-sm"
+                      placeholder={currentTheme.primary_color}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => updateTheme({ benefits_icon_color: currentTheme.primary_color })}
+                    >
+                      Usar Principal
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Cor do Texto</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="color"
+                      value={currentTheme.benefits_text_color || currentTheme.secondary_text_color}
+                      onChange={(e) => updateTheme({ benefits_text_color: e.target.value })}
+                      className="w-10 h-10 p-1 cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={currentTheme.benefits_text_color || currentTheme.secondary_text_color}
+                      onChange={(e) => updateTheme({ benefits_text_color: e.target.value })}
+                      className="w-24 font-mono text-sm"
+                      placeholder={currentTheme.secondary_text_color}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => updateTheme({ benefits_text_color: currentTheme.secondary_text_color })}
+                    >
+                      Usar Secundária
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Background Color */}
           <div className="space-y-3">
             <Label>Cor de Fundo</Label>
             <div className="flex items-center gap-2">
+              <Input
+                type="color"
+                value={currentTheme.background_color}
+                onChange={(e) => updateTheme({ background_color: e.target.value })}
+                className="w-10 h-10 p-1 cursor-pointer"
+              />
+              <Input
+                type="text"
+                value={currentTheme.background_color}
+                onChange={(e) => updateTheme({ background_color: e.target.value })}
+                className="w-24 font-mono text-sm"
+                placeholder="#f8fafc"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({ background_color: '#ffffff' })}
+              >
+                Branco
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({ background_color: '#f8fafc' })}
+              >
+                Cinza claro
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({ background_color: '#0f172a' })}
+              >
+                Escuro
+              </Button>
+            </div>
+          </div>
               <Input
                 type="color"
                 value={currentTheme.background_color}

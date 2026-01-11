@@ -305,7 +305,7 @@ export default function QuizEditor() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   const { quiz, isLoading, error: quizError, refetch, addQuestion, updateQuestion, deleteQuestion, reorderQuestions, addOption, updateOption, deleteOption } = useQuiz(quizId);
   const { updateQuiz } = useQuizzes();
   const { outcomes } = useQuizOutcomes(quizId);
@@ -525,9 +525,9 @@ export default function QuizEditor() {
       id: quizId,
       ...quizData,
       slug: slug || null,
-      theme_config: theme as Record<string, unknown>,
-      start_screen_config: startScreen as Record<string, unknown>,
-      end_screen_config: endScreen as Record<string, unknown>,
+      theme_config: theme as unknown as Record<string, unknown>,
+      start_screen_config: startScreen as unknown as Record<string, unknown>,
+      end_screen_config: endScreen as unknown as Record<string, unknown>,
     });
     toast({ title: 'Quiz salvo com sucesso' });
   };
@@ -571,10 +571,10 @@ export default function QuizEditor() {
   // Generate public URL based on project code and slug
   const getPublicUrl = useCallback(() => {
     if (!quizId) return '';
-    const code = selectedProject?.code || '';
+    const code = currentProject?.public_code || '';
     const slugPart = slug || quizId;
     return code ? `/q/${code}/${slugPart}` : `/q/${quizId}`;
-  }, [quizId, slug, selectedProject?.code]);
+  }, [quizId, slug, currentProject?.public_code]);
 
   const copyPublicLink = () => {
     const url = `${window.location.origin}${getPublicUrl()}`;
@@ -774,11 +774,12 @@ export default function QuizEditor() {
 
                 {/* Slug Settings - Experience Engine unified */}
                 <ExperienceSlugSettings
-                  experienceType="quiz"
+                  type="quiz"
                   experienceId={quizId!}
-                  projectId={selectedProject?.id || ''}
+                  projectId={currentProject?.id || ''}
                   slug={slug}
-                  onSlugChange={setSlug}
+                  onChange={setSlug}
+                  publicCode={currentProject?.public_code}
                 />
 
                 <div className="grid grid-cols-3 gap-4 pt-4 border-t">
@@ -821,8 +822,10 @@ export default function QuizEditor() {
           <TabsContent value="appearance" className="space-y-6">
             <ExperienceAppearanceSettings
               theme={theme}
+              messages={{}}
               onThemeChange={setTheme}
-              projectId={selectedProject?.id || ''}
+              onMessagesChange={() => {}}
+              type="quiz"
             />
           </TabsContent>
 
@@ -832,12 +835,12 @@ export default function QuizEditor() {
               <ExperienceStartScreenSettings
                 config={startScreen}
                 onChange={setStartScreen}
-                projectId={selectedProject?.id || ''}
+                type="quiz"
               />
               <ExperienceEndScreenSettings
                 config={endScreen}
                 onChange={setEndScreen}
-                projectId={selectedProject?.id || ''}
+                type="quiz"
               />
             </div>
           </TabsContent>
@@ -1016,8 +1019,18 @@ export default function QuizEditor() {
           {/* Step 9: Preview - Experience Engine unified */}
           <TabsContent value="preview" className="space-y-4">
             <ExperiencePreview
-              experienceType="quiz"
-              config={previewConfig}
+              type="quiz"
+              name={quizData.name}
+              description={quizData.description}
+              theme={theme}
+              startScreen={startScreen}
+              endScreen={endScreen}
+              questions={quiz?.quiz_questions?.map(q => ({
+                id: q.id,
+                title: q.title,
+                type: q.type,
+                options: q.quiz_options?.map(o => ({ label: o.label })),
+              })) || []}
               publicUrl={getPublicUrl()}
             />
           </TabsContent>

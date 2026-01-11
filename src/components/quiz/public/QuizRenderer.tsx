@@ -143,14 +143,14 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
           
           // If we have a project code, filter by it
           if (projectCode) {
-            const { data: project } = await supabase
+            const { data: projectData } = await supabase
               .from('projects')
               .select('id')
-              .eq('code', projectCode)
-              .single();
+              .eq('public_code', projectCode)
+              .maybeSingle();
             
-            if (project) {
-              query = query.eq('project_id', project.id);
+            if (projectData) {
+              query = query.eq('project_id', projectData.id);
             }
           }
           
@@ -431,7 +431,6 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
         isOpen={true}
         onSubmit={identifyLead}
         onSkip={state.quizConfig?.allow_anonymous ? () => completeQuiz(state.answers) : undefined}
-        theme={theme}
       />
     );
   }
@@ -478,7 +477,6 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
       {showProgress && (
         <QuizProgressBar 
           progress={state.progress} 
-          primaryColor={theme.primary_color}
         />
       )}
 
@@ -509,7 +507,6 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
               questionNumber={state.currentQuestionIndex + 1}
               totalQuestions={state.questions.length}
               onAnswer={(answer) => answerQuestion(currentQuestion.id, answer)}
-              theme={theme}
             />
           </motion.div>
         </AnimatePresence>

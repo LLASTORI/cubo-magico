@@ -4198,6 +4198,128 @@ export type Database = {
           },
         ]
       }
+      quiz_outcome_logs: {
+        Row: {
+          actions_executed: Json
+          contact_id: string | null
+          created_at: string
+          decision_trace: Json
+          evaluation_time_ms: number | null
+          id: string
+          outcome_id: string | null
+          project_id: string
+          quiz_session_id: string
+        }
+        Insert: {
+          actions_executed?: Json
+          contact_id?: string | null
+          created_at?: string
+          decision_trace?: Json
+          evaluation_time_ms?: number | null
+          id?: string
+          outcome_id?: string | null
+          project_id: string
+          quiz_session_id: string
+        }
+        Update: {
+          actions_executed?: Json
+          contact_id?: string | null
+          created_at?: string
+          decision_trace?: Json
+          evaluation_time_ms?: number | null
+          id?: string
+          outcome_id?: string | null
+          project_id?: string
+          quiz_session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_outcome_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_outcome_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_outcome_logs_outcome_id_fkey"
+            columns: ["outcome_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_outcomes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_outcome_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_outcome_logs_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_outcomes: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string
+          description: string | null
+          end_screen_override: Json | null
+          id: string
+          is_active: boolean
+          name: string
+          priority: number
+          quiz_id: string
+          updated_at: string
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          description?: string | null
+          end_screen_override?: Json | null
+          id?: string
+          is_active?: boolean
+          name: string
+          priority?: number
+          quiz_id: string
+          updated_at?: string
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          description?: string | null
+          end_screen_override?: Json | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          priority?: number
+          quiz_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_outcomes_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quiz_question_conditions: {
         Row: {
           condition_payload: Json
@@ -6643,6 +6765,18 @@ export type Database = {
         | "other"
       comment_sentiment: "positive" | "neutral" | "negative"
       invite_status: "pending" | "accepted" | "rejected" | "expired"
+      outcome_action_type:
+        | "add_tag"
+        | "remove_tag"
+        | "set_lifecycle_stage"
+        | "trigger_automation"
+        | "trigger_whatsapp_flow"
+        | "trigger_email_sequence"
+        | "fire_webhook"
+        | "fire_pixel_event"
+        | "redirect_url"
+        | "dynamic_end_screen"
+        | "update_custom_field"
       override_target_type: "user" | "project"
       permission_level: "none" | "view" | "edit" | "admin"
       plan_type: "trial" | "monthly" | "yearly" | "lifetime"
@@ -6818,6 +6952,19 @@ export const Constants = {
       ],
       comment_sentiment: ["positive", "neutral", "negative"],
       invite_status: ["pending", "accepted", "rejected", "expired"],
+      outcome_action_type: [
+        "add_tag",
+        "remove_tag",
+        "set_lifecycle_stage",
+        "trigger_automation",
+        "trigger_whatsapp_flow",
+        "trigger_email_sequence",
+        "fire_webhook",
+        "fire_pixel_event",
+        "redirect_url",
+        "dynamic_end_screen",
+        "update_custom_field",
+      ],
       override_target_type: ["user", "project"],
       permission_level: ["none", "view", "edit", "admin"],
       plan_type: ["trial", "monthly", "yearly", "lifetime"],

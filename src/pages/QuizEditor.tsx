@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/collapsible';
 import { useQuiz, useQuizzes, QUIZ_TYPES, QUESTION_TYPES, QuizQuestion, QuizOption } from '@/hooks/useQuizzes';
 import { QuizVectorEditor } from '@/components/quiz/QuizVectorEditor';
+import { QuizOutcomeEditor } from '@/components/quiz/QuizOutcomeEditor';
 import { QuizRenderer } from '@/components/quiz/public';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -502,7 +503,8 @@ export default function QuizEditor() {
             <TabsTrigger value="questions">2. Perguntas</TabsTrigger>
             <TabsTrigger value="options">3. Opções & Vetores</TabsTrigger>
             <TabsTrigger value="screens">4. Telas</TabsTrigger>
-            <TabsTrigger value="preview">5. Preview</TabsTrigger>
+            <TabsTrigger value="outcomes">5. Outcomes</TabsTrigger>
+            <TabsTrigger value="preview">6. Preview</TabsTrigger>
           </TabsList>
 
           {/* Step 1: General Info */}
@@ -799,7 +801,12 @@ export default function QuizEditor() {
             </div>
           </TabsContent>
 
-          {/* Step 5: Preview */}
+          {/* Step 5: Outcomes (Funnel Brain) */}
+          <TabsContent value="outcomes" className="space-y-4">
+            <QuizOutcomeEditor quizId={quizId!} />
+          </TabsContent>
+
+          {/* Step 6: Preview */}
           <TabsContent value="preview" className="space-y-4">
             <Card>
               <CardHeader>

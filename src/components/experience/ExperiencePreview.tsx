@@ -21,12 +21,23 @@ interface Question {
   options?: Array<{ label: string } | string>;
 }
 
+interface TemplateConfig {
+  layout?: 'centered' | 'grid' | 'sidebar' | 'fullscreen';
+  image_position?: 'top' | 'left' | 'right' | 'background' | 'hidden';
+  progress_style?: 'bar' | 'dots' | 'percentage' | 'segments' | 'steps';
+  navigation_style?: 'buttons' | 'cards' | 'tap' | 'numbered';
+  animation?: 'slide' | 'fade' | 'slide-up' | 'none';
+  cta_style?: 'full_width' | 'inline' | 'outline' | 'floating';
+}
+
 interface ExperiencePreviewProps {
   name: string;
   description?: string;
   theme: ExperienceTheme;
   startScreen: ExperienceStartScreen;
   endScreen: ExperienceEndScreen;
+  templateConfig?: TemplateConfig;
+  templateName?: string;
   welcomeMessage?: string;
   thankYouMessage?: string;
   questions: Question[];
@@ -41,6 +52,8 @@ export function ExperiencePreview({
   theme,
   startScreen,
   endScreen,
+  templateConfig,
+  templateName,
   welcomeMessage,
   thankYouMessage,
   questions,
@@ -56,6 +69,17 @@ export function ExperiencePreview({
   const currentTheme = useMemo(() => ({ ...DEFAULT_THEME, ...theme }), [theme]);
   const currentStartScreen = useMemo(() => ({ ...DEFAULT_START_SCREEN, ...startScreen }), [startScreen]);
   const currentEndScreen = useMemo(() => ({ ...DEFAULT_END_SCREEN, ...endScreen }), [endScreen]);
+  
+  // Default template config
+  const currentTemplateConfig = useMemo(() => ({
+    layout: 'centered' as const,
+    image_position: 'top' as const,
+    progress_style: 'bar' as const,
+    navigation_style: 'buttons' as const,
+    animation: 'slide' as const,
+    cta_style: 'full_width' as const,
+    ...templateConfig,
+  }), [templateConfig]);
 
   const containerClass = cn(
     "relative rounded-xl border-4 border-muted overflow-hidden transition-all mx-auto",
@@ -88,8 +112,31 @@ export function ExperiencePreview({
   const questionType = question?.type || question?.question_type || 'single_choice';
   const questionOptions = question?.options || ['Opção A', 'Opção B', 'Opção C'];
 
+  // Animation variants based on template config
+  const animationVariants = useMemo(() => {
+    switch (currentTemplateConfig.animation) {
+      case 'fade':
+        return { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } };
+      case 'slide-up':
+        return { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -20 } };
+      case 'none':
+        return { initial: {}, animate: {}, exit: {} };
+      case 'slide':
+      default:
+        return { initial: { opacity: 0, x: 20 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -20 } };
+    }
+  }, [currentTemplateConfig.animation]);
+
   return (
     <div className="space-y-4">
+      {/* Template indicator */}
+      {templateName && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="px-2 py-1 rounded bg-muted">Layout: {templateName}</span>
+          <span className="px-2 py-1 rounded bg-muted">Animação: {currentTemplateConfig.animation}</span>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">

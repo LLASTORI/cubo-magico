@@ -333,7 +333,15 @@ export default function QuizEditor() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   
   // Experience Engine hooks
-  const { templates, getDefaultTemplate } = useExperienceTemplates();
+  const { templates, getTemplateById, getDefaultTemplate } = useExperienceTemplates();
+  
+  // Get the currently selected template config
+  const selectedTemplate = useMemo(() => {
+    if (selectedTemplateId) {
+      return getTemplateById(selectedTemplateId);
+    }
+    return getDefaultTemplate();
+  }, [selectedTemplateId, templates, getTemplateById, getDefaultTemplate]);
   
   const [isCreatingFromArchitecture, setIsCreatingFromArchitecture] = useState(false);
   const architectureProcessed = useRef(false);
@@ -459,6 +467,11 @@ export default function QuizEditor() {
       // Load slug
       setSlug(quiz.slug || '');
       
+      // Load template_id
+      if (quiz.template_id) {
+        setSelectedTemplateId(quiz.template_id);
+      }
+      
       // Load theme from theme_config
       if (quiz.theme_config) {
         const tc = quiz.theme_config as Record<string, any>;
@@ -535,6 +548,7 @@ export default function QuizEditor() {
       id: quizId,
       ...quizData,
       slug: slug || null,
+      template_id: selectedTemplateId || null,
       theme_config: theme as unknown as Record<string, unknown>,
       start_screen_config: startScreen as unknown as Record<string, unknown>,
       end_screen_config: endScreen as unknown as Record<string, unknown>,
@@ -891,6 +905,8 @@ export default function QuizEditor() {
                       theme={theme}
                       startScreen={startScreen}
                       endScreen={endScreen}
+                      templateConfig={selectedTemplate?.config}
+                      templateName={selectedTemplate?.name}
                       questions={quiz?.quiz_questions?.map(q => ({
                         id: q.id,
                         title: q.title,
@@ -1102,6 +1118,8 @@ export default function QuizEditor() {
               theme={theme}
               startScreen={startScreen}
               endScreen={endScreen}
+              templateConfig={selectedTemplate?.config}
+              templateName={selectedTemplate?.name}
               questions={quiz?.quiz_questions?.map(q => ({
                 id: q.id,
                 title: q.title,

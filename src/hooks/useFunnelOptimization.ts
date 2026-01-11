@@ -19,15 +19,15 @@ import { Json } from '@/integrations/supabase/types';
 // ============================================
 
 export function useFunnelPerformance(funnelId?: string) {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   
   return useQuery({
-    queryKey: ['funnel-performance', selectedProject?.id, funnelId],
+    queryKey: ['funnel-performance', currentProject?.id, funnelId],
     queryFn: async () => {
       let query = supabase
         .from('funnel_performance')
         .select('*')
-        .eq('project_id', selectedProject!.id)
+        .eq('project_id', currentProject!.id)
         .order('performance_score', { ascending: false });
       
       if (funnelId) {
@@ -44,20 +44,20 @@ export function useFunnelPerformance(funnelId?: string) {
         trend: row.trend as 'improving' | 'declining' | 'stable'
       })) as FunnelPerformance[];
     },
-    enabled: !!selectedProject?.id
+    enabled: !!currentProject?.id
   });
 }
 
 export function useTopPerformingPaths(limit = 5) {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   
   return useQuery({
-    queryKey: ['top-performing-paths', selectedProject?.id, limit],
+    queryKey: ['top-performing-paths', currentProject?.id, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnel_performance')
         .select('*')
-        .eq('project_id', selectedProject!.id)
+        .eq('project_id', currentProject!.id)
         .gte('sample_size', 50)
         .order('performance_score', { ascending: false })
         .limit(limit);
@@ -70,20 +70,20 @@ export function useTopPerformingPaths(limit = 5) {
         trend: row.trend as 'improving' | 'declining' | 'stable'
       })) as FunnelPerformance[];
     },
-    enabled: !!selectedProject?.id
+    enabled: !!currentProject?.id
   });
 }
 
 export function useUnderperformingPaths(limit = 5) {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   
   return useQuery({
-    queryKey: ['underperforming-paths', selectedProject?.id, limit],
+    queryKey: ['underperforming-paths', currentProject?.id, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnel_performance')
         .select('*')
-        .eq('project_id', selectedProject!.id)
+        .eq('project_id', currentProject!.id)
         .gte('sample_size', 50)
         .order('performance_score', { ascending: true })
         .limit(limit);
@@ -96,7 +96,7 @@ export function useUnderperformingPaths(limit = 5) {
         trend: row.trend as 'improving' | 'declining' | 'stable'
       })) as FunnelPerformance[];
     },
-    enabled: !!selectedProject?.id
+    enabled: !!currentProject?.id
   });
 }
 
@@ -128,15 +128,15 @@ export function usePathComparisons(pathId: string) {
 // ============================================
 
 export function useOptimizationSuggestions(status?: string) {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   
   return useQuery({
-    queryKey: ['optimization-suggestions', selectedProject?.id, status],
+    queryKey: ['optimization-suggestions', currentProject?.id, status],
     queryFn: async () => {
       let query = supabase
         .from('funnel_optimization_suggestions')
         .select('*, funnel_performance:funnel_performance_id(*)')
-        .eq('project_id', selectedProject!.id)
+        .eq('project_id', currentProject!.id)
         .order('impact_estimate', { ascending: false });
       
       if (status) {
@@ -149,7 +149,7 @@ export function useOptimizationSuggestions(status?: string) {
       
       return data;
     },
-    enabled: !!selectedProject?.id
+    enabled: !!currentProject?.id
   });
 }
 
@@ -158,13 +158,13 @@ export function usePendingSuggestions() {
 }
 
 export function useGenerateSuggestions() {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   const queryClient = useQueryClient();
   const { data: allPaths } = useFunnelPerformance();
   
   return useMutation({
     mutationFn: async (config: Partial<OptimizationConfig> = {}) => {
-      if (!selectedProject?.id || !allPaths) {
+      if (!currentProject?.id || !allPaths) {
         throw new Error('Missing project or paths data');
       }
       
@@ -250,15 +250,15 @@ export function useUpdateSuggestionStatus() {
 // ============================================
 
 export function useFunnelExperiments(status?: string) {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   
   return useQuery({
-    queryKey: ['funnel-experiments', selectedProject?.id, status],
+    queryKey: ['funnel-experiments', currentProject?.id, status],
     queryFn: async () => {
       let query = supabase
         .from('funnel_experiments')
         .select('*, funnel_performance:funnel_performance_id(*)')
-        .eq('project_id', selectedProject!.id)
+        .eq('project_id', currentProject!.id)
         .order('created_at', { ascending: false });
       
       if (status) {
@@ -271,12 +271,12 @@ export function useFunnelExperiments(status?: string) {
       
       return data;
     },
-    enabled: !!selectedProject?.id
+    enabled: !!currentProject?.id
   });
 }
 
 export function useCreateExperiment() {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -294,7 +294,7 @@ export function useCreateExperiment() {
       const { data, error } = await supabase
         .from('funnel_experiments')
         .insert({
-          project_id: selectedProject!.id,
+          project_id: currentProject!.id,
           ...experiment,
           control_config: experiment.control_config as Json,
           variant_config: experiment.variant_config as Json,
@@ -356,7 +356,7 @@ export function useUpdateExperimentStatus() {
 // ============================================
 
 export function useRecordPathEvent() {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -373,7 +373,7 @@ export function useRecordPathEvent() {
       const { error } = await supabase
         .from('path_events')
         .insert({
-          project_id: selectedProject!.id,
+          project_id: currentProject!.id,
           funnel_performance_id: event.funnel_performance_id,
           contact_id: event.contact_id,
           experiment_id: event.experiment_id,
@@ -393,7 +393,7 @@ export function useRecordPathEvent() {
 }
 
 export function useGetOrCreateFunnelPerformance() {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -413,7 +413,7 @@ export function useGetOrCreateFunnelPerformance() {
       const { data: existing } = await supabase
         .from('funnel_performance')
         .select('*')
-        .eq('project_id', selectedProject!.id)
+        .eq('project_id', currentProject!.id)
         .eq('path_type', pathType)
         .contains('path_signature', { type: pathSignature.type })
         .limit(1);
@@ -428,7 +428,7 @@ export function useGetOrCreateFunnelPerformance() {
       const { data, error } = await supabase
         .from('funnel_performance')
         .insert({
-          project_id: selectedProject!.id,
+          project_id: currentProject!.id,
           funnel_id: funnelId,
           path_signature: pathSignature as unknown as Json,
           path_type: pathType,
@@ -451,24 +451,24 @@ export function useGetOrCreateFunnelPerformance() {
 // ============================================
 
 export function useFunnelOptimizationStats() {
-  const { selectedProject } = useProject();
+  const { currentProject } = useProject();
   
   return useQuery({
-    queryKey: ['funnel-optimization-stats', selectedProject?.id],
+    queryKey: ['funnel-optimization-stats', currentProject?.id],
     queryFn: async () => {
       const [performanceResult, suggestionsResult, experimentsResult] = await Promise.all([
         supabase
           .from('funnel_performance')
           .select('performance_score, trend, sample_size')
-          .eq('project_id', selectedProject!.id),
+          .eq('project_id', currentProject!.id),
         supabase
           .from('funnel_optimization_suggestions')
           .select('status, impact_estimate')
-          .eq('project_id', selectedProject!.id),
+          .eq('project_id', currentProject!.id),
         supabase
           .from('funnel_experiments')
           .select('status, winner')
-          .eq('project_id', selectedProject!.id)
+          .eq('project_id', currentProject!.id)
       ]);
       
       const paths = performanceResult.data || [];
@@ -509,6 +509,6 @@ export function useFunnelOptimizationStats() {
           : 0
       };
     },
-    enabled: !!selectedProject?.id
+    enabled: !!currentProject?.id
   });
 }

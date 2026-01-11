@@ -23,10 +23,12 @@ import { QuizVectorBars } from './QuizVectorBars';
 
 const QUIZ_TYPE_LABELS: Record<string, string> = {
   lead: 'Lead',
-  funnel: 'Funil',
   qualification: 'Qualificação',
-  personality: 'Personalidade',
-  assessment: 'Avaliação',
+  funnel: 'Funil',
+  onboarding: 'Onboarding',
+  entertainment: 'Entretenimento',
+  viral: 'Viral',
+  research: 'Pesquisa',
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {

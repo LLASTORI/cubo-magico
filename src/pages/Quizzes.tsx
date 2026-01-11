@@ -4,7 +4,7 @@ import { Plus, FileQuestion, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, B
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
-import { CRMSubNav } from '@/components/crm/CRMSubNav';
+import { InsightsSubNav } from '@/components/insights/InsightsSubNav';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,8 +60,8 @@ export default function Quizzes() {
   if (!isLoadingModules && !insightsEnabled) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader pageSubtitle="Quizzes" />
-        <CRMSubNav />
+      <AppHeader pageSubtitle="Quizzes" />
+      <InsightsSubNav />
         <main className="container mx-auto px-6 py-12">
           <Card className="text-center py-12">
             <CardContent>
@@ -111,8 +111,8 @@ export default function Quizzes() {
   if (isLoading || isLoadingModules) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader pageSubtitle="Quizzes" />
-        <CRMSubNav />
+      <AppHeader pageSubtitle="Quizzes" />
+      <InsightsSubNav />
         <div className="flex items-center justify-center h-64">
           <CubeLoader size="lg" />
         </div>
@@ -123,7 +123,7 @@ export default function Quizzes() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader pageSubtitle="Quizzes" />
-      <CRMSubNav 
+      <InsightsSubNav 
         rightContent={
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />

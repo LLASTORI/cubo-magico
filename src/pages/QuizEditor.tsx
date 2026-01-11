@@ -22,7 +22,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AppHeader } from '@/components/AppHeader';
-import { CRMSubNav } from '@/components/crm/CRMSubNav';
+import { InsightsSubNav } from '@/components/insights/InsightsSubNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -412,7 +412,7 @@ export default function QuizEditor() {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Editor de Quiz" />
-        <CRMSubNav />
+        <InsightsSubNav />
         <main className="container mx-auto px-6 py-12">
           <Card className="text-center py-12">
             <CardContent>
@@ -432,7 +432,7 @@ export default function QuizEditor() {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Editor de Quiz" />
-        <CRMSubNav />
+        <InsightsSubNav />
         <div className="flex items-center justify-center h-64">
           <CubeLoader size="lg" />
         </div>
@@ -444,7 +444,7 @@ export default function QuizEditor() {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader pageSubtitle="Editor de Quiz" />
-        <CRMSubNav />
+        <InsightsSubNav />
         <div className="container mx-auto px-6 py-12 text-center">
           <p className="text-muted-foreground">Quiz não encontrado</p>
           <Button variant="outline" onClick={() => navigate('/quizzes')} className="mt-4">
@@ -458,7 +458,7 @@ export default function QuizEditor() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader pageSubtitle="Editor de Quiz" />
-      <CRMSubNav />
+      <InsightsSubNav />
       
       {/* Header bar */}
       <div className="border-b bg-card/50">

@@ -16,6 +16,21 @@ interface IdentifyRequest {
   };
 }
 
+interface IdentityFieldConfig {
+  enabled: boolean;
+  required: boolean;
+}
+
+interface IdentitySettings {
+  fields: {
+    name: IdentityFieldConfig;
+    email: IdentityFieldConfig;
+    phone: IdentityFieldConfig;
+    instagram: IdentityFieldConfig;
+  };
+  primary_identity_field: 'email' | 'phone';
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -75,12 +90,60 @@ serve(async (req) => {
       );
     }
 
+    // Fetch quiz identity settings
+    const { data: quizData } = await supabase
+      .from('quizzes')
+      .select('identity_settings')
+      .eq('id', session.quiz_id)
+      .single();
+
+    const identitySettings: IdentitySettings = quizData?.identity_settings || {
+      fields: {
+        name: { enabled: true, required: false },
+        email: { enabled: true, required: true },
+        phone: { enabled: true, required: false },
+        instagram: { enabled: false, required: false },
+      },
+      primary_identity_field: 'email',
+    };
+
+    const primaryField = identitySettings.primary_identity_field;
+    console.log(`[quiz-identify] Primary identity field: ${primaryField}`);
+
+    // Validate required fields based on identity settings
+    const { fields } = identitySettings;
+    if (fields.email.required && !contact_data.email?.trim()) {
+      return new Response(
+        JSON.stringify({ error: 'Email é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (fields.phone.required && !contact_data.phone?.trim()) {
+      return new Response(
+        JSON.stringify({ error: 'Telefone é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (fields.name.required && !contact_data.name?.trim()) {
+      return new Response(
+        JSON.stringify({ error: 'Nome é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (fields.instagram.required && !contact_data.instagram?.trim()) {
+      return new Response(
+        JSON.stringify({ error: 'Instagram é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Se já tem contato vinculado, apenas atualizar os dados
     if (session.contact_id) {
       await supabase
         .from('crm_contacts')
         .update({
           name: contact_data.name || undefined,
+          email: contact_data.email || undefined,
           phone: contact_data.phone || undefined,
           instagram: contact_data.instagram || undefined,
           last_activity_at: new Date().toISOString(),
@@ -101,12 +164,12 @@ serve(async (req) => {
       );
     }
 
-    // 2. Buscar ou criar contato
+    // 2. Buscar ou criar contato based on primary identity field
     let contactId: string | null = null;
     let isNewContact = false;
 
-    // Tentar encontrar contato existente por email
-    if (contact_data.email) {
+    // Try to find existing contact by PRIMARY field first
+    if (primaryField === 'email' && contact_data.email) {
       const { data: existingContact } = await supabase
         .from('crm_contacts')
         .select('id')
@@ -116,7 +179,7 @@ serve(async (req) => {
 
       if (existingContact) {
         contactId = existingContact.id;
-        // Atualizar dados do contato existente
+        // Update existing contact with new data
         await supabase
           .from('crm_contacts')
           .update({
@@ -127,10 +190,7 @@ serve(async (req) => {
           })
           .eq('id', contactId);
       }
-    }
-
-    // Se não encontrou por email, tentar por telefone
-    if (!contactId && contact_data.phone) {
+    } else if (primaryField === 'phone' && contact_data.phone) {
       const { data: existingContact } = await supabase
         .from('crm_contacts')
         .select('id')
@@ -140,7 +200,7 @@ serve(async (req) => {
 
       if (existingContact) {
         contactId = existingContact.id;
-        // Atualizar dados do contato existente
+        // Update existing contact with new data
         await supabase
           .from('crm_contacts')
           .update({
@@ -153,14 +213,48 @@ serve(async (req) => {
       }
     }
 
+    // If not found by primary, try secondary field
+    if (!contactId) {
+      const secondaryField = primaryField === 'email' ? 'phone' : 'email';
+      const secondaryValue = secondaryField === 'email' ? contact_data.email : contact_data.phone;
+      
+      if (secondaryValue) {
+        const { data: existingContact } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .eq('project_id', session.project_id)
+          .eq(secondaryField, secondaryValue)
+          .maybeSingle();
+
+        if (existingContact) {
+          contactId = existingContact.id;
+          // Update existing contact
+          await supabase
+            .from('crm_contacts')
+            .update({
+              name: contact_data.name || undefined,
+              email: contact_data.email || undefined,
+              phone: contact_data.phone || undefined,
+              instagram: contact_data.instagram || undefined,
+              last_activity_at: new Date().toISOString(),
+            })
+            .eq('id', contactId);
+        }
+      }
+    }
+
     // Se não encontrou contato, criar novo
     if (!contactId) {
+      // Generate fallback email if not provided and primary is phone
+      const emailValue = contact_data.email || 
+        (primaryField === 'phone' ? `lead-${session_id.slice(0, 8)}@quiz.local` : null);
+      
       const { data: newContact, error: contactError } = await supabase
         .from('crm_contacts')
         .insert({
           project_id: session.project_id,
           name: contact_data.name || null,
-          email: contact_data.email || `lead-${session_id.slice(0, 8)}@quiz.local`,
+          email: emailValue,
           phone: contact_data.phone || null,
           instagram: contact_data.instagram || null,
           source: 'quiz',

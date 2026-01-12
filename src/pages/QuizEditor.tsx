@@ -51,6 +51,7 @@ import { QuizVectorEditor } from '@/components/quiz/QuizVectorEditor';
 import { QuizOutcomeEditor } from '@/components/quiz/QuizOutcomeEditor';
 import { QuizCognitiveHealth, QuizSimulator } from '@/components/quiz/copilot';
 import { QuizDataControlsCard } from '@/components/quiz/QuizDataControlsCard';
+import { QuizIdentitySettings, IdentitySettings, DEFAULT_IDENTITY_SETTINGS } from '@/components/quiz/QuizIdentitySettings';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useProjectModules } from '@/hooks/useProjectModules';
@@ -332,6 +333,7 @@ export default function QuizEditor() {
   const [startScreen, setStartScreen] = useState<ExperienceStartScreen>(DEFAULT_START_SCREEN);
   const [endScreen, setEndScreen] = useState<ExperienceEndScreen>(DEFAULT_END_SCREEN);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [identitySettings, setIdentitySettings] = useState<IdentitySettings>(DEFAULT_IDENTITY_SETTINGS);
   
   // Experience Engine hooks
   const { templates, getTemplateById, getDefaultTemplate } = useExperienceTemplates();
@@ -525,6 +527,20 @@ export default function QuizEditor() {
           show_share: esc.show_share !== false,
         });
       }
+      
+      // Load identity settings
+      if ((quiz as any).identity_settings) {
+        const is = (quiz as any).identity_settings as IdentitySettings;
+        setIdentitySettings({
+          fields: {
+            name: is.fields?.name || DEFAULT_IDENTITY_SETTINGS.fields.name,
+            email: is.fields?.email || DEFAULT_IDENTITY_SETTINGS.fields.email,
+            phone: is.fields?.phone || DEFAULT_IDENTITY_SETTINGS.fields.phone,
+            instagram: is.fields?.instagram || DEFAULT_IDENTITY_SETTINGS.fields.instagram,
+          },
+          primary_identity_field: is.primary_identity_field || 'email',
+        });
+      }
     }
   }, [quiz]);
 
@@ -559,7 +575,8 @@ export default function QuizEditor() {
       theme_config: theme as unknown as Record<string, unknown>,
       start_screen_config: startScreen as unknown as Record<string, unknown>,
       end_screen_config: endScreen as unknown as Record<string, unknown>,
-    });
+      identity_settings: identitySettings as unknown as Record<string, unknown>,
+    } as any);
     toast({ title: 'Quiz salvo com sucesso' });
   };
 
@@ -755,20 +772,21 @@ export default function QuizEditor() {
             <TabsTrigger value="info">1. Informações</TabsTrigger>
             <TabsTrigger value="appearance">2. Aparência</TabsTrigger>
             <TabsTrigger value="screens">3. Telas</TabsTrigger>
-            <TabsTrigger value="questions">4. Perguntas</TabsTrigger>
-            <TabsTrigger value="options">5. Opções & Vetores</TabsTrigger>
-            <TabsTrigger value="outcomes">6. Outcomes</TabsTrigger>
+            <TabsTrigger value="identification">4. Identificação</TabsTrigger>
+            <TabsTrigger value="questions">5. Perguntas</TabsTrigger>
+            <TabsTrigger value="options">6. Opções & Vetores</TabsTrigger>
+            <TabsTrigger value="outcomes">7. Outcomes</TabsTrigger>
             <TabsTrigger value="cognitive" className="flex items-center gap-1">
               <Brain className="h-3 w-3" />
-              7. Saúde Cognitiva
+              8. Saúde Cognitiva
             </TabsTrigger>
             <TabsTrigger value="simulator" className="flex items-center gap-1">
               <Play className="h-3 w-3" />
-              8. Simulador
+              9. Simulador
             </TabsTrigger>
             <TabsTrigger value="data-controls" className="flex items-center gap-1 text-destructive">
               <Trash2 className="h-3 w-3" />
-              9. Dados & Reset
+              10. Dados & Reset
             </TabsTrigger>
           </TabsList>
 
@@ -948,7 +966,16 @@ export default function QuizEditor() {
             </div>
           </TabsContent>
 
-          {/* Step 4: Questions */}
+          {/* Step 4: Lead Identification */}
+          <TabsContent value="identification" className="space-y-6">
+            <QuizIdentitySettings
+              settings={identitySettings}
+              onChange={setIdentitySettings}
+              requiresIdentification={quizData.requires_identification}
+            />
+          </TabsContent>
+
+          {/* Step 5: Questions */}
           <TabsContent value="questions" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium">Perguntas ({quiz.quiz_questions?.length || 0})</h2>

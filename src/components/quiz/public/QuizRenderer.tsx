@@ -155,7 +155,7 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
         // Fetch quiz with all config data needed for rendering
         let quizQuery = supabase
           .from('quizzes')
-          .select('id, project_id, name, description, is_active, requires_identification, allow_anonymous, theme_config, start_screen_config, end_screen_config, enable_pixel_events');
+          .select('id, project_id, name, description, is_active, requires_identification, allow_anonymous, theme_config, start_screen_config, end_screen_config, enable_pixel_events, identity_settings');
         
         if (isUUID) {
           quizQuery = quizQuery.eq('id', quizIdentifier);
@@ -482,6 +482,7 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
         isOpen={true}
         onSubmit={identifyLead}
         onSkip={state.quizConfig?.allow_anonymous ? () => completeQuiz(state.answers) : undefined}
+        identitySettings={state.quizConfig?.identity_settings}
       />
     );
   }

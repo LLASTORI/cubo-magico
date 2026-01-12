@@ -1649,6 +1649,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "crm_contact_interactions_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
             foreignKeyName: "crm_contact_interactions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -2255,6 +2262,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "crm_webhook_keys_default_funnel_id_fkey"
+            columns: ["default_funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
             foreignKeyName: "crm_webhook_keys_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -2725,6 +2739,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "funnel_meta_accounts_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
             foreignKeyName: "funnel_meta_accounts_meta_account_id_fkey"
             columns: ["meta_account_id"]
             isOneToOne: false
@@ -2895,6 +2916,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "funnel_performance_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
             foreignKeyName: "funnel_performance_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -2954,6 +2982,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_score_history_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
           },
           {
             foreignKeyName: "funnel_score_history_project_id_fkey"
@@ -3385,6 +3420,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "launch_phases_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
             foreignKeyName: "launch_phases_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -3435,6 +3477,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "launch_products_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
           },
           {
             foreignKeyName: "launch_products_offer_mapping_id_fkey"
@@ -4155,6 +4204,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
           },
           {
             foreignKeyName: "offer_mappings_project_id_fkey"
@@ -7267,6 +7323,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "surveys_default_funnel_id_fkey"
+            columns: ["default_funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
             foreignKeyName: "surveys_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -8304,6 +8367,105 @@ export type Database = {
           total_refunds: number | null
         }
         Relationships: []
+      }
+      live_financial_today: {
+        Row: {
+          cpa: number | null
+          data_source: string | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          gross_revenue: number | null
+          is_estimated: boolean | null
+          profit: number | null
+          project_id: string | null
+          revenue: number | null
+          roas: number | null
+          sales_count: number | null
+          spend: number | null
+        }
+        Relationships: []
+      }
+      live_project_totals_today: {
+        Row: {
+          data_source: string | null
+          economic_day: string | null
+          is_estimated: boolean | null
+          overall_cpa: number | null
+          overall_roas: number | null
+          project_id: string | null
+          total_gross_revenue: number | null
+          total_profit: number | null
+          total_revenue: number | null
+          total_sales: number | null
+          total_spend: number | null
+        }
+        Relationships: []
+      }
+      live_sales_today: {
+        Row: {
+          data_source: string | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          gross_revenue: number | null
+          is_estimated: boolean | null
+          project_id: string | null
+          revenue: number | null
+          sales_count: number | null
+          unique_buyers: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_sales_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+        ]
+      }
+      live_spend_today: {
+        Row: {
+          data_source: string | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          is_estimated: boolean | null
+          project_id: string | null
+          record_count: number | null
+          spend: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_insights_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       refunds_daily: {
         Row: {

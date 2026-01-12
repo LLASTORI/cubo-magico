@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
-import { startOfYear, format } from "date-fns";
 
 interface ProjectSummary {
   projectId: string;
@@ -48,54 +47,20 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
     refetchOnMount: 'always',
   });
 
-  // Fetch sales for all projects
-  const { data: allSales, isLoading: salesLoading, refetch: refetchSales } = useQuery({
-    queryKey: ['agency-sales', projects?.map(p => p.id), startDate, endDate],
+  // Fetch financial data from the Cubo Core for all projects
+  const { data: allFinancialData, isLoading: financialLoading, refetch: refetchFinancial } = useQuery({
+    queryKey: ['agency-financial-core', projects?.map(p => p.id), startDate, endDate],
     queryFn: async () => {
       if (!projects || projects.length === 0) return [];
 
       const projectIds = projects.map(p => p.id);
       
       const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('project_id, total_price_brl, status')
+        .from('financial_daily')
+        .select('project_id, revenue, ad_spend, transactions')
         .in('project_id', projectIds)
-        .gte('sale_date', startDate)
-        .lte('sale_date', endDate)
-        .in('status', ['approved', 'complete', 'APPROVED', 'COMPLETE']);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!projects && projects.length > 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
-  });
-
-  // Fetch meta insights for all projects
-  const { data: allInsights, isLoading: insightsLoading, refetch: refetchInsights } = useQuery({
-    queryKey: ['agency-insights', projects?.map(p => p.id), startDate, endDate],
-    queryFn: async () => {
-      if (!projects || projects.length === 0) return [];
-
-      const projectIds = projects.map(p => p.id);
-      
-      // Get active ad accounts for all projects
-      const { data: accounts, error: accountsError } = await supabase
-        .from('meta_ad_accounts')
-        .select('id, project_id')
-        .in('project_id', projectIds)
-        .eq('is_active', true);
-
-      if (accountsError) throw accountsError;
-      if (!accounts || accounts.length === 0) return [];
-
-      const { data, error } = await supabase
-        .from('meta_insights')
-        .select('project_id, spend')
-        .in('project_id', projectIds)
-        .gte('date_start', startDate)
-        .lte('date_stop', endDate);
+        .gte('economic_day', startDate)
+        .lte('economic_day', endDate);
 
       if (error) throw error;
       return data || [];
@@ -109,8 +74,7 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
   const refetchAll = async () => {
     await Promise.all([
       refetchProjects(),
-      refetchSales(),
-      refetchInsights(),
+      refetchFinancial(),
     ]);
   };
 
@@ -119,11 +83,11 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
     if (!projects) return [];
 
     return projects.map(project => {
-      const projectSales = allSales?.filter(s => s.project_id === project.id) || [];
-      const projectInsights = allInsights?.filter(i => i.project_id === project.id) || [];
+      const projectFinancial = allFinancialData?.filter(f => f.project_id === project.id) || [];
 
-      const revenue = projectSales.reduce((sum, sale) => sum + (sale.total_price_brl || 0), 0);
-      const investment = projectInsights.reduce((sum, insight) => sum + (insight.spend || 0), 0);
+      const revenue = projectFinancial.reduce((sum, f) => sum + (f.revenue || 0), 0);
+      const investment = projectFinancial.reduce((sum, f) => sum + (f.ad_spend || 0), 0);
+      const sales = projectFinancial.reduce((sum, f) => sum + (f.transactions || 0), 0);
       const profit = revenue - investment;
       const roas = investment > 0 ? revenue / investment : 0;
 
@@ -134,10 +98,10 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
         revenue,
         profit,
         roas,
-        sales: projectSales.length,
+        sales,
       };
     }).sort((a, b) => b.revenue - a.revenue); // Sort by revenue descending
-  }, [projects, allSales, allInsights]);
+  }, [projects, allFinancialData]);
 
   // Calculate agency totals
   const agencyTotals: AgencyTotals = useMemo(() => {
@@ -157,7 +121,7 @@ export const useAgencyOverview = ({ startDate, endDate }: UseAgencyOverviewProps
     };
   }, [projectSummaries]);
 
-  const isLoading = projectsLoading || salesLoading || insightsLoading;
+  const isLoading = projectsLoading || financialLoading;
 
   return {
     projectSummaries,

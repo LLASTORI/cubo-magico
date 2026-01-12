@@ -1,5 +1,196 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// =====================================================
+// SPEND CORE PROVIDER - Canonical Spend Events Layer
+// =====================================================
+
+// Helper to get project timezone for economic_day calculation
+async function getProjectTimezone(supabase: any, projectId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('projects')
+      .select('timezone')
+      .eq('id', projectId)
+      .maybeSingle()
+    return data?.timezone || 'America/Sao_Paulo'
+  } catch {
+    return 'America/Sao_Paulo'
+  }
+}
+
+// Convert date to economic_day based on project timezone
+function calculateEconomicDay(dateStr: string, timezone: string): string {
+  try {
+    // Meta provides dates in YYYY-MM-DD format (account timezone)
+    // For now, we use the date as-is since Meta already returns in account timezone
+    return dateStr
+  } catch {
+    return dateStr
+  }
+}
+
+// Log raw Meta event to provider_event_log
+async function logProviderEvent(
+  supabase: any,
+  projectId: string,
+  providerEventId: string,
+  rawPayload: any,
+  status: 'processed' | 'ignored' | 'error' = 'processed'
+) {
+  try {
+    await supabase
+      .from('provider_event_log')
+      .insert({
+        project_id: projectId,
+        provider: 'meta',
+        provider_event_id: providerEventId,
+        received_at: new Date().toISOString(),
+        raw_payload: rawPayload,
+        status
+      })
+  } catch (err) {
+    console.error('Error logging provider event:', err)
+  }
+}
+
+// Write canonical spend record to spend_core_events with versioning
+async function writeSpendCoreEvent(
+  supabase: any,
+  projectId: string,
+  insight: any,
+  timezone: string
+): Promise<boolean> {
+  try {
+    const spendAmount = parseFloat(insight.spend || 0)
+    if (spendAmount === 0) return true // Skip zero spend
+    
+    const occurredAt = insight.date_start // YYYY-MM-DD from Meta
+    const economicDay = calculateEconomicDay(occurredAt, timezone)
+    
+    // Create unique provider_event_id: campaign_ad_date combination
+    const providerEventId = `${insight.campaign_id}_${insight.ad_id || 'no_ad'}_${occurredAt}`
+    
+    // Check for existing record with same provider_event_id
+    const { data: existing } = await supabase
+      .from('spend_core_events')
+      .select('id, spend_amount, version')
+      .eq('project_id', projectId)
+      .eq('provider', 'meta')
+      .eq('provider_event_id', providerEventId)
+      .eq('is_active', true)
+      .maybeSingle()
+    
+    if (existing) {
+      // Check if spend changed
+      const existingSpend = parseFloat(existing.spend_amount || 0)
+      if (Math.abs(existingSpend - spendAmount) < 0.01) {
+        // No change, skip
+        return true
+      }
+      
+      // Spend changed - mark old as inactive and insert new version
+      await supabase
+        .from('spend_core_events')
+        .update({ is_active: false })
+        .eq('id', existing.id)
+      
+      const { error } = await supabase
+        .from('spend_core_events')
+        .insert({
+          project_id: projectId,
+          provider: 'meta',
+          provider_event_id: providerEventId,
+          spend_amount: spendAmount,
+          occurred_at: occurredAt,
+          received_at: new Date().toISOString(),
+          economic_day: economicDay,
+          campaign_id: insight.campaign_id,
+          adset_id: insight.adset_id,
+          ad_id: insight.ad_id,
+          raw_payload: insight,
+          version: (existing.version || 1) + 1,
+          is_active: true
+        })
+      
+      if (error) {
+        console.error('Error updating spend_core_event:', error)
+        return false
+      }
+    } else {
+      // New record
+      const { error } = await supabase
+        .from('spend_core_events')
+        .insert({
+          project_id: projectId,
+          provider: 'meta',
+          provider_event_id: providerEventId,
+          spend_amount: spendAmount,
+          occurred_at: occurredAt,
+          received_at: new Date().toISOString(),
+          economic_day: economicDay,
+          campaign_id: insight.campaign_id,
+          adset_id: insight.adset_id,
+          ad_id: insight.ad_id,
+          raw_payload: insight,
+          version: 1,
+          is_active: true
+        })
+      
+      if (error) {
+        console.error('Error inserting spend_core_event:', error)
+        return false
+      }
+    }
+    
+    return true
+  } catch (err) {
+    console.error('Error in writeSpendCoreEvent:', err)
+    return false
+  }
+}
+
+// Batch write spend core events for efficiency
+async function batchWriteSpendCoreEvents(
+  supabase: any,
+  projectId: string,
+  insights: any[],
+  timezone: string
+): Promise<{ success: number, failed: number }> {
+  let success = 0
+  let failed = 0
+  
+  // Filter out zero spend records
+  const nonZeroInsights = insights.filter(i => parseFloat(i.spend || 0) > 0)
+  
+  if (nonZeroInsights.length === 0) {
+    return { success: 0, failed: 0 }
+  }
+  
+  // Process in smaller batches for versioning logic
+  const SPEND_BATCH_SIZE = 50
+  
+  for (let i = 0; i < nonZeroInsights.length; i += SPEND_BATCH_SIZE) {
+    const batch = nonZeroInsights.slice(i, i + SPEND_BATCH_SIZE)
+    
+    // For each insight, check and write with versioning
+    for (const insight of batch) {
+      const result = await writeSpendCoreEvent(supabase, projectId, insight, timezone)
+      if (result) {
+        success++
+      } else {
+        failed++
+      }
+    }
+  }
+  
+  console.log(`Spend Core Events: ${success} written, ${failed} failed`)
+  return { success, failed }
+}
+
+// =====================================================
+// END SPEND CORE PROVIDER
+// =====================================================
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -1291,6 +1482,10 @@ async function syncInsightsSmartOptimized(
   console.log({ projectId, accountIds: accountIds.length, dateStart, dateStop, forceRefresh })
 
   try {
+    // STEP 0: Get project timezone for economic_day calculation
+    const projectTimezone = await getProjectTimezone(supabase, projectId)
+    console.log(`Project timezone: ${projectTimezone}`)
+    
     // STEP 1: Check what we already have in cache
     const cachedDates = await getExistingDatesInCache(supabase, projectId, accountIds, dateStart, dateStop)
     
@@ -1367,6 +1562,32 @@ async function syncInsightsSmartOptimized(
     
     // Create callback to save insights immediately after each chunk
     const saveInsightsCallback = async (insights: any[]): Promise<number> => {
+      // =====================================================
+      // SPEND CORE INTEGRATION - Write to spend_core_events
+      // =====================================================
+      
+      // Log raw Meta events to provider_event_log (batch for efficiency)
+      const uniqueDates = [...new Set(insights.map((i: any) => i.date_start))]
+      for (const dateStr of uniqueDates) {
+        const dateInsights = insights.filter((i: any) => i.date_start === dateStr)
+        const providerEventId = `meta_sync_${projectId}_${dateStr}_${Date.now()}`
+        await logProviderEvent(supabase, projectId, providerEventId, {
+          date: dateStr,
+          records_count: dateInsights.length,
+          total_spend: dateInsights.reduce((sum: number, i: any) => sum + parseFloat(i.spend || 0), 0)
+        }, 'processed')
+      }
+      
+      // Write canonical spend records to spend_core_events
+      console.log('Writing to Spend Core Events...')
+      const spendResult = await batchWriteSpendCoreEvents(supabase, projectId, insights, projectTimezone)
+      console.log(`Spend Core: ${spendResult.success} written, ${spendResult.failed} failed`)
+      
+      // =====================================================
+      // END SPEND CORE INTEGRATION
+      // =====================================================
+      
+      // Original flow: Save to meta_insights (unchanged)
       const adInsightRecords = insights.map((insight: any) => ({
         project_id: projectId,
         ad_account_id: insight.ad_account_id,

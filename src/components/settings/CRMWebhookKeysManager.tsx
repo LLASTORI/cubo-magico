@@ -631,7 +631,55 @@ export function CRMWebhookKeysManager() {
                 <Link className="h-4 w-4" />
                 URL do Webhook
               </h5>
-              {webhookUrl ? (
+              {webhookUrl && webhookKeys && webhookKeys.length > 0 ? (
+                <div className="space-y-4">
+                  {/* URL Simples para ferramentas com suporte a headers */}
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">URL Base (use com header x-api-key):</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 p-2 rounded bg-background text-sm font-mono break-all border">
+                        {webhookUrl}
+                      </code>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(webhookUrl);
+                          toast({ title: 'URL copiada!' });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* URL Completa para Elementor e similares */}
+                  <div className="pt-3 border-t">
+                    <p className="text-xs font-medium text-primary mb-1">
+                      🎯 URL Completa para Elementor/LeadLovers (já inclui a API Key):
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 p-2 rounded bg-primary/10 text-sm font-mono break-all border-2 border-primary/30">
+                        {webhookUrl}?api_key={webhookKeys[0].api_key}
+                      </code>
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        onClick={() => {
+                          const fullUrl = `${webhookUrl}?api_key=${webhookKeys[0].api_key}`;
+                          navigator.clipboard.writeText(fullUrl);
+                          toast({ title: 'URL completa copiada!', description: 'Cole diretamente no Elementor' });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      ✅ Cole esta URL diretamente no campo "URL do Webhook" do Elementor, LeadLovers, etc.
+                    </p>
+                  </div>
+                </div>
+              ) : webhookUrl ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <code className="flex-1 p-2 rounded bg-background text-sm font-mono break-all border">
@@ -648,8 +696,8 @@ export function CRMWebhookKeysManager() {
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Use esta URL para enviar leads de ferramentas externas (Elementor, LeadLovers, ActiveCampaign, etc.)
+                  <p className="text-xs text-yellow-600">
+                    ⚠️ Crie uma API Key primeiro para obter a URL completa para Elementor
                   </p>
                 </div>
               ) : (
@@ -698,6 +746,9 @@ export function CRMWebhookKeysManager() {
     "utm_campaign": "lancamento"
   }'`}
               </pre>
+              <p className="text-xs text-muted-foreground mt-2">
+                💡 <strong>Alternativa:</strong> Use <code>?api_key=SUA_KEY</code> na URL em vez do header
+              </p>
             </div>
 
             {/* Accepted fields */}

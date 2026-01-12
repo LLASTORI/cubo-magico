@@ -333,6 +333,150 @@ export function ExperienceAppearanceSettings({
               </Button>
             </div>
           </div>
+
+          {/* Option Button Colors */}
+          <div className="space-y-3 pt-4 border-t">
+            <div className="space-y-1">
+              <Label className="text-base font-medium">Cores dos Botões de Opção</Label>
+              <p className="text-xs text-muted-foreground">
+                Configure as cores dos botões de resposta das perguntas
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Option Background */}
+              <div className="space-y-2">
+                <Label className="text-sm">Fundo do Botão</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={currentTheme.option_background_color || '#1e293b'}
+                    onChange={(e) => updateTheme({ option_background_color: e.target.value })}
+                    className="w-10 h-10 p-1 cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    value={currentTheme.option_background_color || '#1e293b'}
+                    onChange={(e) => updateTheme({ option_background_color: e.target.value })}
+                    className="flex-1 font-mono text-sm"
+                    placeholder="#1e293b"
+                  />
+                </div>
+              </div>
+
+              {/* Option Hover */}
+              <div className="space-y-2">
+                <Label className="text-sm">Fundo ao Passar o Mouse</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={currentTheme.option_hover_color || '#334155'}
+                    onChange={(e) => updateTheme({ option_hover_color: e.target.value })}
+                    className="w-10 h-10 p-1 cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    value={currentTheme.option_hover_color || '#334155'}
+                    onChange={(e) => updateTheme({ option_hover_color: e.target.value })}
+                    className="flex-1 font-mono text-sm"
+                    placeholder="#334155"
+                  />
+                </div>
+              </div>
+
+              {/* Option Text */}
+              <div className="space-y-2">
+                <Label className="text-sm">Texto do Botão</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={currentTheme.option_text_color || '#ffffff'}
+                    onChange={(e) => updateTheme({ option_text_color: e.target.value })}
+                    className="w-10 h-10 p-1 cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    value={currentTheme.option_text_color || '#ffffff'}
+                    onChange={(e) => updateTheme({ option_text_color: e.target.value })}
+                    className="flex-1 font-mono text-sm"
+                    placeholder="#ffffff"
+                  />
+                </div>
+              </div>
+
+              {/* Option Border */}
+              <div className="space-y-2">
+                <Label className="text-sm">Borda do Botão</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={currentTheme.option_border_color || '#334155'}
+                    onChange={(e) => updateTheme({ option_border_color: e.target.value })}
+                    className="w-10 h-10 p-1 cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    value={currentTheme.option_border_color || '#334155'}
+                    onChange={(e) => updateTheme({ option_border_color: e.target.value })}
+                    className="flex-1 font-mono text-sm"
+                    placeholder="#334155"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({
+                  option_background_color: '#1e293b',
+                  option_hover_color: '#334155',
+                  option_text_color: '#ffffff',
+                  option_border_color: '#334155',
+                })}
+              >
+                Dark (padrão)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({
+                  option_background_color: '#ffffff',
+                  option_hover_color: '#f1f5f9',
+                  option_text_color: '#1e293b',
+                  option_border_color: '#e2e8f0',
+                })}
+              >
+                Light
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({
+                  option_background_color: '#0f172a',
+                  option_hover_color: '#1e3a5f',
+                  option_text_color: '#ffffff',
+                  option_border_color: '#1e3a5f',
+                })}
+              >
+                Ocean
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateTheme({
+                  option_background_color: '#064e3b',
+                  option_hover_color: '#047857',
+                  option_text_color: '#ffffff',
+                  option_border_color: '#047857',
+                })}
+              >
+                Emerald
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

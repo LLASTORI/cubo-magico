@@ -24,18 +24,40 @@ interface QuestionRendererProps {
   questionNumber: number;
   totalQuestions: number;
   onAnswer: (answer: { option_id?: string; option_ids?: string[]; answer_text?: string; answer_value?: number }) => void;
+  /** Theme colors for options */
+  themeColors?: {
+    primaryColor?: string;
+    textColor?: string;
+    secondaryTextColor?: string;
+    optionBackgroundColor?: string;
+    optionHoverColor?: string;
+    optionTextColor?: string;
+    optionBorderColor?: string;
+  };
 }
 
-export function QuestionRenderer({ question, questionNumber, totalQuestions, onAnswer }: QuestionRendererProps) {
+export function QuestionRenderer({ question, questionNumber, totalQuestions, onAnswer, themeColors }: QuestionRendererProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [textAnswer, setTextAnswer] = useState('');
   const [scaleValue, setScaleValue] = useState(5);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
   const options = question.quiz_options || [];
   const scaleMin = question.config?.scale_min ?? 1;
   const scaleMax = question.config?.scale_max ?? 10;
+
+  // Default colors if not provided
+  const colors = {
+    primary: themeColors?.primaryColor || '#6366f1',
+    text: themeColors?.textColor || '#1e293b',
+    secondaryText: themeColors?.secondaryTextColor || '#64748b',
+    optionBg: themeColors?.optionBackgroundColor || '#1e293b',
+    optionHover: themeColors?.optionHoverColor || '#334155',
+    optionText: themeColors?.optionTextColor || '#ffffff',
+    optionBorder: themeColors?.optionBorderColor || '#334155',
+  };
 
   const handleSingleChoice = (optionId: string) => {
     setSelectedOption(optionId);
@@ -71,18 +93,28 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
     onAnswer({ answer_value: scaleValue });
   };
 
+  // Helper to get option style
+  const getOptionStyle = (optionId: string, isSelected: boolean) => {
+    const isHovered = hoveredOption === optionId;
+    return {
+      backgroundColor: isSelected ? colors.primary : (isHovered ? colors.optionHover : colors.optionBg),
+      borderColor: isSelected ? colors.primary : colors.optionBorder,
+      color: isSelected ? '#ffffff' : colors.optionText,
+    };
+  };
+
   return (
     <div className="space-y-8">
       {/* Question header */}
       <div className="text-center space-y-3">
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm" style={{ color: colors.secondaryText }}>
           Pergunta {questionNumber} de {totalQuestions}
         </span>
-        <h2 className="text-2xl md:text-3xl font-semibold text-foreground">
+        <h2 className="text-2xl md:text-3xl font-semibold" style={{ color: colors.text }}>
           {question.question_text}
         </h2>
         {question.description && (
-          <p className="text-muted-foreground">{question.description}</p>
+          <p style={{ color: colors.secondaryText }}>{question.description}</p>
         )}
       </div>
 
@@ -90,81 +122,88 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
       <div className="space-y-4">
         {question.question_type === 'single_choice' && (
           <div className="space-y-3">
-            {options.map((option, index) => (
-              <motion.button
-                key={option.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                onClick={() => handleSingleChoice(option.id)}
-                disabled={isSubmitting}
-                className={cn(
-                  "w-full p-4 rounded-xl border-2 text-left transition-all duration-200",
-                  "hover:border-primary hover:bg-primary/5",
-                  "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-                  selectedOption === option.id
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-card"
-                )}
-                aria-label={option.option_text}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-lg">{option.option_text}</span>
-                  {selectedOption === option.id && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="h-6 w-6 rounded-full bg-primary flex items-center justify-center"
-                    >
-                      <Check className="h-4 w-4 text-primary-foreground" />
-                    </motion.div>
-                  )}
-                </div>
-              </motion.button>
-            ))}
+            {options.map((option, index) => {
+              const isSelected = selectedOption === option.id;
+              return (
+                <motion.button
+                  key={option.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  onClick={() => handleSingleChoice(option.id)}
+                  onMouseEnter={() => setHoveredOption(option.id)}
+                  onMouseLeave={() => setHoveredOption(null)}
+                  disabled={isSubmitting}
+                  className="w-full p-4 rounded-xl border-2 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  style={{
+                    ...getOptionStyle(option.id, isSelected),
+                    '--tw-ring-color': colors.primary,
+                  } as React.CSSProperties}
+                  aria-label={option.option_text}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg">{option.option_text}</span>
+                    {isSelected && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="h-6 w-6 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: '#ffffff' }}
+                      >
+                        <Check className="h-4 w-4" style={{ color: colors.primary }} />
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
         )}
 
         {question.question_type === 'multiple_choice' && (
           <div className="space-y-3">
-            {options.map((option, index) => (
-              <motion.button
-                key={option.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                onClick={() => handleMultipleChoice(option.id)}
-                disabled={isSubmitting}
-                className={cn(
-                  "w-full p-4 rounded-xl border-2 text-left transition-all duration-200",
-                  "hover:border-primary hover:bg-primary/5",
-                  "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-                  selectedOptions.includes(option.id)
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-card"
-                )}
-                aria-label={option.option_text}
-                aria-pressed={selectedOptions.includes(option.id)}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-lg">{option.option_text}</span>
-                  {selectedOptions.includes(option.id) && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="h-6 w-6 rounded-full bg-primary flex items-center justify-center"
-                    >
-                      <Check className="h-4 w-4 text-primary-foreground" />
-                    </motion.div>
-                  )}
-                </div>
-              </motion.button>
-            ))}
+            {options.map((option, index) => {
+              const isSelected = selectedOptions.includes(option.id);
+              return (
+                <motion.button
+                  key={option.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  onClick={() => handleMultipleChoice(option.id)}
+                  onMouseEnter={() => setHoveredOption(option.id)}
+                  onMouseLeave={() => setHoveredOption(null)}
+                  disabled={isSubmitting}
+                  className="w-full p-4 rounded-xl border-2 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                  style={{
+                    ...getOptionStyle(option.id, isSelected),
+                    '--tw-ring-color': colors.primary,
+                  } as React.CSSProperties}
+                  aria-label={option.option_text}
+                  aria-pressed={isSelected}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg">{option.option_text}</span>
+                    {isSelected && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="h-6 w-6 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: '#ffffff' }}
+                      >
+                        <Check className="h-4 w-4" style={{ color: colors.primary }} />
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.button>
+              );
+            })}
             <Button 
               onClick={submitMultipleChoice} 
               disabled={isSubmitting || (selectedOptions.length === 0 && question.is_required)}
               className="w-full mt-4"
               size="lg"
+              style={{ backgroundColor: colors.primary }}
             >
               Continuar
               <ChevronRight className="ml-2 h-5 w-5" />
@@ -179,6 +218,7 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
               onChange={(e) => setTextAnswer(e.target.value)}
               placeholder="Digite sua resposta..."
               className="min-h-[120px] text-lg"
+              style={{ color: colors.text, borderColor: colors.optionBorder }}
               disabled={isSubmitting}
             />
             <Button 
@@ -186,6 +226,7 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
               disabled={isSubmitting || (!textAnswer.trim() && question.is_required)}
               className="w-full"
               size="lg"
+              style={{ backgroundColor: colors.primary }}
             >
               Continuar
               <ChevronRight className="ml-2 h-5 w-5" />
@@ -197,7 +238,7 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
           <div className="space-y-8 py-4">
             <div className="space-y-4">
               <div className="text-center">
-                <span className="text-5xl font-bold text-primary">{scaleValue}</span>
+                <span className="text-5xl font-bold" style={{ color: colors.primary }}>{scaleValue}</span>
               </div>
               <Slider
                 value={[scaleValue]}
@@ -208,7 +249,7 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
                 className="cursor-pointer"
                 disabled={isSubmitting}
               />
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-sm" style={{ color: colors.secondaryText }}>
                 <span>{scaleMin}</span>
                 <span>{scaleMax}</span>
               </div>
@@ -218,6 +259,7 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
               disabled={isSubmitting}
               className="w-full"
               size="lg"
+              style={{ backgroundColor: colors.primary }}
             >
               Continuar
               <ChevronRight className="ml-2 h-5 w-5" />

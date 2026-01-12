@@ -40,6 +40,11 @@ interface ThemeConfig {
   background_image?: string;
   logo_url?: string;
   show_progress?: boolean;
+  /** Option button colors */
+  option_background_color?: string;
+  option_hover_color?: string;
+  option_text_color?: string;
+  option_border_color?: string;
 }
 
 export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps) {
@@ -548,6 +553,15 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
               questionNumber={state.currentQuestionIndex + 1}
               totalQuestions={state.questions.length}
               onAnswer={(answer) => answerQuestion(currentQuestion.id, answer)}
+              themeColors={{
+                primaryColor: theme.primary_color,
+                textColor: theme.text_color,
+                secondaryTextColor: theme.secondary_text_color,
+                optionBackgroundColor: theme.option_background_color,
+                optionHoverColor: theme.option_hover_color,
+                optionTextColor: theme.option_text_color,
+                optionBorderColor: theme.option_border_color,
+              }}
             />
           </motion.div>
         </AnimatePresence>

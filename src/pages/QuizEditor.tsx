@@ -488,6 +488,12 @@ export default function QuizEditor() {
 
           benefits_text_color: tc.benefits_text_color || tc.secondary_text_color || DEFAULT_THEME.benefits_text_color,
           benefits_icon_color: tc.benefits_icon_color || tc.primary_color || DEFAULT_THEME.benefits_icon_color,
+
+          // Option button colors - ensure they're loaded from saved config
+          option_background_color: tc.option_background_color || DEFAULT_THEME.option_background_color,
+          option_hover_color: tc.option_hover_color || DEFAULT_THEME.option_hover_color,
+          option_text_color: tc.option_text_color || DEFAULT_THEME.option_text_color,
+          option_border_color: tc.option_border_color || DEFAULT_THEME.option_border_color,
         });
       }
       

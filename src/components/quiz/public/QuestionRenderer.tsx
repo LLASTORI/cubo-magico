@@ -48,11 +48,13 @@ export function QuestionRenderer({ question, questionNumber, totalQuestions, onA
   const scaleMin = question.config?.scale_min ?? 1;
   const scaleMax = question.config?.scale_max ?? 10;
 
-  // Default colors if not provided
+  // Default colors if not provided - must have good contrast
+  // These defaults match the modern_dark palette for professional appearance
   const colors = {
     primary: themeColors?.primaryColor || '#6366f1',
     text: themeColors?.textColor || '#1e293b',
     secondaryText: themeColors?.secondaryTextColor || '#64748b',
+    // Option colors - dark background with white text for good contrast
     optionBg: themeColors?.optionBackgroundColor || '#1e293b',
     optionHover: themeColors?.optionHoverColor || '#334155',
     optionText: themeColors?.optionTextColor || '#ffffff',

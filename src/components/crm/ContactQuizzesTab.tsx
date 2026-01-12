@@ -15,11 +15,11 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useContactQuizzes, ContactQuizData } from '@/hooks/useContactQuizzes';
-import { QuizVectorBars } from './QuizVectorBars';
+import { ContactQuizSemanticCard } from './ContactQuizSemanticCard';
+import { getSemanticLabel } from '@/lib/semanticProfileEngine';
 
 const QUIZ_TYPE_LABELS: Record<string, string> = {
   lead: 'Lead',
@@ -79,37 +79,22 @@ export function ContactQuizzesTab({ contactId }: ContactQuizzesTabProps) {
               Perfil Agregado
             </CardTitle>
             <CardDescription>
-              Média de {completedQuizzes} quizzes completados
+              Consolidado de {completedQuizzes} quizzes completados
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               {aggregatedProfile.primaryTrait && (
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 bg-blue-50 border-blue-200 text-blue-700">
                   <Target className="h-3 w-3" />
-                  Traço: {aggregatedProfile.primaryTrait}
+                  Traço: {getSemanticLabel(aggregatedProfile.primaryTrait, 'trait')}
                 </Badge>
               )}
               {aggregatedProfile.primaryIntent && (
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 bg-green-50 border-green-200 text-green-700">
                   <TrendingUp className="h-3 w-3" />
-                  Intenção: {aggregatedProfile.primaryIntent}
+                  Intenção: {getSemanticLabel(aggregatedProfile.primaryIntent, 'intent')}
                 </Badge>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.keys(aggregatedProfile.avgTraitsVector).length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Traços Médios</p>
-                  <QuizVectorBars vector={aggregatedProfile.avgTraitsVector} type="traits" />
-                </div>
-              )}
-              {Object.keys(aggregatedProfile.avgIntentVector).length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Intenção Média</p>
-                  <QuizVectorBars vector={aggregatedProfile.avgIntentVector} type="intent" />
-                </div>
               )}
             </div>
           </CardContent>
@@ -147,6 +132,12 @@ function QuizResultCard({ data }: QuizResultCardProps) {
   const statusConfig = STATUS_CONFIG[session.status] || STATUS_CONFIG.started;
   const StatusIcon = statusConfig.icon;
 
+  // Extract summary meta if available
+  const summaryMeta = result?.summary?.meta || {};
+  const entropy = typeof summaryMeta.entropy === 'number' ? summaryMeta.entropy : undefined;
+  const volatility = typeof summaryMeta.volatility === 'number' ? summaryMeta.volatility : undefined;
+  const flowType = typeof summaryMeta.flow_type === 'string' ? summaryMeta.flow_type : undefined;
+
   return (
     <div className="p-4 border rounded-lg space-y-4">
       {/* Header */}
@@ -174,53 +165,23 @@ function QuizResultCard({ data }: QuizResultCardProps) {
         </div>
       </div>
 
-      {/* Summary (if completed) */}
-      {result && result.summary && (
-        <div className="p-3 bg-muted/50 rounded-lg">
-          <p className="text-sm">
-            {typeof result.summary === 'object' && result.summary.description 
-              ? result.summary.description 
-              : 'Este lead demonstra características distintas baseadas nas respostas do quiz.'}
-          </p>
-        </div>
-      )}
-
-      {/* Score and Progress */}
+      {/* Semantic Profile Card - Human Readable */}
       {result && (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Score Normalizado</p>
-            <div className="flex items-center gap-2">
-              <Progress value={result.normalized_score * 100} className="flex-1 h-2" />
-              <span className="text-sm font-medium">{Math.round(result.normalized_score * 100)}%</span>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Respostas</p>
-            <p className="text-sm font-medium">{answersCount} perguntas respondidas</p>
-          </div>
-        </div>
+        <ContactQuizSemanticCard
+          traitsVector={result.traits_vector}
+          intentVector={result.intent_vector}
+          normalizedScore={result.normalized_score}
+          entropy={entropy}
+          volatility={volatility}
+          flowType={flowType}
+          showAIData={true}
+        />
       )}
 
-      {/* Intent Vector */}
-      {result && Object.keys(result.intent_vector).length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-            <TrendingUp className="h-3 w-3" />
-            Vetor de Intenção
-          </p>
-          <QuizVectorBars vector={result.intent_vector} type="intent" />
-        </div>
-      )}
-
-      {/* Traits Vector */}
-      {result && Object.keys(result.traits_vector).length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-            <Target className="h-3 w-3" />
-            Vetor de Traços
-          </p>
-          <QuizVectorBars vector={result.traits_vector} type="traits" />
+      {/* Quick Stats */}
+      {result && (
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span>{answersCount} perguntas respondidas</span>
         </div>
       )}
 

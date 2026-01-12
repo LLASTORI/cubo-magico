@@ -1,3 +1,12 @@
+/**
+ * useFunnelOptimization
+ * 
+ * Optimization hooks for funnel performance.
+ * 
+ * IMPORTANT: All financial data MUST come from Financial Core (funnel_financials view).
+ * Legacy data (before financial_core_start_date) is ignored for optimization.
+ */
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';

@@ -170,6 +170,10 @@ serve(async (req) => {
       payment_distribution,
       ltv_metrics,
       conversion_funnel,
+      // Financial Core flags
+      use_financial_core,
+      financial_core_start_date,
+      data_source,
     } = await req.json();
 
     if (!funnel_id) {
@@ -195,7 +199,10 @@ serve(async (req) => {
     // Check if we have comprehensive client-provided data
     const hasClientData = client_summary && typeof client_summary === 'object';
     const hasEnrichedData = hasClientData && position_breakdown && top_ads;
+    const usingFinancialCore = use_financial_core === true || data_source === 'financial_core';
+    
     console.log(`[FunnelAI] Analysis mode: ${hasEnrichedData ? 'ENRICHED_PAYLOAD' : hasClientData ? 'BASIC_PAYLOAD' : 'DATABASE_VIEWS'}`);
+    console.log(`[FunnelAI] Financial Core: ${usingFinancialCore ? 'YES' : 'NO'}, Core start date: ${financial_core_start_date || 'not specified'}`);
     
     if (hasEnrichedData) {
       console.log(`[FunnelAI] Enriched data: ${position_breakdown?.length || 0} positions, ${top_campaigns?.length || 0} campaigns, ${top_ads?.length || 0} ads`);
@@ -549,8 +556,8 @@ Purchases: ${conversion_funnel.purchases || 0} (Taxa checkout→compra: ${format
       };
     }
 
-    console.log("[FunnelAI] Analysis complete, data_source:", hasEnrichedData ? 'enriched_payload' : hasClientData ? 'basic_payload' : 'database_views');
-
+    const resolvedDataSource = usingFinancialCore ? 'financial_core' : (hasEnrichedData ? 'enriched_payload' : hasClientData ? 'basic_payload' : 'database_views');
+    console.log("[FunnelAI] Analysis complete, data_source:", resolvedDataSource);
     // Return structured response
     return new Response(
       JSON.stringify({
@@ -564,7 +571,9 @@ Purchases: ${conversion_funnel.purchases || 0} (Taxa checkout→compra: ${format
         },
         current_metrics: currentMetrics,
         analysis,
-        data_source: hasEnrichedData ? 'enriched_payload' : hasClientData ? 'basic_payload' : 'database_views',
+        data_source: resolvedDataSource,
+        financial_core: usingFinancialCore,
+        financial_core_start_date: financial_core_start_date || null,
         data_summary: hasEnrichedData ? {
           positions: position_breakdown?.length || 0,
           campaigns: top_campaigns?.length || 0,

@@ -1,3 +1,10 @@
+/**
+ * useFunnelAIAnalysis
+ * 
+ * AI analysis hook that uses ONLY Financial Core data.
+ * Legacy data is ignored - AI learns only from Core era.
+ */
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -104,11 +111,16 @@ export function useFunnelAIAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<FunnelAIAnalysisResponse | null>(null);
 
+  /**
+   * Analyze funnel using ONLY Financial Core data.
+   * Legacy data (before financial_core_start_date) is automatically excluded.
+   */
   const analyzeRunnel = useCallback(async (
     funnelId: string,
     startDate?: string,
     endDate?: string,
-    context?: FunnelAIContext | null
+    context?: FunnelAIContext | null,
+    financialCoreStartDate?: string
   ) => {
     setIsLoading(true);
     setError(null);
@@ -118,9 +130,13 @@ export function useFunnelAIAnalysis() {
         funnel_id: funnelId,
         start_date: startDate,
         end_date: endDate,
+        // Signal to edge function that we're using Core data only
+        use_financial_core: true,
+        financial_core_start_date: financialCoreStartDate || '2026-01-12',
       };
 
       // If context is provided, include ALL enriched data in the request
+      // Note: Context should already be filtered to Core era by the caller
       if (context) {
         body.client_summary = context.client_summary;
         body.client_daily = context.client_daily;
@@ -131,6 +147,7 @@ export function useFunnelAIAnalysis() {
         body.payment_distribution = context.payment_distribution;
         body.ltv_metrics = context.ltv_metrics;
         body.conversion_funnel = context.conversion_funnel;
+        body.data_source = 'financial_core';
       }
 
       const { data, error: invokeError } = await supabase.functions.invoke('funnel-ai-analysis', {

@@ -9,8 +9,9 @@
  * ENDPOINT LEGADO (DEPRECATED):
  * POST /crm-webhook (funciona apenas com API key, mas emite aviso)
  * 
- * ## Headers Obrigatórios:
- * - `x-api-key`: Chave API exclusiva do projeto
+ * ## Autenticação (escolha uma):
+ * - Header: `x-api-key: sua_chave`
+ * - Query Parameter: `?api_key=sua_chave` (para ferramentas que não suportam headers, ex: Elementor)
  * 
  * ## Segurança Multi-Tenant:
  * 1. Projeto resolvido EXCLUSIVAMENTE via project_code
@@ -593,11 +594,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = req.headers.get('x-api-key');
+    // Parse URL first to extract project_code and query params
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    
+    // API Key: aceita via header OU query parameter (para ferramentas como Elementor que não suportam headers)
+    const apiKey = req.headers.get('x-api-key') || url.searchParams.get('api_key');
     
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'Missing API key. Provide it in the x-api-key header.' }),
+        JSON.stringify({ 
+          error: 'Missing API key',
+          hint: 'Provide it in the x-api-key header OR as ?api_key=YOUR_KEY query parameter'
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -605,10 +614,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Parse URL to extract project_code
-    const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
     
     // Expected: /crm-webhook/:project_code
     let projectCode: string | null = null;

@@ -50,6 +50,7 @@ import { useQuizOutcomes } from '@/hooks/useQuizOutcomes';
 import { QuizVectorEditor } from '@/components/quiz/QuizVectorEditor';
 import { QuizOutcomeEditor } from '@/components/quiz/QuizOutcomeEditor';
 import { QuizCognitiveHealth, QuizSimulator } from '@/components/quiz/copilot';
+import { QuizDataControlsCard } from '@/components/quiz/QuizDataControlsCard';
 import { useToast } from '@/hooks/use-toast';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useProjectModules } from '@/hooks/useProjectModules';
@@ -765,6 +766,10 @@ export default function QuizEditor() {
               <Play className="h-3 w-3" />
               8. Simulador
             </TabsTrigger>
+            <TabsTrigger value="data-controls" className="flex items-center gap-1 text-destructive">
+              <Trash2 className="h-3 w-3" />
+              9. Dados & Reset
+            </TabsTrigger>
           </TabsList>
 
           {/* Step 1: General Info */}
@@ -1134,6 +1139,11 @@ export default function QuizEditor() {
               previewUrl={getPreviewUrl()}
               publicUrl={getPublicUrl()}
             />
+          </TabsContent>
+
+          {/* Step 10: Data Controls - Reset & Delete */}
+          <TabsContent value="data-controls" className="space-y-4">
+            <QuizDataControlsCard quizId={quizId!} quizName={quizData.name} />
           </TabsContent>
         </Tabs>
       </main>

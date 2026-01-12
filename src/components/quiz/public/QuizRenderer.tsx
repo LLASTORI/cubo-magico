@@ -317,35 +317,40 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
     try {
       setState(s => ({ ...s, isLoading: true }));
 
+      // NOTE: the backend expects contact_data wrapper
       const { data, error } = await supabase.functions.invoke('quiz-identify', {
         body: {
           session_id: state.sessionId,
-          ...identityData,
+          contact_data: identityData,
         },
       });
 
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if ((data as any)?.error) throw new Error((data as any).error);
 
       // Track lead identified event
-      if (state.quizConfig?.enable_pixel_events !== false && data.contact_id) {
-        trackLeadIdentified(data.contact_id, {
+      if (state.quizConfig?.enable_pixel_events !== false && (data as any)?.contact_id) {
+        trackLeadIdentified((data as any).contact_id, {
           session_id: state.sessionId,
-          email: identityData.email,
+          email: identityData?.email,
         });
       }
 
       setState(s => ({ ...s, showIdentification: false }));
-      await completeQuiz(state.answers, data.contact_id);
+      await completeQuiz(state.answers, identityData);
     } catch (err: any) {
       console.error('Error identifying lead:', err);
-      toast({ title: 'Erro ao salvar dados', variant: 'destructive' });
+      toast({
+        title: 'Erro ao salvar dados',
+        description: err?.message,
+        variant: 'destructive',
+      });
       setState(s => ({ ...s, isLoading: false }));
     }
   };
 
   // Complete quiz
-  const completeQuiz = async (answers: Record<string, any>, contactId?: string) => {
+  const completeQuiz = async (answers: Record<string, any>, contactData?: any) => {
     if (!state.sessionId) return;
 
     try {
@@ -354,26 +359,26 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
       const { data, error } = await supabase.functions.invoke('quiz-public-complete', {
         body: {
           session_id: state.sessionId,
-          contact_id: contactId,
+          contact_data: contactData,
         },
       });
 
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if ((data as any)?.error) throw new Error((data as any).error);
 
       // Track quiz completed event
       if (state.quizConfig?.enable_pixel_events !== false) {
         trackQuizCompleted(state.sessionId!, {
           total_questions: state.questions.length,
-          score: data.result?.score,
-          confidence: data.result?.confidence,
+          score: (data as any).result?.score,
+          confidence: (data as any).result?.confidence,
         });
 
         // Track outcome selected if applicable
-        if (data.result?.outcome) {
+        if ((data as any).result?.outcome) {
           trackOutcomeSelected(
-            data.result.outcome.id,
-            data.result.outcome.name,
+            (data as any).result.outcome.id,
+            (data as any).result.outcome.name,
             { session_id: state.sessionId }
           );
         }
@@ -383,12 +388,16 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
         ...s,
         isCompleted: true,
         showEnd: true,
-        result: data.result,
+        result: (data as any).result,
         isLoading: false,
       }));
     } catch (err: any) {
       console.error('Error completing quiz:', err);
-      toast({ title: 'Erro ao finalizar quiz', variant: 'destructive' });
+      toast({
+        title: 'Erro ao finalizar quiz',
+        description: err?.message,
+        variant: 'destructive',
+      });
       setState(s => ({ ...s, isLoading: false }));
     }
   };

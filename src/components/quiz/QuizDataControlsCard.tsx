@@ -14,22 +14,40 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useQuizDataControls } from '@/hooks/useQuizDataControls';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface QuizDataControlsCardProps {
   quizId: string;
   quizName: string;
-  sessionsCount?: number;
 }
 
-export function QuizDataControlsCard({ quizId, quizName, sessionsCount = 0 }: QuizDataControlsCardProps) {
+export function QuizDataControlsCard({ quizId, quizName }: QuizDataControlsCardProps) {
   const navigate = useNavigate();
   const { resetQuizData, deleteQuiz } = useQuizDataControls();
+
+  // Fetch sessions count directly from quiz_sessions table
+  const { data: sessionsCount = 0, refetch: refetchSessions } = useQuery({
+    queryKey: ['quiz-sessions-count', quizId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('quiz_sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('quiz_id', quizId);
+      
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!quizId,
+  });
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleResetData = async () => {
     await resetQuizData.mutateAsync(quizId);
     setShowResetDialog(false);
+    // Refresh the sessions count after reset
+    refetchSessions();
   };
 
   const handleDeleteQuiz = async () => {

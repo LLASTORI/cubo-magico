@@ -541,27 +541,32 @@ export function ExperiencePreview({
                     <div className="space-y-2">
                       {questionOptions.slice(0, 4).map((opt, i) => {
                         const optLabel = typeof opt === 'string' ? opt : opt.label;
+                        const isSelected = i === 0;
+                        
+                        // Use option colors from theme
+                        const optBg = currentTheme.option_background_color || '#1e293b';
+                        const optHover = currentTheme.option_hover_color || '#334155';
+                        const optText = currentTheme.option_text_color || '#ffffff';
+                        const optBorder = currentTheme.option_border_color || '#334155';
+                        
                         return (
                           <div 
                             key={i}
-                            className={cn(
-                              "p-2 rounded-lg border text-sm flex items-center gap-2 cursor-pointer transition-all",
-                              i === 0 ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-                            )}
+                            className="p-2 rounded-lg border-2 text-sm flex items-center gap-2 cursor-pointer transition-all"
                             style={{
-                              borderColor: i === 0 ? currentTheme.primary_color : undefined,
-                              backgroundColor: i === 0 ? `${currentTheme.primary_color}10` : undefined,
-                              color: currentTheme.input_text_color,
+                              backgroundColor: isSelected ? currentTheme.primary_color : optBg,
+                              borderColor: isSelected ? currentTheme.primary_color : optBorder,
+                              color: isSelected ? '#ffffff' : optText,
                             }}
                           >
                             <span 
-                              className={cn(
-                                "w-5 h-5 rounded flex items-center justify-center text-xs",
-                                i === 0 ? "text-white" : "bg-muted text-muted-foreground"
-                              )}
-                              style={{ backgroundColor: i === 0 ? currentTheme.primary_color : undefined }}
+                              className="w-5 h-5 rounded flex items-center justify-center text-xs font-medium"
+                              style={{ 
+                                backgroundColor: isSelected ? '#ffffff' : 'transparent',
+                                color: isSelected ? currentTheme.primary_color : optText,
+                              }}
                             >
-                              {i === 0 ? <Check className="h-3 w-3" /> : String.fromCharCode(65 + i)}
+                              {isSelected ? <Check className="h-3 w-3" /> : String.fromCharCode(65 + i)}
                             </span>
                             <span className="text-xs">{optLabel}</span>
                           </div>

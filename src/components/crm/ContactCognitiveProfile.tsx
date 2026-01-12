@@ -1,23 +1,26 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   Brain, 
   TrendingUp, 
   TrendingDown, 
   Minus, 
-  Activity, 
   Target,
-  Clock,
   Zap,
   Sparkles,
   Heart,
   ShoppingBag,
-  History
+  History,
+  ChevronDown,
+  Activity,
+  Clock
 } from 'lucide-react';
 import { useContactProfile, formatSourceName, getSourceColor } from '@/hooks/useContactProfile';
-import { interpretProfile, getSemanticLabels, generateProfileSummary } from '@/lib/semanticProfileEngine';
+import { interpretProfile, generateProfileSummary } from '@/lib/semanticProfileEngine';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -27,7 +30,7 @@ interface ContactCognitiveProfileProps {
 
 export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfileProps) {
   const { profile, recentHistory, evolutionTrend, isLoading } = useContactProfile(contactId);
-
+  const [showAdvanced, setShowAdvanced] = useState(false);
   if (isLoading) {
     return (
       <Card>
@@ -75,10 +78,6 @@ export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfilePr
   });
 
   const profileSummary = generateProfileSummary(semanticProfile);
-
-  // Get semantic labels for display
-  const intentLabels = getSemanticLabels(profile.intent_vector as Record<string, number>, 'intent', 4);
-  const traitLabels = getSemanticLabels(profile.trait_vector as Record<string, number>, 'trait', 4);
 
   const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
     if (trend === 'up') return <TrendingUp className="h-3 w-3 text-green-500" />;
@@ -130,85 +129,58 @@ export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfilePr
           </div>
         </div>
 
-        {/* Confidence Metrics */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Target className="h-3 w-3" />
-              Confiança
-              <TrendIcon trend={evolutionTrend.confidenceTrend} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Progress value={profile.confidence_score * 100} className="h-2 flex-1" />
-              <span className="text-xs font-medium">{Math.round(profile.confidence_score * 100)}%</span>
-            </div>
+        {/* Confidence - Simplified for Operator Mode */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Target className="h-3 w-3" />
+            Confiança
+            <TrendIcon trend={evolutionTrend.confidenceTrend} />
           </div>
-          
-          <div className="space-y-1">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Activity className="h-3 w-3" />
-              Volatilidade
-            </div>
-            <div className="flex items-center gap-2">
-              <Progress value={profile.volatility_score * 100} className="h-2 flex-1" />
-              <span className="text-xs font-medium">{Math.round(profile.volatility_score * 100)}%</span>
-            </div>
-          </div>
-          
-          <div className="space-y-1">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Zap className="h-3 w-3" />
-              Entropia
-              <TrendIcon trend={evolutionTrend.entropyTrend} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Progress value={profile.entropy_score * 100} className="h-2 flex-1" />
-              <span className="text-xs font-medium">{Math.round(profile.entropy_score * 100)}%</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <Progress value={profile.confidence_score * 100} className="h-2 flex-1" />
+            <span className="text-xs font-medium">{Math.round(profile.confidence_score * 100)}%</span>
           </div>
         </div>
 
-        {/* Semantic Intent Labels */}
-        {intentLabels.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Target className="h-3 w-3" />
-              Intenções
-            </div>
-            <div className="space-y-1.5">
-              {intentLabels.map(({ key, label, value }) => (
-                <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs w-24 truncate">{label}</span>
-                  <Progress value={value * 100} className="h-1.5 flex-1" />
-                  <span className="text-xs text-muted-foreground w-10 text-right">
-                    {Math.round(value * 100)}%
-                  </span>
+        {/* Advanced Cognitive Data - Collapsible for Operator Mode */}
+        <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+          <CollapsibleTrigger className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full justify-between py-2 border-t">
+            <span className="flex items-center gap-1">
+              <Activity className="h-3 w-3" />
+              Dados Cognitivos Avançados
+            </span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-2">
+            {/* Technical metrics - only visible when expanded */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Zap className="h-3 w-3" />
+                  Entropia
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Semantic Trait Labels */}
-        {traitLabels.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3 w-3" />
-              Características
-            </div>
-            <div className="space-y-1.5">
-              {traitLabels.map(({ key, label, value }) => (
-                <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs w-24 truncate">{label}</span>
-                  <Progress value={value * 100} className="h-1.5 flex-1" />
-                  <span className="text-xs text-muted-foreground w-10 text-right">
-                    {Math.round(value * 100)}%
-                  </span>
+                <div className="flex items-center gap-2">
+                  <Progress value={profile.entropy_score * 100} className="h-1.5 flex-1" />
+                  <span className="text-[10px] text-muted-foreground">{Math.round(profile.entropy_score * 100)}%</span>
                 </div>
-              ))}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Activity className="h-3 w-3" />
+                  Volatilidade
+                </div>
+                <div className="flex items-center gap-2">
+                  <Progress value={profile.volatility_score * 100} className="h-1.5 flex-1" />
+                  <span className="text-[10px] text-muted-foreground">{Math.round(profile.volatility_score * 100)}%</span>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+            
+            <p className="text-[10px] text-muted-foreground italic">
+              Dados técnicos para IA e automações. Não exibir ao lead.
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Recent Updates */}
         {recentHistory.length > 0 && (

@@ -142,6 +142,7 @@ interface QuizResultCardProps {
 }
 
 function QuizResultCard({ data }: QuizResultCardProps) {
+  const navigate = useNavigate();
   const { session, result, answersCount } = data;
   const statusConfig = STATUS_CONFIG[session.status] || STATUS_CONFIG.started;
   const StatusIcon = statusConfig.icon;
@@ -226,11 +227,21 @@ function QuizResultCard({ data }: QuizResultCardProps) {
       {/* Actions */}
       <Separator />
       <div className="flex gap-2">
-        <Button variant="ghost" size="sm" className="text-xs">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-xs"
+          onClick={() => navigate(`/quizzes/${session.quiz_id}/sessions/${session.id}/answers`)}
+        >
           Ver respostas
           <ExternalLink className="h-3 w-3 ml-1" />
         </Button>
-        <Button variant="ghost" size="sm" className="text-xs">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-xs"
+          onClick={() => navigate(`/quizzes/${session.quiz_id}/sessions/${session.id}`)}
+        >
           Ver sessão completa
           <ExternalLink className="h-3 w-3 ml-1" />
         </Button>

@@ -50,6 +50,8 @@ import Quizzes from "./pages/Quizzes";
 import QuizEditor from "./pages/QuizEditor";
 import QuizResults from "./pages/QuizResults";
 import QuizPublic from "./pages/QuizPublic";
+import QuizSessionViewer from "./pages/QuizSessionViewer";
+import QuizAnswersViewer from "./pages/QuizAnswersViewer";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -263,6 +265,16 @@ const App = () => (
                 <Route path="/quizzes/:quizId/results" element={
                   <ProtectedRoute>
                     <QuizResults />
+                  </ProtectedRoute>
+                } />
+                <Route path="/quizzes/:quizId/sessions/:sessionId" element={
+                  <ProtectedRoute>
+                    <QuizSessionViewer />
+                  </ProtectedRoute>
+                } />
+                <Route path="/quizzes/:quizId/sessions/:sessionId/answers" element={
+                  <ProtectedRoute>
+                    <QuizAnswersViewer />
                   </ProtectedRoute>
                 } />
                 {/* Insights Module Routes */}

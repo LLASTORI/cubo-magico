@@ -255,10 +255,48 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
     }
   };
 
-  // Answer question
+  // Answer question - OPTIMISTIC UI: advance immediately, save in background
   const answerQuestion = async (questionId: string, answer: any) => {
     if (!state.sessionId) return;
 
+    // Calculate next state immediately (optimistic)
+    const newAnswers = { ...state.answers, [questionId]: answer };
+    const nextIndex = state.currentQuestionIndex + 1;
+    const progress = (nextIndex / state.questions.length) * 100;
+    const isLastQuestion = nextIndex >= state.questions.length;
+
+    // Track question answered event immediately
+    if (state.quizConfig?.enable_pixel_events !== false) {
+      trackQuestionAnswered(questionId, state.currentQuestionIndex, {
+        session_id: state.sessionId,
+        answer_value: answer.selected_option_id || answer.text_value,
+      });
+    }
+
+    // OPTIMISTIC: Update UI immediately
+    if (isLastQuestion) {
+      if (state.quizConfig?.requires_identification && !state.quizConfig?.allow_anonymous) {
+        setState(s => ({
+          ...s,
+          answers: newAnswers,
+          progress: 100,
+          showIdentification: true,
+        }));
+      } else {
+        // Show loading for completion
+        setState(s => ({ ...s, answers: newAnswers, progress: 100, isLoading: true }));
+      }
+    } else {
+      // Advance to next question immediately
+      setState(s => ({
+        ...s,
+        answers: newAnswers,
+        currentQuestionIndex: nextIndex,
+        progress,
+      }));
+    }
+
+    // BACKGROUND: Save answer to backend (fire and forget for non-last questions)
     try {
       const { data, error } = await supabase.functions.invoke('quiz-public-answer', {
         body: {
@@ -268,45 +306,18 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
         },
       });
 
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      // Track question answered event
-      if (state.quizConfig?.enable_pixel_events !== false) {
-        trackQuestionAnswered(questionId, state.currentQuestionIndex, {
-          session_id: state.sessionId,
-          answer_value: answer.selected_option_id || answer.text_value,
-        });
+      if (error) {
+        console.error('Error saving answer:', error);
+        // Don't revert UI - user experience is more important
       }
 
-      const newAnswers = { ...state.answers, [questionId]: answer };
-      const nextIndex = state.currentQuestionIndex + 1;
-      const progress = (nextIndex / state.questions.length) * 100;
-
-      // Check if this was the last question
-      if (data.is_last_question || nextIndex >= state.questions.length) {
-        // Check if identification is required
-        if (state.quizConfig?.requires_identification && !state.quizConfig?.allow_anonymous) {
-          setState(s => ({
-            ...s,
-            answers: newAnswers,
-            progress: 100,
-            showIdentification: true,
-          }));
-        } else {
-          await completeQuiz(newAnswers);
-        }
-      } else {
-        setState(s => ({
-          ...s,
-          answers: newAnswers,
-          currentQuestionIndex: nextIndex,
-          progress,
-        }));
+      // If it was the last question and not showing identification, complete
+      if (isLastQuestion && !(state.quizConfig?.requires_identification && !state.quizConfig?.allow_anonymous)) {
+        await completeQuiz(newAnswers);
       }
     } catch (err: any) {
       console.error('Error answering question:', err);
-      toast({ title: 'Erro ao salvar resposta', variant: 'destructive' });
+      // Don't show toast for background errors to keep UX smooth
     }
   };
 

@@ -7,6 +7,241 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================
+// SALES CORE PROVIDER - Hotmart Revenue Ingestion (API Sync)
+// ============================================
+
+// Map Hotmart API status to canonical event types
+const hotmartStatusToCanonicalEventType: Record<string, string> = {
+  'APPROVED': 'purchase',
+  'COMPLETE': 'purchase',
+  'PRINTED_BILLET': 'attempt',
+  'WAITING_PAYMENT': 'attempt',
+  'CANCELLED': 'refund',
+  'REFUNDED': 'refund',
+  'PARTIALLY_REFUNDED': 'refund',
+  'CHARGEBACK': 'chargeback',
+  'EXPIRED': 'refund',
+  'PROTESTED': 'refund',
+};
+
+// Calculate economic_day from occurred_at in project timezone (default Brazil UTC-3)
+function calculateEconomicDay(occurredAt: Date): string {
+  // Brazil timezone (UTC-3)
+  const offsetHours = -3;
+  const adjustedDate = new Date(occurredAt.getTime() + offsetHours * 60 * 60 * 1000);
+  return adjustedDate.toISOString().split('T')[0];
+}
+
+// Extract attribution data from Hotmart tracking
+function extractAttributionFromTracking(tracking: any): Record<string, any> {
+  if (!tracking) return { hotmart_checkout_source: null };
+  
+  return {
+    utm_source: tracking.utm_source || null,
+    utm_medium: tracking.utm_medium || null,
+    utm_campaign: tracking.utm_campaign || null,
+    utm_content: tracking.utm_content || null,
+    utm_term: null,
+    hotmart_checkout_source: tracking.source_sck || tracking.source || null,
+    external_code: tracking.external_code || null,
+  };
+}
+
+// Batch write canonical events to sales_core_events
+async function batchWriteSalesCoreEvents(
+  supabase: any,
+  projectId: string,
+  salesWithContactIds: Array<{ sale: any; contactId: string | null; totalPriceBrl: number | null; netRevenue: number | null }>
+): Promise<{ synced: number; versioned: number; errors: number }> {
+  let synced = 0;
+  let versioned = 0;
+  let errors = 0;
+  
+  // Prepare all events
+  const eventsToInsert: any[] = [];
+  const providerEventsToLog: any[] = [];
+  
+  for (const { sale, contactId, totalPriceBrl, netRevenue } of salesWithContactIds) {
+    const status = sale.purchase.status;
+    const canonicalEventType = hotmartStatusToCanonicalEventType[status];
+    
+    if (!canonicalEventType) {
+      continue; // Skip unmapped statuses
+    }
+    
+    const transactionId = sale.purchase.transaction;
+    const providerEventId = `hotmart_${transactionId}_${status}`;
+    const occurredAt = sale.purchase.order_date 
+      ? new Date(sale.purchase.order_date)
+      : new Date();
+    const economicDay = calculateEconomicDay(occurredAt);
+    const attribution = extractAttributionFromTracking(sale.purchase.tracking);
+    
+    eventsToInsert.push({
+      project_id: projectId,
+      provider: 'hotmart',
+      provider_event_id: providerEventId,
+      event_type: canonicalEventType,
+      gross_amount: totalPriceBrl,
+      net_amount: netRevenue,
+      currency: 'BRL',
+      occurred_at: occurredAt.toISOString(),
+      received_at: new Date().toISOString(),
+      economic_day: economicDay,
+      attribution,
+      contact_id: contactId,
+      raw_payload: sale,
+      version: 1,
+      is_active: true,
+    });
+    
+    providerEventsToLog.push({
+      project_id: projectId,
+      provider: 'hotmart',
+      provider_event_id: providerEventId,
+      received_at: new Date().toISOString(),
+      raw_payload: sale,
+      status: 'processed',
+    });
+  }
+  
+  if (eventsToInsert.length === 0) {
+    return { synced: 0, versioned: 0, errors: 0 };
+  }
+  
+  // Log all provider events first
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < providerEventsToLog.length; i += BATCH_SIZE) {
+    const batch = providerEventsToLog.slice(i, i + BATCH_SIZE);
+    await supabase.from('provider_event_log').upsert(batch, {
+      onConflict: 'project_id,provider,provider_event_id',
+      ignoreDuplicates: true
+    });
+  }
+  
+  // For sales_core_events, we need to handle versioning
+  // First, get existing events to check for changes
+  const providerEventIds = eventsToInsert.map(e => e.provider_event_id);
+  
+  const { data: existingEvents } = await supabase
+    .from('sales_core_events')
+    .select('id, provider_event_id, gross_amount, net_amount, version, is_active')
+    .eq('project_id', projectId)
+    .eq('provider', 'hotmart')
+    .eq('is_active', true)
+    .in('provider_event_id', providerEventIds);
+  
+  const existingMap = new Map<string, any>();
+  if (existingEvents) {
+    for (const e of existingEvents) {
+      existingMap.set(e.provider_event_id, e);
+    }
+  }
+  
+  // Separate into new inserts and version updates
+  const newEvents: any[] = [];
+  const eventsToVersion: { old: any; new: any }[] = [];
+  
+  for (const event of eventsToInsert) {
+    const existing = existingMap.get(event.provider_event_id);
+    
+    if (!existing) {
+      // New event
+      newEvents.push(event);
+    } else {
+      // Check if values changed
+      const hasChanges = 
+        existing.gross_amount !== event.gross_amount ||
+        existing.net_amount !== event.net_amount;
+      
+      if (hasChanges) {
+        eventsToVersion.push({ old: existing, new: { ...event, version: existing.version + 1 } });
+      }
+      // If no changes, skip
+    }
+  }
+  
+  // Deactivate old versions
+  if (eventsToVersion.length > 0) {
+    const idsToDeactivate = eventsToVersion.map(e => e.old.id);
+    await supabase
+      .from('sales_core_events')
+      .update({ is_active: false })
+      .in('id', idsToDeactivate);
+    
+    // Insert new versions
+    const newVersions = eventsToVersion.map(e => e.new);
+    for (let i = 0; i < newVersions.length; i += BATCH_SIZE) {
+      const batch = newVersions.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('sales_core_events').insert(batch);
+      if (error) {
+        console.error('[SalesCore] Error inserting versioned events:', error);
+        errors += batch.length;
+      } else {
+        versioned += batch.length;
+      }
+    }
+  }
+  
+  // Insert new events
+  for (let i = 0; i < newEvents.length; i += BATCH_SIZE) {
+    const batch = newEvents.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase
+      .from('sales_core_events')
+      .upsert(batch, {
+        onConflict: 'project_id,provider_event_id,version',
+        ignoreDuplicates: true
+      });
+    
+    if (error) {
+      console.error('[SalesCore] Error inserting new events:', error);
+      errors += batch.length;
+    } else {
+      synced += batch.length;
+    }
+  }
+  
+  return { synced, versioned, errors };
+}
+
+// Find contact IDs for a batch of sales
+async function batchFindContactIds(
+  supabase: any,
+  projectId: string,
+  sales: any[]
+): Promise<Map<string, string | null>> {
+  const emails = sales
+    .map(s => s.buyer?.email?.toLowerCase())
+    .filter(Boolean);
+  
+  if (emails.length === 0) {
+    return new Map();
+  }
+  
+  const { data: contacts } = await supabase
+    .from('crm_contacts')
+    .select('id, email')
+    .eq('project_id', projectId)
+    .in('email', emails);
+  
+  const emailToContactId = new Map<string, string>();
+  if (contacts) {
+    for (const c of contacts) {
+      emailToContactId.set(c.email.toLowerCase(), c.id);
+    }
+  }
+  
+  // Map transaction to contact
+  const result = new Map<string, string | null>();
+  for (const sale of sales) {
+    const email = sale.buyer?.email?.toLowerCase();
+    result.set(sale.purchase.transaction, email ? (emailToContactId.get(email) || null) : null);
+  }
+  
+  return result;
+}
+
 interface HotmartTokenResponse {
   access_token: string;
   token_type: string;
@@ -760,6 +995,37 @@ async function syncSales(
   
   console.log(`Sync complete: ${synced} processed, ${errors} errors`);
   console.log('Category stats:', categoryStats);
+  
+  // =====================================================
+  // SALES CORE - Write canonical revenue events in batch
+  // =====================================================
+  let salesCoreStats = { synced: 0, versioned: 0, errors: 0 };
+  try {
+    console.log('[SalesCore] Writing canonical revenue events in batch...');
+    
+    // Find contact IDs for all sales
+    const transactionToContactId = await batchFindContactIds(supabase, projectId, sales);
+    
+    // Prepare sales with their computed values and contact IDs
+    const salesWithContactIds = sales.map((sale, index) => {
+      const contactId = transactionToContactId.get(sale.purchase.transaction) || null;
+      const currencyCode = sale.purchase.price?.currency_code || 'BRL';
+      const totalPrice = sale.purchase.price?.value || 0;
+      const rate = exchangeRates[currencyCode] || 1;
+      const totalPriceBrl = totalPrice * rate;
+      const netRevenue = sale.commissions?.[0]?.value || null;
+      
+      return { sale, contactId, totalPriceBrl, netRevenue };
+    });
+    
+    // Batch write to sales_core_events
+    salesCoreStats = await batchWriteSalesCoreEvents(supabase, projectId, salesWithContactIds);
+    
+    console.log(`[SalesCore] Canonical events: ${salesCoreStats.synced} new, ${salesCoreStats.versioned} versioned, ${salesCoreStats.errors} errors`);
+  } catch (salesCoreError) {
+    // Don't fail the sync if Sales Core fails
+    console.error('[SalesCore] Error writing canonical events:', salesCoreError);
+  }
   
   // Auto-create offer mappings for new offer codes
   const existingOfferCodes = new Set(offerMappings?.map(m => m.codigo_oferta).filter(Boolean) || []);

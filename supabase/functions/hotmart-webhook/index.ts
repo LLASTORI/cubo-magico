@@ -1,6 +1,196 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ============================================
+// SALES CORE PROVIDER - Hotmart Revenue Ingestion
+// ============================================
+
+// Map Hotmart events to canonical event types
+const hotmartToCanonicalEventType: Record<string, string> = {
+  'PURCHASE_APPROVED': 'purchase',
+  'PURCHASE_COMPLETE': 'purchase',
+  'PURCHASE_BILLET_PRINTED': 'attempt',
+  'PURCHASE_CANCELED': 'refund',
+  'PURCHASE_REFUNDED': 'refund',
+  'PURCHASE_CHARGEBACK': 'chargeback',
+  'SUBSCRIPTION_STARTED': 'subscription',
+  'PURCHASE_RECURRENCE_CANCELLATION': 'refund',
+  'SWITCH_PLAN': 'upgrade',
+};
+
+// Calculate economic_day from occurred_at in project timezone (default Brazil UTC-3)
+function calculateEconomicDay(occurredAt: Date, timezone: string = 'America/Sao_Paulo'): string {
+  // For Brazil timezone (UTC-3), we adjust the date
+  // If the event occurred at 01:00 UTC, it's 22:00 previous day in Brazil
+  const offsetHours = timezone === 'America/Sao_Paulo' ? -3 : 0;
+  const adjustedDate = new Date(occurredAt.getTime() + offsetHours * 60 * 60 * 1000);
+  return adjustedDate.toISOString().split('T')[0];
+}
+
+// Extract attribution data from tracking/UTM
+function extractAttribution(purchase: any, checkoutOrigin: string | null): Record<string, any> {
+  const tracking = purchase?.origin || {};
+  const sck = tracking?.sck || checkoutOrigin || '';
+  
+  return {
+    utm_source: null, // Will be parsed from sck if available
+    utm_medium: null,
+    utm_campaign: null,
+    utm_content: null,
+    utm_term: null,
+    hotmart_checkout_source: sck,
+    src: tracking?.src || null,
+    xcod: tracking?.xcod || null,
+  };
+}
+
+// Write raw event to provider_event_log
+async function logProviderEvent(
+  supabase: any,
+  projectId: string,
+  providerEventId: string,
+  rawPayload: any,
+  status: 'processed' | 'ignored' | 'error' = 'processed'
+): Promise<void> {
+  try {
+    await supabase.from('provider_event_log').insert({
+      project_id: projectId,
+      provider: 'hotmart',
+      provider_event_id: providerEventId,
+      received_at: new Date().toISOString(),
+      raw_payload: rawPayload,
+      status,
+    });
+  } catch (error) {
+    console.error('[SalesCore] Error logging provider event:', error);
+  }
+}
+
+// Write canonical sale event to sales_core_events
+async function writeSalesCoreEvent(
+  supabase: any,
+  projectId: string,
+  hotmartEvent: string,
+  transactionId: string,
+  grossAmount: number | null,
+  netAmount: number | null,
+  currency: string,
+  occurredAt: Date,
+  attribution: Record<string, any>,
+  contactId: string | null,
+  rawPayload: any
+): Promise<{ id: string; version: number } | null> {
+  const canonicalEventType = hotmartToCanonicalEventType[hotmartEvent];
+  
+  if (!canonicalEventType) {
+    console.log(`[SalesCore] Event ${hotmartEvent} not mapped to canonical type, skipping`);
+    return null;
+  }
+  
+  const providerEventId = `hotmart_${transactionId}_${hotmartEvent}`;
+  const economicDay = calculateEconomicDay(occurredAt);
+  const receivedAt = new Date().toISOString();
+  
+  try {
+    // Check if event already exists (for versioning)
+    const { data: existing } = await supabase
+      .from('sales_core_events')
+      .select('id, version, gross_amount, net_amount, is_active')
+      .eq('project_id', projectId)
+      .eq('provider_event_id', providerEventId)
+      .eq('is_active', true)
+      .maybeSingle();
+    
+    let version = 1;
+    
+    if (existing) {
+      // Check if values changed - if so, create new version
+      const hasChanges = 
+        existing.gross_amount !== grossAmount ||
+        existing.net_amount !== netAmount;
+      
+      if (hasChanges) {
+        // Mark old version as inactive
+        await supabase
+          .from('sales_core_events')
+          .update({ is_active: false })
+          .eq('id', existing.id);
+        
+        version = existing.version + 1;
+        console.log(`[SalesCore] Creating version ${version} for ${providerEventId}`);
+      } else {
+        // No changes, skip insert
+        console.log(`[SalesCore] Event ${providerEventId} unchanged, skipping`);
+        return { id: existing.id, version: existing.version };
+      }
+    }
+    
+    // Insert new canonical event
+    const { data, error } = await supabase
+      .from('sales_core_events')
+      .insert({
+        project_id: projectId,
+        provider: 'hotmart',
+        provider_event_id: providerEventId,
+        event_type: canonicalEventType,
+        gross_amount: grossAmount,
+        net_amount: netAmount,
+        currency,
+        occurred_at: occurredAt.toISOString(),
+        received_at: receivedAt,
+        economic_day: economicDay,
+        attribution,
+        contact_id: contactId,
+        raw_payload: rawPayload,
+        version,
+        is_active: true,
+      })
+      .select('id, version')
+      .single();
+    
+    if (error) {
+      console.error('[SalesCore] Error inserting canonical event:', error);
+      return null;
+    }
+    
+    console.log(`[SalesCore] Created canonical event: ${canonicalEventType} v${version} for ${transactionId}`);
+    return data;
+    
+  } catch (error) {
+    console.error('[SalesCore] Exception writing canonical event:', error);
+    return null;
+  }
+}
+
+// Find or lookup CRM contact by email/phone
+async function findContactId(
+  supabase: any,
+  projectId: string,
+  email: string | null,
+  phone: string | null
+): Promise<string | null> {
+  if (!email && !phone) return null;
+  
+  try {
+    let query = supabase
+      .from('crm_contacts')
+      .select('id')
+      .eq('project_id', projectId);
+    
+    if (email) {
+      query = query.eq('email', email.toLowerCase());
+    } else if (phone) {
+      query = query.eq('phone', phone);
+    }
+    
+    const { data } = await query.maybeSingle();
+    return data?.id || null;
+  } catch (error) {
+    console.error('[SalesCore] Error finding contact:', error);
+    return null;
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-hotmart-hottok',
@@ -542,6 +732,49 @@ serve(async (req) => {
     
     const operation = upsertResult ? 'upserted' : 'processed';
     console.log(`${operation} sale ${transactionId}`);
+    
+    // =====================================================
+    // SALES CORE - Write canonical revenue event
+    // =====================================================
+    try {
+      console.log('[SalesCore] Writing canonical revenue event...');
+      
+      // Log raw event to provider_event_log
+      await logProviderEvent(supabase, projectId, `hotmart_${transactionId}_${event}`, payload);
+      
+      // Find contact for binding
+      const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+      
+      // Extract attribution from purchase origin
+      const attribution = extractAttribution(purchase, checkoutOrigin);
+      
+      // Parse occurred_at from Hotmart event
+      const occurredAt = purchase?.order_date 
+        ? new Date(purchase.order_date)
+        : new Date(payload.creation_date);
+      
+      // Write canonical event
+      const coreEventResult = await writeSalesCoreEvent(
+        supabase,
+        projectId,
+        event,
+        transactionId,
+        totalPriceBrl, // gross_amount (converted to BRL)
+        netRevenue, // net_amount from commissions
+        'BRL', // Always store in BRL
+        occurredAt,
+        attribution,
+        contactId,
+        payload
+      );
+      
+      if (coreEventResult) {
+        console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
+      }
+    } catch (salesCoreError) {
+      // Don't fail the webhook if Sales Core fails
+      console.error('[SalesCore] Error writing canonical event:', salesCoreError);
+    }
     
     // =====================================================
     // SUBSCRIPTION MANAGEMENT - Check if product is mapped to a plan

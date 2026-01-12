@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, User, Calendar, BarChart3, Filter, Search, Lock, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Download, User, Calendar, BarChart3, Filter, Search, Lock, ExternalLink, Brain } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ import {
 import { useQuiz } from '@/hooks/useQuizzes';
 import { useQuizSessions } from '@/hooks/useQuizResults';
 import { QuizVectorBars } from '@/components/crm/QuizVectorBars';
+import { QuizAudienceBrain } from '@/components/quiz/QuizAudienceBrain';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useProjectModules } from '@/hooks/useProjectModules';
 
@@ -53,6 +55,7 @@ export default function QuizResults() {
   const { quiz } = useQuiz(quizId);
   const { data: sessions, isLoading } = useQuizSessions(quizId);
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();
+  const [activeTab, setActiveTab] = useState('sessions');
 
   const [filters, setFilters] = useState({
     search: '',
@@ -228,6 +231,18 @@ export default function QuizResults() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Main Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="sessions">Sessões</TabsTrigger>
+            <TabsTrigger value="intelligence" className="gap-2">
+              <Brain className="h-4 w-4" />
+              Inteligência do Público
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="sessions" className="space-y-6 mt-4">
 
         {/* Filters */}
         <Card>
@@ -425,6 +440,12 @@ export default function QuizResults() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="intelligence" className="mt-4">
+            <QuizAudienceBrain quizId={quizId!} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

@@ -7734,6 +7734,60 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_quiz_latest_results: {
+        Row: {
+          contact_id: string | null
+          intent_vector: Json | null
+          normalized_score: Json | null
+          project_id: string | null
+          quiz_id: string | null
+          quiz_name: string | null
+          quiz_type: Database["public"]["Enums"]["quiz_type"] | null
+          raw_score: Json | null
+          result_created_at: string | null
+          result_id: string | null
+          session_id: string | null
+          summary: string | null
+          traits_vector: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_results_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_social_insights: {
         Row: {
           avg_intent_score: number | null

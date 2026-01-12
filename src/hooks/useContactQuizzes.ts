@@ -154,14 +154,27 @@ interface AggregatedProfile {
 
 /**
  * Calculate aggregated profile from multiple quiz results
- * (Preparation for future use - calculates averages)
+ * Uses ONLY the most recent result per quiz (no inflation)
  */
 function calculateAggregatedProfile(data: ContactQuizData[]): AggregatedProfile {
-  const completedResults = data
-    .filter(d => d.result && d.session.status === 'completed')
-    .map(d => d.result!);
+  // Group by quiz_id and take only the most recent completed result per quiz
+  const quizMap = new Map<string, ContactQuizData>();
+  
+  data.forEach(d => {
+    if (!d.result || d.session.status !== 'completed') return;
+    
+    const quizId = d.session.quiz_id;
+    const existing = quizMap.get(quizId);
+    
+    // Keep only the most recent result per quiz
+    if (!existing || new Date(d.session.started_at) > new Date(existing.session.started_at)) {
+      quizMap.set(quizId, d);
+    }
+  });
 
-  if (completedResults.length === 0) {
+  const latestResults = Array.from(quizMap.values()).map(d => d.result!);
+
+  if (latestResults.length === 0) {
     return {
       avgTraitsVector: {},
       avgIntentVector: {},
@@ -171,11 +184,11 @@ function calculateAggregatedProfile(data: ContactQuizData[]): AggregatedProfile 
     };
   }
 
-  // Aggregate traits vectors
+  // Aggregate traits vectors - average across quizzes (not sessions)
   const traitsSum: Record<string, number> = {};
   const traitsCount: Record<string, number> = {};
   
-  completedResults.forEach(r => {
+  latestResults.forEach(r => {
     Object.entries(r.traits_vector).forEach(([key, value]) => {
       traitsSum[key] = (traitsSum[key] || 0) + value;
       traitsCount[key] = (traitsCount[key] || 0) + 1;
@@ -187,11 +200,11 @@ function calculateAggregatedProfile(data: ContactQuizData[]): AggregatedProfile 
     avgTraitsVector[key] = traitsSum[key] / traitsCount[key];
   });
 
-  // Aggregate intent vectors
+  // Aggregate intent vectors - average across quizzes (not sessions)
   const intentSum: Record<string, number> = {};
   const intentCount: Record<string, number> = {};
   
-  completedResults.forEach(r => {
+  latestResults.forEach(r => {
     Object.entries(r.intent_vector).forEach(([key, value]) => {
       intentSum[key] = (intentSum[key] || 0) + value;
       intentCount[key] = (intentCount[key] || 0) + 1;
@@ -203,16 +216,30 @@ function calculateAggregatedProfile(data: ContactQuizData[]): AggregatedProfile 
     avgIntentVector[key] = intentSum[key] / intentCount[key];
   });
 
+  // Normalize vectors to sum to 100 (prevents inflation)
+  const normalizeVector = (vec: Record<string, number>): Record<string, number> => {
+    const total = Object.values(vec).reduce((a, b) => a + Math.abs(b), 0);
+    if (total === 0) return vec;
+    const normalized: Record<string, number> = {};
+    Object.entries(vec).forEach(([key, value]) => {
+      normalized[key] = Math.round((value / total) * 100);
+    });
+    return normalized;
+  };
+
+  const normalizedTraits = normalizeVector(avgTraitsVector);
+  const normalizedIntents = normalizeVector(avgIntentVector);
+
   // Calculate average normalized score
-  const avgNormalizedScore = completedResults.reduce((sum, r) => sum + r.normalized_score, 0) / completedResults.length;
+  const avgNormalizedScore = latestResults.reduce((sum, r) => sum + r.normalized_score, 0) / latestResults.length;
 
   // Find primary trait and intent
-  const primaryTrait = Object.entries(avgTraitsVector).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-  const primaryIntent = Object.entries(avgIntentVector).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const primaryTrait = Object.entries(normalizedTraits).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const primaryIntent = Object.entries(normalizedIntents).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
   return {
-    avgTraitsVector,
-    avgIntentVector,
+    avgTraitsVector: normalizedTraits,
+    avgIntentVector: normalizedIntents,
     avgNormalizedScore,
     primaryTrait,
     primaryIntent,

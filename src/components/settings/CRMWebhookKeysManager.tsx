@@ -40,7 +40,7 @@ import { useCRMWebhookKeys, type CRMWebhookKey } from '@/hooks/useCRMWebhookKeys
 import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight, Play, Loader2, CheckCircle, XCircle, X, Upload } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, Eye, EyeOff, Check, Settings2, FileText, ArrowRight, Play, Loader2, CheckCircle, XCircle, X, Upload, Link } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -625,14 +625,39 @@ export function CRMWebhookKeysManager() {
           </TabsContent>
 
           <TabsContent value="docs" className="space-y-6 mt-4">
-            {/* URL Missing Warning */}
-            {!webhookUrl && (
-              <div className="p-4 rounded-lg border bg-yellow-500/10 border-yellow-500/20">
-                <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                  <strong>Atenção:</strong> Aguardando carregamento do projeto para exibir a URL do webhook.
+            {/* Webhook URL - Most Important */}
+            <div className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+              <h5 className="font-medium text-primary mb-2 flex items-center gap-2">
+                <Link className="h-4 w-4" />
+                URL do Webhook
+              </h5>
+              {webhookUrl ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 p-2 rounded bg-background text-sm font-mono break-all border">
+                      {webhookUrl}
+                    </code>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        navigator.clipboard.writeText(webhookUrl);
+                        toast({ title: 'URL copiada!' });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Use esta URL para enviar leads de ferramentas externas (Elementor, LeadLovers, ActiveCampaign, etc.)
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                  Aguardando carregamento do projeto...
                 </p>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Security Notice */}
             <div className="p-4 rounded-lg border bg-green-500/10 border-green-500/20">

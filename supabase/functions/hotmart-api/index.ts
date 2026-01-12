@@ -48,11 +48,79 @@ function extractAttributionFromTracking(tracking: any): Record<string, any> {
   };
 }
 
+// ============================================
+// FINANCIAL MAPPING - Hotmart Commissions Structure
+// ============================================
+// Hotmart's commissions array contains:
+// - MARKETPLACE: Platform fee (taxa Hotmart) - goes to Hotmart
+// - PRODUCER: Owner's net revenue ("Você recebeu") - goes to project owner
+// - CO_PRODUCER: Coproducer commission - goes to coproducer
+// - AFFILIATE: Affiliate commission - goes to affiliate
+//
+// CORRECT MAPPING:
+// gross_amount = full_price.value (valor pago pelo comprador)
+// platform_fee = MARKETPLACE commission (taxa Hotmart)
+// coproducer_amount = CO_PRODUCER commission (comissão coprodutor)
+// affiliate_amount = AFFILIATE commission (comissão afiliado)
+// net_amount = PRODUCER commission ("Você recebeu" - dinheiro do owner)
+// ============================================
+
+interface HotmartCommission {
+  value?: number;
+  source?: string;
+  currency_code?: string;
+  currency_value?: string;
+}
+
+// Extract financial breakdown from Hotmart commissions
+function extractFinancialBreakdown(commissions: HotmartCommission[] | undefined): {
+  platformFee: number | null;
+  ownerNet: number | null;
+  coproducerAmount: number | null;
+  affiliateAmount: number | null;
+} {
+  if (!commissions || !Array.isArray(commissions)) {
+    return { platformFee: null, ownerNet: null, coproducerAmount: null, affiliateAmount: null };
+  }
+  
+  let platformFee: number | null = null;
+  let ownerNet: number | null = null;
+  let coproducerAmount: number | null = null;
+  let affiliateAmount: number | null = null;
+  
+  for (const comm of commissions) {
+    const source = comm.source?.toUpperCase();
+    const value = comm.value ?? null;
+    
+    switch (source) {
+      case 'MARKETPLACE':
+        platformFee = value;
+        break;
+      case 'PRODUCER':
+        ownerNet = value;
+        break;
+      case 'CO_PRODUCER':
+        coproducerAmount = value;
+        break;
+      case 'AFFILIATE':
+        affiliateAmount = value;
+        break;
+    }
+  }
+  
+  return { platformFee, ownerNet, coproducerAmount, affiliateAmount };
+}
+
 // Batch write canonical events to sales_core_events
 async function batchWriteSalesCoreEvents(
   supabase: any,
   projectId: string,
-  salesWithContactIds: Array<{ sale: any; contactId: string | null; totalPriceBrl: number | null; netRevenue: number | null }>
+  salesWithFinancials: Array<{ 
+    sale: any; 
+    contactId: string | null; 
+    grossAmount: number | null;
+    ownerNet: number | null;
+  }>
 ): Promise<{ synced: number; versioned: number; errors: number }> {
   let synced = 0;
   let versioned = 0;
@@ -62,7 +130,7 @@ async function batchWriteSalesCoreEvents(
   const eventsToInsert: any[] = [];
   const providerEventsToLog: any[] = [];
   
-  for (const { sale, contactId, totalPriceBrl, netRevenue } of salesWithContactIds) {
+  for (const { sale, contactId, grossAmount, ownerNet } of salesWithFinancials) {
     const status = sale.purchase.status;
     const canonicalEventType = hotmartStatusToCanonicalEventType[status];
     
@@ -83,8 +151,8 @@ async function batchWriteSalesCoreEvents(
       provider: 'hotmart',
       provider_event_id: providerEventId,
       event_type: canonicalEventType,
-      gross_amount: totalPriceBrl,
-      net_amount: netRevenue,
+      gross_amount: grossAmount,
+      net_amount: ownerNet, // CORRECT: PRODUCER commission = "Você recebeu"
       currency: 'BRL',
       occurred_at: occurredAt.toISOString(),
       received_at: new Date().toISOString(),
@@ -998,28 +1066,48 @@ async function syncSales(
   
   // =====================================================
   // SALES CORE - Write canonical revenue events in batch
+  // CORRECT FINANCIAL MAPPING:
+  // - gross_amount = full_price (valor pago pelo comprador)
+  // - net_amount = PRODUCER commission ("Você recebeu" - owner's money)
   // =====================================================
   let salesCoreStats = { synced: 0, versioned: 0, errors: 0 };
   try {
     console.log('[SalesCore] Writing canonical revenue events in batch...');
+    console.log('[SalesCore] Using CORRECT financial mapping: net_amount = PRODUCER commission');
     
     // Find contact IDs for all sales
     const transactionToContactId = await batchFindContactIds(supabase, projectId, sales);
     
-    // Prepare sales with their computed values and contact IDs
-    const salesWithContactIds = sales.map((sale, index) => {
+    // Prepare sales with CORRECT financial breakdown
+    const salesWithFinancials = sales.map((sale) => {
       const contactId = transactionToContactId.get(sale.purchase.transaction) || null;
       const currencyCode = sale.purchase.price?.currency_code || 'BRL';
-      const totalPrice = sale.purchase.price?.value || 0;
       const rate = exchangeRates[currencyCode] || 1;
-      const totalPriceBrl = totalPrice * rate;
-      const netRevenue = sale.commissions?.[0]?.value || null;
       
-      return { sale, contactId, totalPriceBrl, netRevenue };
+      // CORRECT: Use full_price for gross (valor pago pelo comprador)
+      // full_price includes taxes, price is after taxes (base)
+      const fullPrice = (sale.purchase as any).full_price?.value || sale.purchase.price?.value || 0;
+      const grossAmount = fullPrice * rate;
+      
+      // CORRECT: Extract PRODUCER commission as net_amount ("Você recebeu")
+      const financials = extractFinancialBreakdown(sale.commissions);
+      const ownerNet = financials.ownerNet; // PRODUCER source = owner's money
+      
+      // Log for verification on first few sales
+      if (sales.indexOf(sale) < 3) {
+        console.log(`[SalesCore] Transaction ${sale.purchase.transaction}:`);
+        console.log(`  - Gross (full_price * rate): ${grossAmount}`);
+        console.log(`  - Platform Fee (MARKETPLACE): ${financials.platformFee}`);
+        console.log(`  - Owner Net (PRODUCER): ${ownerNet}`);
+        console.log(`  - Coproducer (CO_PRODUCER): ${financials.coproducerAmount}`);
+        console.log(`  - Affiliate: ${financials.affiliateAmount}`);
+      }
+      
+      return { sale, contactId, grossAmount, ownerNet };
     });
     
     // Batch write to sales_core_events
-    salesCoreStats = await batchWriteSalesCoreEvents(supabase, projectId, salesWithContactIds);
+    salesCoreStats = await batchWriteSalesCoreEvents(supabase, projectId, salesWithFinancials);
     
     console.log(`[SalesCore] Canonical events: ${salesCoreStats.synced} new, ${salesCoreStats.versioned} versioned, ${salesCoreStats.errors} errors`);
   } catch (salesCoreError) {

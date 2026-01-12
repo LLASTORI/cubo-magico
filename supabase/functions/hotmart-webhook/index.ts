@@ -601,8 +601,49 @@ serve(async (req) => {
       }
     }
     
-    // Get net_revenue from commissions (matching API logic)
-    const netRevenue = commissions?.[0]?.value || null;
+    // ============================================
+    // CORRECT FINANCIAL MAPPING from commissions:
+    // - MARKETPLACE = Platform fee (taxa Hotmart) - NOT the net!
+    // - PRODUCER = Owner's net revenue ("Você recebeu")
+    // - CO_PRODUCER = Coproducer commission
+    // - AFFILIATE = Affiliate commission
+    // ============================================
+    let platformFee: number | null = null;
+    let ownerNetRevenue: number | null = null;
+    let coproducerAmount: number | null = null;
+    let affiliateAmount: number | null = null;
+    
+    if (commissions && Array.isArray(commissions)) {
+      for (const comm of commissions) {
+        const source = (comm.source || '').toUpperCase();
+        const value = comm.value ?? null;
+        
+        switch (source) {
+          case 'MARKETPLACE':
+            platformFee = value;
+            break;
+          case 'PRODUCER':
+            ownerNetRevenue = value;
+            break;
+          case 'CO_PRODUCER':
+            coproducerAmount = value;
+            break;
+          case 'AFFILIATE':
+            affiliateAmount = value;
+            break;
+        }
+      }
+    }
+    
+    console.log('[Financial Mapping] Extracted from commissions:');
+    console.log(`  - Platform Fee (MARKETPLACE): ${platformFee}`);
+    console.log(`  - Owner Net (PRODUCER): ${ownerNetRevenue}`);
+    console.log(`  - Coproducer: ${coproducerAmount}`);
+    console.log(`  - Affiliate: ${affiliateAmount}`);
+    
+    // DEPRECATED: Old incorrect logic was using commissions[0] as net
+    // const netRevenue = commissions?.[0]?.value || null; // WRONG!
+    // CORRECT: Use PRODUCER commission as net_revenue (owner's money)
     
     const saleData = {
       project_id: projectId,
@@ -616,7 +657,7 @@ serve(async (req) => {
       total_price: totalPrice,
       total_price_brl: totalPriceBrl,
       exchange_rate_used: exchangeRateUsed,
-      net_revenue: netRevenue,
+      net_revenue: ownerNetRevenue, // CORRECT: PRODUCER commission = "Você recebeu"
       status,
       sale_date: saleDate,
       confirmation_date: confirmationDate,
@@ -759,8 +800,8 @@ serve(async (req) => {
         projectId,
         event,
         transactionId,
-        totalPriceBrl, // gross_amount (converted to BRL)
-        netRevenue, // net_amount from commissions
+        totalPriceBrl, // gross_amount (valor pago pelo comprador, converted to BRL)
+        ownerNetRevenue, // CORRECT: net_amount = PRODUCER commission ("Você recebeu")
         'BRL', // Always store in BRL
         occurredAt,
         attribution,

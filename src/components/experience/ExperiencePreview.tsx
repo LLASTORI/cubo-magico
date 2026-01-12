@@ -11,6 +11,8 @@ import { Monitor, Smartphone, ExternalLink, ArrowRight, Check, Play, Clock, Chec
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ExperienceTheme, ExperienceStartScreen, ExperienceEndScreen, DEFAULT_THEME, DEFAULT_START_SCREEN, DEFAULT_END_SCREEN } from './types';
+import { QuizProgressBar } from '@/components/quiz/public/QuizProgressBar';
+import { QuestionRenderer } from '@/components/quiz/public/QuestionRenderer';
 
 interface Question {
   id: string;

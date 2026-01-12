@@ -522,7 +522,8 @@ export function QuizRenderer({ quizIdentifier, projectCode }: QuizRendererProps)
       {/* Progress bar */}
       {showProgress && (
         <QuizProgressBar 
-          progress={state.progress} 
+          progress={((state.currentQuestionIndex + 1) / Math.max(state.questions.length, 1)) * 100}
+          color={theme.primary_color}
         />
       )}
 

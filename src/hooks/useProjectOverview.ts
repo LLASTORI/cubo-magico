@@ -1,3 +1,10 @@
+/**
+ * useProjectOverview
+ * 
+ * Project overview hook that uses profit_daily view for accurate metrics.
+ * IMPORTANT: Uses net_revenue (not gross) for all ROAS and profit calculations.
+ */
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
@@ -12,7 +19,7 @@ interface UseProjectOverviewProps {
 export interface CategoryMetrics {
   category: string;
   label: string;
-  revenue: number;
+  revenue: number; // This is NET revenue
   count: number;
   percentage: number;
 }
@@ -20,17 +27,20 @@ export interface CategoryMetrics {
 export interface FunnelROAS {
   funnelId: string;
   funnelName: string;
-  revenue: number;
+  revenue: number; // NET revenue
   spend: number;
-  roas: number;
+  roas: number; // Based on NET revenue
 }
 
 export interface MonthlyBalance {
   month: string;
-  revenue: number;
+  grossRevenue: number;
+  platformFees: number;
+  revenue: number; // NET revenue
   spend: number;
   profit: number;
   accumulatedProfit: number;
+  roas: number | null;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -41,14 +51,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const useProjectOverview = ({ projectId, startDate, endDate }: UseProjectOverviewProps) => {
-  // Fetch financial data from the Cubo Core (financial_daily view)
-  const { data: financialDaily, isLoading: financialLoading } = useQuery({
-    queryKey: ['project-overview-financial', projectId, startDate, endDate],
+  // Fetch profit data from profit_daily view (canonical source for net revenue and profit)
+  const { data: profitDaily, isLoading: profitLoading } = useQuery({
+    queryKey: ['project-overview-profit', projectId, startDate, endDate],
     queryFn: async () => {
       if (!projectId) return [];
 
       const { data, error } = await supabase
-        .from('financial_daily')
+        .from('profit_daily')
         .select('*')
         .eq('project_id', projectId)
         .gte('economic_day', startDate)
@@ -56,11 +66,11 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
         .order('economic_day', { ascending: true });
 
       if (error) {
-        console.error('[ProjectOverview] Error fetching financial_daily:', error);
+        console.error('[ProjectOverview] Error fetching profit_daily:', error);
         throw error;
       }
 
-      console.log(`[ProjectOverview] Financial daily loaded: ${data?.length || 0} records`);
+      console.log(`[ProjectOverview] Profit daily loaded: ${data?.length || 0} records`);
       return data || [];
     },
     enabled: !!projectId,
@@ -215,31 +225,38 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     }).filter(f => f.revenue > 0 || f.spend > 0);
   }, [funnels, salesEvents, spendData]);
 
-  // Calculate general ROAS from financial_daily
+  // Calculate general ROAS from profit_daily (uses NET revenue)
   const generalROAS = useMemo(() => {
-    const totalRevenue = financialDaily?.reduce((sum, f) => sum + (f.revenue || 0), 0) || 0;
-    const totalSpend = financialDaily?.reduce((sum, f) => sum + (f.ad_spend || 0), 0) || 0;
+    const totalNetRevenue = profitDaily?.reduce((sum, f) => sum + (f.net_revenue || 0), 0) || 0;
+    const totalSpend = profitDaily?.reduce((sum, f) => sum + (f.ad_spend || 0), 0) || 0;
     
     return {
-      revenue: totalRevenue,
+      revenue: totalNetRevenue, // This is NET revenue
       spend: totalSpend,
-      roas: totalSpend > 0 ? totalRevenue / totalSpend : 0,
+      roas: totalSpend > 0 ? totalNetRevenue / totalSpend : 0,
     };
-  }, [financialDaily]);
+  }, [profitDaily]);
 
-  // Calculate monthly balance from financial_daily
+  // Calculate monthly balance from profit_daily
   const monthlyBalance = useMemo((): MonthlyBalance[] => {
-    if (!financialDaily) return [];
+    if (!profitDaily) return [];
 
-    const monthlyData: Record<string, { revenue: number; spend: number }> = {};
+    const monthlyData: Record<string, { 
+      grossRevenue: number; 
+      platformFees: number;
+      netRevenue: number; 
+      spend: number;
+    }> = {};
 
-    financialDaily.forEach(day => {
+    profitDaily.forEach(day => {
       if (!day.economic_day) return;
       const month = format(parseISO(day.economic_day), 'yyyy-MM');
       if (!monthlyData[month]) {
-        monthlyData[month] = { revenue: 0, spend: 0 };
+        monthlyData[month] = { grossRevenue: 0, platformFees: 0, netRevenue: 0, spend: 0 };
       }
-      monthlyData[month].revenue += day.revenue || 0;
+      monthlyData[month].grossRevenue += day.gross_revenue || 0;
+      monthlyData[month].platformFees += day.platform_fees || 0;
+      monthlyData[month].netRevenue += day.net_revenue || 0;
       monthlyData[month].spend += day.ad_spend || 0;
     });
 
@@ -248,36 +265,43 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
 
     return sortedMonths.map(month => {
       const data = monthlyData[month];
-      const profit = data.revenue - data.spend;
+      const profit = data.netRevenue - data.spend;
       accumulatedProfit += profit;
 
       return {
         month,
-        revenue: data.revenue,
+        grossRevenue: data.grossRevenue,
+        platformFees: data.platformFees,
+        revenue: data.netRevenue, // NET revenue for display
         spend: data.spend,
         profit,
         accumulatedProfit,
+        roas: data.spend > 0 ? data.netRevenue / data.spend : null,
       };
     });
-  }, [financialDaily]);
+  }, [profitDaily]);
 
-  // Summary metrics from financial_daily
+  // Summary metrics from profit_daily (uses NET revenue)
   const summaryMetrics = useMemo(() => {
-    const totalRevenue = financialDaily?.reduce((sum, f) => sum + (f.revenue || 0), 0) || 0;
-    const totalSpend = financialDaily?.reduce((sum, f) => sum + (f.ad_spend || 0), 0) || 0;
-    const totalSales = financialDaily?.reduce((sum, f) => sum + (f.transactions || 0), 0) || 0;
-    const profit = totalRevenue - totalSpend;
+    const totalGrossRevenue = profitDaily?.reduce((sum, f) => sum + (f.gross_revenue || 0), 0) || 0;
+    const totalPlatformFees = profitDaily?.reduce((sum, f) => sum + (f.platform_fees || 0), 0) || 0;
+    const totalNetRevenue = profitDaily?.reduce((sum, f) => sum + (f.net_revenue || 0), 0) || 0;
+    const totalSpend = profitDaily?.reduce((sum, f) => sum + (f.ad_spend || 0), 0) || 0;
+    const totalSales = profitDaily?.reduce((sum, f) => sum + (f.transaction_count || 0), 0) || 0;
+    const profit = totalNetRevenue - totalSpend;
 
     return {
-      totalRevenue,
+      grossRevenue: totalGrossRevenue,
+      platformFees: totalPlatformFees,
+      totalRevenue: totalNetRevenue, // This is NET revenue
       totalSpend,
       totalSales,
       profit,
-      roas: totalSpend > 0 ? totalRevenue / totalSpend : 0,
+      roas: totalSpend > 0 ? totalNetRevenue / totalSpend : 0,
     };
-  }, [financialDaily]);
+  }, [profitDaily]);
 
-  const isLoading = financialLoading || salesLoading || funnelsLoading || spendLoading;
+  const isLoading = profitLoading || salesLoading || funnelsLoading || spendLoading;
 
   return {
     categoryMetrics,
@@ -288,5 +312,7 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     isLoading,
     sales: salesEvents,
     funnels,
+    // Expose profit data for advanced use cases
+    profitDaily,
   };
 };

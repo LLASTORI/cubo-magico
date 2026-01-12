@@ -21,12 +21,13 @@ export interface FunnelFinancialsDaily {
   project_id: string;
   funnel_id: string;
   economic_day: string;
-  revenue: number;
+  revenue: number; // NET revenue (after platform fees)
   gross_revenue: number;
+  platform_fees?: number; // Difference between gross and net
   sales_count: number;
   spend: number;
-  profit: number;
-  roas: number | null;
+  profit: number; // Based on NET revenue
+  roas: number | null; // Based on NET revenue
   cpa: number | null;
 }
 
@@ -37,12 +38,13 @@ export interface FunnelFinancialsSummary {
   funnel_type: string;
   roas_target: number | null;
   financial_core_start_date: string | null;
-  total_revenue: number;
+  total_revenue: number; // NET revenue
   total_gross_revenue: number;
+  total_platform_fees?: number;
   total_spend: number;
   total_sales: number;
-  total_profit: number;
-  overall_roas: number | null;
+  total_profit: number; // Based on NET revenue
+  overall_roas: number | null; // Based on NET revenue
   overall_cpa: number | null;
   avg_ticket: number | null;
   health_status: 'excellent' | 'good' | 'attention' | 'danger' | 'no-return' | 'inactive';
@@ -315,21 +317,26 @@ export function useFunnelAIContext(funnelId: string, options?: {
     isLoading: loadingDaily || loadingSummary,
     summary,
     dailyData: dailyData || [],
-    // AI-ready format
+    // AI-ready format - ALWAYS uses NET revenue
     aiContext: summary ? {
       funnel_id: summary.funnel_id,
       funnel_name: summary.funnel_name,
       health_status: summary.health_status,
-      total_revenue: summary.total_revenue,
+      // NET revenue - use this for all calculations
+      total_revenue: summary.total_revenue, // This is NET
+      total_gross_revenue: summary.total_gross_revenue,
+      total_platform_fees: summary.total_platform_fees || (summary.total_gross_revenue - summary.total_revenue),
       total_spend: summary.total_spend,
       total_sales: summary.total_sales,
-      overall_roas: summary.overall_roas,
+      overall_roas: summary.overall_roas, // Based on NET revenue
       overall_cpa: summary.overall_cpa,
       avg_ticket: summary.avg_ticket,
       roas_target: summary.roas_target,
       days_with_data: summary.days_with_data,
       data_source: 'financial_core',
       core_start_date: summary.financial_core_start_date,
+      // AI instruction
+      _ai_instruction: 'ALWAYS use total_revenue (NET) for ROAS and profit. NEVER use total_gross_revenue for optimization.',
     } : null,
   };
 }

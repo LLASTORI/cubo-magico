@@ -759,7 +759,6 @@ export default function QuizEditor() {
               <Play className="h-3 w-3" />
               8. Simulador
             </TabsTrigger>
-            <TabsTrigger value="preview">9. Preview</TabsTrigger>
           </TabsList>
 
           {/* Step 1: General Info */}

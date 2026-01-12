@@ -127,6 +127,220 @@ export function ExperiencePreview({
     }
   }, [currentTemplateConfig.animation]);
 
+  const totalSteps = Math.max(questions.length, 1);
+  const progressRatio = previewStep === 'question' ? (currentQuestion + 1) / totalSteps : 0;
+
+  // If template wants image as "background", let it override the theme background per-screen.
+  const backgroundImageUrl = useMemo(() => {
+    if (currentTemplateConfig.image_position === 'background') {
+      if (previewStep === 'start' && currentStartScreen.image_url) return currentStartScreen.image_url;
+      if (previewStep === 'end' && currentEndScreen.image_url) return currentEndScreen.image_url;
+    }
+    return currentTheme.background_image;
+  }, [
+    currentTemplateConfig.image_position,
+    previewStep,
+    currentStartScreen.image_url,
+    currentEndScreen.image_url,
+    currentTheme.background_image,
+  ]);
+
+  const stageRootClass = useMemo(() => {
+    switch (currentTemplateConfig.layout) {
+      case 'sidebar':
+        return "h-full flex";
+      case 'fullscreen':
+        return "h-full";
+      case 'grid':
+      case 'centered':
+      default:
+        return "h-full flex items-center justify-center p-4 md:p-8";
+    }
+  }, [currentTemplateConfig.layout]);
+
+  const mainAreaClass = useMemo(
+    () =>
+      cn(
+        "flex-1",
+        currentTemplateConfig.layout === 'sidebar'
+          ? 'flex items-center justify-center p-4 md:p-8'
+          : currentTemplateConfig.layout === 'fullscreen'
+            ? 'h-full'
+            : 'flex items-center justify-center'
+      ),
+    [currentTemplateConfig.layout]
+  );
+
+  const surfaceClass = useMemo(() => {
+    switch (currentTemplateConfig.layout) {
+      case 'fullscreen':
+        return 'h-full w-full flex flex-col justify-end p-6 md:p-8 bg-background/70 backdrop-blur-sm';
+      case 'grid':
+        return 'w-full max-w-2xl rounded-xl border border-border bg-background/80 backdrop-blur-sm shadow-sm p-6';
+      case 'sidebar':
+        return 'w-full max-w-xl rounded-xl border border-border bg-background/80 backdrop-blur-sm shadow-sm p-6';
+      case 'centered':
+      default:
+        return 'w-full max-w-md rounded-xl border border-border bg-background/80 backdrop-blur-sm shadow-sm p-6';
+    }
+  }, [currentTemplateConfig.layout]);
+
+  const optionsLayoutClass = useMemo(
+    () =>
+      cn(
+        currentTemplateConfig.layout === 'grid' || currentTemplateConfig.navigation_style === 'cards'
+          ? 'grid grid-cols-2 gap-2'
+          : 'space-y-2'
+      ),
+    [currentTemplateConfig.layout, currentTemplateConfig.navigation_style]
+  );
+
+  const optionItemBaseClass = useMemo(
+    () =>
+      cn(
+        'rounded-lg border flex items-center gap-2 cursor-pointer transition-all',
+        currentTemplateConfig.layout === 'grid' || currentTemplateConfig.navigation_style === 'cards' ? 'p-3' : 'p-2'
+      ),
+    [currentTemplateConfig.layout, currentTemplateConfig.navigation_style]
+  );
+
+  const isOutlineCta = currentTemplateConfig.cta_style === 'outline';
+  const ctaClass = useMemo(
+    () =>
+      cn(
+        'gap-2',
+        currentTemplateConfig.cta_style === 'full_width' || currentTemplateConfig.layout === 'fullscreen' ? 'w-full' : undefined
+      ),
+    [currentTemplateConfig.cta_style, currentTemplateConfig.layout]
+  );
+
+  const progressEl = useMemo(() => {
+    if (!currentTheme.show_progress || previewStep !== 'question') return null;
+
+    // Steps progress is rendered in the sidebar for the sidebar layout.
+    if (currentTemplateConfig.progress_style === 'steps' && currentTemplateConfig.layout === 'sidebar') return null;
+
+    const pct = Math.round(progressRatio * 100);
+
+    switch (currentTemplateConfig.progress_style) {
+      case 'dots':
+        return (
+          <div className="absolute top-0 left-0 right-0 bg-background/80 p-2 z-10">
+            <div className="flex items-center justify-center gap-1.5">
+              {Array.from({ length: totalSteps }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn('h-1.5 w-1.5 rounded-full transition-all', i === currentQuestion ? 'scale-125' : 'opacity-40')}
+                  style={{ backgroundColor: currentTheme.primary_color }}
+                />
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'percentage':
+        return (
+          <div className="absolute top-0 left-0 right-0 bg-background/80 p-2 z-10">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {currentQuestion + 1}/{totalSteps}
+              </span>
+              <span>{pct}%</span>
+            </div>
+          </div>
+        );
+
+      case 'segments':
+        return (
+          <div className="absolute top-0 left-0 right-0 bg-background/80 p-2 z-10">
+            <div className="flex gap-1">
+              {Array.from({ length: totalSteps }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-1 flex-1 rounded-full"
+                  style={{
+                    backgroundColor: i <= currentQuestion ? currentTheme.primary_color : 'hsl(var(--muted))',
+                    opacity: i <= currentQuestion ? 1 : 0.7,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'bar':
+      default:
+        return (
+          <div className="absolute top-0 left-0 right-0 bg-background/80 p-2 z-10">
+            <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct}%`, backgroundColor: currentTheme.primary_color }}
+              />
+            </div>
+          </div>
+        );
+    }
+  }, [
+    currentTheme.show_progress,
+    currentTheme.primary_color,
+    previewStep,
+    currentTemplateConfig.progress_style,
+    currentTemplateConfig.layout,
+    progressRatio,
+    totalSteps,
+    currentQuestion,
+  ]);
+
+  const sidebarEl = useMemo(() => {
+    if (currentTemplateConfig.layout !== 'sidebar') return null;
+
+    const showSteps =
+      currentTheme.show_progress &&
+      previewStep === 'question' &&
+      currentTemplateConfig.progress_style === 'steps' &&
+      totalSteps > 1;
+
+    return (
+      <div className="hidden md:flex w-56 shrink-0 flex-col gap-4 border-r border-border bg-background/70 backdrop-blur-sm p-4">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Diagnóstico</p>
+          <p className="text-sm font-semibold text-foreground line-clamp-2">{name || 'Quiz'}</p>
+          {description && <p className="text-xs text-muted-foreground line-clamp-3">{description}</p>}
+        </div>
+
+        {showSteps && (
+          <div className="space-y-2">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    'h-2 w-2 rounded-full',
+                    i === currentQuestion ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-50'
+                  )}
+                  style={{ backgroundColor: currentTheme.primary_color }}
+                />
+                <span className={cn('text-xs', i === currentQuestion ? 'text-foreground' : 'text-muted-foreground')}>
+                  Etapa {i + 1}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }, [
+    currentTemplateConfig.layout,
+    currentTemplateConfig.progress_style,
+    currentTheme.show_progress,
+    currentTheme.primary_color,
+    previewStep,
+    totalSteps,
+    currentQuestion,
+    name,
+    description,
+  ]);
+
   return (
     <div className="space-y-4">
       {/* Template indicator */}

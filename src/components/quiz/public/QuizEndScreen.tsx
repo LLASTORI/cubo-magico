@@ -1,7 +1,9 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, ExternalLink, Share2 } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Share2, Sparkles, Heart, Target, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { QuizVectorBars } from '@/components/crm/QuizVectorBars';
+import { Badge } from '@/components/ui/badge';
+import { generateQuizResultCopy, type QuizResultData } from '@/lib/quizResultNarrative';
+import { getSemanticLabels } from '@/lib/semanticProfileEngine';
 
 interface ThemeConfig {
   primary_color?: string;
@@ -32,21 +34,33 @@ interface QuizEndScreenProps {
     traits_vector?: Record<string, number>;
     intent_vector?: Record<string, number>;
     normalized_score?: number;
+    confidence?: number;
+    entropy?: number;
   };
+  quizName?: string;
 }
 
-export function QuizEndScreen({ config, theme, logoUrl, result }: QuizEndScreenProps) {
-  const headline = config?.headline || 'Parabéns!';
-  const subheadline = config?.subheadline || 'Você completou o quiz com sucesso.';
-  const ctaText = config?.cta_text;
-  const ctaUrl = config?.cta_url;
+export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: QuizEndScreenProps) {
   const showResults = config?.show_results !== false;
   const showShare = config?.show_share !== false;
 
-  const summaryText = result?.summary?.text || 
-    (result?.summary?.primary_trait && result?.summary?.primary_intent
-      ? `Seu perfil indica tendência ${result.summary.primary_trait} com alta intenção de ${result.summary.primary_intent}.`
-      : 'Seu resultado foi processado com sucesso.');
+  // Generate semantic narrative from result
+  const resultData: QuizResultData = result || {};
+  const narrative = generateQuizResultCopy(resultData, { quiz_name: quizName });
+
+  // Use custom config or generated narrative
+  const headline = config?.headline || narrative.title;
+  const subheadline = config?.subheadline || narrative.subtitle;
+  const ctaText = config?.cta_text || narrative.cta_text;
+  const ctaUrl = config?.cta_url;
+
+  // Get semantic labels for display
+  const intentLabels = result?.intent_vector 
+    ? getSemanticLabels(result.intent_vector, 'intent', 3)
+    : [];
+  const traitLabels = result?.traits_vector 
+    ? getSemanticLabels(result.traits_vector, 'trait', 3)
+    : [];
 
   // Background style
   const backgroundStyle: React.CSSProperties = {
@@ -68,8 +82,8 @@ export function QuizEndScreen({ config, theme, logoUrl, result }: QuizEndScreenP
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: 'Meu resultado do quiz',
-        text: summaryText,
+        title: headline,
+        text: narrative.explanation,
         url: window.location.href,
       });
     }
@@ -87,7 +101,7 @@ export function QuizEndScreen({ config, theme, logoUrl, result }: QuizEndScreenP
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-lg text-center space-y-8"
+        className="w-full max-w-lg text-center space-y-6"
       >
         {/* Logo */}
         {logoUrl && (
@@ -135,12 +149,12 @@ export function QuizEndScreen({ config, theme, logoUrl, result }: QuizEndScreenP
         )}
 
         {/* Headlines */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-3xl md:text-4xl font-bold"
+            className="text-2xl md:text-3xl font-bold"
             style={{ color: theme?.text_color }}
           >
             {headline}
@@ -149,45 +163,102 @@ export function QuizEndScreen({ config, theme, logoUrl, result }: QuizEndScreenP
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="text-lg"
+            className="text-base"
             style={{ color: theme?.secondary_text_color }}
           >
             {subheadline}
           </motion.p>
         </div>
 
-        {/* Summary */}
+        {/* Semantic Profile Summary - Human-Readable */}
         {showResults && result && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="bg-card rounded-xl p-6 shadow-sm border space-y-4 text-left"
+            className="bg-card rounded-xl p-5 shadow-sm border space-y-4 text-left"
           >
+            {/* Profile Description */}
             <p 
-              className="text-sm"
+              className="text-sm leading-relaxed"
               style={{ color: theme?.secondary_text_color }}
             >
-              {summaryText}
+              {narrative.explanation}
             </p>
 
-            {result.intent_vector && Object.keys(result.intent_vector).length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium uppercase tracking-wide"
-                    style={{ color: theme?.secondary_text_color }}>
-                  Perfil de Intenção
-                </h4>
-                <QuizVectorBars vector={result.intent_vector} type="intent" maxItems={3} />
+            {/* Key Insights - Human Labels */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              {/* Buying Style */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  <ShoppingBag className="h-3 w-3" />
+                  Estilo de Decisão
+                </div>
+                <p className="text-xs font-medium">
+                  {narrative.semantic_profile.buying_style}
+                </p>
               </div>
-            )}
 
-            {result.traits_vector && Object.keys(result.traits_vector).length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium uppercase tracking-wide"
-                    style={{ color: theme?.secondary_text_color }}>
-                  Perfil Comportamental
-                </h4>
-                <QuizVectorBars vector={result.traits_vector} type="traits" maxItems={3} />
+              {/* Emotional Driver */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  <Heart className="h-3 w-3" />
+                  O Que Te Motiva
+                </div>
+                <p className="text-xs font-medium capitalize">
+                  {narrative.semantic_profile.emotional_driver}
+                </p>
+              </div>
+            </div>
+
+            {/* Semantic Labels - NOT raw vectors */}
+            {(intentLabels.length > 0 || traitLabels.length > 0) && (
+              <div className="space-y-3 pt-3 border-t">
+                {/* Intent Labels */}
+                {intentLabels.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <Target className="h-3 w-3" />
+                      Seu Momento
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {intentLabels.map(({ key, label, value }) => (
+                        <Badge 
+                          key={key} 
+                          variant="secondary"
+                          className="text-[10px] font-normal"
+                          style={theme?.primary_color ? { 
+                            backgroundColor: `${theme.primary_color}15`,
+                            color: theme.primary_color 
+                          } : undefined}
+                        >
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Trait Labels */}
+                {traitLabels.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <Sparkles className="h-3 w-3" />
+                      Suas Características
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {traitLabels.map(({ key, label, value }) => (
+                        <Badge 
+                          key={key} 
+                          variant="outline"
+                          className="text-[10px] font-normal"
+                        >
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

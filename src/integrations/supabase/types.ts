@@ -5426,6 +5426,8 @@ export type Database = {
           questions_answered: number | null
           questions_skipped: number | null
           raw_score: Json | null
+          semantic_interpretation: Json | null
+          semantic_profile_id: string | null
           session_id: string
           summary: string | null
           traits_vector: Json | null
@@ -5443,6 +5445,8 @@ export type Database = {
           questions_answered?: number | null
           questions_skipped?: number | null
           raw_score?: Json | null
+          semantic_interpretation?: Json | null
+          semantic_profile_id?: string | null
           session_id: string
           summary?: string | null
           traits_vector?: Json | null
@@ -5460,6 +5464,8 @@ export type Database = {
           questions_answered?: number | null
           questions_skipped?: number | null
           raw_score?: Json | null
+          semantic_interpretation?: Json | null
+          semantic_profile_id?: string | null
           session_id?: string
           summary?: string | null
           traits_vector?: Json | null
@@ -5470,6 +5476,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_results_semantic_profile_id_fkey"
+            columns: ["semantic_profile_id"]
+            isOneToOne: false
+            referencedRelation: "semantic_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -5916,6 +5929,71 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "role_templates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      semantic_profiles: {
+        Row: {
+          buying_style: string | null
+          copy_angle: string | null
+          created_at: string
+          description: string | null
+          emotional_driver: string | null
+          id: string
+          intent_pattern: Json | null
+          is_active: boolean | null
+          name: string
+          primary_intent: string | null
+          primary_traits: string[] | null
+          priority: number | null
+          project_id: string
+          risk_profile: string | null
+          trait_pattern: Json | null
+          updated_at: string
+        }
+        Insert: {
+          buying_style?: string | null
+          copy_angle?: string | null
+          created_at?: string
+          description?: string | null
+          emotional_driver?: string | null
+          id?: string
+          intent_pattern?: Json | null
+          is_active?: boolean | null
+          name: string
+          primary_intent?: string | null
+          primary_traits?: string[] | null
+          priority?: number | null
+          project_id: string
+          risk_profile?: string | null
+          trait_pattern?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          buying_style?: string | null
+          copy_angle?: string | null
+          created_at?: string
+          description?: string | null
+          emotional_driver?: string | null
+          id?: string
+          intent_pattern?: Json | null
+          is_active?: boolean | null
+          name?: string
+          primary_intent?: string | null
+          primary_traits?: string[] | null
+          priority?: number | null
+          project_id?: string
+          risk_profile?: string | null
+          trait_pattern?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "semantic_profiles_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

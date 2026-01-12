@@ -11,11 +11,13 @@ import {
   Target,
   Clock,
   Zap,
-  BarChart3,
+  Sparkles,
+  Heart,
+  ShoppingBag,
   History
 } from 'lucide-react';
-import { useContactProfile, getPrimaryTrait, getPrimaryIntent, formatSourceName, getSourceColor } from '@/hooks/useContactProfile';
-import { formatVectorKeyName } from '@/lib/profileMergeEngine';
+import { useContactProfile, formatSourceName, getSourceColor } from '@/hooks/useContactProfile';
+import { interpretProfile, getSemanticLabels, generateProfileSummary } from '@/lib/semanticProfileEngine';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -62,16 +64,21 @@ export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfilePr
     );
   }
 
-  const primaryTrait = getPrimaryTrait(profile);
-  const primaryIntent = getPrimaryIntent(profile);
+  // Generate semantic profile interpretation
+  const semanticProfile = interpretProfile({
+    vectors: {
+      intent_vector: profile.intent_vector as Record<string, number>,
+      trait_vector: profile.trait_vector as Record<string, number>
+    },
+    entropy: profile.entropy_score,
+    confidence: profile.confidence_score
+  });
 
-  // Sort vectors by value for display
-  const sortedTraits = Object.entries(profile.trait_vector)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
-  const sortedIntents = Object.entries(profile.intent_vector)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
+  const profileSummary = generateProfileSummary(semanticProfile);
+
+  // Get semantic labels for display
+  const intentLabels = getSemanticLabels(profile.intent_vector as Record<string, number>, 'intent', 4);
+  const traitLabels = getSemanticLabels(profile.trait_vector as Record<string, number>, 'trait', 4);
 
   const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
     if (trend === 'up') return <TrendingUp className="h-3 w-3 text-green-500" />;
@@ -93,7 +100,37 @@ export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfilePr
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Main Metrics */}
+        {/* Semantic Profile Name & Summary */}
+        <div className="space-y-2 pb-3 border-b">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-purple-500" />
+            <h3 className="font-semibold text-sm">{semanticProfile.profile_name}</h3>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {profileSummary}
+          </p>
+        </div>
+
+        {/* Key Insights Grid - Human Readable */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+              <ShoppingBag className="h-3 w-3" />
+              Estilo de Decisão
+            </div>
+            <p className="text-xs font-medium">{semanticProfile.buying_style}</p>
+          </div>
+          
+          <div className="space-y-1">
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+              <Heart className="h-3 w-3" />
+              Motivação
+            </div>
+            <p className="text-xs font-medium capitalize">{semanticProfile.emotional_driver}</p>
+          </div>
+        </div>
+
+        {/* Confidence Metrics */}
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -131,17 +168,17 @@ export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfilePr
           </div>
         </div>
 
-        {/* Intent Vector */}
-        {sortedIntents.length > 0 && (
+        {/* Semantic Intent Labels */}
+        {intentLabels.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <BarChart3 className="h-3 w-3" />
+              <Target className="h-3 w-3" />
               Intenções
             </div>
             <div className="space-y-1.5">
-              {sortedIntents.map(([key, value]) => (
+              {intentLabels.map(({ key, label, value }) => (
                 <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs w-24 truncate">{formatVectorKeyName(key)}</span>
+                  <span className="text-xs w-24 truncate">{label}</span>
                   <Progress value={value * 100} className="h-1.5 flex-1" />
                   <span className="text-xs text-muted-foreground w-10 text-right">
                     {Math.round(value * 100)}%
@@ -152,17 +189,17 @@ export function ContactCognitiveProfile({ contactId }: ContactCognitiveProfilePr
           </div>
         )}
 
-        {/* Trait Vector */}
-        {sortedTraits.length > 0 && (
+        {/* Semantic Trait Labels */}
+        {traitLabels.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Brain className="h-3 w-3" />
-              Traits
+              <Sparkles className="h-3 w-3" />
+              Características
             </div>
             <div className="space-y-1.5">
-              {sortedTraits.map(([key, value]) => (
+              {traitLabels.map(({ key, label, value }) => (
                 <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs w-24 truncate">{formatVectorKeyName(key)}</span>
+                  <span className="text-xs w-24 truncate">{label}</span>
                   <Progress value={value * 100} className="h-1.5 flex-1" />
                   <span className="text-xs text-muted-foreground w-10 text-right">
                     {Math.round(value * 100)}%

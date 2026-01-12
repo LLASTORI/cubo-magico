@@ -1638,6 +1638,13 @@ export type Database = {
             foreignKeyName: "crm_contact_interactions_funnel_id_fkey"
             columns: ["funnel_id"]
             isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_interactions_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
@@ -2237,6 +2244,13 @@ export type Database = {
             foreignKeyName: "crm_webhook_keys_default_funnel_id_fkey"
             columns: ["default_funnel_id"]
             isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "crm_webhook_keys_default_funnel_id_fkey"
+            columns: ["default_funnel_id"]
+            isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
@@ -2700,6 +2714,13 @@ export type Database = {
             foreignKeyName: "funnel_meta_accounts_funnel_id_fkey"
             columns: ["funnel_id"]
             isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "funnel_meta_accounts_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
@@ -2863,6 +2884,13 @@ export type Database = {
             foreignKeyName: "funnel_performance_funnel_id_fkey"
             columns: ["funnel_id"]
             isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "funnel_performance_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
@@ -2913,6 +2941,13 @@ export type Database = {
           tx_pagina_checkout_score?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "funnel_score_history_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
           {
             foreignKeyName: "funnel_score_history_funnel_id_fkey"
             columns: ["funnel_id"]
@@ -3339,6 +3374,13 @@ export type Database = {
             foreignKeyName: "launch_phases_funnel_id_fkey"
             columns: ["funnel_id"]
             isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "launch_phases_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
@@ -3380,6 +3422,13 @@ export type Database = {
           project_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "launch_products_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
           {
             foreignKeyName: "launch_products_funnel_id_fkey"
             columns: ["funnel_id"]
@@ -4093,6 +4142,13 @@ export type Database = {
           valor_original?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
           {
             foreignKeyName: "offer_mappings_funnel_id_fkey"
             columns: ["funnel_id"]
@@ -7200,6 +7256,13 @@ export type Database = {
             foreignKeyName: "surveys_default_funnel_id_fkey"
             columns: ["default_funnel_id"]
             isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "surveys_default_funnel_id_fkey"
+            columns: ["default_funnel_id"]
+            isOneToOne: false
             referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
@@ -8122,6 +8185,44 @@ export type Database = {
         }
         Relationships: []
       }
+      funnel_financials: {
+        Row: {
+          cpa: number | null
+          economic_day: string | null
+          funnel_id: string | null
+          gross_revenue: number | null
+          profit: number | null
+          project_id: string | null
+          revenue: number | null
+          roas: number | null
+          sales_count: number | null
+          spend: number | null
+        }
+        Relationships: []
+      }
+      funnel_financials_summary: {
+        Row: {
+          avg_ticket: number | null
+          days_with_data: number | null
+          financial_core_start_date: string | null
+          first_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          funnel_type: string | null
+          health_status: string | null
+          last_day: string | null
+          overall_cpa: number | null
+          overall_roas: number | null
+          project_id: string | null
+          roas_target: number | null
+          total_gross_revenue: number | null
+          total_profit: number | null
+          total_revenue: number | null
+          total_sales: number | null
+          total_spend: number | null
+        }
+        Relationships: []
+      }
       funnel_metrics_daily: {
         Row: {
           avg_ticket: number | null
@@ -8142,6 +8243,43 @@ export type Database = {
           unique_buyers: number | null
         }
         Relationships: []
+      }
+      funnel_revenue: {
+        Row: {
+          economic_day: string | null
+          funnel_id: string | null
+          gross_revenue: number | null
+          project_id: string | null
+          revenue: number | null
+          sales_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funnel_spend: {
+        Row: {
+          economic_day: string | null
+          funnel_id: string | null
+          project_id: string | null
+          record_count: number | null
+          spend: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       funnel_summary: {
         Row: {
@@ -8218,6 +8356,23 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spend_by_project: {
+        Row: {
+          economic_day: string | null
+          project_id: string | null
+          record_count: number | null
+          total_spend: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_core_events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

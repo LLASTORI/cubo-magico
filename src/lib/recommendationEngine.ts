@@ -7,6 +7,9 @@
  * - Purchase history
  * - Event patterns
  * - Funnel outcomes
+ * 
+ * IMPORTANT: All financial data MUST come from Financial Core.
+ * Legacy data (before financial_core_start_date) is ignored.
  */
 
 import { ContactProfile } from '@/hooks/useContactProfile';

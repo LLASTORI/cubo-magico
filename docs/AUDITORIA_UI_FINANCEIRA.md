@@ -280,7 +280,64 @@ Nota: Para dados do Meta (impressões, cliques, spend), a tabela `meta_insights`
 
 ---
 
-### 1.5 Lançamentos
+### 1.5 Busca Rápida (Hotmart)
+
+```
+[TELA]
+Nome visível no app: Busca Rápida
+URL / rota: /busca-rapida
+Arquivo React da página: src/pages/BuscaRapida.tsx
+Componente principal: BuscaRapida
+Hook(s) usados: NENHUM - chama API Hotmart diretamente via edge function
+```
+
+#### Métricas Analisadas:
+
+**[MÉTRICA: Vendas Totais]**
+```
+Nome exibido no UI: "Vendas Totais"
+De qual hook vem: Calculado localmente em formatSalesData()
+De qual view/tabela SQL vem: API Hotmart direta (não usa banco)
+Campos usados: purchase.price.value (convertido para BRL)
+Fórmula exata: SUM(item.value) após conversão de câmbio
+Tipo de valor:
+  (x) Gross (valor pago pelo cliente) ⚠️
+Fonte de dados:
+  (x) Legacy (API direta, não Core) ⚠️
+```
+
+**[MÉTRICA: Transações]**
+```
+Nome exibido no UI: "Transações"
+De qual hook vem: Calculado localmente
+De qual view/tabela SQL vem: API Hotmart direta
+Campos usados: filteredSales.length
+Fonte de dados:
+  (x) Legacy ⚠️
+```
+
+**[MÉTRICA: Clientes Únicos]**
+```
+Nome exibido no UI: "Clientes Únicos"
+De qual hook vem: Calculado localmente
+De qual view/tabela SQL vem: API Hotmart direta
+Campos usados: Set(filteredSales.map(buyer))
+Fonte de dados:
+  (x) Legacy ⚠️
+```
+
+**Classificação: ❌ 100% Legacy (API direta)**
+
+**Problemas críticos:**
+1. Não usa `sales_core_events` - busca da API diretamente
+2. Não tem campo `economic_day` - usa `purchase_date` em UTC (pode errar o dia no Brasil)
+3. Não mostra `net_amount`, taxas ou splits
+4. Não tem `provider_event_id` para rastreabilidade com Core
+5. Data filtrada por UTC, não America/Sao_Paulo
+
+---
+
+### 1.6 Lançamentos
 
 ```
 [TELA]
@@ -557,7 +614,128 @@ FROM revenue_daily FULL JOIN spend_daily;
 
 ---
 
-## 7️⃣ CONCLUSÃO
+## 7️⃣ VALIDAÇÃO DIA 2026-01-12
+
+### Comparação Legacy vs Core (Dia Único)
+
+```sql
+-- Query executada:
+WITH legacy_sales AS (
+  SELECT SUM(total_price_brl) as legacy_gross
+  FROM hotmart_sales 
+  WHERE project_id = '1e1a89a4-81d5-4aa7-8431-538828def2a3'
+    AND status IN ('APPROVED', 'COMPLETE')
+    AND sale_date::date = '2026-01-12'
+),
+core_revenue AS (
+  SELECT SUM(gross_revenue) as core_gross, SUM(net_revenue) as core_net, SUM(platform_fees) as core_fees
+  FROM revenue_daily
+  WHERE project_id = '1e1a89a4-81d5-4aa7-8431-538828def2a3' AND economic_day = '2026-01-12'
+)
+...
+```
+
+| Métrica | Valor Legacy | Valor Core | Diferença |
+|---------|--------------|------------|-----------|
+| Gross Revenue | R$ 3.640,04 | R$ 1.766,90 | -51% |
+| Net Revenue | N/A | R$ 139,36 | — |
+| Platform Fees | N/A | R$ 1.627,54 | — |
+| Ad Spend | R$ 1.755,08 | R$ 1.755,07 | ~0% |
+| ROAS (Gross/Spend) | 2.07 | — | — |
+| ROAS (Net/Spend) | — | 0.08 | — |
+| **Inflação ROAS** | — | — | **26x** |
+
+### Dados Core Validados (profit_daily)
+
+```
+economic_day: 2026-01-12
+gross_revenue: 1766.90
+net_revenue: 139.36
+platform_fees: 1627.54
+ad_spend: 1755.07
+profit: -1615.71
+roas: 0.08
+transaction_count: 30
+data_source: core
+```
+
+**CONCLUSÃO**: O dia 2026-01-12 teve **PREJUÍZO de R$ 1.615,71** (Core), mas telas Legacy mostrariam **lucro de R$ 1.885** (Gross - Spend).
+
+---
+
+## 8️⃣ CONTRATO FINANCEIRO ÚNICO
+
+### Financial Context Contract (TypeScript)
+
+```typescript
+interface FinancialContextContract {
+  // Identificação
+  economic_day: string;           // YYYY-MM-DD em America/Sao_Paulo
+  project_id: string;
+  funnel_id?: string;
+  
+  // Revenue breakdown
+  gross_revenue: number;          // Valor pago pelo cliente
+  platform_fees: number;          // Taxas da plataforma (Hotmart ~5-20%)
+  net_revenue: number;            // gross - fees (antes de splits)
+  
+  // Splits (quando aplicável)
+  splits?: {
+    owner_amount: number;         // Valor do produtor principal
+    coproducer_amount?: number;   // Valor do coprodutor
+    affiliate_amount?: number;    // Valor do afiliado
+  };
+  owner_net?: number;             // net_revenue após splits para outros
+  
+  // Spend
+  ad_spend: number;               // Investimento em ads
+  
+  // Calculated
+  profit: number;                 // net_revenue - ad_spend
+  roas: number | null;            // net_revenue / ad_spend
+  
+  // Metadata
+  transaction_count: number;
+  trust_level: 'core' | 'live' | 'legacy';
+  data_source: 'profit_daily' | 'revenue_daily' | 'live_financial_today' | 'hotmart_sales';
+}
+```
+
+### Mapeamento de Campos - Origem Correta
+
+| Campo Contract | View Core | Campo SQL |
+|----------------|-----------|-----------|
+| gross_revenue | revenue_daily | gross_revenue |
+| platform_fees | revenue_daily | platform_fees |
+| net_revenue | revenue_daily | net_revenue |
+| ad_spend | spend_daily | ad_spend |
+| profit | profit_daily | profit |
+| roas | profit_daily | roas |
+| economic_day | * | economic_day |
+| transaction_count | profit_daily | transaction_count |
+
+---
+
+## 9️⃣ PROBLEMA DE DATAS (CRÍTICO)
+
+### Campos de Data Usados Atualmente
+
+| Tela | Campo Usado | Timezone | Problema |
+|------|-------------|----------|----------|
+| Funis | sale_date | UTC | UTC ≠ Brazil, pode errar o dia |
+| Busca Rápida | purchase.approved_date | UTC | API retorna UTC |
+| Análise Mensal | sale_date | UTC | parseISO sem conversão |
+| Lançamentos | sale_date | UTC | toZonedTime aplicado incorretamente |
+
+### Campo Correto
+
+**`economic_day`** - Data no fuso horário do Brasil (America/Sao_Paulo)
+- Presente em: `sales_core_events`, `spend_core_events`, todas views Core
+- Garantia: Venda às 23:00 BRT (02:00 UTC+1) conta no dia correto
+
+---
+
+## 🔟 CONCLUSÃO
 
 ### Status por Tela:
 
@@ -565,14 +743,22 @@ FROM revenue_daily FULL JOIN spend_daily;
 |------|--------|-----------------|
 | Visão Geral | ✅ Core | Nenhuma |
 | Funis | ❌ 100% Legacy | Migrar para profit_daily |
+| **Busca Rápida** | ❌ 100% Legacy (API) | Migrar para sales_core_events |
 | Análise Mensal | ❌ 100% Legacy | Migrar para profit_daily |
 | Meta Ads | ✅ Legacy (OK) | Nenhuma (é fonte primária) |
 | Lançamentos | ❌ 100% Legacy | Migrar para profit_daily |
 | Comparar Períodos | ❌ Legacy | Migrar para profit_daily |
 
+### Plano de Migração (Ordem Segura)
+
+1. **Busca Rápida** - Menor risco, menos dependências
+2. **Funis** - Alto impacto, muitos usuários
+3. **Análise Mensal** - Relatórios históricos
+4. **Lançamentos** - Fluxo separado (type = 'lancamento')
+
 ### Impacto da Não-Correção:
 
-- **ROAS inflado em até 185x** em algumas telas
-- **Lucro errado** - mostra lucro positivo quando é negativo
+- **ROAS inflado em até 26x** em telas Legacy
+- **Lucro errado** - mostra lucro positivo quando há prejuízo real
 - **Decisões de negócio baseadas em dados incorretos**
-- **Inconsistência** entre telas diferentes
+- **Inconsistência** entre Dashboard (correto) e outras telas (erradas)

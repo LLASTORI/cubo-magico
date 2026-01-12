@@ -4593,6 +4593,53 @@ export type Database = {
         }
         Relationships: []
       }
+      product_revenue_splits: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          partner_name: string | null
+          partner_type: string
+          percentage: number
+          product_id: string
+          product_name: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          partner_name?: string | null
+          partner_type: string
+          percentage: number
+          product_id: string
+          product_name?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          partner_name?: string | null
+          partner_type?: string
+          percentage?: number
+          product_id?: string
+          product_name?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_revenue_splits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           account_activated: boolean | null
@@ -8467,6 +8514,52 @@ export type Database = {
           },
         ]
       }
+      owner_profit_daily: {
+        Row: {
+          ad_spend: number | null
+          data_source: string | null
+          economic_day: string | null
+          gross_revenue: number | null
+          net_revenue: number | null
+          owner_profit: number | null
+          owner_revenue: number | null
+          owner_roas: number | null
+          platform_fees: number | null
+          project_id: string | null
+          transaction_count: number | null
+        }
+        Relationships: []
+      }
+      profit_daily: {
+        Row: {
+          ad_spend: number | null
+          data_source: string | null
+          economic_day: string | null
+          gross_revenue: number | null
+          net_revenue: number | null
+          platform_fees: number | null
+          profit: number | null
+          project_id: string | null
+          roas: number | null
+          transaction_count: number | null
+        }
+        Relationships: []
+      }
+      profit_monthly: {
+        Row: {
+          ad_spend: number | null
+          data_source: string | null
+          gross_revenue: number | null
+          month: string | null
+          net_revenue: number | null
+          platform_fees: number | null
+          profit: number | null
+          project_id: string | null
+          roas: number | null
+          transaction_count: number | null
+        }
+        Relationships: []
+      }
       refunds_daily: {
         Row: {
           chargeback_count: number | null
@@ -8476,6 +8569,70 @@ export type Database = {
           project_id: string | null
           refund_count: number | null
           refunds: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revenue_allocations: {
+        Row: {
+          allocated_amount: number | null
+          data_source: string | null
+          economic_day: string | null
+          event_id: string | null
+          net_amount: number | null
+          partner_name: string | null
+          partner_type: string | null
+          percentage: number | null
+          product_id: string | null
+          product_name: string | null
+          project_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revenue_allocations_daily: {
+        Row: {
+          data_source: string | null
+          economic_day: string | null
+          partner_name: string | null
+          partner_type: string | null
+          project_id: string | null
+          total_allocated: number | null
+          transaction_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revenue_daily: {
+        Row: {
+          data_source: string | null
+          economic_day: string | null
+          gross_revenue: number | null
+          net_revenue: number | null
+          platform_fees: number | null
+          project_id: string | null
+          transaction_count: number | null
         }
         Relationships: [
           {

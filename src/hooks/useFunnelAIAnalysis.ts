@@ -112,8 +112,11 @@ export function useFunnelAIAnalysis() {
   const [analysis, setAnalysis] = useState<FunnelAIAnalysisResponse | null>(null);
 
   /**
-   * Analyze funnel using ONLY Financial Core data.
+   * Analyze funnel using ONLY Financial Core data with NET revenue.
    * Legacy data (before financial_core_start_date) is automatically excluded.
+   * 
+   * IMPORTANT: All revenue metrics use NET revenue (after platform fees).
+   * Never use gross_revenue for optimization decisions.
    */
   const analyzeRunnel = useCallback(async (
     funnelId: string,
@@ -133,10 +136,13 @@ export function useFunnelAIAnalysis() {
         // Signal to edge function that we're using Core data only
         use_financial_core: true,
         financial_core_start_date: financialCoreStartDate || '2026-01-12',
+        // Explicitly signal to use NET revenue
+        use_net_revenue: true,
       };
 
       // If context is provided, include ALL enriched data in the request
       // Note: Context should already be filtered to Core era by the caller
+      // and all revenue figures should be NET (after platform fees)
       if (context) {
         body.client_summary = context.client_summary;
         body.client_daily = context.client_daily;
@@ -148,6 +154,7 @@ export function useFunnelAIAnalysis() {
         body.ltv_metrics = context.ltv_metrics;
         body.conversion_funnel = context.conversion_funnel;
         body.data_source = 'financial_core';
+        body.revenue_type = 'net'; // Explicit signal for AI
       }
 
       const { data, error: invokeError } = await supabase.functions.invoke('funnel-ai-analysis', {

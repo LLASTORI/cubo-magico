@@ -2249,6 +2249,47 @@ export type Database = {
           },
         ]
       }
+      economic_days: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          date: string
+          id: string
+          is_closed: boolean
+          project_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          date: string
+          id?: string
+          is_closed?: boolean
+          project_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          date?: string
+          id?: string
+          is_closed?: boolean
+          project_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "economic_days_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       encryption_keys: {
         Row: {
           created_at: string
@@ -5012,6 +5053,53 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_event_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          processed_at: string | null
+          project_id: string
+          provider: string
+          provider_event_id: string
+          raw_payload: Json
+          received_at: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processed_at?: string | null
+          project_id: string
+          provider: string
+          provider_event_id: string
+          raw_payload?: Json
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processed_at?: string | null
+          project_id?: string
+          provider?: string
+          provider_event_id?: string
+          raw_payload?: Json
+          received_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_event_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quiz_answers: {
         Row: {
           answer_text: string | null
@@ -5939,6 +6027,88 @@ export type Database = {
           },
         ]
       }
+      sales_core_events: {
+        Row: {
+          attribution: Json | null
+          contact_id: string | null
+          created_at: string
+          currency: string
+          economic_day: string
+          event_type: string
+          gross_amount: number
+          id: string
+          is_active: boolean
+          net_amount: number
+          occurred_at: string
+          project_id: string
+          provider: string
+          provider_event_id: string
+          raw_payload: Json | null
+          received_at: string
+          version: number
+        }
+        Insert: {
+          attribution?: Json | null
+          contact_id?: string | null
+          created_at?: string
+          currency?: string
+          economic_day: string
+          event_type: string
+          gross_amount?: number
+          id?: string
+          is_active?: boolean
+          net_amount?: number
+          occurred_at: string
+          project_id: string
+          provider: string
+          provider_event_id: string
+          raw_payload?: Json | null
+          received_at?: string
+          version?: number
+        }
+        Update: {
+          attribution?: Json | null
+          contact_id?: string | null
+          created_at?: string
+          currency?: string
+          economic_day?: string
+          event_type?: string
+          gross_amount?: number
+          id?: string
+          is_active?: boolean
+          net_amount?: number
+          occurred_at?: string
+          project_id?: string
+          provider?: string
+          provider_event_id?: string
+          raw_payload?: Json | null
+          received_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       semantic_profiles: {
         Row: {
           buying_style: string | null
@@ -6378,6 +6548,71 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "social_posts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spend_core_events: {
+        Row: {
+          ad_id: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          created_at: string
+          currency: string
+          economic_day: string
+          id: string
+          is_active: boolean
+          occurred_at: string
+          project_id: string
+          provider: string
+          provider_event_id: string
+          raw_payload: Json | null
+          received_at: string
+          spend_amount: number
+          version: number
+        }
+        Insert: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          currency?: string
+          economic_day: string
+          id?: string
+          is_active?: boolean
+          occurred_at: string
+          project_id: string
+          provider: string
+          provider_event_id: string
+          raw_payload?: Json | null
+          received_at?: string
+          spend_amount?: number
+          version?: number
+        }
+        Update: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          currency?: string
+          economic_day?: string
+          id?: string
+          is_active?: boolean
+          occurred_at?: string
+          project_id?: string
+          provider?: string
+          provider_event_id?: string
+          raw_payload?: Json | null
+          received_at?: string
+          spend_amount?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_core_events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

@@ -1,9 +1,8 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, ExternalLink, Share2, Sparkles, Heart, Target, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Share2, Heart, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { generateQuizResultCopy, type QuizResultData } from '@/lib/quizResultNarrative';
-import { getSemanticLabels } from '@/lib/semanticProfileEngine';
+import { type AudienceMode } from '@/lib/audienceMode';
 
 interface ThemeConfig {
   primary_color?: string;
@@ -53,14 +52,6 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
   const subheadline = config?.subheadline || narrative.subtitle;
   const ctaText = config?.cta_text || narrative.cta_text;
   const ctaUrl = config?.cta_url;
-
-  // Get semantic labels for display
-  const intentLabels = result?.intent_vector 
-    ? getSemanticLabels(result.intent_vector, 'intent', 3)
-    : [];
-  const traitLabels = result?.traits_vector 
-    ? getSemanticLabels(result.traits_vector, 'trait', 3)
-    : [];
 
   // Background style
   const backgroundStyle: React.CSSProperties = {
@@ -170,7 +161,7 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
           </motion.p>
         </div>
 
-        {/* Semantic Profile Summary - Human-Readable */}
+        {/* Semantic Profile Summary - Human-Readable Only (Lead Mode) */}
         {showResults && result && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -178,7 +169,7 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
             transition={{ delay: 0.5 }}
             className="bg-card rounded-xl p-5 shadow-sm border space-y-4 text-left"
           >
-            {/* Profile Description */}
+            {/* Profile Description - No technical labels */}
             <p 
               className="text-sm leading-relaxed"
               style={{ color: theme?.secondary_text_color }}
@@ -186,9 +177,8 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
               {narrative.explanation}
             </p>
 
-            {/* Key Insights - Human Labels */}
+            {/* Key Insights - Human Labels Only */}
             <div className="grid grid-cols-2 gap-3 pt-2">
-              {/* Buying Style */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   <ShoppingBag className="h-3 w-3" />
@@ -199,7 +189,6 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
                 </p>
               </div>
 
-              {/* Emotional Driver */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   <Heart className="h-3 w-3" />
@@ -210,57 +199,6 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
                 </p>
               </div>
             </div>
-
-            {/* Semantic Labels - NOT raw vectors */}
-            {(intentLabels.length > 0 || traitLabels.length > 0) && (
-              <div className="space-y-3 pt-3 border-t">
-                {/* Intent Labels */}
-                {intentLabels.length > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      <Target className="h-3 w-3" />
-                      Seu Momento
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {intentLabels.map(({ key, label, value }) => (
-                        <Badge 
-                          key={key} 
-                          variant="secondary"
-                          className="text-[10px] font-normal"
-                          style={theme?.primary_color ? { 
-                            backgroundColor: `${theme.primary_color}15`,
-                            color: theme.primary_color 
-                          } : undefined}
-                        >
-                          {label}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Trait Labels */}
-                {traitLabels.length > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      <Sparkles className="h-3 w-3" />
-                      Suas Características
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {traitLabels.map(({ key, label, value }) => (
-                        <Badge 
-                          key={key} 
-                          variant="outline"
-                          className="text-[10px] font-normal"
-                        >
-                          {label}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </motion.div>
         )}
 

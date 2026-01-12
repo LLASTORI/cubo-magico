@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, Database, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
@@ -10,21 +10,21 @@ import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
+import { useSalesCore } from "@/hooks/useSalesCore";
+import { Badge } from "@/components/ui/badge";
 
 const BuscaRapida = () => {
-  const [loading, setLoading] = useState(false);
-  const [salesData, setSalesData] = useState<any>(null);
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
-  const [offerMappings, setOfferMappings] = useState<any[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { currentProject, credentials, markCredentialsValidated } = useProject();
+  const { currentProject, credentials } = useProject();
+  
+  // Use the Financial Core hook instead of direct Hotmart API
+  const { sales, loading, error, totalCount, fetchSales } = useSalesCore();
 
-  // Clear all data when project changes to avoid cross-project data leakage
+  // Clear filters when project changes
   useEffect(() => {
-    setSalesData(null);
     setCurrentFilters(null);
-    setOfferMappings([]);
   }, [currentProject?.id]);
 
   // Redirect if no project or credentials not validated
@@ -39,28 +39,18 @@ const BuscaRapida = () => {
     }
   }, [currentProject, credentials, navigate, toast]);
 
-  // Load offer mappings when project changes
+  // Handle error from hook
   useEffect(() => {
-    const fetchOfferMappings = async () => {
-      if (!currentProject) {
-        setOfferMappings([]);
-        return;
-      }
-      
-      const { data } = await supabase
-        .from('offer_mappings')
-        .select('codigo_oferta, id_funil')
-        .eq('project_id', currentProject.id);
-      
-      if (data) {
-        setOfferMappings(data);
-      }
-    };
-    
-    fetchOfferMappings();
-  }, [currentProject?.id]);
+    if (error) {
+      toast({
+        title: "Erro ao carregar dados",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
 
-  const fetchHotmartData = async (filters: FilterParams) => {
+  const handleFilter = async (filters: FilterParams) => {
     if (!currentProject) {
       toast({
         title: "Projeto não selecionado",
@@ -70,336 +60,110 @@ const BuscaRapida = () => {
       return;
     }
 
-    try {
-      setLoading(true);
-      setCurrentFilters(filters);
-      
-      // Parse date strings directly to avoid timezone issues
-      // Date strings from input are in format "YYYY-MM-DD"
-      const [startYear, startMonth, startDay] = filters.startDate.split('-').map(Number);
-      const [endYear, endMonth, endDay] = filters.endDate.split('-').map(Number);
-      
-      // Start of start date (00:00:00 UTC)
-      const startUTC = Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-      
-      // End of end date (23:59:59.999 UTC)
-      const endUTC = Date.UTC(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
-
-      console.log('=== DEBUG DATAS ===');
-      console.log('startDate:', filters.startDate, '-> UTC:', new Date(startUTC).toISOString());
-      console.log('endDate:', filters.endDate, '-> UTC:', new Date(endUTC).toISOString());
-
-      const params: any = {
-        start_date: startUTC,
-        end_date: endUTC,
-        max_results: 500, // Maximum allowed by API
-      };
-
-      // Note: API only supports one status at a time, we'll filter multiple statuses locally
-      if (filters.transactionStatus && filters.transactionStatus.length === 1) {
-        params.transaction_status = filters.transactionStatus[0].toUpperCase();
-      }
-
-      console.log('Requesting with params:', params);
-
-      // Fetch all pages of data
-      let allItems: any[] = [];
-      let nextPageToken: string | null = null;
-      let totalResults = 0;
-      
-      do {
-        const requestParams = { ...params };
-        if (nextPageToken) {
-          requestParams.page_token = nextPageToken;
-        }
-
-        const { data, error } = await supabase.functions.invoke('hotmart-api', {
-          body: {
-            endpoint: '/sales/history',
-            params: requestParams,
-            projectId: currentProject?.id,
-          },
-        });
-
-        if (error) throw error;
-
-        console.log(`Fetched page with ${data?.items?.length || 0} items`);
-        
-        if (data?.items) {
-          allItems = [...allItems, ...data.items];
-        }
-        
-        totalResults = data?.page_info?.total_results || 0;
-        nextPageToken = data?.page_info?.next_page_token || null;
-        
-      } while (nextPageToken);
-
-      const finalData = {
-        items: allItems,
-        page_info: {
-          total_results: totalResults,
-          results_per_page: allItems.length,
-        }
-      };
-
-      console.log(`Total items fetched: ${allItems.length} of ${totalResults}`);
-      setSalesData(finalData);
-
+    setCurrentFilters(filters);
+    await fetchSales(currentProject.id, filters);
+    
+    if (!error) {
       toast({
         title: "Dados carregados com sucesso!",
-        description: `${allItems.length} transações carregadas`,
+        description: `${sales.length} transações do Financial Core`,
       });
-    } catch (error: any) {
-      console.error('Error fetching Hotmart data:', error);
-      toast({
-        title: "Erro ao carregar dados",
-        description: error.message || "Não foi possível conectar à API da Hotmart",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleRefresh = () => {
-    if (currentFilters) {
-      fetchHotmartData(currentFilters);
+    if (currentFilters && currentProject) {
+      fetchSales(currentProject.id, currentFilters);
     }
   };
-  // Calculate metrics from filtered data
-  const calculateMetrics = (filteredSales: any[]) => {
-    if (!filteredSales || filteredSales.length === 0) {
+
+  // Calculate metrics from Core data (using net_amount)
+  const metrics = useMemo(() => {
+    if (!sales || sales.length === 0) {
       return {
-        totalSales: "R$ 0,00",
+        totalNetRevenue: "R$ 0,00",
+        totalGrossRevenue: "R$ 0,00",
         transactions: 0,
         customers: 0,
       };
     }
 
-    const total = filteredSales.reduce((sum: number, item: any) => {
-      return sum + (item.value || 0);
-    }, 0);
-
-    const uniqueCustomers = new Set(filteredSales.map((item: any) => item.buyer)).size;
+    const totalNet = sales.reduce((sum, item) => sum + (item.netAmount || 0), 0);
+    const totalGross = sales.reduce((sum, item) => sum + (item.grossAmount || 0), 0);
+    const uniqueCustomers = new Set(sales.map(item => item.buyer)).size;
 
     return {
-      totalSales: new Intl.NumberFormat('pt-BR', {
+      totalNetRevenue: new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
-      }).format(total),
-      transactions: filteredSales.length,
+      }).format(totalNet),
+      totalGrossRevenue: new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(totalGross),
+      transactions: sales.length,
       customers: uniqueCustomers,
     };
-  };
+  }, [sales]);
 
-  const parseUtmFromSourceSck = (sourceSck: string) => {
-    if (!sourceSck) return {};
-    
-    // Format: Source|Conjunto|Campanha|Posicionamento|Criativo
-    // Example: Meta-Ads|01_ADVANTAGE_ABERTA_6840169073892|PERPETUO_MAQUIAGEM35+_VENDA31_CBO_ANDROMEDA_6840169073692|Instagram_Reels|VENDA_VIDEO_06_MAKE35+_6840173725692
-    const parts = sourceSck.split('|');
-    
-    return {
-      utmSource: parts[0] || undefined,
-      utmAdset: parts[1] || undefined,        // Conjunto (position 1)
-      utmCampaign: parts[2] || undefined,     // Campanha (position 2)
-      utmPlacement: parts[3] || undefined,
-      utmCreative: parts[4] || undefined,
-    };
-  };
+  // Format sales for the table component (keeping compatibility)
+  const formattedSales = useMemo(() => {
+    return sales.map(sale => ({
+      transaction: sale.transaction,
+      product: sale.product,
+      buyer: sale.buyer,
+      value: sale.netAmount, // Use NET amount (after fees)
+      grossValue: sale.grossAmount,
+      status: sale.status,
+      date: sale.date,
+      utmSource: sale.utmSource,
+      utmCampaign: sale.utmCampaign,
+      utmAdset: sale.utmAdset,
+      utmPlacement: sale.utmPlacement,
+      utmCreative: sale.utmCreative,
+      originalCurrency: sale.currency,
+      originalValue: sale.grossAmount,
+      wasConverted: false, // Already in BRL from Core
+    }));
+  }, [sales]);
 
-  // Exchange rates state - will be updated with real-time rates
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
-    'BRL': 1,
-    'USD': 6.00,
-    'EUR': 6.40,
-    'GBP': 7.60,
-    'PYG': 0.0008,
-    'UYU': 0.14,
-    'AUD': 3.90,
-    'CHF': 6.80,
-    'CAD': 4.40,
-    'MXN': 0.30,
-    'ARS': 0.006,
-    'CLP': 0.006,
-    'COP': 0.0014,
-    'PEN': 1.60,
-  });
+  // Extract unique products and offers from Core data
+  const availableProducts = useMemo(() => {
+    return Array.from(new Set(sales.map(s => s.product).filter(Boolean)));
+  }, [sales]);
 
-  // Fetch real-time exchange rates on mount
-  useEffect(() => {
-    const fetchExchangeRates = async () => {
-      try {
-        const currencies = ['USD', 'EUR', 'GBP', 'AUD', 'CHF', 'CAD', 'MXN'];
-        const newRates: Record<string, number> = { 'BRL': 1 };
-        
-        for (const currency of currencies) {
-          const response = await fetch(`https://api.frankfurter.app/latest?from=${currency}&to=BRL`);
-          if (response.ok) {
-            const data = await response.json();
-            if (data.rates?.BRL) {
-              newRates[currency] = data.rates.BRL;
-            }
-          }
-        }
-        
-        console.log('Real-time exchange rates loaded:', newRates);
-        setExchangeRates(prev => ({ ...prev, ...newRates }));
-      } catch (error) {
-        console.error('Error fetching exchange rates, using fallback:', error);
-      }
-    };
-
-    fetchExchangeRates();
-  }, []);
-
-  const formatSalesData = () => {
-    if (!salesData?.items || !currentFilters) return [];
-
-    console.log('=== DEBUG FILTROS ===');
-    console.log('Total de itens da API:', salesData.items.length);
-    console.log('Filtros aplicados:', currentFilters);
-    console.log('Mapeamentos de ofertas:', offerMappings);
-
-    let filteredItems = salesData.items.map((item: any) => {
-      const utmData = parseUtmFromSourceSck(item.purchase?.tracking?.source_sck);
-      
-      // Use real-time exchange rates
-      const originalValue = item.purchase?.price?.value || 0;
-      const currency = item.purchase?.price?.currency_code || 'BRL';
-      const rate = exchangeRates[currency] || 1;
-      
-      // If currency is not BRL, apply exchange rate
-      const wasConverted = currency !== 'BRL';
-      const valueInBRL = originalValue * rate;
-      
-      return {
-        transaction: item.purchase?.transaction || 'N/A',
-        product: item.product?.name || 'N/A',
-        buyer: item.buyer?.name || item.buyer?.email || 'N/A',
-        value: valueInBRL,
-        status: item.purchase?.status || 'unknown',
-        date: new Date(item.purchase?.approved_date || item.purchase?.order_date).toLocaleDateString('pt-BR'),
-        offerCode: item.purchase?.offer?.code || undefined,
-        originalCurrency: currency,
-        originalValue: originalValue,
-        wasConverted: wasConverted,
-        exchangeRate: rate,
-        ...utmData,
-      };
-    });
-
-    console.log('Após mapeamento:', filteredItems.length, 'itens');
-
-    // Apply status filter (if multiple statuses selected)
-    if (currentFilters.transactionStatus && currentFilters.transactionStatus.length > 1) {
-      filteredItems = filteredItems.filter(item => 
-        currentFilters.transactionStatus!.some(status => 
-          item.status?.toLowerCase() === status.toLowerCase()
-        )
+  const availableOffers = useMemo(() => {
+    return sales
+      .filter(s => s.offerCode)
+      .map(s => ({ code: s.offerCode!, name: s.offerCode! }))
+      .filter((offer, index, self) => 
+        self.findIndex(o => o.code === offer.code) === index
       );
-    }
-
-    // Apply funnel filter (if specified)
-    if (currentFilters.idFunil && currentFilters.idFunil.length > 0) {
-      const offerCodesForFunnel = offerMappings
-        .filter(mapping => currentFilters.idFunil!.includes(mapping.id_funil))
-        .map(mapping => mapping.codigo_oferta)
-        .filter(Boolean);
-      
-      console.log('Filtro de funil:', currentFilters.idFunil);
-      console.log('Códigos de oferta do funil:', offerCodesForFunnel);
-      
-      const beforeFilter = filteredItems.length;
-      filteredItems = filteredItems.filter(item => 
-        item.offerCode && offerCodesForFunnel.includes(item.offerCode)
-      );
-      console.log('Após filtro de funil:', filteredItems.length, 'de', beforeFilter);
-    }
-
-    // Apply product filter (multiple selection)
-    if (currentFilters.productName && currentFilters.productName.length > 0) {
-      filteredItems = filteredItems.filter(item => 
-        currentFilters.productName!.includes(item.product)
-      );
-    }
-
-    // Apply offer filter (multiple selection)
-    if (currentFilters.offerCode && currentFilters.offerCode.length > 0) {
-      filteredItems = filteredItems.filter(item => 
-        item.offerCode && currentFilters.offerCode!.includes(item.offerCode)
-      );
-    }
-
-    // Apply UTM filters locally
-    if (currentFilters.utmSource) {
-      filteredItems = filteredItems.filter(item => 
-        item.utmSource?.toLowerCase().includes(currentFilters.utmSource!.toLowerCase())
-      );
-    }
-    if (currentFilters.utmCampaign) {
-      filteredItems = filteredItems.filter(item => 
-        item.utmCampaign?.toLowerCase().includes(currentFilters.utmCampaign!.toLowerCase())
-      );
-    }
-    if (currentFilters.utmAdset) {
-      filteredItems = filteredItems.filter(item => 
-        item.utmAdset?.toLowerCase().includes(currentFilters.utmAdset!.toLowerCase())
-      );
-    }
-    if (currentFilters.utmPlacement) {
-      filteredItems = filteredItems.filter(item => 
-        item.utmPlacement?.toLowerCase().includes(currentFilters.utmPlacement!.toLowerCase())
-      );
-    }
-    if (currentFilters.utmCreative) {
-      filteredItems = filteredItems.filter(item => 
-        item.utmCreative?.toLowerCase().includes(currentFilters.utmCreative!.toLowerCase())
-      );
-    }
-
-    console.log('=== RESULTADO FINAL ===');
-    console.log('Total após todos os filtros:', filteredItems.length);
-
-    return filteredItems;
-  };
-
-  const formattedSales = formatSalesData();
-  const metrics = calculateMetrics(formattedSales);
-
-  // Extract unique products and offers from sales data
-  const availableProducts = salesData?.items 
-    ? Array.from(new Set(salesData.items.map((item: any) => item.product?.name).filter(Boolean))) as string[]
-    : [];
-  
-  const availableOffers = salesData?.items 
-    ? Array.from(
-        new Map(
-          salesData.items
-            .filter((item: any) => item.purchase?.offer?.code)
-            .map((item: any) => [
-              item.purchase.offer.code,
-              { code: item.purchase.offer.code, name: item.purchase.offer.code }
-            ])
-        ).values()
-      ) as { code: string; name: string }[]
-    : [];
+  }, [sales]);
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader 
         rightContent={
-          salesData && currentProject && (
-            <Button
-              onClick={handleRefresh}
-              disabled={loading}
-              variant="outline"
-              className="gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
-          )
+          <div className="flex items-center gap-3">
+            {/* Trust Level Badge - Always show Core */}
+            <Badge variant="outline" className="gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+              <Database className="w-3 h-3" />
+              Financial Core
+            </Badge>
+            
+            {sales.length > 0 && currentProject && (
+              <Button
+                onClick={handleRefresh}
+                disabled={loading}
+                variant="outline"
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -423,7 +187,7 @@ const BuscaRapida = () => {
           <div className="space-y-6">
             {/* Filters */}
             <SalesFilters 
-              onFilter={fetchHotmartData} 
+              onFilter={handleFilter} 
               availableProducts={availableProducts}
               availableOffers={availableOffers}
               projectId={currentProject?.id}
@@ -431,16 +195,31 @@ const BuscaRapida = () => {
 
             {loading ? (
               <div className="flex flex-col items-center justify-center h-64">
-                <CubeLoader message="Consultando API da Hotmart..." size="lg" />
+                <CubeLoader message="Consultando Financial Core..." size="lg" />
               </div>
-            ) : salesData ? (
+            ) : sales.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
+                {/* Data Source Info */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  <span>
+                    Dados do <strong>Financial Core</strong> • 
+                    Filtro por <strong>economic_day</strong> (horário de Brasília) • 
+                    Valores em <strong>Receita Líquida</strong> (após taxas)
+                  </span>
+                </div>
+
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <MetricCard
-                    title="Vendas Totais"
-                    value={metrics.totalSales}
+                    title="Receita Líquida"
+                    value={metrics.totalNetRevenue}
                     icon={DollarSign}
+                  />
+                  <MetricCard
+                    title="Receita Bruta"
+                    value={metrics.totalGrossRevenue}
+                    icon={TrendingUp}
                   />
                   <MetricCard
                     title="Transações"
@@ -452,21 +231,20 @@ const BuscaRapida = () => {
                     value={metrics.customers}
                     icon={Users}
                   />
-                  <MetricCard
-                    title="Total de Registros"
-                    value={formattedSales.length}
-                    icon={TrendingUp}
-                  />
                 </div>
 
                 {/* Sales Table */}
                 {formattedSales.length > 0 ? (
-                  <SalesTable sales={formattedSales} />
+                  <SalesTable sales={formattedSales} showGrossColumn />
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     Nenhuma transação encontrada para os filtros selecionados
                   </div>
                 )}
+              </div>
+            ) : currentFilters ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Nenhuma transação encontrada para os filtros selecionados
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -475,7 +253,7 @@ const BuscaRapida = () => {
                   Configure os Filtros
                 </h3>
                 <p className="text-muted-foreground">
-                  Selecione as datas e filtros desejados para buscar as transações da Hotmart
+                  Selecione as datas e filtros desejados para consultar o Financial Core
                 </p>
               </div>
             )}

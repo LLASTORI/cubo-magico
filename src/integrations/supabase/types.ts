@@ -8052,6 +8052,44 @@ export type Database = {
           },
         ]
       }
+      financial_daily: {
+        Row: {
+          ad_spend: number | null
+          ads: number | null
+          campaigns: number | null
+          chargeback_count: number | null
+          chargebacks: number | null
+          cpa: number | null
+          economic_day: string | null
+          gross_refunds: number | null
+          gross_revenue: number | null
+          net_revenue: number | null
+          profit: number | null
+          project_id: string | null
+          refund_count: number | null
+          refunds: number | null
+          revenue: number | null
+          roas: number | null
+          transactions: number | null
+          unique_buyers: number | null
+        }
+        Relationships: []
+      }
+      financial_monthly: {
+        Row: {
+          ad_spend: number | null
+          cpa: number | null
+          gross_revenue: number | null
+          month: string | null
+          profit: number | null
+          project_id: string | null
+          revenue: number | null
+          roas: number | null
+          transactions: number | null
+          unique_buyers: number | null
+        }
+        Relationships: []
+      }
       funnel_metrics_daily: {
         Row: {
           avg_ticket: number | null
@@ -8096,6 +8134,99 @@ export type Database = {
           total_refunds: number | null
         }
         Relationships: []
+      }
+      refunds_daily: {
+        Row: {
+          chargeback_count: number | null
+          chargebacks: number | null
+          economic_day: string | null
+          gross_refunds: number | null
+          project_id: string | null
+          refund_count: number | null
+          refunds: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_daily: {
+        Row: {
+          economic_day: string | null
+          gross_revenue: number | null
+          project_id: string | null
+          revenue: number | null
+          transactions: number | null
+          unique_buyers: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_monthly: {
+        Row: {
+          gross_revenue: number | null
+          month: string | null
+          project_id: string | null
+          revenue: number | null
+          transactions: number | null
+          unique_buyers: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spend_daily: {
+        Row: {
+          ad_spend: number | null
+          ads: number | null
+          campaigns: number | null
+          economic_day: string | null
+          project_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spend_monthly: {
+        Row: {
+          ad_spend: number | null
+          campaigns: number | null
+          month: string | null
+          project_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

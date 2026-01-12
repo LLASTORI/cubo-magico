@@ -7,6 +7,7 @@ interface UseFinancialCoreProps {
   projectId: string | undefined;
   startDate: string;
   endDate: string;
+  financialCoreStartDate?: string | null; // The epoch date - data before this is considered legacy
 }
 
 export interface DailyFinancialData {
@@ -53,19 +54,36 @@ export interface FinancialSummary {
 /**
  * Hook to fetch financial data from the Cubo Core (sales_core_events + spend_core_events)
  * via the canonical views: financial_daily, sales_daily, refunds_daily, spend_daily
+ * 
+ * When financialCoreStartDate is provided, only data >= that date is considered valid Core data.
+ * Data before that date is Legacy and should be marked accordingly.
  */
-export const useFinancialCore = ({ projectId, startDate, endDate }: UseFinancialCoreProps) => {
-  // Fetch daily financial data from the canonical view
+export const useFinancialCore = ({ projectId, startDate, endDate, financialCoreStartDate }: UseFinancialCoreProps) => {
+  // Calculate effective date range - only fetch Core data if epoch is set
+  const effectiveStartDate = financialCoreStartDate && startDate < financialCoreStartDate 
+    ? financialCoreStartDate 
+    : startDate;
+  
+  const hasLegacyData = financialCoreStartDate ? startDate < financialCoreStartDate : false;
+  const hasOnlyCoreData = financialCoreStartDate ? startDate >= financialCoreStartDate : true;
+
+  // Fetch daily financial data from the canonical view (only Core era data)
   const { data: dailyData, isLoading: loadingDaily, refetch: refetchDaily } = useQuery({
-    queryKey: ['financial-daily', projectId, startDate, endDate],
+    queryKey: ['financial-daily', projectId, effectiveStartDate, endDate, financialCoreStartDate],
     queryFn: async () => {
       if (!projectId) return [];
+
+      // If entire range is before epoch, return empty (no Core data)
+      if (financialCoreStartDate && endDate < financialCoreStartDate) {
+        console.log(`[useFinancialCore] Entire range ${startDate} to ${endDate} is before epoch ${financialCoreStartDate}, returning empty`);
+        return [];
+      }
 
       const { data, error } = await supabase
         .from('financial_daily')
         .select('*')
         .eq('project_id', projectId)
-        .gte('economic_day', startDate)
+        .gte('economic_day', effectiveStartDate)
         .lte('economic_day', endDate)
         .order('economic_day', { ascending: true });
 
@@ -74,7 +92,7 @@ export const useFinancialCore = ({ projectId, startDate, endDate }: UseFinancial
         throw error;
       }
 
-      console.log(`[useFinancialCore] Loaded ${data?.length || 0} daily records for ${startDate} to ${endDate}`);
+      console.log(`[useFinancialCore] Loaded ${data?.length || 0} Core daily records for ${effectiveStartDate} to ${endDate}`);
       return (data || []) as DailyFinancialData[];
     },
     enabled: !!projectId,
@@ -180,6 +198,11 @@ export const useFinancialCore = ({ projectId, startDate, endDate }: UseFinancial
     loadingDaily,
     loadingMonthly,
     refetchAll,
+    // Era information
+    hasLegacyData,
+    hasOnlyCoreData,
+    effectiveStartDate,
+    financialCoreStartDate,
   };
 };
 

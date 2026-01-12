@@ -4973,6 +4973,38 @@ export type Database = {
           },
         ]
       }
+      project_settings: {
+        Row: {
+          created_at: string
+          financial_core_start_date: string
+          id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          financial_core_start_date?: string
+          id?: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          financial_core_start_date?: string
+          id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_settings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_tracking_settings: {
         Row: {
           created_at: string

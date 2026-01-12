@@ -621,8 +621,48 @@ Deno.serve(async (req) => {
       projectCode = pathParts[1];
     }
 
-    // Parse body first for email validation
-    const rawBody: Record<string, unknown> = await req.json();
+    // Parse body - support both JSON and form-urlencoded (Elementor, etc.)
+    let rawBody: Record<string, unknown> = {};
+    const contentType = req.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      rawBody = await req.json();
+    } else if (contentType.includes('application/x-www-form-urlencoded')) {
+      // Parse form-urlencoded data (Elementor, LeadLovers, etc.)
+      const formData = await req.text();
+      const params = new URLSearchParams(formData);
+      
+      for (const [key, value] of params.entries()) {
+        // Handle nested fields like form[email] or fields[email]
+        const cleanKey = key.replace(/^(form|fields|data)\[|\]$/g, '').replace(/\]$/g, '');
+        rawBody[cleanKey] = value;
+      }
+      console.log('[CRM Webhook] Parsed form-urlencoded data:', JSON.stringify(rawBody));
+    } else if (contentType.includes('multipart/form-data')) {
+      // Parse multipart form data
+      const formData = await req.formData();
+      for (const [key, value] of formData.entries()) {
+        if (typeof value === 'string') {
+          const cleanKey = key.replace(/^(form|fields|data)\[|\]$/g, '').replace(/\]$/g, '');
+          rawBody[cleanKey] = value;
+        }
+      }
+      console.log('[CRM Webhook] Parsed multipart form data:', JSON.stringify(rawBody));
+    } else {
+      // Try JSON as fallback
+      try {
+        rawBody = await req.json();
+      } catch {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Unsupported content type',
+            hint: 'Send data as application/json or application/x-www-form-urlencoded',
+            received: contentType
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // ========== ENDPOINT PRINCIPAL (com namespace) ==========
     if (projectCode && projectCode.startsWith('cm_')) {

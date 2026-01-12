@@ -5604,6 +5604,7 @@ export type Database = {
           end_screen_config: Json | null
           flow_type: string
           id: string
+          identity_settings: Json
           is_active: boolean
           name: string
           pixel_event_overrides: Json
@@ -5627,6 +5628,7 @@ export type Database = {
           end_screen_config?: Json | null
           flow_type?: string
           id?: string
+          identity_settings?: Json
           is_active?: boolean
           name: string
           pixel_event_overrides?: Json
@@ -5650,6 +5652,7 @@ export type Database = {
           end_screen_config?: Json | null
           flow_type?: string
           id?: string
+          identity_settings?: Json
           is_active?: boolean
           name?: string
           pixel_event_overrides?: Json

@@ -5,13 +5,40 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+interface IdentityFieldConfig {
+  enabled: boolean;
+  required: boolean;
+}
+
+interface IdentitySettings {
+  fields: {
+    name: IdentityFieldConfig;
+    email: IdentityFieldConfig;
+    phone: IdentityFieldConfig;
+    instagram: IdentityFieldConfig;
+  };
+  primary_identity_field: 'email' | 'phone';
+}
+
+const DEFAULT_IDENTITY_SETTINGS: IdentitySettings = {
+  fields: {
+    name: { enabled: true, required: false },
+    email: { enabled: true, required: true },
+    phone: { enabled: true, required: false },
+    instagram: { enabled: false, required: false },
+  },
+  primary_identity_field: 'email',
+};
+
 interface QuizIdentificationModalProps {
   isOpen: boolean;
   onSubmit: (data: { name?: string; email?: string; phone?: string; instagram?: string }) => void;
   onSkip?: () => void;
+  identitySettings?: IdentitySettings;
 }
 
-export function QuizIdentificationModal({ isOpen, onSubmit, onSkip }: QuizIdentificationModalProps) {
+export function QuizIdentificationModal({ isOpen, onSubmit, onSkip, identitySettings }: QuizIdentificationModalProps) {
+  const settings = identitySettings || DEFAULT_IDENTITY_SETTINGS;
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,12 +48,27 @@ export function QuizIdentificationModal({ isOpen, onSubmit, onSkip }: QuizIdenti
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = () => {
-    if (!formData.email.trim() && !formData.phone.trim()) return;
+    // Validate required fields based on settings
+    const { fields } = settings;
+    if (fields.email.required && !formData.email.trim()) return;
+    if (fields.phone.required && !formData.phone.trim()) return;
+    if (fields.name.required && !formData.name.trim()) return;
+    if (fields.instagram.required && !formData.instagram.trim()) return;
+    
     setIsSubmitting(true);
     onSubmit(formData);
   };
 
-  const isValid = formData.email.trim() || formData.phone.trim();
+  // Check if form is valid based on required fields
+  const isValid = (() => {
+    const { fields } = settings;
+    if (fields.email.required && !formData.email.trim()) return false;
+    if (fields.phone.required && !formData.phone.trim()) return false;
+    if (fields.name.required && !formData.name.trim()) return false;
+    if (fields.instagram.required && !formData.instagram.trim()) return false;
+    // At least one identity field must be provided
+    return !!(formData.email.trim() || formData.phone.trim());
+  })();
 
   if (!isOpen) return null;
 
@@ -54,62 +96,70 @@ export function QuizIdentificationModal({ isOpen, onSubmit, onSkip }: QuizIdenti
 
           {/* Form */}
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                Nome
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Seu nome"
-                disabled={isSubmitting}
-              />
-            </div>
+            {settings.fields.name.enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="name" className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  Nome {settings.fields.name.required && '*'}
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Seu nome"
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                Email *
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="seu@email.com"
-                disabled={isSubmitting}
-              />
-            </div>
+            {settings.fields.email.enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="email" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  Email {settings.fields.email.required && '*'}
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="seu@email.com"
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="phone" className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                WhatsApp
-              </Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="(11) 99999-9999"
-                disabled={isSubmitting}
-              />
-            </div>
+            {settings.fields.phone.enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  WhatsApp {settings.fields.phone.required && '*'}
+                </Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="(11) 99999-9999"
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="instagram" className="flex items-center gap-2">
-                <Instagram className="h-4 w-4 text-muted-foreground" />
-                Instagram
-              </Label>
-              <Input
-                id="instagram"
-                value={formData.instagram}
-                onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
-                placeholder="@seuusuario"
-                disabled={isSubmitting}
-              />
-            </div>
+            {settings.fields.instagram.enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="instagram" className="flex items-center gap-2">
+                  <Instagram className="h-4 w-4 text-muted-foreground" />
+                  Instagram {settings.fields.instagram.required && '*'}
+                </Label>
+                <Input
+                  id="instagram"
+                  value={formData.instagram}
+                  onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                  placeholder="@seuusuario"
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
           </div>
 
           {/* Actions */}

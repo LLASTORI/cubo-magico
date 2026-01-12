@@ -19,6 +19,12 @@ export interface ExperienceTheme {
   /** Start screen benefits list colors (Quiz) */
   benefits_text_color?: string;
   benefits_icon_color?: string;
+
+  /** Option button colors */
+  option_background_color?: string;
+  option_hover_color?: string;
+  option_text_color?: string;
+  option_border_color?: string;
 }
 
 export interface CTAButton {
@@ -82,6 +88,51 @@ export const DEFAULT_THEME: ExperienceTheme = {
 
   benefits_text_color: '#64748b',
   benefits_icon_color: '#6366f1',
+
+  // Option colors with good contrast
+  option_background_color: '#1e293b',
+  option_hover_color: '#334155',
+  option_text_color: '#ffffff',
+  option_border_color: '#334155',
+};
+
+/** Professional color palettes for templates */
+export const TEMPLATE_PALETTES = {
+  // Modern Dark - sleek dark options on light bg
+  modern_dark: {
+    option_background_color: '#1e293b',
+    option_hover_color: '#334155',
+    option_text_color: '#ffffff',
+    option_border_color: '#334155',
+  },
+  // Ocean Blue - professional blue tones
+  ocean: {
+    option_background_color: '#0f172a',
+    option_hover_color: '#1e3a5f',
+    option_text_color: '#ffffff',
+    option_border_color: '#1e3a5f',
+  },
+  // Emerald - fresh green
+  emerald: {
+    option_background_color: '#064e3b',
+    option_hover_color: '#047857',
+    option_text_color: '#ffffff',
+    option_border_color: '#047857',
+  },
+  // Minimal Light - subtle light theme
+  minimal_light: {
+    option_background_color: '#ffffff',
+    option_hover_color: '#f1f5f9',
+    option_text_color: '#1e293b',
+    option_border_color: '#e2e8f0',
+  },
+  // Warm - warm coral tones
+  warm: {
+    option_background_color: '#7c2d12',
+    option_hover_color: '#9a3412',
+    option_text_color: '#ffffff',
+    option_border_color: '#9a3412',
+  },
 };
 
 export const DEFAULT_COMPLETION_CONFIG: ExperienceCompletionConfig = {

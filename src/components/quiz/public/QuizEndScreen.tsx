@@ -1,8 +1,7 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, ExternalLink, Share2, Heart, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { generateQuizResultCopy, type QuizResultData } from '@/lib/quizResultNarrative';
-import { type AudienceMode } from '@/lib/audienceMode';
+import { generateConversionNarrative, detectTopicFromName } from '@/lib/resultNarrativeEngine';
 
 interface ThemeConfig {
   primary_color?: string;
@@ -43,14 +42,22 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
   const showResults = config?.show_results !== false;
   const showShare = config?.show_share !== false;
 
-  // Generate semantic narrative from result
-  const resultData: QuizResultData = result || {};
-  const narrative = generateQuizResultCopy(resultData, { quiz_name: quizName });
+  // Generate 4-layer conversion narrative
+  const detectedTopic = detectTopicFromName(quizName);
+  const narrative = generateConversionNarrative(
+    {
+      intent_vector: result?.intent_vector,
+      traits_vector: result?.traits_vector,
+      confidence: result?.confidence,
+      entropy: result?.entropy,
+      normalized_score: result?.normalized_score
+    },
+    { name: quizName, topic: detectedTopic }
+  );
 
-  // Use custom config or generated narrative
+  // Use custom config if provided, otherwise use generated narrative
   const headline = config?.headline || narrative.title;
-  const subheadline = config?.subheadline || narrative.subtitle;
-  const ctaText = config?.cta_text || narrative.cta_text;
+  const ctaText = config?.cta_text || 'Quero saber mais';
   const ctaUrl = config?.cta_url;
 
   // Background style
@@ -74,7 +81,7 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
     if (navigator.share) {
       navigator.share({
         title: headline,
-        text: narrative.explanation,
+        text: narrative.mirror,
         url: window.location.href,
       });
     }
@@ -139,66 +146,48 @@ export function QuizEndScreen({ config, theme, logoUrl, result, quizName }: Quiz
           />
         )}
 
-        {/* Headlines */}
-        <div className="space-y-3">
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="text-2xl md:text-3xl font-bold"
-            style={{ color: theme?.text_color }}
-          >
-            {headline}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-base"
-            style={{ color: theme?.secondary_text_color }}
-          >
-            {subheadline}
-          </motion.p>
-        </div>
+        {/* 1️⃣ Profile Title */}
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="text-2xl md:text-3xl font-bold"
+          style={{ color: theme?.text_color }}
+        >
+          {headline}
+        </motion.h1>
 
-        {/* Semantic Profile Summary - Human-Readable Only (Lead Mode) */}
+        {/* 4-Layer Persuasive Narrative */}
         {showResults && result && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-card rounded-xl p-5 shadow-sm border space-y-4 text-left"
+            transition={{ delay: 0.4 }}
+            className="bg-card rounded-xl p-6 shadow-sm border space-y-5 text-left"
           >
-            {/* Profile Description - No technical labels */}
+            {/* 2️⃣ Psychological Mirror */}
+            <p 
+              className="text-base leading-relaxed"
+              style={{ color: theme?.text_color }}
+            >
+              {narrative.mirror}
+            </p>
+
+            {/* 3️⃣ Implicit Pain */}
             <p 
               className="text-sm leading-relaxed"
               style={{ color: theme?.secondary_text_color }}
             >
-              {narrative.explanation}
+              {narrative.pain}
             </p>
 
-            {/* Key Insights - Human Labels Only */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  <ShoppingBag className="h-3 w-3" />
-                  Estilo de Decisão
-                </div>
-                <p className="text-xs font-medium">
-                  {narrative.semantic_profile.buying_style}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  <Heart className="h-3 w-3" />
-                  O Que Te Motiva
-                </div>
-                <p className="text-xs font-medium capitalize">
-                  {narrative.semantic_profile.emotional_driver}
-                </p>
-              </div>
-            </div>
+            {/* 4️⃣ Bridge to Offer */}
+            <p 
+              className="text-sm leading-relaxed font-medium"
+              style={{ color: theme?.primary_color || 'hsl(var(--primary))' }}
+            >
+              {narrative.bridge}
+            </p>
           </motion.div>
         )}
 

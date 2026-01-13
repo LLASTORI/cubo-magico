@@ -7,6 +7,32 @@ import { Calendar, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
+/**
+ * Get today's date in Brazil timezone (UTC-3) as YYYY-MM-DD string
+ * This is critical for Financial Core which uses economic_day in Brazil timezone
+ */
+const getBrazilToday = (): string => {
+  const now = new Date();
+  // Convert to Brazil timezone (UTC-3)
+  const brazilOffset = -3 * 60; // -3 hours in minutes
+  const localOffset = now.getTimezoneOffset(); // Local offset in minutes
+  const brazilTime = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
+  return brazilTime.toISOString().split('T')[0];
+};
+
+/**
+ * Get a date N days ago in Brazil timezone as YYYY-MM-DD string
+ */
+const getBrazilDateDaysAgo = (days: number): string => {
+  const now = new Date();
+  // Convert to Brazil timezone (UTC-3)
+  const brazilOffset = -3 * 60;
+  const localOffset = now.getTimezoneOffset();
+  const brazilTime = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
+  brazilTime.setDate(brazilTime.getDate() - days);
+  return brazilTime.toISOString().split('T')[0];
+};
+
 interface SalesFiltersProps {
   onFilter: (filters: FilterParams) => void;
   availableProducts?: string[];
@@ -30,8 +56,9 @@ export interface FilterParams {
 }
 
 const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], projectId }: SalesFiltersProps) => {
-  const today = new Date().toISOString().split('T')[0];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Use Brazil timezone for economic_day consistency with Financial Core
+  const today = getBrazilToday();
+  const thirtyDaysAgo = getBrazilDateDaysAgo(30);
 
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
@@ -137,27 +164,26 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
     });
   };
 
+  // Quick filter buttons use Brazil timezone for economic_day consistency
   const handleQuickFilter = (days: number) => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - days);
+    // "Últimos X dias" means today + (days-1) days before = X days total
+    const endDate = getBrazilToday();
+    const startDate = getBrazilDateDaysAgo(days - 1);
     
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(end.toISOString().split('T')[0]);
+    setStartDate(startDate);
+    setEndDate(endDate);
   };
 
   const handleTodayFilter = () => {
-    const today = new Date().toISOString().split('T')[0];
-    setStartDate(today);
-    setEndDate(today);
+    const todayBrazil = getBrazilToday();
+    setStartDate(todayBrazil);
+    setEndDate(todayBrazil);
   };
 
   const handleYesterdayFilter = () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    setStartDate(yesterdayStr);
-    setEndDate(yesterdayStr);
+    const yesterdayBrazil = getBrazilDateDaysAgo(1);
+    setStartDate(yesterdayBrazil);
+    setEndDate(yesterdayBrazil);
   };
 
   return (

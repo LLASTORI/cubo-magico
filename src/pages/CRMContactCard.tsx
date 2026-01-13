@@ -1,5 +1,6 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useCRMContact } from '@/hooks/useCRMContact';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useCRMContactJourney } from '@/hooks/useCRMContactJourney';
@@ -69,7 +70,7 @@ import { toast } from 'sonner';
 
 export default function CRMContactCard() {
   const { contactId } = useParams<{ contactId: string }>();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
   const { contact, isLoading, updateContact, updateNotes, addTag, removeTag, updatePipelineStage, deleteContact } = useCRMContact(contactId);
   const { stages } = usePipelineStages();
@@ -115,7 +116,7 @@ export default function CRMContactCard() {
     
     // Se já existe conversa, navegar direto para ela
     if (existingConversation) {
-      navigate(`/whatsapp?conversation=${existingConversation.id}`);
+      navigateTo(`whatsapp?conversation=${existingConversation.id}`);
       return;
     }
 
@@ -145,7 +146,7 @@ export default function CRMContactCard() {
       if (error) throw error;
       
       // Navegar para a conversa recém-criada
-      navigate(`/whatsapp?conversation=${data.id}`);
+      navigateTo(`whatsapp?conversation=${data.id}`);
     } catch (error: any) {
       console.error('Erro ao iniciar conversa:', error);
     } finally {
@@ -213,7 +214,7 @@ export default function CRMContactCard() {
           <Card>
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground">Contato não encontrado</p>
-              <Button onClick={() => navigate('/crm')} className="mt-4">
+              <Button onClick={() => navigateTo('crm')} className="mt-4">
                 Voltar ao CRM
               </Button>
             </CardContent>
@@ -308,7 +309,7 @@ export default function CRMContactCard() {
                   <AlertDialogAction
                     onClick={() => {
                       deleteContact.mutate(undefined, {
-                        onSuccess: () => navigate('/crm/kanban')
+                        onSuccess: () => navigateTo('crm/kanban')
                       });
                     }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

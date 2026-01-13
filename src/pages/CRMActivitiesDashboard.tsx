@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useCRMActivities } from '@/hooks/useCRMActivities';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function CRMActivitiesDashboard() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { completeActivity, deleteActivity } = useCRMActivities();
@@ -196,7 +196,7 @@ export default function CRMActivitiesDashboard() {
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => navigate('/crm/cadences')}
+            onClick={() => navigateTo('crm/cadences')}
           >
             <ListTodo className="h-4 w-4 mr-2" />
             Cadências
@@ -309,7 +309,7 @@ export default function CRMActivitiesDashboard() {
             variant="danger"
             onComplete={handleComplete}
             onDelete={handleDelete}
-            onNavigate={(contactId) => navigate(`/crm/contact/${contactId}`)}
+            onNavigate={(contactId) => navigateTo(`crm/contact/${contactId}`)}
             formatDueDate={formatDueDate}
           />
 
@@ -319,7 +319,7 @@ export default function CRMActivitiesDashboard() {
             variant="warning"
             onComplete={handleComplete}
             onDelete={handleDelete}
-            onNavigate={(contactId) => navigate(`/crm/contact/${contactId}`)}
+            onNavigate={(contactId) => navigateTo(`crm/contact/${contactId}`)}
             formatDueDate={formatDueDate}
           />
 
@@ -329,7 +329,7 @@ export default function CRMActivitiesDashboard() {
             variant="default"
             onComplete={handleComplete}
             onDelete={handleDelete}
-            onNavigate={(contactId) => navigate(`/crm/contact/${contactId}`)}
+            onNavigate={(contactId) => navigateTo(`crm/contact/${contactId}`)}
             formatDueDate={formatDueDate}
           />
 
@@ -339,7 +339,7 @@ export default function CRMActivitiesDashboard() {
             variant="default"
             onComplete={handleComplete}
             onDelete={handleDelete}
-            onNavigate={(contactId) => navigate(`/crm/contact/${contactId}`)}
+            onNavigate={(contactId) => navigateTo(`crm/contact/${contactId}`)}
             formatDueDate={formatDueDate}
           />
 
@@ -349,7 +349,7 @@ export default function CRMActivitiesDashboard() {
             variant="muted"
             onComplete={handleComplete}
             onDelete={handleDelete}
-            onNavigate={(contactId) => navigate(`/crm/contact/${contactId}`)}
+            onNavigate={(contactId) => navigateTo(`crm/contact/${contactId}`)}
             formatDueDate={formatDueDate}
           />
         </div>

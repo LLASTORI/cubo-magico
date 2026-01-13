@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useProject } from '@/contexts/ProjectContext';
 
 import {
@@ -119,7 +119,7 @@ export default function OfferMappingsAuto() {
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
 
   useEffect(() => {

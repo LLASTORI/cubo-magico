@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { 
   ArrowLeft, Save, Plus, Trash2, GripVertical, Eye, 
   ChevronDown, ChevronUp, Copy, ExternalLink, Lock, Check,
@@ -307,7 +308,7 @@ function OptionEditor({
 
 export default function QuizEditor() {
   const { quizId } = useParams();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const location = useLocation();
   const { toast } = useToast();
   const { currentProject } = useProject();

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { ArrowLeft, Download, User, Calendar, BarChart3, Filter, Search, Lock, ExternalLink, Brain } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -51,7 +52,7 @@ const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'o
 
 export default function QuizResults() {
   const { quizId } = useParams();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { quiz } = useQuiz(quizId);
   const { data: sessions, isLoading } = useQuizSessions(quizId);
   const { isModuleEnabled, isLoading: isLoadingModules } = useProjectModules();

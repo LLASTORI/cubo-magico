@@ -2,28 +2,46 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import BuscaRapida from "./pages/BuscaRapida";
+import { ProjectLayout } from "@/components/ProjectLayout";
+
+// Public pages
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import DataDeletion from "./pages/DataDeletion";
+import NoAccess from "./pages/NoAccess";
+import ActivateAccount from "./pages/ActivateAccount";
+import AcceptInvite from "./pages/AcceptInvite";
+import SurveyPublic from "./pages/SurveyPublic";
+import SurveyPublicLegacy from "./pages/SurveyPublicLegacy";
+import QuizPublic from "./pages/QuizPublic";
+import NotFound from "./pages/NotFound";
+
+// Protected pages - require auth but not project context
 import Projects from "./pages/Projects";
+import Onboarding from "./pages/Onboarding";
+import Admin from "./pages/Admin";
+import AgencyDashboard from "./pages/AgencyDashboard";
+
+// Project-scoped pages - require auth AND project context
+import BuscaRapida from "./pages/BuscaRapida";
+import ProjectOverview from "./pages/ProjectOverview";
 import OfferMappings from "./pages/OfferMappings";
 import FunnelAnalysis from "./pages/FunnelAnalysis";
-import ProjectOverview from "./pages/ProjectOverview";
 import DataDebug from "./pages/DataDebug";
 import Settings from "./pages/Settings";
 import NotificationsHistory from "./pages/NotificationsHistory";
-import Admin from "./pages/Admin";
 import MetaAds from "./pages/MetaAds";
 import UndefinedOffers from "./pages/UndefinedOffers";
 import LaunchDashboard from "./pages/LaunchDashboard";
 import AnaliseMensal from "./pages/AnaliseMensal";
-import AgencyDashboard from "./pages/AgencyDashboard";
 import CRM from "./pages/CRM";
 import CRMUTMBehavior from "./pages/CRMUTMBehavior";
 import CRMKanban from "./pages/CRMKanban";
@@ -41,28 +59,31 @@ import AutomationExecutions from "./pages/AutomationExecutions";
 import Surveys from "./pages/Surveys";
 import SurveyEditor from "./pages/SurveyEditor";
 import SurveyResponses from "./pages/SurveyResponses";
-import SurveyPublic from "./pages/SurveyPublic";
-import SurveyPublicLegacy from "./pages/SurveyPublicLegacy";
 import InsightsDashboard from "./pages/InsightsDashboard";
 import SocialListeningPage from "./pages/SocialListeningPage";
 import SurveyAnalysisPage from "./pages/SurveyAnalysisPage";
 import Quizzes from "./pages/Quizzes";
 import QuizEditor from "./pages/QuizEditor";
 import QuizResults from "./pages/QuizResults";
-import QuizPublic from "./pages/QuizPublic";
 import QuizSessionViewer from "./pages/QuizSessionViewer";
 import QuizAnswersViewer from "./pages/QuizAnswersViewer";
-import NotFound from "./pages/NotFound";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import DataDeletion from "./pages/DataDeletion";
-import Onboarding from "./pages/Onboarding";
-import NoAccess from "./pages/NoAccess";
-import ActivateAccount from "./pages/ActivateAccount";
-import AcceptInvite from "./pages/AcceptInvite";
 
 const queryClient = new QueryClient();
 
+/**
+ * ARQUITETURA CANÔNICA DE ROTEAMENTO
+ * 
+ * REGRA DE OURO: O projeto ativo SEMPRE vem da URL.
+ * Pattern: /app/:projectCode/*
+ * 
+ * Estrutura:
+ * 1. Rotas públicas (sem auth): /auth, /s/:code/:slug, /q/:code/:slug, etc.
+ * 2. Rotas protegidas (com auth, sem projeto): /projects, /admin, /agencia
+ * 3. Rotas de projeto (com auth E projeto): /app/:projectCode/*
+ * 
+ * Ao fazer login, usuário é redirecionado para /projects para escolher projeto.
+ * Ao escolher projeto, navega para /app/{projectCode}/dashboard
+ */
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
     <QueryClientProvider client={queryClient}>
@@ -73,6 +94,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
+                {/* ==================== PUBLIC ROUTES ==================== */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
@@ -82,27 +104,17 @@ const App = () => (
                 <Route path="/no-access" element={<NoAccess />} />
                 <Route path="/activate" element={<ActivateAccount />} />
                 <Route path="/accept-invite" element={<AcceptInvite />} />
-                {/* Survey Public Routes - Multi-tenant */}
+                
+                {/* Survey & Quiz Public Routes - Multi-tenant */}
                 <Route path="/s/:code/:slug" element={<SurveyPublic />} />
-                {/* Legacy route for backward compatibility */}
                 <Route path="/s/:slug" element={<SurveyPublicLegacy />} />
-                {/* Quiz Public Routes - Multi-tenant */}
                 <Route path="/q/:code/:slug" element={<QuizPublic />} />
-                {/* Legacy quiz route for backward compatibility */}
                 <Route path="/q/:quizId" element={<QuizPublic />} />
+
+                {/* ==================== PROTECTED ROUTES (no project context) ==================== */}
                 <Route path="/" element={
                   <ProtectedRoute>
-                    <ProjectOverview />
-                  </ProtectedRoute>
-                } />
-                <Route path="/busca-rapida" element={
-                  <ProtectedRoute>
-                    <BuscaRapida />
-                  </ProtectedRoute>
-                } />
-                <Route path="/onboarding" element={
-                  <ProtectedRoute>
-                    <Onboarding />
+                    <Projects />
                   </ProtectedRoute>
                 } />
                 <Route path="/projects" element={
@@ -110,30 +122,9 @@ const App = () => (
                     <Projects />
                   </ProtectedRoute>
                 } />
-                <Route path="/offer-mappings" element={
+                <Route path="/onboarding" element={
                   <ProtectedRoute>
-                    <OfferMappings />
-                  </ProtectedRoute>
-                } />
-                <Route path="/funnel-analysis" element={
-                  <ProtectedRoute>
-                    <FunnelAnalysis />
-                  </ProtectedRoute>
-                } />
-                {/* /project-overview now redirects to / */}
-                <Route path="/data-debug" element={
-                  <ProtectedRoute>
-                    <DataDebug />
-                  </ProtectedRoute>
-                } />
-                <Route path="/settings" element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                } />
-                <Route path="/notifications" element={
-                  <ProtectedRoute>
-                    <NotificationsHistory />
+                    <Onboarding />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin" element={
@@ -141,189 +132,109 @@ const App = () => (
                     <Admin />
                   </ProtectedRoute>
                 } />
-                <Route path="/meta-ads" element={
-                  <ProtectedRoute>
-                    <MetaAds />
-                  </ProtectedRoute>
-                } />
-                <Route path="/undefined-offers" element={
-                  <ProtectedRoute>
-                    <UndefinedOffers />
-                  </ProtectedRoute>
-                } />
-                <Route path="/launch-dashboard" element={
-                  <ProtectedRoute>
-                    <LaunchDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/analise-mensal" element={
-                  <ProtectedRoute>
-                    <AnaliseMensal />
-                  </ProtectedRoute>
-                } />
                 <Route path="/agencia" element={
                   <ProtectedRoute>
                     <AgencyDashboard />
                   </ProtectedRoute>
                 } />
-                <Route path="/crm" element={
+                <Route path="/notifications" element={
                   <ProtectedRoute>
-                    <CRM />
+                    <NotificationsHistory />
                   </ProtectedRoute>
                 } />
-                <Route path="/crm/utm-behavior" element={
+
+                {/* ==================== PROJECT-SCOPED ROUTES ==================== */}
+                {/* All routes under /app/:projectCode require both auth AND valid project */}
+                <Route path="/app/:projectCode" element={
                   <ProtectedRoute>
-                    <CRMUTMBehavior />
+                    <ProjectLayout />
                   </ProtectedRoute>
-                } />
-                <Route path="/crm/kanban" element={
-                  <ProtectedRoute>
-                    <CRMKanban />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/contact/:contactId" element={
-                  <ProtectedRoute>
-                    <CRMContactCard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/pipeline-settings" element={
-                  <ProtectedRoute>
-                    <CRMPipelineSettings />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/activities" element={
-                  <ProtectedRoute>
-                    <CRMActivitiesDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/cadences" element={
-                  <ProtectedRoute>
-                    <CRMCadences />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/recovery" element={
-                  <ProtectedRoute>
-                    <CRMRecovery />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/recovery/kanban" element={
-                  <ProtectedRoute>
-                    <CRMRecoveryKanban />
-                  </ProtectedRoute>
-                } />
-                <Route path="/crm/recovery/settings" element={
-                  <ProtectedRoute>
-                    <CRMRecoverySettings />
-                  </ProtectedRoute>
-                } />
-                <Route path="/whatsapp" element={
-                  <ProtectedRoute>
-                    <WhatsAppLiveChat />
-                  </ProtectedRoute>
-                } />
-                <Route path="/automations" element={
-                  <ProtectedRoute>
-                    <AutomationFlows />
-                  </ProtectedRoute>
-                } />
-                <Route path="/automations/:flowId" element={
-                  <ProtectedRoute>
-                    <AutomationFlowEditor />
-                  </ProtectedRoute>
-                } />
-                <Route path="/automations/executions" element={
-                  <ProtectedRoute>
-                    <AutomationExecutions />
-                  </ProtectedRoute>
-                } />
-                <Route path="/surveys" element={
-                  <ProtectedRoute>
-                    <Surveys />
-                  </ProtectedRoute>
-                } />
-                <Route path="/surveys/:surveyId" element={
-                  <ProtectedRoute>
-                    <SurveyEditor />
-                  </ProtectedRoute>
-                } />
-                <Route path="/surveys/:surveyId/responses" element={
-                  <ProtectedRoute>
-                    <SurveyResponses />
-                  </ProtectedRoute>
-                } />
-                {/* Quiz Routes */}
-                <Route path="/quizzes" element={
-                  <ProtectedRoute>
-                    <Quizzes />
-                  </ProtectedRoute>
-                } />
-                <Route path="/quizzes/:quizId" element={
-                  <ProtectedRoute>
-                    <QuizEditor />
-                  </ProtectedRoute>
-                } />
-                <Route path="/quizzes/:quizId/results" element={
-                  <ProtectedRoute>
-                    <QuizResults />
-                  </ProtectedRoute>
-                } />
-                <Route path="/quizzes/:quizId/sessions/:sessionId" element={
-                  <ProtectedRoute>
-                    <QuizSessionViewer />
-                  </ProtectedRoute>
-                } />
-                <Route path="/quizzes/:quizId/sessions/:sessionId/answers" element={
-                  <ProtectedRoute>
-                    <QuizAnswersViewer />
-                  </ProtectedRoute>
-                } />
-                {/* Insights Module Routes */}
-                <Route path="/insights" element={
-                  <ProtectedRoute>
-                    <InsightsDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys" element={
-                  <ProtectedRoute>
-                    <Surveys />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys/:surveyId" element={
-                  <ProtectedRoute>
-                    <SurveyEditor />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys/:surveyId/responses" element={
-                  <ProtectedRoute>
-                    <SurveyResponses />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys/analysis" element={
-                  <ProtectedRoute>
-                    <SurveyAnalysisPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys/analysis/by-survey" element={
-                  <ProtectedRoute>
-                    <SurveyAnalysisPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys/analysis/ai-settings" element={
-                  <ProtectedRoute>
-                    <SurveyAnalysisPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/surveys/analysis/guide" element={
-                  <ProtectedRoute>
-                    <SurveyAnalysisPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights/social" element={
-                  <ProtectedRoute>
-                    <SocialListeningPage />
-                  </ProtectedRoute>
-                } />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                }>
+                  {/* Dashboard / Overview */}
+                  <Route index element={<ProjectOverview />} />
+                  <Route path="dashboard" element={<ProjectOverview />} />
+                  
+                  {/* Financial */}
+                  <Route path="busca-rapida" element={<BuscaRapida />} />
+                  <Route path="funnel-analysis" element={<FunnelAnalysis />} />
+                  <Route path="analise-mensal" element={<AnaliseMensal />} />
+                  <Route path="launch-dashboard" element={<LaunchDashboard />} />
+                  <Route path="undefined-offers" element={<UndefinedOffers />} />
+                  <Route path="offer-mappings" element={<OfferMappings />} />
+                  
+                  {/* Meta Ads */}
+                  <Route path="meta-ads" element={<MetaAds />} />
+                  
+                  {/* CRM */}
+                  <Route path="crm" element={<CRM />} />
+                  <Route path="crm/utm-behavior" element={<CRMUTMBehavior />} />
+                  <Route path="crm/kanban" element={<CRMKanban />} />
+                  <Route path="crm/contact/:contactId" element={<CRMContactCard />} />
+                  <Route path="crm/pipeline-settings" element={<CRMPipelineSettings />} />
+                  <Route path="crm/activities" element={<CRMActivitiesDashboard />} />
+                  <Route path="crm/cadences" element={<CRMCadences />} />
+                  <Route path="crm/recovery" element={<CRMRecovery />} />
+                  <Route path="crm/recovery/kanban" element={<CRMRecoveryKanban />} />
+                  <Route path="crm/recovery/settings" element={<CRMRecoverySettings />} />
+                  
+                  {/* WhatsApp & Automations */}
+                  <Route path="whatsapp" element={<WhatsAppLiveChat />} />
+                  <Route path="automations" element={<AutomationFlows />} />
+                  <Route path="automations/:flowId" element={<AutomationFlowEditor />} />
+                  <Route path="automations/executions" element={<AutomationExecutions />} />
+                  
+                  {/* Surveys */}
+                  <Route path="surveys" element={<Surveys />} />
+                  <Route path="surveys/:surveyId" element={<SurveyEditor />} />
+                  <Route path="surveys/:surveyId/responses" element={<SurveyResponses />} />
+                  
+                  {/* Quizzes */}
+                  <Route path="quizzes" element={<Quizzes />} />
+                  <Route path="quizzes/:quizId" element={<QuizEditor />} />
+                  <Route path="quizzes/:quizId/results" element={<QuizResults />} />
+                  <Route path="quizzes/:quizId/sessions/:sessionId" element={<QuizSessionViewer />} />
+                  <Route path="quizzes/:quizId/sessions/:sessionId/answers" element={<QuizAnswersViewer />} />
+                  
+                  {/* Insights */}
+                  <Route path="insights" element={<InsightsDashboard />} />
+                  <Route path="insights/surveys" element={<Surveys />} />
+                  <Route path="insights/surveys/:surveyId" element={<SurveyEditor />} />
+                  <Route path="insights/surveys/:surveyId/responses" element={<SurveyResponses />} />
+                  <Route path="insights/surveys/analysis" element={<SurveyAnalysisPage />} />
+                  <Route path="insights/surveys/analysis/by-survey" element={<SurveyAnalysisPage />} />
+                  <Route path="insights/surveys/analysis/ai-settings" element={<SurveyAnalysisPage />} />
+                  <Route path="insights/surveys/analysis/guide" element={<SurveyAnalysisPage />} />
+                  <Route path="insights/social" element={<SocialListeningPage />} />
+                  
+                  {/* Settings & Debug */}
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="data-debug" element={<DataDebug />} />
+                </Route>
+
+                {/* ==================== LEGACY REDIRECTS ==================== */}
+                {/* Redirect old routes to project selector */}
+                <Route path="/busca-rapida" element={<Navigate to="/projects" replace />} />
+                <Route path="/funnel-analysis" element={<Navigate to="/projects" replace />} />
+                <Route path="/analise-mensal" element={<Navigate to="/projects" replace />} />
+                <Route path="/launch-dashboard" element={<Navigate to="/projects" replace />} />
+                <Route path="/meta-ads" element={<Navigate to="/projects" replace />} />
+                <Route path="/crm" element={<Navigate to="/projects" replace />} />
+                <Route path="/crm/*" element={<Navigate to="/projects" replace />} />
+                <Route path="/whatsapp" element={<Navigate to="/projects" replace />} />
+                <Route path="/automations" element={<Navigate to="/projects" replace />} />
+                <Route path="/automations/*" element={<Navigate to="/projects" replace />} />
+                <Route path="/surveys" element={<Navigate to="/projects" replace />} />
+                <Route path="/surveys/*" element={<Navigate to="/projects" replace />} />
+                <Route path="/quizzes" element={<Navigate to="/projects" replace />} />
+                <Route path="/quizzes/*" element={<Navigate to="/projects" replace />} />
+                <Route path="/insights" element={<Navigate to="/projects" replace />} />
+                <Route path="/insights/*" element={<Navigate to="/projects" replace />} />
+                <Route path="/settings" element={<Navigate to="/projects" replace />} />
+                <Route path="/offer-mappings" element={<Navigate to="/projects" replace />} />
+                <Route path="/undefined-offers" element={<Navigate to="/projects" replace />} />
+                <Route path="/data-debug" element={<Navigate to="/projects" replace />} />
+
+                {/* Catch-all */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

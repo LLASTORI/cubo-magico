@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -32,77 +32,89 @@ interface ProjectCredentialStatus {
 }
 
 interface ProjectContextType {
+  // Lista de projetos do usuário (para seletor de projetos)
   projects: Project[];
-  currentProject: Project | null;
-  credentials: ProjectCredential | null;
   projectCredentialStatuses: ProjectCredentialStatus[];
   loading: boolean;
+  
+  // Projeto atual (derivado da URL via setActiveProjectCode)
+  currentProject: Project | null;
+  credentials: ProjectCredential | null;
+  
+  // Para ser chamado pelo ProjectLayout quando a URL muda
+  setActiveProjectCode: (code: string | null) => void;
+  
+  // DEPRECATED: Use navegação URL em vez disso
   setCurrentProject: (project: Project | null) => void;
+  
+  // CRUD de projetos
   createProject: (name: string, description?: string) => Promise<{ data: Project | null; error: any }>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<{ error: any }>;
   deleteProject: (id: string) => Promise<{ error: any }>;
+  
+  // Credentials
   saveCredentials: (projectId: string, credentials: Partial<ProjectCredential>) => Promise<{ error: any }>;
   markCredentialsValidated: (projectId: string) => Promise<{ error: any }>;
   refreshProjects: () => Promise<void>;
   refreshCredentials: () => Promise<void>;
   isProjectReady: (projectId: string) => boolean;
+  
+  // Buscar projeto por ID ou código
+  getProjectById: (projectId: string) => Project | undefined;
+  getProjectByCode: (publicCode: string) => Project | undefined;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
-const CURRENT_PROJECT_KEY = 'lovable_current_project_id';
-
-// Helper to get saved project ID from localStorage
-const getSavedProjectId = (): string | null => {
-  try {
-    return localStorage.getItem(CURRENT_PROJECT_KEY);
-  } catch {
-    return null;
-  }
-};
-
-// Helper to save project ID to localStorage
-const saveProjectId = (projectId: string | null) => {
-  try {
-    if (projectId) {
-      localStorage.setItem(CURRENT_PROJECT_KEY, projectId);
-    } else {
-      localStorage.removeItem(CURRENT_PROJECT_KEY);
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-};
-
+/**
+ * ProjectProvider com arquitetura canônica.
+ * 
+ * REGRA DE OURO: O projeto ativo vem da URL (/app/:projectCode/*)
+ * O ProjectLayout chama setActiveProjectCode quando a URL muda.
+ */
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
-  const [credentials, setCredentials] = useState<ProjectCredential | null>(null);
   const [projectCredentialStatuses, setProjectCredentialStatuses] = useState<ProjectCredentialStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [credentials, setCredentials] = useState<ProjectCredential | null>(null);
+  const [activeProjectCode, setActiveProjectCode] = useState<string | null>(null);
   
-  // Track if we've done initial project selection
-  const hasInitializedRef = useRef(false);
-  // Track the saved project ID to restore
-  const savedProjectIdRef = useRef<string | null>(getSavedProjectId());
+  // Derivar currentProject dos projetos carregados + código ativo
+  const currentProject = activeProjectCode 
+    ? projects.find(p => p.public_code === activeProjectCode) ?? null
+    : null;
 
-  // Wrapper to persist currentProject to localStorage
-  const setCurrentProject = (project: Project | null) => {
-    console.log('[ProjectContext] setCurrentProject called:', project?.name, project?.id);
-    setCurrentProjectState(project);
-    saveProjectId(project?.id || null);
-    // Update the ref as well for consistency
-    savedProjectIdRef.current = project?.id || null;
-  };
+  // Carregar credenciais quando o projeto atual mudar
+  useEffect(() => {
+    const fetchCredentials = async () => {
+      if (!currentProject) {
+        setCredentials(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('project_credentials')
+        .select('*')
+        .eq('project_id', currentProject.id)
+        .eq('provider', 'hotmart')
+        .maybeSingle();
+
+      if (!error && data) {
+        setCredentials(data);
+      } else {
+        setCredentials(null);
+      }
+    };
+
+    fetchCredentials();
+  }, [currentProject?.id]);
 
   const refreshProjects = async () => {
     if (!user) {
       setProjects([]);
-      setCurrentProjectState(null);
       setProjectCredentialStatuses([]);
       setLoading(false);
-      hasInitializedRef.current = false;
       return;
     }
 
@@ -146,67 +158,20 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
       // Sort by created_at descending
       allProjects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      const data = allProjects;
-
-      setProjects(data || []);
+      setProjects(allProjects);
       
       // Fetch credential statuses for all projects
-      if (data && data.length > 0) {
-        const projectIds = data.map(p => p.id);
+      if (allProjects.length > 0) {
+        const projectIds = allProjects.map(p => p.id);
         const { data: credData } = await supabase
           .from('project_credentials')
           .select('project_id, is_configured, is_validated')
           .in('project_id', projectIds);
         
         setProjectCredentialStatuses(credData || []);
-        
-        // ONLY do initial project selection if we haven't initialized yet
-        if (!hasInitializedRef.current) {
-          hasInitializedRef.current = true;
-          
-          // First priority: restore from localStorage
-          const savedId = savedProjectIdRef.current;
-          console.log('[ProjectContext] Initial selection - savedId:', savedId);
-          
-          if (savedId) {
-            const savedProject = data.find(p => p.id === savedId);
-            if (savedProject) {
-              console.log('[ProjectContext] Restoring saved project:', savedProject.name);
-              setCurrentProjectState(savedProject);
-              return; // Don't override with auto-selection
-            } else {
-              // Saved project doesn't exist anymore - clear localStorage
-              console.log('[ProjectContext] Saved project not found, clearing localStorage');
-              localStorage.removeItem(CURRENT_PROJECT_KEY);
-              savedProjectIdRef.current = null;
-            }
-          }
-          
-          // Fallback: select first validated project or first project
-          const validatedProject = data.find(p => 
-            credData?.some(c => c.project_id === p.id && c.is_validated)
-          );
-          const projectToSelect = validatedProject || data[0];
-          console.log('[ProjectContext] Auto-selecting project:', projectToSelect?.name);
-          setCurrentProject(projectToSelect);
-        } else {
-          // If already initialized, verify current project still exists
-          if (currentProject && !data.find(p => p.id === currentProject.id)) {
-            console.log('[ProjectContext] Current project no longer exists, resetting');
-            localStorage.removeItem(CURRENT_PROJECT_KEY);
-            savedProjectIdRef.current = null;
-            const validatedProject = data.find(p => 
-              credData?.some(c => c.project_id === p.id && c.is_validated)
-            );
-            setCurrentProject(validatedProject || data[0] || null);
-          }
-        }
-      } else {
-        hasInitializedRef.current = true;
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-      hasInitializedRef.current = true;
     } finally {
       setLoading(false);
     }
@@ -217,43 +182,21 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     return status?.is_configured === true && status?.is_validated === true;
   };
 
-  // Fetch credentials when project changes
-  useEffect(() => {
-    const fetchCredentials = async () => {
-      if (!currentProject) {
-        setCredentials(null);
-        return;
-      }
+  const getProjectById = (projectId: string): Project | undefined => {
+    return projects.find(p => p.id === projectId);
+  };
 
-      const { data, error } = await supabase
-        .from('project_credentials')
-        .select('*')
-        .eq('project_id', currentProject.id)
-        .eq('provider', 'hotmart')
-        .maybeSingle();
-
-      if (!error && data) {
-        setCredentials(data);
-      } else {
-        setCredentials(null);
-      }
-    };
-
-    fetchCredentials();
-  }, [currentProject]);
+  const getProjectByCode = (publicCode: string): Project | undefined => {
+    return projects.find(p => p.public_code === publicCode);
+  };
 
   useEffect(() => {
-    // Reset initialization when user changes
-    hasInitializedRef.current = false;
-    // Re-read from localStorage for new user
-    savedProjectIdRef.current = getSavedProjectId();
     refreshProjects();
   }, [user]);
 
   const createProject = async (name: string, description?: string) => {
     if (!user) return { data: null, error: new Error('User not authenticated') };
 
-    // Note: public_code is generated automatically by a database trigger
     const { data, error } = await supabase
       .from('projects')
       .insert({ user_id: user.id, name, description } as any)
@@ -262,7 +205,6 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
     if (!error && data) {
       await refreshProjects();
-      setCurrentProject(data);
     }
 
     return { data, error };
@@ -289,9 +231,6 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const finalError = error || (data?.error ? new Error(data.error) : null);
 
     if (!finalError) {
-      if (currentProject?.id === id) {
-        setCurrentProject(null);
-      }
       await refreshProjects();
     }
 
@@ -308,13 +247,12 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         client_secret: creds.client_secret,
         basic_auth: creds.basic_auth,
         is_configured: !!(creds.client_id && creds.client_secret),
-        is_validated: false, // Reset validation when credentials change
+        is_validated: false,
       }, {
         onConflict: 'project_id,provider',
       });
 
     if (!error) {
-      await refreshCredentials();
       await refreshCredentialStatuses();
     }
 
@@ -332,7 +270,6 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
       .eq('provider', 'hotmart');
 
     if (!error) {
-      await refreshCredentials();
       await refreshCredentialStatuses();
     }
 
@@ -368,13 +305,19 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     setProjectCredentialStatuses(credData || []);
   };
 
+  // DEPRECATED: setCurrentProject agora é no-op
+  const setCurrentProject = (project: Project | null) => {
+    console.warn('[ProjectContext] setCurrentProject is deprecated. Use URL navigation instead.');
+  };
+
   return (
     <ProjectContext.Provider value={{
       projects,
-      currentProject,
-      credentials,
       projectCredentialStatuses,
       loading,
+      currentProject,
+      credentials,
+      setActiveProjectCode,
       setCurrentProject,
       createProject,
       updateProject,
@@ -384,6 +327,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
       refreshProjects,
       refreshCredentials,
       isProjectReady,
+      getProjectById,
+      getProjectByCode,
     }}>
       {children}
     </ProjectContext.Provider>

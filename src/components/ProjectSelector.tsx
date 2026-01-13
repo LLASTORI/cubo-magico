@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject, Project } from '@/contexts/ProjectContext';
 import { Button } from '@/components/ui/button';
@@ -13,17 +13,32 @@ import {
 import { ChevronDown, FolderOpen, Settings, CheckCircle, AlertCircle, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
+/**
+ * ProjectSelector REFATORADO para arquitetura canônica.
+ * 
+ * Agora usa navegação via URL em vez de setar estado global.
+ * Ao trocar de projeto, navega para /app/{newProjectCode}/dashboard
+ */
 const ProjectSelector = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { projectCode: currentProjectCode } = useParams<{ projectCode: string }>();
   const queryClient = useQueryClient();
-  const { projects, currentProject, setCurrentProject, isProjectReady } = useProject();
+  const { projects, isProjectReady, getProjectByCode } = useProject();
   
   const isOnConsolidado = location.pathname === '/agencia';
+  const currentProject = currentProjectCode ? getProjectByCode(currentProjectCode) : null;
+
+  // Extrai o path após o projectCode para manter o usuário na mesma página
+  const getCurrentSubPath = (): string => {
+    if (!currentProjectCode) return 'dashboard';
+    const match = location.pathname.match(/^\/app\/[^/]+\/(.+)$/);
+    return match ? match[1] : 'dashboard';
+  };
 
   const handleSelectProject = (project: Project) => {
     // Skip if same project
-    if (currentProject?.id === project.id) {
+    if (project.public_code === currentProjectCode) {
       console.log('[ProjectSelector] Same project selected, skipping');
       return;
     }
@@ -34,24 +49,14 @@ const ProjectSelector = () => {
       return;
     }
     
-    console.log('[ProjectSelector] Switching to project:', project.name, project.id);
+    console.log('[ProjectSelector] Navigating to project:', project.name, project.public_code);
     
     // CRITICAL: Clear ALL cached queries before switching project
-    // This ensures no stale data from previous project is shown
     queryClient.clear();
     
-    // CRITICAL: Clear URL params that reference project-specific data (like conversation IDs)
-    const currentUrl = new URL(window.location.href);
-    const hasProjectParams = currentUrl.searchParams.has('conversation') || 
-                             currentUrl.searchParams.has('contact');
-    if (hasProjectParams) {
-      currentUrl.searchParams.delete('conversation');
-      currentUrl.searchParams.delete('contact');
-      window.history.replaceState({}, '', currentUrl.pathname);
-    }
-    
-    // Update the current project (this also saves to localStorage)
-    setCurrentProject(project);
+    // Navegar para o novo projeto mantendo a mesma sub-página
+    const subPath = getCurrentSubPath();
+    navigate(`/app/${project.public_code}/${subPath}`);
     
     toast.success(`Projeto alterado para: ${project.name}`);
   };
@@ -87,7 +92,7 @@ const ProjectSelector = () => {
         ) : (
           projects.map((project) => {
             const ready = isProjectReady(project.id);
-            const isSelected = currentProject?.id === project.id;
+            const isSelected = project.public_code === currentProjectCode;
             return (
               <DropdownMenuItem
                 key={project.id}

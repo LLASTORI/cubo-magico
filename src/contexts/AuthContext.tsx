@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode, useMemo } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { updateLastLogin, logActivityStandalone } from '@/hooks/useActivityLog';
@@ -17,12 +17,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // ============= FORENSIC DEBUG =============
 const AUTH_PROVIDER_ID = `auth_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+/**
+ * AuthProvider com arquitetura estável.
+ * 
+ * REGRA CRÍTICA: Este provider NUNCA deve causar unmount dos children
+ * durante token refresh ou mudanças de estado de autenticação.
+ * 
+ * O user e session são atualizados via state, mas o provider em si
+ * não desmonta - apenas atualiza o context value.
+ */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const loginLoggedRef = useRef(false);
   const mountedRef = useRef(false);
+  const initializedRef = useRef(false);
   
   // FORENSIC: Track mount/unmount
   useEffect(() => {
@@ -39,6 +49,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    // Prevenir múltiplas inicializações
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    
     // Set up auth state listener FIRST
     const {
       data: { subscription },
@@ -49,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(`[FORENSIC] auth event - user: ${newSession?.user?.email ?? 'null'}`);
       console.log(`[FORENSIC] auth event - session expires_at: ${newSession?.expires_at ?? 'null'}`);
       
+      // CRÍTICO: Apenas atualizar state, NUNCA causar remount
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setLoading(false);
@@ -130,8 +145,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
+  // CRÍTICO: Memoizar o value para evitar re-renders desnecessários
+  // Mas NÃO memoizar de forma que bloqueie atualizações legítimas
+  const value = useMemo(() => ({
+    user,
+    session,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+  }), [user, session, loading]);
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

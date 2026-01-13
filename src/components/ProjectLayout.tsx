@@ -1,7 +1,7 @@
 import { Outlet, Navigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CubeLoader } from '@/components/CubeLoader';
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject, Project } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,8 +33,12 @@ export function useProjectLayout(): ProjectLayoutContextType {
 /**
  * Layout wrapper para todas as rotas que precisam de um projeto ativo.
  * 
+ * ARQUITETURA CRÍTICA:
+ * Este componente NÃO pode desmontar durante token refresh ou mudanças de auth.
+ * O projectCode vem da URL e é estável.
+ * 
  * Este componente:
- * 1. Lê o projectCode da URL
+ * 1. Lê o projectCode da URL (estável, não muda com auth)
  * 2. Valida que o projeto existe e o usuário tem acesso
  * 3. Sincroniza o projeto ativo com o ProjectContext
  * 4. Provê o projeto via context para todos os filhos
@@ -45,6 +49,7 @@ export function ProjectLayout() {
   const { user } = useAuth();
   const { setActiveProjectCode, projects, loading: projectsLoading } = useProject();
   const mountedRef = useRef(false);
+  const previousProjectCodeRef = useRef<string | undefined>(undefined);
   
   // FORENSIC: Track mount/unmount
   useEffect(() => {
@@ -59,7 +64,16 @@ export function ProjectLayout() {
     };
   }, []);
 
+  // Log mudanças de projectCode (não deve acontecer durante token refresh)
+  useEffect(() => {
+    if (previousProjectCodeRef.current !== projectCode) {
+      console.log(`[FORENSIC] ProjectLayout projectCode changed: ${previousProjectCodeRef.current} -> ${projectCode}`);
+      previousProjectCodeRef.current = projectCode;
+    }
+  }, [projectCode]);
+
   // Buscar e validar acesso ao projeto
+  // IMPORTANTE: Esta query é estável - projectCode vem da URL, não do auth state
   const {
     data: projectData,
     isLoading: queryLoading,
@@ -107,6 +121,8 @@ export function ProjectLayout() {
     enabled: !!projectCode && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutos
     gcTime: 10 * 60 * 1000, // 10 minutos
+    // CRÍTICO: Não refetchar em window focus para evitar flicker
+    refetchOnWindowFocus: false,
   });
 
   // Sincronizar o código do projeto ativo com o contexto
@@ -115,12 +131,16 @@ export function ProjectLayout() {
       console.log('[ProjectLayout] Setting active project code:', projectCode);
       setActiveProjectCode(projectCode);
     }
-    
-    // Limpar quando sair do layout
-    return () => {
-      // Não limpar imediatamente para evitar flicker durante navegação
-    };
   }, [projectCode, projectData?.hasAccess, setActiveProjectCode]);
+
+  // Memoizar context value para evitar re-renders
+  const contextValue = useMemo(() => {
+    if (!projectData?.project || !projectCode) return null;
+    return {
+      project: projectData.project,
+      projectCode,
+    };
+  }, [projectData?.project, projectCode]);
 
   const isLoading = queryLoading || projectsLoading;
 
@@ -147,10 +167,7 @@ export function ProjectLayout() {
 
   // Render children com o projeto no context
   return (
-    <ProjectLayoutContext.Provider value={{ 
-      project: projectData.project, 
-      projectCode 
-    }}>
+    <ProjectLayoutContext.Provider value={contextValue!}>
       <Outlet />
     </ProjectLayoutContext.Provider>
   );

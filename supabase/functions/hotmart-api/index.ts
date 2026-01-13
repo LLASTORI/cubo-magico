@@ -701,15 +701,31 @@ async function fetchAllSales(
   return allSales;
 }
 
-// All statuses to fetch from Hotmart API
-// IMPORTANT: the Sales History endpoint only returns APPROVED/COMPLETE if you don't filter by status.
-// Source (docs): /payments/api/v1/sales/history → transaction_status possible values.
-const ALL_TRANSACTION_STATUSES = [
-  'APPROVED',
+// ============================================
+// HOTMART API STATUS HANDLING - CRITICAL FIX
+// ============================================
+// The Hotmart Sales History API has a special behavior:
+// - When NO transaction_status filter is passed, it returns ONLY "APPROVED" and "COMPLETE" sales
+// - When a specific status filter IS passed (e.g., transaction_status=APPROVED), 
+//   the API may return 0 results even if APPROVED sales exist
+//
+// SOLUTION:
+// 1. First fetch WITHOUT any status filter → gets APPROVED + COMPLETE (the main revenue)
+// 2. Then fetch OTHER statuses individually with filters
+//
+// Source: https://developers.hotmart.com/docs/en/v1/sales/sales-history/
+// "if you do not set up the transaction or transaction_status filters for this endpoint, 
+//  it'll only return the 'APPROVED' and 'COMPLETE' statuses."
+// ============================================
+
+// Statuses that require explicit filtering (NOT returned by default)
+// APPROVED and COMPLETE are excluded because they're returned by the default (no filter) call
+const SECONDARY_TRANSACTION_STATUSES = [
+  'ABANDONED',
   'BLOCKED',
   'CANCELLED',
   'CHARGEBACK',
-  'COMPLETE',
+  'DELAYED',
   'EXPIRED',
   'NO_FUNDS',
   'OVERDUE',
@@ -724,20 +740,17 @@ const ALL_TRANSACTION_STATUSES = [
   'WAITING_PAYMENT',
 ];
 
-// PRIMARY statuses for quick search - most relevant for real-time analysis
-// These cover 95%+ of sales and are fastest to fetch
-// Other statuses can be synced via webhook or background cron
-const PRIMARY_TRANSACTION_STATUSES = [
-  'APPROVED',      // Vendas aprovadas
-  'COMPLETE',      // Vendas completas
-  'WAITING_PAYMENT', // Boletos/Pix aguardando
-  'CANCELLED',     // Cancelamentos
-  'REFUNDED',      // Reembolsos
-  'CHARGEBACK',    // Chargebacks
+// PRIMARY statuses for quick search (subset of secondary for faster syncs)
+const QUICK_SECONDARY_STATUSES = [
+  'WAITING_PAYMENT',
+  'CANCELLED',
+  'REFUNDED',
+  'CHARGEBACK',
 ];
 
-// Sync sales to database - OPTIMIZED with batch upsert
-// Supports 'quick' mode (primary statuses only) or 'full' mode (all statuses)
+// Sync sales to database - FIXED with proper Hotmart API behavior
+// The sync now correctly handles the Hotmart API quirk where APPROVED/COMPLETE
+// must be fetched WITHOUT a status filter
 async function syncSales(
   projectId: string,
   startDate: number,
@@ -756,18 +769,37 @@ async function syncSales(
   
   // Fetch sales from Hotmart
   console.log(`Syncing sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`);
-  console.log(`Mode: ${quickMode ? 'QUICK (primary statuses)' : 'FULL (all statuses)'}`);
+  console.log(`Mode: ${quickMode ? 'QUICK' : 'FULL'}`);
   
   let allSales: HotmartSale[] = [];
   
-  // If a specific status is requested OR we don't want to fetch all, just fetch that one
-  if (status || !fetchAllStatuses) {
+  // If a specific status is requested, just fetch that one
+  if (status) {
+    console.log(`Fetching specific status: ${status}`);
     allSales = await fetchAllSales(token, startDate, endDate, status);
-    console.log(`Sales fetched for status ${status || 'all'}: ${allSales.length}`);
+    console.log(`Sales fetched for status ${status}: ${allSales.length}`);
+  } else if (!fetchAllStatuses) {
+    // Legacy behavior: fetch without status filter (returns APPROVED + COMPLETE only)
+    console.log('Fetching without status filter (APPROVED + COMPLETE only)...');
+    allSales = await fetchAllSales(token, startDate, endDate, undefined);
+    console.log(`Sales fetched (default APPROVED+COMPLETE): ${allSales.length}`);
   } else {
-    // Choose which statuses to fetch based on mode
-    const statusesToFetch = quickMode ? PRIMARY_TRANSACTION_STATUSES : ALL_TRANSACTION_STATUSES;
-    console.log(`Fetching sales for ${statusesToFetch.length} statuses (${quickMode ? 'quick' : 'full'} mode)...`);
+    // FULL SYNC with correct Hotmart API behavior
+    console.log('=== FULL SYNC MODE ===');
+    
+    // STEP 1: Fetch APPROVED + COMPLETE without any filter (critical for revenue!)
+    console.log('STEP 1: Fetching APPROVED + COMPLETE (no status filter)...');
+    try {
+      const primarySales = await fetchAllSales(token, startDate, endDate, undefined);
+      console.log(`  ✓ APPROVED + COMPLETE: ${primarySales.length} sales`);
+      allSales.push(...primarySales);
+    } catch (primaryError) {
+      console.error('  ✗ Error fetching APPROVED+COMPLETE:', primaryError);
+    }
+    
+    // STEP 2: Fetch secondary statuses with explicit filters
+    const statusesToFetch = quickMode ? QUICK_SECONDARY_STATUSES : SECONDARY_TRANSACTION_STATUSES;
+    console.log(`STEP 2: Fetching ${statusesToFetch.length} secondary statuses...`);
     
     for (const txStatus of statusesToFetch) {
       try {
@@ -777,14 +809,13 @@ async function syncSales(
         allSales.push(...salesForStatus);
       } catch (statusError) {
         console.error(`  Error fetching status ${txStatus}:`, statusError);
-        // Continue with other statuses
       }
       
       // Small delay between status calls to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 150));
     }
     
-    console.log(`Total sales fetched across ${statusesToFetch.length} statuses: ${allSales.length}`);
+    console.log(`=== TOTAL SALES FETCHED: ${allSales.length} ===`);
   }
   
   if (allSales.length === 0) {

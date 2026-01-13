@@ -1,17 +1,12 @@
 import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { RefreshCw, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
-import { format, subMonths, subDays } from 'date-fns';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { format, subDays } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { invokeProjectFunction } from '@/lib/projectApi';
 
 interface QuickSyncButtonProps {
   variant?: 'default' | 'outline' | 'ghost';
@@ -32,17 +28,21 @@ export function QuickSyncButton({
   size = 'sm',
   showLabel = true 
 }: QuickSyncButtonProps) {
+  // Get projectCode from URL (canonical source of truth)
+  const { projectCode } = useParams<{ projectCode: string }>();
   const { currentProject } = useProject();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
 
+  // Use currentProject.id for queries, but projectCode for edge function calls
   const projectId = currentProject?.id;
+  const effectiveProjectCode = projectCode || currentProject?.public_code;
 
   // Check connections
   const { data: metaCredentials } = useQuery({
-    queryKey: ['meta_credentials_quick', projectId],
+    queryKey: ['meta_credentials_quick', projectCode, projectId],
     queryFn: async () => {
       if (!projectId) return null;
       const { data } = await supabase
@@ -57,7 +57,7 @@ export function QuickSyncButton({
   });
 
   const { data: hotmartCredentials } = useQuery({
-    queryKey: ['hotmart_credentials_quick', projectId],
+    queryKey: ['hotmart_credentials_quick', projectCode, projectId],
     queryFn: async () => {
       if (!projectId) return null;
       const { data } = await supabase
@@ -73,7 +73,7 @@ export function QuickSyncButton({
   });
 
   const { data: metaAccounts } = useQuery({
-    queryKey: ['meta_accounts_quick', projectId],
+    queryKey: ['meta_accounts_quick', projectCode, projectId],
     queryFn: async () => {
       if (!projectId) return [];
       const { data } = await supabase
@@ -92,7 +92,16 @@ export function QuickSyncButton({
   const hasAnyConnection = hasMetaConnection || hasHotmartConnection;
 
   const handleSync = async (forceRefresh: boolean = false, days: number = 90) => {
-    if (!projectId || !hasAnyConnection || isSyncing) return;
+    if (!effectiveProjectCode || !hasAnyConnection || isSyncing) {
+      if (!effectiveProjectCode) {
+        toast({
+          title: 'Erro',
+          description: 'Nenhum projeto selecionado. Navegue para um projeto primeiro.',
+          variant: 'destructive',
+        });
+      }
+      return;
+    }
 
     setIsSyncing(true);
     setJustCompleted(false);
@@ -111,10 +120,10 @@ export function QuickSyncButton({
 
         const accountIds = metaAccounts!.map(a => a.account_id);
         
-        await supabase.functions.invoke('meta-api', {
+        // Use projectCode header instead of projectId in body
+        await invokeProjectFunction(effectiveProjectCode, 'meta-api', {
           body: {
             action: 'sync_insights',
-            projectId,
             accountIds,
             dateStart: format(startDate, 'yyyy-MM-dd'),
             dateStop: format(endDate, 'yyyy-MM-dd'),
@@ -131,10 +140,10 @@ export function QuickSyncButton({
           description: 'Atualizando dados do Hotmart',
         });
 
-        await supabase.functions.invoke('hotmart-api', {
+        // Use projectCode header instead of projectId in body
+        await invokeProjectFunction(effectiveProjectCode, 'hotmart-api', {
           body: {
             action: 'sync_sales',
-            projectId,
             startDate: startDate.getTime(),
             endDate: endDate.getTime(),
           },
@@ -151,8 +160,6 @@ export function QuickSyncButton({
         
         // Invalidate queries to refresh data after a delay
         setTimeout(() => {
-          // The app uses several distinct query keys (e.g. "project-overview-sales", "project-overview-insights").
-          // Invalidate broadly to ensure the UI picks up the newly-synced backend data.
           queryClient.invalidateQueries();
         }, 1500);
         

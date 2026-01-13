@@ -1265,11 +1265,37 @@ serve(async (req) => {
   }
 
   try {
-    const { endpoint, params, apiType, projectId, action, startDate, endDate, status, quickMode } = await req.json();
+    const { endpoint, params, apiType, projectId: bodyProjectId, action, startDate, endDate, status, quickMode } = await req.json();
+    
+    // CANONICAL: Resolve project_id from X-Project-Code header (preferred)
+    // Falls back to body.projectId for backward compatibility
+    const projectCode = req.headers.get('X-Project-Code');
+    let projectId = bodyProjectId;
+    
+    if (projectCode) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('public_code', projectCode)
+        .maybeSingle();
+      
+      if (projectError || !project) {
+        console.error('[hotmart-api] Invalid project code:', projectCode);
+        throw new Error(`Invalid project code: ${projectCode}`);
+      }
+      
+      projectId = project.id;
+      console.log(`[hotmart-api] Resolved project code "${projectCode}" to id "${projectId}"`);
+    }
+    
     console.log('Hotmart API request:', { endpoint, apiType, projectId, action, quickMode });
 
     if (!projectId) {
-      throw new Error('Project ID is required');
+      throw new Error('Project ID is required. Pass X-Project-Code header or projectId in body.');
     }
 
     // Handle sync_sales action - now with monthly chunking for large periods

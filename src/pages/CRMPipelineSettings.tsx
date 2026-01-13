@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,7 +31,7 @@ import {
 import { toast } from 'sonner';
 
 export default function CRMPipelineSettings() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { stages, isLoading: stagesLoading, createStage, updateStage, deleteStage } = usePipelineStages();
@@ -130,7 +130,7 @@ export default function CRMPipelineSettings() {
       <CRMSubNav 
         rightContent={
           <>
-            <Button variant="outline" size="sm" onClick={() => navigate('/crm/kanban')}>
+            <Button variant="outline" size="sm" onClick={() => navigateTo('crm/kanban')}>
               <Kanban className="h-4 w-4 mr-2" />
               Ver Pipeline
             </Button>

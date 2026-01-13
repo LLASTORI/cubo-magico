@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useRecoveryStages } from '@/hooks/useRecoveryStages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -187,7 +187,7 @@ function StageColumn({
 }
 
 export default function CRMRecoveryKanban() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const queryClient = useQueryClient();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
@@ -426,7 +426,7 @@ export default function CRMRecoveryKanban() {
                 <TooltipContent>Recarrega os dados do Kanban</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="outline" size="sm" onClick={() => navigate('/crm/recovery')}>
+            <Button variant="outline" size="sm" onClick={() => navigateTo('crm/recovery')}>
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
             </Button>
@@ -484,7 +484,7 @@ export default function CRMRecoveryKanban() {
                       is_lost: false,
                     }}
                     contacts={contactsByStage.unassigned || []}
-                    onContactClick={(id) => navigate(`/crm/contact/${id}`)}
+                    onContactClick={(id) => navigateTo(`crm/contact/${id}`)}
                   />
 
                   {/* Stage Columns */}
@@ -493,7 +493,7 @@ export default function CRMRecoveryKanban() {
                       key={stage.id}
                       stage={stage}
                       contacts={contactsByStage[stage.id] || []}
-                      onContactClick={(id) => navigate(`/crm/contact/${id}`)}
+                      onContactClick={(id) => navigateTo(`crm/contact/${id}`)}
                     />
                   ))}
                   </div>

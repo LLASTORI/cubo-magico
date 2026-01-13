@@ -102,9 +102,19 @@ const AgencyDashboard = () => {
   });
 
   const handleProjectClick = (projectId: string, projectName: string) => {
-    // Set the project as current and navigate to overview
-    setCurrentProject({ id: projectId, name: projectName } as any);
-    navigate('/');
+    // Buscar public_code do projeto via supabase
+    supabase
+      .from('projects')
+      .select('public_code')
+      .eq('id', projectId)
+      .single()
+      .then(({ data }) => {
+        if (data?.public_code) {
+          navigate(`/app/${data.public_code}/dashboard`);
+        } else {
+          navigate('/projects');
+        }
+      });
   };
 
   const handleSyncAll = async () => {

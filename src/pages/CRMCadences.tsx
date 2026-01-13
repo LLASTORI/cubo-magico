@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useCRMCadences, useCadenceSteps } from '@/hooks/useCRMCadences';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
@@ -68,7 +68,7 @@ interface CadenceStep {
 }
 
 export default function CRMCadences() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { cadences, isLoading: cadencesLoading, createCadence, deleteCadence, toggleCadence } = useCRMCadences();
@@ -183,7 +183,7 @@ export default function CRMCadences() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => navigate('/crm/activities')}
+              onClick={() => navigateTo('crm/activities')}
             >
               <LayoutList className="h-4 w-4 mr-2" />
               Ver Atividades

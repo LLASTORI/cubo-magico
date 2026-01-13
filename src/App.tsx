@@ -8,7 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ProjectLayout } from "@/components/ProjectLayout";
-
+import { ProjectBootstrapGate } from "@/components/ProjectBootstrapGate";
 // Public pages
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -93,150 +93,154 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <Routes>
-                {/* ==================== PUBLIC ROUTES ==================== */}
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                <Route path="/terms-of-service" element={<TermsOfService />} />
-                <Route path="/data-deletion" element={<DataDeletion />} />
-                <Route path="/no-access" element={<NoAccess />} />
-                <Route path="/activate" element={<ActivateAccount />} />
-                <Route path="/accept-invite" element={<AcceptInvite />} />
-                
-                {/* Survey & Quiz Public Routes - Multi-tenant */}
-                <Route path="/s/:code/:slug" element={<SurveyPublic />} />
-                <Route path="/s/:slug" element={<SurveyPublicLegacy />} />
-                <Route path="/q/:code/:slug" element={<QuizPublic />} />
-                <Route path="/q/:quizId" element={<QuizPublic />} />
+              <ProjectBootstrapGate>
+                <Routes>
+                  {/* ==================== PUBLIC ROUTES ==================== */}
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                  <Route path="/terms-of-service" element={<TermsOfService />} />
+                  <Route path="/data-deletion" element={<DataDeletion />} />
+                  <Route path="/no-access" element={<NoAccess />} />
+                  <Route path="/activate" element={<ActivateAccount />} />
+                  <Route path="/accept-invite" element={<AcceptInvite />} />
+                  
+                  {/* Survey & Quiz Public Routes - Multi-tenant */}
+                  <Route path="/s/:code/:slug" element={<SurveyPublic />} />
+                  <Route path="/s/:slug" element={<SurveyPublicLegacy />} />
+                  <Route path="/q/:code/:slug" element={<QuizPublic />} />
+                  <Route path="/q/:quizId" element={<QuizPublic />} />
 
-                {/* ==================== PROTECTED ROUTES (no project context) ==================== */}
-                <Route path="/" element={
-                  <ProtectedRoute>
-                    <Projects />
-                  </ProtectedRoute>
-                } />
-                <Route path="/projects" element={
-                  <ProtectedRoute>
-                    <Projects />
-                  </ProtectedRoute>
-                } />
-                <Route path="/onboarding" element={
-                  <ProtectedRoute>
-                    <Onboarding />
-                  </ProtectedRoute>
-                } />
-                <Route path="/admin" element={
-                  <ProtectedRoute>
-                    <Admin />
-                  </ProtectedRoute>
-                } />
-                <Route path="/agencia" element={
-                  <ProtectedRoute>
-                    <AgencyDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/notifications" element={
-                  <ProtectedRoute>
-                    <NotificationsHistory />
-                  </ProtectedRoute>
-                } />
+                  {/* ==================== PROTECTED ROUTES (no project context) ==================== */}
+                  {/* / e /projects agora são gerenciados pelo ProjectBootstrapGate */}
+                  <Route path="/" element={
+                    <ProtectedRoute>
+                      <Projects />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/projects" element={
+                    <ProtectedRoute>
+                      <Projects />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/onboarding" element={
+                    <ProtectedRoute>
+                      <Onboarding />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/admin" element={
+                    <ProtectedRoute>
+                      <Admin />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/agencia" element={
+                    <ProtectedRoute>
+                      <AgencyDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/notifications" element={
+                    <ProtectedRoute>
+                      <NotificationsHistory />
+                    </ProtectedRoute>
+                  } />
 
-                {/* ==================== PROJECT-SCOPED ROUTES ==================== */}
-                {/* All routes under /app/:projectCode require both auth AND valid project */}
-                <Route path="/app/:projectCode" element={
-                  <ProtectedRoute>
-                    <ProjectLayout />
-                  </ProtectedRoute>
-                }>
-                  {/* Dashboard / Overview */}
-                  <Route index element={<ProjectOverview />} />
-                  <Route path="dashboard" element={<ProjectOverview />} />
-                  
-                  {/* Financial */}
-                  <Route path="busca-rapida" element={<BuscaRapida />} />
-                  <Route path="funnel-analysis" element={<FunnelAnalysis />} />
-                  <Route path="analise-mensal" element={<AnaliseMensal />} />
-                  <Route path="launch-dashboard" element={<LaunchDashboard />} />
-                  <Route path="undefined-offers" element={<UndefinedOffers />} />
-                  <Route path="offer-mappings" element={<OfferMappings />} />
-                  
-                  {/* Meta Ads */}
-                  <Route path="meta-ads" element={<MetaAds />} />
-                  
-                  {/* CRM */}
-                  <Route path="crm" element={<CRM />} />
-                  <Route path="crm/utm-behavior" element={<CRMUTMBehavior />} />
-                  <Route path="crm/kanban" element={<CRMKanban />} />
-                  <Route path="crm/contact/:contactId" element={<CRMContactCard />} />
-                  <Route path="crm/pipeline-settings" element={<CRMPipelineSettings />} />
-                  <Route path="crm/activities" element={<CRMActivitiesDashboard />} />
-                  <Route path="crm/cadences" element={<CRMCadences />} />
-                  <Route path="crm/recovery" element={<CRMRecovery />} />
-                  <Route path="crm/recovery/kanban" element={<CRMRecoveryKanban />} />
-                  <Route path="crm/recovery/settings" element={<CRMRecoverySettings />} />
-                  
-                  {/* WhatsApp & Automations */}
-                  <Route path="whatsapp" element={<WhatsAppLiveChat />} />
-                  <Route path="automations" element={<AutomationFlows />} />
-                  <Route path="automations/:flowId" element={<AutomationFlowEditor />} />
-                  <Route path="automations/executions" element={<AutomationExecutions />} />
-                  
-                  {/* Surveys */}
-                  <Route path="surveys" element={<Surveys />} />
-                  <Route path="surveys/:surveyId" element={<SurveyEditor />} />
-                  <Route path="surveys/:surveyId/responses" element={<SurveyResponses />} />
-                  
-                  {/* Quizzes */}
-                  <Route path="quizzes" element={<Quizzes />} />
-                  <Route path="quizzes/:quizId" element={<QuizEditor />} />
-                  <Route path="quizzes/:quizId/results" element={<QuizResults />} />
-                  <Route path="quizzes/:quizId/sessions/:sessionId" element={<QuizSessionViewer />} />
-                  <Route path="quizzes/:quizId/sessions/:sessionId/answers" element={<QuizAnswersViewer />} />
-                  
-                  {/* Insights */}
-                  <Route path="insights" element={<InsightsDashboard />} />
-                  <Route path="insights/surveys" element={<Surveys />} />
-                  <Route path="insights/surveys/:surveyId" element={<SurveyEditor />} />
-                  <Route path="insights/surveys/:surveyId/responses" element={<SurveyResponses />} />
-                  <Route path="insights/surveys/analysis" element={<SurveyAnalysisPage />} />
-                  <Route path="insights/surveys/analysis/by-survey" element={<SurveyAnalysisPage />} />
-                  <Route path="insights/surveys/analysis/ai-settings" element={<SurveyAnalysisPage />} />
-                  <Route path="insights/surveys/analysis/guide" element={<SurveyAnalysisPage />} />
-                  <Route path="insights/social" element={<SocialListeningPage />} />
-                  
-                  {/* Settings & Debug */}
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="data-debug" element={<DataDebug />} />
-                </Route>
+                  {/* ==================== PROJECT-SCOPED ROUTES ==================== */}
+                  {/* All routes under /app/:projectCode require both auth AND valid project */}
+                  <Route path="/app/:projectCode" element={
+                    <ProtectedRoute>
+                      <ProjectLayout />
+                    </ProtectedRoute>
+                  }>
+                    {/* Dashboard / Overview */}
+                    <Route index element={<ProjectOverview />} />
+                    <Route path="dashboard" element={<ProjectOverview />} />
+                    
+                    {/* Financial */}
+                    <Route path="busca-rapida" element={<BuscaRapida />} />
+                    <Route path="funnel-analysis" element={<FunnelAnalysis />} />
+                    <Route path="analise-mensal" element={<AnaliseMensal />} />
+                    <Route path="launch-dashboard" element={<LaunchDashboard />} />
+                    <Route path="undefined-offers" element={<UndefinedOffers />} />
+                    <Route path="offer-mappings" element={<OfferMappings />} />
+                    
+                    {/* Meta Ads */}
+                    <Route path="meta-ads" element={<MetaAds />} />
+                    
+                    {/* CRM */}
+                    <Route path="crm" element={<CRM />} />
+                    <Route path="crm/utm-behavior" element={<CRMUTMBehavior />} />
+                    <Route path="crm/kanban" element={<CRMKanban />} />
+                    <Route path="crm/contact/:contactId" element={<CRMContactCard />} />
+                    <Route path="crm/pipeline-settings" element={<CRMPipelineSettings />} />
+                    <Route path="crm/activities" element={<CRMActivitiesDashboard />} />
+                    <Route path="crm/cadences" element={<CRMCadences />} />
+                    <Route path="crm/recovery" element={<CRMRecovery />} />
+                    <Route path="crm/recovery/kanban" element={<CRMRecoveryKanban />} />
+                    <Route path="crm/recovery/settings" element={<CRMRecoverySettings />} />
+                    
+                    {/* WhatsApp & Automations */}
+                    <Route path="whatsapp" element={<WhatsAppLiveChat />} />
+                    <Route path="automations" element={<AutomationFlows />} />
+                    <Route path="automations/:flowId" element={<AutomationFlowEditor />} />
+                    <Route path="automations/executions" element={<AutomationExecutions />} />
+                    
+                    {/* Surveys */}
+                    <Route path="surveys" element={<Surveys />} />
+                    <Route path="surveys/:surveyId" element={<SurveyEditor />} />
+                    <Route path="surveys/:surveyId/responses" element={<SurveyResponses />} />
+                    
+                    {/* Quizzes */}
+                    <Route path="quizzes" element={<Quizzes />} />
+                    <Route path="quizzes/:quizId" element={<QuizEditor />} />
+                    <Route path="quizzes/:quizId/results" element={<QuizResults />} />
+                    <Route path="quizzes/:quizId/sessions/:sessionId" element={<QuizSessionViewer />} />
+                    <Route path="quizzes/:quizId/sessions/:sessionId/answers" element={<QuizAnswersViewer />} />
+                    
+                    {/* Insights */}
+                    <Route path="insights" element={<InsightsDashboard />} />
+                    <Route path="insights/surveys" element={<Surveys />} />
+                    <Route path="insights/surveys/:surveyId" element={<SurveyEditor />} />
+                    <Route path="insights/surveys/:surveyId/responses" element={<SurveyResponses />} />
+                    <Route path="insights/surveys/analysis" element={<SurveyAnalysisPage />} />
+                    <Route path="insights/surveys/analysis/by-survey" element={<SurveyAnalysisPage />} />
+                    <Route path="insights/surveys/analysis/ai-settings" element={<SurveyAnalysisPage />} />
+                    <Route path="insights/surveys/analysis/guide" element={<SurveyAnalysisPage />} />
+                    <Route path="insights/social" element={<SocialListeningPage />} />
+                    
+                    {/* Settings & Debug */}
+                    <Route path="settings" element={<Settings />} />
+                    <Route path="data-debug" element={<DataDebug />} />
+                  </Route>
 
-                {/* ==================== LEGACY REDIRECTS ==================== */}
-                {/* Redirect old routes to project selector */}
-                <Route path="/busca-rapida" element={<Navigate to="/projects" replace />} />
-                <Route path="/funnel-analysis" element={<Navigate to="/projects" replace />} />
-                <Route path="/analise-mensal" element={<Navigate to="/projects" replace />} />
-                <Route path="/launch-dashboard" element={<Navigate to="/projects" replace />} />
-                <Route path="/meta-ads" element={<Navigate to="/projects" replace />} />
-                <Route path="/crm" element={<Navigate to="/projects" replace />} />
-                <Route path="/crm/*" element={<Navigate to="/projects" replace />} />
-                <Route path="/whatsapp" element={<Navigate to="/projects" replace />} />
-                <Route path="/automations" element={<Navigate to="/projects" replace />} />
-                <Route path="/automations/*" element={<Navigate to="/projects" replace />} />
-                <Route path="/surveys" element={<Navigate to="/projects" replace />} />
-                <Route path="/surveys/*" element={<Navigate to="/projects" replace />} />
-                <Route path="/quizzes" element={<Navigate to="/projects" replace />} />
-                <Route path="/quizzes/*" element={<Navigate to="/projects" replace />} />
-                <Route path="/insights" element={<Navigate to="/projects" replace />} />
-                <Route path="/insights/*" element={<Navigate to="/projects" replace />} />
-                <Route path="/settings" element={<Navigate to="/projects" replace />} />
-                <Route path="/offer-mappings" element={<Navigate to="/projects" replace />} />
-                <Route path="/undefined-offers" element={<Navigate to="/projects" replace />} />
-                <Route path="/data-debug" element={<Navigate to="/projects" replace />} />
+                  {/* ==================== LEGACY REDIRECTS ==================== */}
+                  {/* Redirect old routes to project selector - will be auto-redirected by BootstrapGate */}
+                  <Route path="/busca-rapida" element={<Navigate to="/" replace />} />
+                  <Route path="/funnel-analysis" element={<Navigate to="/" replace />} />
+                  <Route path="/analise-mensal" element={<Navigate to="/" replace />} />
+                  <Route path="/launch-dashboard" element={<Navigate to="/" replace />} />
+                  <Route path="/meta-ads" element={<Navigate to="/" replace />} />
+                  <Route path="/crm" element={<Navigate to="/" replace />} />
+                  <Route path="/crm/*" element={<Navigate to="/" replace />} />
+                  <Route path="/whatsapp" element={<Navigate to="/" replace />} />
+                  <Route path="/automations" element={<Navigate to="/" replace />} />
+                  <Route path="/automations/*" element={<Navigate to="/" replace />} />
+                  <Route path="/surveys" element={<Navigate to="/" replace />} />
+                  <Route path="/surveys/*" element={<Navigate to="/" replace />} />
+                  <Route path="/quizzes" element={<Navigate to="/" replace />} />
+                  <Route path="/quizzes/*" element={<Navigate to="/" replace />} />
+                  <Route path="/insights" element={<Navigate to="/" replace />} />
+                  <Route path="/insights/*" element={<Navigate to="/" replace />} />
+                  <Route path="/settings" element={<Navigate to="/" replace />} />
+                  <Route path="/offer-mappings" element={<Navigate to="/" replace />} />
+                  <Route path="/undefined-offers" element={<Navigate to="/" replace />} />
+                  <Route path="/data-debug" element={<Navigate to="/" replace />} />
+                  <Route path="/dashboard" element={<Navigate to="/" replace />} />
 
-                {/* Catch-all */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+                  {/* Catch-all */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </ProjectBootstrapGate>
             </BrowserRouter>
           </TooltipProvider>
         </ProjectProvider>

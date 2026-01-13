@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom';
 import { Lightbulb, ClipboardList, MessageCircle, Lock } from 'lucide-react';
 import { AppHeader } from '@/components/AppHeader';
 import { InsightsSubNav } from '@/components/insights/InsightsSubNav';
@@ -7,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CubeLoader } from '@/components/CubeLoader';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 
 export default function InsightsDashboard() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { isModuleEnabled, isLoading } = useProjectModules();
 
   const insightsEnabled = isModuleEnabled('insights');
@@ -75,7 +75,7 @@ export default function InsightsDashboard() {
         {/* Module Cards */}
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl">
           {/* Pesquisas Card */}
-          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/insights/surveys')}>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigateTo('insights/surveys')}>
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -99,7 +99,7 @@ export default function InsightsDashboard() {
           </Card>
 
           {/* Social Listening Card */}
-          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/insights/social')}>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigateTo('insights/social')}>
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-chart-2/10 rounded-lg">

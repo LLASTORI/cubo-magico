@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -16,6 +16,10 @@ interface AccessControlState {
 export const useAccessControl = () => {
   const { user } = useAuth();
   const [refreshNonce, setRefreshNonce] = useState(0);
+  
+  // CRITICAL: Track if access was resolved at least once to prevent destructive re-loading
+  const hasResolvedOnceRef = useRef(false);
+  
   const [state, setState] = useState<AccessControlState>({
     loading: true,
     hasAccess: false,
@@ -50,9 +54,14 @@ export const useAccessControl = () => {
       return;
     }
 
-    // IMPORTANT: when the user is restored after a refresh, mark as loading BEFORE querying.
-    // Otherwise ProtectedRoute may read stale "hasAccess=false" and redirect to /no-access.
-    setState((prev) => ({ ...prev, loading: true }));
+    // CRITICAL FIX: Only set loading=true if we haven't resolved access yet.
+    // This prevents TOKEN_REFRESHED from causing ProtectedRoute to unmount children.
+    if (!hasResolvedOnceRef.current) {
+      console.log('[ACCESS] Setting loading=true (first time resolution)');
+      setState((prev) => ({ ...prev, loading: true }));
+    } else {
+      console.log('[ACCESS] Skipping loading=true (already resolved once, likely TOKEN_REFRESHED)');
+    }
 
     const checkAccess = async () => {
       try {
@@ -141,7 +150,12 @@ export const useAccessControl = () => {
           hasActiveSubscription,
           isMemberOfAnyProject,
           hasAccess,
+          hasResolvedOnce: hasResolvedOnceRef.current,
         });
+
+        // Mark as resolved BEFORE setting state
+        hasResolvedOnceRef.current = true;
+        console.log('[ACCESS] Access resolved successfully, hasResolvedOnce=true');
 
         setState({
           loading: false,
@@ -155,6 +169,10 @@ export const useAccessControl = () => {
         });
       } catch (error) {
         console.error('Error checking access:', error);
+        // Mark as resolved even on error to prevent infinite loading loops
+        hasResolvedOnceRef.current = true;
+        console.log('[ACCESS] Access resolved with error (fail open), hasResolvedOnce=true');
+        
         // Fail open for authenticated users to avoid locking everyone out due to transient issues.
         setState((prev) => ({
           ...prev,

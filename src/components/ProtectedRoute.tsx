@@ -14,8 +14,8 @@ interface ProtectedRouteProps {
 /**
  * ProtectedRoute com arquitetura estável.
  * 
- * REGRA CRÍTICA: Este componente NÃO pode causar unmount dos children
- * durante token refresh. Apenas valida auth e redireciona se necessário.
+ * REGRA CRÍTICA: Este componente NUNCA pode substituir children por loader
+ * após o primeiro mount. O loading deve ser overlay, não gate destrutivo.
  */
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading: authLoading } = useAuth();
@@ -28,6 +28,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   } = useAccessControl();
   
   const mountedRef = useRef(false);
+  const hasRenderedChildrenOnce = useRef(false);
   
   // FORENSIC: Track mount/unmount
   useEffect(() => {
@@ -42,8 +43,11 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     };
   }, []);
 
-  // Show loading while checking auth
-  if (authLoading) {
+  // Log gate state for debugging
+  console.log('[GATE] authLoading:', authLoading, 'accessLoading:', accessLoading, 'hasRenderedChildrenOnce:', hasRenderedChildrenOnce.current);
+
+  // FIRST TIME ONLY: Show loading while checking auth (before any children rendered)
+  if (authLoading && !hasRenderedChildrenOnce.current) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <CubeLoader message="Carregando..." />
@@ -56,8 +60,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Show loading while checking access control (user is authenticated)
-  if (accessLoading) {
+  // FIRST TIME ONLY: Show loading while checking access control
+  if (accessLoading && !hasRenderedChildrenOnce.current) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <CubeLoader message="Verificando acesso..." />
@@ -76,7 +80,21 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to="/no-access" replace />;
   }
 
-  return <>{children}</>;
+  // Mark that we've rendered children at least once
+  hasRenderedChildrenOnce.current = true;
+
+  // CRITICAL: After first render, NEVER replace children with loader.
+  // Use overlay instead to preserve React tree and UI state.
+  return (
+    <>
+      {children}
+      {accessLoading && (
+        <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm flex items-center justify-center">
+          <CubeLoader message="Verificando acesso..." />
+        </div>
+      )}
+    </>
+  );
 };
 
 export default ProtectedRoute;

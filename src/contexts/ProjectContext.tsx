@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -66,10 +66,16 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
+// ============= FORENSIC DEBUG =============
+const PROJECT_CONTEXT_ID = `projctx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 /**
- * ProjectProvider com arquitetura canônica.
+ * ProjectProvider com arquitetura estável.
  * 
- * REGRA DE OURO: O projeto ativo vem da URL (/app/:projectCode/*)
+ * REGRA CRÍTICA: Este provider NÃO deve causar unmount dos children
+ * durante mudanças de auth state. Apenas atualiza o state interno.
+ * 
+ * O projeto ativo vem da URL (/app/:projectCode/*)
  * O ProjectLayout chama setActiveProjectCode quando a URL muda.
  */
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
@@ -79,6 +85,22 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [credentials, setCredentials] = useState<ProjectCredential | null>(null);
   const [activeProjectCode, setActiveProjectCode] = useState<string | null>(null);
+  
+  const mountedRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
+  const fetchInProgressRef = useRef(false);
+  
+  // FORENSIC: Track mount/unmount
+  useEffect(() => {
+    if (!mountedRef.current) {
+      console.log(`%c[FORENSIC] ProjectProvider MOUNTED - ID: ${PROJECT_CONTEXT_ID}`, 'background: #cc6699; color: white; font-size: 14px; padding: 4px;');
+      mountedRef.current = true;
+    }
+    
+    return () => {
+      console.log(`%c[FORENSIC] ProjectProvider UNMOUNTING - ID: ${PROJECT_CONTEXT_ID}`, 'background: #996699; color: white; font-size: 14px; padding: 4px;');
+    };
+  }, []);
   
   // Derivar currentProject dos projetos carregados + código ativo
   const currentProject = activeProjectCode 
@@ -110,13 +132,17 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     fetchCredentials();
   }, [currentProject?.id]);
 
-  const refreshProjects = async () => {
+  const refreshProjects = useCallback(async () => {
     if (!user) {
       setProjects([]);
       setProjectCredentialStatuses([]);
       setLoading(false);
       return;
     }
+
+    // Prevenir múltiplas chamadas simultâneas
+    if (fetchInProgressRef.current) return;
+    fetchInProgressRef.current = true;
 
     try {
       // Fetch projects the user owns OR is a member of
@@ -174,25 +200,36 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error fetching projects:', error);
     } finally {
       setLoading(false);
+      fetchInProgressRef.current = false;
     }
-  };
+  }, [user]);
 
-  const isProjectReady = (projectId: string): boolean => {
+  const isProjectReady = useCallback((projectId: string): boolean => {
     const status = projectCredentialStatuses.find(s => s.project_id === projectId);
     return status?.is_configured === true && status?.is_validated === true;
-  };
+  }, [projectCredentialStatuses]);
 
-  const getProjectById = (projectId: string): Project | undefined => {
+  const getProjectById = useCallback((projectId: string): Project | undefined => {
     return projects.find(p => p.id === projectId);
-  };
+  }, [projects]);
 
-  const getProjectByCode = (publicCode: string): Project | undefined => {
+  const getProjectByCode = useCallback((publicCode: string): Project | undefined => {
     return projects.find(p => p.public_code === publicCode);
-  };
+  }, [projects]);
 
+  // Carregar projetos quando user mudar (mas não em CADA mudança de auth state)
   useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    
+    // Só recarregar se o USER ID realmente mudou (não apenas token refresh)
+    if (currentUserId === lastUserIdRef.current) {
+      // Mesmo user, não precisa recarregar
+      if (!loading && projects.length > 0) return;
+    }
+    
+    lastUserIdRef.current = currentUserId;
     refreshProjects();
-  }, [user]);
+  }, [user?.id]); // Apenas user.id, não user inteiro
 
   const createProject = async (name: string, description?: string) => {
     if (!user) return { data: null, error: new Error('User not authenticated') };
@@ -306,9 +343,14 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // DEPRECATED: setCurrentProject agora é no-op
-  const setCurrentProject = (project: Project | null) => {
+  const setCurrentProject = useCallback((project: Project | null) => {
     console.warn('[ProjectContext] setCurrentProject is deprecated. Use URL navigation instead.');
-  };
+  }, []);
+
+  // Stable setActiveProjectCode
+  const handleSetActiveProjectCode = useCallback((code: string | null) => {
+    setActiveProjectCode(code);
+  }, []);
 
   return (
     <ProjectContext.Provider value={{
@@ -317,7 +359,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
       loading,
       currentProject,
       credentials,
-      setActiveProjectCode,
+      setActiveProjectCode: handleSetActiveProjectCode,
       setCurrentProject,
       createProject,
       updateProject,

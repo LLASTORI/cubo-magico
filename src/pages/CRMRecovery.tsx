@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -100,7 +100,7 @@ const TAG_CONFIG: Record<TagConfigKey, { icon: typeof AlertTriangle | typeof Sho
 };
 
 export default function CRMRecovery() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const [search, setSearch] = useState('');
@@ -468,7 +468,7 @@ export default function CRMRecovery() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button size="sm" onClick={() => navigate('/crm/recovery/kanban')}>
+            <Button size="sm" onClick={() => navigateTo('crm/recovery/kanban')}>
               <Kanban className="h-4 w-4 mr-2" />
               Kanban
             </Button>
@@ -705,7 +705,7 @@ export default function CRMRecovery() {
                           <Card 
                             key={contact.id} 
                             className="hover:bg-muted/50 transition-colors cursor-pointer"
-                            onClick={() => navigate(`/crm/contact/${contact.id}`)}
+                            onClick={() => navigateTo(`crm/contact/${contact.id}`)}
                           >
                             <CardContent className="py-4">
                               <div className="flex items-center justify-between">

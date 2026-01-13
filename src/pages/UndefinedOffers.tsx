@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { useProjectNavigation } from "@/hooks/useProjectNavigation";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle } from "lucide-react";
@@ -24,7 +24,7 @@ const formatCurrency = (value: number) => {
 };
 
 const UndefinedOffers = () => {
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
   
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 30));
@@ -400,7 +400,7 @@ const UndefinedOffers = () => {
                 <p>
                   Esta página mostra ofertas que estão em funis do tipo "A Definir" ou que ainda não foram
                   categorizadas em nenhum funil. Para mover uma oferta para um funil de Perpétuo ou Lançamento,
-                  acesse a página de <Button variant="link" className="p-0 h-auto" onClick={() => navigate('/offer-mappings')}>Mapeamento de Ofertas</Button>.
+                  acesse a página de <Button variant="link" className="p-0 h-auto" onClick={() => navigateTo('offer-mappings')}>Mapeamento de Ofertas</Button>.
                 </p>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Plus, FileText, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock, Brain } from 'lucide-react';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -45,7 +46,7 @@ const STATUS_BADGES: Record<string, { label: string; variant: 'default' | 'secon
 };
 
 export default function Surveys() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const location = useLocation();
   const { toast } = useToast();
   const { surveys, isLoading, createSurvey, deleteSurvey } = useSurveys();
@@ -93,7 +94,7 @@ export default function Surveys() {
     setNewSurvey({ name: '', description: '', objective: 'general' });
     // Navigate to the correct route based on where we are
     const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
-    navigate(`${basePath}/${result.id}`);
+    navigateTo(`${basePath}/${result.id}`);
   };
 
   const handleDelete = async (survey: Survey) => {
@@ -177,7 +178,7 @@ export default function Surveys() {
       toast({ title: 'Pesquisa clonada com sucesso!' });
       // Navigate to the correct route based on where we are
       const basePath = isInsightsRoute ? '/insights/surveys' : '/surveys';
-      navigate(`${basePath}/${newSurveyData.id}`);
+      navigateTo(`${basePath}/${newSurveyData.id}`);
     } catch (error) {
       console.error('Error cloning survey:', error);
       toast({ title: 'Erro ao clonar pesquisa', variant: 'destructive' });
@@ -208,7 +209,7 @@ export default function Surveys() {
         <InsightsSubNav
           rightContent={
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => navigate('/insights/surveys/analysis')} className="gap-2">
+              <Button variant="outline" onClick={() => navigateTo('insights/surveys/analysis')} className="gap-2">
                 <Brain className="h-4 w-4" />
                 Análise IA
               </Button>
@@ -265,11 +266,11 @@ export default function Surveys() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`${basePath}/${survey.id}`)}>
+                        <DropdownMenuItem onClick={() => navigateTo(`${basePath}/${survey.id}`)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`${basePath}/${survey.id}/responses`)}>
+                        <DropdownMenuItem onClick={() => navigateTo(`${basePath}/${survey.id}/responses`)}>
                           <BarChart2 className="h-4 w-4 mr-2" />
                           Ver Respostas
                         </DropdownMenuItem>

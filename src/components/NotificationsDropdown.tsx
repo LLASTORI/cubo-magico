@@ -1,5 +1,5 @@
 import { Bell, Check, CheckCheck, Trash2, ShoppingCart, Info, AlertTriangle, AlertCircle, CheckCircle, History, MessageCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -32,7 +32,7 @@ const getNotificationIcon = (type: Notification['type']) => {
 };
 
 const NotificationsDropdown = () => {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
 
   return (
@@ -89,7 +89,7 @@ const NotificationsDropdown = () => {
                   }
                   // Navigate to WhatsApp if it's a WhatsApp notification
                   if (notification.type === 'whatsapp') {
-                    navigate('/whatsapp');
+                    navigateTo('whatsapp');
                   }
                 }}
               >
@@ -144,7 +144,7 @@ const NotificationsDropdown = () => {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="justify-center text-sm cursor-pointer"
-          onClick={() => navigate('/notifications')}
+          onClick={() => navigateTo('notifications')}
         >
           <History className="h-4 w-4 mr-2" />
           Ver histórico completo

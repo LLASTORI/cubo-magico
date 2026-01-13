@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Plus, FileQuestion, MoreHorizontal, Trash2, Edit, ExternalLink, Copy, BarChart2, Files, Lock, Play, Pause, Brain, Sparkles } from 'lucide-react';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppHeader } from '@/components/AppHeader';
@@ -41,7 +41,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { CognitiveQuizArchitect } from '@/components/quiz/copilot';
 
 export default function Quizzes() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { toast } = useToast();
   const { currentProject } = useProject();
   const { quizzes, isLoading, questionCounts, responseCounts, createQuiz, deleteQuiz, updateQuiz } = useQuizzes();
@@ -96,7 +96,7 @@ export default function Quizzes() {
       // Small delay to ensure database has propagated the insert
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      navigate(`/quizzes/${result.id}`);
+      navigateTo(`quizzes/${result.id}`);
     } catch (error: any) {
       console.error('[Quizzes] Error creating quiz:', error);
       toast({ 
@@ -132,7 +132,7 @@ export default function Quizzes() {
 
   const handleCopilotComplete = (quizId: string) => {
     setShowCopilotWizard(false);
-    navigate(`/quizzes/${quizId}`);
+    navigateTo(`quizzes/${quizId}`);
   };
 
   if (isLoading || isLoadingModules) {
@@ -205,11 +205,11 @@ export default function Quizzes() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/quizzes/${quiz.id}`)}>
+                        <DropdownMenuItem onClick={() => navigateTo(`quizzes/${quiz.id}`)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`/quizzes/${quiz.id}/results`)}>
+                        <DropdownMenuItem onClick={() => navigateTo(`quizzes/${quiz.id}/results`)}>
                           <BarChart2 className="h-4 w-4 mr-2" />
                           Ver Resultados
                         </DropdownMenuItem>

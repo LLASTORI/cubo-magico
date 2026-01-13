@@ -788,18 +788,21 @@ async function syncSales(
     console.log('=== FULL SYNC MODE ===');
     
     // STEP 1: Fetch APPROVED + COMPLETE without any filter (critical for revenue!)
-    console.log('STEP 1: Fetching APPROVED + COMPLETE (no status filter)...');
+    // According to Hotmart docs: "if you do not set up the transaction_status filter, 
+    // it'll only return the 'APPROVED' and 'COMPLETE' statuses."
+    console.log('[STEP 1] Fetching APPROVED + COMPLETE (no status filter)...');
     try {
       const primarySales = await fetchAllSales(token, startDate, endDate, undefined);
-      console.log(`  ✓ APPROVED + COMPLETE: ${primarySales.length} sales`);
+      console.log(`[STEP 1] SUCCESS: ${primarySales.length} sales fetched (APPROVED+COMPLETE)`);
       allSales.push(...primarySales);
     } catch (primaryError) {
-      console.error('  ✗ Error fetching APPROVED+COMPLETE:', primaryError);
+      console.error('[STEP 1] FAILED:', primaryError);
     }
     
     // STEP 2: Fetch secondary statuses with explicit filters
+    // These are statuses NOT returned by the default call
     const statusesToFetch = quickMode ? QUICK_SECONDARY_STATUSES : SECONDARY_TRANSACTION_STATUSES;
-    console.log(`STEP 2: Fetching ${statusesToFetch.length} secondary statuses...`);
+    console.log(`[STEP 2] Fetching ${statusesToFetch.length} secondary statuses...`);
     
     for (const txStatus of statusesToFetch) {
       try {

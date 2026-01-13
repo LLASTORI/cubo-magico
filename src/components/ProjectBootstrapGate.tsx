@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { CubeLoader } from '@/components/CubeLoader';
+
+// ============= FORENSIC DEBUG =============
+const BOOTSTRAP_GATE_ID = `gate_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 /**
  * ProjectBootstrapGate - Garante que usuário autenticado sempre tenha um projeto na URL.
@@ -21,6 +24,20 @@ export function ProjectBootstrapGate({ children }: { children: React.ReactNode }
   const { projects, loading: projectsLoading } = useProject();
   const location = useLocation();
   const [bootstrapComplete, setBootstrapComplete] = useState(false);
+  const mountedRef = useRef(false);
+  
+  // FORENSIC: Track mount/unmount
+  useEffect(() => {
+    if (!mountedRef.current) {
+      console.log(`%c[FORENSIC] ProjectBootstrapGate MOUNTED - ID: ${BOOTSTRAP_GATE_ID}`, 'background: #00cc99; color: white; font-size: 14px; padding: 4px;');
+      console.log(`[FORENSIC] BootstrapGate - location: ${location.pathname}`);
+      mountedRef.current = true;
+    }
+    
+    return () => {
+      console.log(`%c[FORENSIC] ProjectBootstrapGate UNMOUNTING - ID: ${BOOTSTRAP_GATE_ID}`, 'background: #cc0099; color: white; font-size: 14px; padding: 4px;');
+    };
+  }, []);
 
   // Rotas que precisam de redirect automático para projeto
   const routesNeedingProject = ['/', '/projects', '/dashboard'];

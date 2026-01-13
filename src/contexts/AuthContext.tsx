@@ -14,17 +14,41 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ============= FORENSIC DEBUG =============
+const AUTH_PROVIDER_ID = `auth_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const loginLoggedRef = useRef(false);
+  const mountedRef = useRef(false);
+  
+  // FORENSIC: Track mount/unmount
+  useEffect(() => {
+    if (!mountedRef.current) {
+      console.log(`%c[FORENSIC] AuthProvider MOUNTED - ID: ${AUTH_PROVIDER_ID}`, 'background: #9900ff; color: white; font-size: 14px; padding: 4px;');
+      console.log(`[FORENSIC] AuthProvider - timestamp: ${new Date().toISOString()}`);
+      mountedRef.current = true;
+    }
+    
+    return () => {
+      console.log(`%c[FORENSIC] AuthProvider UNMOUNTING - ID: ${AUTH_PROVIDER_ID}`, 'background: #ff0099; color: white; font-size: 14px; padding: 4px;');
+      console.log(`[FORENSIC] AuthProvider unmount - timestamp: ${new Date().toISOString()}`);
+    };
+  }, []);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // FORENSIC: Log every auth state change
+      console.log(`%c[FORENSIC] AUTH STATE CHANGE: ${event}`, 'background: #ff00ff; color: white; font-size: 12px; padding: 2px;');
+      console.log(`[FORENSIC] auth event - timestamp: ${new Date().toISOString()}`);
+      console.log(`[FORENSIC] auth event - user: ${newSession?.user?.email ?? 'null'}`);
+      console.log(`[FORENSIC] auth event - session expires_at: ${newSession?.expires_at ?? 'null'}`);
+      
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setLoading(false);

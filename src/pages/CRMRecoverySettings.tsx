@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { useRecoveryStages, RecoveryStage } from '@/hooks/useRecoveryStages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,7 +56,7 @@ const COLORS = [
 ];
 
 export default function CRMRecoverySettings() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { stages, isLoading, createStage, updateStage, deleteStage } = useRecoveryStages();
@@ -166,7 +166,7 @@ export default function CRMRecoverySettings() {
       <CRMSubNav 
         rightContent={
           <>
-            <Button variant="outline" size="sm" onClick={() => navigate('/crm/recovery/kanban')}>
+            <Button variant="outline" size="sm" onClick={() => navigateTo('crm/recovery/kanban')}>
               <Kanban className="h-4 w-4 mr-2" />
               Ver Kanban
             </Button>

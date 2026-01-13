@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useState, useCallback, useRef, useEffect, DragEvent } from 'react';
 import {
   ReactFlow,
@@ -18,6 +18,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useAutomationFlowDetails, useAutomationFlows } from '@/hooks/useAutomationFlows';
 import { useProjectModules } from '@/hooks/useProjectModules';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -30,7 +31,7 @@ import { NodeConfigPanel } from '@/components/automation/NodeConfigPanel';
 
 function FlowEditor() {
   const { flowId } = useParams<{ flowId: string }>();
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
   
@@ -244,7 +245,7 @@ function FlowEditor() {
       <div className="min-h-screen bg-background flex flex-col">
         <div className="border-b bg-card px-4 py-3">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/automations')}>
+            <Button variant="ghost" size="icon" onClick={() => navigateTo('automations')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
@@ -272,7 +273,7 @@ function FlowEditor() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Fluxo não encontrado</p>
-          <Button onClick={() => navigate('/automations')}>Voltar</Button>
+          <Button onClick={() => navigateTo('automations')}>Voltar</Button>
         </div>
       </div>
     );
@@ -284,7 +285,7 @@ function FlowEditor() {
       <div className="border-b bg-card px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/automations')}>
+            <Button variant="ghost" size="icon" onClick={() => navigateTo('automations')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>

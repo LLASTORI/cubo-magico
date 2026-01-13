@@ -361,9 +361,8 @@ const Projects = () => {
   };
 
   const selectAndGo = (project: Project) => {
-    // Removed Hotmart credential validation requirement - users can access dashboard without it
-    setCurrentProject(project);
-    navigate('/');
+    // Navegação canônica: sempre por URL
+    navigate(`/app/${project.public_code}/dashboard`);
   };
 
   const handleLogout = async () => {

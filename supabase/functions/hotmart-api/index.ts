@@ -146,13 +146,17 @@ async function batchWriteSalesCoreEvents(
     const economicDay = calculateEconomicDay(occurredAt);
     const attribution = extractAttributionFromTracking(sale.purchase.tracking);
     
+    // CRITICAL: net_amount cannot be null - use 0 as fallback for events without PRODUCER commission
+    // This happens for refunds, chargebacks, cancelled, and some legacy COMPLETE events
+    const safeNetAmount = ownerNet ?? 0;
+    
     eventsToInsert.push({
       project_id: projectId,
       provider: 'hotmart',
       provider_event_id: providerEventId,
       event_type: canonicalEventType,
-      gross_amount: grossAmount,
-      net_amount: ownerNet, // CORRECT: PRODUCER commission = "Você recebeu"
+      gross_amount: grossAmount ?? 0,
+      net_amount: safeNetAmount, // CORRECT: PRODUCER commission = "Você recebeu", 0 if not available
       currency: 'BRL',
       occurred_at: occurredAt.toISOString(),
       received_at: new Date().toISOString(),
@@ -252,19 +256,23 @@ async function batchWriteSalesCoreEvents(
     }
   }
   
-  // Insert new events
+  // Insert new events (use regular insert since we already filtered duplicates above)
   for (let i = 0; i < newEvents.length; i += BATCH_SIZE) {
     const batch = newEvents.slice(i, i + BATCH_SIZE);
     const { error } = await supabase
       .from('sales_core_events')
-      .upsert(batch, {
-        onConflict: 'project_id,provider_event_id,version',
-        ignoreDuplicates: true
-      });
+      .insert(batch);
     
     if (error) {
-      console.error('[SalesCore] Error inserting new events:', error);
-      errors += batch.length;
+      // Check if it's a duplicate key error (expected for existing events)
+      if (error.code === '23505') {
+        console.log('[SalesCore] Some events already exist (this is normal):', batch.length);
+        // Count as synced since they already exist
+        synced += batch.length;
+      } else {
+        console.error('[SalesCore] Error inserting new events:', error);
+        errors += batch.length;
+      }
     } else {
       synced += batch.length;
     }

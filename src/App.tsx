@@ -70,6 +70,10 @@ import QuizAnswersViewer from "./pages/QuizAnswersViewer";
 
 const queryClient = new QueryClient();
 
+// ============= FORENSIC DEBUG: APP MOUNT DETECTION =============
+const APP_INSTANCE_ID = `app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+console.log(`%c[FORENSIC] App.tsx PARSED - QueryClient created - ID: ${APP_INSTANCE_ID}`, 'background: #0066ff; color: white; font-size: 14px; padding: 4px;');
+
 /**
  * ARQUITETURA CANÔNICA DE ROTEAMENTO
  * 
@@ -84,7 +88,10 @@ const queryClient = new QueryClient();
  * Ao fazer login, usuário é redirecionado para /projects para escolher projeto.
  * Ao escolher projeto, navega para /app/{projectCode}/dashboard
  */
-const App = () => (
+const App = () => {
+  console.log(`%c[FORENSIC] App RENDER - ID: ${APP_INSTANCE_ID}`, 'background: #0066ff; color: white; padding: 2px;');
+  
+  return (
   <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -247,6 +254,7 @@ const App = () => (
       </AuthProvider>
     </QueryClientProvider>
   </ThemeProvider>
-);
+  );
+};
 
 export default App;

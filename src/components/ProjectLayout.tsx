@@ -1,10 +1,13 @@
 import { Outlet, Navigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CubeLoader } from '@/components/CubeLoader';
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject, Project } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
+
+// ============= FORENSIC DEBUG =============
+const PROJECT_LAYOUT_ID = `layout_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 interface ProjectLayoutContextType {
   project: Project;
@@ -41,6 +44,20 @@ export function ProjectLayout() {
   const { projectCode } = useParams<{ projectCode: string }>();
   const { user } = useAuth();
   const { setActiveProjectCode, projects, loading: projectsLoading } = useProject();
+  const mountedRef = useRef(false);
+  
+  // FORENSIC: Track mount/unmount
+  useEffect(() => {
+    if (!mountedRef.current) {
+      console.log(`%c[FORENSIC] ProjectLayout MOUNTED - ID: ${PROJECT_LAYOUT_ID}`, 'background: #0099cc; color: white; font-size: 14px; padding: 4px;');
+      console.log(`[FORENSIC] ProjectLayout - projectCode: ${projectCode}`);
+      mountedRef.current = true;
+    }
+    
+    return () => {
+      console.log(`%c[FORENSIC] ProjectLayout UNMOUNTING - ID: ${PROJECT_LAYOUT_ID}`, 'background: #cc9900; color: white; font-size: 14px; padding: 4px;');
+    };
+  }, []);
 
   // Buscar e validar acesso ao projeto
   const {

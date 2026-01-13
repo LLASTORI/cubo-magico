@@ -293,6 +293,66 @@ const AcceptInvite = () => {
     }
   };
 
+  // Helper function to wait for session to be established
+  const waitForSession = async (maxAttempts = 10, delayMs = 500): Promise<boolean> => {
+    for (let i = 0; i < maxAttempts; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        console.log('[AcceptInvite] Session established after', i + 1, 'attempts');
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    return false;
+  };
+
+  // Helper function to accept invite with retry
+  const acceptInviteWithRetry = async (inviteId: string, userId: string, maxRetries = 3): Promise<{ success: boolean; error?: string }> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`[AcceptInvite] Attempt ${attempt}/${maxRetries} to accept invite`);
+      
+      try {
+        const { data, error } = await supabase.rpc('accept_project_invite', {
+          p_invite_id: inviteId,
+          p_user_id: userId,
+        });
+
+        if (error) {
+          console.error(`[AcceptInvite] RPC error on attempt ${attempt}:`, error);
+          if (attempt === maxRetries) {
+            return { success: false, error: error.message };
+          }
+          // Wait before retry with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+
+        const result = data as { success: boolean; error?: string };
+        if (result?.success === false) {
+          // If already accepted, treat as success
+          if (result.error?.includes('already') || result.error?.includes('já')) {
+            console.log('[AcceptInvite] Invite already accepted, treating as success');
+            return { success: true };
+          }
+          if (attempt === maxRetries) {
+            return { success: false, error: result.error };
+          }
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        console.error(`[AcceptInvite] Exception on attempt ${attempt}:`, err);
+        if (attempt === maxRetries) {
+          return { success: false, error: err.message };
+        }
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+      }
+    }
+    return { success: false, error: 'Falha após múltiplas tentativas' };
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -315,6 +375,8 @@ const AcceptInvite = () => {
     setLoading(true);
 
     try {
+      console.log('[AcceptInvite] Starting signup process for:', invite.email);
+      
       // Create account
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: invite.email,
@@ -327,50 +389,77 @@ const AcceptInvite = () => {
         },
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        console.error('[AcceptInvite] SignUp error:', signUpError);
+        throw signUpError;
+      }
+
+      console.log('[AcceptInvite] SignUp successful, user:', signUpData.user?.id);
 
       if (signUpData.user) {
+        const userId = signUpData.user.id;
+        
+        // Wait for session to be fully established (auto-confirm may have race condition)
+        console.log('[AcceptInvite] Waiting for session to be established...');
+        const sessionEstablished = await waitForSession();
+        
+        if (!sessionEstablished) {
+          console.warn('[AcceptInvite] Session not established, proceeding anyway...');
+        }
+
         // Update profile with signup source
-        await supabase
+        console.log('[AcceptInvite] Updating profile...');
+        const { error: profileError } = await supabase
           .from('profiles')
           .update({
             signup_source: 'invited',
             account_activated: true,
           })
-          .eq('id', signUpData.user.id);
+          .eq('id', userId);
+        
+        if (profileError) {
+          console.error('[AcceptInvite] Profile update error:', profileError);
+        }
 
-        // Record terms acceptance
+        // Record terms acceptance (non-blocking)
         try {
           let clientIp = null;
           try {
             const { data: ipData } = await supabase.functions.invoke('get-client-ip');
             clientIp = ipData?.ip || null;
           } catch (ipError) {
-            console.error('Failed to get client IP:', ipError);
+            console.error('[AcceptInvite] Failed to get client IP:', ipError);
           }
 
           await supabase.from('terms_acceptances').insert({
-            user_id: signUpData.user.id,
+            user_id: userId,
             terms_version: '1.0',
             ip_address: clientIp,
             user_agent: navigator.userAgent,
             acceptance_method: 'checkbox',
           });
         } catch (termsError) {
-          console.error('Failed to record terms acceptance:', termsError);
+          console.error('[AcceptInvite] Failed to record terms acceptance:', termsError);
         }
 
-        // Accept the invite
-        const { data: acceptData, error: acceptError } = await supabase.rpc('accept_project_invite', {
-          p_invite_id: invite.id,
-          p_user_id: signUpData.user.id,
-        });
-
-        if (acceptError) throw acceptError;
-        if ((acceptData as any)?.success === false) {
-          throw new Error((acceptData as any)?.error || 'Falha ao aceitar convite');
+        // Accept the invite with retry logic
+        console.log('[AcceptInvite] Accepting invite...');
+        const acceptResult = await acceptInviteWithRetry(invite.id, userId);
+        
+        if (!acceptResult.success) {
+          console.error('[AcceptInvite] Failed to accept invite after retries:', acceptResult.error);
+          // Even if invite acceptance fails, the account was created - notify user
+          toast({
+            title: 'Conta criada!',
+            description: 'Sua conta foi criada, mas houve um problema ao aceitar o convite. Entre em contato com o administrador do projeto.',
+            variant: 'destructive',
+          });
+          navigate('/projects', { replace: true });
+          return;
         }
 
+        console.log('[AcceptInvite] Invite accepted successfully!');
+        
         // Force access re-check (membership/subscription can change during this flow)
         window.dispatchEvent(new Event('access-control:refresh'));
 
@@ -382,6 +471,7 @@ const AcceptInvite = () => {
         navigate('/projects', { replace: true });
       }
     } catch (error: any) {
+      console.error('[AcceptInvite] Signup process error:', error);
       toast({
         title: 'Erro ao criar conta',
         description: error.message,
@@ -414,26 +504,43 @@ const AcceptInvite = () => {
     setLoading(true);
 
     try {
+      console.log('[AcceptInvite] Starting login process for:', invite.email);
+      
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: invite.email,
         password: loginData.password,
       });
 
-      if (signInError) throw signInError;
+      if (signInError) {
+        console.error('[AcceptInvite] SignIn error:', signInError);
+        throw signInError;
+      }
 
+      console.log('[AcceptInvite] Login successful, getting user...');
+      
       // Accept the invite - get current user id from session
       const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
       if (currentUser) {
-        const { data: acceptData, error: acceptError } = await supabase.rpc('accept_project_invite', {
-          p_invite_id: invite.id,
-          p_user_id: currentUser.id,
-        });
-
-        if (acceptError) throw acceptError;
-        if ((acceptData as any)?.success === false) {
-          throw new Error((acceptData as any)?.error || 'Falha ao aceitar convite');
+        console.log('[AcceptInvite] User ID:', currentUser.id);
+        
+        // Accept invite with retry logic
+        const acceptResult = await acceptInviteWithRetry(invite.id, currentUser.id);
+        
+        if (!acceptResult.success) {
+          console.error('[AcceptInvite] Failed to accept invite:', acceptResult.error);
+          // If already a member, just redirect
+          toast({
+            title: 'Aviso',
+            description: acceptResult.error || 'Não foi possível aceitar o convite automaticamente.',
+            variant: 'destructive',
+          });
+          navigate('/projects', { replace: true });
+          return;
         }
 
+        console.log('[AcceptInvite] Invite accepted successfully!');
+        
         // Force access re-check (membership/subscription can change during this flow)
         window.dispatchEvent(new Event('access-control:refresh'));
       }
@@ -445,6 +552,7 @@ const AcceptInvite = () => {
 
       navigate('/projects', { replace: true });
     } catch (error: any) {
+      console.error('[AcceptInvite] Login process error:', error);
       toast({
         title: 'Erro ao fazer login',
         description: error.message === 'Invalid login credentials' 

@@ -317,8 +317,22 @@ serve(async (req) => {
       .eq('provider', 'hotmart')
       .maybeSingle();
 
-    if (credError || !credentials || !credentials.client_id) {
-      return new Response(JSON.stringify({ error: 'Hotmart not configured' }), {
+    if (credError || !credentials) {
+      return new Response(JSON.stringify({ error: 'Hotmart não configurado. Vá em Configurações → Hotmart e salve suas credenciais.' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!credentials.client_id || !credentials.client_secret) {
+      console.error('[FinancialSync] Missing credentials - client_id:', !!credentials.client_id, 'client_secret:', !!credentials.client_secret);
+      return new Response(JSON.stringify({ 
+        error: 'Credenciais Hotmart incompletas. Client ID e Client Secret são obrigatórios. Vá em Configurações → Hotmart e salve novamente suas credenciais.',
+        details: {
+          hasClientId: !!credentials.client_id,
+          hasClientSecret: !!credentials.client_secret
+        }
+      }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -52,39 +52,80 @@ async function getHotmartToken(credentials: ProjectCredentials): Promise<string>
     throw new Error('Missing Hotmart credentials');
   }
 
-  // IMPORTANT: always compute Basic auth from client_id/client_secret.
-  // We intentionally ignore any stored basic_auth override here to avoid stale/invalid values.
-  const authHeader = btoa(`${client_id}:${client_secret}`);
-
-  // Hotmart OAuth can require client_id/client_secret in the querystring.
-  // Mirror the proven implementation used in the hotmart-api function.
-  const url = `https://api-sec-vlc.hotmart.com/security/oauth/token?grant_type=client_credentials&client_id=${encodeURIComponent(
-    client_id
-  )}&client_secret=${encodeURIComponent(client_secret)}`;
+  // RULE: OAuth only. Do NOT use Basic Auth.
+  const url = 'https://api.hotmart.com/security/oauth/token';
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id,
+    client_secret,
+  });
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${authHeader}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+    },
+    body: body.toString(),
+  });
+
+  const raw = await response.text();
+
+  if (!response.ok) {
+    const details = raw?.slice?.(0, 2000) ?? String(raw);
+    console.error('[FINANCE SYNC] OAuth failed:', response.status, details);
+    throw new Error(`OAuth failed (${response.status}): ${details}`);
+  }
+
+  let data: HotmartTokenResponse;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(`OAuth failed (200): invalid JSON response: ${raw?.slice?.(0, 500) ?? ''}`);
+  }
+
+  if (!data?.access_token) {
+    throw new Error('OAuth failed (200): missing access_token');
+  }
+
+  return data.access_token;
+}
+
+async function fetchHotmartSalesSample(
+  token: string,
+  startDate: number,
+  endDate: number
+): Promise<{ items: any[]; raw: any }>{
+  const url = new URL('https://api.hotmart.com/payments/api/v1/sales/history');
+  // Prompt requirement: maxResults=5
+  url.searchParams.set('maxResults', '5');
+  // Keep date filters to avoid 400 in environments where dates are required
+  url.searchParams.set('start_date', startDate.toString());
+  url.searchParams.set('end_date', endDate.toString());
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json',
     },
   });
 
+  const rawText = await response.text();
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[FinancialSync] Token error:', response.status, errorText);
-
-    if (response.status === 401) {
-      throw new Error(
-        'Hotmart não autorizou (401) ao gerar token. Confirme se o Client ID/Secret pertencem ao mesmo App e se o App está ativo/permissões ok.'
-      );
-    }
-
-    throw new Error(`Failed to get Hotmart token: ${response.status}`);
+    throw new Error(
+      `Sales history sample failed (${response.status}): ${rawText?.slice?.(0, 2000) ?? ''}`
+    );
   }
 
-  const data: HotmartTokenResponse = await response.json();
-  return data.access_token;
+  let raw: any;
+  try {
+    raw = JSON.parse(rawText);
+  } catch {
+    raw = { _raw: rawText };
+  }
+
+  return { items: raw?.items || [], raw };
 }
 
 // Fetch sales from Hotmart API with commission details
@@ -95,48 +136,51 @@ async function fetchHotmartSalesWithCommissions(
   maxPages: number = 100
 ): Promise<any[]> {
   const allSales: any[] = [];
-  let page = 1;
-  let hasMore = true;
+  let nextPageToken: string | null = null;
 
-  console.log(`[FinancialSync] Fetching sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`);
+  console.log(
+    `[FINANCE SYNC] Fetching sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`
+  );
 
-  while (hasMore && page <= maxPages) {
-    const url = new URL('https://developers.hotmart.com/payments/api/v1/sales/history');
+  for (let page = 1; page <= maxPages; page++) {
+    const url = new URL('https://api.hotmart.com/payments/api/v1/sales/history');
     url.searchParams.set('start_date', startDate.toString());
     url.searchParams.set('end_date', endDate.toString());
     url.searchParams.set('max_results', '100');
-    url.searchParams.set('page_token', page.toString());
+    if (nextPageToken) url.searchParams.set('page_token', nextPageToken);
 
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
 
     if (!response.ok) {
+      const errText = await response.text();
       if (response.status === 429) {
-        console.log('[FinancialSync] Rate limited, waiting 5s...');
-        await new Promise(r => setTimeout(r, 5000));
+        console.log('[FINANCE SYNC] Rate limited (429), waiting 5s...');
+        await new Promise((r) => setTimeout(r, 5000));
         continue;
       }
-      console.error(`[FinancialSync] Sales API error: ${response.status}`);
-      break;
+      throw new Error(`Sales history failed (${response.status}): ${errText?.slice?.(0, 2000) ?? ''}`);
     }
 
     const data = await response.json();
-    const items = data.items || [];
+    const items = data?.items || [];
     allSales.push(...items);
 
-    console.log(`[FinancialSync] Page ${page}: ${items.length} sales`);
+    console.log(`[FINANCE SYNC] Page ${page}: ${items.length} sales`);
 
-    if (items.length < 100) {
-      hasMore = false;
-    } else {
-      page++;
-      await new Promise(r => setTimeout(r, 200)); // Rate limit protection
+    nextPageToken = data?.next_page_token || null;
+
+    // Stop when there is no next page token or no items returned
+    if (!nextPageToken || items.length === 0) {
+      break;
     }
+
+    await new Promise((r) => setTimeout(r, 200)); // Rate limit protection
   }
 
   return allSales;

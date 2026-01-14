@@ -27,7 +27,9 @@ import {
   ExternalLink,
   Info,
   FileSpreadsheet,
-  History
+  History,
+  DollarSign,
+  TrendingUp
 } from 'lucide-react';
 import { HotmartCSVImport } from './HotmartCSVImport';
 import { format, subMonths } from 'date-fns';
@@ -55,6 +57,8 @@ export const HotmartSettings = () => {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState('');
+  const [financialSyncing, setFinancialSyncing] = useState(false);
+  const [financialSyncMessage, setFinancialSyncMessage] = useState('');
 
   const projectId = currentProject?.id;
 
@@ -779,6 +783,111 @@ export const HotmartSettings = () => {
 
                     <p className="text-xs text-muted-foreground">
                       <strong>Idempotente:</strong> Pode ser executado várias vezes sem duplicar dados.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Financial Ledger Sync Section */}
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Sincronização Financeira (Ledger)</h3>
+                    <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                      Receita Real
+                    </Badge>
+                  </div>
+
+                  <div className="p-4 rounded-lg border bg-card space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Sincroniza as <strong>comissões detalhadas</strong> da Hotmart para calcular a receita líquida real do produtor.
+                      Este é o único método que garante 100% de precisão no ROAS e lucro.
+                    </p>
+                    
+                    <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <div className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
+                        <p><strong>O que será sincronizado:</strong></p>
+                        <ul className="list-disc list-inside ml-2 space-y-0.5">
+                          <li>Comissão do Produtor (sua receita líquida)</li>
+                          <li>Taxa da Plataforma Hotmart</li>
+                          <li>Comissões de Afiliados</li>
+                          <li>Comissões de Coprodutores</li>
+                          <li>Reembolsos e Chargebacks</li>
+                        </ul>
+                      </div>
+                    </div>
+                    
+                    {financialSyncMessage && (
+                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <p className="text-sm text-green-700 dark:text-green-400">
+                          {financialSyncMessage}
+                        </p>
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={async () => {
+                        if (!projectId) return;
+                        setFinancialSyncing(true);
+                        setFinancialSyncMessage('Iniciando sincronização financeira...');
+                        
+                        try {
+                          const { data, error } = await supabase.functions.invoke('hotmart-financial-sync', {
+                            body: { projectId, monthsBack: 24 },
+                          });
+
+                          if (error) throw error;
+
+                          const result = data as {
+                            eventsCreated: number;
+                            totalSales: number;
+                            salesWithCommissions: number;
+                            salesWithoutCommissions: number;
+                          };
+
+                          setFinancialSyncMessage(
+                            `✓ ${result.eventsCreated.toLocaleString()} eventos criados de ${result.salesWithCommissions.toLocaleString()} vendas com comissões`
+                          );
+
+                          toast({
+                            title: 'Sincronização financeira concluída!',
+                            description: `${result.eventsCreated.toLocaleString()} eventos de comissão processados.`,
+                          });
+
+                        } catch (error: any) {
+                          console.error('Financial sync error:', error);
+                          setFinancialSyncMessage(`Erro: ${error.message}`);
+                          toast({
+                            title: 'Erro na sincronização financeira',
+                            description: error.message || 'Erro ao sincronizar dados financeiros',
+                            variant: 'destructive',
+                          });
+                        } finally {
+                          setTimeout(() => {
+                            setFinancialSyncing(false);
+                          }, 3000);
+                        }
+                      }}
+                      disabled={financialSyncing || syncing || backfilling}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                    >
+                      {financialSyncing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Sincronizando Ledger...
+                        </>
+                      ) : (
+                        <>
+                          <DollarSign className="h-4 w-4 mr-2" />
+                          Sincronizar Dados Financeiros
+                        </>
+                      )}
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Fonte única da verdade:</strong> Após sincronizar, o Cubo usará apenas estes dados para cálculos financeiros.
                     </p>
                   </div>
                 </div>

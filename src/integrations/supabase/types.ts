@@ -2560,6 +2560,121 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_ledger: {
+        Row: {
+          actor_id: string | null
+          actor_type: string | null
+          amount: number
+          currency: string | null
+          event_type: string
+          hotmart_sale_id: string | null
+          id: string
+          occurred_at: string
+          project_id: string
+          provider: string
+          raw_payload: Json | null
+          recorded_at: string | null
+          source_api: string | null
+          transaction_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type?: string | null
+          amount: number
+          currency?: string | null
+          event_type: string
+          hotmart_sale_id?: string | null
+          id?: string
+          occurred_at: string
+          project_id: string
+          provider?: string
+          raw_payload?: Json | null
+          recorded_at?: string | null
+          source_api?: string | null
+          transaction_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string | null
+          amount?: number
+          currency?: string | null
+          event_type?: string
+          hotmart_sale_id?: string | null
+          id?: string
+          occurred_at?: string
+          project_id?: string
+          provider?: string
+          raw_payload?: Json | null
+          recorded_at?: string | null
+          source_api?: string | null
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_ledger_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_sync_runs: {
+        Row: {
+          apis_synced: string[] | null
+          completed_at: string | null
+          created_by: string | null
+          end_date: string | null
+          error_message: string | null
+          errors: number | null
+          events_created: number | null
+          events_skipped: number | null
+          id: string
+          project_id: string
+          start_date: string | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          apis_synced?: string[] | null
+          completed_at?: string | null
+          created_by?: string | null
+          end_date?: string | null
+          error_message?: string | null
+          errors?: number | null
+          events_created?: number | null
+          events_skipped?: number | null
+          id?: string
+          project_id: string
+          start_date?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          apis_synced?: string[] | null
+          completed_at?: string | null
+          created_by?: string | null
+          end_date?: string | null
+          error_message?: string | null
+          errors?: number | null
+          events_created?: number | null
+          events_skipped?: number | null
+          id?: string
+          project_id?: string
+          start_date?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_sync_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_changes: {
         Row: {
           anotacoes: string | null
@@ -8397,6 +8512,31 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "live_spend_today"
             referencedColumns: ["funnel_id"]
+          },
+        ]
+      }
+      finance_ledger_summary: {
+        Row: {
+          affiliate_cost: number | null
+          coproducer_cost: number | null
+          economic_day: string | null
+          event_count: number | null
+          net_revenue: number | null
+          platform_cost: number | null
+          producer_gross: number | null
+          project_id: string | null
+          provider: string | null
+          refunds: number | null
+          transaction_date: string | null
+          transaction_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_ledger_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
         ]
       }

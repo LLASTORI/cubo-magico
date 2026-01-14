@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, Database, CheckCircle, AlertTriangle } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, Database, CheckCircle } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
 import SalesTablePagination from "@/components/SalesTablePagination";
@@ -9,10 +9,9 @@ import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
-import { useFinanceCore, toFinanceCoreFilters, toCoreSaleItem } from "@/hooks/useFinanceCore";
+import { useSalesCore } from "@/hooks/useSalesCore";
 import { Badge } from "@/components/ui/badge";
 import { useTenantNavigation } from "@/navigation";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 const BuscaRapida = () => {
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
@@ -20,19 +19,19 @@ const BuscaRapida = () => {
   const { navigateTo } = useTenantNavigation();
   const { currentProject, credentials } = useProject();
   
-  // Use the CANONICAL Financial Core hook (finance_core_view)
+  // Use the Financial Core hook with pagination and global totals
   const { 
-    sales: financeSales, 
+    sales, 
     loading, 
     error, 
     pagination,
-    totals,
+    totals, // Global totals from complete filtered dataset
     fetchSales,
     nextPage,
     prevPage,
     setPage,
     setPageSize,
-  } = useFinanceCore();
+  } = useSalesCore();
 
   // Clear filters when project changes
   useEffect(() => {
@@ -73,10 +72,8 @@ const BuscaRapida = () => {
     }
 
     setCurrentFilters(filters);
-    // Convert legacy FilterParams to FinanceCoreFilters
-    const coreFilters = toFinanceCoreFilters(filters);
     // Reset to page 1 with default page size when applying new filters
-    await fetchSales(currentProject.id, coreFilters, 1, pagination.pageSize);
+    await fetchSales(currentProject.id, filters, 1, pagination.pageSize);
     
     if (!error) {
       toast({
@@ -88,15 +85,9 @@ const BuscaRapida = () => {
 
   const handleRefresh = () => {
     if (currentFilters && currentProject) {
-      const coreFilters = toFinanceCoreFilters(currentFilters);
-      fetchSales(currentProject.id, coreFilters, pagination.page, pagination.pageSize);
+      fetchSales(currentProject.id, currentFilters, pagination.page, pagination.pageSize);
     }
   };
-
-  // Convert FinanceCoreSale to legacy CoreSaleItem for table compatibility
-  const sales = useMemo(() => {
-    return financeSales.map(toCoreSaleItem);
-  }, [financeSales]);
 
   // Calculate metrics from page data (for display in table context)
   const pageMetrics = useMemo(() => {
@@ -139,15 +130,9 @@ const BuscaRapida = () => {
       totalGrossRevenue: formatCurrency(totals.totalGrossRevenue),
       transactions: totals.totalTransactions,
       customers: totals.totalUniqueCustomers,
-      pendingNet: totals.totalPendingNet, // Transactions with pending net
       loading: totals.loading,
     };
   }, [totals]);
-
-  // Check if there are pending net values
-  const hasPendingNet = useMemo(() => {
-    return totals.totalPendingNet > 0;
-  }, [totals.totalPendingNet]);
 
   // Format sales for the table component (keeping compatibility)
   const formattedSales = useMemo(() => {
@@ -246,60 +231,36 @@ const BuscaRapida = () => {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                   <span>
-                    Dados do <strong>finance_core_view</strong> (Hotmart Canônico) • 
-                    Filtro por <strong>economic_timestamp</strong> (São Paulo) • 
-                    Valores em <strong>Receita Líquida</strong> (direto Hotmart) •
-                    <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> transações
+                    Dados do <strong>Financial Core</strong> • 
+                    Filtro por <strong>economic_day</strong> (horário de Brasília) • 
+                    Valores em <strong>Receita Líquida</strong> (após taxas) •
+                    <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> transações no total
                   </span>
                 </div>
-                
-                {/* Warning for pending net values */}
-                {hasPendingNet && (
-                  <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>
-                      <strong>{globalMetrics.pendingNet}</strong> transações com receita líquida pendente (Hotmart ainda não calculou). 
-                      O valor líquido será atualizado automaticamente quando a Hotmart processar.
-                    </span>
-                  </div>
-                )}
 
                 {/* Metrics Grid - Using GLOBAL TOTALS from complete dataset */}
-                <TooltipProvider>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <MetricCard
-                            title={hasPendingNet ? "Receita Líquida (parcial)" : "Receita Líquida"}
-                            value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalNetRevenue}
-                            icon={hasPendingNet ? AlertTriangle : DollarSign}
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      {hasPendingNet && (
-                        <TooltipContent>
-                          <p>{globalMetrics.pendingNet} transações com líquido pendente</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                    <MetricCard
-                      title="Receita Bruta"
-                      value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalGrossRevenue}
-                      icon={TrendingUp}
-                    />
-                    <MetricCard
-                      title="Transações"
-                      value={globalMetrics.loading ? "..." : globalMetrics.transactions}
-                      icon={ShoppingCart}
-                    />
-                    <MetricCard
-                      title="Clientes Únicos"
-                      value={globalMetrics.loading ? "..." : globalMetrics.customers}
-                      icon={Users}
-                    />
-                  </div>
-                </TooltipProvider>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <MetricCard
+                    title="Receita Líquida (total)"
+                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalNetRevenue}
+                    icon={DollarSign}
+                  />
+                  <MetricCard
+                    title="Receita Bruta (total)"
+                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalGrossRevenue}
+                    icon={TrendingUp}
+                  />
+                  <MetricCard
+                    title="Transações (total)"
+                    value={globalMetrics.loading ? "..." : globalMetrics.transactions}
+                    icon={ShoppingCart}
+                  />
+                  <MetricCard
+                    title="Clientes Únicos (total)"
+                    value={globalMetrics.loading ? "..." : globalMetrics.customers}
+                    icon={Users}
+                  />
+                </div>
 
                 {/* Sales Table */}
                 {formattedSales.length > 0 && (

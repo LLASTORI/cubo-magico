@@ -19,12 +19,13 @@ const BuscaRapida = () => {
   const { navigateTo } = useTenantNavigation();
   const { currentProject, credentials } = useProject();
   
-  // Use the Financial Core hook with pagination
+  // Use the Financial Core hook with pagination and global totals
   const { 
     sales, 
     loading, 
     error, 
     pagination,
+    totals, // Global totals from complete filtered dataset
     fetchSales,
     nextPage,
     prevPage,
@@ -88,8 +89,8 @@ const BuscaRapida = () => {
     }
   };
 
-  // Calculate metrics from Core data (using net_amount)
-  const metrics = useMemo(() => {
+  // Calculate metrics from page data (for display in table context)
+  const pageMetrics = useMemo(() => {
     if (!sales || sales.length === 0) {
       return {
         totalNetRevenue: "R$ 0,00",
@@ -116,6 +117,22 @@ const BuscaRapida = () => {
       customers: uniqueCustomers,
     };
   }, [sales]);
+
+  // Global metrics from totals query (complete filtered dataset)
+  const globalMetrics = useMemo(() => {
+    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+
+    return {
+      totalNetRevenue: formatCurrency(totals.totalNetRevenue),
+      totalGrossRevenue: formatCurrency(totals.totalGrossRevenue),
+      transactions: totals.totalTransactions,
+      customers: totals.totalUniqueCustomers,
+      loading: totals.loading,
+    };
+  }, [totals]);
 
   // Format sales for the table component (keeping compatibility)
   const formattedSales = useMemo(() => {
@@ -221,26 +238,26 @@ const BuscaRapida = () => {
                   </span>
                 </div>
 
-                {/* Metrics Grid */}
+                {/* Metrics Grid - Using GLOBAL TOTALS from complete dataset */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <MetricCard
-                    title="Receita Líquida (página)"
-                    value={metrics.totalNetRevenue}
+                    title="Receita Líquida (total)"
+                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalNetRevenue}
                     icon={DollarSign}
                   />
                   <MetricCard
-                    title="Receita Bruta (página)"
-                    value={metrics.totalGrossRevenue}
+                    title="Receita Bruta (total)"
+                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalGrossRevenue}
                     icon={TrendingUp}
                   />
                   <MetricCard
-                    title="Transações (página)"
-                    value={metrics.transactions}
+                    title="Transações (total)"
+                    value={globalMetrics.loading ? "..." : globalMetrics.transactions}
                     icon={ShoppingCart}
                   />
                   <MetricCard
-                    title="Clientes Únicos (página)"
-                    value={metrics.customers}
+                    title="Clientes Únicos (total)"
+                    value={globalMetrics.loading ? "..." : globalMetrics.customers}
                     icon={Users}
                   />
                 </div>

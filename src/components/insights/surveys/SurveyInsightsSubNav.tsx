@@ -1,4 +1,5 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { BarChart3, TrendingUp, Brain, BookOpen, ClipboardList, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFeatureGate } from '@/components/FeatureGate';
@@ -44,7 +45,7 @@ interface SurveyInsightsSubNavProps {
 }
 
 export function SurveyInsightsSubNav({ rightContent }: SurveyInsightsSubNavProps) {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -71,7 +72,7 @@ export function SurveyInsightsSubNav({ rightContent }: SurveyInsightsSubNavProps
           {/* Back to surveys list */}
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate('/insights/surveys')}
+              onClick={() => navigateTo('/insights/surveys')}
               className="flex items-center gap-2 px-3 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <ClipboardList className="h-4 w-4" />
@@ -87,7 +88,7 @@ export function SurveyInsightsSubNav({ rightContent }: SurveyInsightsSubNavProps
                 return (
                   <button
                     key={item.path}
-                    onClick={() => !disabled && navigate(item.path)}
+                    onClick={() => !disabled && navigateTo(item.path)}
                     disabled={disabled}
                     className={cn(
                       "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",

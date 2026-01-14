@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useQuizDataControls } from '@/hooks/useQuizDataControls';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -23,7 +23,7 @@ interface QuizDataControlsCardProps {
 }
 
 export function QuizDataControlsCard({ quizId, quizName }: QuizDataControlsCardProps) {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { resetQuizData, deleteQuiz } = useQuizDataControls();
 
   // Fetch sessions count directly from quiz_sessions table
@@ -53,7 +53,7 @@ export function QuizDataControlsCard({ quizId, quizName }: QuizDataControlsCardP
   const handleDeleteQuiz = async () => {
     await deleteQuiz.mutateAsync(quizId);
     setShowDeleteDialog(false);
-    navigate('/quizzes');
+    navigateTo('/quizzes');
   };
 
   return (

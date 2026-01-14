@@ -129,7 +129,7 @@ export default function OfferMappingsAuto() {
         description: 'Selecione um projeto para acessar os mapeamentos',
         variant: 'destructive',
       });
-      navigate('/');
+      navigateTo('/dashboard');
     }
   }, [currentProject, navigate, toast]);
 

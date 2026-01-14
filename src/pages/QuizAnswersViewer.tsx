@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -38,7 +39,7 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
 
 export default function QuizAnswersViewer() {
   const { quizId, sessionId } = useParams();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { data: sessionData, isLoading: isLoadingSession } = useQuizSessionDetail(quizId, sessionId);
   const { data: answers, isLoading: isLoadingAnswers } = useQuizSessionAnswers(sessionId, quizId);
 
@@ -92,7 +93,7 @@ export default function QuizAnswersViewer() {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => navigate(`/quizzes/${quizId}/sessions/${sessionId}`)}
+              onClick={() => navigateTo(`/quizzes/${quizId}/sessions/${sessionId}`)}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar para Sessão

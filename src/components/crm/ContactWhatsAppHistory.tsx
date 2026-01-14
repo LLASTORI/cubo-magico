@@ -5,7 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import { MessageCircle, Loader2, ArrowRight, Image, FileText, Mic, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { cn } from '@/lib/utils';
 
 interface WhatsAppMessage {
@@ -29,7 +29,7 @@ interface ContactWhatsAppHistoryProps {
 }
 
 export function ContactWhatsAppHistory({ contactId }: ContactWhatsAppHistoryProps) {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
 
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['contact-whatsapp-history', contactId],
@@ -130,7 +130,7 @@ export function ContactWhatsAppHistory({ contactId }: ContactWhatsAppHistoryProp
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => navigate(`/whatsapp?conversation=${conversations[0].id}`)}
+          onClick={() => navigateTo(`/whatsapp?conversation=${conversations[0].id}`)}
         >
           <MessageCircle className="h-4 w-4 mr-2" />
           Abrir Chat

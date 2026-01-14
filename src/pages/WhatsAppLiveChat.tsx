@@ -31,7 +31,8 @@ import {
   Loader2,
   Shield
 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { useWhatsAppAgents } from '@/hooks/useWhatsAppAgents';
 import { useWhatsAppDepartments } from '@/hooks/useWhatsAppDepartments';
 import { useQueryClient } from '@tanstack/react-query';
@@ -40,6 +41,7 @@ import { FeatureGate, FeatureLockedBadge } from '@/components/FeatureGate';
 
 export default function WhatsAppLiveChat() {
   const { currentProject } = useProject();
+  const { navigateTo } = useProjectNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState<WhatsAppConversation | null>(null);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -324,12 +326,10 @@ export default function WhatsAppLiveChat() {
               </Badge>
             )}
 
-            <Link to="/settings">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Settings className="h-4 w-4" />
-                Configurações
-              </Button>
-            </Link>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => navigateTo('/settings')}>
+              <Settings className="h-4 w-4" />
+              Configurações
+            </Button>
           </div>
         </div>
       </div>

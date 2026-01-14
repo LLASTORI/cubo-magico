@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
@@ -144,7 +144,7 @@ function DraggableFlowCard({
 }
 
 export default function AutomationFlows() {
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { 
@@ -325,7 +325,7 @@ export default function AutomationFlows() {
               Crie fluxos automatizados para WhatsApp com editor visual
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate('/automations/executions')}>
+          <Button variant="outline" onClick={() => navigateTo('/automations/executions')}>
             <Activity className="h-4 w-4 mr-2" />
             Execuções
           </Button>
@@ -429,7 +429,7 @@ export default function AutomationFlows() {
                   <DraggableFlowCard key={flow.id} flow={flow}>
                     <Card 
                       className="cursor-pointer hover:border-primary/50 transition-colors pl-8"
-                      onClick={() => navigate(`/automations/${flow.id}`)}
+                      onClick={() => navigateTo(`/automations/${flow.id}`)}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
@@ -452,7 +452,7 @@ export default function AutomationFlows() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/automations/${flow.id}`); }}>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigateTo(`/automations/${flow.id}`); }}>
                                 <Edit className="h-4 w-4 mr-2" />
                                 Editar
                               </DropdownMenuItem>

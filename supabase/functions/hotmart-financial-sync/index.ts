@@ -11,17 +11,9 @@ const corsHeaders = {
 // HOTMART FINANCIAL SYNC - Ledger Population
 // ============================================
 // This function syncs financial data from Hotmart APIs to finance_ledger.
-// It calls the following Hotmart endpoints:
-// 1. Sales API (with commissions) - for transaction-level financial breakdown
-//
+// It uses the Railway OAuth Proxy to avoid Cloudflare blocking.
 // The ledger becomes the SINGLE SOURCE OF TRUTH for all financial data.
 // ============================================
-
-interface HotmartTokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-}
 
 interface ProjectCredentials {
   client_id: string | null;
@@ -44,94 +36,55 @@ interface LedgerEntry {
   raw_payload: any;
 }
 
-// Get Hotmart access token
-async function getHotmartToken(credentials: ProjectCredentials): Promise<string> {
-  const { client_id, client_secret } = credentials;
+// Proxy configuration - uses Railway OAuth Proxy
+const HOTMART_PROXY_URL = Deno.env.get('HOTMART_PROXY_URL');
+const HOTMART_PROXY_API_KEY = Deno.env.get('HOTMART_PROXY_API_KEY');
 
-  if (!client_id || !client_secret) {
-    throw new Error('Missing Hotmart credentials');
+// Call Hotmart API through Railway Proxy
+async function callHotmartProxy(path: string, params: Record<string, string> = {}): Promise<any> {
+  if (!HOTMART_PROXY_URL) {
+    throw new Error('HOTMART_PROXY_URL not configured. Please add it in Cloud secrets.');
   }
 
-  // RULE: OAuth only. Do NOT use Basic Auth.
-  // CRITICAL: api.hotmart.com returns HTML. The correct OAuth endpoint is developers.hotmart.com
-  const url = 'https://developers.hotmart.com/oauth/token';
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id,
-    client_secret,
-  });
+  const url = `${HOTMART_PROXY_URL}/hotmart`;
+  
+  console.log(`[FINANCE SYNC] Calling proxy: ${path}`);
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Add API key if configured
+  if (HOTMART_PROXY_API_KEY) {
+    headers['x-api-key'] = HOTMART_PROXY_API_KEY;
+  }
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-    },
-    body: body.toString(),
-  });
-
-  const raw = await response.text();
-
-  if (!response.ok) {
-    const details = raw?.slice?.(0, 2000) ?? String(raw);
-    console.error('[FINANCE SYNC] OAuth failed:', response.status, details);
-    throw new Error(`OAuth failed (${response.status}): ${details}`);
-  }
-
-  let data: HotmartTokenResponse;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    throw new Error(`OAuth failed (200): invalid JSON response: ${raw?.slice?.(0, 500) ?? ''}`);
-  }
-
-  if (!data?.access_token) {
-    throw new Error('OAuth failed (200): missing access_token');
-  }
-
-  return data.access_token;
-}
-
-async function fetchHotmartSalesSample(
-  token: string,
-  startDate: number,
-  endDate: number
-): Promise<{ items: any[]; raw: any }>{
-  const url = new URL('https://api.hotmart.com/payments/api/v1/sales/history');
-  // Prompt requirement: maxResults=5
-  url.searchParams.set('maxResults', '5');
-  // Keep date filters to avoid 400 in environments where dates are required
-  url.searchParams.set('start_date', startDate.toString());
-  url.searchParams.set('end_date', endDate.toString());
-
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
-    },
+    headers,
+    body: JSON.stringify({
+      path,
+      params,
+      method: 'GET',
+    }),
   });
 
   const rawText = await response.text();
+
   if (!response.ok) {
-    throw new Error(
-      `Sales history sample failed (${response.status}): ${rawText?.slice?.(0, 2000) ?? ''}`
-    );
+    console.error(`[FINANCE SYNC] Proxy error (${response.status}):`, rawText.slice(0, 2000));
+    throw new Error(`Proxy request failed (${response.status}): ${rawText.slice(0, 500)}`);
   }
 
-  let raw: any;
   try {
-    raw = JSON.parse(rawText);
+    return JSON.parse(rawText);
   } catch {
-    raw = { _raw: rawText };
+    throw new Error(`Invalid JSON from proxy: ${rawText.slice(0, 500)}`);
   }
-
-  return { items: raw?.items || [], raw };
 }
 
-// Fetch sales from Hotmart API with commission details
+// Fetch sales from Hotmart API with commission details (through proxy)
 async function fetchHotmartSalesWithCommissions(
-  token: string,
   startDate: number,
   endDate: number,
   maxPages: number = 100
@@ -144,44 +97,40 @@ async function fetchHotmartSalesWithCommissions(
   );
 
   for (let page = 1; page <= maxPages; page++) {
-    const url = new URL('https://api.hotmart.com/payments/api/v1/sales/history');
-    url.searchParams.set('start_date', startDate.toString());
-    url.searchParams.set('end_date', endDate.toString());
-    url.searchParams.set('max_results', '100');
-    if (nextPageToken) url.searchParams.set('page_token', nextPageToken);
+    const params: Record<string, string> = {
+      start_date: startDate.toString(),
+      end_date: endDate.toString(),
+      max_results: '100',
+    };
+    
+    if (nextPageToken) {
+      params.page_token = nextPageToken;
+    }
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
+    try {
+      const data = await callHotmartProxy('/payments/api/v1/sales/history', params);
+      
+      const items = data?.items || [];
+      allSales.push(...items);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      if (response.status === 429) {
+      console.log(`[FINANCE SYNC] Page ${page}: ${items.length} sales`);
+
+      nextPageToken = data?.next_page_token || null;
+
+      // Stop when there is no next page token or no items returned
+      if (!nextPageToken || items.length === 0) {
+        break;
+      }
+
+      await new Promise((r) => setTimeout(r, 200)); // Rate limit protection
+    } catch (error: any) {
+      if (error.message?.includes('429')) {
         console.log('[FINANCE SYNC] Rate limited (429), waiting 5s...');
         await new Promise((r) => setTimeout(r, 5000));
         continue;
       }
-      throw new Error(`Sales history failed (${response.status}): ${errText?.slice?.(0, 2000) ?? ''}`);
+      throw error;
     }
-
-    const data = await response.json();
-    const items = data?.items || [];
-    allSales.push(...items);
-
-    console.log(`[FINANCE SYNC] Page ${page}: ${items.length} sales`);
-
-    nextPageToken = data?.next_page_token || null;
-
-    // Stop when there is no next page token or no items returned
-    if (!nextPageToken || items.length === 0) {
-      break;
-    }
-
-    await new Promise((r) => setTimeout(r, 200)); // Rate limit protection
   }
 
   return allSales;
@@ -253,10 +202,6 @@ function parseCommissionsToLedgerEntries(
       raw_payload: comm,
     });
   }
-
-  // If no PRODUCER commission found but we have the total price, 
-  // we cannot reliably calculate net - skip this transaction
-  // The ledger should only contain REAL financial data
 
   return entries;
 }
@@ -369,81 +314,11 @@ serve(async (req) => {
       });
     }
 
-    // Get Hotmart credentials (secrets are stored encrypted in DB; plaintext columns may be NULL)
-    const { data: credentialsRow, error: credError } = await supabase
-      .from('project_credentials')
-      .select('client_id, client_secret, client_secret_encrypted, basic_auth, basic_auth_encrypted')
-      .eq('project_id', projectId)
-      .eq('provider', 'hotmart')
-      .maybeSingle();
-
-    if (credError || !credentialsRow) {
+    // Check if proxy is configured
+    if (!HOTMART_PROXY_URL) {
       return new Response(
         JSON.stringify({
-          error:
-            'Hotmart não configurado. Vá em Configurações → Hotmart e salve suas credenciais.',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    // Resolve secrets (decrypt when encrypted columns exist)
-    let clientSecret: string | null = credentialsRow.client_secret;
-    let basicAuth: string | null = credentialsRow.basic_auth;
-
-    if (credentialsRow.client_secret_encrypted) {
-      const { data: decrypted, error: decryptError } = await supabase.rpc(
-        'decrypt_sensitive',
-        {
-          p_encrypted_data: credentialsRow.client_secret_encrypted,
-        }
-      );
-      if (decryptError) {
-        console.error('[FinancialSync] Failed to decrypt client_secret:', decryptError);
-      }
-      if (decrypted) clientSecret = decrypted;
-    }
-
-    if (credentialsRow.basic_auth_encrypted) {
-      const { data: decrypted, error: decryptError } = await supabase.rpc(
-        'decrypt_sensitive',
-        {
-          p_encrypted_data: credentialsRow.basic_auth_encrypted,
-        }
-      );
-      if (decryptError) {
-        console.error('[FinancialSync] Failed to decrypt basic_auth:', decryptError);
-      }
-      if (decrypted) basicAuth = decrypted;
-    }
-
-    const credentials: ProjectCredentials = {
-      client_id: credentialsRow.client_id,
-      client_secret: clientSecret,
-      basic_auth: basicAuth,
-    };
-
-    if (!credentials.client_id || !credentials.client_secret) {
-      console.error(
-        '[FinancialSync] Missing credentials (after decrypt) - client_id:',
-        !!credentials.client_id,
-        'client_secret:',
-        !!credentials.client_secret,
-        'has_client_secret_encrypted:',
-        !!credentialsRow.client_secret_encrypted
-      );
-      return new Response(
-        JSON.stringify({
-          error:
-            'Credenciais Hotmart incompletas. Client ID e Client Secret são obrigatórios. Vá em Configurações → Hotmart e salve novamente suas credenciais.',
-          details: {
-            hasClientId: !!credentials.client_id,
-            hasClientSecret: !!credentials.client_secret,
-            hasClientSecretEncrypted: !!credentialsRow.client_secret_encrypted,
-          },
+          error: 'HOTMART_PROXY_URL não configurado. Configure o secret nas configurações do Cloud.',
         }),
         {
           status: 400,
@@ -477,14 +352,9 @@ serve(async (req) => {
     const runId = syncRun?.id;
 
     try {
-      // Get Hotmart token
-      console.log('[FinancialSync] Getting Hotmart token...');
-      const token = await getHotmartToken(credentials);
-
-      // Fetch all sales with commissions
-      console.log('[FinancialSync] Fetching sales...');
+      // Fetch all sales with commissions (through proxy - no token needed here)
+      console.log('[FinancialSync] Fetching sales via proxy...');
       const sales = await fetchHotmartSalesWithCommissions(
-        token,
         startDate.getTime(),
         endDate.getTime()
       );
@@ -525,11 +395,17 @@ serve(async (req) => {
       let eventsSkipped = 0;
       let errors = 0;
       const BATCH_SIZE = 100;
+      let firstTransactionId: string | null = null;
 
       for (let i = 0; i < allEntries.length; i += BATCH_SIZE) {
         const batch = allEntries.slice(i, i + BATCH_SIZE);
         
-        const { error: insertError, count } = await supabase
+        // Capture first transaction ID
+        if (!firstTransactionId && batch.length > 0) {
+          firstTransactionId = batch[0].transaction_id;
+        }
+
+        const { error: insertError } = await supabase
           .from('finance_ledger')
           .upsert(batch, {
             onConflict: 'provider,transaction_id,event_type,actor_type,actor_id,amount,occurred_at',
@@ -573,10 +449,12 @@ serve(async (req) => {
         totalSales: sales.length,
         salesWithCommissions,
         salesWithoutCommissions,
+        firstTransactionId,
         dateRange: {
           start: startDate.toISOString(),
           end: endDate.toISOString(),
         },
+        proxyUsed: HOTMART_PROXY_URL,
       };
 
       console.log('[FinancialSync] Sync completed:', result);
@@ -608,8 +486,8 @@ serve(async (req) => {
     console.error('[FinancialSync] Error:', error);
 
     const status =
-      message.includes('Hotmart não autorizou (401)') ||
-      message.includes('Failed to get Hotmart token: 401')
+      message.includes('Proxy request failed') ||
+      message.includes('HOTMART_PROXY_URL')
         ? 400
         : 500;
 

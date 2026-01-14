@@ -28,11 +28,23 @@ export interface PaginationState {
   totalPages: number;
 }
 
+/**
+ * Global totals from the complete filtered dataset (not paginated)
+ */
+export interface GlobalTotals {
+  totalTransactions: number;
+  totalGrossRevenue: number;
+  totalNetRevenue: number;
+  totalUniqueCustomers: number;
+  loading: boolean;
+}
+
 export interface UseSalesCoreResult {
   sales: CoreSaleItem[];
   loading: boolean;
   error: string | null;
   pagination: PaginationState;
+  totals: GlobalTotals;
   fetchSales: (projectId: string, filters: FilterParams, page?: number, pageSize?: number) => Promise<void>;
   nextPage: () => void;
   prevPage: () => void;
@@ -88,6 +100,15 @@ export function useSalesCore(): UseSalesCoreResult {
     pageSize: 100,
     totalCount: 0,
     totalPages: 0,
+  });
+  
+  // Global totals state (from complete filtered dataset, not paginated)
+  const [totals, setTotals] = useState<GlobalTotals>({
+    totalTransactions: 0,
+    totalGrossRevenue: 0,
+    totalNetRevenue: 0,
+    totalUniqueCustomers: 0,
+    loading: false,
   });
   
   // Store current filters for pagination navigation
@@ -161,8 +182,99 @@ export function useSalesCore(): UseSalesCoreResult {
 
       if (total === 0) {
         setSales([]);
+        setTotals({
+          totalTransactions: 0,
+          totalGrossRevenue: 0,
+          totalNetRevenue: 0,
+          totalUniqueCustomers: 0,
+          loading: false,
+        });
         return;
       }
+
+      // Step 1.5: Fetch global totals (aggregate query without pagination)
+      // This runs in parallel with the paginated data fetch
+      setTotals(prev => ({ ...prev, loading: true }));
+      
+      const fetchGlobalTotals = async () => {
+        try {
+          // Build the same filter conditions for the totals query
+          // Use contact_id for unique customers since contact_email doesn't exist
+          let totalsQuery = supabase
+            .from('sales_core_events')
+            .select('gross_amount, net_amount, contact_id')
+            .eq('project_id', projectId)
+            .eq('provider', 'hotmart')
+            .eq('is_active', true)
+            .gte('economic_day', filters.startDate)
+            .lte('economic_day', filters.endDate);
+
+          // Apply same event type filter
+          if (filters.transactionStatus && filters.transactionStatus.length > 0) {
+            const statusToEventType: Record<string, string> = {
+              'approved': 'purchase',
+              'complete': 'purchase',
+              'refunded': 'refund',
+              'chargeback': 'chargeback',
+              'cancelled': 'cancellation',
+            };
+            
+            const eventTypes = filters.transactionStatus.map(s => statusToEventType[s.toLowerCase()] || s.toLowerCase());
+            const uniqueEventTypes = [...new Set(eventTypes)];
+            
+            if (uniqueEventTypes.length === 1) {
+              totalsQuery = totalsQuery.eq('event_type', uniqueEventTypes[0]);
+            } else if (uniqueEventTypes.length > 1) {
+              totalsQuery = totalsQuery.in('event_type', uniqueEventTypes);
+            }
+          } else {
+            totalsQuery = totalsQuery.eq('event_type', 'purchase');
+          }
+
+          const { data: totalsData, error: totalsError } = await totalsQuery;
+
+          if (totalsError) {
+            console.warn('Error fetching global totals:', totalsError);
+            setTotals({
+              totalTransactions: total, // fallback to count
+              totalGrossRevenue: 0,
+              totalNetRevenue: 0,
+              totalUniqueCustomers: 0,
+              loading: false,
+            });
+            return;
+          }
+
+          if (totalsData && totalsData.length > 0) {
+            const totalGrossRevenue = totalsData.reduce((sum, row) => sum + (Number(row.gross_amount) || 0), 0);
+            const totalNetRevenue = totalsData.reduce((sum, row) => sum + (Number(row.net_amount) || 0), 0);
+            // Count unique contact_ids for unique customers
+            const uniqueContacts = new Set(totalsData.map(row => row.contact_id).filter(Boolean));
+            
+            setTotals({
+              totalTransactions: totalsData.length,
+              totalGrossRevenue,
+              totalNetRevenue,
+              totalUniqueCustomers: uniqueContacts.size,
+              loading: false,
+            });
+          } else {
+            setTotals({
+              totalTransactions: 0,
+              totalGrossRevenue: 0,
+              totalNetRevenue: 0,
+              totalUniqueCustomers: 0,
+              loading: false,
+            });
+          }
+        } catch (err) {
+          console.warn('Error in global totals fetch:', err);
+          setTotals(prev => ({ ...prev, loading: false }));
+        }
+      };
+
+      // Start fetching totals in background (don't await)
+      fetchGlobalTotals();
 
       // Step 2: Fetch Core events with pagination
       let coreQuery = supabase
@@ -465,6 +577,7 @@ export function useSalesCore(): UseSalesCoreResult {
     loading,
     error,
     pagination,
+    totals,
     fetchSales,
     nextPage,
     prevPage,

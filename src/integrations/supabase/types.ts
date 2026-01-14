@@ -3552,13 +3552,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "launch_products_offer_mapping_id_fkey"
-            columns: ["offer_mapping_id"]
-            isOneToOne: false
-            referencedRelation: "sales_core_view"
-            referencedColumns: ["offer_mapping_id"]
-          },
-          {
             foreignKeyName: "launch_products_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -8712,44 +8705,50 @@ export type Database = {
       }
       sales_core_view: {
         Row: {
-          attribution: Json | null
+          affiliate_code: string | null
+          affiliate_name: string | null
+          base_value: number | null
           buyer_email: string | null
           buyer_name: string | null
-          checkout_origin: string | null
+          commission_value: number | null
+          confirmation_date: string | null
           contact_id: string | null
+          coupon_code: string | null
           created_at: string | null
           currency: string | null
+          currency_code: string | null
           economic_day: string | null
           event_type: string | null
+          fee_value: number | null
           funnel_id: string | null
           funnel_name: string | null
           gross_amount: number | null
           hotmart_status: string | null
           id: string | null
-          id_funil: string | null
-          is_active: boolean | null
-          mapped_offer_name: string | null
-          mapped_product_name: string | null
-          meta_ad_id_extracted: string | null
-          meta_adset_id_extracted: string | null
-          meta_campaign_id_extracted: string | null
+          installments: number | null
           net_amount: number | null
-          nome_posicao: string | null
+          nome_oferta: string | null
           occurred_at: string | null
           offer_code: string | null
-          offer_mapping_id: string | null
+          original_currency: string | null
+          original_value: number | null
+          payment_method: string | null
+          payment_type: string | null
           product_code: string | null
           product_name: string | null
           project_id: string | null
           provider: string | null
           provider_event_id: string | null
-          raw_payload: Json | null
-          received_at: string | null
+          purchase_date: string | null
           tipo_posicao: string | null
+          total_price_brl: number | null
           transaction_id: string | null
+          utm_ad: string | null
           utm_adset: string | null
           utm_campaign: string | null
+          utm_content: string | null
           utm_creative: string | null
+          utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
         }

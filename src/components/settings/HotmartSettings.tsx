@@ -53,8 +53,9 @@ export const HotmartSettings = () => {
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncMessage, setSyncMessage] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [backfilling, setBackfilling] = useState(false);
-  const [backfillMessage, setBackfillMessage] = useState('');
+  // REMOVED: backfilling and backfillMessage states
+  // The backfill functionality has been deprecated as part of the canonical pipeline migration.
+  // Now hotmart_sales is the single source of truth and sales_core_events is only for event logging.
 
   const projectId = currentProject?.id;
 
@@ -358,55 +359,16 @@ export const HotmartSettings = () => {
     }
   };
 
-  const handleBackfillHistory = async () => {
-    if (!projectId) return;
-
-    setBackfilling(true);
-    setBackfillMessage('Iniciando reconstrução do histórico...');
-
-    try {
-      const { data, error } = await supabase.functions.invoke('hotmart-backfill', {
-        body: {
-          projectId,
-          startDate: subMonths(new Date(), 24).getTime(),
-        },
-      });
-
-      if (error) throw error;
-
-      const result = data as {
-        eventsCreated: number;
-        eventsSkipped: number;
-        totalSalesFound: number;
-        errors: number;
-      };
-
-      setBackfillMessage(
-        `✓ ${result.eventsCreated.toLocaleString()} eventos criados, ${result.eventsSkipped.toLocaleString()} já existentes`
-      );
-
-      toast({
-        title: 'Histórico reconstruído!',
-        description: `${result.eventsCreated.toLocaleString()} eventos de vendas criados.`,
-      });
-
-      refetchStats();
-
-    } catch (error: any) {
-      console.error('Backfill error:', error);
-      setBackfillMessage(error.message || 'Erro ao reconstruir histórico');
-      toast({
-        title: 'Erro na reconstrução',
-        description: error.message || 'Erro ao reconstruir histórico de vendas',
-        variant: 'destructive',
-      });
-    } finally {
-      setTimeout(() => {
-        setBackfilling(false);
-        setBackfillMessage('');
-      }, 5000);
-    }
-  };
+  // DEPRECATED: handleBackfillHistory function removed
+  // ============================================
+  // CANONICAL PIPELINE MIGRATION
+  // ============================================
+  // The backfill functionality has been deprecated. Reason:
+  // - hotmart_sales is now the SINGLE SOURCE OF TRUTH
+  // - sales_core_events is ONLY for event logging (webhooks)
+  // - sales_core_view reads directly from hotmart_sales
+  // - No need to "rebuild" events - just sync hotmart_sales via API
+  // ============================================
 
   const isConfigured = hotmartCredentials?.is_configured;
   const isValidated = hotmartCredentials?.is_validated;
@@ -732,56 +694,21 @@ export const HotmartSettings = () => {
                   </p>
                 </div>
 
-                {/* Backfill Section */}
-                <Separator />
-                
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <History className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Reconstrução de Histórico</h3>
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                      Novo
-                    </Badge>
-                  </div>
-
-                  <div className="p-4 rounded-lg border bg-card space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Reconstrói os eventos de vendas no módulo Sales Core a partir dos dados sincronizados via API.
-                      Isso permite que a <strong>Busca Rápida</strong>, <strong>Funis</strong> e <strong>Insights</strong> mostrem 100% das vendas históricas.
-                    </p>
-                    
-                    {backfillMessage && (
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <p className="text-sm text-blue-700 dark:text-blue-400">
-                          {backfillMessage}
-                        </p>
-                      </div>
-                    )}
-
-                    <Button
-                      onClick={handleBackfillHistory}
-                      disabled={backfilling || syncing}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      {backfilling ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Reconstruindo...
-                        </>
-                      ) : (
-                        <>
-                          <History className="h-4 w-4 mr-2" />
-                          Reconstruir Histórico de Vendas
-                        </>
-                      )}
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Idempotente:</strong> Pode ser executado várias vezes sem duplicar dados.
-                    </p>
-                  </div>
-                </div>
+                {/* REMOVED: Backfill Section - Deprecated as part of canonical pipeline */}
+                {/* 
+                  ============================================
+                  CANONICAL PIPELINE ARCHITECTURE
+                  ============================================
+                  hotmart_sales is now the SINGLE SOURCE OF TRUTH.
+                  sales_core_events is ONLY for webhook event logging.
+                  sales_core_view reads from hotmart_sales directly.
+                  
+                  The "Reconstruir Histórico" button has been removed because:
+                  1. It wrote to sales_core_events which is no longer the financial source
+                  2. The correct action is to sync via API to hotmart_sales
+                  3. sales_core_view automatically picks up hotmart_sales data
+                  ============================================
+                */}
 
                 {/* CSV Import Section */}
                 <Separator />

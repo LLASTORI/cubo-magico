@@ -46,16 +46,18 @@ interface LedgerEntry {
 
 // Get Hotmart access token
 async function getHotmartToken(credentials: ProjectCredentials): Promise<string> {
-  const { client_id, client_secret, basic_auth } = credentials;
+  const { client_id, client_secret } = credentials;
 
   if (!client_id || !client_secret) {
     throw new Error('Missing Hotmart credentials');
   }
 
-  const authHeader = basic_auth || btoa(`${client_id}:${client_secret}`);
+  // IMPORTANT: always compute Basic auth from client_id/client_secret.
+  // We intentionally ignore any stored basic_auth override here to avoid stale/invalid values.
+  const authHeader = btoa(`${client_id}:${client_secret}`);
 
   // Hotmart OAuth can require client_id/client_secret in the querystring.
-  // We mirror the proven implementation used in the hotmart-api function.
+  // Mirror the proven implementation used in the hotmart-api function.
   const url = `https://api-sec-vlc.hotmart.com/security/oauth/token?grant_type=client_credentials&client_id=${encodeURIComponent(
     client_id
   )}&client_secret=${encodeURIComponent(client_secret)}`;
@@ -71,6 +73,13 @@ async function getHotmartToken(credentials: ProjectCredentials): Promise<string>
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[FinancialSync] Token error:', response.status, errorText);
+
+    if (response.status === 401) {
+      throw new Error(
+        'Hotmart não autorizou (401) ao gerar token. Confirme se o Client ID/Secret pertencem ao mesmo App e se o App está ativo/permissões ok.'
+      );
+    }
+
     throw new Error(`Failed to get Hotmart token: ${response.status}`);
   }
 
@@ -550,9 +559,17 @@ serve(async (req) => {
     }
 
   } catch (error: any) {
+    const message = error?.message || 'Erro desconhecido';
     console.error('[FinancialSync] Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+
+    const status =
+      message.includes('Hotmart não autorizou (401)') ||
+      message.includes('Failed to get Hotmart token: 401')
+        ? 400
+        : 500;
+
+    return new Response(JSON.stringify({ error: message }), {
+      status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

@@ -13,6 +13,7 @@ const corsHeaders = {
 // that was synced via API but never received webhook events.
 //
 // IDEMPOTENT: Uses provider_event_id pattern to avoid duplicates
+// PAGINATED: Processes ALL records without 1000 limit
 // ============================================
 
 // Map Hotmart status to canonical event types
@@ -44,6 +45,107 @@ interface BackfillResult {
   errors: number;
   status: 'completed' | 'failed';
   errorMessage?: string;
+}
+
+// Paginated fetch to get ALL records without Supabase's 1000 limit
+async function fetchAllHotmartSales(
+  supabase: any,
+  projectId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<any[]> {
+  const PAGE_SIZE = 1000;
+  let allSales: any[] = [];
+  let page = 0;
+  let hasMore = true;
+
+  console.log(`[Backfill] Starting paginated fetch...`);
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from('hotmart_sales')
+      .select('*')
+      .eq('project_id', projectId)
+      .in('status', ['APPROVED', 'COMPLETE'])
+      .gte('sale_date', startDate.toISOString())
+      .lte('sale_date', endDate.toISOString())
+      .order('sale_date', { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Failed to fetch hotmart_sales page ${page}: ${error.message}`);
+    }
+
+    const count = data?.length || 0;
+    console.log(`[Backfill] Page ${page}: fetched ${count} records (range ${from}-${to})`);
+
+    if (count > 0) {
+      allSales = allSales.concat(data);
+    }
+
+    // If we got less than PAGE_SIZE, we've reached the end
+    hasMore = count === PAGE_SIZE;
+    page++;
+
+    // Safety limit to prevent infinite loops (100 pages = 100k records)
+    if (page > 100) {
+      console.warn(`[Backfill] Safety limit reached at page ${page}`);
+      break;
+    }
+  }
+
+  console.log(`[Backfill] Total sales fetched: ${allSales.length} in ${page} pages`);
+  return allSales;
+}
+
+// Fetch existing transactions with pagination
+async function fetchExistingTransactions(
+  supabase: any,
+  projectId: string
+): Promise<Set<string>> {
+  const PAGE_SIZE = 1000;
+  const existingTransactions = new Set<string>();
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from('sales_core_events')
+      .select('provider_event_id')
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart')
+      .range(from, to);
+
+    if (error) {
+      console.error(`[Backfill] Error fetching existing events page ${page}:`, error);
+      break;
+    }
+
+    const count = data?.length || 0;
+
+    if (data) {
+      for (const event of data) {
+        // Extract transaction from provider_event_id (format: hotmart_HPXXXXXXXXX_STATUS)
+        const match = event.provider_event_id.match(/hotmart_([A-Z0-9]+)_/);
+        if (match) {
+          existingTransactions.add(match[1]);
+        }
+      }
+    }
+
+    hasMore = count === PAGE_SIZE;
+    page++;
+
+    if (page > 100) break;
+  }
+
+  return existingTransactions;
 }
 
 serve(async (req) => {
@@ -179,23 +281,11 @@ async function runBackfill(
 ): Promise<BackfillResult> {
   console.log(`[Backfill] Processing ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-  // Step 1: Get all hotmart_sales for the project in date range
-  // Only process APPROVED and COMPLETE (purchases)
-  const { data: hotmartSales, error: salesError } = await supabase
-    .from('hotmart_sales')
-    .select('*')
-    .eq('project_id', projectId)
-    .in('status', ['APPROVED', 'COMPLETE'])
-    .gte('sale_date', startDate.toISOString())
-    .lte('sale_date', endDate.toISOString())
-    .order('sale_date', { ascending: true });
+  // Step 1: Get ALL hotmart_sales with pagination (no 1000 limit)
+  const hotmartSales = await fetchAllHotmartSales(supabase, projectId, startDate, endDate);
 
-  if (salesError) {
-    throw new Error(`Failed to fetch hotmart_sales: ${salesError.message}`);
-  }
-
-  const totalSalesFound = hotmartSales?.length || 0;
-  console.log(`[Backfill] Found ${totalSalesFound} sales to process`);
+  const totalSalesFound = hotmartSales.length;
+  console.log(`[Backfill] Found ${totalSalesFound} total sales to process`);
 
   if (totalSalesFound === 0) {
     await supabase
@@ -220,44 +310,29 @@ async function runBackfill(
     };
   }
 
-  // Step 2: Get existing events to check for duplicates
-  const transactionIds = hotmartSales.map((s: any) => s.transaction_id);
-  const providerEventPatterns = transactionIds.map((t: string) => `hotmart_${t}_%`);
-
-  // Check which transactions already have events
-  const { data: existingEvents } = await supabase
-    .from('sales_core_events')
-    .select('provider_event_id')
-    .eq('project_id', projectId)
-    .eq('provider', 'hotmart')
-    .eq('is_active', true);
-
-  const existingTransactions = new Set<string>();
-  if (existingEvents) {
-    for (const event of existingEvents) {
-      // Extract transaction from provider_event_id (format: hotmart_HPXXXXXXXXX_STATUS)
-      const match = event.provider_event_id.match(/hotmart_([A-Z0-9]+)_/);
-      if (match) {
-        existingTransactions.add(match[1]);
-      }
-    }
-  }
-
+  // Step 2: Get ALL existing events with pagination
+  const existingTransactions = await fetchExistingTransactions(supabase, projectId);
   console.log(`[Backfill] Found ${existingTransactions.size} existing transactions`);
 
-  // Step 3: Find contacts by email
+  // Step 3: Find contacts by email (with pagination for large sets)
   const emails = [...new Set(hotmartSales.map((s: any) => s.buyer_email?.toLowerCase()).filter(Boolean))];
   
-  const { data: contacts } = await supabase
-    .from('crm_contacts')
-    .select('id, email')
-    .eq('project_id', projectId)
-    .in('email', emails);
-
   const emailToContactId = new Map<string, string>();
-  if (contacts) {
-    for (const c of contacts) {
-      emailToContactId.set(c.email.toLowerCase(), c.id);
+  
+  // Fetch contacts in batches of 500 emails
+  const EMAIL_BATCH_SIZE = 500;
+  for (let i = 0; i < emails.length; i += EMAIL_BATCH_SIZE) {
+    const emailBatch = emails.slice(i, i + EMAIL_BATCH_SIZE);
+    const { data: contacts } = await supabase
+      .from('crm_contacts')
+      .select('id, email')
+      .eq('project_id', projectId)
+      .in('email', emailBatch);
+
+    if (contacts) {
+      for (const c of contacts) {
+        emailToContactId.set(c.email.toLowerCase(), c.id);
+      }
     }
   }
 
@@ -333,6 +408,11 @@ async function runBackfill(
   for (let i = 0; i < eventsToInsert.length; i += BATCH_SIZE) {
     const batch = eventsToInsert.slice(i, i + BATCH_SIZE);
     
+    // Log progress every 10 batches
+    if ((i / BATCH_SIZE) % 10 === 0) {
+      console.log(`[Backfill] Processing batch ${i / BATCH_SIZE + 1}/${Math.ceil(eventsToInsert.length / BATCH_SIZE)}`);
+    }
+
     const { error: insertError } = await supabase
       .from('sales_core_events')
       .insert(batch);

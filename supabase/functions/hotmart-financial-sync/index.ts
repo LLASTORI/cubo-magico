@@ -47,14 +47,20 @@ interface LedgerEntry {
 // Get Hotmart access token
 async function getHotmartToken(credentials: ProjectCredentials): Promise<string> {
   const { client_id, client_secret, basic_auth } = credentials;
-  
+
   if (!client_id || !client_secret) {
     throw new Error('Missing Hotmart credentials');
   }
 
   const authHeader = basic_auth || btoa(`${client_id}:${client_secret}`);
-  
-  const response = await fetch('https://api-sec-vlc.hotmart.com/security/oauth/token?grant_type=client_credentials', {
+
+  // Hotmart OAuth can require client_id/client_secret in the querystring.
+  // We mirror the proven implementation used in the hotmart-api function.
+  const url = `https://api-sec-vlc.hotmart.com/security/oauth/token?grant_type=client_credentials&client_id=${encodeURIComponent(
+    client_id
+  )}&client_secret=${encodeURIComponent(client_secret)}`;
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${authHeader}`,
@@ -64,7 +70,7 @@ async function getHotmartToken(credentials: ProjectCredentials): Promise<string>
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[FinancialSync] Token error:', errorText);
+    console.error('[FinancialSync] Token error:', response.status, errorText);
     throw new Error(`Failed to get Hotmart token: ${response.status}`);
   }
 
@@ -309,33 +315,87 @@ serve(async (req) => {
       });
     }
 
-    // Get Hotmart credentials
-    const { data: credentials, error: credError } = await supabase
+    // Get Hotmart credentials (secrets are stored encrypted in DB; plaintext columns may be NULL)
+    const { data: credentialsRow, error: credError } = await supabase
       .from('project_credentials')
-      .select('client_id, client_secret, basic_auth')
+      .select('client_id, client_secret, client_secret_encrypted, basic_auth, basic_auth_encrypted')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .maybeSingle();
 
-    if (credError || !credentials) {
-      return new Response(JSON.stringify({ error: 'Hotmart não configurado. Vá em Configurações → Hotmart e salve suas credenciais.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (credError || !credentialsRow) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'Hotmart não configurado. Vá em Configurações → Hotmart e salve suas credenciais.',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    if (!credentials.client_id || !credentials.client_secret) {
-      console.error('[FinancialSync] Missing credentials - client_id:', !!credentials.client_id, 'client_secret:', !!credentials.client_secret);
-      return new Response(JSON.stringify({ 
-        error: 'Credenciais Hotmart incompletas. Client ID e Client Secret são obrigatórios. Vá em Configurações → Hotmart e salve novamente suas credenciais.',
-        details: {
-          hasClientId: !!credentials.client_id,
-          hasClientSecret: !!credentials.client_secret
+    // Resolve secrets (decrypt when encrypted columns exist)
+    let clientSecret: string | null = credentialsRow.client_secret;
+    let basicAuth: string | null = credentialsRow.basic_auth;
+
+    if (credentialsRow.client_secret_encrypted) {
+      const { data: decrypted, error: decryptError } = await supabase.rpc(
+        'decrypt_sensitive',
+        {
+          p_encrypted_data: credentialsRow.client_secret_encrypted,
         }
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      );
+      if (decryptError) {
+        console.error('[FinancialSync] Failed to decrypt client_secret:', decryptError);
+      }
+      if (decrypted) clientSecret = decrypted;
+    }
+
+    if (credentialsRow.basic_auth_encrypted) {
+      const { data: decrypted, error: decryptError } = await supabase.rpc(
+        'decrypt_sensitive',
+        {
+          p_encrypted_data: credentialsRow.basic_auth_encrypted,
+        }
+      );
+      if (decryptError) {
+        console.error('[FinancialSync] Failed to decrypt basic_auth:', decryptError);
+      }
+      if (decrypted) basicAuth = decrypted;
+    }
+
+    const credentials: ProjectCredentials = {
+      client_id: credentialsRow.client_id,
+      client_secret: clientSecret,
+      basic_auth: basicAuth,
+    };
+
+    if (!credentials.client_id || !credentials.client_secret) {
+      console.error(
+        '[FinancialSync] Missing credentials (after decrypt) - client_id:',
+        !!credentials.client_id,
+        'client_secret:',
+        !!credentials.client_secret,
+        'has_client_secret_encrypted:',
+        !!credentialsRow.client_secret_encrypted
+      );
+      return new Response(
+        JSON.stringify({
+          error:
+            'Credenciais Hotmart incompletas. Client ID e Client Secret são obrigatórios. Vá em Configurações → Hotmart e salve novamente suas credenciais.',
+          details: {
+            hasClientId: !!credentials.client_id,
+            hasClientSecret: !!credentials.client_secret,
+            hasClientSecretEncrypted: !!credentialsRow.client_secret_encrypted,
+          },
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Create sync run record

@@ -8316,6 +8316,90 @@ export type Database = {
           },
         ]
       }
+      finance_core_view: {
+        Row: {
+          affiliate_code: string | null
+          affiliate_name: string | null
+          buyer_city: string | null
+          buyer_country: string | null
+          buyer_document: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          buyer_phone: string | null
+          buyer_phone_ddd: string | null
+          buyer_state: string | null
+          checkout_origin: string | null
+          confirmation_date: string | null
+          coupon_code: string | null
+          created_at: string | null
+          currency: string | null
+          economic_day: string | null
+          economic_timestamp: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          funnel_type: string | null
+          gross_amount: number | null
+          hotmart_status: string | null
+          id: string | null
+          installments: number | null
+          is_cancelled: boolean | null
+          is_net_pending: boolean | null
+          is_valid_sale: boolean | null
+          last_synced_at: string | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          net_amount: number | null
+          nome_oferta: string | null
+          occurred_at: string | null
+          offer_code: string | null
+          payment_method: string | null
+          payment_type: string | null
+          product_code: string | null
+          product_name: string | null
+          project_id: string | null
+          sale_origin: string | null
+          tipo_posicao: string | null
+          total_price_brl: number | null
+          transaction_id: string | null
+          updated_at: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_placement: string | null
+          utm_source: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_sales_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+        ]
+      }
       financial_daily: {
         Row: {
           ad_spend: number | null

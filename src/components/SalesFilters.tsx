@@ -96,18 +96,23 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
   const [utmPlacement, setUtmPlacement] = useState("");
   const [utmCreative, setUtmCreative] = useState("");
 
+  // State for funnel options with UUID and display name
+  const [funnelOptions, setFunnelOptions] = useState<{ id: string; name: string }[]>([]);
+
   useEffect(() => {
     const fetchFilterOptions = async () => {
       if (!projectId) {
         setFunis([]);
+        setFunnelOptions([]);
         setMappedProducts([]);
         setMappedOffers([]);
         return;
       }
 
+      // Fetch offer mappings with funnel data
       const { data, error } = await supabase
         .from('offer_mappings')
-        .select('id_funil, nome_produto, codigo_oferta, nome_oferta')
+        .select('id_funil, funnel_id, nome_produto, codigo_oferta, nome_oferta')
         .eq('project_id', projectId)
         .order('id_funil');
       
@@ -119,7 +124,17 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
           .map(item => ({ code: item.codigo_oferta!, name: item.nome_oferta || item.codigo_oferta! }))
           .filter((offer, index, self) => self.findIndex(o => o.code === offer.code) === index);
         
+        // Build funnel options with UUID (funnel_id) and display name (id_funil)
+        const funnelMap = new Map<string, string>();
+        for (const item of data) {
+          if (item.funnel_id && !funnelMap.has(item.funnel_id)) {
+            funnelMap.set(item.funnel_id, item.id_funil || item.funnel_id);
+          }
+        }
+        const funnelOpts = Array.from(funnelMap.entries()).map(([id, name]) => ({ id, name }));
+        
         setFunis(uniqueFunis);
+        setFunnelOptions(funnelOpts);
         setMappedProducts(uniqueProducts);
         setMappedOffers(uniqueOffers);
       }
@@ -150,9 +165,10 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
     { value: "blocked", label: "Bloqueada", description: "Transação bloqueada por suspeita de fraude ou violação de políticas. Requer análise manual." },
   ];
 
-  const funilOptions: MultiSelectOption[] = funis.map(funil => ({
-    value: funil,
-    label: funil,
+  // Use funnel_id (UUID) as value, display id_funil as label
+  const funilOptionsForSelect: MultiSelectOption[] = funnelOptions.map(funil => ({
+    value: funil.id,
+    label: funil.name,
   }));
 
   const productOptions: MultiSelectOption[] = displayProducts.map(product => ({
@@ -246,7 +262,7 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
         <div className="space-y-2">
           <Label className="text-foreground">Funil</Label>
           <MultiSelect
-            options={funilOptions}
+            options={funilOptionsForSelect}
             selected={idFunil}
             onChange={setIdFunil}
             placeholder="Todos os Funis"

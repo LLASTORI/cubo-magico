@@ -19,6 +19,8 @@ export interface CoreSaleItem {
   utmPlacement?: string;
   utmCreative?: string;
   currency: string;
+  funnelId?: string;
+  funnelName?: string;
 }
 
 export interface PaginationState {
@@ -53,43 +55,90 @@ export interface UseSalesCoreResult {
 }
 
 /**
- * Parse UTM data from Hotmart's SCK format (checkout_origin or sck field)
- * Format: Source|Conjunto|Campanha|Posicionamento|Criativo
+ * Apply common filters to a query on sales_core_view
+ * This ensures both Totals and Page queries use IDENTICAL filters
  */
-const parseHotmartSCK = (sck: string | null | undefined) => {
-  if (!sck) return {};
+const applyViewFilters = (
+  query: any,
+  projectId: string,
+  filters: FilterParams
+) => {
+  // Base filters
+  query = query
+    .eq('project_id', projectId)
+    .eq('provider', 'hotmart')
+    .eq('is_active', true)
+    .gte('economic_day', filters.startDate)
+    .lte('economic_day', filters.endDate);
+
+  // Event type filter (status mapping)
+  if (filters.transactionStatus && filters.transactionStatus.length > 0) {
+    const statusToEventType: Record<string, string> = {
+      'approved': 'purchase',
+      'complete': 'purchase',
+      'refunded': 'refund',
+      'chargeback': 'chargeback',
+      'cancelled': 'cancellation',
+    };
+    
+    const eventTypes = filters.transactionStatus.map(s => statusToEventType[s.toLowerCase()] || s.toLowerCase());
+    const uniqueEventTypes = [...new Set(eventTypes)];
+    
+    if (uniqueEventTypes.length === 1) {
+      query = query.eq('event_type', uniqueEventTypes[0]);
+    } else if (uniqueEventTypes.length > 1) {
+      query = query.in('event_type', uniqueEventTypes);
+    }
+  } else {
+    // Default to purchases only
+    query = query.eq('event_type', 'purchase');
+  }
+
+  // ========== SQL-LEVEL FILTERS (previously client-side) ==========
   
-  const parts = sck.split('|');
-  return {
-    utmSource: parts[0] || undefined,
-    utmAdset: parts[1] || undefined,
-    utmCampaign: parts[2] || undefined,
-    utmPlacement: parts[3] || undefined,
-    utmCreative: parts[4] || undefined,
-  };
+  // Filter by funnel_id (UUID)
+  if (filters.idFunil && filters.idFunil.length > 0) {
+    query = query.in('funnel_id', filters.idFunil);
+  }
+
+  // Filter by product name (exact match)
+  if (filters.productName && filters.productName.length > 0) {
+    query = query.in('product_name', filters.productName);
+  }
+
+  // Filter by offer code
+  if (filters.offerCode && filters.offerCode.length > 0) {
+    query = query.in('offer_code', filters.offerCode);
+  }
+
+  // UTM filters (partial match with ilike)
+  if (filters.utmSource) {
+    query = query.ilike('utm_source', `%${filters.utmSource}%`);
+  }
+  if (filters.utmCampaign) {
+    query = query.ilike('utm_campaign', `%${filters.utmCampaign}%`);
+  }
+  if (filters.utmAdset) {
+    query = query.ilike('utm_adset', `%${filters.utmAdset}%`);
+  }
+  if (filters.utmPlacement) {
+    query = query.ilike('utm_placement', `%${filters.utmPlacement}%`);
+  }
+  if (filters.utmCreative) {
+    query = query.ilike('utm_creative', `%${filters.utmCreative}%`);
+  }
+
+  return query;
 };
 
 /**
- * Extract transaction_id from Core's provider_event_id
- * Formats: 
- *   - hotmart_HP0768912179C2_PURCHASE_APPROVED -> HP0768912179C2
- *   - hotmart_HP0768912179_APPROVED -> HP0768912179
- */
-const extractTransactionId = (providerEventId: string): string => {
-  // Match hotmart_XXXXX_ pattern
-  const match = providerEventId?.match(/hotmart_([A-Z0-9]+)_/);
-  return match ? match[1] : providerEventId;
-};
-
-/**
- * Hook to fetch sales data using Financial Core + Hotmart Legacy JOIN
+ * Hook to fetch sales data using the canonical sales_core_view
  * 
  * Strategy:
- * 1. Query sales_core_events for financial data (event_type, gross_amount, economic_day)
- * 2. JOIN with hotmart_sales for identity data (buyer, product, UTMs)
- * 3. Use hotmart_sales.net_revenue as fallback when Core net_amount = 0
- * 4. GROUP BY transaction_id to avoid duplicates
- * 5. Support real pagination with total count
+ * 1. Use sales_core_view which JOINs sales_core_events + hotmart_sales + offer_mappings
+ * 2. Apply ALL filters at SQL level (funnel, product, offer, UTMs)
+ * 3. Both Totals and Page queries use identical filter logic
+ * 4. No more client-side filtering!
  */
 export function useSalesCore(): UseSalesCoreResult {
   const [sales, setSales] = useState<CoreSaleItem[]>([]);
@@ -130,38 +179,12 @@ export function useSalesCore(): UseSalesCoreResult {
       // Calculate offset for pagination
       const offset = (page - 1) * pageSize;
 
-      // Step 1: First get total count with exact count
+      // ========== QUERY 1: COUNT (for pagination) ==========
       let countQuery = supabase
-        .from('sales_core_events')
-        .select('id', { count: 'exact', head: true })
-        .eq('project_id', projectId)
-        .eq('provider', 'hotmart')
-        .eq('is_active', true)
-        .gte('economic_day', filters.startDate)
-        .lte('economic_day', filters.endDate);
-
-      // Filter by event type (status mapping)
-      if (filters.transactionStatus && filters.transactionStatus.length > 0) {
-        const statusToEventType: Record<string, string> = {
-          'approved': 'purchase',
-          'complete': 'purchase',
-          'refunded': 'refund',
-          'chargeback': 'chargeback',
-          'cancelled': 'cancellation',
-        };
-        
-        const eventTypes = filters.transactionStatus.map(s => statusToEventType[s.toLowerCase()] || s.toLowerCase());
-        const uniqueEventTypes = [...new Set(eventTypes)];
-        
-        if (uniqueEventTypes.length === 1) {
-          countQuery = countQuery.eq('event_type', uniqueEventTypes[0]);
-        } else if (uniqueEventTypes.length > 1) {
-          countQuery = countQuery.in('event_type', uniqueEventTypes);
-        }
-      } else {
-        // Default to purchases only
-        countQuery = countQuery.eq('event_type', 'purchase');
-      }
+        .from('sales_core_view')
+        .select('id', { count: 'exact', head: true });
+      
+      countQuery = applyViewFilters(countQuery, projectId, filters);
 
       const { count: totalCount, error: countError } = await countQuery;
 
@@ -192,51 +215,23 @@ export function useSalesCore(): UseSalesCoreResult {
         return;
       }
 
-      // Step 1.5: Fetch global totals (aggregate query without pagination)
-      // This runs in parallel with the paginated data fetch
+      // ========== QUERY 2: GLOBAL TOTALS (no pagination, same filters) ==========
       setTotals(prev => ({ ...prev, loading: true }));
       
       const fetchGlobalTotals = async () => {
         try {
-          // Build the same filter conditions for the totals query
-          // Use contact_id for unique customers since contact_email doesn't exist
           let totalsQuery = supabase
-            .from('sales_core_events')
-            .select('gross_amount, net_amount, contact_id')
-            .eq('project_id', projectId)
-            .eq('provider', 'hotmart')
-            .eq('is_active', true)
-            .gte('economic_day', filters.startDate)
-            .lte('economic_day', filters.endDate);
-
-          // Apply same event type filter
-          if (filters.transactionStatus && filters.transactionStatus.length > 0) {
-            const statusToEventType: Record<string, string> = {
-              'approved': 'purchase',
-              'complete': 'purchase',
-              'refunded': 'refund',
-              'chargeback': 'chargeback',
-              'cancelled': 'cancellation',
-            };
-            
-            const eventTypes = filters.transactionStatus.map(s => statusToEventType[s.toLowerCase()] || s.toLowerCase());
-            const uniqueEventTypes = [...new Set(eventTypes)];
-            
-            if (uniqueEventTypes.length === 1) {
-              totalsQuery = totalsQuery.eq('event_type', uniqueEventTypes[0]);
-            } else if (uniqueEventTypes.length > 1) {
-              totalsQuery = totalsQuery.in('event_type', uniqueEventTypes);
-            }
-          } else {
-            totalsQuery = totalsQuery.eq('event_type', 'purchase');
-          }
+            .from('sales_core_view')
+            .select('gross_amount, net_amount, contact_id');
+          
+          totalsQuery = applyViewFilters(totalsQuery, projectId, filters);
 
           const { data: totalsData, error: totalsError } = await totalsQuery;
 
           if (totalsError) {
             console.warn('Error fetching global totals:', totalsError);
             setTotals({
-              totalTransactions: total, // fallback to count
+              totalTransactions: total,
               totalGrossRevenue: 0,
               totalNetRevenue: 0,
               totalUniqueCustomers: 0,
@@ -248,7 +243,6 @@ export function useSalesCore(): UseSalesCoreResult {
           if (totalsData && totalsData.length > 0) {
             const totalGrossRevenue = totalsData.reduce((sum, row) => sum + (Number(row.gross_amount) || 0), 0);
             const totalNetRevenue = totalsData.reduce((sum, row) => sum + (Number(row.net_amount) || 0), 0);
-            // Count unique contact_ids for unique customers
             const uniqueContacts = new Set(totalsData.map(row => row.contact_id).filter(Boolean));
             
             setTotals({
@@ -273,272 +267,97 @@ export function useSalesCore(): UseSalesCoreResult {
         }
       };
 
-      // Start fetching totals in background (don't await)
+      // Start fetching totals in background
       fetchGlobalTotals();
 
-      // Step 2: Fetch Core events with pagination
-      let coreQuery = supabase
-        .from('sales_core_events')
-        .select('*')
-        .eq('project_id', projectId)
-        .eq('provider', 'hotmart')
-        .eq('is_active', true)
-        .gte('economic_day', filters.startDate)
-        .lte('economic_day', filters.endDate)
+      // ========== QUERY 3: PAGE DATA (with pagination, same filters) ==========
+      let pageQuery = supabase
+        .from('sales_core_view')
+        .select(`
+          id,
+          transaction_id,
+          product_name,
+          buyer_name,
+          gross_amount,
+          net_amount,
+          event_type,
+          hotmart_status,
+          economic_day,
+          offer_code,
+          currency,
+          funnel_id,
+          funnel_name,
+          utm_source,
+          utm_campaign,
+          utm_adset,
+          utm_placement,
+          utm_creative
+        `)
         .order('economic_day', { ascending: false })
         .range(offset, offset + pageSize - 1);
+      
+      pageQuery = applyViewFilters(pageQuery, projectId, filters);
 
-      // Apply same event type filter
-      if (filters.transactionStatus && filters.transactionStatus.length > 0) {
-        const statusToEventType: Record<string, string> = {
-          'approved': 'purchase',
-          'complete': 'purchase',
-          'refunded': 'refund',
-          'chargeback': 'chargeback',
-          'cancelled': 'cancellation',
-        };
-        
-        const eventTypes = filters.transactionStatus.map(s => statusToEventType[s.toLowerCase()] || s.toLowerCase());
-        const uniqueEventTypes = [...new Set(eventTypes)];
-        
-        if (uniqueEventTypes.length === 1) {
-          coreQuery = coreQuery.eq('event_type', uniqueEventTypes[0]);
-        } else if (uniqueEventTypes.length > 1) {
-          coreQuery = coreQuery.in('event_type', uniqueEventTypes);
-        }
-      } else {
-        coreQuery = coreQuery.eq('event_type', 'purchase');
+      const { data: pageData, error: pageError } = await pageQuery;
+
+      if (pageError) {
+        throw new Error(pageError.message);
       }
 
-      const { data: coreData, error: coreError } = await coreQuery;
-
-      if (coreError) {
-        throw new Error(coreError.message);
-      }
-
-      if (!coreData || coreData.length === 0) {
+      if (!pageData || pageData.length === 0) {
         setSales([]);
         return;
       }
 
-      // Step 3: Extract transaction IDs from Core and fetch Legacy data
-      const transactionIds = coreData.map((row: any) => extractTransactionId(row.provider_event_id));
-      const uniqueTransactionIds = [...new Set(transactionIds)];
-
-      // Fetch hotmart_sales for these transactions (identity + UTM data)
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('hotmart_sales')
-        .select(`
-          transaction_id,
-          buyer_name,
-          buyer_email,
-          product_name,
-          offer_code,
-          status,
-          net_revenue,
-          total_price,
-          checkout_origin,
-          utm_source,
-          utm_campaign_id,
-          utm_adset_name,
-          utm_placement,
-          utm_creative
-        `)
-        .eq('project_id', projectId)
-        .in('transaction_id', uniqueTransactionIds);
-
-      if (legacyError) {
-        console.warn('Warning: Could not fetch legacy data for enrichment:', legacyError);
-      }
-
-      // Create lookup map by transaction_id
-      const legacyMap = new Map<string, any>();
-      if (legacyData) {
-        for (const row of legacyData) {
-          legacyMap.set(row.transaction_id, row);
-        }
-      }
-
-      // Step 4: Group Core events by transaction_id and take the most recent
+      // Transform data to CoreSaleItem format
+      // Group by transaction_id to avoid duplicates
       const groupedByTx = new Map<string, any>();
-      for (const coreRow of coreData) {
-        const txId = extractTransactionId(coreRow.provider_event_id);
-        const existing = groupedByTx.get(txId);
-        
-        // Keep the most recent by occurred_at
-        if (!existing || new Date(coreRow.occurred_at) > new Date(existing.occurred_at)) {
-          groupedByTx.set(txId, coreRow);
+      for (const row of pageData) {
+        const txId = row.transaction_id || row.id;
+        if (!groupedByTx.has(txId)) {
+          groupedByTx.set(txId, row);
         }
       }
 
-      // Step 5: Merge Core + Legacy data
-      const mergedSales: CoreSaleItem[] = [];
+      const transformedSales: CoreSaleItem[] = [];
       
-      for (const [txId, coreRow] of groupedByTx) {
-        const legacy = legacyMap.get(txId);
-        
-        // Financial data from Core (with Legacy fallback for net_amount)
-        const grossAmount = Number(coreRow.gross_amount) || 0;
-        let netAmount = Number(coreRow.net_amount) || 0;
-        
-        // CRITICAL: If Core net_amount is 0, try Legacy net_revenue as fallback
-        if (netAmount === 0 && legacy?.net_revenue) {
-          netAmount = Number(legacy.net_revenue) || 0;
-        }
-        
-        // If still 0 and status is purchase, estimate using typical Hotmart fee (~54% producer commission)
-        if (netAmount === 0 && grossAmount > 0 && coreRow.event_type === 'purchase') {
-          netAmount = grossAmount * 0.46;
-        }
-        
-        // Identity data from Legacy (with Core raw_payload as fallback)
-        let buyer = '-';
-        let product = '-';
-        let offerCode: string | undefined;
-        let utmSource: string | undefined;
-        let utmCampaign: string | undefined;
-        let utmAdset: string | undefined;
-        let utmPlacement: string | undefined;
-        let utmCreative: string | undefined;
-        let status = coreRow.event_type?.toUpperCase() || 'UNKNOWN';
-        
-        if (legacy) {
-          buyer = legacy.buyer_name || legacy.buyer_email || '-';
-          product = legacy.product_name || '-';
-          offerCode = legacy.offer_code || undefined;
-          status = legacy.status || status;
-          
-          utmSource = legacy.utm_source || undefined;
-          utmCampaign = legacy.utm_campaign_id || undefined;
-          utmAdset = legacy.utm_adset_name || undefined;
-          utmPlacement = legacy.utm_placement || undefined;
-          utmCreative = legacy.utm_creative || undefined;
-          
-          if (!utmSource && legacy.checkout_origin) {
-            const sckData = parseHotmartSCK(legacy.checkout_origin);
-            utmSource = sckData.utmSource;
-            utmCampaign = utmCampaign || sckData.utmCampaign;
-            utmAdset = utmAdset || sckData.utmAdset;
-            utmPlacement = utmPlacement || sckData.utmPlacement;
-            utmCreative = utmCreative || sckData.utmCreative;
-          }
-        } else {
-          const rawData = coreRow.raw_payload?.data || {};
-          const buyerData = rawData.buyer || {};
-          const productData = rawData.product || {};
-          const purchaseData = rawData.purchase || {};
-          const offerData = purchaseData.offer || {};
-          
-          buyer = buyerData.name || buyerData.email || '-';
-          product = productData.name || '-';
-          offerCode = offerData.code || undefined;
-          status = purchaseData.status || status;
-          
-          const attribution = coreRow.attribution || {};
-          if (attribution.hotmart_checkout_source) {
-            const sckData = parseHotmartSCK(attribution.hotmart_checkout_source);
-            utmSource = sckData.utmSource;
-            utmCampaign = sckData.utmCampaign;
-            utmAdset = sckData.utmAdset;
-            utmPlacement = sckData.utmPlacement;
-            utmCreative = sckData.utmCreative;
-          }
-        }
-
-        const economicDay = coreRow.economic_day;
+      for (const [txId, row] of groupedByTx) {
+        const economicDay = row.economic_day;
         const formattedDate = economicDay 
           ? new Date(economicDay + 'T12:00:00').toLocaleDateString('pt-BR')
           : '-';
 
-        mergedSales.push({
-          id: coreRow.id,
+        transformedSales.push({
+          id: row.id,
           transaction: txId,
-          product,
-          buyer,
-          grossAmount,
-          netAmount,
-          status,
+          product: row.product_name || '-',
+          buyer: row.buyer_name || '-',
+          grossAmount: Number(row.gross_amount) || 0,
+          netAmount: Number(row.net_amount) || 0,
+          status: row.hotmart_status || row.event_type?.toUpperCase() || 'UNKNOWN',
           economicDay,
           date: formattedDate,
-          offerCode,
-          currency: coreRow.currency || 'BRL',
-          utmSource,
-          utmCampaign,
-          utmAdset,
-          utmPlacement,
-          utmCreative,
+          offerCode: row.offer_code || undefined,
+          currency: row.currency || 'BRL',
+          funnelId: row.funnel_id || undefined,
+          funnelName: row.funnel_name || undefined,
+          utmSource: row.utm_source || undefined,
+          utmCampaign: row.utm_campaign || undefined,
+          utmAdset: row.utm_adset || undefined,
+          utmPlacement: row.utm_placement || undefined,
+          utmCreative: row.utm_creative || undefined,
         });
       }
 
-      // Step 6: Apply client-side filters (for UTM and funnel filters that can't be done server-side)
-      let filteredSales = mergedSales;
-
-      // Filter by funnel (using offer mappings)
-      if (filters.idFunil && filters.idFunil.length > 0) {
-        const { data: offerMappings } = await supabase
-          .from('offer_mappings')
-          .select('codigo_oferta')
-          .eq('project_id', projectId)
-          .in('id_funil', filters.idFunil);
-
-        if (offerMappings) {
-          const validOfferCodes = offerMappings.map(m => m.codigo_oferta);
-          filteredSales = filteredSales.filter(sale => 
-            sale.offerCode && validOfferCodes.includes(sale.offerCode)
-          );
-        }
-      }
-
-      // Filter by product name
-      if (filters.productName && filters.productName.length > 0) {
-        filteredSales = filteredSales.filter(sale =>
-          filters.productName!.includes(sale.product)
-        );
-      }
-
-      // Filter by offer code
-      if (filters.offerCode && filters.offerCode.length > 0) {
-        filteredSales = filteredSales.filter(sale =>
-          sale.offerCode && filters.offerCode!.includes(sale.offerCode)
-        );
-      }
-
-      // Apply UTM filters (partial match)
-      if (filters.utmSource) {
-        filteredSales = filteredSales.filter(sale =>
-          sale.utmSource?.toLowerCase().includes(filters.utmSource!.toLowerCase())
-        );
-      }
-      if (filters.utmCampaign) {
-        filteredSales = filteredSales.filter(sale =>
-          sale.utmCampaign?.toLowerCase().includes(filters.utmCampaign!.toLowerCase())
-        );
-      }
-      if (filters.utmAdset) {
-        filteredSales = filteredSales.filter(sale =>
-          sale.utmAdset?.toLowerCase().includes(filters.utmAdset!.toLowerCase())
-        );
-      }
-      if (filters.utmPlacement) {
-        filteredSales = filteredSales.filter(sale =>
-          sale.utmPlacement?.toLowerCase().includes(filters.utmPlacement!.toLowerCase())
-        );
-      }
-      if (filters.utmCreative) {
-        filteredSales = filteredSales.filter(sale =>
-          sale.utmCreative?.toLowerCase().includes(filters.utmCreative!.toLowerCase())
-        );
-      }
-
-      // Sort by economic_day descending (most recent first)
-      filteredSales.sort((a, b) => {
+      // Sort by economic_day descending
+      transformedSales.sort((a, b) => {
         if (!a.economicDay || !b.economicDay) return 0;
         return b.economicDay.localeCompare(a.economicDay);
       });
 
-      setSales(filteredSales);
+      setSales(transformedSales);
     } catch (err: any) {
-      console.error('Error fetching sales from Core:', err);
+      console.error('Error fetching sales from sales_core_view:', err);
       setError(err.message || 'Erro ao carregar dados');
       setSales([]);
       setPagination(prev => ({ ...prev, totalCount: 0, totalPages: 0 }));
@@ -567,7 +386,6 @@ export function useSalesCore(): UseSalesCoreResult {
 
   const setPageSize = useCallback((size: number) => {
     if (currentProjectId && currentFilters) {
-      // Reset to page 1 when changing page size
       fetchSales(currentProjectId, currentFilters, 1, size);
     }
   }, [currentProjectId, currentFilters, fetchSales]);

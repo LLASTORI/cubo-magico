@@ -3493,6 +3493,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "launch_products_offer_mapping_id_fkey"
+            columns: ["offer_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "sales_core_view"
+            referencedColumns: ["offer_mapping_id"]
+          },
+          {
             foreignKeyName: "launch_products_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -8635,6 +8642,94 @@ export type Database = {
           transaction_count: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_core_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_core_view: {
+        Row: {
+          attribution: Json | null
+          buyer_email: string | null
+          buyer_name: string | null
+          checkout_origin: string | null
+          contact_id: string | null
+          created_at: string | null
+          currency: string | null
+          economic_day: string | null
+          event_type: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          gross_amount: number | null
+          hotmart_status: string | null
+          id: string | null
+          id_funil: string | null
+          is_active: boolean | null
+          mapped_offer_name: string | null
+          mapped_product_name: string | null
+          meta_ad_id_extracted: string | null
+          meta_adset_id_extracted: string | null
+          meta_campaign_id_extracted: string | null
+          net_amount: number | null
+          nome_posicao: string | null
+          occurred_at: string | null
+          offer_code: string | null
+          offer_mapping_id: string | null
+          product_code: string | null
+          product_name: string | null
+          project_id: string | null
+          provider: string | null
+          provider_event_id: string | null
+          raw_payload: Json | null
+          received_at: string | null
+          tipo_posicao: string | null
+          transaction_id: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_placement: string | null
+          utm_source: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_core_events_project_id_fkey"
             columns: ["project_id"]

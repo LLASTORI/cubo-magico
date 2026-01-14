@@ -32,21 +32,29 @@ import FunnelChangelog from '@/components/funnel/FunnelChangelog';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { useFunnelHealthMetrics } from '@/hooks/useFunnelHealthMetrics';
 
-// Define unified sales type that matches FunnelAnalysis query
+// Define unified sales type that matches finance_tracking_view
 interface UnifiedSale {
   transaction_id: string;
-  product_name: string;
+  product_name: string | null;
   offer_code: string | null;
-  total_price_brl: number | null;
+  gross_amount: number | null;
+  net_amount: number | null;
   buyer_email: string | null;
-  sale_date: string | null;
-  status: string;
-  meta_campaign_id_extracted?: string | null;
-  meta_adset_id_extracted?: string | null;
-  meta_ad_id_extracted?: string | null;
-  utm_source?: string | null;
-  payment_method?: string | null;
-  installment_number?: number | null;
+  economic_day: string | null;
+  purchase_date: string | null;
+  hotmart_status: string | null;
+  funnel_id: string | null;
+  funnel_name: string | null;
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  meta_ad_id: string | null;
+  utm_source: string | null;
+  utm_campaign: string | null;
+  utm_adset: string | null;
+  utm_creative: string | null;
+  utm_placement: string | null;
+  payment_method: string | null;
+  recurrence: number | null;
 }
 
 interface MetaInsightData {
@@ -431,7 +439,7 @@ export function CuboMagicoDashboard({
 
       // Calculate sales metrics
       const funnelSales = salesData.filter(s => offerCodes.has(s.offer_code));
-      const faturamento = funnelSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+      const faturamento = funnelSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
       
       // Count unique customers
       const uniqueCustomers = new Set(funnelSales.map(s => s.buyer_email)).size;
@@ -446,7 +454,7 @@ export function CuboMagicoDashboard({
         const posKey = `${pos}${ordem || ''}`;
         const offerSales = funnelSales.filter(s => s.offer_code === offer.codigo_oferta);
         const salesCount = offerSales.length;
-        const salesRevenue = offerSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+        const salesRevenue = offerSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
         
         productsByPosition[pos] = (productsByPosition[pos] || 0) + salesCount;
         
@@ -570,7 +578,7 @@ export function CuboMagicoDashboard({
   // Calculate REAL totals from all sales data (not just mapped)
   const faturamentoTotal = useMemo(() => {
     if (!salesData) return 0;
-    return salesData.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    return salesData.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
   }, [salesData]);
 
   const totalProdutosReal = useMemo(() => {
@@ -785,11 +793,11 @@ export function CuboMagicoDashboard({
       .filter(s => offerCodesSet.has(s.offer_code || ''))
       .map(s => ({
         transaction: s.transaction_id,
-        product: s.product_name,
+        product: s.product_name || '',
         buyer: s.buyer_email || 'Desconhecido',
-        value: s.total_price_brl || 0,
-        status: s.status,
-        date: s.sale_date || '',
+        value: s.gross_amount || 0,
+        status: s.hotmart_status || 'UNKNOWN',
+        date: s.economic_day || '',
         offerCode: s.offer_code || '',
       }));
   };

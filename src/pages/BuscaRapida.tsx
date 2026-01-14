@@ -9,7 +9,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
-import { useSalesCore } from "@/hooks/useSalesCore";
+import { useFinanceTracking } from "@/hooks/useFinanceTracking";
 import { Badge } from "@/components/ui/badge";
 import { useTenantNavigation } from "@/navigation";
 
@@ -19,7 +19,7 @@ const BuscaRapida = () => {
   const { navigateTo } = useTenantNavigation();
   const { currentProject, credentials } = useProject();
   
-  // Use the Financial Core hook with pagination and global totals
+  // Use the canonical Finance Tracking hook (queries finance_tracking_view)
   const { 
     sales, 
     loading, 
@@ -31,7 +31,7 @@ const BuscaRapida = () => {
     prevPage,
     setPage,
     setPageSize,
-  } = useSalesCore();
+  } = useFinanceTracking();
 
   // Clear filters when project changes
   useEffect(() => {
@@ -100,9 +100,9 @@ const BuscaRapida = () => {
       };
     }
 
-    const totalNet = sales.reduce((sum, item) => sum + (item.netAmount || 0), 0);
-    const totalGross = sales.reduce((sum, item) => sum + (item.grossAmount || 0), 0);
-    const uniqueCustomers = new Set(sales.map(item => item.buyer)).size;
+    const totalNet = sales.reduce((sum, item) => sum + (item.net_amount || 0), 0);
+    const totalGross = sales.reduce((sum, item) => sum + (item.gross_amount || 0), 0);
+    const uniqueCustomers = new Set(sales.map(item => item.buyer_email).filter(Boolean)).size;
 
     return {
       totalNetRevenue: new Intl.NumberFormat('pt-BR', {
@@ -136,34 +136,41 @@ const BuscaRapida = () => {
 
   // Format sales for the table component (keeping compatibility)
   const formattedSales = useMemo(() => {
-    return sales.map(sale => ({
-      transaction: sale.transaction,
-      product: sale.product,
-      buyer: sale.buyer,
-      value: sale.netAmount, // Use NET amount (after fees)
-      grossValue: sale.grossAmount,
-      status: sale.status,
-      date: sale.date,
-      utmSource: sale.utmSource,
-      utmCampaign: sale.utmCampaign,
-      utmAdset: sale.utmAdset,
-      utmPlacement: sale.utmPlacement,
-      utmCreative: sale.utmCreative,
-      originalCurrency: sale.currency,
-      originalValue: sale.grossAmount,
-      wasConverted: false, // Already in BRL from Core
-    }));
+    return sales.map(sale => {
+      const economicDay = sale.economic_day;
+      const formattedDate = economicDay 
+        ? new Date(economicDay + 'T12:00:00').toLocaleDateString('pt-BR')
+        : '-';
+      
+      return {
+        transaction: sale.transaction_id,
+        product: sale.product_name || '-',
+        buyer: sale.buyer_name || '-',
+        value: sale.net_amount,
+        grossValue: sale.gross_amount,
+        status: sale.hotmart_status || 'UNKNOWN',
+        date: formattedDate,
+        utmSource: sale.utm_source || undefined,
+        utmCampaign: sale.utm_campaign || undefined,
+        utmAdset: sale.utm_adset || undefined,
+        utmPlacement: sale.utm_placement || undefined,
+        utmCreative: sale.utm_creative || undefined,
+        originalCurrency: 'BRL',
+        originalValue: sale.gross_amount,
+        wasConverted: false,
+      };
+    });
   }, [sales]);
 
-  // Extract unique products and offers from Core data
+  // Extract unique products and offers from canonical view
   const availableProducts = useMemo(() => {
-    return Array.from(new Set(sales.map(s => s.product).filter(Boolean)));
+    return Array.from(new Set(sales.map(s => s.product_name).filter(Boolean))) as string[];
   }, [sales]);
 
   const availableOffers = useMemo(() => {
     return sales
-      .filter(s => s.offerCode)
-      .map(s => ({ code: s.offerCode!, name: s.offerCode! }))
+      .filter(s => s.offer_code)
+      .map(s => ({ code: s.offer_code!, name: s.offer_code! }))
       .filter((offer, index, self) => 
         self.findIndex(o => o.code === offer.code) === index
       );
@@ -223,7 +230,7 @@ const BuscaRapida = () => {
 
             {loading ? (
               <div className="flex flex-col items-center justify-center h-64">
-                <CubeLoader message="Consultando Financial Core..." size="lg" />
+                <CubeLoader message="Consultando Finance Tracking..." size="lg" />
               </div>
             ) : sales.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
@@ -231,7 +238,7 @@ const BuscaRapida = () => {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                   <span>
-                    Dados do <strong>Financial Core</strong> • 
+                    Fonte canônica: <strong>finance_tracking_view</strong> • 
                     Filtro por <strong>economic_day</strong> (horário de Brasília) • 
                     Valores em <strong>Receita Líquida</strong> (após taxas) •
                     <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> transações no total

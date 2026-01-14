@@ -6,6 +6,10 @@ verify_jwt = true
 [functions.hotmart-webhook]
 verify_jwt = false
 
+[functions.hotmart-backfill]
+verify_jwt = true
+max_duration = 300
+
 [functions.send-invite-email]
 verify_jwt = true
 

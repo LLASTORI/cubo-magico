@@ -26,7 +26,8 @@ import {
   Webhook,
   ExternalLink,
   Info,
-  FileSpreadsheet
+  FileSpreadsheet,
+  History
 } from 'lucide-react';
 import { HotmartCSVImport } from './HotmartCSVImport';
 import { format, subMonths } from 'date-fns';
@@ -52,6 +53,8 @@ export const HotmartSettings = () => {
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncMessage, setSyncMessage] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState('');
 
   const projectId = currentProject?.id;
 
@@ -352,6 +355,56 @@ export const HotmartSettings = () => {
         description: 'Tente selecionar e copiar manualmente.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleBackfillHistory = async () => {
+    if (!projectId) return;
+
+    setBackfilling(true);
+    setBackfillMessage('Iniciando reconstrução do histórico...');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('hotmart-backfill', {
+        body: {
+          projectId,
+          startDate: subMonths(new Date(), 24).getTime(),
+        },
+      });
+
+      if (error) throw error;
+
+      const result = data as {
+        eventsCreated: number;
+        eventsSkipped: number;
+        totalSalesFound: number;
+        errors: number;
+      };
+
+      setBackfillMessage(
+        `✓ ${result.eventsCreated.toLocaleString()} eventos criados, ${result.eventsSkipped.toLocaleString()} já existentes`
+      );
+
+      toast({
+        title: 'Histórico reconstruído!',
+        description: `${result.eventsCreated.toLocaleString()} eventos de vendas criados.`,
+      });
+
+      refetchStats();
+
+    } catch (error: any) {
+      console.error('Backfill error:', error);
+      setBackfillMessage(error.message || 'Erro ao reconstruir histórico');
+      toast({
+        title: 'Erro na reconstrução',
+        description: error.message || 'Erro ao reconstruir histórico de vendas',
+        variant: 'destructive',
+      });
+    } finally {
+      setTimeout(() => {
+        setBackfilling(false);
+        setBackfillMessage('');
+      }, 5000);
     }
   };
 
@@ -677,6 +730,57 @@ export const HotmartSettings = () => {
                   <p className="text-xs text-muted-foreground">
                     <strong>Nota:</strong> A sincronização em lote via API não inclui telefone. Use o webhook para capturar telefones em tempo real.
                   </p>
+                </div>
+
+                {/* Backfill Section */}
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <History className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Reconstrução de Histórico</h3>
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                      Novo
+                    </Badge>
+                  </div>
+
+                  <div className="p-4 rounded-lg border bg-card space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Reconstrói os eventos de vendas no módulo Sales Core a partir dos dados sincronizados via API.
+                      Isso permite que a <strong>Busca Rápida</strong>, <strong>Funis</strong> e <strong>Insights</strong> mostrem 100% das vendas históricas.
+                    </p>
+                    
+                    {backfillMessage && (
+                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <p className="text-sm text-blue-700 dark:text-blue-400">
+                          {backfillMessage}
+                        </p>
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleBackfillHistory}
+                      disabled={backfilling || syncing}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {backfilling ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Reconstruindo...
+                        </>
+                      ) : (
+                        <>
+                          <History className="h-4 w-4 mr-2" />
+                          Reconstruir Histórico de Vendas
+                        </>
+                      )}
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Idempotente:</strong> Pode ser executado várias vezes sem duplicar dados.
+                    </p>
+                  </div>
                 </div>
 
                 {/* CSV Import Section */}

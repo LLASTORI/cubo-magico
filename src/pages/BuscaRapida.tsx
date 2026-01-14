@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, Database, CheckCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
+import SalesTablePagination from "@/components/SalesTablePagination";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -12,15 +11,26 @@ import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
 import { useSalesCore } from "@/hooks/useSalesCore";
 import { Badge } from "@/components/ui/badge";
+import { useTenantNavigation } from "@/navigation";
 
 const BuscaRapida = () => {
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const { navigateTo } = useTenantNavigation();
   const { currentProject, credentials } = useProject();
   
-  // Use the Financial Core hook instead of direct Hotmart API
-  const { sales, loading, error, totalCount, fetchSales } = useSalesCore();
+  // Use the Financial Core hook with pagination
+  const { 
+    sales, 
+    loading, 
+    error, 
+    pagination,
+    fetchSales,
+    nextPage,
+    prevPage,
+    setPage,
+    setPageSize,
+  } = useSalesCore();
 
   // Clear filters when project changes
   useEffect(() => {
@@ -35,9 +45,9 @@ const BuscaRapida = () => {
         description: "Configure e teste as credenciais do projeto antes de continuar",
         variant: "destructive",
       });
-      navigate('/projects');
+      navigateTo('/projects');
     }
-  }, [currentProject, credentials, navigate, toast]);
+  }, [currentProject, credentials, navigateTo, toast]);
 
   // Handle error from hook
   useEffect(() => {
@@ -61,19 +71,20 @@ const BuscaRapida = () => {
     }
 
     setCurrentFilters(filters);
-    await fetchSales(currentProject.id, filters);
+    // Reset to page 1 with default page size when applying new filters
+    await fetchSales(currentProject.id, filters, 1, pagination.pageSize);
     
     if (!error) {
       toast({
         title: "Dados carregados com sucesso!",
-        description: `${sales.length} transações do Financial Core`,
+        description: `${pagination.totalCount.toLocaleString('pt-BR')} transações encontradas`,
       });
     }
   };
 
   const handleRefresh = () => {
     if (currentFilters && currentProject) {
-      fetchSales(currentProject.id, currentFilters);
+      fetchSales(currentProject.id, currentFilters, pagination.page, pagination.pageSize);
     }
   };
 
@@ -178,7 +189,7 @@ const BuscaRapida = () => {
             <p className="text-muted-foreground mb-4">
               Selecione um projeto existente ou crie um novo para começar
             </p>
-            <Button onClick={() => navigate('/projects')} className="gap-2">
+            <Button onClick={() => navigateTo('/projects')} className="gap-2">
               <Settings className="w-4 h-4" />
               Gerenciar Projetos
             </Button>
@@ -205,41 +216,50 @@ const BuscaRapida = () => {
                   <span>
                     Dados do <strong>Financial Core</strong> • 
                     Filtro por <strong>economic_day</strong> (horário de Brasília) • 
-                    Valores em <strong>Receita Líquida</strong> (após taxas)
+                    Valores em <strong>Receita Líquida</strong> (após taxas) •
+                    <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> transações no total
                   </span>
                 </div>
 
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <MetricCard
-                    title="Receita Líquida"
+                    title="Receita Líquida (página)"
                     value={metrics.totalNetRevenue}
                     icon={DollarSign}
                   />
                   <MetricCard
-                    title="Receita Bruta"
+                    title="Receita Bruta (página)"
                     value={metrics.totalGrossRevenue}
                     icon={TrendingUp}
                   />
                   <MetricCard
-                    title="Transações"
+                    title="Transações (página)"
                     value={metrics.transactions}
                     icon={ShoppingCart}
                   />
                   <MetricCard
-                    title="Clientes Únicos"
+                    title="Clientes Únicos (página)"
                     value={metrics.customers}
                     icon={Users}
                   />
                 </div>
 
                 {/* Sales Table */}
-                {formattedSales.length > 0 ? (
-                  <SalesTable sales={formattedSales} showGrossColumn />
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    Nenhuma transação encontrada para os filtros selecionados
-                  </div>
+                {formattedSales.length > 0 && (
+                  <>
+                    <SalesTable sales={formattedSales} showGrossColumn />
+                    
+                    {/* Pagination Controls */}
+                    <SalesTablePagination
+                      pagination={pagination}
+                      onNextPage={nextPage}
+                      onPrevPage={prevPage}
+                      onSetPage={setPage}
+                      onSetPageSize={setPageSize}
+                      loading={loading}
+                    />
+                  </>
                 )}
               </div>
             ) : currentFilters ? (

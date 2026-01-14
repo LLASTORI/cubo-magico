@@ -64,7 +64,6 @@ export interface FilterParams {
   startDate: string;
   endDate: string;
   transactionStatus?: string[];
-  maxResults: number;
   utmSource?: string;
   utmCampaign?: string;
   utmAdset?: string;
@@ -83,7 +82,6 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [transactionStatus, setTransactionStatus] = useState<string[]>(["approved", "complete"]);
-  const [maxResults, setMaxResults] = useState("50");
   const [idFunil, setIdFunil] = useState<string[]>([]);
   const [productName, setProductName] = useState<string[]>([]);
   const [offerCode, setOfferCode] = useState<string[]>([]);
@@ -172,7 +170,6 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
       startDate,
       endDate,
       transactionStatus: transactionStatus.length > 0 ? transactionStatus : undefined,
-      maxResults: parseInt(maxResults),
       utmSource: utmSource || undefined,
       utmCampaign: utmCampaign || undefined,
       utmAdset: utmAdset || undefined,
@@ -243,19 +240,6 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
             selected={transactionStatus}
             onChange={setTransactionStatus}
             placeholder="Todos"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="maxResults" className="text-foreground">Resultados (máx)</Label>
-          <Input
-            id="maxResults"
-            type="number"
-            value={maxResults}
-            onChange={(e) => setMaxResults(e.target.value)}
-            min="1"
-            max="500"
-            className="border-border"
           />
         </div>
 

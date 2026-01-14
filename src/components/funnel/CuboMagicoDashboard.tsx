@@ -1,3 +1,23 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * CUBO MÁGICO DASHBOARD - CANONICAL FINANCIAL LAYER
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * Sales data comes EXCLUSIVELY from finance_tracking_view (via parent or local query).
+ * Investment data comes from meta_insights (ad-level, deduplicated).
+ * 
+ * FILTER RULES:
+ * - Date: economic_day (DATE type, São Paulo timezone)
+ * - Status: hotmart_status IN ('APPROVED', 'COMPLETE')
+ * - Revenue: gross_amount (CANONICAL)
+ * 
+ * FORBIDDEN:
+ * ❌ hotmart_sales for direct revenue queries
+ * ❌ sales_core_events
+ * ❌ total_price_brl
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 import { useState, useMemo, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';

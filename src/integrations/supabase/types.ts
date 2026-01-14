@@ -8518,17 +8518,40 @@ export type Database = {
       finance_ledger_summary: {
         Row: {
           affiliate_cost: number | null
+          buyer_email: string | null
+          buyer_name: string | null
+          buyer_phone: string | null
           coproducer_cost: number | null
           economic_day: string | null
           event_count: number | null
+          funnel_id: string | null
+          funnel_name: string | null
+          hotmart_status: string | null
+          is_upgrade: boolean | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
           net_revenue: number | null
+          offer_code: string | null
+          payment_method: string | null
+          payment_type: string | null
           platform_cost: number | null
           producer_gross: number | null
+          product_code: string | null
+          product_name: string | null
           project_id: string | null
           provider: string | null
+          recurrence: number | null
           refunds: number | null
+          sale_category: string | null
+          subscriber_code: string | null
           transaction_date: string | null
           transaction_id: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_placement: string | null
+          utm_source: string | null
         }
         Relationships: [
           {
@@ -8537,6 +8560,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
           },
         ]
       }

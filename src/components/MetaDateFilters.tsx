@@ -3,6 +3,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "lucide-react";
+import { toZonedTime, format } from "date-fns-tz";
+
+/**
+ * ============================================================================
+ * TIMEZONE CONTRACT FOR META ADS FILTERS
+ * ============================================================================
+ * 
+ * All date filters MUST be calculated in São Paulo timezone (America/Sao_Paulo),
+ * regardless of the user's local timezone, to maintain consistency with
+ * the economic_day field in the database.
+ * 
+ * Format: YYYY-MM-DD (ISO date string)
+ * ============================================================================
+ */
+
+const SAO_PAULO_TIMEZONE = "America/Sao_Paulo";
+
+/**
+ * Get today's date in São Paulo timezone as YYYY-MM-DD string.
+ */
+const getBrazilToday = (): string => {
+  const now = new Date();
+  const zonedDate = toZonedTime(now, SAO_PAULO_TIMEZONE);
+  return format(zonedDate, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE });
+};
+
+/**
+ * Get a date N days ago in São Paulo timezone as YYYY-MM-DD string.
+ */
+const getBrazilDateDaysAgo = (days: number): string => {
+  const now = new Date();
+  const zonedDate = toZonedTime(now, SAO_PAULO_TIMEZONE);
+  zonedDate.setDate(zonedDate.getDate() - days);
+  return format(zonedDate, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE });
+};
 
 interface MetaDateFiltersProps {
   startDate: string;
@@ -16,11 +51,9 @@ const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChang
 
   const handleStartDateChange = (date: string) => {
     onStartDateChange(date);
-    // Se a data inicial for maior que a final, ajusta a final
     if (endDate && date > endDate) {
       onEndDateChange(date);
     }
-    // Foca no campo de data final após selecionar a inicial
     setTimeout(() => {
       endDateRef.current?.focus();
       endDateRef.current?.showPicker?.();
@@ -28,48 +61,46 @@ const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChang
   };
 
   const handleEndDateChange = (date: string) => {
-    // Impede que a data final seja menor que a inicial
     if (startDate && date < startDate) {
       return;
     }
     onEndDateChange(date);
   };
+
   const handleQuickFilter = (days: number) => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    
-    onStartDateChange(start.toISOString().split('T')[0]);
-    onEndDateChange(end.toISOString().split('T')[0]);
+    const endDate = getBrazilToday();
+    const startDate = getBrazilDateDaysAgo(days - 1);
+    onStartDateChange(startDate);
+    onEndDateChange(endDate);
   };
 
   const handleTodayFilter = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getBrazilToday();
     onStartDateChange(today);
     onEndDateChange(today);
   };
 
   const handleYesterdayFilter = () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    onStartDateChange(yesterdayStr);
-    onEndDateChange(yesterdayStr);
+    const yesterday = getBrazilDateDaysAgo(1);
+    onStartDateChange(yesterday);
+    onEndDateChange(yesterday);
   };
 
   const handleThisMonth = () => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    onStartDateChange(start.toISOString().split('T')[0]);
-    onEndDateChange(now.toISOString().split('T')[0]);
+    const zonedNow = toZonedTime(now, SAO_PAULO_TIMEZONE);
+    const start = new Date(zonedNow.getFullYear(), zonedNow.getMonth(), 1);
+    onStartDateChange(format(start, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE }));
+    onEndDateChange(getBrazilToday());
   };
 
   const handleLastMonth = () => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
-    onStartDateChange(start.toISOString().split('T')[0]);
-    onEndDateChange(end.toISOString().split('T')[0]);
+    const zonedNow = toZonedTime(now, SAO_PAULO_TIMEZONE);
+    const start = new Date(zonedNow.getFullYear(), zonedNow.getMonth() - 1, 1);
+    const end = new Date(zonedNow.getFullYear(), zonedNow.getMonth(), 0);
+    onStartDateChange(format(start, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE }));
+    onEndDateChange(format(end, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE }));
   };
 
   return (

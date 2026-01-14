@@ -6,31 +6,51 @@ import { Label } from "@/components/ui/label";
 import { Calendar, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
+import { toZonedTime, format } from "date-fns-tz";
 
 /**
- * Get today's date in Brazil timezone (UTC-3) as YYYY-MM-DD string
- * This is critical for Financial Core which uses economic_day in Brazil timezone
+ * ============================================================================
+ * TIMEZONE CONTRACT FOR FINANCIAL FILTERS
+ * ============================================================================
+ * 
+ * The `economic_day` field in the database represents the economic day in
+ * São Paulo timezone (America/Sao_Paulo).
+ * 
+ * All date filters (startDate, endDate) MUST be calculated in this timezone,
+ * regardless of the user's local timezone.
+ * 
+ * Format: YYYY-MM-DD (ISO date string)
+ * Timezone: America/Sao_Paulo (handles DST automatically)
+ * 
+ * Example validation:
+ * - If current UTC time is 2026-01-14 02:30 UTC
+ * - São Paulo time is 2026-01-13 23:30 (UTC-3)
+ * - getBrazilToday() should return "2026-01-13"
+ * - "Últimos 7 dias" filter should return: "2026-01-07" → "2026-01-13"
+ * ============================================================================
+ */
+
+const SAO_PAULO_TIMEZONE = "America/Sao_Paulo";
+
+/**
+ * Get today's date in São Paulo timezone as YYYY-MM-DD string.
+ * Uses date-fns-tz for accurate timezone conversion including DST handling.
  */
 const getBrazilToday = (): string => {
   const now = new Date();
-  // Convert to Brazil timezone (UTC-3)
-  const brazilOffset = -3 * 60; // -3 hours in minutes
-  const localOffset = now.getTimezoneOffset(); // Local offset in minutes
-  const brazilTime = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
-  return brazilTime.toISOString().split('T')[0];
+  const zonedDate = toZonedTime(now, SAO_PAULO_TIMEZONE);
+  return format(zonedDate, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE });
 };
 
 /**
- * Get a date N days ago in Brazil timezone as YYYY-MM-DD string
+ * Get a date N days ago in São Paulo timezone as YYYY-MM-DD string.
+ * Uses date-fns-tz for accurate timezone conversion including DST handling.
  */
 const getBrazilDateDaysAgo = (days: number): string => {
   const now = new Date();
-  // Convert to Brazil timezone (UTC-3)
-  const brazilOffset = -3 * 60;
-  const localOffset = now.getTimezoneOffset();
-  const brazilTime = new Date(now.getTime() + (localOffset + brazilOffset) * 60 * 1000);
-  brazilTime.setDate(brazilTime.getDate() - days);
-  return brazilTime.toISOString().split('T')[0];
+  const zonedDate = toZonedTime(now, SAO_PAULO_TIMEZONE);
+  zonedDate.setDate(zonedDate.getDate() - days);
+  return format(zonedDate, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE });
 };
 
 interface SalesFiltersProps {

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 
 interface UserAvatarProps {
   size?: 'sm' | 'md' | 'lg';
@@ -11,7 +11,7 @@ interface UserAvatarProps {
 
 export const UserAvatar = ({ size = 'md', clickable = true }: UserAvatarProps) => {
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
 
   const { data: profile } = useQuery({
     queryKey: ['profile', user?.id],
@@ -42,7 +42,7 @@ export const UserAvatar = ({ size = 'md', clickable = true }: UserAvatarProps) =
 
   const handleClick = () => {
     if (clickable) {
-      navigate('/settings');
+      navigateTo('/settings');
     }
   };
 

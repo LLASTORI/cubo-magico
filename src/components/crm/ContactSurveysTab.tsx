@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Calendar, Globe, CheckCircle, ExternalLink, RefreshCw, History } from 'lucide-react';
@@ -21,7 +21,7 @@ interface ContactSurveysTabProps {
 }
 
 export function ContactSurveysTab({ contactId }: ContactSurveysTabProps) {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { responses, isLoading } = useContactSurveyResponses(contactId);
 
   // Group responses by survey_id, keeping only the latest response per survey
@@ -180,7 +180,7 @@ export function ContactSurveysTab({ contactId }: ContactSurveysTabProps) {
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 text-xs"
-                    onClick={() => navigate(`/surveys/${response.surveys.id}/responses`)}
+                    onClick={() => navigateTo(`/surveys/${response.surveys.id}/responses`)}
                   >
                     Ver todas as respostas desta pesquisa
                     <ExternalLink className="h-3 w-3 ml-1" />

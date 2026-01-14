@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Users, HardDrive, Activity } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
@@ -380,10 +380,10 @@ const Settings = () => {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="h-4 w-4" />
               Voltar
-            </Link>
+            </button>
             <div className="flex items-center gap-2">
               <SettingsIcon className="h-6 w-6 text-primary" />
               <h1 className="text-xl font-bold text-foreground">Configurações</h1>

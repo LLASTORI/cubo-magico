@@ -189,7 +189,7 @@ export default function QuizResults() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/quizzes/${quizId}`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigateTo(`/quizzes/${quizId}`)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -376,7 +376,7 @@ export default function QuizResults() {
                               variant="link"
                               size="sm"
                               className="p-0 h-auto text-xs"
-                              onClick={() => navigate(`/crm/contact/${session.contact_id}`)}
+                              onClick={() => navigateTo(`/crm/contact/${session.contact_id}`)}
                             >
                               Ver no CRM →
                             </Button>
@@ -427,7 +427,7 @@ export default function QuizResults() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => navigate(`/crm/contact/${session.contact_id}`)}
+                              onClick={() => navigateTo(`/crm/contact/${session.contact_id}`)}
                             >
                               <ExternalLink className="h-4 w-4" />
                             </Button>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { CustomerJourneyAnalysis } from '@/components/crm/CustomerJourneyAnalysis';
@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
 export default function CRM() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
   const [activeTab, setActiveTab] = useState('journey');
@@ -134,7 +134,7 @@ export default function CRM() {
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onSuccess={(contactId) => {
-          navigate(`/crm/contact/${contactId}`);
+          navigateTo(`/crm/contact/${contactId}`);
         }}
       />
     </div>

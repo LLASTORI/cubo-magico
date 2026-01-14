@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { format, formatDistance } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -34,7 +35,7 @@ import {
 
 export default function QuizSessionViewer() {
   const { quizId, sessionId } = useParams();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { data, isLoading, error } = useQuizSessionDetail(quizId, sessionId);
 
   if (isLoading) {
@@ -108,7 +109,7 @@ export default function QuizSessionViewer() {
           </div>
           <Button 
             variant="outline" 
-            onClick={() => navigate(`/quizzes/${quizId}/sessions/${sessionId}/answers`)}
+            onClick={() => navigateTo(`/quizzes/${quizId}/sessions/${sessionId}/answers`)}
           >
             <FileText className="h-4 w-4 mr-2" />
             Ver Respostas
@@ -142,7 +143,7 @@ export default function QuizSessionViewer() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => navigate(`/crm/contact/${session.contact_id}`)}
+                    onClick={() => navigateTo(`/crm/contact/${session.contact_id}`)}
                   >
                     Ver no CRM →
                   </Button>

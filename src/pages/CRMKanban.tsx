@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { useProject } from '@/contexts/ProjectContext';
@@ -42,7 +43,7 @@ interface KanbanContact {
 }
 
 export default function CRMKanban() {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
@@ -209,7 +210,7 @@ export default function CRMKanban() {
   };
 
   const handleSearchSelect = (contactId: string) => {
-    navigate(`/crm/contact/${contactId}`);
+    navigateTo(`/crm/contact/${contactId}`);
   };
 
   const toggleContactSelection = (contactId: string) => {
@@ -425,7 +426,7 @@ export default function CRMKanban() {
                         if (isSelectionMode) {
                           toggleContactSelection(contact.id);
                         } else {
-                          navigate(`/crm/contact/${contact.id}`);
+                          navigateTo(`/crm/contact/${contact.id}`);
                         }
                       }}
                       formatCurrency={formatCurrency}
@@ -491,7 +492,7 @@ export default function CRMKanban() {
                             if (isSelectionMode) {
                               toggleContactSelection(contact.id);
                             } else {
-                              navigate(`/crm/contact/${contact.id}`);
+                              navigateTo(`/crm/contact/${contact.id}`);
                             }
                           }}
                           formatCurrency={formatCurrency}
@@ -524,7 +525,7 @@ export default function CRMKanban() {
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onSuccess={(contactId) => {
-          navigate(`/crm/contact/${contactId}`);
+          navigateTo(`/crm/contact/${contactId}`);
         }}
       />
     </div>

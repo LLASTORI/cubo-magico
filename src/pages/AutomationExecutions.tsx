@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
@@ -62,7 +62,7 @@ const statusConfig = {
 };
 
 export default function AutomationExecutions() {
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading: modulesLoading } = useProjectModules();
   const { flows } = useAutomationFlows();
@@ -127,7 +127,7 @@ export default function AutomationExecutions() {
       
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/automations')}>
+          <Button variant="ghost" size="icon" onClick={() => navigateTo('/automations')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">

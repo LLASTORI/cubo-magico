@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -43,7 +43,7 @@ interface ContactQuizzesTabProps {
 }
 
 export function ContactQuizzesTab({ contactId }: ContactQuizzesTabProps) {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { quizzes, isLoading, totalQuizzes, completedQuizzes, aggregatedProfile } = useContactQuizzes(contactId);
 
   if (isLoading) {
@@ -127,7 +127,7 @@ interface QuizResultCardProps {
 }
 
 function QuizResultCard({ data }: QuizResultCardProps) {
-  const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { session, result, answersCount } = data;
   const statusConfig = STATUS_CONFIG[session.status] || STATUS_CONFIG.started;
   const StatusIcon = statusConfig.icon;
@@ -192,7 +192,7 @@ function QuizResultCard({ data }: QuizResultCardProps) {
           variant="ghost" 
           size="sm" 
           className="text-xs"
-          onClick={() => navigate(`/quizzes/${session.quiz_id}/sessions/${session.id}/answers`)}
+          onClick={() => navigateTo(`/quizzes/${session.quiz_id}/sessions/${session.id}/answers`)}
         >
           Ver respostas
           <ExternalLink className="h-3 w-3 ml-1" />
@@ -201,7 +201,7 @@ function QuizResultCard({ data }: QuizResultCardProps) {
           variant="ghost" 
           size="sm" 
           className="text-xs"
-          onClick={() => navigate(`/quizzes/${session.quiz_id}/sessions/${session.id}`)}
+          onClick={() => navigateTo(`/quizzes/${session.quiz_id}/sessions/${session.id}`)}
         >
           Ver sessão completa
           <ExternalLink className="h-3 w-3 ml-1" />

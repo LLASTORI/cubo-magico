@@ -1,4 +1,5 @@
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { ArrowLeft, Download, Trash2, User, Calendar, Globe, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,7 +28,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export default function SurveyResponses() {
   const { surveyId } = useParams();
-  const navigate = useNavigate();
+  const { navigateTo, navigate } = useProjectNavigation();
   const location = useLocation();
   const { survey } = useSurvey(surveyId);
   const { responses, isLoading, deleteResponse } = useSurveyResponses(surveyId);
@@ -50,7 +51,7 @@ export default function SurveyResponses() {
             <p className="text-muted-foreground mb-4">
               O módulo de Pesquisas não está ativo para este projeto.
             </p>
-            <Button variant="outline" onClick={() => navigate(basePath)}>
+            <Button variant="outline" onClick={() => navigateTo(basePath)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -113,7 +114,7 @@ export default function SurveyResponses() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate(`${basePath}/${surveyId}`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigateTo(`${basePath}/${surveyId}`)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -202,7 +203,7 @@ export default function SurveyResponses() {
                             variant="link"
                             size="sm"
                             className="p-0 h-auto text-xs"
-                            onClick={() => navigate(`/crm/contact/${response.contact_id}`)}
+                            onClick={() => navigateTo(`/crm/contact/${response.contact_id}`)}
                           >
                             Ver no CRM →
                           </Button>

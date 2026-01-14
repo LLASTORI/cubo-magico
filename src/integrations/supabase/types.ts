@@ -8789,51 +8789,32 @@ export type Database = {
       }
       sales_core_view: {
         Row: {
-          affiliate_code: string | null
-          affiliate_name: string | null
-          base_value: number | null
           buyer_email: string | null
           buyer_name: string | null
-          commission_value: number | null
-          confirmation_date: string | null
           contact_id: string | null
-          coupon_code: string | null
           created_at: string | null
           currency: string | null
-          currency_code: string | null
           economic_day: string | null
-          economic_timestamp: string | null
           event_type: string | null
-          fee_value: number | null
           funnel_id: string | null
           funnel_name: string | null
           gross_amount: number | null
           hotmart_status: string | null
           id: string | null
-          installments: number | null
+          is_active: boolean | null
           net_amount: number | null
-          nome_oferta: string | null
           occurred_at: string | null
           offer_code: string | null
-          original_currency: string | null
-          original_value: number | null
-          payment_method: string | null
-          payment_type: string | null
           product_code: string | null
           product_name: string | null
           project_id: string | null
           provider: string | null
           provider_event_id: string | null
-          purchase_date: string | null
-          tipo_posicao: string | null
-          total_price_brl: number | null
+          received_at: string | null
           transaction_id: string | null
-          utm_ad: string | null
           utm_adset: string | null
           utm_campaign: string | null
-          utm_content: string | null
           utm_creative: string | null
-          utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
         }

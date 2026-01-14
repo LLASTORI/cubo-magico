@@ -53,7 +53,8 @@ async function getHotmartToken(credentials: ProjectCredentials): Promise<string>
   }
 
   // RULE: OAuth only. Do NOT use Basic Auth.
-  const url = 'https://api.hotmart.com/security/oauth/token';
+  // CRITICAL: api.hotmart.com returns HTML. The correct OAuth endpoint is developers.hotmart.com
+  const url = 'https://developers.hotmart.com/oauth/token';
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id,

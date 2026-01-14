@@ -3093,6 +3093,65 @@ export type Database = {
           },
         ]
       }
+      hotmart_backfill_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          end_date: string
+          error_message: string | null
+          errors: number | null
+          events_created: number | null
+          events_skipped: number | null
+          executed_by: string | null
+          id: string
+          project_id: string
+          start_date: string
+          started_at: string
+          status: string
+          total_sales_found: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          end_date: string
+          error_message?: string | null
+          errors?: number | null
+          events_created?: number | null
+          events_skipped?: number | null
+          executed_by?: string | null
+          id?: string
+          project_id: string
+          start_date: string
+          started_at?: string
+          status?: string
+          total_sales_found?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          end_date?: string
+          error_message?: string | null
+          errors?: number | null
+          events_created?: number | null
+          events_skipped?: number | null
+          executed_by?: string | null
+          id?: string
+          project_id?: string
+          start_date?: string
+          started_at?: string
+          status?: string
+          total_sales_found?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_backfill_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hotmart_product_plans: {
         Row: {
           created_at: string

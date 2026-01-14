@@ -62,9 +62,6 @@ const BuscaRapida = () => {
   }, [error, toast]);
 
   const handleFilter = async (filters: FilterParams) => {
-    // [FORENSIC] Log filters being sent from UI to hook
-    console.log('[FORENSIC][UI] Filters sent to useSalesCore', JSON.stringify(filters, null, 2));
-    
     if (!currentProject) {
       toast({
         title: "Projeto não selecionado",
@@ -77,9 +74,6 @@ const BuscaRapida = () => {
     setCurrentFilters(filters);
     // Reset to page 1 with default page size when applying new filters
     await fetchSales(currentProject.id, filters, 1, pagination.pageSize);
-    
-    // [FORENSIC] Log results after fetch
-    console.log('[FORENSIC][UI] After fetchSales - pagination.totalCount:', pagination.totalCount);
     
     if (!error) {
       toast({

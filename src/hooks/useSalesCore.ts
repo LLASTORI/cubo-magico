@@ -216,38 +216,56 @@ export function useSalesCore(): UseSalesCoreResult {
         return;
       }
 
-      // ========== QUERY 2: GLOBAL TOTALS (no pagination, same filters) ==========
+      // ========== QUERY 2: GLOBAL TOTALS (with pagination to bypass 1000 limit) ==========
       setTotals(prev => ({ ...prev, loading: true }));
       
       const fetchGlobalTotals = async () => {
         try {
-          let totalsQuery = supabase
-            .from('sales_core_view')
-            .select('gross_amount, net_amount, contact_id');
-          
-          totalsQuery = applyViewFilters(totalsQuery, projectId, filters, 'TOTALS');
+          // Use pagination to fetch ALL records and bypass Supabase's 1000 row limit
+          const allTotalsData: { gross_amount: number; net_amount: number; contact_id: string }[] = [];
+          let totalsPage = 0;
+          const totalsPageSize = 1000;
+          let hasMoreTotals = true;
 
-          const { data: totalsData, error: totalsError } = await totalsQuery;
+          while (hasMoreTotals) {
+            let totalsQuery = supabase
+              .from('sales_core_view')
+              .select('gross_amount, net_amount, contact_id')
+              .range(totalsPage * totalsPageSize, (totalsPage + 1) * totalsPageSize - 1);
+            
+            totalsQuery = applyViewFilters(totalsQuery, projectId, filters, 'TOTALS');
 
-          if (totalsError) {
-            console.warn('Error fetching global totals:', totalsError);
-            setTotals({
-              totalTransactions: total,
-              totalGrossRevenue: 0,
-              totalNetRevenue: 0,
-              totalUniqueCustomers: 0,
-              loading: false,
-            });
-            return;
+            const { data: totalsData, error: totalsError } = await totalsQuery;
+
+            if (totalsError) {
+              console.warn('Error fetching global totals page:', totalsError);
+              break;
+            }
+
+            if (totalsData && totalsData.length > 0) {
+              allTotalsData.push(...totalsData);
+              hasMoreTotals = totalsData.length === totalsPageSize;
+              totalsPage++;
+            } else {
+              hasMoreTotals = false;
+            }
           }
 
-          if (totalsData && totalsData.length > 0) {
-            const totalGrossRevenue = totalsData.reduce((sum, row) => sum + (Number(row.gross_amount) || 0), 0);
-            const totalNetRevenue = totalsData.reduce((sum, row) => sum + (Number(row.net_amount) || 0), 0);
-            const uniqueContacts = new Set(totalsData.map(row => row.contact_id).filter(Boolean));
+          // Log forensic data for debugging
+          console.log('[useSalesCore] TOTALS FORENSIC:', {
+            totalCount: total,
+            totalsRowsFetched: allTotalsData.length,
+            pagesLoaded: totalsPage,
+            timestamp: new Date().toISOString(),
+          });
+
+          if (allTotalsData.length > 0) {
+            const totalGrossRevenue = allTotalsData.reduce((sum, row) => sum + (Number(row.gross_amount) || 0), 0);
+            const totalNetRevenue = allTotalsData.reduce((sum, row) => sum + (Number(row.net_amount) || 0), 0);
+            const uniqueContacts = new Set(allTotalsData.map(row => row.contact_id).filter(Boolean));
             
             setTotals({
-              totalTransactions: totalsData.length,
+              totalTransactions: allTotalsData.length,
               totalGrossRevenue,
               totalNetRevenue,
               totalUniqueCustomers: uniqueContacts.size,
@@ -300,6 +318,16 @@ export function useSalesCore(): UseSalesCoreResult {
       pageQuery = applyViewFilters(pageQuery, projectId, filters, 'PAGE');
 
       const { data: pageData, error: pageError } = await pageQuery;
+
+      // Log forensic data for debugging pagination
+      console.log('[useSalesCore] PAGE FORENSIC:', {
+        totalCount: total,
+        page,
+        pageSize,
+        offset,
+        pageRowsLength: pageData?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
 
       if (pageError) {
         throw new Error(pageError.message);

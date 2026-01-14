@@ -55,8 +55,30 @@ export interface UseSalesCoreResult {
 }
 
 /**
+ * ============================================
+ * CANONICAL FINANCIAL DATA SOURCE
+ * ============================================
+ * 
+ * This hook reads from `sales_core_view`, which is the SINGLE SOURCE OF TRUTH
+ * for all financial data in Cubo Mágico.
+ * 
+ * Architecture (canonical pipeline):
+ *   Hotmart API → hotmart_sales → sales_core_view → Cubo UI
+ * 
+ * IMPORTANT:
+ * - sales_core_view JOINs hotmart_sales + offer_mappings + funnels + UTMs
+ * - hotmart_sales.status IN ('APPROVED', 'COMPLETE') determines valid sales
+ * - sales_core_events is now ONLY an event log, NOT a financial source
+ * - NEVER filter by is_active - use hotmart_status directly
+ * ============================================
+ */
+
+/**
  * Apply common filters to a query on sales_core_view
  * This ensures both Totals and Page queries use IDENTICAL filters
+ * 
+ * NOTE: We filter by hotmart_status instead of is_active flag.
+ * The view already handles this, but we also filter explicitly.
  */
 const applyViewFilters = (
   query: any,
@@ -64,11 +86,10 @@ const applyViewFilters = (
   filters: FilterParams,
   queryName: string = 'unknown'
 ) => {
-  // Base filters
+  // Base filters - NO is_active filter, use hotmart_status instead
   query = query
     .eq('project_id', projectId)
     .eq('provider', 'hotmart')
-    .eq('is_active', true)
     .gte('economic_day', filters.startDate)
     .lte('economic_day', filters.endDate);
 
@@ -91,7 +112,7 @@ const applyViewFilters = (
       query = query.in('event_type', uniqueEventTypes);
     }
   } else {
-    // Default to purchases only
+    // Default to purchases only (APPROVED and COMPLETE from hotmart_sales)
     query = query.eq('event_type', 'purchase');
   }
 
@@ -133,13 +154,21 @@ const applyViewFilters = (
 };
 
 /**
- * Hook to fetch sales data using the canonical sales_core_view
+ * ============================================
+ * CANONICAL HOOK FOR FINANCIAL DATA
+ * ============================================
  * 
- * Strategy:
- * 1. Use sales_core_view which JOINs sales_core_events + hotmart_sales + offer_mappings
- * 2. Apply ALL filters at SQL level (funnel, product, offer, UTMs)
- * 3. Both Totals and Page queries use identical filter logic
- * 4. No more client-side filtering!
+ * This hook fetches sales data from sales_core_view - the SINGLE SOURCE OF TRUTH.
+ * 
+ * Architecture:
+ *   Hotmart API → hotmart_sales → sales_core_view → This Hook → UI
+ * 
+ * Key Points:
+ * - sales_core_view is a JOIN of hotmart_sales + offer_mappings + funnels
+ * - hotmart_sales is the absolute truth for Hotmart data
+ * - sales_core_events is ONLY for event logging (webhooks), NOT for financial queries
+ * - All filters are applied at SQL level for accuracy
+ * - No is_active filter needed - the view uses hotmart_status directly
  */
 export function useSalesCore(): UseSalesCoreResult {
   const [sales, setSales] = useState<CoreSaleItem[]>([]);

@@ -8718,6 +8718,7 @@ export type Database = {
           currency: string | null
           currency_code: string | null
           economic_day: string | null
+          economic_timestamp: string | null
           event_type: string | null
           fee_value: number | null
           funnel_id: string | null

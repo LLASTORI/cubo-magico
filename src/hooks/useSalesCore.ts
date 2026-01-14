@@ -2,6 +2,45 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterParams } from "@/components/SalesFilters";
 
+/**
+ * ============================================
+ * TIMEZONE UTILITIES FOR ECONOMIC TIMESTAMP
+ * ============================================
+ * 
+ * Converts date strings (YYYY-MM-DD) to ISO timestamps
+ * in America/Sao_Paulo timezone for precise date filtering.
+ * 
+ * This fixes the "single-day bug" where UTC timestamps
+ * near midnight would "slide" to the previous/next day
+ * when converted to Brazil timezone.
+ */
+const SAO_PAULO_TIMEZONE = 'America/Sao_Paulo';
+
+/**
+ * Convert a date string to the START of that day in São Paulo timezone
+ * e.g., "2026-01-10" -> "2026-01-10T03:00:00.000Z" (00:00 São Paulo = 03:00 UTC)
+ */
+function toEconomicTimestampStart(dateStr: string): string {
+  // Create date at midnight in São Paulo
+  // São Paulo is UTC-3, so midnight São Paulo = 03:00 UTC
+  const [year, month, day] = dateStr.split('-').map(Number);
+  // Create date object interpreting as São Paulo time
+  const date = new Date(Date.UTC(year, month - 1, day, 3, 0, 0, 0)); // 03:00 UTC = 00:00 São Paulo
+  return date.toISOString();
+}
+
+/**
+ * Convert a date string to the END of that day in São Paulo timezone
+ * e.g., "2026-01-10" -> "2026-01-11T02:59:59.999Z" (23:59:59.999 São Paulo = 02:59:59.999 UTC next day)
+ */
+function toEconomicTimestampEnd(dateStr: string): string {
+  // Create date at end of day (23:59:59.999) in São Paulo
+  // São Paulo is UTC-3, so 23:59:59.999 São Paulo = 02:59:59.999 UTC next day
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + 1, 2, 59, 59, 999)); // 02:59:59.999 UTC next day = 23:59:59.999 São Paulo
+  return date.toISOString();
+}
+
 export interface CoreSaleItem {
   id: string;
   transaction: string;
@@ -86,12 +125,34 @@ const applyViewFilters = (
   filters: FilterParams,
   queryName: string = 'unknown'
 ) => {
-  // Base filters - NO is_active filter, use hotmart_status instead
+  // ========== CRITICAL: TIMESTAMP-BASED FILTERING ==========
+  // Use economic_timestamp (timestamptz in São Paulo timezone) instead of
+  // economic_day (date) to fix the "single-day bug" where UTC timestamps
+  // near midnight would slide to adjacent days in Brazil timezone.
+  //
+  // The frontend sends dates as strings (YYYY-MM-DD).
+  // We convert them to precise São Paulo timezone boundaries:
+  // - startDate "2026-01-10" -> 2026-01-10 00:00:00.000 São Paulo
+  // - endDate "2026-01-10" -> 2026-01-10 23:59:59.999 São Paulo
+  // =========================================================
+  
+  const startTimestamp = toEconomicTimestampStart(filters.startDate);
+  const endTimestamp = toEconomicTimestampEnd(filters.endDate);
+  
+  // Log for debugging (remove in production)
+  console.log(`[${queryName}] Date filter conversion:`, {
+    inputStart: filters.startDate,
+    inputEnd: filters.endDate,
+    startTimestamp,
+    endTimestamp,
+  });
+  
+  // Base filters - using economic_timestamp for precise timezone-aware filtering
   query = query
     .eq('project_id', projectId)
     .eq('provider', 'hotmart')
-    .gte('economic_day', filters.startDate)
-    .lte('economic_day', filters.endDate);
+    .gte('economic_timestamp', startTimestamp)
+    .lte('economic_timestamp', endTimestamp);
 
   // Event type filter (status mapping)
   if (filters.transactionStatus && filters.transactionStatus.length > 0) {

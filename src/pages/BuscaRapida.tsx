@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, Database, CheckCircle } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, Database, CheckCircle, Coins, Percent } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import SalesTable from "@/components/SalesTable";
 import SalesTablePagination from "@/components/SalesTablePagination";
@@ -9,9 +9,25 @@ import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { CubeLoader } from "@/components/CubeLoader";
 import { AppHeader } from "@/components/AppHeader";
-import { useFinanceTracking } from "@/hooks/useFinanceTracking";
+import { useFinanceLedger, LedgerFilters } from "@/hooks/useFinanceLedger";
 import { Badge } from "@/components/ui/badge";
 import { useTenantNavigation } from "@/navigation";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * BUSCA RÁPIDA - CANONICAL FINANCIAL VIEW
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * This page uses EXCLUSIVELY finance_ledger_summary via useFinanceLedger hook.
+ * All money values represent REAL MONEY paid by Hotmart (after all deductions).
+ * 
+ * FORBIDDEN SOURCES:
+ * ❌ hotmart_sales.total_price_brl
+ * ❌ finance_tracking_view
+ * ❌ sales_core_events
+ * ❌ Any percentage-based fallback
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
 
 const BuscaRapida = () => {
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
@@ -19,19 +35,19 @@ const BuscaRapida = () => {
   const { navigateTo } = useTenantNavigation();
   const { currentProject, credentials } = useProject();
   
-  // Use the canonical Finance Tracking hook (queries finance_tracking_view)
+  // CANONICAL: Use finance_ledger_summary via useFinanceLedger hook
   const { 
-    sales, 
+    transactions, 
     loading, 
     error, 
     pagination,
-    totals, // Global totals from complete filtered dataset
-    fetchSales,
+    totals, // Global totals from complete filtered dataset (real money)
+    fetchData,
     nextPage,
     prevPage,
     setPage,
     setPageSize,
-  } = useFinanceTracking();
+  } = useFinanceLedger();
 
   // Clear filters when project changes
   useEffect(() => {
@@ -61,6 +77,21 @@ const BuscaRapida = () => {
     }
   }, [error, toast]);
 
+  // Convert FilterParams to LedgerFilters format
+  const convertToLedgerFilters = (filters: FilterParams): LedgerFilters => ({
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    transactionStatus: filters.transactionStatus,
+    funnelId: filters.idFunil,
+    productName: filters.productName,
+    offerCode: filters.offerCode,
+    utmSource: filters.utmSource,
+    utmCampaign: filters.utmCampaign,
+    utmAdset: filters.utmAdset,
+    utmPlacement: filters.utmPlacement,
+    utmCreative: filters.utmCreative,
+  });
+
   const handleFilter = async (filters: FilterParams) => {
     if (!currentProject) {
       toast({
@@ -72,8 +103,9 @@ const BuscaRapida = () => {
     }
 
     setCurrentFilters(filters);
+    const ledgerFilters = convertToLedgerFilters(filters);
     // Reset to page 1 with default page size when applying new filters
-    await fetchSales(currentProject.id, filters, 1, pagination.pageSize);
+    await fetchData(currentProject.id, ledgerFilters, 1, pagination.pageSize);
     
     if (!error) {
       toast({
@@ -85,40 +117,41 @@ const BuscaRapida = () => {
 
   const handleRefresh = () => {
     if (currentFilters && currentProject) {
-      fetchSales(currentProject.id, currentFilters, pagination.page, pagination.pageSize);
+      const ledgerFilters = convertToLedgerFilters(currentFilters);
+      fetchData(currentProject.id, ledgerFilters, pagination.page, pagination.pageSize);
     }
   };
 
   // Calculate metrics from page data (for display in table context)
   const pageMetrics = useMemo(() => {
-    if (!sales || sales.length === 0) {
+    if (!transactions || transactions.length === 0) {
       return {
-        totalNetRevenue: "R$ 0,00",
-        totalGrossRevenue: "R$ 0,00",
+        netRevenue: "R$ 0,00",
+        producerGross: "R$ 0,00",
         transactions: 0,
         customers: 0,
       };
     }
 
-    const totalNet = sales.reduce((sum, item) => sum + (item.net_amount || 0), 0);
-    const totalGross = sales.reduce((sum, item) => sum + (item.gross_amount || 0), 0);
-    const uniqueCustomers = new Set(sales.map(item => item.buyer_email).filter(Boolean)).size;
+    const totalNet = transactions.reduce((sum, item) => sum + (item.net_revenue || 0), 0);
+    const totalGross = transactions.reduce((sum, item) => sum + (item.producer_gross || 0), 0);
+    const uniqueCustomers = new Set(transactions.map(item => item.buyer_email).filter(Boolean)).size;
 
     return {
-      totalNetRevenue: new Intl.NumberFormat('pt-BR', {
+      netRevenue: new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
       }).format(totalNet),
-      totalGrossRevenue: new Intl.NumberFormat('pt-BR', {
+      producerGross: new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
       }).format(totalGross),
-      transactions: sales.length,
+      transactions: transactions.length,
       customers: uniqueCustomers,
     };
-  }, [sales]);
+  }, [transactions]);
 
-  // Global metrics from totals query (complete filtered dataset)
+  // Global metrics from totals query (complete filtered dataset - REAL MONEY)
   const globalMetrics = useMemo(() => {
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -126,68 +159,72 @@ const BuscaRapida = () => {
     }).format(value);
 
     return {
-      totalNetRevenue: formatCurrency(totals.totalNetRevenue),
-      totalGrossRevenue: formatCurrency(totals.totalGrossRevenue),
+      netRevenue: formatCurrency(totals.netRevenue),
+      producerGross: formatCurrency(totals.producerGross),
+      affiliateCost: formatCurrency(totals.affiliateCost),
+      coproducerCost: formatCurrency(totals.coproducerCost),
+      platformCost: formatCurrency(totals.platformCost),
+      refunds: formatCurrency(totals.refunds),
       transactions: totals.totalTransactions,
-      customers: totals.totalUniqueCustomers,
+      customers: totals.uniqueCustomers,
       loading: totals.loading,
     };
   }, [totals]);
 
-  // Format sales for the table component (keeping compatibility)
+  // Format transactions for the table component (keeping compatibility)
   const formattedSales = useMemo(() => {
-    return sales.map(sale => {
-      const economicDay = sale.economic_day;
+    return transactions.map(tx => {
+      const economicDay = tx.economic_day;
       const formattedDate = economicDay 
         ? new Date(economicDay + 'T12:00:00').toLocaleDateString('pt-BR')
         : '-';
       
       return {
-        transaction: sale.transaction_id,
-        product: sale.product_name || '-',
-        buyer: sale.buyer_name || '-',
-        value: sale.net_amount,
-        grossValue: sale.gross_amount,
-        status: sale.hotmart_status || 'UNKNOWN',
+        transaction: tx.transaction_id,
+        product: tx.product_name || '-',
+        buyer: tx.buyer_name || '-',
+        value: tx.net_revenue,
+        grossValue: tx.producer_gross,
+        status: tx.hotmart_status || 'UNKNOWN',
         date: formattedDate,
-        utmSource: sale.utm_source || undefined,
-        utmCampaign: sale.utm_campaign || undefined,
-        utmAdset: sale.utm_adset || undefined,
-        utmPlacement: sale.utm_placement || undefined,
-        utmCreative: sale.utm_creative || undefined,
+        utmSource: tx.utm_source || undefined,
+        utmCampaign: tx.utm_campaign || undefined,
+        utmAdset: tx.utm_adset || undefined,
+        utmPlacement: tx.utm_placement || undefined,
+        utmCreative: tx.utm_creative || undefined,
         originalCurrency: 'BRL',
-        originalValue: sale.gross_amount,
+        originalValue: tx.producer_gross,
         wasConverted: false,
       };
     });
-  }, [sales]);
+  }, [transactions]);
 
   // Extract unique products and offers from canonical view
   const availableProducts = useMemo(() => {
-    return Array.from(new Set(sales.map(s => s.product_name).filter(Boolean))) as string[];
-  }, [sales]);
+    return Array.from(new Set(transactions.map(s => s.product_name).filter(Boolean))) as string[];
+  }, [transactions]);
 
   const availableOffers = useMemo(() => {
-    return sales
+    return transactions
       .filter(s => s.offer_code)
       .map(s => ({ code: s.offer_code!, name: s.offer_code! }))
       .filter((offer, index, self) => 
         self.findIndex(o => o.code === offer.code) === index
       );
-  }, [sales]);
+  }, [transactions]);
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader 
         rightContent={
           <div className="flex items-center gap-3">
-            {/* Trust Level Badge - Always show Core */}
+            {/* Trust Level Badge - Finance Ledger (real money) */}
             <Badge variant="outline" className="gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-              <Database className="w-3 h-3" />
-              Financial Core
+              <Coins className="w-3 h-3" />
+              Finance Ledger
             </Badge>
             
-            {sales.length > 0 && currentProject && (
+            {transactions.length > 0 && currentProject && (
               <Button
                 onClick={handleRefresh}
                 disabled={loading}
@@ -230,42 +267,66 @@ const BuscaRapida = () => {
 
             {loading ? (
               <div className="flex flex-col items-center justify-center h-64">
-                <CubeLoader message="Consultando Finance Tracking..." size="lg" />
+                <CubeLoader message="Consultando Finance Ledger..." size="lg" />
               </div>
-            ) : sales.length > 0 ? (
+            ) : transactions.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
                 {/* Data Source Info */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                   <span>
-                    Fonte canônica: <strong>finance_tracking_view</strong> • 
+                    Fonte canônica: <strong>finance_ledger_summary</strong> • 
                     Filtro por <strong>economic_day</strong> (horário de Brasília) • 
-                    Valores em <strong>Receita Líquida</strong> (após taxas) •
+                    Valores em <strong>Receita Líquida Real</strong> (dinheiro pago pela Hotmart) •
                     <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> transações no total
                   </span>
                 </div>
 
-                {/* Metrics Grid - Using GLOBAL TOTALS from complete dataset */}
+                {/* Metrics Grid - Using GLOBAL TOTALS from complete dataset (REAL MONEY) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <MetricCard
-                    title="Receita Líquida (total)"
-                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalNetRevenue}
+                    title="Receita Líquida do Produtor"
+                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.netRevenue}
                     icon={DollarSign}
                   />
                   <MetricCard
-                    title="Receita Bruta (total)"
-                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.totalGrossRevenue}
+                    title="Receita Bruta do Produtor"
+                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.producerGross}
                     icon={TrendingUp}
                   />
                   <MetricCard
-                    title="Transações (total)"
+                    title="Transações"
                     value={globalMetrics.loading ? "..." : globalMetrics.transactions}
                     icon={ShoppingCart}
                   />
                   <MetricCard
-                    title="Clientes Únicos (total)"
+                    title="Clientes Únicos"
                     value={globalMetrics.loading ? "..." : globalMetrics.customers}
                     icon={Users}
+                  />
+                </div>
+
+                {/* Cost breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <MetricCard
+                    title="Custo Afiliados"
+                    value={globalMetrics.loading ? "..." : globalMetrics.affiliateCost}
+                    icon={Percent}
+                  />
+                  <MetricCard
+                    title="Custo Coprodução"
+                    value={globalMetrics.loading ? "..." : globalMetrics.coproducerCost}
+                    icon={Percent}
+                  />
+                  <MetricCard
+                    title="Taxas Hotmart"
+                    value={globalMetrics.loading ? "..." : globalMetrics.platformCost}
+                    icon={Percent}
+                  />
+                  <MetricCard
+                    title="Reembolsos"
+                    value={globalMetrics.loading ? "..." : globalMetrics.refunds}
+                    icon={Percent}
                   />
                 </div>
 
@@ -297,7 +358,7 @@ const BuscaRapida = () => {
                   Configure os Filtros
                 </h3>
                 <p className="text-muted-foreground">
-                  Selecione as datas e filtros desejados para consultar o Financial Core
+                  Selecione as datas e filtros desejados para consultar o Finance Ledger
                 </p>
               </div>
             )}

@@ -21,6 +21,17 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // Regra para bloquear imports diretos de react-router-dom em páginas internas
+      // A verificação completa é feita pelo script check-tenant-navigation.js
+      "no-restricted-imports": ["warn", {
+        "paths": [
+          {
+            "name": "react-router-dom",
+            "importNames": ["useNavigate"],
+            "message": "Use useTenantNavigation() de '@/navigation' para navegação multi-tenant. Veja ARCHITECTURE_NAVIGATION.md"
+          }
+        ]
+      }],
     },
   },
 );

@@ -1406,11 +1406,11 @@ const FunnelAnalysis = () => {
                   <LTVAnalysis
                     salesData={salesData.map(s => ({
                       transaction: s.transaction_id,
-                      product: s.product_name,
+                      product: s.product_name || '',
                       buyer: s.buyer_email || '',
-                      value: s.total_price_brl || 0,
-                      status: s.status,
-                      date: s.sale_date || '',
+                      value: s.gross_amount || 0,
+                      status: s.hotmart_status || 'UNKNOWN',
+                      date: s.economic_day || '',
                       offerCode: s.offer_code || undefined,
                     }))}
                     funnelOfferCodes={offerCodes}

@@ -31,25 +31,29 @@ interface FunnelConfig {
   roas_target: number | null;
 }
 
+// Sales record from finance_tracking_view (canonical source)
 interface SaleRecord {
   transaction_id: string;
-  product_name: string;
+  product_name: string | null;
   offer_code: string | null;
-  total_price_brl: number | null;
+  gross_amount: number | null;
+  net_amount: number | null;
   buyer_email: string | null;
-  sale_date: string | null;
-  status: string;
-  checkout_origin: string | null;
-  meta_campaign_id_extracted: string | null;
-  meta_adset_id_extracted: string | null;
-  meta_ad_id_extracted: string | null;
+  economic_day: string | null;
+  purchase_date: string | null;
+  hotmart_status: string | null;
+  funnel_id: string | null;
+  funnel_name: string | null;
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  meta_ad_id: string | null;
   utm_source: string | null;
-  utm_campaign_id: string | null;
-  utm_adset_name: string | null;
+  utm_campaign: string | null;
+  utm_adset: string | null;
   utm_creative: string | null;
   utm_placement: string | null;
   payment_method: string | null;
-  installment_number: number | null;
+  recurrence: number | null;
 }
 
 interface MetaInsight {
@@ -188,25 +192,13 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     staleTime: 5 * 60 * 1000,
   });
 
+  // CANONICAL: Sales from finance_tracking_view
   const salesQuery = useQuery({
-    queryKey: ['sales', projectId, startDateStr, endDateStr],
+    queryKey: ['finance-tracking-sales', projectId, startDateStr, endDateStr],
     queryFn: async () => {
-      // IMPORTANT: Sales are stored in UTC. To filter by Brazil timezone (UTC-3),
-      // we need to adjust the timestamps. When user selects "2025-12-09" in Brazil:
-      // - Start: 2025-12-09 00:00:00 Brazil = 2025-12-09 03:00:00 UTC
-      // - End: 2025-12-09 23:59:59 Brazil = 2025-12-10 02:59:59 UTC
-      // Using timezone-aware timestamps ensures correct filtering
-      const startTimestamp = `${startDateStr}T03:00:00.000Z`; // 00:00 Brazil = 03:00 UTC
+      console.log(`[useFunnelData] Fetching sales from finance_tracking_view for ${startDateStr} to ${endDateStr}`);
       
-      // Adjust end date to next day for the UTC conversion
-      const endDateObj = new Date(endDateStr);
-      endDateObj.setDate(endDateObj.getDate() + 1);
-      const adjustedEndDate = endDateObj.toISOString().split('T')[0];
-      const adjustedEndTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
-      
-      console.log(`[useFunnelData] Sales query: Brazil ${startDateStr} to ${endDateStr} => UTC ${startTimestamp} to ${adjustedEndTimestamp}`);
-      
-      // Fetch ALL sales with pagination to handle large date ranges
+      // Fetch ALL sales with pagination to bypass 1000 limit
       const PAGE_SIZE = 1000;
       let allData: SaleRecord[] = [];
       let page = 0;
@@ -214,12 +206,34 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       
       while (hasMore) {
         const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('transaction_id, product_name, offer_code, total_price_brl, buyer_email, sale_date, status, checkout_origin, meta_campaign_id_extracted, meta_adset_id_extracted, meta_ad_id_extracted, utm_source, utm_campaign_id, utm_adset_name, utm_creative, utm_placement, payment_method, installment_number')
+          .from('finance_tracking_view')
+          .select(`
+            transaction_id,
+            product_name,
+            offer_code,
+            gross_amount,
+            net_amount,
+            buyer_email,
+            economic_day,
+            purchase_date,
+            hotmart_status,
+            funnel_id,
+            funnel_name,
+            meta_campaign_id,
+            meta_adset_id,
+            meta_ad_id,
+            utm_source,
+            utm_campaign,
+            utm_adset,
+            utm_creative,
+            utm_placement,
+            payment_method,
+            recurrence
+          `)
           .eq('project_id', projectId!)
-          .in('status', ['APPROVED', 'COMPLETE'])
-          .gte('sale_date', startTimestamp)
-          .lte('sale_date', adjustedEndTimestamp)
+          .in('hotmart_status', ['APPROVED', 'COMPLETE'])
+          .gte('economic_day', startDateStr)
+          .lte('economic_day', endDateStr)
           .order('transaction_id', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
@@ -228,10 +242,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           throw error;
         }
         
-        console.log(`[useFunnelData] Sales page ${page}: ${data?.length || 0} records`);
-        
         if (data && data.length > 0) {
-          allData = [...allData, ...data];
+          allData = [...allData, ...data as SaleRecord[]];
           page++;
           hasMore = data.length === PAGE_SIZE;
         } else {
@@ -239,12 +251,14 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         }
       }
       
-      console.log(`[useFunnelData] Total sales loaded: ${allData.length}, total revenue: R$${allData.reduce((s, sale) => s + (sale.total_price_brl || 0), 0).toFixed(2)}`);
+      const totalGross = allData.reduce((s, sale) => s + (sale.gross_amount || 0), 0);
+      const totalNet = allData.reduce((s, sale) => s + (sale.net_amount || 0), 0);
+      console.log(`[useFunnelData] Total sales from finance_tracking_view: ${allData.length}, gross: R$${totalGross.toFixed(2)}, net: R$${totalNet.toFixed(2)}`);
       return allData;
     },
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   // Get active account IDs first before building insights query
@@ -373,9 +387,11 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       const code = sale.offer_code || 'SEM_CODIGO';
       if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
       
-      const isFirstInstallment = sale.installment_number === 1 || sale.installment_number === null;
+      // Use recurrence to identify first installment (1 or null means first)
+      const isFirstInstallment = sale.recurrence === 1 || sale.recurrence === null;
       if (isFirstInstallment) salesByOffer[code].count += 1;
-      salesByOffer[code].revenue += sale.total_price_brl || 0;
+      // Use gross_amount from finance_tracking_view
+      salesByOffer[code].revenue += sale.gross_amount || 0;
     });
 
     const mappedOffers = new Set(sortedMappings.map(m => m.codigo_oferta));

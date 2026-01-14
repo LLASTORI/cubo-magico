@@ -9,25 +9,30 @@ import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 import { toZonedTime, format } from "date-fns-tz";
 
 /**
- * ============================================================================
- * TIMEZONE CONTRACT FOR FINANCIAL FILTERS
- * ============================================================================
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * CANONICAL FINANCIAL FILTERS - TIMEZONE CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * CANONICAL VIEW: finance_tracking_view
+ * DATE FIELD: economic_day (DATE type)
+ * STATUS FIELD: hotmart_status IN ('APPROVED', 'COMPLETE')
+ * UTM FIELDS: utm_source, utm_campaign, utm_adset, utm_placement, utm_creative
+ * 
+ * TIMEZONE: America/Sao_Paulo
  * 
  * The `economic_day` field in the database represents the economic day in
- * São Paulo timezone (America/Sao_Paulo).
- * 
- * All date filters (startDate, endDate) MUST be calculated in this timezone,
+ * São Paulo timezone. All date filters MUST be calculated in this timezone,
  * regardless of the user's local timezone.
  * 
  * Format: YYYY-MM-DD (ISO date string)
  * Timezone: America/Sao_Paulo (handles DST automatically)
  * 
- * Example validation:
- * - If current UTC time is 2026-01-14 02:30 UTC
- * - São Paulo time is 2026-01-13 23:30 (UTC-3)
- * - getBrazilToday() should return "2026-01-13"
- * - "Últimos 7 dias" filter should return: "2026-01-07" → "2026-01-13"
- * ============================================================================
+ * FORBIDDEN:
+ * ❌ economic_timestamp (doesn't exist in view)
+ * ❌ event_type
+ * ❌ is_active
+ * ❌ Any legacy status fields
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 const SAO_PAULO_TIMEZONE = "America/Sao_Paulo";

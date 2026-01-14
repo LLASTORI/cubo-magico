@@ -1,18 +1,31 @@
 /**
  * useFinanceTracking
  * 
- * CANONICAL HOOK for all financial data.
- * Queries exclusively from finance_tracking_view which is the single source of truth.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * CANONICAL FINANCIAL HOOK - SINGLE SOURCE OF TRUTH
+ * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * This view contains:
- * - Financial data from hotmart_sales (gross, net, status)
- * - Tracking data from sales_core_events (UTMs, funnel, meta IDs)
- * - 1 row per transaction_id (deduplicated)
+ * This hook queries EXCLUSIVELY from finance_tracking_view which is the canonical
+ * financial layer, validated 100% against Hotmart API.
  * 
- * RULES:
- * - NEVER calculate money from sales_core_events
- * - NEVER search UTMs in hotmart_sales
- * - All financial screens MUST use this hook
+ * DATA SOURCE:
+ * - finance_tracking_view (Supabase view)
+ * - Validated: COUNT, gross_amount, net_amount = Hotmart API
+ * 
+ * FILTERS:
+ * - Date: economic_day (DATE type, São Paulo timezone)
+ * - Status: hotmart_status IN ('APPROVED', 'COMPLETE')
+ * - UTMs: utm_source, utm_campaign, utm_adset, utm_placement, utm_creative
+ * 
+ * FORBIDDEN SOURCES (for financial data):
+ * ❌ hotmart_sales (use only finance_tracking_view)
+ * ❌ sales_core_events
+ * ❌ sales_core_view
+ * ❌ revenue_daily / profit_daily
+ * ❌ Any direct meta_insights for revenue
+ * 
+ * All financial screens MUST use this hook or useFinanceTrackingQuery.
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useState, useCallback, useMemo } from "react";

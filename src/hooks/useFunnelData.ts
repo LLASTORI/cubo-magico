@@ -1,3 +1,25 @@
+/**
+ * useFunnelData
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * CANONICAL FUNNEL DATA HOOK
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * Sales data comes EXCLUSIVELY from finance_tracking_view.
+ * Investment data comes from meta_insights (ad-level, deduplicated).
+ * 
+ * FILTER RULES:
+ * - Date: economic_day (DATE type, São Paulo timezone)
+ * - Status: hotmart_status IN ('APPROVED', 'COMPLETE')
+ * - UTMs: All from finance_tracking_view
+ * 
+ * FORBIDDEN:
+ * ❌ hotmart_sales for direct queries
+ * ❌ sales_core_events
+ * ❌ sales_core_view
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";

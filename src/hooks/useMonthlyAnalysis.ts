@@ -5,10 +5,24 @@ import { format, startOfYear, endOfYear, parseISO, eachMonthOfInterval, startOfM
 import { ptBR } from "date-fns/locale";
 
 /**
- * CANONICAL Monthly Analysis Hook
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * CANONICAL MONTHLY ANALYSIS HOOK
+ * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * Uses ONLY finance_tracking_view for all financial data.
- * This ensures consistency with the Hotmart API.
+ * Uses EXCLUSIVELY finance_tracking_view for all financial data.
+ * Validated 100% against Hotmart API.
+ * 
+ * FILTER RULES:
+ * - Date: economic_day (DATE type, São Paulo timezone)
+ * - Status: hotmart_status IN ('APPROVED', 'COMPLETE')
+ * - Revenue: gross_amount (from finance_tracking_view)
+ * 
+ * FORBIDDEN:
+ * ❌ hotmart_sales direct queries
+ * ❌ sales_core_events
+ * ❌ total_price_brl
+ * ❌ event_type
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 interface UseMonthlyAnalysisProps {

@@ -4,6 +4,13 @@ import { useMemo } from "react";
 import { format, startOfYear, endOfYear, parseISO, eachMonthOfInterval, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+/**
+ * CANONICAL Monthly Analysis Hook
+ * 
+ * Uses ONLY finance_tracking_view for all financial data.
+ * This ensures consistency with the Hotmart API.
+ */
+
 interface UseMonthlyAnalysisProps {
   projectId: string | undefined;
   year: number;
@@ -46,6 +53,18 @@ export interface FunnelMonthlyData {
   };
 }
 
+// Type for sales from finance_tracking_view
+interface FinanceTrackingSale {
+  transaction_id: string;
+  gross_amount: number | null;
+  net_amount: number | null;
+  economic_day: string | null;
+  purchase_date: string | null;
+  offer_code: string | null;
+  funnel_id: string | null;
+  hotmart_status: string | null;
+}
+
 export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMonth }: UseMonthlyAnalysisProps) => {
   const startDate = startOfYear(new Date(year, 0, 1));
   const endDate = endOfYear(new Date(year, 0, 1));
@@ -57,25 +76,28 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
   const monthStartDate = selectedMonth ? startOfMonth(new Date(year, selectedMonth - 1, 1)) : null;
   const monthEndDate = selectedMonth ? endOfMonth(new Date(year, selectedMonth - 1, 1)) : null;
 
-  // Fetch sales data for primary year
+  // CANONICAL: Fetch sales data from finance_tracking_view for primary year
   const { data: salesData, isLoading: loadingSales } = useQuery({
-    queryKey: ['monthly-sales', projectId, year],
+    queryKey: ['monthly-sales-canonical', projectId, year],
     queryFn: async () => {
       if (!projectId) return [];
       
-      let allSales: any[] = [];
+      const startDateStr = format(startDate, 'yyyy-MM-dd');
+      const endDateStr = format(endDate, 'yyyy-MM-dd');
+      
+      let allSales: FinanceTrackingSale[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('*')
+          .from('finance_tracking_view')
+          .select('transaction_id, gross_amount, net_amount, economic_day, purchase_date, offer_code, funnel_id, hotmart_status')
           .eq('project_id', projectId)
-          .gte('sale_date', startDate.toISOString())
-          .lte('sale_date', endDate.toISOString())
-          .in('status', ['APPROVED', 'COMPLETE'])
+          .gte('economic_day', startDateStr)
+          .lte('economic_day', endDateStr)
+          .in('hotmart_status', ['APPROVED', 'COMPLETE'])
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) throw error;
@@ -84,31 +106,35 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
         page++;
       }
 
+      console.log(`[useMonthlyAnalysis] Loaded ${allSales.length} sales from finance_tracking_view for year ${year}`);
       return allSales;
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch sales data for comparison year
+  // CANONICAL: Fetch sales data from finance_tracking_view for comparison year
   const { data: comparisonSalesData, isLoading: loadingCompSales } = useQuery({
-    queryKey: ['monthly-sales', projectId, comparisonYear],
+    queryKey: ['monthly-sales-canonical', projectId, comparisonYear],
     queryFn: async () => {
       if (!projectId || !compStartDate || !compEndDate) return [];
       
-      let allSales: any[] = [];
+      const startDateStr = format(compStartDate, 'yyyy-MM-dd');
+      const endDateStr = format(compEndDate, 'yyyy-MM-dd');
+      
+      let allSales: FinanceTrackingSale[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('*')
+          .from('finance_tracking_view')
+          .select('transaction_id, gross_amount, net_amount, economic_day, purchase_date, offer_code, funnel_id, hotmart_status')
           .eq('project_id', projectId)
-          .gte('sale_date', compStartDate.toISOString())
-          .lte('sale_date', compEndDate.toISOString())
-          .in('status', ['APPROVED', 'COMPLETE'])
+          .gte('economic_day', startDateStr)
+          .lte('economic_day', endDateStr)
+          .in('hotmart_status', ['APPROVED', 'COMPLETE'])
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) throw error;
@@ -117,13 +143,14 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
         page++;
       }
 
+      console.log(`[useMonthlyAnalysis] Loaded ${allSales.length} sales from finance_tracking_view for comparison year ${comparisonYear}`);
       return allSales;
     },
     enabled: !!projectId && !!comparisonYear,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch meta insights for primary year
+  // Fetch meta insights for primary year (for investment data)
   const { data: metaInsights, isLoading: loadingInsights } = useQuery({
     queryKey: ['monthly-insights', projectId, year],
     queryFn: async () => {
@@ -147,9 +174,10 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
       while (hasMore) {
         const { data, error } = await supabase
           .from('meta_insights')
-          .select('*')
+          .select('spend, date_start, campaign_id, ad_id')
           .eq('project_id', projectId)
           .in('ad_account_id', accountIds)
+          .not('ad_id', 'is', null)
           .gte('date_start', format(startDate, 'yyyy-MM-dd'))
           .lte('date_stop', format(endDate, 'yyyy-MM-dd'))
           .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -190,9 +218,10 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
       while (hasMore) {
         const { data, error } = await supabase
           .from('meta_insights')
-          .select('*')
+          .select('spend, date_start, campaign_id, ad_id')
           .eq('project_id', projectId)
           .in('ad_account_id', accountIds)
+          .not('ad_id', 'is', null)
           .gte('date_start', format(compStartDate, 'yyyy-MM-dd'))
           .lte('date_stop', format(compEndDate, 'yyyy-MM-dd'))
           .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -280,26 +309,52 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
     }));
   }, [selectedMonth, year]);
 
-  // Helper function to calculate monthly data
+  // Helper function to deduplicate insights by ad_id + date
+  const deduplicateInsights = (insights: any[] | undefined) => {
+    if (!insights) return new Map<string, number>();
+    const spendMap = new Map<string, number>();
+    insights.forEach(i => {
+      if (i.spend && i.ad_id && i.date_start) {
+        const key = `${i.ad_id}_${i.date_start}`;
+        if (!spendMap.has(key)) {
+          spendMap.set(key, i.spend);
+        }
+      }
+    });
+    return spendMap;
+  };
+
+  // Helper function to calculate monthly data from CANONICAL source
   const calculateMonthlyData = (
-    sales: any[] | undefined,
+    sales: FinanceTrackingSale[] | undefined,
     insights: any[] | undefined,
     months: { month: string; monthIndex: number; monthLabel: string }[]
   ): MonthlyData[] => {
-    if (!sales || !insights) return [];
+    if (!sales) return [];
+
+    // Deduplicate insights
+    const spendMap = deduplicateInsights(insights);
+    
+    // Group spend by month
+    const monthlySpend = new Map<string, number>();
+    spendMap.forEach((spend, key) => {
+      const dateStr = key.split('_')[1]; // Extract date from key
+      if (dateStr) {
+        const month = dateStr.substring(0, 7); // yyyy-MM
+        monthlySpend.set(month, (monthlySpend.get(month) || 0) + spend);
+      }
+    });
 
     return months.map(({ month, monthLabel }) => {
+      // Use economic_day for month matching (CANONICAL)
       const monthSales = sales.filter(sale => {
-        if (!sale.sale_date) return false;
-        return format(parseISO(sale.sale_date), 'yyyy-MM') === month;
+        if (!sale.economic_day) return false;
+        return sale.economic_day.startsWith(month);
       });
 
-      const monthInsights = insights.filter(insight => {
-        return format(parseISO(insight.date_start), 'yyyy-MM') === month;
-      });
-
-      const revenue = monthSales.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0);
-      const investment = monthInsights.reduce((sum, insight) => sum + (insight.spend || 0), 0);
+      // Use gross_amount from finance_tracking_view (CANONICAL)
+      const revenue = monthSales.reduce((sum, sale) => sum + (sale.gross_amount || 0), 0);
+      const investment = monthlySpend.get(month) || 0;
       const grossProfit = revenue - investment;
       const roas = investment > 0 ? revenue / investment : 0;
 
@@ -310,31 +365,38 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
         revenue,
         grossProfit,
         roas,
-        sales: monthSales.length,
+        sales: monthSales.length, // COUNT(transaction_id) - already deduplicated in view
       };
     });
   };
 
-  // Helper function to calculate daily data
+  // Helper function to calculate daily data from CANONICAL source
   const calculateDailyData = (
-    sales: any[] | undefined,
+    sales: FinanceTrackingSale[] | undefined,
     insights: any[] | undefined,
     days: { day: string; dayNumber: number; dayLabel: string }[]
   ): DailyData[] => {
-    if (!sales || !insights) return [];
+    if (!sales) return [];
+
+    // Deduplicate insights
+    const spendMap = deduplicateInsights(insights);
+    
+    // Group spend by day
+    const dailySpend = new Map<string, number>();
+    spendMap.forEach((spend, key) => {
+      const dateStr = key.split('_')[1];
+      if (dateStr) {
+        dailySpend.set(dateStr, (dailySpend.get(dateStr) || 0) + spend);
+      }
+    });
 
     return days.map(({ day, dayNumber, dayLabel }) => {
-      const daySales = sales.filter(sale => {
-        if (!sale.sale_date) return false;
-        return format(parseISO(sale.sale_date), 'yyyy-MM-dd') === day;
-      });
+      // Use economic_day for day matching (CANONICAL)
+      const daySales = sales.filter(sale => sale.economic_day === day);
 
-      const dayInsights = insights.filter(insight => {
-        return format(parseISO(insight.date_start), 'yyyy-MM-dd') === day;
-      });
-
-      const revenue = daySales.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0);
-      const investment = dayInsights.reduce((sum, insight) => sum + (insight.spend || 0), 0);
+      // Use gross_amount from finance_tracking_view (CANONICAL)
+      const revenue = daySales.reduce((sum, sale) => sum + (sale.gross_amount || 0), 0);
+      const investment = dailySpend.get(day) || 0;
       const grossProfit = revenue - investment;
       const roas = investment > 0 ? revenue / investment : 0;
 
@@ -366,17 +428,16 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
   const dailyData = useMemo((): DailyData[] => {
     if (!selectedMonth || !salesData || !metaInsights) return [];
     
-    // Filter sales for the selected month
-    const monthSales = salesData.filter(sale => {
-      if (!sale.sale_date) return false;
-      const saleDate = parseISO(sale.sale_date);
-      return saleDate.getMonth() + 1 === selectedMonth && saleDate.getFullYear() === year;
-    });
+    // Filter sales for the selected month using economic_day (CANONICAL)
+    const monthStr = `${year}-${String(selectedMonth).padStart(2, '0')}`;
+    const monthSales = salesData.filter(sale => 
+      sale.economic_day?.startsWith(monthStr)
+    );
 
     // Filter insights for the selected month
     const monthInsights = metaInsights.filter(insight => {
-      const insightDate = parseISO(insight.date_start);
-      return insightDate.getMonth() + 1 === selectedMonth && insightDate.getFullYear() === year;
+      if (!insight.date_start) return false;
+      return insight.date_start.startsWith(monthStr);
     });
 
     return calculateDailyData(monthSales, monthInsights, daysOfMonth);
@@ -392,29 +453,54 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
   const funnelMonthlyData = useMemo((): FunnelMonthlyData[] => {
     if (!salesData || !metaInsights || !funnels || !mappings || !campaigns) return [];
 
+    // Deduplicate insights
+    const spendMap = deduplicateInsights(metaInsights);
+    
+    // Group spend by campaign_id and month
+    const campaignMonthlySpend = new Map<string, Map<string, number>>();
+    metaInsights?.forEach(i => {
+      if (i.spend && i.ad_id && i.date_start && i.campaign_id) {
+        const key = `${i.ad_id}_${i.date_start}`;
+        if (!spendMap.has(key)) return; // Skip if already processed (dedup)
+        
+        const month = i.date_start.substring(0, 7);
+        const campaignId = String(i.campaign_id);
+        
+        if (!campaignMonthlySpend.has(campaignId)) {
+          campaignMonthlySpend.set(campaignId, new Map());
+        }
+        const monthMap = campaignMonthlySpend.get(campaignId)!;
+        monthMap.set(month, (monthMap.get(month) || 0) + i.spend);
+      }
+    });
+
     return funnels.map(funnel => {
       const funnelMappings = mappings.filter(m => m.funnel_id === funnel.id || m.id_funil === funnel.id);
-      const offerCodes = funnelMappings.map(m => m.codigo_oferta).filter(Boolean);
+      const offerCodes = new Set(funnelMappings.map(m => m.codigo_oferta).filter(Boolean));
 
-      const pattern = funnel.campaign_name_pattern;
+      const pattern = funnel.campaign_name_pattern?.toLowerCase();
       const matchingCampaignIds = pattern
-        ? campaigns.filter(c => c.campaign_name?.toLowerCase().includes(pattern.toLowerCase())).map(c => c.campaign_id)
+        ? campaigns.filter(c => c.campaign_name?.toLowerCase().includes(pattern)).map(c => String(c.campaign_id))
         : [];
+      const matchingCampaignIdSet = new Set(matchingCampaignIds);
 
       const months = monthsOfYear.map(({ month, monthLabel }) => {
+        // Filter sales by offer_code and month using economic_day (CANONICAL)
         const monthSales = salesData.filter(sale => {
-          if (!sale.sale_date) return false;
-          const saleMonth = format(parseISO(sale.sale_date), 'yyyy-MM');
-          return saleMonth === month && offerCodes.includes(sale.offer_code);
+          if (!sale.economic_day) return false;
+          const saleMonth = sale.economic_day.substring(0, 7);
+          return saleMonth === month && offerCodes.has(sale.offer_code || '');
         });
 
-        const monthInsights = metaInsights.filter(insight => {
-          const insightMonth = format(parseISO(insight.date_start), 'yyyy-MM');
-          return insightMonth === month && matchingCampaignIds.includes(insight.campaign_id);
+        // Sum investment from matching campaigns for this month
+        let investment = 0;
+        matchingCampaignIdSet.forEach(campaignId => {
+          const monthSpend = campaignMonthlySpend.get(campaignId)?.get(month) || 0;
+          investment += monthSpend;
         });
 
-        const revenue = monthSales.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0);
-        const investment = monthInsights.reduce((sum, insight) => sum + (insight.spend || 0), 0);
+        // Use gross_amount from finance_tracking_view (CANONICAL)
+        const revenue = monthSales.reduce((sum, sale) => sum + (sale.gross_amount || 0), 0);
         const grossProfit = revenue - investment;
         const roas = investment > 0 ? revenue / investment : 0;
 
@@ -501,7 +587,11 @@ export const useMonthlyAnalysis = ({ projectId, year, comparisonYear, selectedMo
     dailyData,
     selectedMonthData,
     selectedMonthTotals,
-    isLoading: loadingSales || loadingInsights || loadingCompSales || loadingCompInsights,
+    isLoading: loadingSales || loadingCompSales || loadingInsights || loadingCompInsights,
+    year,
+    comparisonYear,
+    selectedMonth,
     funnels,
+    mappings,
   };
 };

@@ -2,14 +2,16 @@ import { useMemo } from 'react';
 import { format, eachDayOfInterval } from 'date-fns';
 
 /**
+ * CANONICAL Funnel AI Context Hook
+ * 
  * Computes COMPREHENSIVE AI context payload from frontend data.
- * This includes all funnel metrics for deep AI analysis:
- * - Position breakdown (FRONT, OB, UPSELL)
- * - Top campaigns/creatives
- * - Payment distribution
- * - LTV metrics
- * - Conversion funnel
- * - Daily trends
+ * 
+ * IMPORTANT: This hook expects data from finance_tracking_view (canonical source).
+ * All financial fields should use:
+ * - gross_amount (NOT total_price_brl)
+ * - net_amount (for net revenue)
+ * - economic_day (for date filtering)
+ * - purchase_date (for raw timestamp)
  */
 
 // ============= Types =============
@@ -17,14 +19,26 @@ import { format, eachDayOfInterval } from 'date-fns';
 interface SaleRecord {
   transaction_id?: string;
   id?: string;
-  offer_code?: string;
+  offer_code?: string | null;
+  // CANONICAL: Use gross_amount and net_amount from finance_tracking_view
+  gross_amount?: number | null;
+  net_amount?: number | null;
+  // LEGACY support (will be removed)
   total_price_brl?: number;
+  // CANONICAL: Use economic_day
+  economic_day?: string | null;
+  purchase_date?: string | null;
+  // LEGACY support
   sale_date?: string;
+  // Status
+  hotmart_status?: string | null;
   transaction_status?: string;
   status?: string;
-  product_name?: string;
-  buyer_email?: string;
-  payment_method?: string;
+  // Other fields
+  product_name?: string | null;
+  buyer_email?: string | null;
+  payment_method?: string | null;
+  recurrence?: number | null;
   installment_number?: number;
 }
 
@@ -181,6 +195,37 @@ const getActionValue = (actions: any[] | null, actionType: string): number => {
   return action ? parseInt(action.value || '0', 10) : 0;
 };
 
+/**
+ * Get revenue from sale record using CANONICAL fields
+ * Falls back to legacy fields for backwards compatibility
+ */
+const getSaleRevenue = (sale: SaleRecord): number => {
+  // CANONICAL: Use gross_amount from finance_tracking_view
+  if (sale.gross_amount !== undefined && sale.gross_amount !== null) {
+    return sale.gross_amount;
+  }
+  // LEGACY fallback (will be removed)
+  return sale.total_price_brl || 0;
+};
+
+/**
+ * Get sale date from record using CANONICAL fields
+ */
+const getSaleDate = (sale: SaleRecord): string | null => {
+  // CANONICAL: Use economic_day from finance_tracking_view
+  if (sale.economic_day) {
+    return sale.economic_day;
+  }
+  // LEGACY fallback
+  if (sale.purchase_date) {
+    return sale.purchase_date.split('T')[0];
+  }
+  if (sale.sale_date) {
+    return sale.sale_date.split('T')[0];
+  }
+  return null;
+};
+
 function computeLTVMetrics(sales: SaleRecord[]): LTVMetrics {
   if (sales.length === 0) {
     return {
@@ -198,7 +243,7 @@ function computeLTVMetrics(sales: SaleRecord[]): LTVMetrics {
   sales.forEach(sale => {
     const email = sale.buyer_email || 'unknown';
     const existing = customerData.get(email) || { totalSpent: 0, purchases: 0 };
-    existing.totalSpent += sale.total_price_brl || 0;
+    existing.totalSpent += getSaleRevenue(sale);
     existing.purchases += 1;
     customerData.set(email, existing);
   });
@@ -249,9 +294,11 @@ function computePaymentDistribution(sales: SaleRecord[]): PaymentMetrics[] {
     const method = sale.payment_method || 'UNKNOWN';
     const existing = byMethod.get(method) || { sales: 0, revenue: 0, installments: [] };
     existing.sales += 1;
-    existing.revenue += sale.total_price_brl || 0;
-    if (sale.installment_number) {
-      existing.installments.push(sale.installment_number);
+    existing.revenue += getSaleRevenue(sale);
+    // Use recurrence from finance_tracking_view or fallback to installment_number
+    const installment = sale.recurrence || sale.installment_number;
+    if (installment) {
+      existing.installments.push(installment);
     }
     byMethod.set(method, existing);
   });
@@ -324,7 +371,9 @@ export function computeFunnelAIContext(
 
   // Filter sales by funnel offers
   const funnelSales = salesData.filter(s => offerCodes.has(s.offer_code || ''));
-  const totalRevenue = funnelSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+  
+  // CANONICAL: Use gross_amount for revenue
+  const totalRevenue = funnelSales.reduce((sum, s) => sum + getSaleRevenue(s), 0);
   const totalSales = funnelSales.length;
 
   // ============= Position Breakdown =============
@@ -343,7 +392,7 @@ export function computeFunnelAIContext(
     const posKey = `${pos}${ordem || ''}`;
     const offerSales = funnelSales.filter(s => s.offer_code === offer.codigo_oferta);
     const salesCount = offerSales.length;
-    const salesRevenue = offerSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const salesRevenue = offerSales.reduce((sum, s) => sum + getSaleRevenue(s), 0);
     
     if (!positionDetails[posKey]) {
       positionDetails[posKey] = { vendas: 0, receita: 0, ordem, produtos: [] };
@@ -430,8 +479,6 @@ export function computeFunnelAIContext(
     }
   });
 
-  // TODO: Link sales to campaigns via UTM for accurate campaign-level revenue
-  // For now, we distribute revenue proportionally by spend
   const totalCampaignSpend = Array.from(campaignMetrics.values()).reduce((sum, c) => sum + c.spend, 0);
   
   const topCampaigns: CreativeMetrics[] = Array.from(campaignMetrics.entries())
@@ -570,13 +617,13 @@ export function computeFunnelAIContext(
     dailyMap.set(dateStr, { revenue: 0, investment: 0, sales: 0 });
   });
 
-  // Aggregate sales by day
+  // Aggregate sales by day using CANONICAL field (economic_day)
   funnelSales.forEach(s => {
-    if (s.sale_date) {
-      const dateStr = s.sale_date.split('T')[0];
+    const dateStr = getSaleDate(s);
+    if (dateStr) {
       const existing = dailyMap.get(dateStr);
       if (existing) {
-        existing.revenue += s.total_price_brl || 0;
+        existing.revenue += getSaleRevenue(s);
         existing.sales += 1;
       }
     }

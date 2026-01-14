@@ -8400,6 +8400,88 @@ export type Database = {
           },
         ]
       }
+      finance_tracking_view: {
+        Row: {
+          buyer_email: string | null
+          buyer_name: string | null
+          buyer_phone: string | null
+          buyer_phone_country_code: string | null
+          buyer_phone_ddd: string | null
+          contact_id: string | null
+          created_at: string | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          gross_amount: number | null
+          hotmart_status: string | null
+          id: string | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          net_amount: number | null
+          offer_code: string | null
+          payment_method: string | null
+          payment_type: string | null
+          product_code: string | null
+          product_name: string | null
+          project_id: string | null
+          purchase_date: string | null
+          recurrence: number | null
+          sale_category: string | null
+          transaction_id: string | null
+          updated_at: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_placement: string | null
+          utm_source: string | null
+          webhook_event_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_sales_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_daily: {
         Row: {
           ad_spend: number | null

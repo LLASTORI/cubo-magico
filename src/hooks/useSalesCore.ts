@@ -61,8 +61,25 @@ export interface UseSalesCoreResult {
 const applyViewFilters = (
   query: any,
   projectId: string,
-  filters: FilterParams
+  filters: FilterParams,
+  queryName: string = 'unknown'
 ) => {
+  // [FORENSIC] Log the filters being applied
+  console.log(`[FORENSIC][HOOK] applyViewFilters for ${queryName}`, {
+    projectId,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    transactionStatus: filters.transactionStatus,
+    idFunil: filters.idFunil,
+    productName: filters.productName,
+    offerCode: filters.offerCode,
+    utmSource: filters.utmSource,
+    utmCampaign: filters.utmCampaign,
+    utmAdset: filters.utmAdset,
+    utmPlacement: filters.utmPlacement,
+    utmCreative: filters.utmCreative,
+  });
+
   // Base filters
   query = query
     .eq('project_id', projectId)
@@ -84,6 +101,8 @@ const applyViewFilters = (
     const eventTypes = filters.transactionStatus.map(s => statusToEventType[s.toLowerCase()] || s.toLowerCase());
     const uniqueEventTypes = [...new Set(eventTypes)];
     
+    console.log(`[FORENSIC][HOOK] ${queryName} - Event types mapped:`, uniqueEventTypes);
+    
     if (uniqueEventTypes.length === 1) {
       query = query.eq('event_type', uniqueEventTypes[0]);
     } else if (uniqueEventTypes.length > 1) {
@@ -98,33 +117,41 @@ const applyViewFilters = (
   
   // Filter by funnel_id (UUID)
   if (filters.idFunil && filters.idFunil.length > 0) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying funnel_id filter:`, filters.idFunil);
     query = query.in('funnel_id', filters.idFunil);
   }
 
   // Filter by product name (exact match)
   if (filters.productName && filters.productName.length > 0) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying product_name filter:`, filters.productName);
     query = query.in('product_name', filters.productName);
   }
 
   // Filter by offer code
   if (filters.offerCode && filters.offerCode.length > 0) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying offer_code filter:`, filters.offerCode);
     query = query.in('offer_code', filters.offerCode);
   }
 
   // UTM filters (partial match with ilike)
   if (filters.utmSource) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying utm_source filter:`, filters.utmSource);
     query = query.ilike('utm_source', `%${filters.utmSource}%`);
   }
   if (filters.utmCampaign) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying utm_campaign filter:`, filters.utmCampaign);
     query = query.ilike('utm_campaign', `%${filters.utmCampaign}%`);
   }
   if (filters.utmAdset) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying utm_adset filter:`, filters.utmAdset);
     query = query.ilike('utm_adset', `%${filters.utmAdset}%`);
   }
   if (filters.utmPlacement) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying utm_placement filter:`, filters.utmPlacement);
     query = query.ilike('utm_placement', `%${filters.utmPlacement}%`);
   }
   if (filters.utmCreative) {
+    console.log(`[FORENSIC][HOOK] ${queryName} - Applying utm_creative filter:`, filters.utmCreative);
     query = query.ilike('utm_creative', `%${filters.utmCreative}%`);
   }
 
@@ -180,13 +207,16 @@ export function useSalesCore(): UseSalesCoreResult {
       const offset = (page - 1) * pageSize;
 
       // ========== QUERY 1: COUNT (for pagination) ==========
+      console.log('[FORENSIC][HOOK] Starting COUNT query...');
       let countQuery = supabase
         .from('sales_core_view')
         .select('id', { count: 'exact', head: true });
       
-      countQuery = applyViewFilters(countQuery, projectId, filters);
+      countQuery = applyViewFilters(countQuery, projectId, filters, 'COUNT');
 
       const { count: totalCount, error: countError } = await countQuery;
+
+      console.log('[FORENSIC][HOOK] COUNT query result:', { totalCount, countError });
 
       if (countError) {
         throw new Error(countError.message);
@@ -194,6 +224,8 @@ export function useSalesCore(): UseSalesCoreResult {
 
       const total = totalCount || 0;
       const totalPages = Math.ceil(total / pageSize);
+
+      console.log('[FORENSIC][HOOK] Pagination calculated:', { total, totalPages, page, pageSize });
 
       // Update pagination state
       setPagination({
@@ -220,16 +252,23 @@ export function useSalesCore(): UseSalesCoreResult {
       
       const fetchGlobalTotals = async () => {
         try {
+          console.log('[FORENSIC][HOOK] Starting TOTALS query...');
           let totalsQuery = supabase
             .from('sales_core_view')
             .select('gross_amount, net_amount, contact_id');
           
-          totalsQuery = applyViewFilters(totalsQuery, projectId, filters);
+          totalsQuery = applyViewFilters(totalsQuery, projectId, filters, 'TOTALS');
 
           const { data: totalsData, error: totalsError } = await totalsQuery;
 
+          console.log('[FORENSIC][HOOK] TOTALS query result:', { 
+            rowCount: totalsData?.length, 
+            totalsError,
+            sampleRows: totalsData?.slice(0, 3)
+          });
+
           if (totalsError) {
-            console.warn('Error fetching global totals:', totalsError);
+            console.warn('[FORENSIC][HOOK] Error fetching global totals:', totalsError);
             setTotals({
               totalTransactions: total,
               totalGrossRevenue: 0,
@@ -245,6 +284,13 @@ export function useSalesCore(): UseSalesCoreResult {
             const totalNetRevenue = totalsData.reduce((sum, row) => sum + (Number(row.net_amount) || 0), 0);
             const uniqueContacts = new Set(totalsData.map(row => row.contact_id).filter(Boolean));
             
+            console.log('[FORENSIC][HOOK] TOTALS calculated:', {
+              totalTransactions: totalsData.length,
+              totalGrossRevenue,
+              totalNetRevenue,
+              totalUniqueCustomers: uniqueContacts.size,
+            });
+            
             setTotals({
               totalTransactions: totalsData.length,
               totalGrossRevenue,
@@ -253,6 +299,7 @@ export function useSalesCore(): UseSalesCoreResult {
               loading: false,
             });
           } else {
+            console.log('[FORENSIC][HOOK] TOTALS - No data returned');
             setTotals({
               totalTransactions: 0,
               totalGrossRevenue: 0,
@@ -262,7 +309,7 @@ export function useSalesCore(): UseSalesCoreResult {
             });
           }
         } catch (err) {
-          console.warn('Error in global totals fetch:', err);
+          console.warn('[FORENSIC][HOOK] Error in global totals fetch:', err);
           setTotals(prev => ({ ...prev, loading: false }));
         }
       };
@@ -271,6 +318,7 @@ export function useSalesCore(): UseSalesCoreResult {
       fetchGlobalTotals();
 
       // ========== QUERY 3: PAGE DATA (with pagination, same filters) ==========
+      console.log('[FORENSIC][HOOK] Starting PAGE query...', { page, pageSize, offset });
       let pageQuery = supabase
         .from('sales_core_view')
         .select(`
@@ -296,15 +344,26 @@ export function useSalesCore(): UseSalesCoreResult {
         .order('economic_day', { ascending: false })
         .range(offset, offset + pageSize - 1);
       
-      pageQuery = applyViewFilters(pageQuery, projectId, filters);
+      pageQuery = applyViewFilters(pageQuery, projectId, filters, 'PAGE');
 
       const { data: pageData, error: pageError } = await pageQuery;
+
+      console.log('[FORENSIC][HOOK] PAGE query result:', { 
+        rowCount: pageData?.length, 
+        pageError,
+        sampleRows: pageData?.slice(0, 3)?.map(r => ({ 
+          transaction_id: r.transaction_id, 
+          funnel_id: r.funnel_id, 
+          funnel_name: r.funnel_name 
+        }))
+      });
 
       if (pageError) {
         throw new Error(pageError.message);
       }
 
       if (!pageData || pageData.length === 0) {
+        console.log('[FORENSIC][HOOK] PAGE - No data returned');
         setSales([]);
         return;
       }
@@ -318,6 +377,11 @@ export function useSalesCore(): UseSalesCoreResult {
           groupedByTx.set(txId, row);
         }
       }
+
+      console.log('[FORENSIC][HOOK] PAGE - After deduplication:', { 
+        rawRows: pageData.length, 
+        uniqueTransactions: groupedByTx.size 
+      });
 
       const transformedSales: CoreSaleItem[] = [];
       
@@ -353,6 +417,11 @@ export function useSalesCore(): UseSalesCoreResult {
       transformedSales.sort((a, b) => {
         if (!a.economicDay || !b.economicDay) return 0;
         return b.economicDay.localeCompare(a.economicDay);
+      });
+
+      console.log('[FORENSIC][HOOK] Final transformed sales:', { 
+        count: transformedSales.length,
+        sampleFunnels: transformedSales.slice(0, 5).map(s => ({ tx: s.transaction, funnel: s.funnelName }))
       });
 
       setSales(transformedSales);

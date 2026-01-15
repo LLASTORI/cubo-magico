@@ -361,9 +361,22 @@ async function runBackfill(
     // Use BACKFILL suffix to mark synthetic events
     const providerEventId = `hotmart_${sale.transaction_id}_BACKFILL`;
     
-    // Calculate amounts - use total_price as gross, net_revenue if available
+    // =====================================================
+    // FINANCIAL VALUES - ARCHITECTURAL DECISION
+    // =====================================================
+    // BACKFILL does NOT set accurate net_amount because:
+    //   1. API data lacks reliable commission breakdown
+    //   2. Financial accuracy must come from webhooks or CSV
+    //
+    // We set net_amount = 0 to indicate "needs reconciliation"
+    // The gross_amount is set for reference only.
+    //
+    // To get accurate financials, use:
+    //   - Hotmart webhooks (real-time with commissions[])
+    //   - CSV import from Hotmart financial reports
+    // =====================================================
     const grossAmount = sale.total_price || sale.product_price || 0;
-    const netAmount = sale.net_revenue || grossAmount * 0.9; // Fallback: estimate 90% if no net
+    const netAmount = 0; // INTENTIONALLY ZERO - backfill cannot determine accurate net
 
     // Build attribution from UTM fields
     const attribution: Record<string, any> = {

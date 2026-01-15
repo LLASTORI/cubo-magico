@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveProjectFromRequest } from '../_shared/projectResolver.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,25 +25,56 @@ Deno.serve(async (req) => {
     const internalKey = req.headers.get('X-Cubo-Internal-Key') || req.headers.get('x-cubo-internal-key');
     const isInternalCall = internalKey && CUBO_INTERNAL_KEY && internalKey === CUBO_INTERNAL_KEY;
 
-    // Get project_id from query params or body
+    // Resolve project from public code or fallback to legacy project_id
+    // Supports: ?project=cm_50r2xr (preferred) or X-Project-Code header or ?project_id=uuid (legacy)
     const url = new URL(req.url);
-    let projectId = url.searchParams.get('project_id');
+    const projectCode = url.searchParams.get('project') || req.headers.get('X-Project-Code');
     
-    if (!projectId && req.method === 'POST') {
-      const body = await req.json().catch(() => ({}));
-      projectId = body.project_id;
+    let projectId: string | null = null;
+    let resolvedCode: string | null = null;
+    
+    if (projectCode) {
+      // Resolve public_code to internal UUID
+      const { data: project, error } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('public_code', projectCode)
+        .maybeSingle();
+      
+      if (error || !project) {
+        console.error('[hotmart-credentials-export] Invalid project code:', projectCode, error);
+        return new Response(
+          JSON.stringify({ error: `Invalid project code: ${projectCode}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      projectId = project.id;
+      resolvedCode = projectCode;
+      console.log(`[hotmart-credentials-export] Resolved "${projectCode}" → internal ID`);
+    } else {
+      // Legacy fallback: accept project_id directly (for backward compatibility)
+      projectId = url.searchParams.get('project_id');
+      
+      if (!projectId && req.method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        projectId = body.project_id;
+      }
     }
 
     if (!projectId) {
       return new Response(
-        JSON.stringify({ error: 'project_id required as query param or in body' }),
+        JSON.stringify({ 
+          error: 'Project identification required',
+          hint: 'Use ?project=PUBLIC_CODE (preferred) or X-Project-Code header'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // If internal VPS call with valid key, skip user auth
     if (isInternalCall) {
-      console.log(`[hotmart-credentials-export] VPS internal call authenticated for project: ${projectId}`);
+      console.log(`[hotmart-credentials-export] VPS internal call authenticated for project: ${resolvedCode || 'legacy-uuid'}`);
     } else {
       // Regular user authentication flow
       const authHeader = req.headers.get('Authorization');
@@ -67,7 +99,6 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[hotmart-credentials-export] User authenticated: ${user.id}`);
-      console.log(`[hotmart-credentials-export] Checking access for project: ${projectId}`);
 
       // Check if user is owner or manager of this project
       const { data: projectOwner } = await supabase
@@ -141,7 +172,7 @@ Deno.serve(async (req) => {
     }
 
     // SECURITY: Only log that we're returning, NOT the actual values
-    console.log(`[hotmart-credentials-export] Successfully returning credentials for project ${projectId}`);
+    console.log(`[hotmart-credentials-export] Successfully returning credentials for project ${resolvedCode || 'legacy'}`);
 
     // Return only client_id and client_secret
     return new Response(

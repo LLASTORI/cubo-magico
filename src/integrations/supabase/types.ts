@@ -3362,6 +3362,7 @@ export type Database = {
           product_name: string
           product_price: number | null
           project_id: string
+          raw_checkout_origin: string | null
           received_value: number | null
           recurrence: number | null
           sale_attribution_type: string | null
@@ -3378,10 +3379,12 @@ export type Database = {
           updated_at: string
           utm_adset_name: string | null
           utm_campaign_id: string | null
+          utm_content: string | null
           utm_creative: string | null
           utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
+          utm_term: string | null
         }
         Insert: {
           affiliate_code?: string | null
@@ -3439,6 +3442,7 @@ export type Database = {
           product_name: string
           product_price?: number | null
           project_id: string
+          raw_checkout_origin?: string | null
           received_value?: number | null
           recurrence?: number | null
           sale_attribution_type?: string | null
@@ -3455,10 +3459,12 @@ export type Database = {
           updated_at?: string
           utm_adset_name?: string | null
           utm_campaign_id?: string | null
+          utm_content?: string | null
           utm_creative?: string | null
           utm_medium?: string | null
           utm_placement?: string | null
           utm_source?: string | null
+          utm_term?: string | null
         }
         Update: {
           affiliate_code?: string | null
@@ -3516,6 +3522,7 @@ export type Database = {
           product_name?: string
           product_price?: number | null
           project_id?: string
+          raw_checkout_origin?: string | null
           received_value?: number | null
           recurrence?: number | null
           sale_attribution_type?: string | null
@@ -3532,10 +3539,12 @@ export type Database = {
           updated_at?: string
           utm_adset_name?: string | null
           utm_campaign_id?: string | null
+          utm_content?: string | null
           utm_creative?: string | null
           utm_medium?: string | null
           utm_placement?: string | null
           utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: [
           {

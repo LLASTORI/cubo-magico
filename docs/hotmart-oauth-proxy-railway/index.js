@@ -35,6 +35,23 @@ let cachedToken = null;
 let tokenExpiresAt = 0;
 
 /**
+ * Browser-like headers to bypass Hotmart WAF/CloudFront
+ */
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Origin": "https://developers.hotmart.com",
+  "Referer": "https://developers.hotmart.com/",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "same-site",
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+};
+
+/**
  * Get Hotmart OAuth token (with caching)
  */
 async function getHotmartToken() {
@@ -49,8 +66,8 @@ async function getHotmartToken() {
   const response = await fetch("https://developers.hotmart.com/oauth/token", {
     method: "POST",
     headers: {
+      ...BROWSER_HEADERS,
       "Content-Type": "application/x-www-form-urlencoded",
-      "Accept": "application/json",
     },
     body: new URLSearchParams({
       grant_type: "client_credentials",
@@ -128,12 +145,12 @@ app.post("/hotmart", async (req, res) => {
 
     console.log(`[PROXY] ${method} ${url}`);
 
-    // Make request to Hotmart
+    // Make request to Hotmart with browser-like headers
     const fetchOptions = {
       method,
       headers: {
+        ...BROWSER_HEADERS,
         "Authorization": `Bearer ${token}`,
-        "Accept": "application/json",
       },
     };
 

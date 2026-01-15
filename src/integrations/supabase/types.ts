@@ -8846,6 +8846,7 @@ export type Database = {
           product_name: string | null
           project_id: string | null
           provider: string | null
+          raw_checkout_origin: string | null
           recurrence: number | null
           refunds: number | null
           sale_category: string | null
@@ -8854,10 +8855,12 @@ export type Database = {
           transaction_id: string | null
           utm_adset: string | null
           utm_campaign: string | null
+          utm_content: string | null
           utm_creative: string | null
           utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
+          utm_term: string | null
         }
         Relationships: [
           {
@@ -9155,12 +9158,10 @@ export type Database = {
       }
       live_project_totals_today: {
         Row: {
-          data_source: string | null
+          cpa: number | null
           economic_day: string | null
-          is_estimated: boolean | null
-          overall_cpa: number | null
-          overall_roas: number | null
           project_id: string | null
+          roas: number | null
           total_affiliate_fees: number | null
           total_coproducer_fees: number | null
           total_gross_revenue: number | null
@@ -9174,19 +9175,25 @@ export type Database = {
       }
       live_sales_today: {
         Row: {
-          affiliate_fees: number | null
-          coproducer_fees: number | null
-          data_source: string | null
+          affiliate_cost: number | null
+          buyer_email: string | null
+          coproducer_cost: number | null
           economic_day: string | null
           funnel_id: string | null
-          funnel_name: string | null
-          gross_revenue: number | null
-          is_estimated: boolean | null
-          platform_fees: number | null
+          gross_amount: number | null
+          net_revenue: number | null
+          offer_code: string | null
+          platform_fee: number | null
+          product_name: string | null
           project_id: string | null
-          revenue: number | null
-          sales_count: number | null
-          unique_buyers: number | null
+          raw_checkout_origin: string | null
+          status: string | null
+          transaction_id: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
         }
         Relationships: [
           {

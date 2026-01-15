@@ -991,6 +991,14 @@ serve(async (req) => {
       total_price_brl: totalPriceBrl,
       exchange_rate_used: exchangeRateUsed,
       net_revenue: ownerNetRevenue, // CORRECT: PRODUCER commission = "Você recebeu"
+      // ============================================
+      // FINANCIAL BREAKDOWN - persisted at ingestion
+      // ============================================
+      gross_amount: totalPriceBrl,           // Valor pago pelo comprador (em BRL)
+      platform_fee: platformFee,             // Taxa Hotmart (MARKETPLACE)
+      affiliate_cost: affiliateAmount,       // Comissão afiliado (AFFILIATE)
+      coproducer_cost: coproducerAmount,     // Comissão coprodutor (CO_PRODUCER)
+      net_amount: ownerNetRevenue,           // Líquido do owner (PRODUCER)
       status,
       sale_date: saleDate,
       confirmation_date: confirmationDate,

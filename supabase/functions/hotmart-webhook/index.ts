@@ -47,11 +47,28 @@ function calculateEconomicDay(occurredAt: Date, timezone: string = 'America/Sao_
 }
 
 // ============================================
-// UTM PARSING FROM CHECKOUT ORIGIN
+// SCK → UTM CONVERSION (Hotmart-Only)
 // ============================================
-// Format: "Meta-Ads|campaign_name_with_id|adset_name_with_id|placement|creative_name_with_id"
-// OR: "source|campaign|adset|placement|creative"
-// OR: "wpp|g-amg|||" (WhatsApp organic)
+// A Hotmart não trabalha com UTMs padrão.
+// Ela usa SCK (Serial Checkout Key), que é um pacote de UTMs serializado por posição.
+//
+// No tráfego (Meta Ads, Google Ads, etc), o padrão Cubo Mágico é:
+//   utm_source   = Meta-Ads
+//   utm_medium   = {{adset.name}}_{{adset.id}}
+//   utm_campaign = {{campaign.name}}_{{campaign.id}}
+//   utm_term     = {{placement}}
+//   utm_content  = {{ad.name}}_{{ad.id}}
+//
+// Na página de vendas, um script transforma isso em:
+//   sck = utm_source | utm_medium | utm_campaign | utm_term | utm_content
+//
+// Este parser reverte o SCK de volta para UTMs padrão:
+//   parts[0] → utm_source
+//   parts[1] → utm_medium (ex: 00_ADVANTAGE_6845240173892)
+//   parts[2] → utm_campaign (ex: PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA_6845240176292)
+//   parts[3] → utm_term (ex: Instagram_Stories)
+//   parts[4] → utm_content (ex: Teste—VENDA_TRAFEGO_102_MAKE_13_MINUTOS_6858871344292)
+//   parts[5+] → extra_params (ex: page_name)
 // ============================================
 
 interface ParsedUTMs {
@@ -60,27 +77,34 @@ interface ParsedUTMs {
   utm_campaign: string | null;
   utm_content: string | null;
   utm_term: string | null;
-  utm_placement: string | null;
-  utm_adset: string | null;
-  utm_creative: string | null;
+  raw_checkout_origin: string | null;
+  // Meta IDs extracted from names (suffix numbers)
   meta_campaign_id: string | null;
   meta_adset_id: string | null;
   meta_ad_id: string | null;
+  // Extra params (page_name, etc.)
+  extra_params: string | null;
 }
 
-function parseCheckoutOriginToUTMs(checkoutOrigin: string | null): ParsedUTMs {
+/**
+ * Convert Hotmart SCK (Serial Checkout Key) back to standard UTM parameters.
+ * This is ONLY for Hotmart provider - other providers send UTMs directly.
+ * 
+ * @param checkoutOrigin The raw SCK string from Hotmart webhook (purchase.origin.sck)
+ * @returns Parsed UTM parameters in Cubo Mágico standard format
+ */
+function parseSCKtoUTMs(checkoutOrigin: string | null): ParsedUTMs {
   const result: ParsedUTMs = {
     utm_source: null,
     utm_medium: null,
     utm_campaign: null,
     utm_content: null,
     utm_term: null,
-    utm_placement: null,
-    utm_adset: null,
-    utm_creative: null,
+    raw_checkout_origin: checkoutOrigin, // Always store the raw value
     meta_campaign_id: null,
     meta_adset_id: null,
     meta_ad_id: null,
+    extra_params: null,
   };
   
   if (!checkoutOrigin || checkoutOrigin.trim() === '') {
@@ -89,95 +113,85 @@ function parseCheckoutOriginToUTMs(checkoutOrigin: string | null): ParsedUTMs {
   
   const parts = checkoutOrigin.split('|').map(p => p.trim());
   
-  // Extract source from first part
-  const source = parts[0] || null;
-  if (source) {
-    // Normalize common sources
-    const sourceLower = source.toLowerCase();
-    if (sourceLower === 'meta-ads' || sourceLower === 'facebook' || sourceLower === 'fb') {
-      result.utm_source = 'facebook';
-      result.utm_medium = 'paid';
-    } else if (sourceLower === 'wpp' || sourceLower === 'whatsapp') {
-      result.utm_source = 'whatsapp';
-      result.utm_medium = 'organic';
-    } else if (sourceLower === 'google' || sourceLower === 'gads') {
-      result.utm_source = 'google';
-      result.utm_medium = 'paid';
-    } else if (sourceLower === 'organic' || sourceLower === 'direto') {
-      result.utm_source = 'direct';
-      result.utm_medium = 'organic';
-    } else {
-      result.utm_source = source;
-      result.utm_medium = 'unknown';
-    }
+  // parts[0] = utm_source (ex: "Meta-Ads", "wpp", "google")
+  // KEEP AS-IS - não normalizar para manter consistência com o tráfego original
+  if (parts.length >= 1 && parts[0]) {
+    result.utm_source = parts[0];
   }
   
-  // Parse remaining parts: campaign, adset, placement, creative
+  // parts[1] = utm_medium (ex: "00_ADVANTAGE_6845240173892")
+  // Este é o adset.name_adset.id do Meta
   if (parts.length >= 2 && parts[1]) {
-    result.utm_campaign = parts[1];
-    // Extract Meta campaign ID (numbers at end of campaign name)
-    const campaignIdMatch = parts[1].match(/_(\d{10,})$/);
-    if (campaignIdMatch) {
-      result.meta_campaign_id = campaignIdMatch[1];
-    }
-  }
-  
-  if (parts.length >= 3 && parts[2]) {
-    result.utm_adset = parts[2];
-    // Extract Meta adset ID
-    const adsetIdMatch = parts[2].match(/_(\d{10,})$/);
+    result.utm_medium = parts[1];
+    // Extract Meta adset ID from medium (numbers at end)
+    const adsetIdMatch = parts[1].match(/_(\d{10,})$/);
     if (adsetIdMatch) {
       result.meta_adset_id = adsetIdMatch[1];
     }
   }
   
-  if (parts.length >= 4 && parts[3]) {
-    result.utm_placement = parts[3];
-    // Normalize placement to medium if not already set
-    const placement = parts[3].toLowerCase();
-    if (placement.includes('instagram')) {
-      result.utm_medium = 'instagram';
-    } else if (placement.includes('facebook')) {
-      result.utm_medium = 'facebook';
-    } else if (placement === 'an') {
-      result.utm_medium = 'audience_network';
+  // parts[2] = utm_campaign (ex: "PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA_6845240176292")
+  // Este é o campaign.name_campaign.id do Meta
+  if (parts.length >= 3 && parts[2]) {
+    result.utm_campaign = parts[2];
+    // Extract Meta campaign ID (numbers at end)
+    const campaignIdMatch = parts[2].match(/_(\d{10,})$/);
+    if (campaignIdMatch) {
+      result.meta_campaign_id = campaignIdMatch[1];
     }
   }
   
+  // parts[3] = utm_term (ex: "Instagram_Stories", "Facebook_Mobile_Feed")
+  // Este é o placement do Meta
+  if (parts.length >= 4 && parts[3]) {
+    result.utm_term = parts[3];
+  }
+  
+  // parts[4] = utm_content (ex: "Teste—VENDA_TRAFEGO_102_MAKE_13_MINUTOS_6858871344292")
+  // Este é o ad.name_ad.id do Meta
   if (parts.length >= 5 && parts[4]) {
-    result.utm_creative = parts[4];
-    result.utm_content = parts[4]; // Also set as utm_content for compatibility
-    // Extract Meta ad ID
+    result.utm_content = parts[4];
+    // Extract Meta ad ID (numbers at end)
     const adIdMatch = parts[4].match(/_(\d{10,})$/);
     if (adIdMatch) {
       result.meta_ad_id = adIdMatch[1];
     }
   }
   
+  // parts[5+] = extra_params (ex: "page_name=hm-make-pratica-2")
+  if (parts.length >= 6) {
+    result.extra_params = parts.slice(5).join('|');
+  }
+  
   return result;
 }
 
-// Extract attribution data from tracking/UTM
+// Alias for backwards compatibility
+const parseCheckoutOriginToUTMs = parseSCKtoUTMs;
+
+// Extract attribution data from tracking/UTM (for sales_core_events and finance_ledger)
 function extractAttribution(purchase: any, checkoutOrigin: string | null): Record<string, any> {
   const tracking = purchase?.origin || {};
   const sck = tracking?.sck || checkoutOrigin || '';
   
-  // Parse checkout_origin into structured UTMs
-  const parsedUTMs = parseCheckoutOriginToUTMs(sck);
+  // Parse SCK into standard UTMs
+  const parsedUTMs = parseSCKtoUTMs(sck);
   
   return {
-    utm_source: parsedUTMs.utm_source,
-    utm_medium: parsedUTMs.utm_medium,
-    utm_campaign: parsedUTMs.utm_campaign,
-    utm_content: parsedUTMs.utm_content,
-    utm_term: parsedUTMs.utm_term,
-    utm_placement: parsedUTMs.utm_placement,
-    utm_adset: parsedUTMs.utm_adset,
-    utm_creative: parsedUTMs.utm_creative,
+    // Standard UTM fields - following Cubo Mágico convention
+    utm_source: parsedUTMs.utm_source,     // ex: "Meta-Ads"
+    utm_medium: parsedUTMs.utm_medium,     // ex: "00_ADVANTAGE_6845240173892" (adset)
+    utm_campaign: parsedUTMs.utm_campaign, // ex: "PERPETUO_MAKEPRATICA13M..." (campaign)
+    utm_term: parsedUTMs.utm_term,         // ex: "Instagram_Stories" (placement)
+    utm_content: parsedUTMs.utm_content,   // ex: "Teste—VENDA_TRAFEGO..." (creative)
+    // Meta IDs extracted from names
     meta_campaign_id: parsedUTMs.meta_campaign_id,
     meta_adset_id: parsedUTMs.meta_adset_id,
     meta_ad_id: parsedUTMs.meta_ad_id,
-    hotmart_checkout_source: sck,
+    // Raw checkout origin for debugging
+    raw_checkout_origin: parsedUTMs.raw_checkout_origin,
+    extra_params: parsedUTMs.extra_params,
+    // Hotmart tracking fields
     src: tracking?.src || null,
     xcod: tracking?.xcod || null,
   };
@@ -847,12 +861,15 @@ serve(async (req) => {
     console.log('[UTM Parsing] Parsed UTMs:', JSON.stringify(parsedUTMs));
     
     // Extract parsed values for hotmart_sales columns
+    // Following PROMPT 6 SCK→UTM mapping:
+    // parts[0] → utm_source, parts[1] → utm_medium, parts[2] → utm_campaign,
+    // parts[3] → utm_term, parts[4] → utm_content
     const utmSource = parsedUTMs.utm_source;
     const utmMedium = parsedUTMs.utm_medium;
     const utmCampaign = parsedUTMs.utm_campaign;
-    const utmAdset = parsedUTMs.utm_adset;
-    const utmPlacement = parsedUTMs.utm_placement;
-    const utmCreative = parsedUTMs.utm_creative;
+    const utmTerm = parsedUTMs.utm_term;
+    const utmContent = parsedUTMs.utm_content;
+    const rawCheckoutOrigin = parsedUTMs.raw_checkout_origin;
     const metaCampaignIdExtracted = parsedUTMs.meta_campaign_id;
     const metaAdsetIdExtracted = parsedUTMs.meta_adset_id;
     const metaAdIdExtracted = parsedUTMs.meta_ad_id;
@@ -1000,14 +1017,15 @@ serve(async (req) => {
       // Affiliate
       affiliate_code: affiliate?.affiliate_code || null,
       affiliate_name: affiliate?.name || null,
-      // UTM/Origin - Now properly parsed from checkout_origin
-      checkout_origin: checkoutOrigin,
-      utm_source: utmSource,
-      utm_medium: utmMedium,
-      utm_campaign_id: utmCampaign, // Store campaign name (ID is extracted separately)
-      utm_adset_name: utmAdset,     // Store adset name
-      utm_creative: utmCreative,
-      utm_placement: utmPlacement,
+      // UTM/Origin - PROMPT 6: SCK→UTM standard mapping
+      // parts[0]=source, [1]=medium, [2]=campaign, [3]=term, [4]=content
+      checkout_origin: rawCheckoutOrigin, // Store raw SCK for debugging
+      utm_source: utmSource,              // ex: "Meta-Ads"
+      utm_medium: utmMedium,              // ex: "00_ADVANTAGE_6845240173892"
+      utm_campaign_id: utmCampaign,       // ex: "PERPETUO_MAKEPRATICA13M..."
+      utm_adset_name: utmMedium,          // Same as utm_medium (adset name is in medium)
+      utm_creative: utmContent,           // ex: "Teste—VENDA_TRAFEGO..."
+      utm_placement: utmTerm,             // ex: "Instagram_Stories"
       meta_campaign_id_extracted: metaCampaignIdExtracted,
       meta_adset_id_extracted: metaAdsetIdExtracted,
       meta_ad_id_extracted: metaAdIdExtracted,

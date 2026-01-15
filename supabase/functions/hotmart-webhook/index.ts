@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ============================================
 // SALES CORE PROVIDER - Hotmart Revenue Ingestion
+// FINANCE LEDGER - Primary Financial Source (Webhook Only)
 // ============================================
 
 // Map Hotmart events to canonical event types
@@ -17,6 +18,24 @@ const hotmartToCanonicalEventType: Record<string, string> = {
   'PURCHASE_RECURRENCE_CANCELLATION': 'refund',
   'SWITCH_PLAN': 'upgrade',
 };
+
+// Map Hotmart events to ledger entry types
+const hotmartToLedgerEventType: Record<string, string> = {
+  'PURCHASE_APPROVED': 'credit',
+  'PURCHASE_COMPLETE': 'credit',
+  'PURCHASE_CANCELED': 'refund',
+  'PURCHASE_REFUNDED': 'refund',
+  'PURCHASE_CHARGEBACK': 'chargeback',
+  'SUBSCRIPTION_STARTED': 'credit',
+  'PURCHASE_RECURRENCE_CANCELLATION': 'refund',
+  'SWITCH_PLAN': 'credit',
+};
+
+// Events that represent money coming IN
+const creditEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE', 'SUBSCRIPTION_STARTED', 'SWITCH_PLAN'];
+
+// Events that represent money going OUT (inverted amounts)
+const debitEvents = ['PURCHASE_CANCELED', 'PURCHASE_REFUNDED', 'PURCHASE_CHARGEBACK', 'PURCHASE_RECURRENCE_CANCELLATION'];
 
 // Calculate economic_day from occurred_at in project timezone (default Brazil UTC-3)
 function calculateEconomicDay(occurredAt: Date, timezone: string = 'America/Sao_Paulo'): string {
@@ -63,6 +82,177 @@ async function logProviderEvent(
     });
   } catch (error) {
     console.error('[SalesCore] Error logging provider event:', error);
+  }
+}
+
+// ============================================
+// FINANCE LEDGER - Primary Financial Entry Point
+// ============================================
+interface LedgerEntry {
+  project_id: string;
+  provider: string;
+  transaction_id: string;
+  hotmart_sale_id: string | null;
+  event_type: string;
+  actor_type: string;
+  actor_id: string | null;
+  amount: number;
+  currency: string;
+  occurred_at: string;
+  source_api: string;
+  raw_payload: any;
+}
+
+// Parse commissions from webhook to immutable ledger entries
+function parseCommissionsToLedgerEntries(
+  projectId: string,
+  transactionId: string,
+  commissions: any[],
+  occurredAt: Date,
+  hotmartEvent: string,
+  affiliateData: any,
+  producerData: any,
+  rawPayload: any
+): LedgerEntry[] {
+  const entries: LedgerEntry[] = [];
+  const occurredAtStr = occurredAt.toISOString();
+  
+  // Determine if this is a debit event (money going out)
+  const isDebit = debitEvents.includes(hotmartEvent);
+
+  for (const comm of commissions) {
+    const source = (comm.source || '').toUpperCase();
+    let value = comm.value ?? 0;
+    
+    if (value === 0) continue;
+
+    // For refunds/chargebacks, amounts should be NEGATIVE to reverse the ledger
+    if (isDebit) {
+      value = -Math.abs(value);
+    }
+
+    let eventType: string;
+    let actorType: string;
+    let actorId: string | null = null;
+
+    switch (source) {
+      case 'MARKETPLACE':
+        eventType = 'platform_fee';
+        actorType = 'platform';
+        actorId = 'hotmart';
+        break;
+      case 'PRODUCER':
+        eventType = isDebit ? hotmartToLedgerEventType[hotmartEvent] || 'refund' : 'credit';
+        actorType = 'producer';
+        break;
+      case 'CO_PRODUCER':
+        eventType = 'coproducer';
+        actorType = 'coproducer';
+        actorId = producerData?.name || null;
+        break;
+      case 'AFFILIATE':
+        eventType = 'affiliate';
+        actorType = 'affiliate';
+        actorId = affiliateData?.affiliate_code || affiliateData?.name || null;
+        break;
+      default:
+        console.log(`[FinanceLedger] Unknown commission source: ${source}`);
+        continue;
+    }
+
+    entries.push({
+      project_id: projectId,
+      provider: 'hotmart',
+      transaction_id: transactionId,
+      hotmart_sale_id: transactionId,
+      event_type: eventType,
+      actor_type: actorType,
+      actor_id: actorId,
+      amount: value,
+      currency: comm.currency_code || comm.currency_value || 'BRL',
+      occurred_at: occurredAtStr,
+      source_api: 'webhook',
+      raw_payload: comm,
+    });
+  }
+
+  return entries;
+}
+
+// Write entries to finance_ledger (immutable, append-only)
+async function writeFinanceLedgerEntries(
+  supabase: any,
+  entries: LedgerEntry[]
+): Promise<{ written: number; skipped: number }> {
+  let written = 0;
+  let skipped = 0;
+
+  for (const entry of entries) {
+    try {
+      // Attempt insert - unique constraint will prevent duplicates
+      const { error } = await supabase
+        .from('finance_ledger')
+        .insert(entry);
+
+      if (error) {
+        if (error.code === '23505') {
+          // Duplicate - already exists, this is expected for webhook retries
+          console.log(`[FinanceLedger] Entry already exists for ${entry.transaction_id}/${entry.event_type}/${entry.actor_type}`);
+          skipped++;
+        } else {
+          console.error('[FinanceLedger] Error inserting entry:', error);
+        }
+      } else {
+        written++;
+        console.log(`[FinanceLedger] Wrote ${entry.event_type} for ${entry.actor_type}: ${entry.amount}`);
+      }
+    } catch (err) {
+      console.error('[FinanceLedger] Exception inserting entry:', err);
+    }
+  }
+
+  return { written, skipped };
+}
+
+// Lookup previous transaction values for inheritance (refunds without commissions)
+async function lookupPreviousTransactionValues(
+  supabase: any,
+  projectId: string,
+  transactionId: string
+): Promise<{ producerAmount: number | null; platformFee: number | null; affiliateAmount: number | null; coproducerAmount: number | null }> {
+  try {
+    const { data } = await supabase
+      .from('finance_ledger')
+      .select('event_type, actor_type, amount')
+      .eq('project_id', projectId)
+      .eq('transaction_id', transactionId)
+      .eq('provider', 'hotmart');
+
+    if (!data || data.length === 0) {
+      return { producerAmount: null, platformFee: null, affiliateAmount: null, coproducerAmount: null };
+    }
+
+    let producerAmount: number | null = null;
+    let platformFee: number | null = null;
+    let affiliateAmount: number | null = null;
+    let coproducerAmount: number | null = null;
+
+    for (const entry of data) {
+      if (entry.actor_type === 'producer' && entry.event_type === 'credit') {
+        producerAmount = Math.abs(entry.amount);
+      } else if (entry.actor_type === 'platform') {
+        platformFee = Math.abs(entry.amount);
+      } else if (entry.actor_type === 'affiliate') {
+        affiliateAmount = Math.abs(entry.amount);
+      } else if (entry.actor_type === 'coproducer') {
+        coproducerAmount = Math.abs(entry.amount);
+      }
+    }
+
+    return { producerAmount, platformFee, affiliateAmount, coproducerAmount };
+  } catch (error) {
+    console.error('[FinanceLedger] Error looking up previous values:', error);
+    return { producerAmount: null, platformFee: null, affiliateAmount: null, coproducerAmount: null };
   }
 }
 
@@ -818,6 +1008,109 @@ serve(async (req) => {
     }
     
     // =====================================================
+    // FINANCE LEDGER - Primary Financial Source (IMMUTABLE)
+    // =====================================================
+    // This is the CANONICAL source for all financial data.
+    // The ledger is append-only and immutable.
+    // Refunds and chargebacks are recorded as NEGATIVE amounts.
+    // =====================================================
+    let ledgerWritten = 0;
+    let ledgerSkipped = 0;
+    
+    try {
+      console.log('[FinanceLedger] Processing financial entries from webhook...');
+      
+      // Parse occurred_at from Hotmart event
+      const occurredAt = purchase?.order_date 
+        ? new Date(purchase.order_date)
+        : new Date(payload.creation_date);
+      
+      // Only process events that have financial implications
+      const financialEvents = [...creditEvents, ...debitEvents];
+      
+      if (financialEvents.includes(event)) {
+        let commissionsToProcess = commissions || [];
+        
+        // For refunds/chargebacks WITHOUT commissions, inherit from original transaction
+        if (debitEvents.includes(event) && (!commissionsToProcess || commissionsToProcess.length === 0)) {
+          console.log(`[FinanceLedger] ${event} without commissions, looking up original values...`);
+          
+          const previousValues = await lookupPreviousTransactionValues(supabase, projectId, transactionId);
+          
+          if (previousValues.producerAmount !== null) {
+            console.log(`[FinanceLedger] Found original producer amount: ${previousValues.producerAmount}`);
+            
+            // Create synthetic commissions array for the refund (use any[] to avoid type conflicts)
+            const syntheticCommissions: any[] = [];
+            
+            if (previousValues.producerAmount) {
+              syntheticCommissions.push({
+                source: 'PRODUCER',
+                value: previousValues.producerAmount,
+                currency_value: 'BRL'
+              });
+            }
+            if (previousValues.platformFee) {
+              syntheticCommissions.push({
+                source: 'MARKETPLACE',
+                value: previousValues.platformFee,
+                currency_value: 'BRL'
+              });
+            }
+            if (previousValues.affiliateAmount) {
+              syntheticCommissions.push({
+                source: 'AFFILIATE',
+                value: previousValues.affiliateAmount,
+                currency_value: 'BRL'
+              });
+            }
+            if (previousValues.coproducerAmount) {
+              syntheticCommissions.push({
+                source: 'CO_PRODUCER',
+                value: previousValues.coproducerAmount,
+                currency_value: 'BRL'
+              });
+            }
+            
+            commissionsToProcess = syntheticCommissions;
+          } else {
+            console.warn(`[FinanceLedger] No previous values found for ${transactionId}, refund will have zero amounts`);
+          }
+        }
+        
+        if (commissionsToProcess && commissionsToProcess.length > 0) {
+          const ledgerEntries = parseCommissionsToLedgerEntries(
+            projectId,
+            transactionId,
+            commissionsToProcess,
+            occurredAt,
+            event,
+            affiliate,
+            data?.producer,
+            payload
+          );
+          
+          console.log(`[FinanceLedger] Generated ${ledgerEntries.length} ledger entries for ${event}`);
+          
+          if (ledgerEntries.length > 0) {
+            const result = await writeFinanceLedgerEntries(supabase, ledgerEntries);
+            ledgerWritten = result.written;
+            ledgerSkipped = result.skipped;
+            
+            console.log(`[FinanceLedger] Written: ${ledgerWritten}, Skipped: ${ledgerSkipped}`);
+          }
+        } else {
+          console.log(`[FinanceLedger] No commissions to process for ${event}`);
+        }
+      } else {
+        console.log(`[FinanceLedger] Event ${event} is not a financial event, skipping ledger`);
+      }
+    } catch (ledgerError) {
+      // Don't fail the webhook if ledger fails
+      console.error('[FinanceLedger] Error processing ledger entries:', ledgerError);
+    }
+    
+    // =====================================================
     // SUBSCRIPTION MANAGEMENT - Check if product is mapped to a plan
     // This is used for managing Cubo Mágico platform subscriptions
     // =====================================================
@@ -1289,6 +1582,8 @@ serve(async (req) => {
     console.log('Phone captured:', !!buyerPhone);
     console.log('Subscription action:', subscriptionAction || 'none');
     console.log('New user created:', newUserCreated);
+    console.log('Ledger written:', ledgerWritten);
+    console.log('Ledger skipped:', ledgerSkipped);
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -1302,7 +1597,11 @@ serve(async (req) => {
       subscription: subscriptionAction ? {
         action: subscriptionAction,
         created: subscriptionCreated
-      } : null
+      } : null,
+      ledger: {
+        written: ledgerWritten,
+        skipped: ledgerSkipped
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

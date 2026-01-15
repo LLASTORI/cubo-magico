@@ -3675,6 +3675,256 @@ export type Database = {
           },
         ]
       }
+      ledger_import_batches: {
+        Row: {
+          created_at: string | null
+          divergence_count: number | null
+          error_message: string | null
+          error_rows: number | null
+          file_name: string
+          file_size: number | null
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          imported_rows: number
+          new_transactions_count: number | null
+          period_end: string | null
+          period_start: string | null
+          project_id: string
+          reconciled_count: number | null
+          skipped_rows: number | null
+          status: string | null
+          total_affiliate_commissions: number | null
+          total_coproducer_commissions: number | null
+          total_gross: number | null
+          total_net: number | null
+          total_platform_fees: number | null
+          total_rows: number
+          total_taxes: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          divergence_count?: number | null
+          error_message?: string | null
+          error_rows?: number | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          imported_rows: number
+          new_transactions_count?: number | null
+          period_end?: string | null
+          period_start?: string | null
+          project_id: string
+          reconciled_count?: number | null
+          skipped_rows?: number | null
+          status?: string | null
+          total_affiliate_commissions?: number | null
+          total_coproducer_commissions?: number | null
+          total_gross?: number | null
+          total_net?: number | null
+          total_platform_fees?: number | null
+          total_rows: number
+          total_taxes?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          divergence_count?: number | null
+          error_message?: string | null
+          error_rows?: number | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          imported_rows?: number
+          new_transactions_count?: number | null
+          period_end?: string | null
+          period_start?: string | null
+          project_id?: string
+          reconciled_count?: number | null
+          skipped_rows?: number | null
+          status?: string | null
+          total_affiliate_commissions?: number | null
+          total_coproducer_commissions?: number | null
+          total_gross?: number | null
+          total_net?: number | null
+          total_platform_fees?: number | null
+          total_rows?: number
+          total_taxes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_import_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ledger_official: {
+        Row: {
+          affiliate_code: string | null
+          affiliate_commission: number | null
+          affiliate_name: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          confirmation_date: string | null
+          coproducer_commission: number | null
+          coproducer_name: string | null
+          created_at: string | null
+          divergence_amount: number | null
+          divergence_csv_value: number | null
+          divergence_notes: string | null
+          divergence_type: string | null
+          divergence_webhook_value: number | null
+          exchange_rate: number | null
+          gross_value: number
+          has_divergence: boolean | null
+          id: string
+          import_batch_id: string | null
+          imported_at: string | null
+          imported_by: string | null
+          installments: number | null
+          is_reconciled: boolean | null
+          net_value: number
+          net_value_brl: number
+          offer_code: string | null
+          offer_name: string | null
+          offer_price: number | null
+          original_currency: string | null
+          payment_method: string | null
+          payment_type: string | null
+          payout_date: string | null
+          payout_id: string | null
+          platform_fee: number | null
+          product_code: string | null
+          product_name: string | null
+          product_price: number | null
+          project_id: string
+          raw_csv_row: Json | null
+          reconciled_at: string | null
+          reconciled_by: string | null
+          sale_date: string | null
+          source_file_name: string | null
+          source_row_number: number | null
+          status: string | null
+          taxes: number | null
+          transaction_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          affiliate_code?: string | null
+          affiliate_commission?: number | null
+          affiliate_name?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          confirmation_date?: string | null
+          coproducer_commission?: number | null
+          coproducer_name?: string | null
+          created_at?: string | null
+          divergence_amount?: number | null
+          divergence_csv_value?: number | null
+          divergence_notes?: string | null
+          divergence_type?: string | null
+          divergence_webhook_value?: number | null
+          exchange_rate?: number | null
+          gross_value: number
+          has_divergence?: boolean | null
+          id?: string
+          import_batch_id?: string | null
+          imported_at?: string | null
+          imported_by?: string | null
+          installments?: number | null
+          is_reconciled?: boolean | null
+          net_value: number
+          net_value_brl: number
+          offer_code?: string | null
+          offer_name?: string | null
+          offer_price?: number | null
+          original_currency?: string | null
+          payment_method?: string | null
+          payment_type?: string | null
+          payout_date?: string | null
+          payout_id?: string | null
+          platform_fee?: number | null
+          product_code?: string | null
+          product_name?: string | null
+          product_price?: number | null
+          project_id: string
+          raw_csv_row?: Json | null
+          reconciled_at?: string | null
+          reconciled_by?: string | null
+          sale_date?: string | null
+          source_file_name?: string | null
+          source_row_number?: number | null
+          status?: string | null
+          taxes?: number | null
+          transaction_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          affiliate_code?: string | null
+          affiliate_commission?: number | null
+          affiliate_name?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          confirmation_date?: string | null
+          coproducer_commission?: number | null
+          coproducer_name?: string | null
+          created_at?: string | null
+          divergence_amount?: number | null
+          divergence_csv_value?: number | null
+          divergence_notes?: string | null
+          divergence_type?: string | null
+          divergence_webhook_value?: number | null
+          exchange_rate?: number | null
+          gross_value?: number
+          has_divergence?: boolean | null
+          id?: string
+          import_batch_id?: string | null
+          imported_at?: string | null
+          imported_by?: string | null
+          installments?: number | null
+          is_reconciled?: boolean | null
+          net_value?: number
+          net_value_brl?: number
+          offer_code?: string | null
+          offer_name?: string | null
+          offer_price?: number | null
+          original_currency?: string | null
+          payment_method?: string | null
+          payment_type?: string | null
+          payout_date?: string | null
+          payout_id?: string | null
+          platform_fee?: number | null
+          product_code?: string | null
+          product_name?: string | null
+          product_price?: number | null
+          project_id?: string
+          raw_csv_row?: Json | null
+          reconciled_at?: string | null
+          reconciled_by?: string | null
+          sale_date?: string | null
+          source_file_name?: string | null
+          source_row_number?: number | null
+          status?: string | null
+          taxes?: number | null
+          transaction_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_official_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_ad_accounts: {
         Row: {
           account_id: string

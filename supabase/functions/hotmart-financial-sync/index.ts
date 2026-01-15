@@ -8,13 +8,32 @@ const corsHeaders = {
 };
 
 // ============================================
-// HOTMART FINANCIAL SYNC - Ledger Population
+// HOTMART FINANCIAL SYNC - DEPRECATED
 // ============================================
-// This function syncs financial data from Hotmart APIs to finance_ledger.
-// MIGRATED TO OAUTH AUTHORIZATION CODE FLOW
-// - Uses refresh_token to get fresh access_token
-// - Calls Hotmart API directly (no proxy needed)
-// The ledger becomes the SINGLE SOURCE OF TRUTH for all financial data.
+// STATUS: DISABLED (Architectural Decision - 2025-01-15)
+//
+// REASON: This function fetched financial data from Hotmart's
+// GET /payments/api/v1/sales/history endpoint and wrote to finance_ledger.
+//
+// PROBLEM: The API does NOT return reliable commission breakdowns.
+// Many transactions lack the commissions[] array or have incomplete data.
+// Using API data for financial calculations led to inaccurate:
+//   - Net revenue (net_amount)
+//   - Platform fees
+//   - Affiliate/coproducer splits
+//   - ROAS and profit calculations
+//
+// NEW ARCHITECTURE:
+// Financial data MUST come ONLY from:
+//   1. Hotmart WEBHOOKS (real-time, with complete commissions[])
+//   2. Future CSV IMPORT (official Hotmart financial reports)
+//
+// The API sync (hotmart-api) now ONLY handles:
+//   - Commercial metadata (hotmart_sales table)
+//   - Offer mappings
+//   - Historical backfill for CRM contacts
+//
+// This function is kept for reference but will return an error if called.
 // ============================================
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -354,258 +373,57 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Get authorization header for user context
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verify user
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Parse request
-    const body = await req.json();
-    const { projectId, monthsBack = 24 } = body;
-
-    if (!projectId) {
-      return new Response(JSON.stringify({ error: 'projectId is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Verify user has access to project
-    const { data: membership, error: memberError } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (memberError || !membership) {
-      return new Response(JSON.stringify({ error: 'Access denied' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Get credentials and validate OAuth connection
-    const { data: credentialsRaw, error: credError } = await supabase
-      .from('project_credentials')
-      .select('client_id, client_secret, basic_auth, hotmart_access_token, hotmart_refresh_token, hotmart_expires_at')
-      .eq('project_id', projectId)
-      .eq('provider', 'hotmart')
-      .maybeSingle();
-
-    if (credError || !credentialsRaw?.hotmart_refresh_token) {
-      return new Response(
-        JSON.stringify({
-          error: 'Hotmart não conectado via OAuth. Use o botão "Conectar Hotmart (OAuth)" nas configurações.',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    const credentials: ProjectCredentials = {
-      client_id: credentialsRaw.client_id,
-      client_secret: credentialsRaw.client_secret,
-      basic_auth: credentialsRaw.basic_auth,
-      hotmart_access_token: credentialsRaw.hotmart_access_token,
-      hotmart_refresh_token: credentialsRaw.hotmart_refresh_token,
-      hotmart_expires_at: credentialsRaw.hotmart_expires_at,
-    };
-
-    // Get valid access token
-    const accessToken = await getValidAccessToken(supabase, projectId, credentials);
-
-    // Create sync run record
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - monthsBack);
-
-    const { data: syncRun, error: runError } = await supabase
-      .from('finance_sync_runs')
-      .insert({
-        project_id: projectId,
-        status: 'running',
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-        apis_synced: ['sales_history'],
-        created_by: user.id,
-      })
-      .select('id')
-      .single();
-
-    if (runError) {
-      console.error('[FinancialSync] Failed to create run record:', runError);
-    }
-
-    const runId = syncRun?.id;
-
-    try {
-      // Fetch all sales with commissions via OAuth
-      console.log('[FinancialSync] Fetching sales via OAuth...');
-      const sales = await fetchHotmartSalesWithCommissions(
-        accessToken,
-        startDate.getTime(),
-        endDate.getTime()
-      );
-
-      console.log(`[FinancialSync] Processing ${sales.length} sales...`);
-
-      // Parse sales into ledger entries
-      const allEntries: LedgerEntry[] = [];
-      let salesWithCommissions = 0;
-      let salesWithoutCommissions = 0;
-
-      for (const sale of sales) {
-        const orderDate = sale.purchase?.order_date;
-        const occurredAt = orderDate ? new Date(orderDate) : new Date();
-
-        // Get commission entries
-        const commissionEntries = parseCommissionsToLedgerEntries(projectId, sale, occurredAt);
-        
-        if (commissionEntries.length > 0) {
-          salesWithCommissions++;
-          allEntries.push(...commissionEntries);
-        } else {
-          salesWithoutCommissions++;
-        }
-
-        // Get refund/chargeback entry if applicable
-        const statusEntry = parseStatusToLedgerEntry(projectId, sale, occurredAt);
-        if (statusEntry) {
-          allEntries.push(statusEntry);
-        }
-      }
-
-      console.log(`[FinancialSync] Found ${salesWithCommissions} sales with commissions, ${salesWithoutCommissions} without`);
-      console.log(`[FinancialSync] Total ledger entries to insert: ${allEntries.length}`);
-
-      // Insert entries in batches (upsert to handle duplicates)
-      let eventsCreated = 0;
-      let eventsSkipped = 0;
-      let errors = 0;
-      const BATCH_SIZE = 100;
-      let firstTransactionId: string | null = null;
-
-      for (let i = 0; i < allEntries.length; i += BATCH_SIZE) {
-        const batch = allEntries.slice(i, i + BATCH_SIZE);
-        
-        // Capture first transaction ID
-        if (!firstTransactionId && batch.length > 0) {
-          firstTransactionId = batch[0].transaction_id;
-        }
-
-        const { error: insertError } = await supabase
-          .from('finance_ledger')
-          .upsert(batch, {
-            onConflict: 'provider,transaction_id,event_type,actor_type,actor_id,amount,occurred_at',
-            ignoreDuplicates: true,
-          });
-
-        if (insertError) {
-          // Check if it's a duplicate key error (expected)
-          if (insertError.code === '23505') {
-            eventsSkipped += batch.length;
-          } else {
-            console.error('[FinancialSync] Insert error:', insertError);
-            errors += batch.length;
-          }
-        } else {
-          // Supabase doesn't return count for upsert with ignoreDuplicates
-          // So we count all as potentially created
-          eventsCreated += batch.length;
-        }
-      }
-
-      // Update sync run record
-      if (runId) {
-        await supabase
-          .from('finance_sync_runs')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            events_created: eventsCreated,
-            events_skipped: eventsSkipped,
-            errors: errors,
-          })
-          .eq('id', runId);
-      }
-
-      const result = {
-        success: true,
-        eventsCreated,
-        eventsSkipped,
-        errors,
-        totalSales: sales.length,
-        salesWithCommissions,
-        salesWithoutCommissions,
-        firstTransactionId,
-        dateRange: {
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-        },
-        method: 'oauth_direct',
-      };
-
-      console.log('[FinancialSync] Sync completed:', result);
-
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-
-    } catch (syncError: any) {
-      console.error('[FinancialSync] Sync error:', syncError);
-
-      // Update sync run with error
-      if (runId) {
-        await supabase
-          .from('finance_sync_runs')
-          .update({
-            status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: syncError.message,
-          })
-          .eq('id', runId);
-      }
-
-      throw syncError;
-    }
-
-  } catch (error: any) {
-    const message = error?.message || 'Erro desconhecido';
-    console.error('[FinancialSync] Error:', error);
-
-    const status =
-      message.includes('Proxy request failed') ||
-      message.includes('HOTMART_PROXY_URL')
-        ? 400
-        : 500;
-
-    return new Response(JSON.stringify({ error: message }), {
-      status,
+  // =====================================================
+  // FUNCTION DISABLED - Return informative error
+  // =====================================================
+  // This function has been deprecated as part of the
+  // architectural decision to separate API sync from
+  // financial data management.
+  //
+  // Financial data now comes ONLY from:
+  //   1. Hotmart webhooks (hotmart-webhook function)
+  //   2. Future CSV import functionality
+  // =====================================================
+  
+  console.log('[DEPRECATED] hotmart-financial-sync called but is disabled');
+  
+  return new Response(
+    JSON.stringify({
+      error: 'FUNCTION_DEPRECATED',
+      message: 'Esta função foi desativada. Dados financeiros agora vêm exclusivamente dos webhooks Hotmart.',
+      recommendation: 'Use a sincronização normal via API para metadados comerciais (hotmart_sales). Para dados financeiros precisos, os webhooks Hotmart são a única fonte confiável.',
+      migrationDate: '2025-01-15',
+      documentation: 'A API da Hotmart não retorna breakdown de comissões confiável. Use webhooks para net_amount correto.',
+    }),
+    {
+      status: 410, // HTTP 410 Gone - indicates resource no longer available
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+    }
+  );
 });
+
+// =====================================================
+// LEGACY CODE PRESERVED FOR REFERENCE ONLY
+// =====================================================
+// The following functions were used when this edge function
+// was active. They are kept here for documentation purposes
+// but are no longer executed:
+//
+// - refreshAccessToken(): Refreshed OAuth tokens
+// - getValidAccessToken(): Managed token lifecycle
+// - callHotmartAPI(): Called Hotmart API with OAuth
+// - fetchHotmartSalesWithCommissions(): Fetched sales history
+// - parseCommissionsToLedgerEntries(): Parsed commissions to ledger
+// - parseStatusToLedgerEntry(): Created refund/chargeback entries
+//
+// REASON FOR DEPRECATION:
+// The GET /payments/api/v1/sales/history endpoint does not
+// reliably return the commissions[] array for all transactions.
+// This led to incomplete financial data in finance_ledger.
+//
+// NEW APPROACH:
+// - Webhooks (hotmart-webhook) receive events in real-time
+//   with complete commission breakdowns
+// - Future CSV import will allow manual reconciliation
+//   using official Hotmart financial reports
+// =====================================================

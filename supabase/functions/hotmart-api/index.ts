@@ -1070,40 +1070,29 @@ async function syncSales(
   console.log('Category stats:', categoryStats);
   
   // =====================================================
-  // SALES CORE - Write canonical revenue events in batch
+  // SALES CORE - DISABLED (ARCHITECTURAL DECISION)
   // =====================================================
-  let salesCoreStats = { synced: 0, versioned: 0, errors: 0 };
-  try {
-    console.log('[SalesCore] Writing canonical revenue events in batch...');
-    console.log('[SalesCore] Using CORRECT financial mapping: net_amount = PRODUCER commission');
-    
-    // Find contact IDs for all sales
-    const transactionToContactId = await batchFindContactIds(supabase, projectId, sales);
-    
-    // Prepare sales with CORRECT financial breakdown
-    const salesWithFinancials = sales.map((sale) => {
-      const contactId = transactionToContactId.get(sale.purchase.transaction) || null;
-      const currencyCode = sale.purchase.price?.currency_code || 'BRL';
-      const rate = exchangeRates[currencyCode] || 1;
-      
-      // CORRECT: Use full_price for gross (valor pago pelo comprador)
-      const fullPrice = (sale.purchase as any).full_price?.value || sale.purchase.price?.value || 0;
-      const grossAmount = fullPrice * rate;
-      
-      // CORRECT: Extract PRODUCER commission as net_amount ("Você recebeu")
-      const financials = extractFinancialBreakdown(sale.commissions);
-      const ownerNet = financials.ownerNet;
-      
-      return { sale, contactId, grossAmount, ownerNet };
-    });
-    
-    // Batch write to sales_core_events
-    salesCoreStats = await batchWriteSalesCoreEvents(supabase, projectId, salesWithFinancials);
-    
-    console.log(`[SalesCore] Canonical events: ${salesCoreStats.synced} new, ${salesCoreStats.versioned} versioned, ${salesCoreStats.errors} errors`);
-  } catch (salesCoreError) {
-    console.error('[SalesCore] Error writing canonical events:', salesCoreError);
-  }
+  // REASON: API sync should NOT write financial data to sales_core_events.
+  // Financial data (net_amount, fees, splits) must ONLY come from:
+  //   1. Hotmart webhooks (with commissions[] array)
+  //   2. Future CSV import (official ledger from Hotmart)
+  // 
+  // The API endpoint GET /sales/history does NOT reliably return
+  // detailed commission breakdowns for all transactions.
+  // 
+  // This function now ONLY syncs:
+  //   - hotmart_sales table (raw commercial metadata)
+  //   - offer_mappings (auto-creation of new offer codes)
+  //
+  // REMOVED CODE:
+  //   - batchFindContactIds() call
+  //   - extractFinancialBreakdown() for PRODUCER commission
+  //   - batchWriteSalesCoreEvents() call
+  //
+  // MIGRATION DATE: 2025-01-15
+  // =====================================================
+  console.log('[SalesCore] SKIPPED: API sync does not write financial data to sales_core_events');
+  console.log('[SalesCore] Financial data comes ONLY from webhooks and CSV imports');
   
   // Auto-create offer mappings for new offer codes
   const existingOfferCodes = new Set(offerMappings?.map(m => m.codigo_oferta).filter(Boolean) || []);

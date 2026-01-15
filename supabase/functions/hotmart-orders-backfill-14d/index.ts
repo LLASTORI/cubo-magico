@@ -32,28 +32,61 @@ const debitEvents = ['PURCHASE_CANCELED', 'PURCHASE_REFUNDED', 'PURCHASE_CHARGEB
 
 /**
  * Resolve Hotmart Order ID from payload
+ * Must group order bumps, upsells and downsells under the same parent order.
+ * 
+ * Rules:
+ * 1. If purchase.order_bump.is_order_bump = true → use parent_purchase_transaction
+ * 2. If upsell/downsell detected → use parent_purchase_transaction (if available)
+ * 3. Otherwise → use purchase.transaction (main product)
  */
 function resolveHotmartOrderId(payload: any): string | null {
   const data = payload?.data;
   const purchase = data?.purchase;
   
+  if (!purchase) return null;
+  
+  // Rule 1: Order Bump - always use parent
+  if (purchase.order_bump?.is_order_bump && purchase.order_bump?.parent_purchase_transaction) {
+    return purchase.order_bump.parent_purchase_transaction;
+  }
+  
+  // Rule 2: Upsell/Downsell detection via offer name
+  const offerName = purchase.offer?.name?.toLowerCase() || '';
+  const isUpsell = offerName.includes('upsell');
+  const isDownsell = offerName.includes('downsell');
+  
+  if ((isUpsell || isDownsell) && purchase.order_bump?.parent_purchase_transaction) {
+    return purchase.order_bump.parent_purchase_transaction;
+  }
+  
+  // Rule 3: Check for any parent_purchase_transaction
+  if (purchase.parent_purchase_transaction) {
+    return purchase.parent_purchase_transaction;
+  }
+  
+  // Rule 4: Main product - use own transaction
+  if (purchase.transaction) {
+    return purchase.transaction;
+  }
+  
+  // Fallback
   if (data?.order?.id) {
     return String(data.order.id);
   }
   
-  if (purchase?.order_bump?.is_order_bump && purchase?.order_bump?.parent_purchase_transaction) {
-    return purchase.order_bump.parent_purchase_transaction;
-  }
-  
-  if (purchase?.transaction) {
-    return purchase.transaction;
-  }
-  
-  if (purchase?.code) {
+  if (purchase.code) {
     return purchase.code;
   }
   
   return null;
+}
+
+/**
+ * Get the original transaction ID (for mapping purposes)
+ */
+function getOriginalTransactionId(payload: any): string | null {
+  const purchase = payload?.data?.purchase;
+  return purchase?.transaction || purchase?.code || null;
 }
 
 /**
@@ -269,41 +302,64 @@ serve(async (req) => {
         const status = hotmartToOrderStatus[hotmartEvent] || 'pending';
 
         // ============================================
-        // 1. UPSERT ORDER
+        // 1. UPSERT ORDER (with ACCUMULATION)
         // ============================================
         const { data: existingOrder } = await supabase
           .from('orders')
-          .select('id')
+          .select('id, customer_paid, gross_base, producer_net, approved_at')
           .eq('project_id', projectId)
           .eq('provider', 'hotmart')
           .eq('provider_order_id', providerOrderId)
           .maybeSingle();
 
         let orderId: string;
+        
+        // Current event values
+        const thisEventCustomerPaid = totalPriceBrl || 0;
+        const thisEventGrossBase = grossBase || totalPriceBrl || 0;
+        const thisEventProducerNet = financials.ownerNet || 0;
 
         if (existingOrder) {
-          const { error: updateError } = await supabase
-            .from('orders')
-            .update({
-              status,
-              customer_paid: totalPriceBrl,
-              gross_base: grossBase || totalPriceBrl,
-              producer_net: financials.ownerNet,
-              approved_at: approvedAt,
-              completed_at: status === 'completed' ? new Date().toISOString() : null,
-              raw_payload: payload,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingOrder.id);
+          // Check if this item was already added (avoid double counting)
+          const productId = orderItems[0]?.provider_product_id || 'unknown';
+          const { data: existingItem } = await supabase
+            .from('order_items')
+            .select('id')
+            .eq('order_id', existingOrder.id)
+            .eq('provider_product_id', productId)
+            .maybeSingle();
 
-          if (updateError) {
-            console.error('[OrdersBackfill14d] Error updating order:', updateError);
-            errors++;
-            continue;
+          if (!existingItem) {
+            // ACCUMULATE values - this is a new item for existing order
+            const newCustomerPaid = (existingOrder.customer_paid || 0) + thisEventCustomerPaid;
+            const newGrossBase = (existingOrder.gross_base || 0) + thisEventGrossBase;
+            const newProducerNet = (existingOrder.producer_net || 0) + thisEventProducerNet;
+
+            console.log(`[OrdersBackfill14d] Accumulating for ${providerOrderId}: ${existingOrder.customer_paid} + ${thisEventCustomerPaid} = ${newCustomerPaid}`);
+
+            const { error: updateError } = await supabase
+              .from('orders')
+              .update({
+                status,
+                customer_paid: newCustomerPaid,
+                gross_base: newGrossBase,
+                producer_net: newProducerNet,
+                approved_at: approvedAt || existingOrder.approved_at,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingOrder.id);
+
+            if (updateError) {
+              console.error('[OrdersBackfill14d] Error updating order:', updateError);
+              errors++;
+              continue;
+            }
+            ordersUpdated++;
+          } else {
+            console.log(`[OrdersBackfill14d] Item already exists for ${providerOrderId}, skipping accumulation`);
           }
           
           orderId = existingOrder.id;
-          ordersUpdated++;
         } else {
           const { data: newOrder, error: insertError } = await supabase
             .from('orders')
@@ -315,9 +371,9 @@ serve(async (req) => {
               buyer_name: buyer?.name || null,
               status,
               currency: currencyCode,
-              customer_paid: totalPriceBrl,
-              gross_base: grossBase || totalPriceBrl,
-              producer_net: financials.ownerNet,
+              customer_paid: thisEventCustomerPaid,
+              gross_base: thisEventGrossBase,
+              producer_net: thisEventProducerNet,
               ordered_at: orderedAt,
               approved_at: approvedAt,
               completed_at: status === 'completed' ? new Date().toISOString() : null,

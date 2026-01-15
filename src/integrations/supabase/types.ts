@@ -9120,6 +9120,93 @@ export type Database = {
         }
         Relationships: []
       }
+      live_financial_today: {
+        Row: {
+          affiliate_fees: number | null
+          coproducer_fees: number | null
+          cpa: number | null
+          data_source: string | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          gross_revenue: number | null
+          is_estimated: boolean | null
+          platform_fees: number | null
+          profit: number | null
+          project_id: string | null
+          revenue: number | null
+          roas: number | null
+          sales_count: number | null
+          spend: number | null
+        }
+        Relationships: []
+      }
+      live_project_totals_today: {
+        Row: {
+          data_source: string | null
+          economic_day: string | null
+          is_estimated: boolean | null
+          overall_cpa: number | null
+          overall_roas: number | null
+          project_id: string | null
+          total_affiliate_fees: number | null
+          total_coproducer_fees: number | null
+          total_gross_revenue: number | null
+          total_platform_fees: number | null
+          total_profit: number | null
+          total_revenue: number | null
+          total_sales: number | null
+          total_spend: number | null
+        }
+        Relationships: []
+      }
+      live_sales_today: {
+        Row: {
+          affiliate_fees: number | null
+          coproducer_fees: number | null
+          data_source: string | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          gross_revenue: number | null
+          is_estimated: boolean | null
+          platform_fees: number | null
+          project_id: string | null
+          revenue: number | null
+          sales_count: number | null
+          unique_buyers: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_ledger_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+        ]
+      }
       live_spend_today: {
         Row: {
           data_source: string | null

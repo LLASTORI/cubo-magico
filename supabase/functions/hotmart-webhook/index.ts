@@ -235,6 +235,7 @@ interface LedgerEntry {
   occurred_at: string;
   source_api: string;
   raw_payload: any;
+  attribution: Record<string, any>; // PROMPT 6: Include UTM attribution in ledger
 }
 
 // Parse commissions from webhook to immutable ledger entries
@@ -246,7 +247,8 @@ function parseCommissionsToLedgerEntries(
   hotmartEvent: string,
   affiliateData: any,
   producerData: any,
-  rawPayload: any
+  rawPayload: any,
+  attribution: Record<string, any> = {} // PROMPT 6: Add attribution parameter
 ): LedgerEntry[] {
   const entries: LedgerEntry[] = [];
   const occurredAtStr = occurredAt.toISOString();
@@ -307,6 +309,7 @@ function parseCommissionsToLedgerEntries(
       occurred_at: occurredAtStr,
       source_api: 'webhook',
       raw_payload: comm,
+      attribution, // PROMPT 6: Include UTM attribution in each ledger entry
     });
   }
 
@@ -1026,6 +1029,10 @@ serve(async (req) => {
       utm_adset_name: utmMedium,          // Same as utm_medium (adset name is in medium)
       utm_creative: utmContent,           // ex: "Teste—VENDA_TRAFEGO..."
       utm_placement: utmTerm,             // ex: "Instagram_Stories"
+      // PROMPT 6: New standard UTM fields
+      utm_term: utmTerm,                  // ex: "Instagram_Stories" (placement)
+      utm_content: utmContent,            // ex: "Teste—VENDA_TRAFEGO..." (creative)
+      raw_checkout_origin: rawCheckoutOrigin,
       meta_campaign_id_extracted: metaCampaignIdExtracted,
       meta_adset_id_extracted: metaAdsetIdExtracted,
       meta_ad_id_extracted: metaAdIdExtracted,
@@ -1174,6 +1181,9 @@ serve(async (req) => {
         ? new Date(purchase.order_date)
         : new Date(payload.creation_date);
       
+      // PROMPT 6: Extract attribution for ledger entries
+      const ledgerAttribution = extractAttribution(purchase, rawCheckoutOrigin);
+      
       // Only process events that have financial implications
       const financialEvents = [...creditEvents, ...debitEvents];
       
@@ -1236,7 +1246,8 @@ serve(async (req) => {
             event,
             affiliate,
             data?.producer,
-            payload
+            payload,
+            ledgerAttribution // PROMPT 6: Pass attribution to ledger entries
           );
           
           console.log(`[FinanceLedger] Generated ${ledgerEntries.length} ledger entries for ${event}`);

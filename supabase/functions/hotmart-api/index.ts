@@ -4,12 +4,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-project-code',
 };
 
 // ============================================
 // SALES CORE PROVIDER - Hotmart Revenue Ingestion (API Sync)
 // ============================================
+// MIGRATED: All Hotmart API calls now go through Railway OAuth Proxy
+// NO direct calls to developers.hotmart.com or api-sec-vlc.hotmart.com
+// ============================================
+
+// Proxy configuration - uses Railway OAuth Proxy
+const HOTMART_PROXY_URL = Deno.env.get('HOTMART_PROXY_URL');
+const HOTMART_PROXY_API_KEY = Deno.env.get('HOTMART_PROXY_API_KEY');
 
 // Map Hotmart API status to canonical event types
 const hotmartStatusToCanonicalEventType: Record<string, string> = {
@@ -318,18 +325,6 @@ async function batchFindContactIds(
   return result;
 }
 
-interface HotmartTokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-}
-
-interface ProjectCredentials {
-  client_id: string | null;
-  client_secret: string | null;
-  basic_auth: string | null;
-}
-
 interface HotmartSale {
   purchase: {
     transaction: string;
@@ -426,17 +421,12 @@ interface HotmartSale {
 function extractMetaIds(tracking: HotmartSale['purchase']['tracking']) {
   if (!tracking) return { campaignId: null, adsetId: null, adId: null };
   
-  // utm_campaign often contains the campaign ID
-  // utm_content or source_sck may contain adset/ad info
-  // These patterns may vary based on your UTM setup
-  
   let campaignId = null;
   let adsetId = null;
   let adId = null;
   
   // Try to extract from utm_campaign (often contains campaign ID)
   if (tracking.utm_campaign) {
-    // Pattern: could be just the ID or "campaignname_123456789"
     const campaignMatch = tracking.utm_campaign.match(/(\d{10,})/);
     if (campaignMatch) {
       campaignId = campaignMatch[1];
@@ -453,25 +443,17 @@ function extractMetaIds(tracking: HotmartSale['purchase']['tracking']) {
   
   // Try to extract from source_sck (Facebook Click ID sometimes has adset info)
   if (tracking.source_sck) {
-    // source_sck format varies, try to find numeric IDs
     const sckMatch = tracking.source_sck.match(/(\d{10,})/g);
     if (sckMatch && sckMatch.length > 0) {
-      // First long number might be ad or adset ID
       if (!adId && sckMatch[0]) adId = sckMatch[0];
       if (sckMatch[1]) adsetId = sckMatch[1];
     }
   }
   
-  // Also check utm_source for source info
-  // utm_source === 'fb' or 'facebook' or 'ig' indicates Meta ads
-  
   return { campaignId, adsetId, adId };
 }
 
-// Determine sale_category based on:
-// 1. Oferta → Funil (always defines the funnel)
-// 2. UTM → Origin (ads vs unidentified vs other)
-// Categories: 'funnel_ads', 'funnel_no_ads', 'unidentified_origin', 'other_origin'
+// Determine sale_category based on offer/funnel and UTM tracking
 function determineSaleCategory(
   sale: HotmartSale,
   offerToFunnel: Map<string, string>,
@@ -480,162 +462,155 @@ function determineSaleCategory(
   const tracking = sale.purchase.tracking;
   const offerCode = sale.purchase.offer?.code;
   
-  // Check if we have Meta tracking
   const { campaignId, adsetId, adId } = extractMetaIds(tracking);
   const hasMetaIds = !!(campaignId || adsetId || adId);
   const utmSource = tracking?.utm_source?.toLowerCase() || '';
   const isFromMeta = ['fb', 'facebook', 'ig', 'instagram', 'meta'].some(s => utmSource.includes(s));
   const hasMetaTracking = hasMetaIds || (isFromMeta && tracking?.utm_campaign);
   
-  // Check if offer belongs to a funnel
   const funnelId = offerCode ? offerToFunnel.get(offerCode) : null;
   const hasFunnel = !!funnelId && funnelId !== 'A Definir';
-  const funnelHasAds = funnelId ? funnelsWithAds.has(funnelId) : false;
   
-  // Check for affiliate (other origin)
   const hasAffiliate = !!sale.affiliate?.affiliate_code;
   
-  // Categorization logic:
-  // 1. Funil + Ads: Has funnel AND has Meta tracking
   if (hasFunnel && hasMetaTracking) {
     return 'funnel_ads';
   }
   
-  // 2. Funil sem Ads: Has funnel but NO Meta tracking
   if (hasFunnel && !hasMetaTracking) {
     return 'funnel_no_ads';
   }
   
-  // 3. Outras Origens: Has affiliate or other known sources (not funnel)
   if (hasAffiliate) {
     return 'other_origin';
   }
   
-  // 4. Origem Não Identificada: No funnel, no Meta tracking, no affiliate
   return 'unidentified_origin';
 }
 
-// Get all funnels that have Meta ad accounts linked
-async function getFunnelsWithMetaAds(projectId: string, supabase: any): Promise<Set<string>> {
-  const { data: funnelMetaAccounts } = await supabase
-    .from('funnel_meta_accounts')
-    .select('funnel_id')
-    .eq('project_id', projectId);
-  
-  const funnelIds = new Set<string>();
-  
-  if (funnelMetaAccounts) {
-    for (const fma of funnelMetaAccounts) {
-      funnelIds.add(fma.funnel_id);
-    }
-  }
-  
-  // Also get funnels from offer_mappings id_funil field
-  const { data: funnels } = await supabase
-    .from('funnels')
-    .select('id, name')
-    .eq('project_id', projectId);
-  
-  if (funnels) {
-    for (const funnel of funnels) {
-      // Check if this funnel has any meta accounts
-      const { data: hasAccounts } = await supabase
-        .from('funnel_meta_accounts')
-        .select('id')
-        .eq('funnel_id', funnel.id)
-        .limit(1);
-      
-      if (hasAccounts && hasAccounts.length > 0) {
-        funnelIds.add(funnel.id);
-      }
-    }
-  }
-  
-  return funnelIds;
-}
+// ============================================
+// RAILWAY OAUTH PROXY - All Hotmart API calls go through here
+// ============================================
+// This replaces direct calls to:
+// - api-sec-vlc.hotmart.com (OAuth)
+// - developers.hotmart.com (Sales API)
+// ============================================
 
-async function getProjectCredentials(projectId: string): Promise<ProjectCredentials> {
+// Call Hotmart API through Railway OAuth Proxy
+async function callHotmartProxy(
+  projectId: string,
+  path: string,
+  params: Record<string, string> = {},
+  method: string = 'GET'
+): Promise<any> {
+  if (!HOTMART_PROXY_URL) {
+    throw new Error('HOTMART_PROXY_URL not configured. Configure it in Cloud secrets.');
+  }
+
+  // Step 1: Get credentials via hotmart-credentials-export
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const internalKey = Deno.env.get('CUBO_INTERNAL_KEY');
   
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  console.log(`[PROXY] Fetching credentials for project ${projectId}...`);
   
-  // Fetch credentials including encrypted columns
-  const { data, error } = await supabase
-    .from('project_credentials')
-    .select('client_id, client_secret, client_secret_encrypted, basic_auth, basic_auth_encrypted')
-    .eq('project_id', projectId)
-    .eq('provider', 'hotmart')
-    .maybeSingle();
-  
-  if (error) {
-    console.error('Error fetching project credentials:', error);
-    throw new Error('Failed to fetch project credentials');
-  }
-  
-  if (!data) {
-    throw new Error('Project credentials not configured. Please configure Hotmart credentials in project settings.');
-  }
-  
-  // If encrypted columns exist, decrypt them using RPC
-  let clientSecret = data.client_secret;
-  let basicAuth = data.basic_auth;
-  
-  if (data.client_secret_encrypted) {
-    const { data: decrypted } = await supabase.rpc('decrypt_sensitive', { 
-      p_encrypted_data: data.client_secret_encrypted 
-    });
-    if (decrypted) clientSecret = decrypted;
-  }
-  
-  if (data.basic_auth_encrypted) {
-    const { data: decrypted } = await supabase.rpc('decrypt_sensitive', { 
-      p_encrypted_data: data.basic_auth_encrypted 
-    });
-    if (decrypted) basicAuth = decrypted;
-  }
-  
-  return {
-    client_id: data.client_id,
-    client_secret: clientSecret,
-    basic_auth: basicAuth
+  const credentialsUrl = `${supabaseUrl}/functions/v1/hotmart-credentials-export?projectId=${projectId}`;
+  const credHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
   };
-}
-
-async function getHotmartToken(credentials: ProjectCredentials): Promise<string> {
-  const { client_id, client_secret } = credentials;
-
-  if (!client_id || !client_secret) {
-    throw new Error('Hotmart credentials not configured (client_id, client_secret). Configure them in project settings.');
+  
+  // Use internal key if available (VPS-to-VPS call)
+  if (internalKey) {
+    credHeaders['X-Cubo-Internal-Key'] = internalKey;
   }
-
-  console.log('Requesting Hotmart token...');
-
-  const basicAuth = btoa(`${client_id}:${client_secret}`);
-  const url = `https://api-sec-vlc.hotmart.com/security/oauth/token?grant_type=client_credentials&client_id=${encodeURIComponent(client_id)}&client_secret=${encodeURIComponent(client_secret)}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Basic ${basicAuth}`,
-    },
+  
+  const credResponse = await fetch(credentialsUrl, {
+    method: 'GET',
+    headers: credHeaders,
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Failed to get Hotmart token. Status:', response.status);
-    throw new Error(`Failed to authenticate with Hotmart: ${response.status}`);
+  
+  if (!credResponse.ok) {
+    const credError = await credResponse.text();
+    console.error('[PROXY] Credentials fetch failed:', credError);
+    throw new Error(`Failed to fetch credentials: ${credError}`);
   }
-
-  const data: HotmartTokenResponse = await response.json();
-  console.log('Token obtained successfully');
-  return data.access_token;
+  
+  const credentials = await credResponse.json();
+  const { client_id, client_secret } = credentials;
+  
+  if (!client_id || !client_secret) {
+    throw new Error('Hotmart credentials not configured (client_id, client_secret)');
+  }
+  
+  console.log(`[PROXY] Got credentials, calling Railway proxy...`);
+  
+  // Step 2: Get access token from Railway proxy
+  const oauthUrl = `${HOTMART_PROXY_URL}/oauth`;
+  const oauthHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (HOTMART_PROXY_API_KEY) {
+    oauthHeaders['x-api-key'] = HOTMART_PROXY_API_KEY;
+  }
+  
+  const oauthResponse = await fetch(oauthUrl, {
+    method: 'POST',
+    headers: oauthHeaders,
+    body: JSON.stringify({ client_id, client_secret }),
+  });
+  
+  if (!oauthResponse.ok) {
+    const oauthError = await oauthResponse.text();
+    console.error('[PROXY] OAuth failed:', oauthError);
+    throw new Error(`OAuth failed: ${oauthError}`);
+  }
+  
+  const { access_token } = await oauthResponse.json();
+  
+  if (!access_token) {
+    throw new Error('No access_token returned from OAuth proxy');
+  }
+  
+  console.log(`[PROXY] Got access_token, calling Hotmart API via proxy: ${path}`);
+  
+  // Step 3: Call Hotmart API through proxy
+  const apiUrl = `${HOTMART_PROXY_URL}/hotmart`;
+  const apiHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (HOTMART_PROXY_API_KEY) {
+    apiHeaders['x-api-key'] = HOTMART_PROXY_API_KEY;
+  }
+  
+  const apiResponse = await fetch(apiUrl, {
+    method: 'POST',
+    headers: apiHeaders,
+    body: JSON.stringify({
+      access_token,
+      path,
+      params,
+      method,
+    }),
+  });
+  
+  const rawText = await apiResponse.text();
+  
+  if (!apiResponse.ok) {
+    console.error(`[PROXY] API error (${apiResponse.status}):`, rawText.slice(0, 2000));
+    throw new Error(`Proxy API failed (${apiResponse.status}): ${rawText.slice(0, 500)}`);
+  }
+  
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    throw new Error(`Invalid JSON from proxy: ${rawText.slice(0, 500)}`);
+  }
 }
 
-// Fetch all sales with pagination
+// Fetch all sales with pagination - THROUGH PROXY
 async function fetchAllSales(
-  token: string,
+  projectId: string,
   startDate: number,
   endDate: number,
   status?: string
@@ -652,7 +627,6 @@ async function fetchAllSales(
       max_results: pageSize.toString(),
     };
     
-    // Only add page_token if we have one from previous response
     if (nextPageToken) {
       params.page_token = nextPageToken;
     }
@@ -661,26 +635,10 @@ async function fetchAllSales(
       params.transaction_status = status;
     }
     
-    const queryString = new URLSearchParams(params).toString();
-    const url = `https://developers.hotmart.com/payments/api/v1/sales/history?${queryString}`;
-    
     console.log(`Fetching page ${pageCount + 1}...`);
     
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Hotmart API error:', error);
-      throw new Error(`Hotmart API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    // MIGRATED: Use proxy instead of direct call
+    const data = await callHotmartProxy(projectId, '/payments/api/v1/sales/history', params);
     const items = data.items || [];
     
     console.log(`Page ${pageCount + 1}: ${items.length} sales`);
@@ -689,37 +647,24 @@ async function fetchAllSales(
     pageCount++;
     
     // Get next page token from response
-    nextPageToken = data.page_info?.next_page_token || null;
+    nextPageToken = data.page_info?.next_page_token || data.next_page_token || null;
     
     // Safety limit
     if (pageCount >= 100) {
       console.warn('Reached page limit (100), stopping pagination');
       break;
     }
+    
+    // Rate limit protection
+    if (nextPageToken) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
   } while (nextPageToken);
   
   return allSales;
 }
 
-// ============================================
-// HOTMART API STATUS HANDLING - CRITICAL FIX
-// ============================================
-// The Hotmart Sales History API has a special behavior:
-// - When NO transaction_status filter is passed, it returns ONLY "APPROVED" and "COMPLETE" sales
-// - When a specific status filter IS passed (e.g., transaction_status=APPROVED), 
-//   the API may return 0 results even if APPROVED sales exist
-//
-// SOLUTION:
-// 1. First fetch WITHOUT any status filter → gets APPROVED + COMPLETE (the main revenue)
-// 2. Then fetch OTHER statuses individually with filters
-//
-// Source: https://developers.hotmart.com/docs/en/v1/sales/sales-history/
-// "if you do not set up the transaction or transaction_status filters for this endpoint, 
-//  it'll only return the 'APPROVED' and 'COMPLETE' statuses."
-// ============================================
-
 // Statuses that require explicit filtering (NOT returned by default)
-// APPROVED and COMPLETE are excluded because they're returned by the default (no filter) call
 const SECONDARY_TRANSACTION_STATUSES = [
   'ABANDONED',
   'BLOCKED',
@@ -740,7 +685,7 @@ const SECONDARY_TRANSACTION_STATUSES = [
   'WAITING_PAYMENT',
 ];
 
-// PRIMARY statuses for quick search (subset of secondary for faster syncs)
+// PRIMARY statuses for quick search
 const QUICK_SECONDARY_STATUSES = [
   'WAITING_PAYMENT',
   'CANCELLED',
@@ -748,9 +693,28 @@ const QUICK_SECONDARY_STATUSES = [
   'CHARGEBACK',
 ];
 
-// Sync sales to database - FIXED with proper Hotmart API behavior
-// The sync now correctly handles the Hotmart API quirk where APPROVED/COMPLETE
-// must be fetched WITHOUT a status filter
+// STANDARDIZED exchange rates - MUST match webhook rates exactly
+const exchangeRates: Record<string, number> = {
+  'BRL': 1,
+  'USD': 5.50,
+  'EUR': 6.00,
+  'GBP': 7.00,
+  'PYG': 0.00075,
+  'UYU': 0.14,
+  'AUD': 3.60,
+  'CHF': 6.20,
+  'CAD': 4.00,
+  'MXN': 0.28,
+  'ARS': 0.005,
+  'CLP': 0.006,
+  'COP': 0.0013,
+  'PEN': 1.45,
+  'JPY': 0.037,
+  'BOB': 0.79,
+  'VES': 0.15,
+};
+
+// Sync sales to database - MIGRATED to use proxy
 async function syncSales(
   projectId: string,
   startDate: number,
@@ -763,36 +727,29 @@ async function syncSales(
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  // Get credentials and token
-  const credentials = await getProjectCredentials(projectId);
-  const token = await getHotmartToken(credentials);
-  
-  // Fetch sales from Hotmart
   console.log(`Syncing sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`);
-  console.log(`Mode: ${quickMode ? 'QUICK' : 'FULL'}`);
+  console.log(`Mode: ${quickMode ? 'QUICK' : 'FULL'} | Proxy: ${HOTMART_PROXY_URL}`);
   
   let allSales: HotmartSale[] = [];
   
   // If a specific status is requested, just fetch that one
   if (status) {
     console.log(`Fetching specific status: ${status}`);
-    allSales = await fetchAllSales(token, startDate, endDate, status);
+    allSales = await fetchAllSales(projectId, startDate, endDate, status);
     console.log(`Sales fetched for status ${status}: ${allSales.length}`);
   } else if (!fetchAllStatuses) {
     // Legacy behavior: fetch without status filter (returns APPROVED + COMPLETE only)
     console.log('Fetching without status filter (APPROVED + COMPLETE only)...');
-    allSales = await fetchAllSales(token, startDate, endDate, undefined);
+    allSales = await fetchAllSales(projectId, startDate, endDate, undefined);
     console.log(`Sales fetched (default APPROVED+COMPLETE): ${allSales.length}`);
   } else {
     // FULL SYNC with correct Hotmart API behavior
-    console.log('=== FULL SYNC MODE ===');
+    console.log('=== FULL SYNC MODE (via Railway Proxy) ===');
     
-    // STEP 1: Fetch APPROVED + COMPLETE without any filter (critical for revenue!)
-    // According to Hotmart docs: "if you do not set up the transaction_status filter, 
-    // it'll only return the 'APPROVED' and 'COMPLETE' statuses."
+    // STEP 1: Fetch APPROVED + COMPLETE without any filter
     console.log('[STEP 1] Fetching APPROVED + COMPLETE (no status filter)...');
     try {
-      const primarySales = await fetchAllSales(token, startDate, endDate, undefined);
+      const primarySales = await fetchAllSales(projectId, startDate, endDate, undefined);
       console.log(`[STEP 1] SUCCESS: ${primarySales.length} sales fetched (APPROVED+COMPLETE)`);
       allSales.push(...primarySales);
     } catch (primaryError) {
@@ -800,14 +757,13 @@ async function syncSales(
     }
     
     // STEP 2: Fetch secondary statuses with explicit filters
-    // These are statuses NOT returned by the default call
     const statusesToFetch = quickMode ? QUICK_SECONDARY_STATUSES : SECONDARY_TRANSACTION_STATUSES;
     console.log(`[STEP 2] Fetching ${statusesToFetch.length} secondary statuses...`);
     
     for (const txStatus of statusesToFetch) {
       try {
         console.log(`  Fetching status: ${txStatus}...`);
-        const salesForStatus = await fetchAllSales(token, startDate, endDate, txStatus);
+        const salesForStatus = await fetchAllSales(projectId, startDate, endDate, txStatus);
         console.log(`    Found ${salesForStatus.length} sales with status ${txStatus}`);
         allSales.push(...salesForStatus);
       } catch (statusError) {
@@ -825,7 +781,6 @@ async function syncSales(
     return { synced: 0, updated: 0, errors: 0, categoryStats: {} };
   }
   
-  // Use allSales instead of sales
   const sales = allSales;
   
   // Get offer mappings for attribution (one query)
@@ -853,76 +808,8 @@ async function syncSales(
     unidentified_origin: 0,
     other_origin: 0,
   };
-  
-  // STANDARDIZED exchange rates - MUST match webhook rates exactly
-  // Using fixed rates to ensure consistency between webhook and API
-  const exchangeRates: Record<string, number> = {
-    'BRL': 1,
-    'USD': 5.50,
-    'EUR': 6.00,
-    'GBP': 7.00,
-    'PYG': 0.00075,
-    'UYU': 0.14,
-    'AUD': 3.60,
-    'CHF': 6.20,
-    'CAD': 4.00,
-    'MXN': 0.28,
-    'ARS': 0.005,
-    'CLP': 0.006,
-    'COP': 0.0013,
-    'PEN': 1.45,
-    'JPY': 0.037,
-    'BOB': 0.79,
-    'VES': 0.15,
-  };
-  
-  console.log('Using standardized exchange rates (matching webhook):', exchangeRates);
 
-  // Log first sale's full purchase for debugging source_sck and checkout_origin
-  if (sales.length > 0) {
-    const firstSale = sales[0];
-    const purchase = firstSale.purchase as Record<string, unknown>;
-    console.log('First sale tracking debug:', {
-      transaction: firstSale.purchase.transaction,
-      tracking: firstSale.purchase.tracking,
-      checkout_source: purchase['checkout_source'],
-      sck: purchase['sck'],
-      source: purchase['source'],
-      origin: purchase['origin'],
-      // Log all purchase keys to find the right field
-      purchaseKeys: Object.keys(purchase)
-    });
-  }
-  
-  // Find a sale with source_sck that looks like Meta UTM pattern
-  const saleWithMetaSource = sales.find(s => {
-    const purchase = s.purchase as Record<string, unknown>;
-    const tracking = s.purchase.tracking as Record<string, unknown> | undefined;
-    const sck = (tracking?.['source_sck'] || purchase['sck'] || '') as string;
-    return sck.includes('|') && (sck.includes('Meta') || sck.includes('PERPETUO') || sck.includes('ADVANTAGE'));
-  });
-  if (saleWithMetaSource) {
-    const purchase = saleWithMetaSource.purchase as Record<string, unknown>;
-    const tracking = saleWithMetaSource.purchase.tracking as Record<string, unknown> | undefined;
-    console.log('Found sale with Meta source_sck:', {
-      transaction: saleWithMetaSource.purchase.transaction,
-      tracking: saleWithMetaSource.purchase.tracking,
-      source_sck: tracking?.['source_sck'] || purchase['sck']
-    });
-  }
-  
   // Prepare all sales data
-  // Log first sale's buyer structure for debugging (only once per sync)
-  if (sales.length > 0) {
-    const sampleBuyer = sales[0].buyer;
-    console.log('=== BUYER STRUCTURE DEBUG ===');
-    console.log('Full buyer object:', JSON.stringify(sampleBuyer, null, 2));
-    console.log('buyer.phone:', JSON.stringify(sampleBuyer?.phone, null, 2));
-    console.log('buyer.checkout_phone:', sampleBuyer?.checkout_phone);
-    console.log('buyer.phones:', JSON.stringify(sampleBuyer?.phones, null, 2));
-    console.log('=== END BUYER DEBUG ===');
-  }
-
   const salesData = sales.map(sale => {
     const tracking = sale.purchase.tracking;
     const { campaignId, adsetId, adId } = extractMetaIds(tracking);
@@ -947,8 +834,6 @@ async function syncSales(
     let rate = exchangeRates[currencyCode];
     if (rate === undefined) {
       console.warn(`Unknown currency ${currencyCode} for transaction ${sale.purchase.transaction}, using conservative estimate`);
-      // For unknown currencies, assume it's a weak currency (value in hundreds/thousands)
-      // This prevents massive overestimation
       rate = totalPrice > 1000 ? 0.001 : 1;
     }
     
@@ -968,29 +853,22 @@ async function syncSales(
       phoneNumber = phoneObj.number || null;
       phoneCountryCode = phoneObj.country_code || phoneObj.ddi || '55';
     }
-    // Try structure 2: buyer.checkout_phone as full string (e.g., "5511999999999")
+    // Try structure 2: buyer.checkout_phone as full string
     else if (buyer?.checkout_phone) {
       const fullPhone = String(buyer.checkout_phone).replace(/\D/g, '');
       if (fullPhone.length >= 10) {
-        // Check if starts with country code (55 for Brazil)
         if (fullPhone.startsWith('55') && fullPhone.length >= 12) {
           phoneCountryCode = '55';
           phoneDdd = fullPhone.substring(2, 4);
           phoneNumber = fullPhone.substring(4);
         } else if (fullPhone.length === 11) {
-          // Brazilian format without country code: DDD + 9 digits
           phoneCountryCode = '55';
           phoneDdd = fullPhone.substring(0, 2);
           phoneNumber = fullPhone.substring(2);
         } else if (fullPhone.length === 10) {
-          // Brazilian format without country code: DDD + 8 digits (landline)
           phoneCountryCode = '55';
           phoneDdd = fullPhone.substring(0, 2);
           phoneNumber = fullPhone.substring(2);
-        } else {
-          // Unknown format, store as is
-          phoneNumber = fullPhone;
-          phoneCountryCode = '55';
         }
       }
     }
@@ -1108,9 +986,6 @@ async function syncSales(
   
   // =====================================================
   // SALES CORE - Write canonical revenue events in batch
-  // CORRECT FINANCIAL MAPPING:
-  // - gross_amount = full_price (valor pago pelo comprador)
-  // - net_amount = PRODUCER commission ("Você recebeu" - owner's money)
   // =====================================================
   let salesCoreStats = { synced: 0, versioned: 0, errors: 0 };
   try {
@@ -1127,23 +1002,12 @@ async function syncSales(
       const rate = exchangeRates[currencyCode] || 1;
       
       // CORRECT: Use full_price for gross (valor pago pelo comprador)
-      // full_price includes taxes, price is after taxes (base)
       const fullPrice = (sale.purchase as any).full_price?.value || sale.purchase.price?.value || 0;
       const grossAmount = fullPrice * rate;
       
       // CORRECT: Extract PRODUCER commission as net_amount ("Você recebeu")
       const financials = extractFinancialBreakdown(sale.commissions);
-      const ownerNet = financials.ownerNet; // PRODUCER source = owner's money
-      
-      // Log for verification on first few sales
-      if (sales.indexOf(sale) < 3) {
-        console.log(`[SalesCore] Transaction ${sale.purchase.transaction}:`);
-        console.log(`  - Gross (full_price * rate): ${grossAmount}`);
-        console.log(`  - Platform Fee (MARKETPLACE): ${financials.platformFee}`);
-        console.log(`  - Owner Net (PRODUCER): ${ownerNet}`);
-        console.log(`  - Coproducer (CO_PRODUCER): ${financials.coproducerAmount}`);
-        console.log(`  - Affiliate: ${financials.affiliateAmount}`);
-      }
+      const ownerNet = financials.ownerNet;
       
       return { sale, contactId, grossAmount, ownerNet };
     });
@@ -1153,7 +1017,6 @@ async function syncSales(
     
     console.log(`[SalesCore] Canonical events: ${salesCoreStats.synced} new, ${salesCoreStats.versioned} versioned, ${salesCoreStats.errors} errors`);
   } catch (salesCoreError) {
-    // Don't fail the sync if Sales Core fails
     console.error('[SalesCore] Error writing canonical events:', salesCoreError);
   }
   
@@ -1161,7 +1024,6 @@ async function syncSales(
   const existingOfferCodes = new Set(offerMappings?.map(m => m.codigo_oferta).filter(Boolean) || []);
   const newOfferCodes = new Set<string>();
   
-  // Collect unique offer codes from sales that don't exist in mappings
   const offerDataMap = new Map<string, { productName: string; bestPrice: number | null }>();
   
   for (const sale of sales) {
@@ -1170,12 +1032,10 @@ async function syncSales(
     
     newOfferCodes.add(offerCode);
     
-    // Get product info for the new mapping
     const productName = sale.product?.name || 'Produto Desconhecido';
     const currencyCode = sale.purchase.price?.currency_code || 'BRL';
     const totalPrice = sale.purchase.price?.value || null;
     
-    // Only store BRL prices, convert others
     const existing = offerDataMap.get(offerCode);
     if (!existing) {
       const priceInBrl = currencyCode === 'BRL' ? totalPrice : 
@@ -1188,7 +1048,6 @@ async function syncSales(
   if (newOfferCodes.size > 0) {
     console.log(`Auto-creating ${newOfferCodes.size} new offer mappings...`);
     
-    // Get or create "A Definir" funnel for this project
     let defaultFunnelId: string | null = null;
     const { data: existingFunnel } = await supabase
       .from('funnels')
@@ -1201,7 +1060,6 @@ async function syncSales(
     if (existingFunnel) {
       defaultFunnelId = existingFunnel.id;
     } else {
-      // Create "A Definir" funnel if it doesn't exist
       const { data: newFunnel, error: funnelError } = await supabase
         .from('funnels')
         .insert({
@@ -1218,7 +1076,6 @@ async function syncSales(
       }
     }
     
-    // Prepare offer mappings to insert
     const newMappings = Array.from(newOfferCodes).map(code => {
       const data = offerDataMap.get(code);
       return {
@@ -1234,7 +1091,6 @@ async function syncSales(
       };
     });
     
-    // Insert in batches, ignoring duplicates (constraint will prevent them)
     const MAPPING_BATCH_SIZE = 50;
     let mappingsCreated = 0;
     
@@ -1248,7 +1104,6 @@ async function syncSales(
       if (!insertError) {
         mappingsCreated += batch.length;
       } else {
-        // Log but don't fail - duplicates are expected if running multiple syncs
         console.log('Some offer mappings already exist (this is normal):', insertError.message);
       }
     }
@@ -1268,7 +1123,6 @@ serve(async (req) => {
     const { endpoint, params, apiType, projectId: bodyProjectId, action, startDate, endDate, status, quickMode } = await req.json();
     
     // CANONICAL: Resolve project_id from X-Project-Code header (preferred)
-    // Falls back to body.projectId for backward compatibility
     const projectCode = req.headers.get('X-Project-Code');
     let projectId = bodyProjectId;
     
@@ -1298,13 +1152,12 @@ serve(async (req) => {
       throw new Error('Project ID is required. Pass X-Project-Code header or projectId in body.');
     }
 
-    // Handle sync_sales action - now with monthly chunking for large periods
+    // Handle sync_sales action
     if (action === 'sync_sales') {
       if (!startDate || !endDate) {
         throw new Error('startDate and endDate are required for sync_sales');
       }
       
-      // Calculate period length
       const periodMs = endDate - startDate;
       const periodDays = periodMs / (1000 * 60 * 60 * 24);
       
@@ -1317,10 +1170,9 @@ serve(async (req) => {
         const finalEnd = new Date(endDate);
         
         while (chunkStart < finalEnd) {
-          // End of current month or final end date, whichever comes first
           const chunkEnd = new Date(chunkStart);
           chunkEnd.setMonth(chunkEnd.getMonth() + 1);
-          chunkEnd.setDate(0); // Last day of current month
+          chunkEnd.setDate(0);
           chunkEnd.setHours(23, 59, 59, 999);
           
           const actualEnd = chunkEnd > finalEnd ? finalEnd : chunkEnd;
@@ -1330,7 +1182,6 @@ serve(async (req) => {
             end: actualEnd.getTime()
           });
           
-          // Move to next month
           chunkStart = new Date(actualEnd);
           chunkStart.setDate(chunkStart.getDate() + 1);
           chunkStart.setHours(0, 0, 0, 0);
@@ -1351,17 +1202,14 @@ serve(async (req) => {
           const chunk = chunks[i];
           console.log(`Processing chunk ${i + 1}/${chunks.length}: ${new Date(chunk.start).toISOString()} to ${new Date(chunk.end).toISOString()}`);
           
-          // Pass quickMode to syncSales
           const result = await syncSales(projectId, chunk.start, chunk.end, status, true, quickMode === true);
           totalSynced += result.synced;
           totalErrors += result.errors;
           
-          // Combine category stats
           Object.keys(result.categoryStats || {}).forEach(key => {
             combinedStats[key] = (combinedStats[key] || 0) + (result.categoryStats?.[key] || 0);
           });
           
-          // Small delay between chunks to avoid rate limiting
           if (i < chunks.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
@@ -1374,50 +1222,30 @@ serve(async (req) => {
           updated: 0,
           errors: totalErrors,
           categoryStats: combinedStats,
-          chunks: chunks.length
+          chunks: chunks.length,
+          proxyUsed: HOTMART_PROXY_URL
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      // Small period - sync directly with quickMode
+      // Small period - sync directly
       const result = await syncSales(projectId, startDate, endDate, status, true, quickMode === true);
       
-      return new Response(JSON.stringify(result), {
+      return new Response(JSON.stringify({ ...result, proxyUsed: HOTMART_PROXY_URL }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Original API passthrough logic
-    const credentials = await getProjectCredentials(projectId);
-    const token = await getHotmartToken(credentials);
-
-    const baseUrl = apiType === 'products' 
-      ? 'https://developers.hotmart.com/products/api/v1'
-      : 'https://developers.hotmart.com/payments/api/v1';
-
-    const queryString = params ? new URLSearchParams(params).toString() : '';
-    const url = `${baseUrl}/${endpoint}${queryString ? `?${queryString}` : ''}`;
-
-    console.log('Calling Hotmart API:', url);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Hotmart API error:', error);
-      throw new Error(`Hotmart API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Hotmart API response received');
-
+    // API passthrough logic - THROUGH PROXY
+    console.log(`[hotmart-api] Passthrough request: ${endpoint}`);
+    
+    const fullPath = apiType === 'products' 
+      ? `/products/api/v1/${endpoint}`
+      : `/payments/api/v1/${endpoint}`;
+    
+    const data = await callHotmartProxy(projectId, fullPath, params || {});
+    
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -1426,10 +1254,10 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      {
-        status: 500,
+      { 
+        status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      },
     );
   }
 });

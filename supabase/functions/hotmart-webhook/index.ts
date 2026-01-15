@@ -46,17 +46,137 @@ function calculateEconomicDay(occurredAt: Date, timezone: string = 'America/Sao_
   return adjustedDate.toISOString().split('T')[0];
 }
 
+// ============================================
+// UTM PARSING FROM CHECKOUT ORIGIN
+// ============================================
+// Format: "Meta-Ads|campaign_name_with_id|adset_name_with_id|placement|creative_name_with_id"
+// OR: "source|campaign|adset|placement|creative"
+// OR: "wpp|g-amg|||" (WhatsApp organic)
+// ============================================
+
+interface ParsedUTMs {
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_term: string | null;
+  utm_placement: string | null;
+  utm_adset: string | null;
+  utm_creative: string | null;
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  meta_ad_id: string | null;
+}
+
+function parseCheckoutOriginToUTMs(checkoutOrigin: string | null): ParsedUTMs {
+  const result: ParsedUTMs = {
+    utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    utm_content: null,
+    utm_term: null,
+    utm_placement: null,
+    utm_adset: null,
+    utm_creative: null,
+    meta_campaign_id: null,
+    meta_adset_id: null,
+    meta_ad_id: null,
+  };
+  
+  if (!checkoutOrigin || checkoutOrigin.trim() === '') {
+    return result;
+  }
+  
+  const parts = checkoutOrigin.split('|').map(p => p.trim());
+  
+  // Extract source from first part
+  const source = parts[0] || null;
+  if (source) {
+    // Normalize common sources
+    const sourceLower = source.toLowerCase();
+    if (sourceLower === 'meta-ads' || sourceLower === 'facebook' || sourceLower === 'fb') {
+      result.utm_source = 'facebook';
+      result.utm_medium = 'paid';
+    } else if (sourceLower === 'wpp' || sourceLower === 'whatsapp') {
+      result.utm_source = 'whatsapp';
+      result.utm_medium = 'organic';
+    } else if (sourceLower === 'google' || sourceLower === 'gads') {
+      result.utm_source = 'google';
+      result.utm_medium = 'paid';
+    } else if (sourceLower === 'organic' || sourceLower === 'direto') {
+      result.utm_source = 'direct';
+      result.utm_medium = 'organic';
+    } else {
+      result.utm_source = source;
+      result.utm_medium = 'unknown';
+    }
+  }
+  
+  // Parse remaining parts: campaign, adset, placement, creative
+  if (parts.length >= 2 && parts[1]) {
+    result.utm_campaign = parts[1];
+    // Extract Meta campaign ID (numbers at end of campaign name)
+    const campaignIdMatch = parts[1].match(/_(\d{10,})$/);
+    if (campaignIdMatch) {
+      result.meta_campaign_id = campaignIdMatch[1];
+    }
+  }
+  
+  if (parts.length >= 3 && parts[2]) {
+    result.utm_adset = parts[2];
+    // Extract Meta adset ID
+    const adsetIdMatch = parts[2].match(/_(\d{10,})$/);
+    if (adsetIdMatch) {
+      result.meta_adset_id = adsetIdMatch[1];
+    }
+  }
+  
+  if (parts.length >= 4 && parts[3]) {
+    result.utm_placement = parts[3];
+    // Normalize placement to medium if not already set
+    const placement = parts[3].toLowerCase();
+    if (placement.includes('instagram')) {
+      result.utm_medium = 'instagram';
+    } else if (placement.includes('facebook')) {
+      result.utm_medium = 'facebook';
+    } else if (placement === 'an') {
+      result.utm_medium = 'audience_network';
+    }
+  }
+  
+  if (parts.length >= 5 && parts[4]) {
+    result.utm_creative = parts[4];
+    result.utm_content = parts[4]; // Also set as utm_content for compatibility
+    // Extract Meta ad ID
+    const adIdMatch = parts[4].match(/_(\d{10,})$/);
+    if (adIdMatch) {
+      result.meta_ad_id = adIdMatch[1];
+    }
+  }
+  
+  return result;
+}
+
 // Extract attribution data from tracking/UTM
 function extractAttribution(purchase: any, checkoutOrigin: string | null): Record<string, any> {
   const tracking = purchase?.origin || {};
   const sck = tracking?.sck || checkoutOrigin || '';
   
+  // Parse checkout_origin into structured UTMs
+  const parsedUTMs = parseCheckoutOriginToUTMs(sck);
+  
   return {
-    utm_source: null, // Will be parsed from sck if available
-    utm_medium: null,
-    utm_campaign: null,
-    utm_content: null,
-    utm_term: null,
+    utm_source: parsedUTMs.utm_source,
+    utm_medium: parsedUTMs.utm_medium,
+    utm_campaign: parsedUTMs.utm_campaign,
+    utm_content: parsedUTMs.utm_content,
+    utm_term: parsedUTMs.utm_term,
+    utm_placement: parsedUTMs.utm_placement,
+    utm_adset: parsedUTMs.utm_adset,
+    utm_creative: parsedUTMs.utm_creative,
+    meta_campaign_id: parsedUTMs.meta_campaign_id,
+    meta_adset_id: parsedUTMs.meta_adset_id,
+    meta_ad_id: parsedUTMs.meta_ad_id,
     hotmart_checkout_source: sck,
     src: tracking?.src || null,
     xcod: tracking?.xcod || null,
@@ -703,36 +823,27 @@ serve(async (req) => {
       console.log('Parsed phone:', { buyerPhoneCountryCode, buyerPhoneDDD, buyerPhone });
     }
     
-    // Parse origin/UTM from sck field
-    let checkoutOrigin: string | null = null;
-    let utmSource: string | null = null;
-    let utmCampaignId: string | null = null;
-    let utmAdsetName: string | null = null;
-    let utmCreative: string | null = null;
-    let utmPlacement: string | null = null;
-    let metaCampaignIdExtracted: string | null = null;
-    let metaAdsetIdExtracted: string | null = null;
-    let metaAdIdExtracted: string | null = null;
+    // ============================================
+    // PARSE CHECKOUT ORIGIN INTO UTMs
+    // ============================================
+    // Using the standardized parseCheckoutOriginToUTMs function
+    const sck = purchase?.origin?.sck || null;
+    const checkoutOrigin = sck;
+    const parsedUTMs = parseCheckoutOriginToUTMs(sck);
     
-    const sck = purchase?.origin?.sck;
-    if (sck) {
-      checkoutOrigin = sck;
-      
-      // Parse Meta Ads data from sck
-      if (sck.includes('Meta-Ads') || sck.includes('|')) {
-        const parts = sck.split('|');
-        if (parts.length >= 2) {
-          for (const part of parts) {
-            const cleanPart = part.trim();
-            if (/^\d{10,}$/.test(cleanPart)) {
-              if (!metaAdIdExtracted) metaAdIdExtracted = cleanPart;
-              else if (!metaAdsetIdExtracted) metaAdsetIdExtracted = cleanPart;
-              else if (!metaCampaignIdExtracted) metaCampaignIdExtracted = cleanPart;
-            }
-          }
-        }
-      }
-    }
+    console.log('[UTM Parsing] checkout_origin:', sck);
+    console.log('[UTM Parsing] Parsed UTMs:', JSON.stringify(parsedUTMs));
+    
+    // Extract parsed values for hotmart_sales columns
+    const utmSource = parsedUTMs.utm_source;
+    const utmMedium = parsedUTMs.utm_medium;
+    const utmCampaign = parsedUTMs.utm_campaign;
+    const utmAdset = parsedUTMs.utm_adset;
+    const utmPlacement = parsedUTMs.utm_placement;
+    const utmCreative = parsedUTMs.utm_creative;
+    const metaCampaignIdExtracted = parsedUTMs.meta_campaign_id;
+    const metaAdsetIdExtracted = parsedUTMs.meta_adset_id;
+    const metaAdIdExtracted = parsedUTMs.meta_ad_id;
     
     // Prepare sale data
     const saleDate = purchase?.order_date 
@@ -877,11 +988,12 @@ serve(async (req) => {
       // Affiliate
       affiliate_code: affiliate?.affiliate_code || null,
       affiliate_name: affiliate?.name || null,
-      // UTM/Origin
+      // UTM/Origin - Now properly parsed from checkout_origin
       checkout_origin: checkoutOrigin,
       utm_source: utmSource,
-      utm_campaign_id: utmCampaignId,
-      utm_adset_name: utmAdsetName,
+      utm_medium: utmMedium,
+      utm_campaign_id: utmCampaign, // Store campaign name (ID is extracted separately)
+      utm_adset_name: utmAdset,     // Store adset name
       utm_creative: utmCreative,
       utm_placement: utmPlacement,
       meta_campaign_id_extracted: metaCampaignIdExtracted,

@@ -2,8 +2,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-project-code',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-project-code, x-cubo-internal-key',
 };
+
+// Internal key for VPS-to-VPS authentication
+const CUBO_INTERNAL_KEY = Deno.env.get('CUBO_INTERNAL_KEY');
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -17,29 +20,9 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('[hotmart-credentials-export] No authorization header');
-      return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verify user token
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      console.error('[hotmart-credentials-export] Auth error:', authError);
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`[hotmart-credentials-export] User authenticated: ${user.id}`);
+    // Check for VPS-to-VPS authentication via X-Cubo-Internal-Key
+    const internalKey = req.headers.get('X-Cubo-Internal-Key') || req.headers.get('x-cubo-internal-key');
+    const isInternalCall = internalKey && CUBO_INTERNAL_KEY && internalKey === CUBO_INTERNAL_KEY;
 
     // Get project_id from query params or body
     const url = new URL(req.url);
@@ -57,44 +40,72 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[hotmart-credentials-export] Checking access for project: ${projectId}`);
+    // If internal VPS call with valid key, skip user auth
+    if (isInternalCall) {
+      console.log(`[hotmart-credentials-export] VPS internal call authenticated for project: ${projectId}`);
+    } else {
+      // Regular user authentication flow
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        console.error('[hotmart-credentials-export] No authorization header');
+        return new Response(
+          JSON.stringify({ error: 'Authorization header or X-Cubo-Internal-Key required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
-    // Check if user is owner or manager of this project
-    const { data: projectOwner } = await supabase
-      .from('projects')
-      .select('user_id')
-      .eq('id', projectId)
-      .maybeSingle();
-
-    const isOwner = projectOwner?.user_id === user.id;
-
-    let isManager = false;
-    if (!isOwner) {
-      const { data: memberRole } = await supabase
-        .from('project_members')
-        .select('role')
-        .eq('project_id', projectId)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Verify user token
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
       
-      isManager = memberRole?.role === 'manager';
+      if (authError || !user) {
+        console.error('[hotmart-credentials-export] Auth error:', authError);
+        return new Response(
+          JSON.stringify({ error: 'Invalid or expired token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[hotmart-credentials-export] User authenticated: ${user.id}`);
+      console.log(`[hotmart-credentials-export] Checking access for project: ${projectId}`);
+
+      // Check if user is owner or manager of this project
+      const { data: projectOwner } = await supabase
+        .from('projects')
+        .select('user_id')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      const isOwner = projectOwner?.user_id === user.id;
+
+      let isManager = false;
+      if (!isOwner) {
+        const { data: memberRole } = await supabase
+          .from('project_members')
+          .select('role')
+          .eq('project_id', projectId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        isManager = memberRole?.role === 'manager';
+      }
+
+      // Check if user is super admin
+      const { data: adminCheck } = await supabase
+        .rpc('is_super_admin', { user_id: user.id });
+
+      const isSuperAdmin = adminCheck === true;
+
+      if (!isOwner && !isManager && !isSuperAdmin) {
+        console.error('[hotmart-credentials-export] User not authorized for this project');
+        return new Response(
+          JSON.stringify({ error: 'Access denied. Only project owner, manager, or super admin can export credentials.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[hotmart-credentials-export] Access granted. Owner: ${isOwner}, Manager: ${isManager}, SuperAdmin: ${isSuperAdmin}`);
     }
-
-    // Check if user is super admin
-    const { data: adminCheck } = await supabase
-      .rpc('is_super_admin', { user_id: user.id });
-
-    const isSuperAdmin = adminCheck === true;
-
-    if (!isOwner && !isManager && !isSuperAdmin) {
-      console.error('[hotmart-credentials-export] User not authorized for this project');
-      return new Response(
-        JSON.stringify({ error: 'Access denied. Only project owner, manager, or super admin can export credentials.' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`[hotmart-credentials-export] Access granted. Owner: ${isOwner}, Manager: ${isManager}, SuperAdmin: ${isSuperAdmin}`);
 
     // Get credentials using the secure function that decrypts values
     const { data: credentials, error: credError } = await supabase

@@ -9322,6 +9322,22 @@ export type Database = {
         Args: { p_department_id?: string; p_project_id: string }
         Returns: string
       }
+      get_project_credentials_internal: {
+        Args: { p_project_id: string }
+        Returns: {
+          basic_auth: string
+          client_id: string
+          client_secret: string
+          created_at: string
+          id: string
+          is_configured: boolean
+          is_validated: boolean
+          project_id: string
+          provider: string
+          updated_at: string
+          validated_at: string
+        }[]
+      }
       get_project_credentials_secure: {
         Args: { p_project_id: string }
         Returns: {

@@ -138,9 +138,10 @@ Deno.serve(async (req) => {
       console.log(`[hotmart-credentials-export] Access granted. Owner: ${isOwner}, Manager: ${isManager}, SuperAdmin: ${isSuperAdmin}`);
     }
 
-    // Get credentials using the secure function that decrypts values
+    // Get credentials - use internal function for VPS calls, secure function for user calls
+    const rpcFunction = isInternalCall ? 'get_project_credentials_internal' : 'get_project_credentials_secure';
     const { data: credentials, error: credError } = await supabase
-      .rpc('get_project_credentials_secure', { p_project_id: projectId });
+      .rpc(rpcFunction, { p_project_id: projectId });
 
     if (credError) {
       console.error('[hotmart-credentials-export] Error fetching credentials:', credError);

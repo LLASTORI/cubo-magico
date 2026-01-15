@@ -101,3 +101,6 @@ verify_jwt = true
 
 [functions.quiz-copilot]
 verify_jwt = false
+
+[functions.hotmart-credentials-export]
+verify_jwt = false

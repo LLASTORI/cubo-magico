@@ -445,11 +445,19 @@ export const HotmartSettings = () => {
 
     setOauthConnecting(true);
     try {
-      // Get signed state from edge function
+      // Build a safe redirect back URL to this project's settings.
+      // IMPORTANT: projectCode must come from the URL (/app/:projectCode/*), never from projectId (UUID).
+      const pathParts = window.location.pathname.split('/');
+      const projectCodeFromPath = pathParts[1] === 'app' ? pathParts[2] : undefined;
+      const redirectBackUrl = projectCodeFromPath
+        ? `${window.location.origin}/app/${projectCodeFromPath}/settings`
+        : `${window.location.origin}/projects`;
+
+      // Get signed state from backend function
       const { data, error } = await supabase.functions.invoke('hotmart-oauth-state', {
-        body: { 
+        body: {
           projectId,
-          redirectUrl: window.location.origin + '/app/' + (currentProject?.public_code || projectId) + '/settings'
+          redirectUrl: redirectBackUrl,
         },
       });
 
@@ -457,14 +465,42 @@ export const HotmartSettings = () => {
       if (!data?.state) throw new Error('Estado OAuth não gerado');
 
       // Build Hotmart authorization URL (correct endpoint)
+      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hotmart-oauth-callback`;
       const authUrl = new URL('https://api-sec-vlc.hotmart.com/security/oauth/authorize');
       authUrl.searchParams.set('client_id', credentials.client_id);
-      authUrl.searchParams.set('redirect_uri', `https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-oauth-callback`);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('scope', 'all');
       authUrl.searchParams.set('state', data.state);
 
-      // Redirect to Hotmart OAuth
+      // In the preview (iframe), Hotmart blocks rendering, so we open a new tab.
+      const isInIframe = (() => {
+        try {
+          return window.self !== window.top;
+        } catch {
+          return true;
+        }
+      })();
+
+      if (isInIframe) {
+        const opened = window.open(authUrl.toString(), '_blank', 'noopener,noreferrer');
+
+        // If the popup was blocked, fallback to same-tab navigation.
+        if (!opened) {
+          window.location.href = authUrl.toString();
+          return;
+        }
+
+        toast({
+          title: 'Continue a autorização na nova aba',
+          description: 'A Hotmart não abre dentro do preview. Depois de autorizar, você voltará para as Configurações.',
+        });
+
+        setOauthConnecting(false);
+        return;
+      }
+
+      // Production: same-tab redirect
       window.location.href = authUrl.toString();
 
     } catch (error: any) {

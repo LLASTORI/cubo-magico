@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // ============================================
 // SALES CORE PROVIDER - Hotmart Revenue Ingestion
 // FINANCE LEDGER - Primary Financial Source (Webhook Only)
+// ORDERS CORE SHADOW MODE - Duplicate to new canonical structure
 // ============================================
 
 // Map Hotmart events to canonical event types
@@ -17,6 +18,19 @@ const hotmartToCanonicalEventType: Record<string, string> = {
   'SUBSCRIPTION_STARTED': 'subscription',
   'PURCHASE_RECURRENCE_CANCELLATION': 'refund',
   'SWITCH_PLAN': 'upgrade',
+};
+
+// Map Hotmart events to canonical order status
+const hotmartToOrderStatus: Record<string, string> = {
+  'PURCHASE_APPROVED': 'approved',
+  'PURCHASE_COMPLETE': 'completed',
+  'PURCHASE_BILLET_PRINTED': 'pending',
+  'PURCHASE_CANCELED': 'cancelled',
+  'PURCHASE_REFUNDED': 'refunded',
+  'PURCHASE_CHARGEBACK': 'chargeback',
+  'SUBSCRIPTION_STARTED': 'approved',
+  'PURCHASE_RECURRENCE_CANCELLATION': 'cancelled',
+  'SWITCH_PLAN': 'approved',
 };
 
 // Map Hotmart events to ledger entry types
@@ -36,6 +50,397 @@ const creditEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE', 'SUBSCRIPTION_ST
 
 // Events that represent money going OUT (inverted amounts)
 const debitEvents = ['PURCHASE_CANCELED', 'PURCHASE_REFUNDED', 'PURCHASE_CHARGEBACK', 'PURCHASE_RECURRENCE_CANCELLATION'];
+
+// ============================================
+// ORDERS CORE SHADOW - Utility Functions
+// ============================================
+
+/**
+ * Resolve Hotmart Order ID from payload
+ * Must be stable for recurrences, bumps, and upsells
+ * 
+ * Priority:
+ * 1. order.id (if exists)
+ * 2. purchase.transaction (transaction ID)
+ * 3. purchase.code (fallback)
+ */
+function resolveHotmartOrderId(payload: any): string | null {
+  const data = payload?.data;
+  const purchase = data?.purchase;
+  
+  // Priority 1: order.id (Hotmart V3 order structure)
+  if (data?.order?.id) {
+    return String(data.order.id);
+  }
+  
+  // Priority 2: For order bumps, use parent transaction
+  if (purchase?.order_bump?.is_order_bump && purchase?.order_bump?.parent_purchase_transaction) {
+    return purchase.order_bump.parent_purchase_transaction;
+  }
+  
+  // Priority 3: purchase.transaction (most common)
+  if (purchase?.transaction) {
+    return purchase.transaction;
+  }
+  
+  // Priority 4: purchase.code (fallback)
+  if (purchase?.code) {
+    return purchase.code;
+  }
+  
+  return null;
+}
+
+/**
+ * Determine item type from Hotmart payload
+ */
+function resolveItemType(payload: any): string {
+  const purchase = payload?.data?.purchase;
+  
+  // Order bump detection
+  if (purchase?.order_bump?.is_order_bump) {
+    return 'bump';
+  }
+  
+  // Upsell/Downsell detection (via tracking or offer metadata)
+  const offerName = purchase?.offer?.name?.toLowerCase() || '';
+  if (offerName.includes('upsell')) return 'upsell';
+  if (offerName.includes('downsell')) return 'downsell';
+  
+  // Default to main product
+  return 'main';
+}
+
+/**
+ * Extract all products from payload (main + combo items)
+ */
+function extractOrderItems(payload: any): Array<{
+  provider_product_id: string;
+  provider_offer_id: string | null;
+  product_name: string;
+  offer_name: string | null;
+  item_type: string;
+  base_price: number | null;
+  quantity: number;
+}> {
+  const data = payload?.data;
+  const product = data?.product;
+  const purchase = data?.purchase;
+  const items: Array<{
+    provider_product_id: string;
+    provider_offer_id: string | null;
+    product_name: string;
+    offer_name: string | null;
+    item_type: string;
+    base_price: number | null;
+    quantity: number;
+  }> = [];
+  
+  if (!product) return items;
+  
+  const itemType = resolveItemType(payload);
+  const basePrice = purchase?.price?.value || purchase?.full_price?.value || null;
+  
+  items.push({
+    provider_product_id: product.id?.toString() || product.ucode || 'unknown',
+    provider_offer_id: purchase?.offer?.code || null,
+    product_name: product.name || 'Unknown Product',
+    offer_name: purchase?.offer?.name || null,
+    item_type: itemType,
+    base_price: basePrice,
+    quantity: 1,
+  });
+  
+  // TODO: Handle combo products when Hotmart provides array of products
+  // Hotmart currently sends one product per webhook for combos
+  
+  return items;
+}
+
+/**
+ * Write order to Orders Core (shadow mode)
+ * UPSERT to handle retries gracefully
+ */
+async function writeOrderShadow(
+  supabase: any,
+  projectId: string,
+  hotmartEvent: string,
+  payload: any,
+  totalPriceBrl: number | null,
+  ownerNetRevenue: number | null,
+  contactId: string | null
+): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number }> {
+  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0 };
+  
+  try {
+    const data = payload?.data;
+    const purchase = data?.purchase;
+    const buyer = data?.buyer;
+    const commissions = data?.commissions || [];
+    
+    const providerOrderId = resolveHotmartOrderId(payload);
+    if (!providerOrderId) {
+      console.log('[OrdersShadow] No order ID resolved, skipping');
+      return result;
+    }
+    
+    const transactionId = purchase?.transaction;
+    const currency = purchase?.price?.currency_value || 'BRL';
+    const status = hotmartToOrderStatus[hotmartEvent] || 'pending';
+    
+    // Calculate gross_base from order items
+    const orderItems = extractOrderItems(payload);
+    const grossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
+    
+    // Parse dates
+    const orderedAt = purchase?.order_date 
+      ? new Date(purchase.order_date).toISOString()
+      : new Date(payload.creation_date).toISOString();
+    
+    const approvedAt = purchase?.approved_date
+      ? new Date(purchase.approved_date).toISOString()
+      : null;
+    
+    // ============================================
+    // 1. UPSERT ORDER
+    // ============================================
+    const orderData = {
+      project_id: projectId,
+      provider: 'hotmart',
+      provider_order_id: providerOrderId,
+      buyer_email: buyer?.email?.toLowerCase() || null,
+      buyer_name: buyer?.name || null,
+      contact_id: contactId,
+      status,
+      currency,
+      customer_paid: totalPriceBrl,
+      gross_base: grossBase || totalPriceBrl,
+      producer_net: ownerNetRevenue,
+      ordered_at: orderedAt,
+      approved_at: approvedAt,
+      completed_at: status === 'completed' ? new Date().toISOString() : null,
+      raw_payload: payload,
+    };
+    
+    // Check if order exists
+    const { data: existingOrder } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart')
+      .eq('provider_order_id', providerOrderId)
+      .maybeSingle();
+    
+    let orderId: string;
+    
+    if (existingOrder) {
+      // Update existing order
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          ...orderData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingOrder.id);
+      
+      if (updateError) {
+        console.error('[OrdersShadow] Error updating order:', updateError);
+        return result;
+      }
+      
+      orderId = existingOrder.id;
+      console.log(`[OrdersShadow] Updated order: ${orderId}`);
+    } else {
+      // Insert new order
+      const { data: newOrder, error: insertError } = await supabase
+        .from('orders')
+        .insert(orderData)
+        .select('id')
+        .single();
+      
+      if (insertError) {
+        console.error('[OrdersShadow] Error inserting order:', insertError);
+        return result;
+      }
+      
+      orderId = newOrder.id;
+      console.log(`[OrdersShadow] Created order: ${orderId}`);
+    }
+    
+    result.orderId = orderId;
+    
+    // ============================================
+    // 2. CREATE ORDER ITEMS (if new order)
+    // ============================================
+    if (!existingOrder) {
+      for (const item of orderItems) {
+        const { error: itemError } = await supabase
+          .from('order_items')
+          .insert({
+            order_id: orderId,
+            provider_product_id: item.provider_product_id,
+            provider_offer_id: item.provider_offer_id,
+            product_name: item.product_name,
+            offer_name: item.offer_name,
+            item_type: item.item_type,
+            base_price: item.base_price,
+            quantity: item.quantity,
+          });
+        
+        if (!itemError) {
+          result.itemsCreated++;
+          console.log(`[OrdersShadow] Created item: ${item.product_name} (${item.item_type})`);
+        }
+      }
+    }
+    
+    // ============================================
+    // 3. CREATE LEDGER EVENTS
+    // ============================================
+    const occurredAt = orderedAt;
+    const isDebit = debitEvents.includes(hotmartEvent);
+    
+    for (const comm of commissions) {
+      const source = (comm.source || '').toUpperCase();
+      let value = comm.value ?? 0;
+      
+      if (value === 0) continue;
+      
+      // For refunds/chargebacks, amounts should be NEGATIVE
+      if (isDebit) {
+        value = -Math.abs(value);
+      }
+      
+      let eventType: string;
+      let actor: string;
+      let actorName: string | null = null;
+      
+      switch (source) {
+        case 'MARKETPLACE':
+          eventType = 'platform_fee';
+          actor = 'platform';
+          actorName = 'hotmart';
+          break;
+        case 'PRODUCER':
+          eventType = isDebit ? 'refund' : 'sale';
+          actor = 'producer';
+          break;
+        case 'CO_PRODUCER':
+          eventType = 'coproducer';
+          actor = 'coproducer';
+          actorName = data?.producer?.name || null;
+          break;
+        case 'AFFILIATE':
+          eventType = 'affiliate';
+          actor = 'affiliate';
+          actorName = data?.affiliates?.[0]?.name || null;
+          break;
+        default:
+          continue;
+      }
+      
+      // Check if event already exists
+      const { data: existingEvent } = await supabase
+        .from('ledger_events')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('event_type', eventType)
+        .eq('actor', actor)
+        .maybeSingle();
+      
+      if (!existingEvent) {
+        const { error: eventError } = await supabase
+          .from('ledger_events')
+          .insert({
+            order_id: orderId,
+            project_id: projectId,
+            provider: 'hotmart',
+            event_type: eventType,
+            actor,
+            actor_name: actorName,
+            amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
+            currency,
+            provider_event_id: `${transactionId}_${eventType}_${actor}`,
+            occurred_at: occurredAt,
+            raw_payload: comm,
+          });
+        
+        if (!eventError) {
+          result.eventsCreated++;
+          console.log(`[OrdersShadow] Created ledger event: ${eventType} (${actor}): ${value}`);
+        }
+      }
+    }
+    
+    // ============================================
+    // 4. AUTO-ADD COPRODUCER if calculated
+    // ============================================
+    const hasCoProduction = data?.product?.has_co_production === true;
+    const hasCoproducerInCommissions = commissions.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
+    
+    if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenue !== null) {
+      const platformFee = commissions.find((c: any) => (c.source || '').toUpperCase() === 'MARKETPLACE')?.value || 0;
+      const affiliateAmount = commissions.find((c: any) => (c.source || '').toUpperCase() === 'AFFILIATE')?.value || 0;
+      const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenue;
+      
+      if (calculatedCoproducerCost > 0) {
+        const { data: existingCoproducer } = await supabase
+          .from('ledger_events')
+          .select('id')
+          .eq('order_id', orderId)
+          .eq('event_type', 'coproducer')
+          .maybeSingle();
+        
+        if (!existingCoproducer) {
+          const { error: coproducerError } = await supabase
+            .from('ledger_events')
+            .insert({
+              order_id: orderId,
+              project_id: projectId,
+              provider: 'hotmart',
+              event_type: 'coproducer',
+              actor: 'coproducer',
+              actor_name: null,
+              amount: -calculatedCoproducerCost,
+              currency,
+              provider_event_id: `${transactionId}_coproducer_auto`,
+              occurred_at: occurredAt,
+              raw_payload: { source: 'auto_calculated', has_co_production: true },
+            });
+          
+          if (!coproducerError) {
+            result.eventsCreated++;
+            console.log(`[OrdersShadow] Created auto-calculated coproducer: ${calculatedCoproducerCost}`);
+          }
+        }
+      }
+    }
+    
+    // ============================================
+    // 5. FILL provider_order_map
+    // ============================================
+    if (transactionId) {
+      await supabase
+        .from('provider_order_map')
+        .upsert({
+          project_id: projectId,
+          provider: 'hotmart',
+          provider_transaction_id: transactionId,
+          order_id: orderId,
+        }, {
+          onConflict: 'project_id,provider,provider_transaction_id',
+        });
+      
+      console.log(`[OrdersShadow] Mapped transaction ${transactionId} -> order ${orderId}`);
+    }
+    
+    return result;
+    
+  } catch (error) {
+    console.error('[OrdersShadow] Error:', error);
+    return result;
+  }
+}
 
 // Calculate economic_day from occurred_at in project timezone (default Brazil UTC-3)
 function calculateEconomicDay(occurredAt: Date, timezone: string = 'America/Sao_Paulo'): string {
@@ -1317,6 +1722,37 @@ serve(async (req) => {
     }
     
     // =====================================================
+    // ORDERS CORE SHADOW MODE (PROMPT 2)
+    // Duplicate data to new canonical structure
+    // This runs in parallel, doesn't affect existing system
+    // =====================================================
+    let ordersShadowResult = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0 };
+    
+    try {
+      console.log('[OrdersShadow] Writing to Orders Core (shadow mode)...');
+      
+      // Find contact for binding
+      const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+      
+      ordersShadowResult = await writeOrderShadow(
+        supabase,
+        projectId,
+        event,
+        payload,
+        totalPriceBrl,
+        ownerNetRevenue,
+        contactId
+      );
+      
+      if (ordersShadowResult.orderId) {
+        console.log(`[OrdersShadow] Success: order=${ordersShadowResult.orderId}, items=${ordersShadowResult.itemsCreated}, events=${ordersShadowResult.eventsCreated}`);
+      }
+    } catch (ordersShadowError) {
+      // Don't fail the webhook if Orders Shadow fails
+      console.error('[OrdersShadow] Error (non-blocking):', ordersShadowError);
+    }
+    
+    // =====================================================
     // SUBSCRIPTION MANAGEMENT - Check if product is mapped to a plan
     // This is used for managing Cubo Mágico platform subscriptions
     // =====================================================
@@ -1790,6 +2226,7 @@ serve(async (req) => {
     console.log('New user created:', newUserCreated);
     console.log('Ledger written:', ledgerWritten);
     console.log('Ledger skipped:', ledgerSkipped);
+    console.log('Orders Shadow:', ordersShadowResult.orderId ? 'success' : 'skipped');
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -1807,6 +2244,11 @@ serve(async (req) => {
       ledger: {
         written: ledgerWritten,
         skipped: ledgerSkipped
+      },
+      orders_shadow: {
+        order_id: ordersShadowResult.orderId,
+        items_created: ordersShadowResult.itemsCreated,
+        events_created: ordersShadowResult.eventsCreated
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

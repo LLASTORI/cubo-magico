@@ -2,9 +2,9 @@
 
 ## Data: 2026-01-15
 
-## 📊 Mapeamento Financeiro CORRETO
+## ✅ PROMPT 4 - CONCLUÍDO
 
-### Campos do Webhook Hotmart
+Corrigido o parser financeiro e de UTMs do webhook Hotmart conforme especificação.
 
 ```javascript
 // Do payload do webhook:

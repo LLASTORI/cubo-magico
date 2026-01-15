@@ -54,14 +54,18 @@ export interface FinanceTrackingItem {
   purchase_date: string | null;
   funnel_id: string | null;
   funnel_name: string | null;
+  // UTM fields - now properly parsed from checkout_origin
   utm_source: string | null;
+  utm_medium: string | null;
   utm_campaign: string | null;
   utm_adset: string | null;
   utm_placement: string | null;
   utm_creative: string | null;
+  // Legacy fields for backwards compatibility
   meta_campaign_id: string | null;
   meta_adset_id: string | null;
   meta_ad_id: string | null;
+  checkout_origin: string | null;
   payment_method: string | null;
   payment_type: string | null;
   recurrence: number | null;
@@ -324,6 +328,7 @@ export function useFinanceTracking(): UseFinanceTrackingResult {
           funnel_id,
           funnel_name,
           utm_source,
+          utm_medium,
           utm_campaign,
           utm_adset,
           utm_placement,
@@ -331,6 +336,7 @@ export function useFinanceTracking(): UseFinanceTrackingResult {
           meta_campaign_id,
           meta_adset_id,
           meta_ad_id,
+          checkout_origin,
           payment_method,
           payment_type,
           recurrence,
@@ -369,6 +375,7 @@ export function useFinanceTracking(): UseFinanceTrackingResult {
         funnel_id: row.funnel_id,
         funnel_name: row.funnel_name,
         utm_source: row.utm_source,
+        utm_medium: row.utm_medium,
         utm_campaign: row.utm_campaign,
         utm_adset: row.utm_adset,
         utm_placement: row.utm_placement,
@@ -376,6 +383,7 @@ export function useFinanceTracking(): UseFinanceTrackingResult {
         meta_campaign_id: row.meta_campaign_id,
         meta_adset_id: row.meta_adset_id,
         meta_ad_id: row.meta_ad_id,
+        checkout_origin: row.checkout_origin,
         payment_method: row.payment_method,
         payment_type: row.payment_type,
         recurrence: row.recurrence,
@@ -456,14 +464,18 @@ export interface FinanceTrackingSale {
   hotmart_status: string;
   funnel_id: string | null;
   funnel_name: string | null;
+  // UTM fields - now properly parsed
   utm_source: string | null;
+  utm_medium: string | null;
   utm_campaign: string | null;
   utm_adset: string | null;
   utm_creative: string | null;
   utm_placement: string | null;
+  // Meta IDs
   meta_campaign_id: string | null;
   meta_adset_id: string | null;
   meta_ad_id: string | null;
+  checkout_origin: string | null;
   payment_method: string | null;
   recurrence: number | null;
 }
@@ -502,6 +514,7 @@ export function useFinanceTrackingQuery(options: UseFinanceTrackingQueryOptions)
             funnel_id,
             funnel_name,
             utm_source,
+            utm_medium,
             utm_campaign,
             utm_adset,
             utm_creative,
@@ -509,6 +522,7 @@ export function useFinanceTrackingQuery(options: UseFinanceTrackingQueryOptions)
             meta_campaign_id,
             meta_adset_id,
             meta_ad_id,
+            checkout_origin,
             payment_method,
             recurrence
           `)
@@ -544,6 +558,7 @@ export function useFinanceTrackingQuery(options: UseFinanceTrackingQueryOptions)
             funnel_id: row.funnel_id,
             funnel_name: row.funnel_name,
             utm_source: row.utm_source,
+            utm_medium: row.utm_medium,
             utm_campaign: row.utm_campaign,
             utm_adset: row.utm_adset,
             utm_creative: row.utm_creative,
@@ -551,6 +566,7 @@ export function useFinanceTrackingQuery(options: UseFinanceTrackingQueryOptions)
             meta_campaign_id: row.meta_campaign_id,
             meta_adset_id: row.meta_adset_id,
             meta_ad_id: row.meta_ad_id,
+            checkout_origin: row.checkout_origin,
             payment_method: row.payment_method,
             recurrence: row.recurrence,
           }))];

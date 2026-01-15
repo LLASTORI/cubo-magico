@@ -456,12 +456,12 @@ export const HotmartSettings = () => {
       if (error) throw error;
       if (!data?.state) throw new Error('Estado OAuth não gerado');
 
-      // Build Hotmart authorization URL
-      const authUrl = new URL('https://developers.hotmart.com/oauth/authorize');
+      // Build Hotmart authorization URL (correct endpoint)
+      const authUrl = new URL('https://api-sec-vlc.hotmart.com/security/oauth/authorize');
       authUrl.searchParams.set('client_id', credentials.client_id);
       authUrl.searchParams.set('redirect_uri', `https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-oauth-callback`);
       authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', 'sales.read payments.read subscriptions.read');
+      authUrl.searchParams.set('scope', 'all');
       authUrl.searchParams.set('state', data.state);
 
       // Redirect to Hotmart OAuth

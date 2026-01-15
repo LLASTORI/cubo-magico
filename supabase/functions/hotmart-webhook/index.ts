@@ -376,6 +376,13 @@ async function lookupPreviousTransactionValues(
   }
 }
 
+// Financial breakdown for sales_core_events
+interface FinancialBreakdown {
+  platform_fee: number | null;
+  affiliate_cost: number | null;
+  coproducer_cost: number | null;
+}
+
 // Write canonical sale event to sales_core_events
 async function writeSalesCoreEvent(
   supabase: any,
@@ -388,7 +395,8 @@ async function writeSalesCoreEvent(
   occurredAt: Date,
   attribution: Record<string, any>,
   contactId: string | null,
-  rawPayload: any
+  rawPayload: any,
+  financialBreakdown?: FinancialBreakdown
 ): Promise<{ id: string; version: number } | null> {
   const canonicalEventType = hotmartToCanonicalEventType[hotmartEvent];
   
@@ -435,7 +443,7 @@ async function writeSalesCoreEvent(
       }
     }
     
-    // Insert new canonical event
+    // Insert new canonical event with financial breakdown
     const { data, error } = await supabase
       .from('sales_core_events')
       .insert({
@@ -445,6 +453,10 @@ async function writeSalesCoreEvent(
         event_type: canonicalEventType,
         gross_amount: grossAmount,
         net_amount: netAmount,
+        // NEW: Financial breakdown columns
+        platform_fee: financialBreakdown?.platform_fee ?? 0,
+        affiliate_cost: financialBreakdown?.affiliate_cost ?? 0,
+        coproducer_cost: financialBreakdown?.coproducer_cost ?? 0,
         currency,
         occurred_at: occurredAt.toISOString(),
         received_at: receivedAt,
@@ -463,7 +475,7 @@ async function writeSalesCoreEvent(
       return null;
     }
     
-    console.log(`[SalesCore] Created canonical event: ${canonicalEventType} v${version} for ${transactionId}`);
+    console.log(`[SalesCore] Created canonical event: ${canonicalEventType} v${version} for ${transactionId} (platform_fee=${financialBreakdown?.platform_fee}, affiliate=${financialBreakdown?.affiliate_cost}, coproducer=${financialBreakdown?.coproducer_cost})`);
     return data;
     
   } catch (error) {
@@ -1096,7 +1108,13 @@ serve(async (req) => {
         ? new Date(purchase.order_date)
         : new Date(payload.creation_date);
       
-      // Write canonical event
+      // Write canonical event with financial breakdown
+      const financialBreakdown: FinancialBreakdown = {
+        platform_fee: platformFee,
+        affiliate_cost: affiliateAmount,
+        coproducer_cost: coproducerAmount,
+      };
+      
       const coreEventResult = await writeSalesCoreEvent(
         supabase,
         projectId,
@@ -1108,7 +1126,8 @@ serve(async (req) => {
         occurredAt,
         attribution,
         contactId,
-        payload
+        payload,
+        financialBreakdown // NEW: Pass financial breakdown for fee columns
       );
       
       if (coreEventResult) {

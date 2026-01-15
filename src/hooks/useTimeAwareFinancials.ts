@@ -137,7 +137,8 @@ export function useTimeAwareFinancials(options: {
   const { data: liveData, isLoading: isLiveLoading } = useQuery({
     queryKey: ['time-aware-live', currentProject?.id, options.funnelId],
     queryFn: async () => {
-      let query = supabase
+      // Use raw query to avoid type issues with views that changed structure
+      let query = (supabase as any)
         .from('live_financial_today')
         .select('*')
         .eq('project_id', currentProject!.id);
@@ -149,7 +150,7 @@ export function useTimeAwareFinancials(options: {
       const { data, error } = await query;
       if (error) throw error;
       
-      return (data || []).map(d => ({
+      return ((data || []) as TimeAwareFinancialData[]).map(d => ({
         ...d,
         data_source: 'live' as const,
         is_estimated: true,

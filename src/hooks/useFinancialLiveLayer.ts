@@ -86,7 +86,8 @@ export function useLiveFinancialToday() {
   return useQuery({
     queryKey: ['live-financial-today', currentProject?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Use raw query to avoid type issues with views that changed structure
+      const { data, error } = await (supabase as any)
         .from('live_financial_today')
         .select('*')
         .eq('project_id', currentProject!.id);
@@ -115,7 +116,8 @@ export function useLiveProjectTotals() {
   return useQuery({
     queryKey: ['live-project-totals', currentProject?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Use raw query to avoid type issues with views that changed structure
+      const { data, error } = await (supabase as any)
         .from('live_project_totals_today')
         .select('*')
         .eq('project_id', currentProject!.id)
@@ -145,7 +147,8 @@ export function useLiveSalesToday() {
   return useQuery({
     queryKey: ['live-sales-today', currentProject?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Use raw query to avoid type issues with views that changed structure
+      const { data, error } = await (supabase as any)
         .from('live_sales_today')
         .select('*')
         .eq('project_id', currentProject!.id);

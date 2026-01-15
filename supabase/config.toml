@@ -14,6 +14,10 @@ max_duration = 300
 verify_jwt = true
 max_duration = 540
 
+[functions.hotmart-orders-backfill-14d]
+verify_jwt = true
+max_duration = 540
+
 [functions.hotmart-oauth-callback]
 verify_jwt = false
 

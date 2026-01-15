@@ -13,6 +13,7 @@ const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
   'https://cubomagicoleandrolastoricombr.lovable.app',
   'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
+  'https://17d62d10-743a-42e0-8072-f81bc76fe538.lovableproject.com',
 ]
 
 function getCorsHeaders(origin: string | null): Record<string, string> {

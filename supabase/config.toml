@@ -14,6 +14,15 @@ max_duration = 300
 verify_jwt = true
 max_duration = 540
 
+[functions.hotmart-oauth-callback]
+verify_jwt = false
+
+[functions.hotmart-oauth-state]
+verify_jwt = true
+
+[functions.hotmart-refresh-token]
+verify_jwt = true
+
 [functions.send-invite-email]
 verify_jwt = true
 

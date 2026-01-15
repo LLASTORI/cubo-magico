@@ -4894,6 +4894,11 @@ export type Database = {
           client_secret: string | null
           client_secret_encrypted: string | null
           created_at: string
+          hotmart_access_token: string | null
+          hotmart_connected_at: string | null
+          hotmart_expires_at: string | null
+          hotmart_refresh_token: string | null
+          hotmart_user_id: string | null
           id: string
           is_configured: boolean | null
           is_validated: boolean | null
@@ -4909,6 +4914,11 @@ export type Database = {
           client_secret?: string | null
           client_secret_encrypted?: string | null
           created_at?: string
+          hotmart_access_token?: string | null
+          hotmart_connected_at?: string | null
+          hotmart_expires_at?: string | null
+          hotmart_refresh_token?: string | null
+          hotmart_user_id?: string | null
           id?: string
           is_configured?: boolean | null
           is_validated?: boolean | null
@@ -4924,6 +4934,11 @@ export type Database = {
           client_secret?: string | null
           client_secret_encrypted?: string | null
           created_at?: string
+          hotmart_access_token?: string | null
+          hotmart_connected_at?: string | null
+          hotmart_expires_at?: string | null
+          hotmart_refresh_token?: string | null
+          hotmart_user_id?: string | null
           id?: string
           is_configured?: boolean | null
           is_validated?: boolean | null

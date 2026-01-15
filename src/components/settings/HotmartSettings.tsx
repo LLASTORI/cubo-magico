@@ -32,6 +32,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { HotmartCSVImport } from './HotmartCSVImport';
+import { HotmartLedgerCSVImport } from './HotmartLedgerCSVImport';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -1094,9 +1095,13 @@ export const HotmartSettings = () => {
                   </div>
                 </div>
 
-                {/* CSV Import Section */}
+                {/* CSV Import Section - Contact Update */}
                 <Separator />
                 <HotmartCSVImport />
+                
+                {/* CSV Import Section - Official Ledger */}
+                <Separator />
+                <HotmartLedgerCSVImport />
               </>
             )}
 

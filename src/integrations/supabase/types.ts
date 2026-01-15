@@ -3374,6 +3374,7 @@ export type Database = {
           utm_adset_name: string | null
           utm_campaign_id: string | null
           utm_creative: string | null
+          utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
         }
@@ -3445,6 +3446,7 @@ export type Database = {
           utm_adset_name?: string | null
           utm_campaign_id?: string | null
           utm_creative?: string | null
+          utm_medium?: string | null
           utm_placement?: string | null
           utm_source?: string | null
         }
@@ -3516,6 +3518,7 @@ export type Database = {
           utm_adset_name?: string | null
           utm_campaign_id?: string | null
           utm_creative?: string | null
+          utm_medium?: string | null
           utm_placement?: string | null
           utm_source?: string | null
         }
@@ -8856,6 +8859,7 @@ export type Database = {
           buyer_phone: string | null
           buyer_phone_country_code: string | null
           buyer_phone_ddd: string | null
+          checkout_origin: string | null
           contact_id: string | null
           created_at: string | null
           economic_day: string | null
@@ -8882,6 +8886,7 @@ export type Database = {
           utm_adset: string | null
           utm_campaign: string | null
           utm_creative: string | null
+          utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
           webhook_event_type: string | null

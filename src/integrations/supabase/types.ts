@@ -2565,6 +2565,7 @@ export type Database = {
           actor_id: string | null
           actor_type: string | null
           amount: number
+          attribution: Json
           currency: string | null
           event_type: string
           hotmart_sale_id: string | null
@@ -2581,6 +2582,7 @@ export type Database = {
           actor_id?: string | null
           actor_type?: string | null
           amount: number
+          attribution?: Json
           currency?: string | null
           event_type: string
           hotmart_sale_id?: string | null
@@ -2597,6 +2599,7 @@ export type Database = {
           actor_id?: string | null
           actor_type?: string | null
           amount?: number
+          attribution?: Json
           currency?: string | null
           event_type?: string
           hotmart_sale_id?: string | null

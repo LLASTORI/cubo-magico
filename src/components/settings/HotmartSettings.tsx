@@ -59,6 +59,7 @@ export const HotmartSettings = () => {
   const [backfillMessage, setBackfillMessage] = useState('');
   const [financialSyncing, setFinancialSyncing] = useState(false);
   const [financialSyncMessage, setFinancialSyncMessage] = useState('');
+  const [oauthConnecting, setOauthConnecting] = useState(false);
 
   const projectId = currentProject?.id;
 
@@ -414,6 +415,7 @@ export const HotmartSettings = () => {
 
   const isConfigured = hotmartCredentials?.is_configured;
   const isValidated = hotmartCredentials?.is_validated;
+  const isOAuthConnected = !!hotmartCredentials?.hotmart_refresh_token;
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';
@@ -423,6 +425,88 @@ export const HotmartSettings = () => {
       return dateStr;
     }
   };
+
+  // Handle OAuth connection
+  const handleOAuthConnect = async () => {
+    if (!projectId) return;
+
+    // Check if client_id and client_secret are configured first
+    if (!credentials.client_id || !credentials.client_secret) {
+      toast({
+        title: 'Configure as credenciais primeiro',
+        description: 'Client ID e Client Secret são necessários antes de conectar via OAuth.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Save credentials first if they changed
+    await saveCredentialsMutation.mutateAsync(credentials);
+
+    setOauthConnecting(true);
+    try {
+      // Get signed state from edge function
+      const { data, error } = await supabase.functions.invoke('hotmart-oauth-state', {
+        body: { 
+          projectId,
+          redirectUrl: window.location.origin + '/app/' + (currentProject?.public_code || projectId) + '/settings'
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.state) throw new Error('Estado OAuth não gerado');
+
+      // Build Hotmart authorization URL
+      const authUrl = new URL('https://developers.hotmart.com/oauth/authorize');
+      authUrl.searchParams.set('client_id', credentials.client_id);
+      authUrl.searchParams.set('redirect_uri', `https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-oauth-callback`);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', 'sales.read payments.read subscriptions.read');
+      authUrl.searchParams.set('state', data.state);
+
+      // Redirect to Hotmart OAuth
+      window.location.href = authUrl.toString();
+
+    } catch (error: any) {
+      console.error('OAuth error:', error);
+      toast({
+        title: 'Erro ao conectar OAuth',
+        description: error.message || 'Não foi possível iniciar conexão OAuth',
+        variant: 'destructive',
+      });
+      setOauthConnecting(false);
+    }
+  };
+
+  // Check for OAuth callback result
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hotmartConnected = params.get('hotmart_connected');
+    const hotmartError = params.get('hotmart_error');
+
+    if (hotmartConnected === 'true') {
+      toast({
+        title: 'Hotmart conectado com sucesso!',
+        description: 'Agora você pode sincronizar dados financeiros.',
+      });
+      // Clean URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      // Refetch credentials
+      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
+    }
+
+    if (hotmartError) {
+      toast({
+        title: 'Erro na conexão OAuth',
+        description: hotmartError,
+        variant: 'destructive',
+      });
+      // Clean URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
 
   return (
     <Card>
@@ -663,8 +747,90 @@ export const HotmartSettings = () => {
               )}
             </div>
 
-            {/* Sync Section - Only show when validated */}
-            {isValidated && (
+            {/* OAuth Connection Section - Show after credentials are saved */}
+            {isConfigured && (
+              <>
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ExternalLink className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Conexão OAuth (Autorização Oficial)</h3>
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
+                      Recomendado
+                    </Badge>
+                  </div>
+
+                  <div className="p-4 rounded-lg border bg-card space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      A conexão OAuth permite acesso seguro à API da Hotmart para sincronização de <strong>comissões detalhadas</strong> e cálculo da <strong>receita líquida real</strong>.
+                    </p>
+                    
+                    {isOAuthConnected ? (
+                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <div className="flex items-center gap-2 text-green-600 text-sm">
+                          <CheckCircle className="h-4 w-4" />
+                          <span className="font-medium">OAuth conectado com sucesso!</span>
+                        </div>
+                        {hotmartCredentials?.hotmart_connected_at && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Conectado em: {new Date(hotmartCredentials.hotmart_connected_at).toLocaleString('pt-BR')}
+                          </p>
+                        )}
+                        {hotmartCredentials?.hotmart_expires_at && (
+                          <p className="text-xs text-muted-foreground">
+                            Token expira em: {new Date(hotmartCredentials.hotmart_expires_at).toLocaleString('pt-BR')}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                          <div className="text-xs text-amber-700 dark:text-amber-400">
+                            <strong>OAuth não conectado.</strong>
+                            <p className="mt-1">
+                              Clique no botão abaixo para autorizar o Cubo Mágico a acessar seus dados da Hotmart.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleOAuthConnect}
+                      disabled={oauthConnecting || !credentials.client_id || !credentials.client_secret}
+                      className="w-full"
+                      variant={isOAuthConnected ? 'outline' : 'default'}
+                    >
+                      {oauthConnecting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Conectando...
+                        </>
+                      ) : isOAuthConnected ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Reconectar OAuth
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Conectar Hotmart (OAuth)
+                        </>
+                      )}
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      Você será redirecionado para a página de autorização da Hotmart e retornará automaticamente após autorizar.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Sync Section - Only show when OAuth connected */}
+            {isOAuthConnected && (
               <>
                 <Separator />
                 

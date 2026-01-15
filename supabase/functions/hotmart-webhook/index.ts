@@ -57,38 +57,70 @@ const debitEvents = ['PURCHASE_CANCELED', 'PURCHASE_REFUNDED', 'PURCHASE_CHARGEB
 
 /**
  * Resolve Hotmart Order ID from payload
- * Must be stable for recurrences, bumps, and upsells
+ * Must group order bumps, upsells and downsells under the same parent order.
  * 
- * Priority:
- * 1. order.id (if exists)
- * 2. purchase.transaction (transaction ID)
- * 3. purchase.code (fallback)
+ * Rules:
+ * 1. If purchase.order_bump.is_order_bump = true → use parent_purchase_transaction
+ * 2. If upsell/downsell detected → use parent_purchase_transaction (if available)
+ * 3. Otherwise → use purchase.transaction (main product)
+ * 
+ * This ensures all items from the same checkout session are grouped under 1 order.
  */
 function resolveHotmartOrderId(payload: any): string | null {
   const data = payload?.data;
   const purchase = data?.purchase;
   
-  // Priority 1: order.id (Hotmart V3 order structure)
+  if (!purchase) return null;
+  
+  // Rule 1: Order Bump - always use parent
+  if (purchase.order_bump?.is_order_bump && purchase.order_bump?.parent_purchase_transaction) {
+    console.log(`[OrderId] Order bump detected, using parent: ${purchase.order_bump.parent_purchase_transaction}`);
+    return purchase.order_bump.parent_purchase_transaction;
+  }
+  
+  // Rule 2: Upsell/Downsell detection via offer name or tracking
+  const offerName = purchase.offer?.name?.toLowerCase() || '';
+  const isUpsell = offerName.includes('upsell');
+  const isDownsell = offerName.includes('downsell');
+  
+  if ((isUpsell || isDownsell) && purchase.order_bump?.parent_purchase_transaction) {
+    console.log(`[OrderId] ${isUpsell ? 'Upsell' : 'Downsell'} detected, using parent: ${purchase.order_bump.parent_purchase_transaction}`);
+    return purchase.order_bump.parent_purchase_transaction;
+  }
+  
+  // Rule 3: Check for any parent_purchase_transaction (generic fallback)
+  // Some variations of Hotmart payload may have parent in different places
+  if (purchase.parent_purchase_transaction) {
+    console.log(`[OrderId] Parent transaction found: ${purchase.parent_purchase_transaction}`);
+    return purchase.parent_purchase_transaction;
+  }
+  
+  // Rule 4: Main product - use own transaction
+  if (purchase.transaction) {
+    console.log(`[OrderId] Main product, using transaction: ${purchase.transaction}`);
+    return purchase.transaction;
+  }
+  
+  // Fallback to order.id (Hotmart V3 structure)
   if (data?.order?.id) {
     return String(data.order.id);
   }
   
-  // Priority 2: For order bumps, use parent transaction
-  if (purchase?.order_bump?.is_order_bump && purchase?.order_bump?.parent_purchase_transaction) {
-    return purchase.order_bump.parent_purchase_transaction;
-  }
-  
-  // Priority 3: purchase.transaction (most common)
-  if (purchase?.transaction) {
-    return purchase.transaction;
-  }
-  
-  // Priority 4: purchase.code (fallback)
-  if (purchase?.code) {
+  // Last fallback
+  if (purchase.code) {
     return purchase.code;
   }
   
   return null;
+}
+
+/**
+ * Get the original transaction ID (for mapping purposes)
+ * This is always the individual transaction, not the parent
+ */
+function getOriginalTransactionId(payload: any): string | null {
+  const purchase = payload?.data?.purchase;
+  return purchase?.transaction || purchase?.code || null;
 }
 
 /**
@@ -159,7 +191,7 @@ function extractOrderItems(payload: any): Array<{
 
 /**
  * Write order to Orders Core (shadow mode)
- * UPSERT to handle retries gracefully
+ * UPSERT with ACCUMULATION: when a bump/upsell arrives, we ADD values, not replace
  */
 async function writeOrderShadow(
   supabase: any,
@@ -179,18 +211,22 @@ async function writeOrderShadow(
     const commissions = data?.commissions || [];
     
     const providerOrderId = resolveHotmartOrderId(payload);
+    const originalTransactionId = getOriginalTransactionId(payload);
+    
     if (!providerOrderId) {
       console.log('[OrdersShadow] No order ID resolved, skipping');
       return result;
     }
     
-    const transactionId = purchase?.transaction;
+    const transactionId = originalTransactionId; // For ledger events and mapping
     const currency = purchase?.price?.currency_value || 'BRL';
     const status = hotmartToOrderStatus[hotmartEvent] || 'pending';
     
-    // Calculate gross_base from order items
+    // Calculate values from THIS webhook event only
     const orderItems = extractOrderItems(payload);
-    const grossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
+    const thisEventGrossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
+    const thisEventCustomerPaid = totalPriceBrl || 0;
+    const thisEventProducerNet = ownerNetRevenue || 0;
     
     // Parse dates
     const orderedAt = purchase?.order_date 
@@ -202,30 +238,13 @@ async function writeOrderShadow(
       : null;
     
     // ============================================
-    // 1. UPSERT ORDER
+    // 1. UPSERT ORDER (with accumulation)
     // ============================================
-    const orderData = {
-      project_id: projectId,
-      provider: 'hotmart',
-      provider_order_id: providerOrderId,
-      buyer_email: buyer?.email?.toLowerCase() || null,
-      buyer_name: buyer?.name || null,
-      contact_id: contactId,
-      status,
-      currency,
-      customer_paid: totalPriceBrl,
-      gross_base: grossBase || totalPriceBrl,
-      producer_net: ownerNetRevenue,
-      ordered_at: orderedAt,
-      approved_at: approvedAt,
-      completed_at: status === 'completed' ? new Date().toISOString() : null,
-      raw_payload: payload,
-    };
     
-    // Check if order exists
+    // Check if order exists and get current values
     const { data: existingOrder } = await supabase
       .from('orders')
-      .select('id')
+      .select('id, customer_paid, gross_base, producer_net')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .eq('provider_order_id', providerOrderId)
@@ -234,27 +253,65 @@ async function writeOrderShadow(
     let orderId: string;
     
     if (existingOrder) {
-      // Update existing order
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          ...orderData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingOrder.id);
+      // Check if this item was already added (avoid double counting on retries)
+      const { data: existingItem } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('order_id', existingOrder.id)
+        .eq('provider_product_id', orderItems[0]?.provider_product_id || 'unknown')
+        .maybeSingle();
       
-      if (updateError) {
-        console.error('[OrdersShadow] Error updating order:', updateError);
-        return result;
+      if (!existingItem) {
+        // ACCUMULATE values - this is a new item for existing order
+        const newCustomerPaid = (existingOrder.customer_paid || 0) + thisEventCustomerPaid;
+        const newGrossBase = (existingOrder.gross_base || 0) + thisEventGrossBase;
+        const newProducerNet = (existingOrder.producer_net || 0) + thisEventProducerNet;
+        
+        console.log(`[OrdersShadow] Accumulating: ${existingOrder.customer_paid} + ${thisEventCustomerPaid} = ${newCustomerPaid}`);
+        
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({
+            status,
+            customer_paid: newCustomerPaid,
+            gross_base: newGrossBase,
+            producer_net: newProducerNet,
+            approved_at: approvedAt || existingOrder.approved_at,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingOrder.id);
+        
+        if (updateError) {
+          console.error('[OrdersShadow] Error updating order:', updateError);
+          return result;
+        }
+      } else {
+        console.log(`[OrdersShadow] Item already exists, skipping accumulation`);
       }
       
       orderId = existingOrder.id;
       console.log(`[OrdersShadow] Updated order: ${orderId}`);
     } else {
-      // Insert new order
+      // Insert new order with initial values
       const { data: newOrder, error: insertError } = await supabase
         .from('orders')
-        .insert(orderData)
+        .insert({
+          project_id: projectId,
+          provider: 'hotmart',
+          provider_order_id: providerOrderId,
+          buyer_email: buyer?.email?.toLowerCase() || null,
+          buyer_name: buyer?.name || null,
+          contact_id: contactId,
+          status,
+          currency,
+          customer_paid: thisEventCustomerPaid,
+          gross_base: thisEventGrossBase || thisEventCustomerPaid,
+          producer_net: thisEventProducerNet,
+          ordered_at: orderedAt,
+          approved_at: approvedAt,
+          completed_at: status === 'completed' ? new Date().toISOString() : null,
+          raw_payload: payload,
+        })
         .select('id')
         .single();
       

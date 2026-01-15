@@ -10,13 +10,14 @@ const corsHeaders = {
 // ============================================
 // SALES CORE PROVIDER - Hotmart Revenue Ingestion (API Sync)
 // ============================================
-// MIGRATED: All Hotmart API calls now go through Railway OAuth Proxy
-// NO direct calls to developers.hotmart.com or api-sec-vlc.hotmart.com
+// MIGRATED TO OAUTH AUTHORIZATION CODE FLOW
+// - Uses refresh_token to get fresh access_token
+// - Calls Hotmart API directly (no proxy needed)
+// - Browser-like headers to avoid WAF blocks
 // ============================================
 
-// Proxy configuration - uses Railway OAuth Proxy
-const HOTMART_PROXY_URL = Deno.env.get('HOTMART_PROXY_URL');
-const HOTMART_PROXY_API_KEY = Deno.env.get('HOTMART_PROXY_API_KEY');
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 // Map Hotmart API status to canonical event types
 const hotmartStatusToCanonicalEventType: Record<string, string> = {
@@ -489,122 +490,206 @@ function determineSaleCategory(
 }
 
 // ============================================
-// RAILWAY OAUTH PROXY - All Hotmart API calls go through here
+// OAUTH REFRESH TOKEN FLOW - Direct Hotmart API Access
 // ============================================
-// This replaces direct calls to:
-// - api-sec-vlc.hotmart.com (OAuth)
-// - developers.hotmart.com (Sales API)
+// Uses refresh_token from browser OAuth flow to get fresh access_token
+// Then calls Hotmart API directly with browser-like headers
 // ============================================
 
-// Call Hotmart API through Railway OAuth Proxy
-async function callHotmartProxy(
+// Browser-like headers to avoid WAF blocks
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Origin": "https://developers.hotmart.com",
+  "Referer": "https://developers.hotmart.com/",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "same-site",
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+}
+
+// Refresh the access token using refresh_token
+async function refreshAccessToken(
+  supabase: any,
+  projectId: string,
+  credentials: {
+    client_id: string
+    client_secret: string
+    hotmart_refresh_token: string
+  }
+): Promise<string> {
+  console.log('[OAUTH] Refreshing access token for project:', projectId)
+
+  const tokenUrl = 'https://developers.hotmart.com/oauth/token'
+  
+  const tokenBody = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: credentials.client_id,
+    client_secret: credentials.client_secret,
+    refresh_token: credentials.hotmart_refresh_token,
+  })
+
+  const tokenResponse = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      ...BROWSER_HEADERS,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: tokenBody,
+  })
+
+  const tokenText = await tokenResponse.text()
+
+  if (!tokenResponse.ok) {
+    console.error('[OAUTH] Token refresh failed:', tokenText.slice(0, 500))
+    
+    // Check if it's an HTML response (WAF block)
+    if (tokenText.includes('<!DOCTYPE') || tokenText.includes('<html')) {
+      throw new Error('Hotmart bloqueou a requisição (WAF). Reconecte via OAuth nas configurações.')
+    }
+    
+    throw new Error(`Refresh failed: ${tokenText.slice(0, 200)}`)
+  }
+
+  let tokenData
+  try {
+    tokenData = JSON.parse(tokenText)
+  } catch {
+    throw new Error(`Invalid JSON from refresh: ${tokenText.slice(0, 200)}`)
+  }
+
+  const { access_token, refresh_token: new_refresh_token, expires_in } = tokenData
+
+  if (!access_token) {
+    throw new Error('No access_token in refresh response')
+  }
+
+  // Calculate expiration
+  const expiresAt = new Date(Date.now() + (expires_in || 3600) * 1000).toISOString()
+
+  // Update database with new tokens
+  const updateData: any = {
+    hotmart_access_token: access_token,
+    hotmart_expires_at: expiresAt,
+    updated_at: new Date().toISOString(),
+  }
+
+  // If a new refresh token was provided, update it too
+  if (new_refresh_token) {
+    updateData.hotmart_refresh_token = new_refresh_token
+  }
+
+  const { error: updateError } = await supabase
+    .from('project_credentials')
+    .update(updateData)
+    .eq('project_id', projectId)
+    .eq('provider', 'hotmart')
+
+  if (updateError) {
+    console.error('[OAUTH] Failed to save new token:', updateError)
+  } else {
+    console.log('[OAUTH] ✅ New access token saved, expires:', expiresAt)
+  }
+
+  return access_token
+}
+
+// Get a valid access token (refresh if needed)
+async function getValidAccessToken(
+  supabase: any,
+  projectId: string
+): Promise<string> {
+  // Get current credentials
+  const { data: credentials, error: credError } = await supabase
+    .from('project_credentials')
+    .select('client_id, client_secret, hotmart_access_token, hotmart_refresh_token, hotmart_expires_at')
+    .eq('project_id', projectId)
+    .eq('provider', 'hotmart')
+    .maybeSingle()
+
+  if (credError || !credentials) {
+    throw new Error('Credenciais Hotmart não encontradas')
+  }
+
+  // Check if we have OAuth tokens
+  if (!credentials.hotmart_refresh_token) {
+    throw new Error('Hotmart não conectado via OAuth. Use o botão "Conectar Hotmart (OAuth)" nas configurações.')
+  }
+
+  // Check if token is still valid (with 5 minute buffer)
+  const expiresAt = credentials.hotmart_expires_at ? new Date(credentials.hotmart_expires_at) : null
+  const now = new Date()
+  const bufferMs = 5 * 60 * 1000 // 5 minutes
+
+  if (credentials.hotmart_access_token && expiresAt && expiresAt.getTime() > now.getTime() + bufferMs) {
+    // Token still valid
+    console.log('[OAUTH] Token still valid, expires:', expiresAt.toISOString())
+    return credentials.hotmart_access_token
+  }
+
+  // Token expired or about to expire - refresh it
+  console.log('[OAUTH] Token expired or expiring soon, refreshing...')
+  
+  if (!credentials.client_id || !credentials.client_secret) {
+    throw new Error('Client ID/Secret não configurados')
+  }
+
+  return await refreshAccessToken(supabase, projectId, {
+    client_id: credentials.client_id,
+    client_secret: credentials.client_secret,
+    hotmart_refresh_token: credentials.hotmart_refresh_token,
+  })
+}
+
+// Call Hotmart API directly with OAuth token
+async function callHotmartAPI(
   projectId: string,
   path: string,
   params: Record<string, string> = {},
   method: string = 'GET'
 ): Promise<any> {
-  if (!HOTMART_PROXY_URL) {
-    throw new Error('HOTMART_PROXY_URL not configured. Configure it in Cloud secrets.');
+  // Create admin Supabase client
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  
+  // Get valid access token (auto-refresh if needed)
+  const access_token = await getValidAccessToken(supabase, projectId)
+  
+  // Build URL with query params
+  const url = new URL(`https://developers.hotmart.com${path}`)
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.append(key, value)
   }
 
-  // Step 1: Get credentials via hotmart-credentials-export
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const internalKey = Deno.env.get('CUBO_INTERNAL_KEY');
-  
-  console.log(`[PROXY] Fetching credentials for project ${projectId}...`);
-  
-  const credentialsUrl = `${supabaseUrl}/functions/v1/hotmart-credentials-export?projectId=${projectId}`;
-  const credHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  
-  // Use internal key if available (VPS-to-VPS call)
-  if (internalKey) {
-    credHeaders['X-Cubo-Internal-Key'] = internalKey;
+  console.log(`[HOTMART-API] ${method} ${url.pathname}`)
+
+  const response = await fetch(url.toString(), {
+    method,
+    headers: {
+      ...BROWSER_HEADERS,
+      'Authorization': `Bearer ${access_token}`,
+    },
+  })
+
+  const rawText = await response.text()
+
+  if (!response.ok) {
+    console.error(`[HOTMART-API] Error (${response.status}):`, rawText.slice(0, 500))
+    
+    // Check for WAF block
+    if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
+      throw new Error('Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.')
+    }
+    
+    throw new Error(`Hotmart API error (${response.status}): ${rawText.slice(0, 200)}`)
   }
-  
-  const credResponse = await fetch(credentialsUrl, {
-    method: 'GET',
-    headers: credHeaders,
-  });
-  
-  if (!credResponse.ok) {
-    const credError = await credResponse.text();
-    console.error('[PROXY] Credentials fetch failed:', credError);
-    throw new Error(`Failed to fetch credentials: ${credError}`);
-  }
-  
-  const credentials = await credResponse.json();
-  const { client_id, client_secret } = credentials;
-  
-  if (!client_id || !client_secret) {
-    throw new Error('Hotmart credentials not configured (client_id, client_secret)');
-  }
-  
-  console.log(`[PROXY] Got credentials, calling Railway proxy...`);
-  
-  // Step 2: Get access token from Railway proxy
-  const oauthUrl = `${HOTMART_PROXY_URL}/oauth`;
-  const oauthHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  
-  if (HOTMART_PROXY_API_KEY) {
-    oauthHeaders['x-api-key'] = HOTMART_PROXY_API_KEY;
-  }
-  
-  const oauthResponse = await fetch(oauthUrl, {
-    method: 'POST',
-    headers: oauthHeaders,
-    body: JSON.stringify({ client_id, client_secret }),
-  });
-  
-  if (!oauthResponse.ok) {
-    const oauthError = await oauthResponse.text();
-    console.error('[PROXY] OAuth failed:', oauthError);
-    throw new Error(`OAuth failed: ${oauthError}`);
-  }
-  
-  const { access_token } = await oauthResponse.json();
-  
-  if (!access_token) {
-    throw new Error('No access_token returned from OAuth proxy');
-  }
-  
-  console.log(`[PROXY] Got access_token, calling Hotmart API via proxy: ${path}`);
-  
-  // Step 3: Call Hotmart API through proxy
-  const apiUrl = `${HOTMART_PROXY_URL}/hotmart`;
-  const apiHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  
-  if (HOTMART_PROXY_API_KEY) {
-    apiHeaders['x-api-key'] = HOTMART_PROXY_API_KEY;
-  }
-  
-  const apiResponse = await fetch(apiUrl, {
-    method: 'POST',
-    headers: apiHeaders,
-    body: JSON.stringify({
-      access_token,
-      path,
-      params,
-      method,
-    }),
-  });
-  
-  const rawText = await apiResponse.text();
-  
-  if (!apiResponse.ok) {
-    console.error(`[PROXY] API error (${apiResponse.status}):`, rawText.slice(0, 2000));
-    throw new Error(`Proxy API failed (${apiResponse.status}): ${rawText.slice(0, 500)}`);
-  }
-  
+
   try {
-    return JSON.parse(rawText);
+    return JSON.parse(rawText)
   } catch {
-    throw new Error(`Invalid JSON from proxy: ${rawText.slice(0, 500)}`);
+    throw new Error(`Invalid JSON from Hotmart: ${rawText.slice(0, 200)}`)
   }
 }
 
@@ -637,8 +722,8 @@ async function fetchAllSales(
     
     console.log(`Fetching page ${pageCount + 1}...`);
     
-    // MIGRATED: Use proxy instead of direct call
-    const data = await callHotmartProxy(projectId, '/payments/api/v1/sales/history', params);
+    // Call Hotmart API directly with OAuth token
+    const data = await callHotmartAPI(projectId, '/payments/api/v1/sales/history', params);
     const items = data.items || [];
     
     console.log(`Page ${pageCount + 1}: ${items.length} sales`);
@@ -728,7 +813,7 @@ async function syncSales(
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
   console.log(`Syncing sales from ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`);
-  console.log(`Mode: ${quickMode ? 'QUICK' : 'FULL'} | Proxy: ${HOTMART_PROXY_URL}`);
+  console.log(`Mode: ${quickMode ? 'QUICK' : 'FULL'} | OAuth: Direct API`);
   
   let allSales: HotmartSale[] = [];
   
@@ -1223,7 +1308,7 @@ serve(async (req) => {
           errors: totalErrors,
           categoryStats: combinedStats,
           chunks: chunks.length,
-          proxyUsed: HOTMART_PROXY_URL
+          method: 'oauth_direct'
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1232,19 +1317,19 @@ serve(async (req) => {
       // Small period - sync directly
       const result = await syncSales(projectId, startDate, endDate, status, true, quickMode === true);
       
-      return new Response(JSON.stringify({ ...result, proxyUsed: HOTMART_PROXY_URL }), {
+      return new Response(JSON.stringify({ ...result, method: 'oauth_direct' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // API passthrough logic - THROUGH PROXY
+    // API passthrough logic - Direct OAuth
     console.log(`[hotmart-api] Passthrough request: ${endpoint}`);
     
     const fullPath = apiType === 'products' 
       ? `/products/api/v1/${endpoint}`
       : `/payments/api/v1/${endpoint}`;
     
-    const data = await callHotmartProxy(projectId, fullPath, params || {});
+    const data = await callHotmartAPI(projectId, fullPath, params || {});
     
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

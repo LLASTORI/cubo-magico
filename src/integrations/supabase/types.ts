@@ -3705,6 +3705,76 @@ export type Database = {
           },
         ]
       }
+      ledger_events: {
+        Row: {
+          actor: string | null
+          actor_name: string | null
+          amount: number
+          created_at: string
+          currency: string
+          event_type: string
+          id: string
+          occurred_at: string | null
+          order_id: string
+          project_id: string
+          provider: string
+          provider_event_id: string | null
+          raw_payload: Json | null
+        }
+        Insert: {
+          actor?: string | null
+          actor_name?: string | null
+          amount?: number
+          created_at?: string
+          currency?: string
+          event_type: string
+          id?: string
+          occurred_at?: string | null
+          order_id: string
+          project_id: string
+          provider: string
+          provider_event_id?: string | null
+          raw_payload?: Json | null
+        }
+        Update: {
+          actor?: string | null
+          actor_name?: string | null
+          amount?: number
+          created_at?: string
+          currency?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string | null
+          order_id?: string
+          project_id?: string
+          provider?: string
+          provider_event_id?: string | null
+          raw_payload?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_view_shadow"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ledger_import_batches: {
         Row: {
           created_at: string | null
@@ -4668,6 +4738,185 @@ export type Database = {
           },
           {
             foreignKeyName: "offer_mappings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          base_price: number | null
+          created_at: string
+          funnel_id: string | null
+          funnel_position: string | null
+          id: string
+          item_type: string
+          metadata: Json | null
+          offer_mapping_id: string | null
+          offer_name: string | null
+          order_id: string
+          product_name: string | null
+          provider_offer_id: string | null
+          provider_product_id: string | null
+          quantity: number | null
+        }
+        Insert: {
+          base_price?: number | null
+          created_at?: string
+          funnel_id?: string | null
+          funnel_position?: string | null
+          id?: string
+          item_type?: string
+          metadata?: Json | null
+          offer_mapping_id?: string | null
+          offer_name?: string | null
+          order_id: string
+          product_name?: string | null
+          provider_offer_id?: string | null
+          provider_product_id?: string | null
+          quantity?: number | null
+        }
+        Update: {
+          base_price?: number | null
+          created_at?: string
+          funnel_id?: string | null
+          funnel_position?: string | null
+          id?: string
+          item_type?: string
+          metadata?: Json | null
+          offer_mapping_id?: string | null
+          offer_name?: string | null
+          order_id?: string
+          product_name?: string | null
+          provider_offer_id?: string | null
+          provider_product_id?: string | null
+          quantity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_spend"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "order_items_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "live_spend_today"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "order_items_offer_mapping_id_fkey"
+            columns: ["offer_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "offer_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_view_shadow"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          approved_at: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          currency: string
+          customer_paid: number | null
+          gross_base: number | null
+          id: string
+          ordered_at: string | null
+          producer_net: number | null
+          project_id: string
+          provider: string
+          provider_order_id: string
+          raw_payload: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          currency?: string
+          customer_paid?: number | null
+          gross_base?: number | null
+          id?: string
+          ordered_at?: string | null
+          producer_net?: number | null
+          project_id: string
+          provider: string
+          provider_order_id: string
+          raw_payload?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          currency?: string
+          customer_paid?: number | null
+          gross_base?: number | null
+          id?: string
+          ordered_at?: string | null
+          producer_net?: number | null
+          project_id?: string
+          provider?: string
+          provider_order_id?: string
+          raw_payload?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -5753,6 +6002,55 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "provider_event_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_order_map: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          project_id: string
+          provider: string
+          provider_transaction_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          project_id: string
+          provider: string
+          provider_transaction_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          project_id?: string
+          provider?: string
+          provider_transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_order_map_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_order_map_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_view_shadow"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_order_map_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -9240,6 +9538,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meta_insights_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders_view_shadow: {
+        Row: {
+          affiliate_cost: number | null
+          approved_at: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          chargeback_amount: number | null
+          completed_at: string | null
+          contact_id: string | null
+          coproducer_cost: number | null
+          created_at: string | null
+          currency: string | null
+          customer_paid: number | null
+          gross_base: number | null
+          id: string | null
+          item_count: number | null
+          ordered_at: string | null
+          platform_fee: number | null
+          producer_net: number | null
+          project_id: string | null
+          provider: string | null
+          provider_order_id: string | null
+          refund_amount: number | null
+          status: string | null
+          tax_cost: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_social_insights"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

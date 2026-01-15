@@ -3308,6 +3308,7 @@ export type Database = {
       hotmart_sales: {
         Row: {
           affiliate_code: string | null
+          affiliate_cost: number | null
           affiliate_name: string | null
           buyer_address: string | null
           buyer_address_complement: string | null
@@ -3326,12 +3327,14 @@ export type Database = {
           buyer_state: string | null
           checkout_origin: string | null
           confirmation_date: string | null
+          coproducer_cost: number | null
           coupon: string | null
           created_at: string
           due_date: string | null
           exchange_rate: number | null
           exchange_rate_used: number | null
           free_period: string | null
+          gross_amount: number | null
           has_coproduction: boolean | null
           id: string
           installment_number: number | null
@@ -3342,6 +3345,7 @@ export type Database = {
           meta_ad_id_extracted: string | null
           meta_adset_id_extracted: string | null
           meta_campaign_id_extracted: string | null
+          net_amount: number | null
           net_revenue: number | null
           offer_code: string | null
           offer_currency: string | null
@@ -3350,6 +3354,7 @@ export type Database = {
           original_price: number | null
           payment_method: string | null
           payment_type: string | null
+          platform_fee: number | null
           producer_document: string | null
           producer_name: string | null
           product_code: string | null
@@ -3380,6 +3385,7 @@ export type Database = {
         }
         Insert: {
           affiliate_code?: string | null
+          affiliate_cost?: number | null
           affiliate_name?: string | null
           buyer_address?: string | null
           buyer_address_complement?: string | null
@@ -3398,12 +3404,14 @@ export type Database = {
           buyer_state?: string | null
           checkout_origin?: string | null
           confirmation_date?: string | null
+          coproducer_cost?: number | null
           coupon?: string | null
           created_at?: string
           due_date?: string | null
           exchange_rate?: number | null
           exchange_rate_used?: number | null
           free_period?: string | null
+          gross_amount?: number | null
           has_coproduction?: boolean | null
           id?: string
           installment_number?: number | null
@@ -3414,6 +3422,7 @@ export type Database = {
           meta_ad_id_extracted?: string | null
           meta_adset_id_extracted?: string | null
           meta_campaign_id_extracted?: string | null
+          net_amount?: number | null
           net_revenue?: number | null
           offer_code?: string | null
           offer_currency?: string | null
@@ -3422,6 +3431,7 @@ export type Database = {
           original_price?: number | null
           payment_method?: string | null
           payment_type?: string | null
+          platform_fee?: number | null
           producer_document?: string | null
           producer_name?: string | null
           product_code?: string | null
@@ -3452,6 +3462,7 @@ export type Database = {
         }
         Update: {
           affiliate_code?: string | null
+          affiliate_cost?: number | null
           affiliate_name?: string | null
           buyer_address?: string | null
           buyer_address_complement?: string | null
@@ -3470,12 +3481,14 @@ export type Database = {
           buyer_state?: string | null
           checkout_origin?: string | null
           confirmation_date?: string | null
+          coproducer_cost?: number | null
           coupon?: string | null
           created_at?: string
           due_date?: string | null
           exchange_rate?: number | null
           exchange_rate_used?: number | null
           free_period?: string | null
+          gross_amount?: number | null
           has_coproduction?: boolean | null
           id?: string
           installment_number?: number | null
@@ -3486,6 +3499,7 @@ export type Database = {
           meta_ad_id_extracted?: string | null
           meta_adset_id_extracted?: string | null
           meta_campaign_id_extracted?: string | null
+          net_amount?: number | null
           net_revenue?: number | null
           offer_code?: string | null
           offer_currency?: string | null
@@ -3494,6 +3508,7 @@ export type Database = {
           original_price?: number | null
           payment_method?: string | null
           payment_type?: string | null
+          platform_fee?: number | null
           producer_document?: string | null
           producer_name?: string | null
           product_code?: string | null
@@ -6662,8 +6677,10 @@ export type Database = {
       }
       sales_core_events: {
         Row: {
+          affiliate_cost: number | null
           attribution: Json | null
           contact_id: string | null
+          coproducer_cost: number | null
           created_at: string
           currency: string
           economic_day: string
@@ -6673,6 +6690,7 @@ export type Database = {
           is_active: boolean
           net_amount: number
           occurred_at: string
+          platform_fee: number | null
           project_id: string
           provider: string
           provider_event_id: string
@@ -6681,8 +6699,10 @@ export type Database = {
           version: number
         }
         Insert: {
+          affiliate_cost?: number | null
           attribution?: Json | null
           contact_id?: string | null
+          coproducer_cost?: number | null
           created_at?: string
           currency?: string
           economic_day: string
@@ -6692,6 +6712,7 @@ export type Database = {
           is_active?: boolean
           net_amount?: number
           occurred_at: string
+          platform_fee?: number | null
           project_id: string
           provider: string
           provider_event_id: string
@@ -6700,8 +6721,10 @@ export type Database = {
           version?: number
         }
         Update: {
+          affiliate_cost?: number | null
           attribution?: Json | null
           contact_id?: string | null
+          coproducer_cost?: number | null
           created_at?: string
           currency?: string
           economic_day?: string
@@ -6711,6 +6734,7 @@ export type Database = {
           is_active?: boolean
           net_amount?: number
           occurred_at?: string
+          platform_fee?: number | null
           project_id?: string
           provider?: string
           provider_event_id?: string
@@ -8789,6 +8813,7 @@ export type Database = {
           buyer_email: string | null
           buyer_name: string | null
           buyer_phone: string | null
+          checkout_origin: string | null
           coproducer_cost: number | null
           economic_day: string | null
           event_count: number | null
@@ -8818,6 +8843,7 @@ export type Database = {
           utm_adset: string | null
           utm_campaign: string | null
           utm_creative: string | null
+          utm_medium: string | null
           utm_placement: string | null
           utm_source: string | null
         }
@@ -9094,84 +9120,6 @@ export type Database = {
         }
         Relationships: []
       }
-      live_financial_today: {
-        Row: {
-          cpa: number | null
-          data_source: string | null
-          economic_day: string | null
-          funnel_id: string | null
-          funnel_name: string | null
-          gross_revenue: number | null
-          is_estimated: boolean | null
-          profit: number | null
-          project_id: string | null
-          revenue: number | null
-          roas: number | null
-          sales_count: number | null
-          spend: number | null
-        }
-        Relationships: []
-      }
-      live_project_totals_today: {
-        Row: {
-          data_source: string | null
-          economic_day: string | null
-          is_estimated: boolean | null
-          overall_cpa: number | null
-          overall_roas: number | null
-          project_id: string | null
-          total_gross_revenue: number | null
-          total_profit: number | null
-          total_revenue: number | null
-          total_sales: number | null
-          total_spend: number | null
-        }
-        Relationships: []
-      }
-      live_sales_today: {
-        Row: {
-          data_source: string | null
-          economic_day: string | null
-          funnel_id: string | null
-          funnel_name: string | null
-          gross_revenue: number | null
-          is_estimated: boolean | null
-          project_id: string | null
-          revenue: number | null
-          sales_count: number | null
-          unique_buyers: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "hotmart_sales_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "offer_mappings_funnel_id_fkey"
-            columns: ["funnel_id"]
-            isOneToOne: false
-            referencedRelation: "funnel_spend"
-            referencedColumns: ["funnel_id"]
-          },
-          {
-            foreignKeyName: "offer_mappings_funnel_id_fkey"
-            columns: ["funnel_id"]
-            isOneToOne: false
-            referencedRelation: "funnels"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "offer_mappings_funnel_id_fkey"
-            columns: ["funnel_id"]
-            isOneToOne: false
-            referencedRelation: "live_spend_today"
-            referencedColumns: ["funnel_id"]
-          },
-        ]
-      }
       live_spend_today: {
         Row: {
           data_source: string | null
@@ -9196,6 +9144,8 @@ export type Database = {
       owner_profit_daily: {
         Row: {
           ad_spend: number | null
+          affiliate_fees: number | null
+          coproducer_fees: number | null
           data_source: string | null
           economic_day: string | null
           gross_revenue: number | null
@@ -9212,6 +9162,8 @@ export type Database = {
       profit_daily: {
         Row: {
           ad_spend: number | null
+          affiliate_fees: number | null
+          coproducer_fees: number | null
           data_source: string | null
           economic_day: string | null
           gross_revenue: number | null
@@ -9227,6 +9179,8 @@ export type Database = {
       profit_monthly: {
         Row: {
           ad_spend: number | null
+          affiliate_fees: number | null
+          coproducer_fees: number | null
           data_source: string | null
           gross_revenue: number | null
           month: string | null
@@ -9305,6 +9259,8 @@ export type Database = {
       }
       revenue_daily: {
         Row: {
+          affiliate_fees: number | null
+          coproducer_fees: number | null
           data_source: string | null
           economic_day: string | null
           gross_revenue: number | null

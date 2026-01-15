@@ -407,14 +407,14 @@ serve(async (req) => {
     }
 
     // Get credentials and validate OAuth connection
-    const { data: credentials, error: credError } = await supabase
+    const { data: credentialsRaw, error: credError } = await supabase
       .from('project_credentials')
-      .select('client_id, client_secret, hotmart_access_token, hotmart_refresh_token, hotmart_expires_at')
+      .select('client_id, client_secret, basic_auth, hotmart_access_token, hotmart_refresh_token, hotmart_expires_at')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .maybeSingle();
 
-    if (credError || !credentials?.hotmart_refresh_token) {
+    if (credError || !credentialsRaw?.hotmart_refresh_token) {
       return new Response(
         JSON.stringify({
           error: 'Hotmart não conectado via OAuth. Use o botão "Conectar Hotmart (OAuth)" nas configurações.',
@@ -425,6 +425,15 @@ serve(async (req) => {
         }
       );
     }
+
+    const credentials: ProjectCredentials = {
+      client_id: credentialsRaw.client_id,
+      client_secret: credentialsRaw.client_secret,
+      basic_auth: credentialsRaw.basic_auth,
+      hotmart_access_token: credentialsRaw.hotmart_access_token,
+      hotmart_refresh_token: credentialsRaw.hotmart_refresh_token,
+      hotmart_expires_at: credentialsRaw.hotmart_expires_at,
+    };
 
     // Get valid access token
     const accessToken = await getValidAccessToken(supabase, projectId, credentials);
@@ -454,9 +463,10 @@ serve(async (req) => {
     const runId = syncRun?.id;
 
     try {
-      // Fetch all sales with commissions (through proxy - no token needed here)
-      console.log('[FinancialSync] Fetching sales via proxy...');
+      // Fetch all sales with commissions via OAuth
+      console.log('[FinancialSync] Fetching sales via OAuth...');
       const sales = await fetchHotmartSalesWithCommissions(
+        accessToken,
         startDate.getTime(),
         endDate.getTime()
       );

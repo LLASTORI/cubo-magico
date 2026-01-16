@@ -458,38 +458,72 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               )}
             </div>
 
-            {/* UTM Attribution */}
-            {(order.utm_source || order.utm_campaign) && (
+            {/* ═══════════════════════════════════════════════════════════════════════════════
+                ORIGEM DA VENDA (UTM) - COLUNAS MATERIALIZADAS
+                ═══════════════════════════════════════════════════════════════════════════════
+                
+                REGRAS CANÔNICAS:
+                ✓ UTMs vêm EXCLUSIVAMENTE de orders.utm_*
+                ✓ UTMs são atributos do PEDIDO, não dos itens
+                ✓ Preenchidas no webhook ou backfill
+                
+                PROIBIDO:
+                ❌ Parsing de raw_payload
+                ❌ Buscar UTMs de hotmart_sales
+                ═══════════════════════════════════════════════════════════════════════════════ */}
+            {(order.utm_source || order.utm_campaign || order.utm_adset || order.utm_placement || order.utm_creative) && (
               <>
                 <Separator />
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Info className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">Atribuição</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">Origem da Venda (UTM)</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-3.5 h-3.5 text-muted-foreground/70 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[280px] text-sm">
+                            <p>As UTMs são capturadas no checkout e associadas ao pedido como um todo.</p>
+                            <p className="mt-1 text-xs text-muted-foreground">Fonte: colunas materializadas em orders.*</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Badge variant="outline" className="text-xs bg-muted">
+                      Fonte: Pedido
+                    </Badge>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/30 rounded-lg p-3">
                     {order.utm_source && (
-                      <div>
-                        <span className="text-muted-foreground">Source:</span>{' '}
-                        <span>{order.utm_source}</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">Source</span>
+                        <span className="font-medium truncate">{order.utm_source}</span>
                       </div>
                     )}
                     {order.utm_campaign && (
-                      <div>
-                        <span className="text-muted-foreground">Campaign:</span>{' '}
-                        <span className="truncate">{order.utm_campaign}</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">Campaign</span>
+                        <span className="font-medium truncate">{order.utm_campaign}</span>
                       </div>
                     )}
                     {order.utm_adset && (
-                      <div>
-                        <span className="text-muted-foreground">Adset:</span>{' '}
-                        <span className="truncate">{order.utm_adset}</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">Adset</span>
+                        <span className="font-medium truncate">{order.utm_adset}</span>
+                      </div>
+                    )}
+                    {order.utm_placement && (
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">Placement</span>
+                        <span className="font-medium truncate">{order.utm_placement}</span>
                       </div>
                     )}
                     {order.utm_creative && (
-                      <div>
-                        <span className="text-muted-foreground">Creative:</span>{' '}
-                        <span className="truncate">{order.utm_creative}</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">Creative</span>
+                        <span className="font-medium truncate">{order.utm_creative}</span>
                       </div>
                     )}
                   </div>

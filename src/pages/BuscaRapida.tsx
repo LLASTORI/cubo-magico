@@ -15,20 +15,37 @@ import { useTenantNavigation } from "@/navigation";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * BUSCA RÁPIDA - CANONICAL ORDERS CORE VIEW
+ * BUSCA RÁPIDA - PAINEL CENTRAL DE PEDIDOS (MULTI-PLATAFORMA)
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * REBUILD: 2026-01-16
  * 
- * This page uses EXCLUSIVELY the Orders Core tables:
- * - orders: customer_paid (GROSS), producer_net (NET)
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ ARQUITETURA MULTI-PLATAFORMA (REGRA DE OURO)                               │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │ A Busca Rápida NÃO é específica da Hotmart.                                │
+ * │ É um PAINEL CENTRAL de pedidos para QUALQUER plataforma.                   │
+ * │                                                                             │
+ * │ A plataforma (Hotmart, Kiwify, Monetizze, etc) é apenas um ATRIBUTO:       │
+ * │   • orders.provider = 'hotmart' | 'kiwify' | 'monetizze' | ...             │
+ * │                                                                             │
+ * │ FUTURO (sem alterar lógica de pedidos):                                    │
+ * │   • Seletor de plataforma no header                                        │
+ * │   • Filtro por provider nos filtros existentes                             │
+ * │   • Badge visual indicando origem do pedido                                │
+ * │                                                                             │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * DATA SOURCES (Orders Core - Canonical):
+ * - orders: customer_paid (GROSS), producer_net (NET), provider
  * - order_items: products list
  * - ledger_events: breakdown (EXPLANATION ONLY)
  * 
  * FORBIDDEN SOURCES:
  * ❌ finance_ledger_summary
  * ❌ useFinanceLedger hook
- * ❌ hotmart_sales
+ * ❌ hotmart_sales (legacy)
  * ❌ crm_transactions
  * 
  * CARD DEFINITIONS:

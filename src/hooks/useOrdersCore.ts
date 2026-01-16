@@ -2,8 +2,25 @@
  * useOrdersCore
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
- * CANONICAL FINANCIAL HOOK - ORDERS CORE
+ * CANONICAL FINANCIAL HOOK - ORDERS CORE (MULTI-PLATAFORMA)
  * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ ARQUITETURA MULTI-PLATAFORMA                                               │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │ Este hook NÃO é específico da Hotmart.                                     │
+ * │ Funciona com QUALQUER plataforma que siga o modelo Orders Core.            │
+ * │                                                                             │
+ * │ A plataforma é apenas um ATRIBUTO do pedido:                               │
+ * │   • orders.provider = 'hotmart' | 'kiwify' | 'monetizze' | ...             │
+ * │                                                                             │
+ * │ PARA ADICIONAR NOVA PLATAFORMA:                                            │
+ * │   1. Criar edge function de ingestão (ex: ingest-kiwify-sale)              │
+ * │   2. Mapear webhook para orders + order_items + ledger_events              │
+ * │   3. Pronto! A Busca Rápida já exibe automaticamente                       │
+ * │                                                                             │
+ * └─────────────────────────────────────────────────────────────────────────────┘
  * 
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │ REGRA CANÔNICA DE PEDIDO (OBRIGATÓRIA - NÃO NEGOCIÁVEL)                    │
@@ -13,37 +30,40 @@
  * │                                                                             │
  * │ • orders é a entidade canônica de pedido                                   │
  * │ • orders.id = identificador interno único                                  │
- * │ • orders.provider_order_id = identificador externo (Hotmart, etc)          │
+ * │ • orders.provider_order_id = identificador externo (HP..., KW..., etc)     │
+ * │ • orders.provider = nome da plataforma de origem                           │
  * │                                                                             │
  * │ Todo produto vendido no mesmo checkout deve:                               │
  * │   ✓ Pertencer ao mesmo order_id                                            │
  * │   ✓ Aparecer como order_item                                               │
  * │                                                                             │
- * │ Tipos de item suportados:                                                  │
+ * │ Tipos de item suportados (universal):                                      │
  * │   • main (produto principal)                                               │
- * │   • bump (order bump)                                                      │
+ * │   • bump / orderbump (order bump)                                          │
  * │   • upsell                                                                 │
  * │   • downsell                                                               │
+ * │   • addon                                                                  │
  * │   • combo                                                                  │
  * │                                                                             │
  * │ PROIBIDO: Renderizar produtos por transaction_id isolado na UI             │
  * └─────────────────────────────────────────────────────────────────────────────┘
  * 
- * This hook queries from the CANONICAL Orders Core tables:
- * - orders: Primary source for customer_paid, producer_net
+ * DATA SOURCES (Canonical):
+ * - orders: customer_paid, producer_net, provider
  * - order_items: Products list with base_price
  * - ledger_events: Financial breakdown (EXPLANATION ONLY)
  * 
  * FORBIDDEN SOURCES:
  * ❌ finance_ledger_summary
- * ❌ hotmart_sales
+ * ❌ hotmart_sales (legacy)
  * ❌ crm_transactions
- * ❌ Any legacy views
+ * ❌ Any platform-specific legacy views
  * 
  * PRINCIPLE:
  * - Ledger explains the order, but NEVER changes order values
  * - customer_paid = what customer paid (GROSS)
  * - producer_net = what producer receives (NET)
+ * - provider = platform of origin (Hotmart, Kiwify, etc)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 

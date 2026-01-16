@@ -466,66 +466,98 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 ✓ UTMs vêm EXCLUSIVAMENTE de orders.utm_*
                 ✓ UTMs são atributos do PEDIDO, não dos itens
                 ✓ Preenchidas no webhook ou backfill
+                ✓ SEMPRE exibir seção, mesmo se vazia (PROMPT 14)
                 
                 PROIBIDO:
                 ❌ Parsing de raw_payload
                 ❌ Buscar UTMs de hotmart_sales
                 ═══════════════════════════════════════════════════════════════════════════════ */}
-            {(order.utm_source || order.utm_campaign || order.utm_adset || order.utm_placement || order.utm_creative) && (
+            <Separator />
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">Origem da Venda (UTM)</span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground/70 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[280px] text-sm">
+                        <p>As UTMs são capturadas no checkout e associadas ao pedido como um todo.</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Fonte: colunas materializadas em orders.*</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Badge variant="outline" className="text-xs bg-muted">
+                  Fonte: Pedido
+                </Badge>
+              </div>
+              
+              {/* Task 3: Always show UTM section, with explanatory text when empty */}
+              {(order.utm_source || order.utm_campaign || order.utm_adset || order.utm_placement || order.utm_creative) ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/30 rounded-lg p-3">
+                  {order.utm_source && (
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">Source</span>
+                      <span className="font-medium truncate">{order.utm_source}</span>
+                    </div>
+                  )}
+                  {order.utm_campaign && (
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">Campaign</span>
+                      <span className="font-medium truncate">{order.utm_campaign}</span>
+                    </div>
+                  )}
+                  {order.utm_adset && (
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">Adset</span>
+                      <span className="font-medium truncate">{order.utm_adset}</span>
+                    </div>
+                  )}
+                  {order.utm_placement && (
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">Placement</span>
+                      <span className="font-medium truncate">{order.utm_placement}</span>
+                    </div>
+                  )}
+                  {order.utm_creative && (
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">Creative</span>
+                      <span className="font-medium truncate">{order.utm_creative}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-muted/30 rounded-lg p-3 text-sm text-muted-foreground">
+                  <p>Este pedido não possui parâmetros de UTM enviados pela plataforma de origem.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Task 4: Funnel visible in modal */}
+            {order.products.some(p => p.funnel_id) && (
               <>
                 <Separator />
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Info className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Origem da Venda (UTM)</span>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="w-3.5 h-3.5 text-muted-foreground/70 cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-[280px] text-sm">
-                            <p>As UTMs são capturadas no checkout e associadas ao pedido como um todo.</p>
-                            <p className="mt-1 text-xs text-muted-foreground">Fonte: colunas materializadas em orders.*</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <span className="font-medium">Funil</span>
                     </div>
-                    <Badge variant="outline" className="text-xs bg-muted">
-                      Fonte: Pedido
-                    </Badge>
+                    {order.products.filter(p => p.funnel_id).length > 1 && (
+                      <Badge variant="outline" className="text-xs bg-muted">
+                        Múltiplos Funis
+                      </Badge>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/30 rounded-lg p-3">
-                    {order.utm_source && (
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">Source</span>
-                        <span className="font-medium truncate">{order.utm_source}</span>
-                      </div>
-                    )}
-                    {order.utm_campaign && (
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">Campaign</span>
-                        <span className="font-medium truncate">{order.utm_campaign}</span>
-                      </div>
-                    )}
-                    {order.utm_adset && (
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">Adset</span>
-                        <span className="font-medium truncate">{order.utm_adset}</span>
-                      </div>
-                    )}
-                    {order.utm_placement && (
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">Placement</span>
-                        <span className="font-medium truncate">{order.utm_placement}</span>
-                      </div>
-                    )}
-                    {order.utm_creative && (
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">Creative</span>
-                        <span className="font-medium truncate">{order.utm_creative}</span>
-                      </div>
-                    )}
+                  <div className="flex flex-wrap gap-2">
+                    {[...new Set(order.products.filter(p => p.funnel_id).map(p => p.funnel_id))].map((funnelId, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {funnelId}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </>

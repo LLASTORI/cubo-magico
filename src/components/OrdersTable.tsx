@@ -36,13 +36,20 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Eye, Package } from "lucide-react";
+import { Info, Eye, Package, Signal, SignalZero } from "lucide-react";
 import { OrderRecord } from "@/hooks/useOrdersCore";
 import { OrderDetailDialog } from "@/components/OrderDetailDialog";
 
 interface OrdersTableProps {
   orders: OrderRecord[];
+  utmFilterActive?: boolean;
+  ordersWithoutUtmCount?: number;
 }
+
+// Helper to check if order has any UTM
+const hasUtm = (order: OrderRecord): boolean => {
+  return !!(order.utm_source || order.utm_campaign || order.utm_adset || order.utm_placement || order.utm_creative);
+};
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -84,7 +91,7 @@ const getStatusLabel = (status: string) => {
   return labels[status.toLowerCase()] || status;
 };
 
-export function OrdersTable({ orders }: OrdersTableProps) {
+export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: OrdersTableProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -111,12 +118,42 @@ export function OrdersTable({ orders }: OrdersTableProps) {
               </Tooltip>
             </TooltipProvider>
           </div>
+          
+          {/* UTM Filter Warning - Task 1 */}
+          {utmFilterActive && ordersWithoutUtmCount !== undefined && ordersWithoutUtmCount > 0 && (
+            <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2 text-sm">
+              <SignalZero className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-amber-700 dark:text-amber-400 font-medium">
+                  Alguns pedidos não possuem UTM e foram ocultados pelo filtro.
+                </p>
+                <p className="text-amber-600/70 dark:text-amber-400/70 text-xs mt-0.5">
+                  {ordersWithoutUtmCount} pedido{ordersWithoutUtmCount > 1 ? 's' : ''} sem UTM neste período
+                </p>
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
                   <TableHead className="text-muted-foreground">Pedido</TableHead>
                   <TableHead className="text-muted-foreground">Plataforma</TableHead>
+                  <TableHead className="text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      UTM
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="w-3 h-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Indica se o pedido possui parâmetros UTM</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </TableHead>
                   <TableHead className="text-muted-foreground">Cliente</TableHead>
                   <TableHead className="text-muted-foreground">
                     <div className="flex items-center gap-1">
@@ -184,6 +221,20 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       <Badge variant="outline" className="uppercase text-xs">
                         {order.provider}
                       </Badge>
+                    </TableCell>
+                    {/* UTM Badge - Task 2 */}
+                    <TableCell>
+                      {hasUtm(order) ? (
+                        <Badge variant="outline" className="text-xs gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                          <Signal className="w-3 h-3" />
+                          Com UTM
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs gap-1 bg-muted text-muted-foreground">
+                          <SignalZero className="w-3 h-3" />
+                          Sem UTM
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-foreground max-w-[150px] truncate" title={order.buyer_name || ''}>
                       {order.buyer_name || '-'}

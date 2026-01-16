@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, CheckCircle, Percent, Database } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, CheckCircle, Percent, Database, SearchX } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import { OrdersTable } from "@/components/OrdersTable";
 import SalesTablePagination from "@/components/SalesTablePagination";
@@ -65,8 +65,15 @@ import { useTenantNavigation } from "@/navigation";
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
+// Helper to check if any UTM filter is active
+const hasUtmFilterActive = (filters: FilterParams | null): boolean => {
+  if (!filters) return false;
+  return !!(filters.utmSource || filters.utmCampaign || filters.utmAdset || filters.utmPlacement || filters.utmCreative);
+};
+
 const BuscaRapida = () => {
   const [currentFilters, setCurrentFilters] = useState<FilterParams | null>(null);
+  const [ordersWithoutUtmCount, setOrdersWithoutUtmCount] = useState<number>(0);
   const { toast } = useToast();
   const { navigateTo } = useTenantNavigation();
   const { currentProject, credentials } = useProject();
@@ -83,6 +90,7 @@ const BuscaRapida = () => {
     prevPage,
     setPage,
     setPageSize,
+    countOrdersWithoutUtm,
   } = useOrdersCore();
 
   // Clear filters when project changes
@@ -143,6 +151,14 @@ const BuscaRapida = () => {
     setCurrentFilters(filters);
     const ordersFilters = convertToOrdersFilters(filters);
     await fetchData(currentProject.id, ordersFilters, 1, pagination.pageSize);
+    
+    // Fetch count of orders without UTM if UTM filter is active
+    if (hasUtmFilterActive(filters)) {
+      const count = await countOrdersWithoutUtm(currentProject.id, ordersFilters);
+      setOrdersWithoutUtmCount(count);
+    } else {
+      setOrdersWithoutUtmCount(0);
+    }
     
     if (!error) {
       toast({
@@ -323,7 +339,11 @@ const BuscaRapida = () => {
                 {/* Orders Table */}
                 {orders.length > 0 && (
                   <>
-                    <OrdersTable orders={orders} />
+                    <OrdersTable 
+                      orders={orders} 
+                      utmFilterActive={hasUtmFilterActive(currentFilters)}
+                      ordersWithoutUtmCount={ordersWithoutUtmCount}
+                    />
                     
                     {/* Pagination Controls */}
                     <SalesTablePagination
@@ -338,8 +358,18 @@ const BuscaRapida = () => {
                 )}
               </div>
             ) : currentFilters ? (
-              <div className="text-center py-12 text-muted-foreground">
-                Nenhum pedido encontrado para os filtros selecionados
+              /* Task 5: Contextual no-results message */
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <SearchX className="w-16 h-16 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Nenhum pedido encontrado
+                </h3>
+                <p className="text-muted-foreground max-w-md">
+                  {hasUtmFilterActive(currentFilters) 
+                    ? "Nenhum pedido corresponde aos filtros aplicados. Pedidos sem UTM não aparecem quando filtros de UTM estão ativos."
+                    : "Nenhum pedido corresponde aos filtros aplicados. Verifique as datas e os filtros selecionados."
+                  }
+                </p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-64 text-center">

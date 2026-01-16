@@ -19,7 +19,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -41,9 +41,11 @@ import {
   ArrowUp,
   Info,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from "lucide-react";
 import { useOrdersCore, OrderRecord, LedgerBreakdown } from "@/hooks/useOrdersCore";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OrderDetailDialogProps {
   orderId: string | null;
@@ -146,11 +148,16 @@ const getItemTypeBadgeColor = (itemType: string) => {
   }
 };
 
+// Funnel name is resolved at runtime via funnel_id.
+// funnel_id is the canonical link; name is a mutable label.
+type FunnelNameMap = Record<string, string>;
+
 export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDialogProps) {
   const { fetchOrderDetail } = useOrdersCore();
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [breakdown, setBreakdown] = useState<LedgerBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
+  const [funnelNames, setFunnelNames] = useState<FunnelNameMap>({});
 
   useEffect(() => {
     if (open && orderId) {
@@ -163,8 +170,48 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
     } else {
       setOrder(null);
       setBreakdown(null);
+      setFunnelNames({});
     }
   }, [open, orderId, fetchOrderDetail]);
+
+  // Fetch funnel names when order is loaded and has funnel_ids
+  useEffect(() => {
+    if (!order) return;
+    
+    const funnelIds = [...new Set(order.products.filter(p => p.funnel_id).map(p => p.funnel_id!))]
+      .filter(Boolean);
+    
+    if (funnelIds.length === 0) return;
+
+    const fetchFunnelNames = async () => {
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('id, name')
+        .in('id', funnelIds);
+
+      if (error) {
+        console.error('Error fetching funnel names:', error);
+        return;
+      }
+
+      const nameMap: FunnelNameMap = {};
+      data?.forEach(f => {
+        nameMap[f.id] = f.name;
+      });
+      setFunnelNames(nameMap);
+    };
+
+    fetchFunnelNames();
+  }, [order]);
+
+  // Resolve funnel_id to name with fallback
+  const getFunnelDisplayName = (funnelId: string): { name: string; isRemoved: boolean } => {
+    const name = funnelNames[funnelId];
+    if (name) {
+      return { name, isRemoved: false };
+    }
+    return { name: '[Funil removido ou renomeado]', isRemoved: true };
+  };
 
   // Validate ledger breakdown matches order values
   const validateBreakdown = () => {
@@ -544,20 +591,42 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Info className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Funil</span>
+                      <span className="font-medium">
+                        {[...new Set(order.products.filter(p => p.funnel_id).map(p => p.funnel_id))].length > 1 
+                          ? 'Funis' 
+                          : 'Funil'}
+                      </span>
                     </div>
-                    {order.products.filter(p => p.funnel_id).length > 1 && (
+                    {[...new Set(order.products.filter(p => p.funnel_id).map(p => p.funnel_id))].length > 1 && (
                       <Badge variant="outline" className="text-xs bg-muted">
                         Múltiplos Funis
                       </Badge>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {[...new Set(order.products.filter(p => p.funnel_id).map(p => p.funnel_id))].map((funnelId, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs">
-                        {funnelId}
-                      </Badge>
-                    ))}
+                    {[...new Set(order.products.filter(p => p.funnel_id).map(p => p.funnel_id!))].map((funnelId, idx) => {
+                      const { name, isRemoved } = getFunnelDisplayName(funnelId);
+                      return (
+                        <TooltipProvider key={idx}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs ${isRemoved ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20' : ''}`}
+                              >
+                                {isRemoved && <AlertTriangle className="w-3 h-3 mr-1" />}
+                                {name}
+                              </Badge>
+                            </TooltipTrigger>
+                            {isRemoved && (
+                              <TooltipContent className="max-w-[280px] text-sm">
+                                <p>Este pedido está vinculado a um funil que foi removido ou renomeado.</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })}
                   </div>
                 </div>
               </>

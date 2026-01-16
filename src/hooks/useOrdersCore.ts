@@ -5,6 +5,30 @@
  * CANONICAL FINANCIAL HOOK - ORDERS CORE
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ REGRA CANÔNICA DE PEDIDO (OBRIGATÓRIA - NÃO NEGOCIÁVEL)                    │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │ UM PEDIDO = TODOS OS PRODUTOS DO MESMO provider_order_id                   │
+ * │                                                                             │
+ * │ • orders é a entidade canônica de pedido                                   │
+ * │ • orders.id = identificador interno único                                  │
+ * │ • orders.provider_order_id = identificador externo (Hotmart, etc)          │
+ * │                                                                             │
+ * │ Todo produto vendido no mesmo checkout deve:                               │
+ * │   ✓ Pertencer ao mesmo order_id                                            │
+ * │   ✓ Aparecer como order_item                                               │
+ * │                                                                             │
+ * │ Tipos de item suportados:                                                  │
+ * │   • main (produto principal)                                               │
+ * │   • bump (order bump)                                                      │
+ * │   • upsell                                                                 │
+ * │   • downsell                                                               │
+ * │   • combo                                                                  │
+ * │                                                                             │
+ * │ PROIBIDO: Renderizar produtos por transaction_id isolado na UI             │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
  * This hook queries from the CANONICAL Orders Core tables:
  * - orders: Primary source for customer_paid, producer_net
  * - order_items: Products list with base_price

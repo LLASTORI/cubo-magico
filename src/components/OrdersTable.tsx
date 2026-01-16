@@ -1,12 +1,26 @@
 /**
  * OrdersTable
  * 
- * Canonical table for displaying orders from Orders Core.
- * Each row = 1 order (NOT 1 transaction event)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * REGRA CANÔNICA DE PEDIDO (OBRIGATÓRIA - NÃO NEGOCIÁVEL)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * UM PEDIDO = TODOS OS PRODUTOS DO MESMO provider_order_id
+ * 
+ * Cada linha desta tabela = 1 pedido completo (NÃO 1 evento de transação)
+ * 
+ * A coluna "Produtos" mostra TODOS os items do pedido:
+ * - Produto principal (main)
+ * - Order bumps
+ * - Upsells
+ * - Downsells
+ * - Combos
  * 
  * FORBIDDEN:
  * ❌ Using finance_ledger_summary
  * ❌ Showing ledger events as rows
+ * ❌ Rendering products by isolated transaction_id
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useState } from "react";

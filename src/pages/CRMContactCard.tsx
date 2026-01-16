@@ -62,6 +62,7 @@ import { ContactCognitiveProfile } from '@/components/crm/ContactCognitiveProfil
 import { ContactAIRecommendations } from '@/components/crm/ContactAIRecommendations';
 import { ContactAgentSuggestions } from '@/components/crm/ContactAgentSuggestions';
 import { ContactMemoryCard } from '@/components/crm/ContactMemoryCard';
+import { ContactOrdersMetricsCard } from '@/components/crm/ContactOrdersMetricsCard';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -530,7 +531,10 @@ export default function CRMContactCard() {
             {/* Cognitive Profile */}
             <ContactCognitiveProfile contactId={contactId!} />
 
-            {/* Financial Info */}
+            {/* SHADOW: Métricas por Pedido (canônicas) - não remover legado ainda */}
+            <ContactOrdersMetricsCard contactId={contactId!} />
+
+            {/* Financial Info (LEGACY - transitório) */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">

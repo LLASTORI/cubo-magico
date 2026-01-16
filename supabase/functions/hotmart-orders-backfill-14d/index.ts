@@ -469,12 +469,13 @@ serve(async (req) => {
               continue;
           }
 
+          // Use provider_event_id to allow multiple ledger entries per item (C1, C2, C3)
+          const providerEventId = `${transactionId}_${eventType}_${actor}`;
           const { data: existingEvent } = await supabase
             .from('ledger_events')
             .select('id')
             .eq('order_id', orderId)
-            .eq('event_type', eventType)
-            .eq('actor', actor)
+            .eq('provider_event_id', providerEventId)
             .maybeSingle();
 
           if (!existingEvent) {
@@ -502,11 +503,13 @@ serve(async (req) => {
 
         // Add auto-calculated coproducer if needed
         if (hasCoProduction && !hasCoproducerInCommissions && finalCoproducerCost && finalCoproducerCost > 0) {
+          // Use provider_event_id to allow multiple coproducer entries per item
+          const coproducerEventId = `${transactionId}_coproducer_auto`;
           const { data: existingCoproducer } = await supabase
             .from('ledger_events')
             .select('id')
             .eq('order_id', orderId)
-            .eq('event_type', 'coproducer')
+            .eq('provider_event_id', coproducerEventId)
             .maybeSingle();
 
           if (!existingCoproducer) {

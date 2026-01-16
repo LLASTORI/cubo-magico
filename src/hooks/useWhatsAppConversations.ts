@@ -66,6 +66,7 @@ export function useWhatsAppConversations(filters?: {
     queryFn: async () => {
       if (!projectId) return [];
 
+      // PROMPT 25: Query única com JOIN - elimina N+1
       let query = supabase
         .from('whatsapp_conversations')
         .select(`
@@ -90,29 +91,37 @@ export function useWhatsAppConversations(filters?: {
 
       if (error) throw error;
 
-      // Fetch assigned agents separately if needed (assigned_to stores user_id)
-      const conversationsWithAgents = await Promise.all(
-        (data || []).map(async (conv) => {
-          let assigned_agent = null;
-          if (conv.assigned_to) {
-            const { data: agentData } = await supabase
-              .from('whatsapp_agents')
-              .select('id, display_name, user_id')
-              .eq('user_id', conv.assigned_to)
-              .eq('project_id', projectId)
-              .single();
-            assigned_agent = agentData;
-          }
-          return {
-            ...conv,
-            contact: conv.contact || null,
-            assigned_agent,
-            department: conv.department || null,
-          };
-        })
-      );
+      // PROMPT 25: Buscar agentes em batch único (1 query em vez de N)
+      const assignedUserIds = [...new Set(
+        (data || [])
+          .filter(conv => conv.assigned_to)
+          .map(conv => conv.assigned_to)
+      )];
+
+      let agentsMap: Record<string, { id: string; display_name: string | null; user_id: string }> = {};
       
-      return conversationsWithAgents as WhatsAppConversation[];
+      if (assignedUserIds.length > 0) {
+        const { data: agentsData } = await supabase
+          .from('whatsapp_agents')
+          .select('id, display_name, user_id')
+          .eq('project_id', projectId)
+          .in('user_id', assignedUserIds);
+        
+        if (agentsData) {
+          agentsMap = agentsData.reduce((acc, agent) => {
+            acc[agent.user_id] = agent;
+            return acc;
+          }, {} as Record<string, { id: string; display_name: string | null; user_id: string }>);
+        }
+      }
+
+      // Mapear conversas com agentes do cache
+      return (data || []).map(conv => ({
+        ...conv,
+        contact: conv.contact || null,
+        assigned_agent: conv.assigned_to ? agentsMap[conv.assigned_to] || null : null,
+        department: conv.department || null,
+      })) as WhatsAppConversation[];
     },
     enabled: !!projectId,
   });

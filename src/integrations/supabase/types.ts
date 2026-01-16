@@ -170,6 +170,13 @@ export type Database = {
             foreignKeyName: "agent_decisions_log_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "agent_decisions_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -503,6 +510,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "automation_executions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -974,6 +988,13 @@ export type Database = {
             foreignKeyName: "contact_identity_events_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_identity_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -1067,6 +1088,13 @@ export type Database = {
             foreignKeyName: "contact_memory_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_memory_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -1152,6 +1180,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_predictions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -1302,6 +1337,13 @@ export type Database = {
             foreignKeyName: "contact_profiles_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: true
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "contact_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -1368,6 +1410,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -1462,6 +1511,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_activities_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -1654,6 +1710,13 @@ export type Database = {
             foreignKeyName: "crm_contact_cadences_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_cadences_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -1758,6 +1821,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_interactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -2133,6 +2203,13 @@ export type Database = {
             foreignKeyName: "crm_recovery_activities_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_recovery_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -2343,6 +2420,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "crm_transactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -4512,6 +4596,13 @@ export type Database = {
             foreignKeyName: "meta_audience_contacts_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "meta_audience_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -5198,6 +5289,13 @@ export type Database = {
             foreignKeyName: "orders_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -5273,6 +5371,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "path_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -5386,6 +5491,13 @@ export type Database = {
             foreignKeyName: "personalization_contexts_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "personalization_contexts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -5467,6 +5579,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "personalization_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -6527,6 +6646,13 @@ export type Database = {
             foreignKeyName: "quiz_events_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -6667,6 +6793,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_outcome_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -7018,6 +7151,13 @@ export type Database = {
             foreignKeyName: "quiz_sessions_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -7201,6 +7341,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "recommendation_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -7497,6 +7644,13 @@ export type Database = {
             foreignKeyName: "sales_core_events_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -7718,6 +7872,13 @@ export type Database = {
             columns: ["crm_contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "social_comments_crm_contact_id_fkey"
+            columns: ["crm_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -8388,6 +8549,13 @@ export type Database = {
             foreignKeyName: "survey_response_analysis_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "survey_response_analysis_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -8474,6 +8642,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "survey_responses_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -8699,6 +8874,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "system_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {
@@ -9173,6 +9355,13 @@ export type Database = {
             foreignKeyName: "whatsapp_conversations_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -9505,6 +9694,13 @@ export type Database = {
             foreignKeyName: "quiz_sessions_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -9601,6 +9797,36 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_orders_metrics_view: {
+        Row: {
+          avg_ticket: number | null
+          contact_email: string | null
+          contact_id: string | null
+          contact_name: string | null
+          days_since_last_order: number | null
+          first_order_at: string | null
+          first_product: string | null
+          first_utm_source: string | null
+          is_repeat_customer: boolean | null
+          items_count: number | null
+          last_order_at: string | null
+          last_product: string | null
+          orders_count: number | null
+          project_id: string | null
+          provider_breakdown: Json | null
+          total_customer_paid: number | null
+          total_producer_net: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contacts_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -10104,6 +10330,13 @@ export type Database = {
             foreignKeyName: "sales_core_events_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -10493,6 +10726,13 @@ export type Database = {
             foreignKeyName: "orders_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
@@ -10715,6 +10955,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contact_journey_metrics_view"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "sales_core_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contact_orders_metrics_view"
             referencedColumns: ["contact_id"]
           },
           {

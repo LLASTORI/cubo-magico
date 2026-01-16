@@ -4,15 +4,22 @@ import { UTMMetrics } from '@/hooks/useUTMBehaviorData';
 import { ArrowUpDown, TrendingUp, TrendingDown } from 'lucide-react';
 import { useState } from 'react';
 
+/**
+ * 🚫 LEGACY TABLES FORBIDDEN
+ * This component displays metrics from Orders Core:
+ * - totalCustomerPaid: What customer paid
+ * - totalProducerNet: What producer received
+ */
+
 interface UTMBehaviorTableProps {
   data: UTMMetrics[];
   dimensionLabel: string;
 }
 
-type SortField = 'key' | 'totalContacts' | 'totalCustomers' | 'conversionRate' | 'totalRevenue' | 'avgLTV' | 'avgTicket' | 'repurchaseRate';
+type SortField = 'key' | 'totalContacts' | 'totalCustomers' | 'conversionRate' | 'totalCustomerPaid' | 'avgLTV' | 'avgTicket' | 'repurchaseRate';
 
 export function UTMBehaviorTable({ data, dimensionLabel }: UTMBehaviorTableProps) {
-  const [sortField, setSortField] = useState<SortField>('totalRevenue');
+  const [sortField, setSortField] = useState<SortField>('totalCustomerPaid');
   const [sortDesc, setSortDesc] = useState(true);
 
   const handleSort = (field: SortField) => {
@@ -44,12 +51,6 @@ export function UTMBehaviorTable({ data, dimensionLabel }: UTMBehaviorTableProps
 
   const formatPercent = (value: number) => {
     return `${value.toFixed(1)}%`;
-  };
-
-  const getConversionBadge = (rate: number) => {
-    if (rate >= 5) return <Badge variant="default" className="bg-green-500/20 text-green-400 border-green-500/30">Alto</Badge>;
-    if (rate >= 2) return <Badge variant="default" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Médio</Badge>;
-    return <Badge variant="default" className="bg-red-500/20 text-red-400 border-red-500/30">Baixo</Badge>;
   };
 
   // Calculate averages for comparison
@@ -85,7 +86,7 @@ export function UTMBehaviorTable({ data, dimensionLabel }: UTMBehaviorTableProps
             <SortHeader field="totalContacts">Contatos</SortHeader>
             <SortHeader field="totalCustomers">Clientes</SortHeader>
             <SortHeader field="conversionRate">Conversão</SortHeader>
-            <SortHeader field="totalRevenue">Receita Total</SortHeader>
+            <SortHeader field="totalCustomerPaid">Receita Bruta</SortHeader>
             <SortHeader field="avgLTV">LTV Médio</SortHeader>
             <SortHeader field="avgTicket">Ticket Médio</SortHeader>
             <SortHeader field="repurchaseRate">Recompra</SortHeader>
@@ -109,7 +110,7 @@ export function UTMBehaviorTable({ data, dimensionLabel }: UTMBehaviorTableProps
                   ) : null}
                 </div>
               </TableCell>
-              <TableCell className="font-semibold">{formatCurrency(row.totalRevenue)}</TableCell>
+              <TableCell className="font-semibold">{formatCurrency(row.totalCustomerPaid)}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
                   {formatCurrency(row.avgLTV)}

@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
 import { formatPhoneForDisplay } from '@/components/ui/international-phone-input';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 
 interface ContactPanelProps {
   conversation: WhatsAppConversation | null;
@@ -37,6 +38,7 @@ interface ContactPanelProps {
 export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPanelProps) {
   const { agents } = useWhatsAppAgents();
   const { departments } = useWhatsAppDepartments();
+  const { getProjectUrl } = useProjectNavigation();
 
   if (!conversation) {
     return (
@@ -82,9 +84,10 @@ export function ContactPanel({ conversation, onAssign, onTransfer }: ContactPane
             <h3 className="font-semibold text-lg">
               {contact?.name || 'Contato'}
             </h3>
+            {/* CORRIGIDO PROMPT 22: usar getProjectUrl para navegação canônica */}
             {contact && (
               <Link 
-                to={`/crm/contact/${contact.id}`}
+                to={getProjectUrl(`/crm/contact/${contact.id}`)}
                 className="text-sm text-primary hover:underline inline-flex items-center gap-1"
               >
                 Ver ficha completa

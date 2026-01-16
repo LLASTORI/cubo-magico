@@ -25,6 +25,7 @@ interface RawData {
 
 export default function DataDebug() {
   const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { user } = useAuth();
   const { toast } = useToast();
   const { currentProject } = useProject();
@@ -293,7 +294,14 @@ export default function DataDebug() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            {/* CORRIGIDO PROMPT 22: Back seguro com fallback */}
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigateTo('/dashboard');
+              }
+            }}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <h1 className="text-3xl font-bold text-foreground">Debug de Dados</h1>

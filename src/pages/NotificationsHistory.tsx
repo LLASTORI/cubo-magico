@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { ArrowLeft, Bell, Check, CheckCheck, Trash2, Search, Filter, ShoppingCart, Info, AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,6 +61,7 @@ const getTypeLabel = (type: Notification['type']) => {
 
 const NotificationsHistory = () => {
   const navigate = useNavigate();
+  const { navigateTo } = useProjectNavigation();
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -183,7 +185,14 @@ const NotificationsHistory = () => {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              {/* CORRIGIDO PROMPT 22: Back seguro com fallback */}
+              <Button variant="ghost" size="icon" onClick={() => {
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigateTo('/dashboard');
+                }
+              }}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <CuboBrand size="md" />

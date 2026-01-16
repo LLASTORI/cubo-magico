@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,7 @@ interface CustomerRowProps {
 
 function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { getProjectUrl } = useProjectNavigation();
 
   const sourceLabels: Record<string, string> = {
     'hotmart': 'Hotmart',
@@ -140,7 +142,8 @@ function CustomerRow({ journey, showOrigin, searchTerm }: CustomerRowProps) {
               asChild
               onClick={(e) => e.stopPropagation()}
             >
-              <Link to={`/crm/contact/${journey.contactId}`} title="Ver cartão do contato">
+              {/* CORRIGIDO PROMPT 22: usar getProjectUrl para navegação canônica */}
+              <Link to={getProjectUrl(`/crm/contact/${journey.contactId}`)} title="Ver cartão do contato">
                 <ExternalLink className="h-4 w-4" />
               </Link>
             </Button>

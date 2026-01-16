@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ interface JourneyOrderCardProps {
 
 function JourneyOrderCard({ event }: JourneyOrderCardProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { getProjectUrl } = useProjectNavigation();
 
   const getItemTypeBadge = (itemType: string) => {
     switch (itemType) {
@@ -166,11 +168,11 @@ function JourneyOrderCard({ event }: JourneyOrderCardProps) {
               </div>
             )}
 
-            {/* Link para contato */}
+            {/* Link para contato - CORRIGIDO PROMPT 22: usar getProjectUrl */}
             {event.contact_id && (
               <div className="border-t pt-4 flex justify-end">
                 <Button variant="outline" size="sm" asChild>
-                  <Link to={`/crm/contact/${event.contact_id}`}>
+                  <Link to={getProjectUrl(`/crm/contact/${event.contact_id}`)}>
                     <ExternalLink className="h-3 w-3 mr-2" />
                     Ver Contato
                   </Link>

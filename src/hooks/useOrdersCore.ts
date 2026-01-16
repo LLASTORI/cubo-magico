@@ -167,6 +167,7 @@ export interface UseOrdersCoreResult {
   totals: OrdersCoreTotals;
   fetchData: (projectId: string, filters: OrdersCoreFilters, page?: number, pageSize?: number) => Promise<void>;
   fetchOrderDetail: (orderId: string) => Promise<{ order: OrderRecord | null; breakdown: LedgerBreakdown | null }>;
+  countOrdersWithoutUtm: (projectId: string, filters: OrdersCoreFilters) => Promise<number>;
   nextPage: () => void;
   prevPage: () => void;
   setPage: (page: number) => void;
@@ -846,6 +847,41 @@ export function useOrdersCore(): UseOrdersCoreResult {
     }
   }, [currentProjectId, currentFilters, fetchData]);
 
+  /**
+   * Count orders without UTM in the same date range/filters (for UX warning)
+   * This counts orders that would NOT appear when UTM filters are applied
+   */
+  const countOrdersWithoutUtm = useCallback(async (
+    projectId: string,
+    filters: OrdersCoreFilters
+  ): Promise<number> => {
+    try {
+      const statuses = buildStatusFilter(filters.transactionStatus || []);
+      const startDateTime = `${filters.startDate}T00:00:00-03:00`;
+      const endDateTime = `${filters.endDate}T23:59:59-03:00`;
+
+      // Count orders in the date range that have NULL utm_source
+      const { count, error } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .in('status', statuses)
+        .gte('ordered_at', startDateTime)
+        .lte('ordered_at', endDateTime)
+        .is('utm_source', null);
+
+      if (error) {
+        console.warn('[useOrdersCore] Error counting orders without UTM:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (e) {
+      console.warn('[useOrdersCore] Exception counting orders without UTM:', e);
+      return 0;
+    }
+  }, []);
+
   return {
     orders,
     loading,
@@ -854,6 +890,7 @@ export function useOrdersCore(): UseOrdersCoreResult {
     totals,
     fetchData,
     fetchOrderDetail,
+    countOrdersWithoutUtm,
     nextPage,
     prevPage,
     setPage,

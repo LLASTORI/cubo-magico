@@ -45,24 +45,27 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState, useEffect } from 'react';
-import { ContactActivitiesList } from '@/components/crm/ContactActivitiesList';
-import { ContactTransactionsList } from '@/components/crm/ContactTransactionsList';
-import { ContactWhatsAppHistory } from '@/components/crm/ContactWhatsAppHistory';
+import { useState, useEffect, lazy, Suspense } from 'react';
+
+// Lazy load tab components for performance (PROMPT 24 - Quick Win #1)
+const ContactActivitiesList = lazy(() => import('@/components/crm/ContactActivitiesList').then(m => ({ default: m.ContactActivitiesList })));
+const ContactTransactionsList = lazy(() => import('@/components/crm/ContactTransactionsList').then(m => ({ default: m.ContactTransactionsList })));
+const ContactWhatsAppHistory = lazy(() => import('@/components/crm/ContactWhatsAppHistory').then(m => ({ default: m.ContactWhatsAppHistory })));
+const ContactIdentityTab = lazy(() => import('@/components/crm/ContactIdentityTab').then(m => ({ default: m.ContactIdentityTab })));
+const ContactSurveysTab = lazy(() => import('@/components/crm/ContactSurveysTab').then(m => ({ default: m.ContactSurveysTab })));
+const ContactSocialTab = lazy(() => import('@/components/crm/ContactSocialTab').then(m => ({ default: m.ContactSocialTab })));
+const ContactQuizzesTab = lazy(() => import('@/components/crm/ContactQuizzesTab').then(m => ({ default: m.ContactQuizzesTab })));
+const ContactCognitiveProfile = lazy(() => import('@/components/crm/ContactCognitiveProfile').then(m => ({ default: m.ContactCognitiveProfile })));
+const ContactAIRecommendations = lazy(() => import('@/components/crm/ContactAIRecommendations').then(m => ({ default: m.ContactAIRecommendations })));
+const ContactAgentSuggestions = lazy(() => import('@/components/crm/ContactAgentSuggestions').then(m => ({ default: m.ContactAgentSuggestions })));
+const ContactMemoryCard = lazy(() => import('@/components/crm/ContactMemoryCard').then(m => ({ default: m.ContactMemoryCard })));
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { ContactAttributionCard } from '@/components/crm/ContactAttributionCard';
 import { ContactOrdersAttributionCard } from '@/components/crm/ContactOrdersAttributionCard';
 import { ContactSegmentInsights } from '@/components/crm/ContactSegmentInsights';
-import { ContactIdentityTab } from '@/components/crm/ContactIdentityTab';
-import { ContactSurveysTab } from '@/components/crm/ContactSurveysTab';
-import { ContactSocialTab } from '@/components/crm/ContactSocialTab';
-import { ContactQuizzesTab } from '@/components/crm/ContactQuizzesTab';
-import { ContactCognitiveProfile } from '@/components/crm/ContactCognitiveProfile';
-import { ContactAIRecommendations } from '@/components/crm/ContactAIRecommendations';
-import { ContactAgentSuggestions } from '@/components/crm/ContactAgentSuggestions';
-import { ContactMemoryCard } from '@/components/crm/ContactMemoryCard';
 import { ContactOrdersMetricsCard } from '@/components/crm/ContactOrdersMetricsCard';
+import { CubeLoader } from '@/components/CubeLoader';
 import { useWhatsAppNumbers } from '@/hooks/useWhatsAppNumbers';
 import { useWhatsAppConversations } from '@/hooks/useWhatsAppConversations';
 import { getFullPhoneNumber } from '@/components/ui/international-phone-input';
@@ -85,6 +88,14 @@ export default function CRMContactCard() {
   const [showActivityDialog, setShowActivityDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isStartingChat, setIsStartingChat] = useState(false);
+  const [activeTab, setActiveTab] = useState('activities');
+
+  // Lazy load fallback component
+  const TabLoader = () => (
+    <div className="flex items-center justify-center py-8">
+      <CubeLoader size="sm" />
+    </div>
+  );
 
   // Verifica se contato tem número de telefone válido para WhatsApp
   const hasWhatsAppNumber = !!(contact?.phone && (contact.phone_country_code || '55') && (contact.phone_ddd || '').length >= 0 && contact.phone.length >= 8);
@@ -386,7 +397,8 @@ export default function CRMContactCard() {
             </Card>
 
             {/* Tabs for Activities, Transactions, WhatsApp, Notes, Identity, Surveys, Social */}
-            <Tabs defaultValue="activities">
+            {/* PROMPT 24 - Quick Win #1: Lazy load tabs - só carrega quando ativa */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full flex-wrap h-auto gap-1 p-1">
                 <TabsTrigger value="activities">Atividades</TabsTrigger>
                 <TabsTrigger value="transactions">Transações</TabsTrigger>
@@ -410,7 +422,9 @@ export default function CRMContactCard() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ContactActivitiesList contactId={contactId!} />
+                    <Suspense fallback={<TabLoader />}>
+                      {activeTab === 'activities' && <ContactActivitiesList contactId={contactId!} />}
+                    </Suspense>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -421,10 +435,14 @@ export default function CRMContactCard() {
                     <CardTitle className="text-base">Histórico de Transações (Orders Core)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ContactTransactionsList 
-                      contactEmail={contact?.email || ''} 
-                      projectId={currentProject?.id || ''} 
-                    />
+                    <Suspense fallback={<TabLoader />}>
+                      {activeTab === 'transactions' && (
+                        <ContactTransactionsList 
+                          contactEmail={contact?.email || ''} 
+                          projectId={currentProject?.id || ''} 
+                        />
+                      )}
+                    </Suspense>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -438,25 +456,35 @@ export default function CRMContactCard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ContactWhatsAppHistory contactId={contactId!} />
+                    <Suspense fallback={<TabLoader />}>
+                      {activeTab === 'whatsapp' && <ContactWhatsAppHistory contactId={contactId!} />}
+                    </Suspense>
                   </CardContent>
                 </Card>
               </TabsContent>
 
               <TabsContent value="identity" className="mt-4">
-                <ContactIdentityTab contactId={contactId!} />
+                <Suspense fallback={<TabLoader />}>
+                  {activeTab === 'identity' && <ContactIdentityTab contactId={contactId!} />}
+                </Suspense>
               </TabsContent>
 
               <TabsContent value="surveys" className="mt-4">
-                <ContactSurveysTab contactId={contactId!} />
+                <Suspense fallback={<TabLoader />}>
+                  {activeTab === 'surveys' && <ContactSurveysTab contactId={contactId!} />}
+                </Suspense>
               </TabsContent>
 
               <TabsContent value="quizzes" className="mt-4">
-                <ContactQuizzesTab contactId={contactId!} />
+                <Suspense fallback={<TabLoader />}>
+                  {activeTab === 'quizzes' && <ContactQuizzesTab contactId={contactId!} />}
+                </Suspense>
               </TabsContent>
 
               <TabsContent value="social" className="mt-4">
-                <ContactSocialTab contactId={contactId!} />
+                <Suspense fallback={<TabLoader />}>
+                  {activeTab === 'social' && <ContactSocialTab contactId={contactId!} />}
+                </Suspense>
               </TabsContent>
 
               <TabsContent value="notes" className="mt-4">
@@ -535,8 +563,10 @@ export default function CRMContactCard() {
               </CardContent>
             </Card>
 
-            {/* Cognitive Profile */}
-            <ContactCognitiveProfile contactId={contactId!} />
+            {/* Cognitive Profile - Lazy loaded */}
+            <Suspense fallback={<TabLoader />}>
+              <ContactCognitiveProfile contactId={contactId!} />
+            </Suspense>
 
             {/* SHADOW: Métricas por Pedido (canônicas) - não remover legado ainda */}
             <ContactOrdersMetricsCard contactId={contactId!} />
@@ -652,14 +682,20 @@ export default function CRMContactCard() {
             {/* UTM Attribution - Legacy (fallback) */}
             <ContactAttributionCard contact={contact} />
 
-            {/* AI Recommendations */}
-            <ContactAIRecommendations contactId={contactId!} />
+            {/* AI Recommendations - Lazy loaded */}
+            <Suspense fallback={<TabLoader />}>
+              <ContactAIRecommendations contactId={contactId!} />
+            </Suspense>
 
-            {/* AI Agent Suggestions */}
-            <ContactAgentSuggestions contactId={contactId!} />
+            {/* AI Agent Suggestions - Lazy loaded */}
+            <Suspense fallback={<TabLoader />}>
+              <ContactAgentSuggestions contactId={contactId!} />
+            </Suspense>
 
-            {/* Long-term Memory */}
-            <ContactMemoryCard contactId={contactId!} />
+            {/* Long-term Memory - Lazy loaded */}
+            <Suspense fallback={<TabLoader />}>
+              <ContactMemoryCard contactId={contactId!} />
+            </Suspense>
 
             {/* Segment Insights */}
             <ContactSegmentInsights 

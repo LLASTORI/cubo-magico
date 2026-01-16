@@ -92,55 +92,33 @@ export default function CRMKanban() {
 
   const crmEnabled = isModuleEnabled('crm');
 
-  // Fetch contacts for kanban with their last transaction date
+  // PROMPT 24 - Quick Win #2: LIMIT 200 + Remover query extra de transactions
   const { data: contacts = [], isLoading: contactsLoading } = useQuery({
     queryKey: ['crm-kanban-contacts', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return [];
 
-      // Fetch contacts
+      // Fetch contacts com limit de 200 (Quick Win #2)
       const { data: contactsData, error: contactsError } = await supabase
         .from('crm_contacts')
         .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, updated_at, tags')
         .eq('project_id', currentProject.id)
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .limit(200); // PROMPT 24: Limit para performance
 
       if (contactsError) throw contactsError;
       
-      // Fetch last transaction date for each contact (for date filtering)
-      // Do this in batches to avoid URL length limits
-      const contactIds = contactsData.map(c => c.id);
-      const lastTxDateMap = new Map<string, string>();
-      
-      const batchSize = 50; // Smaller batch size to avoid URL length issues
-      for (let i = 0; i < contactIds.length; i += batchSize) {
-        const batchIds = contactIds.slice(i, i + batchSize);
-        
-        const { data: transactionsData, error: txError } = await supabase
-          .from('crm_transactions')
-          .select('contact_id, transaction_date, created_at')
-          .eq('project_id', currentProject.id)
-          .in('contact_id', batchIds)
-          .order('transaction_date', { ascending: false, nullsFirst: false });
-
-        if (txError) {
-          console.error('Error fetching transactions batch:', txError);
-          continue; // Continue with other batches even if one fails
-        }
-
-        for (const tx of transactionsData || []) {
-          if (!lastTxDateMap.has(tx.contact_id)) {
-            lastTxDateMap.set(tx.contact_id, tx.transaction_date || tx.created_at);
-          }
-        }
-      }
+      // PROMPT 24: Query de transactions REMOVIDA
+      // O campo last_transaction_date não é usado no visual do Kanban
+      // Se necessário no futuro, usar view materializada
 
       return contactsData.map(c => ({
         ...c,
-        last_transaction_date: lastTxDateMap.get(c.id) || null,
+        last_transaction_date: null, // Campo mantido para compatibilidade, mas não é carregado
       })) as KanbanContact[];
     },
     enabled: !!currentProject?.id && crmEnabled,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   });
 
   // Create default stages if none exist

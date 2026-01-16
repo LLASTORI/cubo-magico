@@ -78,18 +78,23 @@ GROUP BY c.id, c.email, c.name, c.project_id;
 
 ## Prova de Conceito
 
-### Exemplo: Contato com 1 pedido de 3 produtos
+### Exemplo Real: julianebborba@gmail.com
 
-| Origem | Nº Compras | LTV |
-|--------|------------|-----|
-| CRM Legado | 3 | R$ 615,00 (inflado) |
-| Orders Core | 1 | R$ 205,00 (correto) |
+| Origem | Nº Compras | LTV | Ticket Médio |
+|--------|------------|-----|--------------|
+| CRM Legado | 3 | R$ 205,00 (distribuído) | - |
+| Orders Core | 1 | R$ 615,00 (correto) | R$ 615,00 |
 
-### Validação com Dados Reais
+**Explicação**: O legado dividiu o valor entre as 3 transações. Orders Core reconhece que é 1 pedido com 3 produtos.
 
-A view `crm_contact_journey_metrics_view` já provou que:
-- Angela Franco: 1 pedido, 2 items, R$ 189,00 total
-- Jaqueline Casale: 1 pedido, 2 items, R$ 166,00 total
+### Mais Casos Validados
+
+| Email | Legacy Compras | Legacy LTV | Orders Count | Orders LTV |
+|-------|----------------|------------|--------------|------------|
+| letcramosa@gmail.com | 6 | R$ 638 | 1 | R$ 1.706,50 |
+| renataccrolla@hotmail.com | 4 | R$ 279 | 1 | R$ 1.119,12 |
+| rejane.calazans@gmail.com | 4 | R$ 194 | 1 | R$ 777,20 |
+| livialimeira@gmail.com | 4 | R$ 194 | 1 | R$ 777,20 |
 
 ## Componentes
 

@@ -52,6 +52,7 @@ import { ContactWhatsAppHistory } from '@/components/crm/ContactWhatsAppHistory'
 import { CreateActivityDialog } from '@/components/crm/CreateActivityDialog';
 import { EditContactDialog } from '@/components/crm/EditContactDialog';
 import { ContactAttributionCard } from '@/components/crm/ContactAttributionCard';
+import { ContactOrdersAttributionCard } from '@/components/crm/ContactOrdersAttributionCard';
 import { ContactSegmentInsights } from '@/components/crm/ContactSegmentInsights';
 import { ContactIdentityTab } from '@/components/crm/ContactIdentityTab';
 import { ContactSurveysTab } from '@/components/crm/ContactSurveysTab';
@@ -631,7 +632,13 @@ export default function CRMContactCard() {
               </CardContent>
             </Card>
 
-            {/* UTM Attribution - Expanded */}
+            {/* UTM Attribution - Orders Core (canonical) */}
+            <ContactOrdersAttributionCard 
+              projectId={currentProject?.id || ''} 
+              buyerEmail={contact?.email || ''} 
+            />
+            
+            {/* UTM Attribution - Legacy (fallback) */}
             <ContactAttributionCard contact={contact} />
 
             {/* AI Recommendations */}

@@ -114,6 +114,7 @@ const BuscaRapida = () => {
   }, [error, toast]);
 
   // Convert FilterParams to OrdersCoreFilters format
+  // ALL filters are passed to the hook - NO client-side filtering
   const convertToOrdersFilters = (filters: FilterParams): OrdersCoreFilters => ({
     startDate: filters.startDate,
     endDate: filters.endDate,
@@ -121,8 +122,12 @@ const BuscaRapida = () => {
     funnelId: filters.idFunil,
     productName: filters.productName,
     offerCode: filters.offerCode,
+    // ALL UTM filters mapped (PROMPT 10)
     utmSource: filters.utmSource,
     utmCampaign: filters.utmCampaign,
+    utmAdset: filters.utmAdset,
+    utmPlacement: filters.utmPlacement,
+    utmCreative: filters.utmCreative,
   });
 
   const handleFilter = async (filters: FilterParams) => {

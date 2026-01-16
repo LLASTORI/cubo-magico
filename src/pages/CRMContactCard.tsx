@@ -409,10 +409,13 @@ export default function CRMContactCard() {
               <TabsContent value="transactions" className="mt-4">
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Histórico de Transações</CardTitle>
+                    <CardTitle className="text-base">Histórico de Transações (Orders Core)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ContactTransactionsList contactId={contactId!} />
+                    <ContactTransactionsList 
+                      contactEmail={contact?.email || ''} 
+                      projectId={currentProject?.id || ''} 
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>

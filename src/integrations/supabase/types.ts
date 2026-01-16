@@ -3763,6 +3763,13 @@ export type Database = {
             foreignKeyName: "ledger_events_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "crm_recovery_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "ledger_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "funnel_orders_by_offer"
             referencedColumns: ["order_id"]
           },
@@ -4849,6 +4856,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "crm_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_recovery_orders_view"
             referencedColumns: ["order_id"]
           },
           {
@@ -6082,6 +6096,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "crm_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "provider_order_map_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_recovery_orders_view"
             referencedColumns: ["order_id"]
           },
           {
@@ -9169,6 +9190,13 @@ export type Database = {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "crm_recovery_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "funnel_orders_by_offer"
             referencedColumns: ["order_id"]
           },
@@ -9252,6 +9280,65 @@ export type Database = {
           producer_net?: number | null
           project_id?: string | null
           provider_order_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_recovery_orders_view: {
+        Row: {
+          buyer_email: string | null
+          buyer_name: string | null
+          customer_paid: number | null
+          funnel_id: string | null
+          funnel_name: string | null
+          item_count: number | null
+          main_product_name: string | null
+          order_id: string | null
+          ordered_at: string | null
+          producer_net: number | null
+          project_id: string | null
+          provider_order_id: string | null
+          recovery_category: string | null
+          status: string | null
+        }
+        Insert: {
+          buyer_email?: string | null
+          buyer_name?: string | null
+          customer_paid?: number | null
+          funnel_id?: never
+          funnel_name?: never
+          item_count?: never
+          main_product_name?: never
+          order_id?: string | null
+          ordered_at?: string | null
+          producer_net?: number | null
+          project_id?: string | null
+          provider_order_id?: string | null
+          recovery_category?: never
+          status?: string | null
+        }
+        Update: {
+          buyer_email?: string | null
+          buyer_name?: string | null
+          customer_paid?: number | null
+          funnel_id?: never
+          funnel_name?: never
+          item_count?: never
+          main_product_name?: never
+          order_id?: string | null
+          ordered_at?: string | null
+          producer_net?: number | null
+          project_id?: string | null
+          provider_order_id?: string | null
+          recovery_category?: never
           status?: string | null
         }
         Relationships: [

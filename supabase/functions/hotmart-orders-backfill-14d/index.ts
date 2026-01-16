@@ -203,10 +203,15 @@ serve(async (req) => {
       projectId = project?.id || null;
     }
 
+    const body = await req.json().catch(() => ({}));
+    
     if (!projectId) {
-      const body = await req.json().catch(() => ({}));
       projectId = body.projectId || null;
     }
+
+    // Pagination parameters
+    const offset = body.offset || 0;
+    const limit = body.limit || 200; // Process 200 events per batch to avoid timeout
 
     if (!projectId) {
       return new Response(JSON.stringify({ error: 'Project identification required' }), {
@@ -215,7 +220,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[OrdersBackfill14d] Starting for project ${projectId}`);
+    console.log(`[OrdersBackfill14d] Starting for project ${projectId}, offset=${offset}, limit=${limit}`);
 
     // Get events from last 14 days
     const fourteenDaysAgo = new Date();
@@ -227,11 +232,12 @@ serve(async (req) => {
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .gte('received_at', fourteenDaysAgo.toISOString())
-      .order('received_at', { ascending: true });
+      .order('received_at', { ascending: true })
+      .range(offset, offset + limit - 1);
 
     if (fetchError) throw fetchError;
 
-    console.log(`[OrdersBackfill14d] Found ${events?.length || 0} events to process`);
+    console.log(`[OrdersBackfill14d] Processing ${events?.length || 0} events (offset ${offset})`);
 
     let ordersCreated = 0;
     let ordersUpdated = 0;

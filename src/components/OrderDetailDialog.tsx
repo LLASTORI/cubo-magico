@@ -90,6 +90,27 @@ const getStatusLabel = (status: string) => {
   return labels[status.toLowerCase()] || status;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORDENAÇÃO VISUAL DOS PRODUTOS (ALINHADA COM HOTMART)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Ordem: main → orderbump → upsell → downsell → addon
+// Esta ordenação é APENAS VISUAL, nunca altera valores financeiros
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ITEM_TYPE_ORDER: Record<string, number> = {
+  'main': 1,
+  'bump': 2,
+  'orderbump': 2,
+  'upsell': 3,
+  'downsell': 4,
+  'addon': 5,
+  'combo': 6,
+};
+
+const getItemTypeSortOrder = (itemType: string): number => {
+  return ITEM_TYPE_ORDER[itemType.toLowerCase()] || 99;
+};
+
 // Item type labels for display
 const getItemTypeLabel = (itemType: string) => {
   const labels: Record<string, string> = {
@@ -225,7 +246,10 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </span>
               </div>
               <div className="space-y-2">
-                {order.products.map((item) => (
+                {/* ORDENAÇÃO: main → orderbump → upsell → downsell → addon (APENAS VISUAL) */}
+                {[...order.products]
+                  .sort((a, b) => getItemTypeSortOrder(a.item_type) - getItemTypeSortOrder(b.item_type))
+                  .map((item) => (
                   <div 
                     key={item.id} 
                     className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"

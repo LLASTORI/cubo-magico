@@ -3756,6 +3756,20 @@ export type Database = {
             foreignKeyName: "ledger_events_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "funnel_orders_by_offer"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "ledger_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "ledger_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
@@ -4822,6 +4836,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "offer_mappings"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_by_offer"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_view"
+            referencedColumns: ["order_id"]
           },
           {
             foreignKeyName: "order_items_order_id_fkey"
@@ -6035,6 +6063,20 @@ export type Database = {
           provider_transaction_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "provider_order_map_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_by_offer"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "provider_order_map_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_view"
+            referencedColumns: ["order_id"]
+          },
           {
             foreignKeyName: "provider_order_map_order_id_fkey"
             columns: ["order_id"]
@@ -9371,6 +9413,68 @@ export type Database = {
           unique_buyers: number | null
         }
         Relationships: []
+      }
+      funnel_orders_by_offer: {
+        Row: {
+          base_price: number | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          item_type: string | null
+          nome_posicao: string | null
+          offer_code: string | null
+          ordem_posicao: number | null
+          order_id: string | null
+          product_name: string | null
+          project_id: string | null
+          tipo_posicao: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funnel_orders_view: {
+        Row: {
+          all_offer_codes: string[] | null
+          bump_revenue: number | null
+          buyer_email: string | null
+          buyer_name: string | null
+          created_at: string | null
+          currency: string | null
+          customer_paid: number | null
+          economic_day: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          has_bump: boolean | null
+          has_downsell: boolean | null
+          has_upsell: boolean | null
+          main_offer_code: string | null
+          main_product: string | null
+          main_revenue: number | null
+          order_id: string | null
+          order_items_count: number | null
+          ordered_at: string | null
+          producer_net: number | null
+          project_id: string | null
+          status: string | null
+          transaction_id: string | null
+          upsell_revenue: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       funnel_revenue: {
         Row: {

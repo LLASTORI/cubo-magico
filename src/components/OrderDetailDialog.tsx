@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   DollarSign, 
   Package, 
@@ -368,7 +369,20 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   )}
                   {breakdown.coproducer > 0 && (
                     <div className="flex items-center justify-between p-2 text-sm">
-                      <span className="text-muted-foreground">Coprodução</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Coprodução</span>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="w-3.5 h-3.5 text-muted-foreground/70 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[280px] text-sm">
+                              <p>A taxa da Hotmart é descontada apenas do produtor.</p>
+                              <p className="mt-1">A coprodução é calculada sobre a base líquida da venda.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                       <span className="text-red-600">- {formatCurrency(breakdown.coproducer)}</span>
                     </div>
                   )}

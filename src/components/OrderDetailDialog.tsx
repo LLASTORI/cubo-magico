@@ -309,14 +309,34 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
 
             <Separator />
 
-            {/* Financial Breakdown */}
+            {/* ═══════════════════════════════════════════════════════════════════════════════
+                DECOMPOSIÇÃO FINANCEIRA - NÍVEL DO PEDIDO (OBRIGATÓRIO)
+                ═══════════════════════════════════════════════════════════════════════════════
+                
+                REGRAS CANÔNICAS:
+                ✓ Cliente pagou = orders.customer_paid (NUNCA calcular soma de itens)
+                ✓ Taxas/deduções = ledger_events agregados por order_id
+                ✓ Produtor recebe = orders.producer_net (NUNCA calcular manualmente)
+                
+                PROIBIDO:
+                ❌ Calcular valores financeiros por item individual
+                ❌ Mostrar breakdown por produto
+                ❌ Usar valores de order_items para totais financeiros
+                
+                A decomposição é SEMPRE no nível do PEDIDO, independente da quantidade de produtos
+                ═══════════════════════════════════════════════════════════════════════════════ */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <DollarSign className="w-4 h-4 text-muted-foreground" />
-                <span className="font-medium">Decomposição Financeira</span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">Decomposição Financeira</span>
+                </div>
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  Nível: Pedido
+                </span>
               </div>
               
-              {/* What customer paid (GROSS) */}
+              {/* What customer paid (GROSS) - ALWAYS from orders.customer_paid */}
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -330,13 +350,16 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-green-600/70 mt-1">
-                  Valor bruto do pedido (customer_paid)
+                  Valor bruto total do pedido (orders.customer_paid)
                 </p>
               </div>
 
-              {/* Deductions from ledger */}
+              {/* Deductions from ledger_events (aggregated at ORDER level) */}
               {breakdown && (
                 <div className="space-y-2 mb-4">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Deduções agregadas (ledger_events):
+                  </p>
                   {breakdown.platform_fee > 0 && (
                     <div className="flex items-center justify-between p-2 text-sm">
                       <span className="text-muted-foreground">Taxas Hotmart</span>
@@ -378,7 +401,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
 
               <Separator className="my-2" />
 
-              {/* What producer receives (NET) */}
+              {/* What producer receives (NET) - ALWAYS from orders.producer_net */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -392,11 +415,11 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">
-                  Valor líquido do produtor (producer_net)
+                  Valor líquido total do produtor (orders.producer_net)
                 </p>
               </div>
 
-              {/* Validation indicator */}
+              {/* Validation: ledger breakdown should match order values */}
               {validation && (
                 <div className={`flex items-center gap-2 mt-3 p-2 rounded text-xs ${
                   validation.matches 
@@ -406,13 +429,13 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   {validation.matches ? (
                     <>
                       <CheckCircle className="w-3 h-3" />
-                      <span>Ledger valida: breakdown bate com producer_net</span>
+                      <span>✓ Ledger valida: customer_paid − deduções = producer_net</span>
                     </>
                   ) : (
                     <>
                       <AlertCircle className="w-3 h-3" />
                       <span>
-                        Diferença de {formatCurrency(validation.difference)} 
+                        ⚠ Diferença de {formatCurrency(validation.difference)} 
                         (calculado: {formatCurrency(validation.calculatedNet)})
                       </span>
                     </>

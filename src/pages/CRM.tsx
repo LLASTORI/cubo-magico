@@ -1,22 +1,46 @@
-import { useState } from 'react';
+/**
+ * CRM - Página principal de análises
+ * 
+ * PROMPT 26: Jornada Canônica baseada em Orders Core
+ * - CustomerJourneyOrders é a jornada PADRÃO
+ * - CustomerJourneyAnalysis é LEGADO (aba secundária)
+ * - useCRMJourneyData está marcado como LEGACY
+ */
+import { useState, lazy, Suspense } from 'react';
 import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
-import { CustomerJourneyAnalysis } from '@/components/crm/CustomerJourneyAnalysis';
-import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
+import { CustomerJourneyOrders } from '@/components/crm/CustomerJourneyOrders';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, TrendingUp, Route } from 'lucide-react';
+import { Users, Loader2, Lock, TrendingUp, Route, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// LEGACY: Componentes legados carregados sob demanda apenas quando necessário
+const CustomerJourneyAnalysis = lazy(() => import('@/components/crm/CustomerJourneyAnalysis').then(m => ({ default: m.CustomerJourneyAnalysis })));
+const AscensionAnalysis = lazy(() => import('@/components/crm/AscensionAnalysis').then(m => ({ default: m.AscensionAnalysis })));
+
+const LegacyTabLoader = () => (
+  <div className="space-y-4">
+    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 mb-4">
+      <AlertTriangle className="h-4 w-4" />
+      <span className="text-sm">Carregando visualização legada...</span>
+    </div>
+    <Skeleton className="h-32 w-full" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
 
 export default function CRM() {
   const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
-  const [activeTab, setActiveTab] = useState('journey');
+  // PROMPT 26: Tab padrão é 'orders' (Jornada Canônica)
+  const [activeTab, setActiveTab] = useState('orders');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const crmEnabled = isModuleEnabled('crm');
@@ -106,11 +130,17 @@ export default function CRM() {
               </p>
             </div>
 
+            {/* PROMPT 26: Jornada Canônica (Orders Core) como padrão */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList>
-                <TabsTrigger value="journey" className="flex items-center gap-2">
-                  <Route className="h-4 w-4" />
+                <TabsTrigger value="orders" className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" />
                   Jornada do Cliente
+                </TabsTrigger>
+                <TabsTrigger value="legacy-journey" className="flex items-center gap-2">
+                  <Route className="h-4 w-4" />
+                  <span>Jornada (Legado)</span>
+                  <AlertTriangle className="h-3 w-3 text-amber-500" />
                 </TabsTrigger>
                 <TabsTrigger value="ascension" className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
@@ -118,12 +148,54 @@ export default function CRM() {
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="journey" className="mt-6">
-                <CustomerJourneyAnalysis />
+              {/* Tab Padrão: Jornada Canônica baseada em Orders Core */}
+              <TabsContent value="orders" className="mt-6">
+                <CustomerJourneyOrders maxHeight="calc(100vh - 300px)" />
               </TabsContent>
               
+              {/* LEGACY: Jornada baseada em crm_transactions - NÃO DISPARA POR PADRÃO */}
+              <TabsContent value="legacy-journey" className="mt-6">
+                {activeTab === 'legacy-journey' && (
+                  <Suspense fallback={<LegacyTabLoader />}>
+                    <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-600 dark:text-amber-500">
+                            Visualização Legada
+                          </p>
+                          <p className="text-muted-foreground mt-1">
+                            Esta visualização usa dados de <code className="text-xs bg-muted px-1 py-0.5 rounded">crm_transactions</code> (legado).
+                            A aba "Jornada do Cliente" usa Orders Core (dados canônicos).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <CustomerJourneyAnalysis />
+                  </Suspense>
+                )}
+              </TabsContent>
+              
+              {/* LEGACY: Análise de Ascensão - também usa dados legados */}
               <TabsContent value="ascension" className="mt-6">
-                <AscensionAnalysis />
+                {activeTab === 'ascension' && (
+                  <Suspense fallback={<LegacyTabLoader />}>
+                    <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-600 dark:text-amber-500">
+                            Visualização Legada
+                          </p>
+                          <p className="text-muted-foreground mt-1">
+                            Esta análise usa dados legados. Será migrada para Orders Core em breve.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <AscensionAnalysis />
+                  </Suspense>
+                )}
               </TabsContent>
             </Tabs>
           </main>

@@ -1,7 +1,35 @@
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║                                                                           ║
+ * ║  ⚠️  LEGACY HOOK - DEPRECATED (PROMPT 26)                                 ║
+ * ║                                                                           ║
+ * ║  Este hook usa crm_transactions (dados legados).                          ║
+ * ║                                                                           ║
+ * ║  FONTE CANÔNICA: useCRMJourneyOrders                                      ║
+ * ║  - Usa Orders Core (orders + order_items)                                 ║
+ * ║  - 1 pedido = 1 evento de jornada                                         ║
+ * ║  - Dados corretos e não inflacionados                                     ║
+ * ║                                                                           ║
+ * ║  NÃO USE ESTE HOOK EM NOVAS IMPLEMENTAÇÕES.                               ║
+ * ║  Será removido quando a migração estiver completa.                        ║
+ * ║                                                                           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ * 
+ * @deprecated Use useCRMJourneyOrders from '@/hooks/useCRMJourneyOrders'
+ */
+
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useProject } from '@/contexts/ProjectContext';
+
+// ⚠️ LEGACY WARNING: Log para ajudar a identificar uso deste hook
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.warn(
+    '%c[LEGACY] useCRMJourneyData está deprecated. Use useCRMJourneyOrders.',
+    'color: #f59e0b; font-weight: bold;'
+  );
+}
 
 export interface CustomerJourney {
   contactId: string;
@@ -142,6 +170,12 @@ export interface GenericBreakdown {
   uniqueClients: number;
 }
 
+/**
+ * @deprecated Use useCRMJourneyOrders from '@/hooks/useCRMJourneyOrders'
+ * 
+ * Este hook carrega dados de crm_transactions (LEGADO).
+ * A fonte canônica é Orders Core via useCRMJourneyOrders.
+ */
 export function useCRMJourneyData(filters: CRMFilters) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;

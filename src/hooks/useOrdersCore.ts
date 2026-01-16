@@ -15,55 +15,37 @@
  * │ A plataforma é apenas um ATRIBUTO do pedido:                               │
  * │   • orders.provider = 'hotmart' | 'kiwify' | 'monetizze' | ...             │
  * │                                                                             │
- * │ PARA ADICIONAR NOVA PLATAFORMA:                                            │
- * │   1. Criar edge function de ingestão (ex: ingest-kiwify-sale)              │
- * │   2. Mapear webhook para orders + order_items + ledger_events              │
- * │   3. Pronto! A Busca Rápida já exibe automaticamente                       │
- * │                                                                             │
  * └─────────────────────────────────────────────────────────────────────────────┘
  * 
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ REGRA CANÔNICA DE PEDIDO (OBRIGATÓRIA - NÃO NEGOCIÁVEL)                    │
+ * │ REGRA 100% SERVER-SIDE (OBRIGATÓRIA - PROMPT 10)                           │
  * ├─────────────────────────────────────────────────────────────────────────────┤
  * │                                                                             │
- * │ UM PEDIDO = TODOS OS PRODUTOS DO MESMO provider_order_id                   │
+ * │ ❌ PROIBIDO usar .filter() no frontend ou hook                              │
+ * │ ❌ PROIBIDO filtrar após paginação                                          │
+ * │ ✅ Todos os filtros aplicados via SQL                                       │
+ * │ ✅ Contagem, lista e totais usam mesma query base filtrada                  │
  * │                                                                             │
- * │ • orders é a entidade canônica de pedido                                   │
- * │ • orders.id = identificador interno único                                  │
- * │ • orders.provider_order_id = identificador externo (HP..., KW..., etc)     │
- * │ • orders.provider = nome da plataforma de origem                           │
+ * │ FILTROS SQL:                                                                │
+ * │   • Data inicial/final → orders.ordered_at                                  │
+ * │   • Status → orders.status                                                  │
+ * │   • Plataforma → orders.provider                                            │
+ * │   • UTMs → orders.utm_source, utm_campaign, utm_adset, etc (COLUNAS)       │
+ * │   • Funil → EXISTS com order_items.funnel_id                               │
+ * │   • Produto → EXISTS com order_items.product_name                          │
+ * │   • Oferta → EXISTS com order_items.provider_offer_id                      │
  * │                                                                             │
- * │ Todo produto vendido no mesmo checkout deve:                               │
- * │   ✓ Pertencer ao mesmo order_id                                            │
- * │   ✓ Aparecer como order_item                                               │
- * │                                                                             │
- * │ Tipos de item suportados (universal):                                      │
- * │   • main (produto principal)                                               │
- * │   • bump / orderbump (order bump)                                          │
- * │   • upsell                                                                 │
- * │   • downsell                                                               │
- * │   • addon                                                                  │
- * │   • combo                                                                  │
- * │                                                                             │
- * │ PROIBIDO: Renderizar produtos por transaction_id isolado na UI             │
  * └─────────────────────────────────────────────────────────────────────────────┘
  * 
  * DATA SOURCES (Canonical):
- * - orders: customer_paid, producer_net, provider
- * - order_items: Products list with base_price
+ * - orders: customer_paid, producer_net, provider, utm_* (COLUNAS MATERIALIZADAS)
+ * - order_items: Products list with base_price, funnel_id
  * - ledger_events: Financial breakdown (EXPLANATION ONLY)
  * 
- * FORBIDDEN SOURCES:
- * ❌ finance_ledger_summary
- * ❌ hotmart_sales (legacy)
- * ❌ crm_transactions
- * ❌ Any platform-specific legacy views
- * 
- * PRINCIPLE:
- * - Ledger explains the order, but NEVER changes order values
- * - customer_paid = what customer paid (GROSS)
- * - producer_net = what producer receives (NET)
- * - provider = platform of origin (Hotmart, Kiwify, etc)
+ * FORBIDDEN:
+ * ❌ parseSck() em runtime - UTMs são colunas materializadas
+ * ❌ .filter() client-side
+ * ❌ Filtragem após paginação
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -101,7 +83,7 @@ export interface OrderRecord {
   // Aggregated from ledger_events (for breakdown)
   ledger_breakdown?: LedgerBreakdown;
   
-  // UTM from raw_payload or attribution
+  // UTM from orders table (MATERIALIZED COLUMNS)
   utm_source?: string | null;
   utm_campaign?: string | null;
   utm_adset?: string | null;
@@ -145,16 +127,29 @@ export interface OrdersCoreTotals {
   loading: boolean;
 }
 
+/**
+ * FILTROS ORDERS CORE - TODOS APLICADOS NO SQL
+ * 
+ * Regra: Nenhum filtro é aplicado client-side após paginação
+ */
 export interface OrdersCoreFilters {
-  startDate: string;         // YYYY-MM-DD (economic_day)
-  endDate: string;           // YYYY-MM-DD (economic_day)
+  startDate: string;           // YYYY-MM-DD (ordered_at range)
+  endDate: string;             // YYYY-MM-DD (ordered_at range)
   transactionStatus?: string[];
-  funnelId?: string[];
-  productName?: string[];
-  offerCode?: string[];
+  
+  // Filtros via EXISTS/JOIN com order_items
+  funnelId?: string[];         // order_items.funnel_id
+  productName?: string[];      // order_items.product_name
+  offerCode?: string[];        // order_items.provider_offer_id
+  
+  // UTM filters - aplicados diretamente em orders.utm_*
   utmSource?: string;
   utmCampaign?: string;
-  provider?: string;         // Prepared for multi-platform
+  utmAdset?: string;
+  utmPlacement?: string;
+  utmCreative?: string;
+  
+  provider?: string;           // orders.provider
 }
 
 export interface OrdersCorePagination {
@@ -190,12 +185,181 @@ const getEconomicDay = (dateString: string | null): string => {
 };
 
 const buildStatusFilter = (statuses: string[]): string[] => {
-  // Map UI status to database status
   const mappedStatuses = statuses.map(s => s.toLowerCase());
   if (mappedStatuses.length === 0) {
     return ['approved', 'complete'];
   }
   return mappedStatuses;
+};
+
+/**
+ * Builds SQL filter conditions for order_items subquery filters
+ * Returns order IDs that match the product/funnel/offer filters
+ */
+const fetchFilteredOrderIds = async (
+  projectId: string,
+  filters: OrdersCoreFilters,
+  startDateTime: string,
+  endDateTime: string,
+  statuses: string[]
+): Promise<string[] | null> => {
+  // Check if we need to filter by order_items
+  const needsItemFilter = (
+    (filters.funnelId && filters.funnelId.length > 0) ||
+    (filters.productName && filters.productName.length > 0) ||
+    (filters.offerCode && filters.offerCode.length > 0)
+  );
+
+  if (!needsItemFilter) {
+    return null; // No item-level filtering needed
+  }
+
+  // First, get all order IDs that match basic filters
+  let baseQuery = supabase
+    .from('orders')
+    .select('id')
+    .eq('project_id', projectId)
+    .in('status', statuses)
+    .gte('ordered_at', startDateTime)
+    .lte('ordered_at', endDateTime);
+
+  // Apply UTM filters at order level
+  if (filters.utmSource) {
+    baseQuery = baseQuery.ilike('utm_source', `%${filters.utmSource}%`);
+  }
+  if (filters.utmCampaign) {
+    baseQuery = baseQuery.ilike('utm_campaign', `%${filters.utmCampaign}%`);
+  }
+  if (filters.utmAdset) {
+    baseQuery = baseQuery.ilike('utm_adset', `%${filters.utmAdset}%`);
+  }
+  if (filters.utmPlacement) {
+    baseQuery = baseQuery.ilike('utm_placement', `%${filters.utmPlacement}%`);
+  }
+  if (filters.utmCreative) {
+    baseQuery = baseQuery.ilike('utm_creative', `%${filters.utmCreative}%`);
+  }
+  if (filters.provider) {
+    baseQuery = baseQuery.eq('provider', filters.provider);
+  }
+
+  const { data: baseOrders, error: baseError } = await baseQuery;
+  
+  if (baseError || !baseOrders || baseOrders.length === 0) {
+    return [];
+  }
+
+  const orderIds = baseOrders.map(o => o.id);
+
+  // Now fetch order_items for these orders and filter
+  const { data: itemsData, error: itemsError } = await supabase
+    .from('order_items')
+    .select('order_id, funnel_id, product_name, provider_offer_id')
+    .in('order_id', orderIds);
+
+  if (itemsError || !itemsData) {
+    console.warn('[useOrdersCore] Error fetching items for filter:', itemsError);
+    return [];
+  }
+
+  // Group items by order_id
+  const itemsByOrder = new Map<string, typeof itemsData>();
+  for (const item of itemsData) {
+    if (!itemsByOrder.has(item.order_id)) {
+      itemsByOrder.set(item.order_id, []);
+    }
+    itemsByOrder.get(item.order_id)!.push(item);
+  }
+
+  // Filter order IDs based on item conditions
+  const filteredOrderIds: string[] = [];
+  
+  for (const orderId of orderIds) {
+    const items = itemsByOrder.get(orderId) || [];
+    if (items.length === 0) continue;
+
+    let matchesFunnel = true;
+    let matchesProduct = true;
+    let matchesOffer = true;
+
+    // Check funnel filter
+    if (filters.funnelId && filters.funnelId.length > 0) {
+      const funnelSet = new Set(filters.funnelId);
+      matchesFunnel = items.some(item => item.funnel_id && funnelSet.has(item.funnel_id));
+    }
+
+    // Check product filter
+    if (filters.productName && filters.productName.length > 0) {
+      const productSet = new Set(filters.productName);
+      matchesProduct = items.some(item => item.product_name && productSet.has(item.product_name));
+    }
+
+    // Check offer filter
+    if (filters.offerCode && filters.offerCode.length > 0) {
+      const offerSet = new Set(filters.offerCode);
+      matchesOffer = items.some(item => item.provider_offer_id && offerSet.has(item.provider_offer_id));
+    }
+
+    if (matchesFunnel && matchesProduct && matchesOffer) {
+      filteredOrderIds.push(orderId);
+    }
+  }
+
+  return filteredOrderIds;
+};
+
+/**
+ * Apply base SQL filters to a query
+ * These filters apply directly to the orders table
+ */
+const applyOrdersFilters = (
+  query: any,
+  projectId: string,
+  filters: OrdersCoreFilters,
+  statuses: string[],
+  startDateTime: string,
+  endDateTime: string,
+  filteredOrderIds: string[] | null
+) => {
+  query = query
+    .eq('project_id', projectId)
+    .in('status', statuses)
+    .gte('ordered_at', startDateTime)
+    .lte('ordered_at', endDateTime);
+
+  // If we have pre-filtered order IDs (from item-level filters), use them
+  if (filteredOrderIds !== null) {
+    if (filteredOrderIds.length === 0) {
+      // No orders match the item filters - use impossible condition
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+    } else {
+      query = query.in('id', filteredOrderIds);
+    }
+  }
+
+  // UTM filters - DIRECT ON ORDERS TABLE (materialized columns)
+  if (filters.utmSource) {
+    query = query.ilike('utm_source', `%${filters.utmSource}%`);
+  }
+  if (filters.utmCampaign) {
+    query = query.ilike('utm_campaign', `%${filters.utmCampaign}%`);
+  }
+  if (filters.utmAdset) {
+    query = query.ilike('utm_adset', `%${filters.utmAdset}%`);
+  }
+  if (filters.utmPlacement) {
+    query = query.ilike('utm_placement', `%${filters.utmPlacement}%`);
+  }
+  if (filters.utmCreative) {
+    query = query.ilike('utm_creative', `%${filters.utmCreative}%`);
+  }
+
+  // Provider filter
+  if (filters.provider) {
+    query = query.eq('provider', filters.provider);
+  }
+
+  return query;
 };
 
 // ============================================
@@ -243,26 +407,50 @@ export function useOrdersCore(): UseOrdersCoreResult {
       const offset = (page - 1) * pageSize;
       const statuses = buildStatusFilter(filters.transactionStatus || []);
 
+      // Date range in São Paulo timezone
+      const startDateTime = `${filters.startDate}T00:00:00-03:00`;
+      const endDateTime = `${filters.endDate}T23:59:59-03:00`;
+
       // ============================================
-      // QUERY 1: COUNT total orders
+      // STEP 1: Pre-filter order IDs if item-level filters are active
+      // ============================================
+      const filteredOrderIds = await fetchFilteredOrderIds(
+        projectId,
+        filters,
+        startDateTime,
+        endDateTime,
+        statuses
+      );
+
+      console.log('[useOrdersCore] SQL Filter Debug:', {
+        hasItemFilters: filteredOrderIds !== null,
+        filteredOrderIdsCount: filteredOrderIds?.length ?? 'N/A',
+        filters: {
+          utmSource: filters.utmSource,
+          utmCampaign: filters.utmCampaign,
+          utmAdset: filters.utmAdset,
+          funnelId: filters.funnelId,
+          productName: filters.productName,
+          offerCode: filters.offerCode,
+        }
+      });
+
+      // ============================================
+      // QUERY 1: COUNT total orders (with ALL filters)
       // ============================================
       let countQuery = supabase
         .from('orders')
-        .select('id', { count: 'exact', head: true })
-        .eq('project_id', projectId)
-        .in('status', statuses);
+        .select('id', { count: 'exact', head: true });
 
-      // Date filter using ordered_at converted to economic_day
-      // We filter by ordered_at range in UTC, then compute economic_day client-side
-      const startDateTime = `${filters.startDate}T00:00:00-03:00`;
-      const endDateTime = `${filters.endDate}T23:59:59-03:00`;
-      countQuery = countQuery
-        .gte('ordered_at', startDateTime)
-        .lte('ordered_at', endDateTime);
-
-      if (filters.provider) {
-        countQuery = countQuery.eq('provider', filters.provider);
-      }
+      countQuery = applyOrdersFilters(
+        countQuery,
+        projectId,
+        filters,
+        statuses,
+        startDateTime,
+        endDateTime,
+        filteredOrderIds
+      );
 
       const { count: totalCount, error: countError } = await countQuery;
 
@@ -277,6 +465,8 @@ export function useOrdersCore(): UseOrdersCoreResult {
         totalCount: total,
         totalPages,
       });
+
+      console.log('[useOrdersCore] COUNT result:', { total, page, pageSize, totalPages });
 
       if (total === 0) {
         setOrders([]);
@@ -295,25 +485,33 @@ export function useOrdersCore(): UseOrdersCoreResult {
       }
 
       // ============================================
-      // QUERY 2: FETCH orders with pagination
+      // QUERY 2: FETCH orders with pagination (same filters)
       // ============================================
       let ordersQuery = supabase
         .from('orders')
         .select('*')
-        .eq('project_id', projectId)
-        .in('status', statuses)
-        .gte('ordered_at', startDateTime)
-        .lte('ordered_at', endDateTime)
         .order('ordered_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
 
-      if (filters.provider) {
-        ordersQuery = ordersQuery.eq('provider', filters.provider);
-      }
+      ordersQuery = applyOrdersFilters(
+        ordersQuery,
+        projectId,
+        filters,
+        statuses,
+        startDateTime,
+        endDateTime,
+        filteredOrderIds
+      );
 
       const { data: ordersData, error: ordersError } = await ordersQuery;
 
       if (ordersError) throw new Error(ordersError.message);
+
+      console.log('[useOrdersCore] PAGE result:', { 
+        ordersCount: ordersData?.length || 0,
+        offset,
+        pageSize 
+      });
 
       if (!ordersData || ordersData.length === 0) {
         setOrders([]);
@@ -355,77 +553,41 @@ export function useOrdersCore(): UseOrdersCoreResult {
         }
       }
 
-      // Filter by product name if specified
-      let filteredOrders = ordersData;
-      if (filters.productName && filters.productName.length > 0) {
-        const productSet = new Set(filters.productName);
-        filteredOrders = ordersData.filter(order => {
-          const orderItems = itemsByOrder[order.id] || [];
-          return orderItems.some(item => item.product_name && productSet.has(item.product_name));
-        });
-      }
-
-      // Filter by funnel if specified
-      if (filters.funnelId && filters.funnelId.length > 0) {
-        const funnelSet = new Set(filters.funnelId);
-        filteredOrders = filteredOrders.filter(order => {
-          const orderItems = itemsByOrder[order.id] || [];
-          return orderItems.some(item => item.funnel_id && funnelSet.has(item.funnel_id));
-        });
-      }
-
+      // ============================================
       // Transform to OrderRecord format
-      const transformedOrders: OrderRecord[] = filteredOrders.map(order => {
-        // Extract UTM from raw_payload if available
-        const rawPayload = order.raw_payload as any;
-        const tracking = rawPayload?.purchase?.checkout?.sck 
-          ? parseSck(rawPayload.purchase.checkout.sck)
-          : {};
+      // NO CLIENT-SIDE FILTERING HERE - data is already filtered by SQL
+      // ============================================
+      const transformedOrders: OrderRecord[] = ordersData.map(order => ({
+        id: order.id,
+        project_id: order.project_id,
+        provider: order.provider,
+        provider_order_id: order.provider_order_id,
+        buyer_email: order.buyer_email,
+        buyer_name: order.buyer_name,
+        contact_id: order.contact_id,
+        status: order.status,
+        currency: order.currency,
+        customer_paid: Number(order.customer_paid) || 0,
+        gross_base: order.gross_base ? Number(order.gross_base) : null,
+        producer_net: Number(order.producer_net) || 0,
+        ordered_at: order.ordered_at,
+        approved_at: order.approved_at,
+        completed_at: order.completed_at,
+        created_at: order.created_at,
+        products: itemsByOrder[order.id] || [],
+        economic_day: getEconomicDay(order.ordered_at),
+        // UTM from MATERIALIZED COLUMNS (not parsed from raw_payload)
+        utm_source: order.utm_source || null,
+        utm_campaign: order.utm_campaign || null,
+        utm_adset: order.utm_adset || null,
+        utm_placement: order.utm_placement || null,
+        utm_creative: order.utm_creative || null,
+      }));
 
-        return {
-          id: order.id,
-          project_id: order.project_id,
-          provider: order.provider,
-          provider_order_id: order.provider_order_id,
-          buyer_email: order.buyer_email,
-          buyer_name: order.buyer_name,
-          contact_id: order.contact_id,
-          status: order.status,
-          currency: order.currency,
-          customer_paid: Number(order.customer_paid) || 0,
-          gross_base: order.gross_base ? Number(order.gross_base) : null,
-          producer_net: Number(order.producer_net) || 0,
-          ordered_at: order.ordered_at,
-          approved_at: order.approved_at,
-          completed_at: order.completed_at,
-          created_at: order.created_at,
-          products: itemsByOrder[order.id] || [],
-          economic_day: getEconomicDay(order.ordered_at),
-          utm_source: tracking.utm_source || null,
-          utm_campaign: tracking.utm_campaign || null,
-          utm_adset: tracking.utm_adset || null,
-          utm_placement: tracking.utm_placement || null,
-          utm_creative: tracking.utm_creative || null,
-        };
-      });
-
-      // Apply UTM filters
-      let finalOrders = transformedOrders;
-      if (filters.utmSource) {
-        finalOrders = finalOrders.filter(o => 
-          o.utm_source?.toLowerCase().includes(filters.utmSource!.toLowerCase())
-        );
-      }
-      if (filters.utmCampaign) {
-        finalOrders = finalOrders.filter(o => 
-          o.utm_campaign?.toLowerCase().includes(filters.utmCampaign!.toLowerCase())
-        );
-      }
-
-      setOrders(finalOrders);
+      setOrders(transformedOrders);
 
       // ============================================
-      // QUERY 4: CALCULATE GLOBAL TOTALS
+      // QUERY 4: CALCULATE GLOBAL TOTALS (same filters, no pagination)
       // ============================================
       setTotals(prev => ({ ...prev, loading: true }));
       
@@ -441,15 +603,17 @@ export function useOrdersCore(): UseOrdersCoreResult {
             let totalsQuery = supabase
               .from('orders')
               .select('customer_paid, producer_net, buyer_email, id')
-              .eq('project_id', projectId)
-              .in('status', statuses)
-              .gte('ordered_at', startDateTime)
-              .lte('ordered_at', endDateTime)
               .range(totalsPage * totalsPageSize, (totalsPage + 1) * totalsPageSize - 1);
 
-            if (filters.provider) {
-              totalsQuery = totalsQuery.eq('provider', filters.provider);
-            }
+            totalsQuery = applyOrdersFilters(
+              totalsQuery,
+              projectId,
+              filters,
+              statuses,
+              startDateTime,
+              endDateTime,
+              filteredOrderIds
+            );
 
             const { data: totalsData, error: totalsError } = await totalsQuery;
 
@@ -512,7 +676,7 @@ export function useOrdersCore(): UseOrdersCoreResult {
           const producerNet = allOrdersData.reduce((sum, row) => sum + (Number(row.producer_net) || 0), 0);
           const uniqueEmails = new Set(allOrdersData.map(row => row.buyer_email).filter(Boolean));
 
-          console.log('[useOrdersCore] TOTALS from Orders Core:', {
+          console.log('[useOrdersCore] TOTALS from Orders Core (100% SQL filtered):', {
             totalOrders: allOrdersData.length,
             customerPaid,
             producerNet,
@@ -614,11 +778,6 @@ export function useOrdersCore(): UseOrdersCoreResult {
         }
       }
 
-      const rawPayload = orderData.raw_payload as any;
-      const tracking = rawPayload?.purchase?.checkout?.sck 
-        ? parseSck(rawPayload.purchase.checkout.sck)
-        : {};
-
       const order: OrderRecord = {
         id: orderData.id,
         project_id: orderData.project_id,
@@ -648,11 +807,12 @@ export function useOrdersCore(): UseOrdersCoreResult {
         })),
         ledger_breakdown: breakdown,
         economic_day: getEconomicDay(orderData.ordered_at),
-        utm_source: tracking.utm_source || null,
-        utm_campaign: tracking.utm_campaign || null,
-        utm_adset: tracking.utm_adset || null,
-        utm_placement: tracking.utm_placement || null,
-        utm_creative: tracking.utm_creative || null,
+        // UTM from MATERIALIZED COLUMNS
+        utm_source: orderData.utm_source || null,
+        utm_campaign: orderData.utm_campaign || null,
+        utm_adset: orderData.utm_adset || null,
+        utm_placement: orderData.utm_placement || null,
+        utm_creative: orderData.utm_creative || null,
       };
 
       return { order, breakdown };
@@ -699,53 +859,4 @@ export function useOrdersCore(): UseOrdersCoreResult {
     setPage,
     setPageSize,
   };
-}
-
-// ============================================
-// Helper: Parse SCK tracking parameter
-// ============================================
-
-function parseSck(sck: string): Record<string, string> {
-  if (!sck) return {};
-  
-  const result: Record<string, string> = {};
-  const parts = sck.split('|');
-  
-  for (const part of parts) {
-    const [key, value] = part.split(':');
-    if (key && value) {
-      // Map SCK keys to UTM keys
-      switch (key.toLowerCase()) {
-        case 'src':
-          result.utm_source = value;
-          break;
-        case 'utm_source':
-          result.utm_source = value;
-          break;
-        case 'utm_campaign':
-          result.utm_campaign = value;
-          break;
-        case 'utm_medium':
-          result.utm_medium = value;
-          break;
-        case 'utm_term':
-          result.utm_adset = value;
-          break;
-        case 'utm_content':
-          result.utm_creative = value;
-          break;
-        case 'sck':
-          // Full SCK - parse campaign/adset/ad
-          const sckParts = value.split('_');
-          if (sckParts.length >= 3) {
-            result.utm_campaign = sckParts[0] || '';
-            result.utm_adset = sckParts[1] || '';
-            result.utm_creative = sckParts[2] || '';
-          }
-          break;
-      }
-    }
-  }
-  
-  return result;
 }

@@ -222,6 +222,18 @@ async function writeOrderShadow(
     const currency = purchase?.price?.currency_value || 'BRL';
     const status = hotmartToOrderStatus[hotmartEvent] || 'pending';
     
+    // ============================================
+    // EXTRACT UTMs FROM SCK (MATERIALIZED IN ORDERS)
+    // ============================================
+    const rawSck = purchase?.origin?.sck 
+      || purchase?.checkout_origin 
+      || purchase?.tracking?.source_sck 
+      || purchase?.tracking?.source 
+      || null;
+    const parsedUTMs = parseSCKtoUTMs(rawSck);
+    
+    console.log(`[OrdersShadow] UTM extraction: source=${parsedUTMs.utm_source}, campaign=${parsedUTMs.utm_campaign}, adset=${parsedUTMs.utm_medium}`);
+    
     // Calculate values from THIS webhook event only
     const orderItems = extractOrderItems(payload);
     const thisEventGrossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
@@ -292,7 +304,7 @@ async function writeOrderShadow(
       orderId = existingOrder.id;
       console.log(`[OrdersShadow] Updated order: ${orderId}`);
     } else {
-      // Insert new order with initial values
+      // Insert new order with initial values INCLUDING MATERIALIZED UTMs
       const { data: newOrder, error: insertError } = await supabase
         .from('orders')
         .insert({
@@ -311,6 +323,16 @@ async function writeOrderShadow(
           approved_at: approvedAt,
           completed_at: status === 'completed' ? new Date().toISOString() : null,
           raw_payload: payload,
+          // MATERIALIZED UTMs (PROMPT 9) - no runtime parsing allowed
+          utm_source: parsedUTMs.utm_source,
+          utm_campaign: parsedUTMs.utm_campaign,
+          utm_adset: parsedUTMs.utm_medium,       // utm_medium = adset in SCK format
+          utm_placement: parsedUTMs.utm_term,     // utm_term = placement in SCK format
+          utm_creative: parsedUTMs.utm_content,   // utm_content = creative in SCK format
+          raw_sck: rawSck,
+          meta_campaign_id: parsedUTMs.meta_campaign_id,
+          meta_adset_id: parsedUTMs.meta_adset_id,
+          meta_ad_id: parsedUTMs.meta_ad_id,
         })
         .select('id')
         .single();

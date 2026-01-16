@@ -149,6 +149,90 @@ function extractOrderItems(payload: any): Array<{
   return items;
 }
 
+// ============================================
+// SCK → UTM PARSER (Same as webhook)
+// ============================================
+interface ParsedUTMs {
+  utm_source: string | null;
+  utm_medium: string | null;      // adset in SCK format
+  utm_campaign: string | null;
+  utm_content: string | null;     // creative in SCK format
+  utm_term: string | null;        // placement in SCK format
+  raw_sck: string | null;
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  meta_ad_id: string | null;
+}
+
+function parseSCKtoUTMs(checkoutOrigin: string | null): ParsedUTMs {
+  const result: ParsedUTMs = {
+    utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    utm_content: null,
+    utm_term: null,
+    raw_sck: checkoutOrigin,
+    meta_campaign_id: null,
+    meta_adset_id: null,
+    meta_ad_id: null,
+  };
+  
+  if (!checkoutOrigin || checkoutOrigin.trim() === '') {
+    return result;
+  }
+  
+  const parts = checkoutOrigin.split('|').map(p => p.trim());
+  
+  // parts[0] = utm_source
+  if (parts.length >= 1 && parts[0]) {
+    result.utm_source = parts[0];
+  }
+  
+  // parts[1] = utm_medium (adset)
+  if (parts.length >= 2 && parts[1]) {
+    result.utm_medium = parts[1];
+    const adsetIdMatch = parts[1].match(/_(\d{10,})$/);
+    if (adsetIdMatch) {
+      result.meta_adset_id = adsetIdMatch[1];
+    }
+  }
+  
+  // parts[2] = utm_campaign
+  if (parts.length >= 3 && parts[2]) {
+    result.utm_campaign = parts[2];
+    const campaignIdMatch = parts[2].match(/_(\d{10,})$/);
+    if (campaignIdMatch) {
+      result.meta_campaign_id = campaignIdMatch[1];
+    }
+  }
+  
+  // parts[3] = utm_term (placement)
+  if (parts.length >= 4 && parts[3]) {
+    result.utm_term = parts[3];
+  }
+  
+  // parts[4] = utm_content (creative)
+  if (parts.length >= 5 && parts[4]) {
+    result.utm_content = parts[4];
+    const adIdMatch = parts[4].match(/_(\d{10,})$/);
+    if (adIdMatch) {
+      result.meta_ad_id = adIdMatch[1];
+    }
+  }
+  
+  return result;
+}
+
+// Resolve SCK from multiple possible payload locations
+function resolveSCK(payload: any): string | null {
+  const purchase = payload?.data?.purchase;
+  return purchase?.origin?.sck 
+    || purchase?.checkout_origin 
+    || purchase?.tracking?.source_sck 
+    || purchase?.tracking?.source 
+    || null;
+}
+
 /**
  * Extract financial breakdown from commissions
  */
@@ -296,6 +380,12 @@ serve(async (req) => {
         const orderItems = extractOrderItems(payload);
         const grossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
 
+        // ============================================
+        // EXTRACT UTMs FROM SCK (MATERIALIZED IN ORDERS)
+        // ============================================
+        const rawSck = resolveSCK(payload);
+        const parsedUTMs = parseSCKtoUTMs(rawSck);
+
         // Parse dates
         const orderedAt = purchase?.order_date 
           ? new Date(purchase.order_date).toISOString()
@@ -308,11 +398,11 @@ serve(async (req) => {
         const status = hotmartToOrderStatus[hotmartEvent] || 'pending';
 
         // ============================================
-        // 1. UPSERT ORDER (with ACCUMULATION)
+        // 1. UPSERT ORDER (with ACCUMULATION + UTM BACKFILL)
         // ============================================
         const { data: existingOrder } = await supabase
           .from('orders')
-          .select('id, customer_paid, gross_base, producer_net, approved_at')
+          .select('id, customer_paid, gross_base, producer_net, approved_at, utm_source')
           .eq('project_id', projectId)
           .eq('provider', 'hotmart')
           .eq('provider_order_id', providerOrderId)
@@ -335,24 +425,41 @@ serve(async (req) => {
             .eq('provider_product_id', productId)
             .maybeSingle();
 
-          if (!existingItem) {
-            // ACCUMULATE values - this is a new item for existing order
-            const newCustomerPaid = (existingOrder.customer_paid || 0) + thisEventCustomerPaid;
-            const newGrossBase = (existingOrder.gross_base || 0) + thisEventGrossBase;
-            const newProducerNet = (existingOrder.producer_net || 0) + thisEventProducerNet;
+          // ALWAYS update UTMs if missing (backfill existing orders)
+          const shouldUpdateUTMs = !existingOrder.utm_source && parsedUTMs.utm_source;
 
-            console.log(`[OrdersBackfill14d] Accumulating for ${providerOrderId}: ${existingOrder.customer_paid} + ${thisEventCustomerPaid} = ${newCustomerPaid}`);
+          if (!existingItem || shouldUpdateUTMs) {
+            const updateData: Record<string, any> = {
+              status,
+              approved_at: approvedAt || existingOrder.approved_at,
+              updated_at: new Date().toISOString(),
+            };
+            
+            // Accumulate financial values only for new items
+            if (!existingItem) {
+              updateData.customer_paid = (existingOrder.customer_paid || 0) + thisEventCustomerPaid;
+              updateData.gross_base = (existingOrder.gross_base || 0) + thisEventGrossBase;
+              updateData.producer_net = (existingOrder.producer_net || 0) + thisEventProducerNet;
+              console.log(`[OrdersBackfill14d] Accumulating for ${providerOrderId}: ${existingOrder.customer_paid} + ${thisEventCustomerPaid} = ${updateData.customer_paid}`);
+            }
+            
+            // Backfill UTMs if missing
+            if (shouldUpdateUTMs) {
+              updateData.utm_source = parsedUTMs.utm_source;
+              updateData.utm_campaign = parsedUTMs.utm_campaign;
+              updateData.utm_adset = parsedUTMs.utm_medium;
+              updateData.utm_placement = parsedUTMs.utm_term;
+              updateData.utm_creative = parsedUTMs.utm_content;
+              updateData.raw_sck = rawSck;
+              updateData.meta_campaign_id = parsedUTMs.meta_campaign_id;
+              updateData.meta_adset_id = parsedUTMs.meta_adset_id;
+              updateData.meta_ad_id = parsedUTMs.meta_ad_id;
+              console.log(`[OrdersBackfill14d] Backfilling UTMs for ${providerOrderId}: source=${parsedUTMs.utm_source}`);
+            }
 
             const { error: updateError } = await supabase
               .from('orders')
-              .update({
-                status,
-                customer_paid: newCustomerPaid,
-                gross_base: newGrossBase,
-                producer_net: newProducerNet,
-                approved_at: approvedAt || existingOrder.approved_at,
-                updated_at: new Date().toISOString(),
-              })
+              .update(updateData)
               .eq('id', existingOrder.id);
 
             if (updateError) {
@@ -362,11 +469,12 @@ serve(async (req) => {
             }
             ordersUpdated++;
           } else {
-            console.log(`[OrdersBackfill14d] Item already exists for ${providerOrderId}, skipping accumulation`);
+            console.log(`[OrdersBackfill14d] Item already exists for ${providerOrderId}, skipping`);
           }
           
           orderId = existingOrder.id;
         } else {
+          // Insert new order with MATERIALIZED UTMs
           const { data: newOrder, error: insertError } = await supabase
             .from('orders')
             .insert({
@@ -384,6 +492,16 @@ serve(async (req) => {
               approved_at: approvedAt,
               completed_at: status === 'completed' ? new Date().toISOString() : null,
               raw_payload: payload,
+              // MATERIALIZED UTMs (PROMPT 9)
+              utm_source: parsedUTMs.utm_source,
+              utm_campaign: parsedUTMs.utm_campaign,
+              utm_adset: parsedUTMs.utm_medium,
+              utm_placement: parsedUTMs.utm_term,
+              utm_creative: parsedUTMs.utm_content,
+              raw_sck: rawSck,
+              meta_campaign_id: parsedUTMs.meta_campaign_id,
+              meta_adset_id: parsedUTMs.meta_adset_id,
+              meta_ad_id: parsedUTMs.meta_ad_id,
             })
             .select('id')
             .single();

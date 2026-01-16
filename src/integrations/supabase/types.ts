@@ -4907,14 +4907,23 @@ export type Database = {
           customer_paid: number | null
           gross_base: number | null
           id: string
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
           ordered_at: string | null
           producer_net: number | null
           project_id: string
           provider: string
           provider_order_id: string
           raw_payload: Json | null
+          raw_sck: string | null
           status: string
           updated_at: string
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_placement: string | null
+          utm_source: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -4927,14 +4936,23 @@ export type Database = {
           customer_paid?: number | null
           gross_base?: number | null
           id?: string
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
           ordered_at?: string | null
           producer_net?: number | null
           project_id: string
           provider: string
           provider_order_id: string
           raw_payload?: Json | null
+          raw_sck?: string | null
           status?: string
           updated_at?: string
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_creative?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -4947,14 +4965,23 @@ export type Database = {
           customer_paid?: number | null
           gross_base?: number | null
           id?: string
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
           ordered_at?: string | null
           producer_net?: number | null
           project_id?: string
           provider?: string
           provider_order_id?: string
           raw_payload?: Json | null
+          raw_sck?: string | null
           status?: string
           updated_at?: string
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_creative?: string | null
+          utm_placement?: string | null
+          utm_source?: string | null
         }
         Relationships: [
           {

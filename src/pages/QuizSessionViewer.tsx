@@ -58,10 +58,17 @@ export default function QuizSessionViewer() {
             <CardContent className="py-12 text-center">
               <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
               <p className="text-muted-foreground">Sessão não encontrada</p>
+              {/* CORRIGIDO PROMPT 22: Back seguro com fallback */}
               <Button 
                 variant="outline" 
                 className="mt-4"
-                onClick={() => navigate(-1)}
+                onClick={() => {
+                  if (window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigateTo('/quizzes');
+                  }
+                }}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Voltar
@@ -99,7 +106,14 @@ export default function QuizSessionViewer() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+            {/* CORRIGIDO PROMPT 22: Back seguro com fallback */}
+            <Button variant="ghost" size="sm" onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigateTo(`/quizzes/${quizId}`);
+              }
+            }}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>

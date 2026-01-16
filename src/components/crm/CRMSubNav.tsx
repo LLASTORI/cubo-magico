@@ -6,8 +6,6 @@ import {
   Kanban, 
   CheckSquare, 
   RefreshCcw, 
-  Workflow, 
-  MessageCircle,
   Plus,
   Settings,
   BarChart3
@@ -21,6 +19,14 @@ interface NavItem {
   matchPaths?: string[];
 }
 
+/**
+ * CRMSubNav - Navegação EXCLUSIVA do módulo CRM
+ * 
+ * REGRA ARQUITETURAL (PROMPT 21/22):
+ * - Automações e WhatsApp NÃO pertencem ao CRM
+ * - Eles são acessíveis pelo menu global, não pela CRMSubNav
+ * - CRM = Contexto do cliente, não operação
+ */
 const navItems: NavItem[] = [
   { 
     label: 'Análises', 
@@ -52,18 +58,8 @@ const navItems: NavItem[] = [
     path: '/crm/recovery',
     matchPaths: ['/crm/recovery', '/crm/recovery/kanban', '/crm/recovery/settings']
   },
-  { 
-    label: 'Automações', 
-    icon: Workflow, 
-    path: '/automations',
-    matchPaths: ['/automations']
-  },
-  { 
-    label: 'Chat ao Vivo', 
-    icon: MessageCircle, 
-    path: '/whatsapp',
-    matchPaths: ['/whatsapp']
-  },
+  // REMOVIDOS (PROMPT 22): Automações e WhatsApp não pertencem ao CRM
+  // Eles são acessíveis pelo menu global AppSidebar
 ];
 
 interface CRMSubNavProps {
@@ -81,23 +77,32 @@ export function CRMSubNav({
   settingsPath,
   rightContent
 }: CRMSubNavProps) {
-  const { navigateTo } = useProjectNavigation();
+  const { navigateTo, projectCode } = useProjectNavigation();
   const location = useLocation();
   const currentPath = location.pathname;
 
+  /**
+   * isActive - Verifica se um item de navegação está ativo
+   * 
+   * CORREÇÃO PROMPT 22: Compara contra o path completo incluindo /app/:projectCode
+   */
   const isActive = (item: NavItem) => {
+    if (!projectCode) return false;
+    
+    const basePath = `/app/${projectCode}`;
+    
     if (item.matchPaths) {
       return item.matchPaths.some(p => {
+        const fullPath = `${basePath}${p}`;
         if (p === '/crm') {
-          return currentPath === '/crm';
+          // Exato match para /crm (não /crm/xxx)
+          return currentPath === fullPath;
         }
-        if (p === '/automations') {
-          return currentPath === '/automations' || currentPath.startsWith('/automations/');
-        }
-        return currentPath.startsWith(p);
+        return currentPath.startsWith(fullPath);
       });
     }
-    return currentPath === item.path;
+    
+    return currentPath === `${basePath}${item.path}`;
   };
 
   return (

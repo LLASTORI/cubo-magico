@@ -2,19 +2,19 @@
  * useFunnelData
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
- * CANONICAL FUNNEL DATA HOOK
+ * CANONICAL FUNNEL DATA HOOK - ORDERS CORE MIGRATION
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * Sales data comes EXCLUSIVELY from finance_tracking_view.
+ * Sales data comes EXCLUSIVELY from funnel_orders_view (Orders Core).
  * Investment data comes from meta_insights (ad-level, deduplicated).
  * 
  * FILTER RULES:
  * - Date: economic_day (DATE type, São Paulo timezone)
- * - Status: hotmart_status IN ('APPROVED', 'COMPLETE')
- * - UTMs: All from finance_tracking_view
+ * - Status: handled by view (approved, completed)
  * 
  * FORBIDDEN:
- * ❌ hotmart_sales for direct queries
+ * ❌ hotmart_sales - MUST NOT be used in FunnelAnalysis
+ * ❌ finance_tracking_view - DEPRECATED, replaced by funnel_orders_view
  * ❌ sales_core_events
  * ❌ sales_core_view
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -53,7 +53,37 @@ interface FunnelConfig {
   roas_target: number | null;
 }
 
-// Sales record from finance_tracking_view (canonical source)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORDERS CORE: New canonical order record from funnel_orders_view
+// ═══════════════════════════════════════════════════════════════════════════════
+interface OrderRecord {
+  order_id: string;
+  transaction_id: string;
+  project_id: string;
+  funnel_id: string | null;
+  funnel_name: string | null;
+  customer_paid: number | null;
+  producer_net: number | null;
+  currency: string | null;
+  order_items_count: number;
+  main_product: string | null;
+  main_offer_code: string | null;
+  has_bump: boolean;
+  has_upsell: boolean;
+  has_downsell: boolean;
+  buyer_email: string | null;
+  buyer_name: string | null;
+  status: string | null;
+  created_at: string;
+  ordered_at: string;
+  economic_day: string | null;
+  all_offer_codes: string[] | null;
+  main_revenue: number;
+  bump_revenue: number;
+  upsell_revenue: number;
+}
+
+// Legacy interface for backward compatibility
 interface SaleRecord {
   transaction_id: string;
   product_name: string | null;
@@ -117,51 +147,6 @@ const getPositionSortOrder = (tipo: string, ordem: number): number => {
   return 999;
 };
 
-// Insights are now stored ONLY at ad level (most granular)
-// No deduplication needed - just aggregate by the level you need
-const getInsightsAtLevel = (insights: MetaInsight[], level: 'ad' | 'adset' | 'campaign' | 'account') => {
-  // All insights are at ad level now, just return them for aggregation
-  return insights.filter(i => i.ad_id !== null);
-};
-
-// Aggregate insights by campaign
-const aggregateInsightsByCampaign = (insights: MetaInsight[]) => {
-  const byCampaign = new Map<string, { spend: number; impressions: number; clicks: number; reach: number }>();
-  
-  insights.forEach(i => {
-    if (!i.campaign_id) return;
-    const key = `${i.campaign_id}_${i.date_start}`;
-    const existing = byCampaign.get(key) || { spend: 0, impressions: 0, clicks: 0, reach: 0 };
-    byCampaign.set(key, {
-      spend: existing.spend + (i.spend || 0),
-      impressions: existing.impressions + (i.impressions || 0),
-      clicks: existing.clicks + (i.clicks || 0),
-      reach: existing.reach + (i.reach || 0),
-    });
-  });
-  
-  return byCampaign;
-};
-
-// Aggregate insights by adset
-const aggregateInsightsByAdset = (insights: MetaInsight[]) => {
-  const byAdset = new Map<string, { spend: number; impressions: number; clicks: number; reach: number }>();
-  
-  insights.forEach(i => {
-    if (!i.adset_id) return;
-    const key = `${i.adset_id}_${i.date_start}`;
-    const existing = byAdset.get(key) || { spend: 0, impressions: 0, clicks: 0, reach: 0 };
-    byAdset.set(key, {
-      spend: existing.spend + (i.spend || 0),
-      impressions: existing.impressions + (i.impressions || 0),
-      clicks: existing.clicks + (i.clicks || 0),
-      reach: existing.reach + (i.reach || 0),
-    });
-  });
-  
-  return byAdset;
-};
-
 export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataProps) => {
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
@@ -214,58 +199,62 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     staleTime: 5 * 60 * 1000,
   });
 
-  // CANONICAL: Sales from finance_tracking_view
-  const salesQuery = useQuery({
-    queryKey: ['finance-tracking-sales', projectId, startDateStr, endDateStr],
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ORDERS CORE: Fetch from funnel_orders_view (replaces finance_tracking_view)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const ordersQuery = useQuery({
+    queryKey: ['funnel-orders', projectId, startDateStr, endDateStr],
     queryFn: async () => {
-      console.log(`[useFunnelData] Fetching sales from finance_tracking_view for ${startDateStr} to ${endDateStr}`);
+      console.log(`[useFunnelData] Fetching orders from funnel_orders_view for ${startDateStr} to ${endDateStr}`);
       
-      // Fetch ALL sales with pagination to bypass 1000 limit
+      // Fetch ALL orders with pagination to bypass 1000 limit
       const PAGE_SIZE = 1000;
-      let allData: SaleRecord[] = [];
+      let allData: OrderRecord[] = [];
       let page = 0;
       let hasMore = true;
       
       while (hasMore) {
         const { data, error } = await supabase
-          .from('finance_tracking_view')
+          .from('funnel_orders_view')
           .select(`
+            order_id,
             transaction_id,
-            product_name,
-            offer_code,
-            gross_amount,
-            net_amount,
-            buyer_email,
-            economic_day,
-            purchase_date,
-            hotmart_status,
+            project_id,
             funnel_id,
             funnel_name,
-            meta_campaign_id,
-            meta_adset_id,
-            meta_ad_id,
-            utm_source,
-            utm_campaign,
-            utm_adset,
-            utm_creative,
-            utm_placement,
-            payment_method,
-            recurrence
+            customer_paid,
+            producer_net,
+            currency,
+            order_items_count,
+            main_product,
+            main_offer_code,
+            has_bump,
+            has_upsell,
+            has_downsell,
+            buyer_email,
+            buyer_name,
+            status,
+            created_at,
+            ordered_at,
+            economic_day,
+            all_offer_codes,
+            main_revenue,
+            bump_revenue,
+            upsell_revenue
           `)
           .eq('project_id', projectId!)
-          .in('hotmart_status', ['APPROVED', 'COMPLETE'])
           .gte('economic_day', startDateStr)
           .lte('economic_day', endDateStr)
-          .order('transaction_id', { ascending: true })
+          .order('order_id', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
         if (error) {
-          console.error(`[useFunnelData] Error fetching sales page ${page}:`, error);
+          console.error(`[useFunnelData] Error fetching orders page ${page}:`, error);
           throw error;
         }
         
         if (data && data.length > 0) {
-          allData = [...allData, ...data as SaleRecord[]];
+          allData = [...allData, ...data as OrderRecord[]];
           page++;
           hasMore = data.length === PAGE_SIZE;
         } else {
@@ -273,9 +262,9 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         }
       }
       
-      const totalGross = allData.reduce((s, sale) => s + (sale.gross_amount || 0), 0);
-      const totalNet = allData.reduce((s, sale) => s + (sale.net_amount || 0), 0);
-      console.log(`[useFunnelData] Total sales from finance_tracking_view: ${allData.length}, gross: R$${totalGross.toFixed(2)}, net: R$${totalNet.toFixed(2)}`);
+      const totalCustomerPaid = allData.reduce((s, o) => s + (o.customer_paid || 0), 0);
+      const totalProducerNet = allData.reduce((s, o) => s + (o.producer_net || 0), 0);
+      console.log(`[useFunnelData] Total orders from funnel_orders_view: ${allData.length}, customer_paid: R$${totalCustomerPaid.toFixed(2)}, producer_net: R$${totalProducerNet.toFixed(2)}`);
       return allData;
     },
     enabled,
@@ -348,11 +337,42 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // Extract data
   const funnels = funnelsQuery.data || [];
   const mappings = mappingsQuery.data || [];
-  const salesData = salesQuery.data || [];
+  const ordersData = ordersQuery.data || [];
   const rawInsights = insightsQuery.data || [];
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ADAPTER: Convert OrderRecord to SaleRecord for backward compatibility
+  // This allows gradual migration without breaking existing components
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const salesData: SaleRecord[] = useMemo(() => {
+    return ordersData.map(order => ({
+      transaction_id: order.transaction_id,
+      product_name: order.main_product,
+      offer_code: order.main_offer_code,
+      gross_amount: order.customer_paid,
+      net_amount: order.producer_net,
+      buyer_email: order.buyer_email,
+      economic_day: order.economic_day,
+      purchase_date: order.ordered_at,
+      hotmart_status: order.status?.toUpperCase() || 'APPROVED',
+      funnel_id: order.funnel_id,
+      funnel_name: order.funnel_name,
+      // UTMs not available in orders yet - will be added later
+      meta_campaign_id: null,
+      meta_adset_id: null,
+      meta_ad_id: null,
+      utm_source: null,
+      utm_campaign: null,
+      utm_adset: null,
+      utm_creative: null,
+      utm_placement: null,
+      payment_method: null,
+      recurrence: 1, // Orders are always unique (no parcelas duplicated)
+    }));
+  }, [ordersData]);
+
   // Loading states
-  const loadingSales = salesQuery.isLoading;
+  const loadingSales = ordersQuery.isLoading;
   const loadingInsights = insightsQuery.isLoading;
   const isLoading = loadingSales;
 
@@ -400,20 +420,35 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     };
   }, [adLevelInsights]);
 
-  // Aggregated metrics by position
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ORDERS CORE: New metrics calculation using order-level data
+  // ═══════════════════════════════════════════════════════════════════════════════
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
-    if (!salesData.length) return [];
+    if (!ordersData.length) return [];
 
+    // Build offer code revenue map from all_offer_codes in orders
     const salesByOffer: Record<string, { count: number; revenue: number }> = {};
-    salesData.forEach(sale => {
-      const code = sale.offer_code || 'SEM_CODIGO';
-      if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
+    
+    ordersData.forEach(order => {
+      const offerCodes = order.all_offer_codes || [order.main_offer_code].filter(Boolean);
       
-      // Use recurrence to identify first installment (1 or null means first)
-      const isFirstInstallment = sale.recurrence === 1 || sale.recurrence === null;
-      if (isFirstInstallment) salesByOffer[code].count += 1;
-      // Use gross_amount from finance_tracking_view
-      salesByOffer[code].revenue += sale.gross_amount || 0;
+      // For each order, count 1 sale for the main offer code
+      const mainCode = order.main_offer_code || 'SEM_CODIGO';
+      if (!salesByOffer[mainCode]) salesByOffer[mainCode] = { count: 0, revenue: 0 };
+      salesByOffer[mainCode].count += 1;
+      salesByOffer[mainCode].revenue += order.main_revenue || 0;
+      
+      // Add bump revenue if has_bump or if bump_revenue > 0
+      if (order.bump_revenue > 0) {
+        // Find bump offer codes from all_offer_codes (exclude main)
+        const bumpCodes = (order.all_offer_codes || []).filter(c => c !== mainCode);
+        bumpCodes.forEach(code => {
+          if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
+          salesByOffer[code].count += 1;
+          // Distribute bump_revenue evenly (simplified)
+          salesByOffer[code].revenue += order.bump_revenue / Math.max(bumpCodes.length, 1);
+        });
+      }
     });
 
     const mappedOffers = new Set(sortedMappings.map(m => m.codigo_oferta));
@@ -457,30 +492,56 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }));
 
     return [...mappedMetrics, ...unmappedOffers];
-  }, [sortedMappings, salesData]);
+  }, [sortedMappings, ordersData]);
 
-  // Summary metrics
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ORDERS CORE: Summary metrics using order-level aggregations
+  // ═══════════════════════════════════════════════════════════════════════════════
   const summaryMetrics = useMemo(() => {
-    const totalVendas = aggregatedMetrics.reduce((sum, m) => sum + m.total_vendas, 0);
-    const totalReceita = aggregatedMetrics.reduce((sum, m) => sum + m.total_receita, 0);
-    const vendasFront = aggregatedMetrics
-      .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
-      .reduce((sum, m) => sum + m.total_vendas, 0);
+    // Count unique orders (not transactions/parcelas)
+    const totalVendas = ordersData.length;
     
-    const uniqueCustomers = new Set(salesData.map(s => s.buyer_email).filter(Boolean)).size;
+    // Total revenue = sum of customer_paid
+    const totalReceita = ordersData.reduce((sum, o) => sum + (o.customer_paid || 0), 0);
+    
+    // Producer net
+    const totalProducerNet = ordersData.reduce((sum, o) => sum + (o.producer_net || 0), 0);
+    
+    // Front-end sales (orders with main offer in FRONT position)
+    const frontOfferCodes = new Set(
+      sortedMappings
+        .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
+        .map(m => m.codigo_oferta)
+    );
+    const vendasFront = ordersData.filter(o => 
+      frontOfferCodes.has(o.main_offer_code || '')
+    ).length;
+    
+    // Unique customers
+    const uniqueCustomers = new Set(ordersData.map(o => o.buyer_email).filter(Boolean)).size;
+    
+    // Ticket médio = customer_paid / orders
     const baseVendas = vendasFront > 0 ? vendasFront : totalVendas;
     const ticketMedio = baseVendas > 0 ? totalReceita / baseVendas : 0;
     
+    // ROAS and CPA
     const avgRoasTarget = funnels.length 
       ? funnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / funnels.length 
       : 2;
     const cpaMaximo = ticketMedio / avgRoasTarget;
     const cpaReal = baseVendas > 0 ? totalMetaInvestment / baseVendas : 0;
     const roas = totalMetaInvestment > 0 ? totalReceita / totalMetaInvestment : 0;
+    
+    // Order composition rates
+    const ordersWithBump = ordersData.filter(o => o.has_bump || o.bump_revenue > 0).length;
+    const ordersWithUpsell = ordersData.filter(o => o.has_upsell || o.upsell_revenue > 0).length;
+    const bumpRate = totalVendas > 0 ? (ordersWithBump / totalVendas) * 100 : 0;
+    const upsellRate = totalVendas > 0 ? (ordersWithUpsell / totalVendas) * 100 : 0;
 
     return { 
       totalVendas, 
       totalReceita, 
+      totalProducerNet,
       ticketMedio, 
       uniqueCustomers, 
       vendasFront,
@@ -489,17 +550,22 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       cpaReal,
       roas,
       roasTarget: avgRoasTarget,
+      // New metrics from Orders Core
+      bumpRate,
+      upsellRate,
+      ordersWithBump,
+      ordersWithUpsell,
     };
-  }, [aggregatedMetrics, salesData, totalMetaInvestment, funnels]);
+  }, [ordersData, sortedMappings, totalMetaInvestment, funnels]);
 
   // Refetch functions
   const refetchAll = async () => {
     console.log(`[useFunnelData] Refetching all data...`);
     const results = await Promise.all([
-      salesQuery.refetch(),
+      ordersQuery.refetch(),
       insightsQuery.refetch(),
     ]);
-    console.log(`[useFunnelData] Refetch complete. Sales: ${results[0].data?.length || 0}, Insights: ${results[1].data?.length || 0}`);
+    console.log(`[useFunnelData] Refetch complete. Orders: ${results[0].data?.length || 0}, Insights: ${results[1].data?.length || 0}`);
   };
 
   return {
@@ -507,7 +573,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     mappings,
     sortedMappings,
     offerCodes,
-    salesData,
+    salesData, // Backward compatible - uses adapter from ordersData
+    ordersData, // New: Raw orders from Orders Core
     metaInsights: adLevelInsights,
     rawInsights, // Keep raw for debugging
     metaStructure: { campaigns, adsets, ads },
@@ -520,9 +587,9 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     loadingSales,
     loadingInsights,
     refetchAll,
-    refetchSales: salesQuery.refetch,
+    refetchSales: ordersQuery.refetch,
     refetchInsights: insightsQuery.refetch,
   };
 };
 
-export type { OfferMapping, FunnelConfig, SaleRecord, MetaInsight, PositionMetrics };
+export type { OfferMapping, FunnelConfig, SaleRecord, MetaInsight, PositionMetrics, OrderRecord };

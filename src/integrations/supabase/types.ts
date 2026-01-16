@@ -3756,6 +3756,13 @@ export type Database = {
             foreignKeyName: "ledger_events_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "crm_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "ledger_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "funnel_orders_by_offer"
             referencedColumns: ["order_id"]
           },
@@ -4836,6 +4843,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "offer_mappings"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders_view"
+            referencedColumns: ["order_id"]
           },
           {
             foreignKeyName: "order_items_order_id_fkey"
@@ -6063,6 +6077,13 @@ export type Database = {
           provider_transaction_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "provider_order_map_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders_view"
+            referencedColumns: ["order_id"]
+          },
           {
             foreignKeyName: "provider_order_map_order_id_fkey"
             columns: ["order_id"]
@@ -9068,6 +9089,174 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_contacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_attribution_view: {
+        Row: {
+          buyer_email: string | null
+          buyer_name: string | null
+          first_order_at: string | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          project_id: string | null
+          raw_sck: string | null
+          raw_xcod: string | null
+          utm_placement: string | null
+          utm_source: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_revenue_view: {
+        Row: {
+          average_ticket: number | null
+          buyer_email: string | null
+          buyer_name: string | null
+          first_purchase_at: string | null
+          last_purchase_at: string | null
+          project_id: string | null
+          total_customer_paid: number | null
+          total_orders: number | null
+          total_producer_net: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_order_items_view: {
+        Row: {
+          base_price: number | null
+          buyer_email: string | null
+          buyer_name: string | null
+          funnel_id: string | null
+          funnel_name: string | null
+          item_id: string | null
+          item_type: string | null
+          order_id: string | null
+          product_name: string | null
+          project_id: string | null
+          provider_offer_id: string | null
+          provider_product_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_by_offer"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_orders_view"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_view_shadow"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_orders_view: {
+        Row: {
+          approved_at: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          customer_paid: number | null
+          funnel_id: string | null
+          funnel_name: string | null
+          has_bump: boolean | null
+          has_upsell: boolean | null
+          item_count: number | null
+          order_id: string | null
+          ordered_at: string | null
+          producer_net: number | null
+          project_id: string | null
+          provider_order_id: string | null
+          status: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          customer_paid?: number | null
+          funnel_id?: never
+          funnel_name?: never
+          has_bump?: never
+          has_upsell?: never
+          item_count?: never
+          order_id?: string | null
+          ordered_at?: string | null
+          producer_net?: number | null
+          project_id?: string | null
+          provider_order_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          customer_paid?: number | null
+          funnel_id?: never
+          funnel_name?: never
+          has_bump?: never
+          has_upsell?: never
+          item_count?: never
+          order_id?: string | null
+          ordered_at?: string | null
+          producer_net?: number | null
+          project_id?: string | null
+          provider_order_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

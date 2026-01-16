@@ -1,8 +1,22 @@
 /**
  * OrderDetailDialog
  * 
- * Shows detailed financial breakdown of an order using ledger_events.
- * Ledger EXPLAINS the order but NEVER changes the canonical values.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FONTE DE PRODUTOS: order_items (ÚNICA E EXCLUSIVA)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * REGRAS OBRIGATÓRIAS:
+ * ✓ Buscar produtos SOMENTE de order_items por order_id
+ * ✓ Cada produto exibe: nome, tipo, preço base
+ * ✓ Soma visual dos produtos = orders.customer_paid
+ * 
+ * PROIBIDO:
+ * ❌ Buscar produtos por transaction_id
+ * ❌ Usar ledger_events para listar produtos
+ * ❌ Qualquer fonte que não seja order_items
+ * 
+ * Ledger EXPLICA a decomposição financeira, mas NUNCA altera valores
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useState, useEffect } from "react";
@@ -74,6 +88,40 @@ const getStatusLabel = (status: string) => {
     'chargeback': 'Chargeback',
   };
   return labels[status.toLowerCase()] || status;
+};
+
+// Item type labels for display
+const getItemTypeLabel = (itemType: string) => {
+  const labels: Record<string, string> = {
+    'main': 'Principal',
+    'bump': 'Order Bump',
+    'orderbump': 'Order Bump',
+    'upsell': 'Upsell',
+    'downsell': 'Downsell',
+    'addon': 'Addon',
+    'combo': 'Combo',
+  };
+  return labels[itemType.toLowerCase()] || itemType;
+};
+
+const getItemTypeBadgeColor = (itemType: string) => {
+  switch (itemType.toLowerCase()) {
+    case 'main':
+      return 'bg-primary/10 text-primary border-primary/20';
+    case 'bump':
+    case 'orderbump':
+      return 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20';
+    case 'upsell':
+      return 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20';
+    case 'downsell':
+      return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20';
+    case 'addon':
+      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
+    case 'combo':
+      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
 };
 
 export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDialogProps) {
@@ -165,28 +213,74 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
 
             <Separator />
 
-            {/* Products List */}
+            {/* Products List - FONTE EXCLUSIVA: order_items */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Package className="w-4 h-4 text-muted-foreground" />
-                <span className="font-medium">Produtos ({order.products.length})</span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">Produtos ({order.products.length})</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Fonte: order_items
+                </span>
               </div>
               <div className="space-y-2">
-                {order.products.map((item, index) => (
+                {order.products.map((item) => (
                   <div 
                     key={item.id} 
                     className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
                   >
-                    <div>
-                      <p className="font-medium">{item.product_name || 'Produto sem nome'}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {item.offer_name || item.item_type}
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-medium truncate">{item.product_name || 'Produto sem nome'}</p>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs shrink-0 ${getItemTypeBadgeColor(item.item_type)}`}
+                        >
+                          {getItemTypeLabel(item.item_type)}
+                        </Badge>
+                      </div>
+                      {item.offer_name && (
+                        <p className="text-sm text-muted-foreground truncate">
+                          {item.offer_name}
+                        </p>
+                      )}
                     </div>
-                    <span className="font-semibold">{formatCurrency(item.base_price)}</span>
+                    <span className="font-semibold ml-4 shrink-0">
+                      {formatCurrency(item.base_price)}
+                    </span>
                   </div>
                 ))}
               </div>
+              
+              {/* Soma dos produtos vs customer_paid */}
+              {(() => {
+                const productsSum = order.products.reduce((sum, item) => sum + item.base_price, 0);
+                const difference = Math.abs(productsSum - order.customer_paid);
+                const matches = difference < 0.02; // 2 centavos de tolerância
+                
+                return (
+                  <div className={`flex items-center justify-between mt-3 p-2 rounded text-sm ${
+                    matches 
+                      ? 'bg-green-500/10 border border-green-500/20' 
+                      : 'bg-yellow-500/10 border border-yellow-500/20'
+                  }`}>
+                    <span className={matches ? 'text-green-600' : 'text-yellow-600'}>
+                      Soma dos produtos:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-semibold ${matches ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {formatCurrency(productsSum)}
+                      </span>
+                      {matches ? (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-yellow-500" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <Separator />

@@ -1,243 +1,216 @@
-# Inteligência de Clientes — Documentação UX
+# Inteligência de Clientes — Documentação Completa
 
-> **PROMPT 27**: Reestruturação completa da área de análise de clientes
+> **PROMPT 27 + 28 + 29**: Reestruturação completa da área de análise de clientes
 
 ---
 
 ## 📋 Sumário
 
-1. [Diagnóstico UX (Antes)](#diagnóstico-ux-antes)
-2. [Nova Estrutura (Depois)](#nova-estrutura-depois)
-3. [As 3 Perspectivas](#as-3-perspectivas)
-4. [Componentes Atualizados](#componentes-atualizados)
-5. [Classificação Canônica](#classificação-canônica)
-6. [Melhorias de UX Implementadas](#melhorias-de-ux-implementadas)
+1. [Arquitetura Final](#arquitetura-final)
+2. [Princípio-Chave](#princípio-chave)
+3. [As 4 Perspectivas](#as-4-perspectivas)
+4. [Fontes de Dados](#fontes-de-dados)
+5. [Componentes](#componentes)
+6. [Métricas da View](#métricas-da-view)
+7. [Migração para Orders Core](#migração-para-orders-core)
 
 ---
 
-## 🔴 Diagnóstico UX (Antes)
-
-### Problemas Identificados
-
-| # | Problema | Impacto |
-|---|----------|---------|
-| 1 | **Naming inconsistente** | "Análise de Clientes" não reflete o propósito real |
-| 2 | **Jornada parecia lista de produtos** | Sem hierarquia clara Cliente → Pedidos → Produtos |
-| 3 | **Ascensão erroneamente legada** | Componente canônico marcado com banner de aviso |
-| 4 | **Falta busca por cliente** | Não era possível filtrar por nome/email |
-| 5 | **Scroll problemático** | Overflow inconsistente em diferentes resoluções |
-| 6 | **Tabs confusas** | 3 tabs com 2 marcadas como "legado" |
-
-### Estrutura Anterior
-
-```
-CRM.tsx
-├── Tab: Jornada do Cliente (Orders Core) ← PADRÃO
-├── Tab: Jornada (Legado) ⚠️ 
-└── Tab: Análise de Ascensão ⚠️ ← INCORRETO (era canônico)
-```
-
----
-
-## 🟢 Nova Estrutura (Depois)
-
-### Naming Corrigido
-
-| Antes | Depois |
-|-------|--------|
-| "Análise de Clientes" | **Inteligência de Clientes** |
-| "Jornada do Cliente" | **Jornada** |
-| "Análise de Ascensão" | **Ascensão** |
-| "Jornada (Legado)" | **Visão Legada** |
-
-### Nova Estrutura de Tabs
+## 🏗️ Arquitetura Final
 
 ```
 Inteligência de Clientes
-├── Tab: Jornada ← CANÔNICO (Orders Core)
-├── Tab: Ascensão ← CANÔNICO (offer_mappings)
-└── Tab: Visão Legada ⚠️ ← Apenas para comparação
+├── Visão Geral      → estado da base (executivo)
+├── Jornada          → Cliente → Pedidos → Produtos
+├── Ascensão         → progressão estratégica
+└── Fluxos           → caminhos reais (visual)
 ```
 
 ---
 
-## 📊 As 3 Perspectivas
+## 🔑 Princípio-Chave
 
-### 1. Jornada (Canônica)
+### Fallback ≠ Legado
 
-**Componente:** `CustomerJourneyOrders`
+O fallback é uma **estratégia de transição arquitetural**, não dívida técnica.
 
-**Hierarquia implementada:**
-```
-Clientes
-└── Pedidos
-    └── Produtos
-```
+- ✅ Nada é chamado de "legado"
+- ✅ Nada fica confuso para o usuário
+- ✅ Nada será refeito depois
+- ✅ Transição silenciosa e automática
 
-**Features:**
-- ✅ Busca por nome/email
-- ✅ Agrupamento por cliente (não por pedido)
-- ✅ Cards expansíveis
-- ✅ Badge "1ª Compra" destacado
-- ✅ Scroll corrigido com altura dinâmica
+---
 
-**Fonte de dados:** `crm_journey_orders_view` (Orders Core)
+## 📊 As 4 Perspectivas
 
-### 2. Ascensão (Canônica)
+### 1. Visão Geral (Executiva)
+
+**Pergunta que responde:** "Qual o estado atual da minha base de clientes?"
+
+**Contém:**
+- Total de Contatos, Clientes, Leads
+- Receita Total, LTV Médio, Ticket Médio
+- Taxa de Recompra, Clientes Recorrentes
+
+**NÃO contém:**
+- Listas de clientes
+- Fluxos visuais
+- Filtros avançados
+
+**Componente:** `CustomerIntelligenceOverview`
+
+---
+
+### 2. Jornada (Cliente → Pedidos → Produtos)
+
+**Pergunta que responde:** "Como cada cliente se comportou ao longo do tempo?"
+
+**Contém:**
+- Lista de clientes com suas compras
+- Busca por nome/email
+- Hierarquia clara: Cliente → Pedidos → Produtos
+- Badge "1ª Compra"
+
+**Componente:** `CustomerJourneyWithFallback`
+
+---
+
+### 3. Ascensão (Progressão Estratégica)
+
+**Pergunta que responde:** "Quais produtos de entrada geram mais ascensão?"
+
+**Contém:**
+- Seleção de produtos/ofertas/funis de entrada
+- Seleção de produtos/ofertas/funis de destino
+- Taxa de ascensão por entrada
+- Breakdown detalhado
 
 **Componente:** `AscensionAnalysis`
 
-**O que analisa:**
-- Produto de entrada → Produto de destino
-- Taxa de ascensão por funil
-- Breakdown por cliente
+---
 
-**Fonte de dados:** `crm_transactions` + `offer_mappings`
+### 4. Fluxos (Caminhos Visuais)
 
-> **IMPORTANTE:** Embora use `crm_transactions`, a Ascensão é **CANÔNICA** porque:
-> 1. Usa `offer_mappings` como fonte de verdade para produtos/ofertas
-> 2. Faz análise de fluxo, não contagem de eventos
-> 3. Será migrada para Orders Core quando houver items suficientes
+**Pergunta que responde:** "Qual caminho os clientes realmente percorrem?"
 
-### 3. Visão Legada (Comparativo)
+**Contém:**
+- Visualização de fluxo (Sankey-like)
+- Filtros de passos e mínimo de clientes
+- Legenda de produtos
+- Estatísticas de fluxo
 
-**Componente:** `CustomerJourneyAnalysis`
+**NÃO contém:**
+- Total de contatos
+- LTV
+- Cards executivos
 
-**Quando usar:**
-- Comparação com dados históricos
-- Debugging de discrepâncias
-- Período de transição
-
-**NÃO usar para:**
-- Análises oficiais
-- Decisões de negócio
-- Relatórios para clientes
+**Componente:** `CustomerFlowsAnalysis`
 
 ---
 
-## 🧩 Componentes Atualizados
+## 📂 Fontes de Dados
 
-### CRM.tsx (Página)
+| Aba | Fonte Atual | Fonte Final |
+|-----|-------------|-------------|
+| Visão Geral | `crm_customer_intelligence_overview` (view) | Orders Core |
+| Jornada | `crm_transactions` (via hook) | Orders Core |
+| Ascensão | `crm_transactions` + `offer_mappings` | Orders Core |
+| Fluxos | `crm_transactions` | Orders Core |
 
+### Como o Fallback Funciona
+
+1. **Visão Geral**: A view `crm_customer_intelligence_overview` usa `crm_transactions` diretamente
+2. **Jornada**: O hook `useCRMJourneyFallback` usa `crm_transactions` por padrão
+3. **Ascensão**: Continua usando `crm_transactions` + `offer_mappings`
+4. **Fluxos**: Usa `crm_transactions` para calcular transições
+
+---
+
+## 🧩 Componentes
+
+### Arquivos Principais
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/CRM.tsx` | Página principal com 4 tabs |
+| `src/components/crm/CustomerIntelligenceOverview.tsx` | Visão Geral |
+| `src/components/crm/CustomerJourneyWithFallback.tsx` | Jornada |
+| `src/components/crm/AscensionAnalysis.tsx` | Ascensão |
+| `src/components/crm/CustomerFlowsAnalysis.tsx` | Fluxos |
+
+### Hooks
+
+| Hook | Descrição |
+|------|-----------|
+| `useCustomerIntelligenceOverview` | Métricas agregadas da view |
+| `useCRMJourneyFallback` | Jornada com fallback automático |
+
+---
+
+## 📈 Métricas da View
+
+A view `crm_customer_intelligence_overview` retorna:
+
+### Bloco 1 — Base de Contatos
+- `total_contacts`: Total de contatos na base
+- `total_customers`: Contatos com pelo menos 1 compra
+- `total_leads`: Contatos sem compra
+- `total_prospects`: Reservado para futuro
+
+### Bloco 2 — Valor da Base
+- `total_revenue`: Receita total
+- `avg_ltv`: LTV médio por cliente
+- `avg_ticket`: Ticket médio por pedido
+- `total_orders`: Total de pedidos
+- `avg_orders_per_customer`: Compras por cliente
+
+### Bloco 3 — Comportamento
+- `repeat_customers_count`: Clientes com 2+ compras
+- `repeat_rate_percent`: Taxa de recompra
+
+---
+
+## 🔄 Migração para Orders Core
+
+Quando Orders Core estiver completamente populado:
+
+### Passo 1: Atualizar o Hook de Jornada
 ```typescript
-// ANTES
-const [activeTab, setActiveTab] = useState('orders');
-
-// DEPOIS  
-const [activeTab, setActiveTab] = useState('journey');
+// src/hooks/useCRMJourneyFallback.ts
+// Trocar de:
+const useOrdersCore = false;
+// Para:
+const useOrdersCore = true;
 ```
 
-**Mudanças:**
-- Header: "Inteligência de Clientes" com ícone Brain
-- Tabs renomeadas para semântica clara
-- AscensionAnalysis não é mais lazy-loaded (é canônica)
-- Banner de legado apenas na tab "Visão Legada"
+### Passo 2: A View já está preparada
+A view `crm_customer_intelligence_overview` tem lógica de fallback inteligente.
 
-### CustomerJourneyOrders.tsx
-
-**Mudanças UX:**
-
-1. **Nova hierarquia:** `CustomerCard` agrupa pedidos por cliente
-2. **Busca:** Input com ícone Search para filtrar
-3. **Scroll:** `ScrollArea` com `height` em vez de `maxHeight` problemático
-4. **Cards compactos:** Modo `compact` para pedidos dentro do card de cliente
-
-**Novo fluxo visual:**
-
-```
-┌─────────────────────────────────────────┐
-│ 🔍 Buscar por nome ou email...          │
-├─────────────────────────────────────────┤
-│ ┌─ Cliente: João Silva ─────── R$ 500 ─┐│
-│ │  📧 joao@email.com     2 pedidos     ││
-│ │  ┌─ Pedido 1 ──────────────────────┐ ││
-│ │  │ Produto X • 1ª Compra           │ ││
-│ │  └─────────────────────────────────┘ ││
-│ │  ┌─ Pedido 2 ──────────────────────┐ ││
-│ │  │ Produto Y + Bump                │ ││
-│ │  └─────────────────────────────────┘ ││
-│ │            [Ver Perfil Completo →]   ││
-│ └──────────────────────────────────────┘│
-└─────────────────────────────────────────┘
-```
+### Passo 3: Migrar Ascensão e Fluxos
+Gradualmente atualizar para usar `order_items` em vez de `crm_transactions`.
 
 ---
 
-## ✅ Classificação Canônica
+## ❌ O que foi Removido
 
-| Componente | Status | Fonte de Dados |
-|------------|--------|----------------|
-| `CustomerJourneyOrders` | **CANÔNICO** | Orders Core |
-| `AscensionAnalysis` | **CANÔNICO** | offer_mappings |
-| `CustomerJourneyAnalysis` | LEGACY | crm_transactions |
-
-### Por que Ascensão é Canônica?
-
-1. **offer_mappings** é a fonte de verdade para produtos/ofertas configurados
-2. A análise de fluxo (entrada → destino) não depende de contagem de eventos
-3. Mesmo usando `crm_transactions`, o cálculo de ascensão é baseado em **contatos únicos**
-4. Migração para Orders Core é planejada mas não prioritária
+- Aba "Avançado" (ex-Legado) — removida do MVP
+- Referências a "legado" em todo o código
+- Mensagens de "quando for processado"
+- `CustomerJourneyAnalysis` da navegação principal
 
 ---
 
-## 🎨 Melhorias de UX Implementadas
+## 🚀 Próximos Passos
 
-### 1. Busca Instantânea
+### PROMPT 30
+- Refinar visual do Fluxos (Sankey premium)
+- Ajustar microcopy
 
-```tsx
-<Input
-  placeholder="Buscar por nome ou email..."
-  value={searchTerm}
-  onChange={(e) => setSearchTerm(e.target.value)}
-  className="pl-9"
-/>
-```
-
-### 2. Agrupamento por Cliente
-
-```tsx
-const customerGroups = useMemo((): CustomerGroup[] => {
-  const groups = new Map<string, CustomerGroup>();
-  journeyEvents.forEach(event => {
-    // Agrupa por email
-  });
-  // Ordena por total gasto (maior primeiro)
-  return Array.from(groups.values()).sort((a, b) => b.totalSpent - a.totalSpent);
-}, [journeyEvents]);
-```
-
-### 3. Scroll Corrigido
-
-```tsx
-<ScrollArea style={{ height: maxHeight }} className="pr-2">
-  {/* conteúdo */}
-</ScrollArea>
-```
-
-### 4. Estados Vazios Claros
-
-- Sem pedidos: Ícone + explicação
-- Sem resultados de busca: Ícone diferente + sugestão
+### PROMPT 31
+- Importar CSV
+- Popular Orders Core
+- Desligar fallback
 
 ---
 
-## 📁 Arquivos Modificados
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/CRM.tsx` | Nova estrutura de tabs, naming, classificação |
-| `src/components/crm/CustomerJourneyOrders.tsx` | Hierarquia, busca, scroll |
-| `docs/CRM_CUSTOMER_INTELLIGENCE.md` | Esta documentação |
-
----
-
-## 🚀 Próximos Passos (Não neste PROMPT)
-
-1. Migrar `AscensionAnalysis` para usar `order_items` quando disponível
-2. Adicionar filtros por data na Jornada
-3. Exportação de dados (CSV/PDF)
-4. Remover componentes legados após período de transição
-
----
-
-*Documentação gerada pelo PROMPT 27 — Reestruturação UX + Produto*
+*Documentação atualizada pelo PROMPT 29 — Correção Estrutural*

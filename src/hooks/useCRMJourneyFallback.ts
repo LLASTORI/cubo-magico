@@ -74,23 +74,9 @@ export function useCRMJourneyFallback() {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
 
-  // 1. Verificar se Orders Core tem dados
-  const { data: ordersCount = 0 } = useQuery({
-    queryKey: ['orders-core-count', projectId],
-    queryFn: async () => {
-      if (!projectId) return 0;
-      const { count } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', projectId)
-        .eq('status', 'approved');
-      return count || 0;
-    },
-    enabled: !!projectId,
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const useOrdersCore = ordersCount > 0;
+  // 1. Por enquanto, sempre usar crm_transactions até Orders Core estar completo
+  // Quando Orders Core tiver paridade com transactions, trocar useOrdersCore para true
+  const useOrdersCore = false;
 
   // 2. Buscar dados de Orders Core (se disponível)
   const { data: ordersData = [], isLoading: loadingOrders } = useQuery({

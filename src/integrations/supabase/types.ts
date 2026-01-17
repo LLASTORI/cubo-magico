@@ -10073,6 +10073,31 @@ export type Database = {
           },
         ]
       }
+      crm_customer_intelligence_overview: {
+        Row: {
+          avg_ltv: number | null
+          avg_orders_per_customer: number | null
+          avg_ticket: number | null
+          project_id: string | null
+          repeat_customers_count: number | null
+          repeat_rate_percent: number | null
+          total_contacts: number | null
+          total_customers: number | null
+          total_leads: number | null
+          total_orders: number | null
+          total_prospects: number | null
+          total_revenue: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_journey_orders_view: {
         Row: {
           contact_email: string | null

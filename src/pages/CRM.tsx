@@ -1,40 +1,38 @@
 /**
  * CRM - Inteligência de Clientes
  * 
- * PROMPT 27: Reestruturação UX + Produto
+ * PROMPT 28: Nova estrutura com Visão Geral como primeira aba
  * 
- * 3 Perspectivas:
- * 1. Jornada (Canônica – Orders Core)
- * 2. Ascensão (Canônica – Orders Core via offer_mappings)
- * 3. Visão Legada (Avançado / Comparativo)
+ * 4 Perspectivas:
+ * 1. Visão Geral (Macro, Executiva) - NOVA
+ * 2. Jornada (Canônica – Orders Core)
+ * 3. Ascensão (Canônica – Orders Core via offer_mappings)
+ * 4. Avançado (Dados históricos para análise comparativa)
  * 
- * Ascensão foi RECLASSIFICADA como canônica (não legado).
- * Legado é apenas para comparação histórica.
+ * Não existe mais conceito de "legado" no produto final.
+ * Todos os dados são tratados como canônicos.
  */
 import { useState, lazy, Suspense } from 'react';
 import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
+import { CustomerIntelligenceOverview } from '@/components/crm/CustomerIntelligenceOverview';
 import { CustomerJourneyOrders } from '@/components/crm/CustomerJourneyOrders';
 import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, TrendingUp, Route, AlertTriangle, ShoppingCart, Brain, BookOpen } from 'lucide-react';
+import { Users, Loader2, Lock, TrendingUp, ShoppingCart, Brain, LayoutDashboard, Layers } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// LEGACY: Apenas o componente de jornada legada é carregado sob demanda
+// Avançado: Componente de jornada histórica carregado sob demanda
 const CustomerJourneyAnalysis = lazy(() => import('@/components/crm/CustomerJourneyAnalysis').then(m => ({ default: m.CustomerJourneyAnalysis })));
 
-const LegacyTabLoader = () => (
+const AdvancedTabLoader = () => (
   <div className="space-y-4">
-    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 mb-4">
-      <AlertTriangle className="h-4 w-4" />
-      <span className="text-sm">Carregando visualização legada...</span>
-    </div>
     <Skeleton className="h-32 w-full" />
     <Skeleton className="h-64 w-full" />
   </div>
@@ -44,8 +42,8 @@ export default function CRM() {
   const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
-  // PROMPT 27: Tab padrão é 'journey' (Jornada Canônica)
-  const [activeTab, setActiveTab] = useState('journey');
+  // PROMPT 28: Tab padrão é 'overview' (Visão Geral)
+  const [activeTab, setActiveTab] = useState('overview');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const crmEnabled = isModuleEnabled('crm');
@@ -139,56 +137,66 @@ export default function CRM() {
               </p>
             </div>
 
-            {/* PROMPT 27: Nova estrutura de 3 perspectivas */}
+            {/* PROMPT 28: Nova estrutura de 4 perspectivas */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="mb-4">
-                {/* TAB 1: Jornada Canônica */}
+                {/* TAB 1: Visão Geral (NOVA - PROMPT 28) */}
+                <TabsTrigger value="overview" className="flex items-center gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Visão Geral
+                </TabsTrigger>
+                
+                {/* TAB 2: Jornada Canônica */}
                 <TabsTrigger value="journey" className="flex items-center gap-2">
                   <ShoppingCart className="h-4 w-4" />
                   Jornada
                 </TabsTrigger>
                 
-                {/* TAB 2: Ascensão CANÔNICA (não mais legada) */}
+                {/* TAB 3: Ascensão Canônica */}
                 <TabsTrigger value="ascension" className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
                   Ascensão
                 </TabsTrigger>
                 
-                {/* TAB 3: Legado (secundário) */}
-                <TabsTrigger value="legacy" className="flex items-center gap-2 text-muted-foreground">
-                  <BookOpen className="h-4 w-4" />
-                  <span>Visão Legada</span>
-                  <AlertTriangle className="h-3 w-3 text-amber-500" />
+                {/* TAB 4: Avançado (dados históricos) */}
+                <TabsTrigger value="advanced" className="flex items-center gap-2 text-muted-foreground">
+                  <Layers className="h-4 w-4" />
+                  Avançado
                 </TabsTrigger>
               </TabsList>
               
-              {/* TAB 1: Jornada Canônica (Orders Core) */}
+              {/* TAB 1: Visão Geral (Macro, Executiva) */}
+              <TabsContent value="overview" className="mt-2">
+                <CustomerIntelligenceOverview />
+              </TabsContent>
+              
+              {/* TAB 2: Jornada Canônica (Orders Core) */}
               <TabsContent value="journey" className="mt-2">
                 <CustomerJourneyOrders maxHeight="calc(100vh - 320px)" />
               </TabsContent>
               
-              {/* TAB 2: Análise de Ascensão - CANÔNICA (PROMPT 27: removido banner de legado) */}
+              {/* TAB 3: Análise de Ascensão Canônica */}
               <TabsContent value="ascension" className="mt-2">
                 <AscensionAnalysis />
               </TabsContent>
               
-              {/* TAB 3: Jornada Legada - apenas para comparação */}
-              <TabsContent value="legacy" className="mt-2">
-                {activeTab === 'legacy' && (
-                  <Suspense fallback={<LegacyTabLoader />}>
-                    <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+              {/* TAB 4: Dados Históricos (para análise comparativa) */}
+              <TabsContent value="advanced" className="mt-2">
+                {activeTab === 'advanced' && (
+                  <Suspense fallback={<AdvancedTabLoader />}>
+                    <Card className="mb-4 border-muted">
                       <CardHeader className="pb-3">
                         <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-full bg-amber-500/10">
-                            <AlertTriangle className="h-5 w-5 text-amber-600" />
+                          <div className="p-2 rounded-lg bg-muted">
+                            <Layers className="h-5 w-5 text-muted-foreground" />
                           </div>
                           <div>
-                            <CardTitle className="text-base text-amber-600 dark:text-amber-500">
-                              Visão Legada (Comparativo)
+                            <CardTitle className="text-base">
+                              Análise Avançada
                             </CardTitle>
                             <CardDescription className="mt-1">
-                              Esta visualização usa dados de <code className="text-xs bg-muted px-1 py-0.5 rounded">crm_transactions</code> (sistema antigo).
-                              Use apenas para comparação com dados históricos. Para análises oficiais, use as abas "Jornada" ou "Ascensão".
+                              Visualização baseada em dados históricos de transações. 
+                              Use para análises comparativas e investigação detalhada.
                             </CardDescription>
                           </div>
                         </div>

@@ -107,7 +107,7 @@ export function CustomerFlowsAnalysis() {
     };
   }, [period]);
 
-  // Buscar transações
+  // Buscar transações (cache de 5 min via usePaginatedQuery)
   const { data: transactions = [], isLoading } = usePaginatedQuery<TransactionData>(
     ['crm-flows-transactions', projectId, period],
     {
@@ -327,11 +327,25 @@ export function CustomerFlowsAnalysis() {
 
   // Calcular dimensões e posições do SVG
   const svgWidth = Math.max(900, columns.length * 220);
-  const svgHeight = 420; // Altura fixa
   const columnWidth = svgWidth / (columns.length || 1);
   const nodeWidth = 140;
   const nodeMinHeight = 30;
   const nodePadding = 10;
+
+  // Calcular altura necessária dinamicamente para não cortar nós
+  const calculatedHeight = useMemo(() => {
+    let maxColumnHeight = 0;
+    columns.forEach(column => {
+      const columnHeight = column.reduce((sum, node) => {
+        const height = Math.max(nodeMinHeight, (node.count / Math.max(1, column.reduce((s, n) => s + n.count, 0))) * 300);
+        return sum + height + nodePadding;
+      }, 60); // padding top + bottom
+      maxColumnHeight = Math.max(maxColumnHeight, columnHeight);
+    });
+    return Math.max(420, Math.min(800, maxColumnHeight)); // Min 420, max 800
+  }, [columns, nodeMinHeight, nodePadding]);
+
+  const svgHeight = calculatedHeight;
 
   const nodePositions = useMemo(() => {
     const positions = new Map<string, { x: number; y: number; height: number }>();
@@ -356,7 +370,7 @@ export function CustomerFlowsAnalysis() {
     });
     
     return positions;
-  }, [columns, svgHeight, columnWidth]);
+  }, [columns, svgHeight, columnWidth, nodeWidth, nodeMinHeight, nodePadding]);
 
   const generateLinkPath = (link: FlowLink) => {
     const sourcePos = nodePositions.get(link.source);
@@ -374,12 +388,104 @@ export function CustomerFlowsAnalysis() {
     return `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`;
   };
 
+  // Importar skeleton dedicado para loading progressivo
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-[420px] w-full" />
-        <Skeleton className="h-24 w-full" />
+      <div className="space-y-4 animate-in fade-in-0 duration-200">
+        {/* Filtros - aparecem primeiro mesmo em loading */}
+        <Card className="border-dashed bg-muted/30">
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Período:</span>
+                <Select value={period} onValueChange={setPeriod}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERIOD_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Passos:</span>
+                <Select value={maxSteps.toString()} onValueChange={(v) => setMaxSteps(parseInt(v))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="4">4</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="6">6</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Mín. clientes:</span>
+                <Select value={minFlowSize.toString()} onValueChange={(v) => setMinFlowSize(parseInt(v))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Skeleton className="h-4 w-32 ml-auto" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Container do gráfico com skeleton */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Mapa de Ascensão</CardTitle>
+            </div>
+            <CardDescription>
+              Visualize os caminhos que seus clientes percorrem entre produtos
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-lg bg-muted/20 p-4 overflow-hidden" style={{ height: 420 }}>
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Skeleton className="h-8 w-8 rounded-full mx-auto mb-3" />
+                  <Skeleton className="h-4 w-32 mx-auto" />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Insights skeleton */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-amber-500" />
+              <CardTitle className="text-lg">Insights do Mapa</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-4 rounded-lg border">
+                  <Skeleton className="h-4 w-28 mb-2" />
+                  <Skeleton className="h-3 w-full mb-1" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -512,8 +618,8 @@ export function CustomerFlowsAnalysis() {
             ))}
           </div>
 
-          {/* SVG Flow Chart com scroll horizontal */}
-          <div className="overflow-x-auto border rounded-lg bg-muted/20 p-4">
+          {/* SVG Flow Chart com scroll horizontal E vertical */}
+          <div className="overflow-auto border rounded-lg bg-muted/20 p-4" style={{ maxHeight: 480, maxWidth: '100%' }}>
             <svg width={svgWidth} height={svgHeight} className="block">
               {/* Links */}
               <g>

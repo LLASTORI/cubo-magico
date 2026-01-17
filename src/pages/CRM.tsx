@@ -1,25 +1,18 @@
 /**
  * CRM - Inteligência de Clientes
  * 
- * PROMPT 29: Nova estrutura com fallback silencioso
+ * PROMPT 31: Otimização de performance perceptiva
  * 
- * 4 Perspectivas:
- * 1. Visão Geral (Macro, Executiva)
- * 2. Jornada (Clientes → Pedidos → Produtos)
- * 3. Ascensão (Progressão estratégica)
- * 4. Fluxos (Caminhos visuais)
- * 
- * Não existe conceito de "legado" no produto final.
- * Fallback é silencioso e automático.
+ * Melhorias:
+ * 1. Lazy loading por aba (queries só disparam quando aba ativada)
+ * 2. Skeletons imediatos (<300ms)
+ * 3. Cache por projeto (staleTime: 5min)
+ * 4. Transições suaves entre abas
  */
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useCallback } from 'react';
 import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
-import { CustomerIntelligenceOverview } from '@/components/crm/CustomerIntelligenceOverview';
-import { CustomerJourneyWithFallback } from '@/components/crm/CustomerJourneyWithFallback';
-import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
-import { CustomerFlowsAnalysis } from '@/components/crm/CustomerFlowsAnalysis';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,13 +21,44 @@ import { Users, Loader2, Lock, TrendingUp, ShoppingCart, Brain, LayoutDashboard 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
+// Lazy imports para cada aba - só carrega quando necessário
+const CustomerIntelligenceOverview = lazy(() => 
+  import('@/components/crm/CustomerIntelligenceOverview').then(m => ({ default: m.CustomerIntelligenceOverview }))
+);
+const CustomerJourneyWithFallback = lazy(() => 
+  import('@/components/crm/CustomerJourneyWithFallback').then(m => ({ default: m.CustomerJourneyWithFallback }))
+);
+const AscensionAnalysis = lazy(() => 
+  import('@/components/crm/AscensionAnalysis').then(m => ({ default: m.AscensionAnalysis }))
+);
+const CustomerFlowsAnalysis = lazy(() => 
+  import('@/components/crm/CustomerFlowsAnalysis').then(m => ({ default: m.CustomerFlowsAnalysis }))
+);
+
+// Skeletons para carregamento imediato
+import { 
+  OverviewSkeleton, 
+  JourneySkeleton, 
+  AscensionSkeleton, 
+  FlowsSkeleton 
+} from '@/components/crm/skeletons';
+
 export default function CRM() {
   const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
-  // PROMPT 29: Tab padrão é 'overview' (Visão Geral)
+  
+  // Tab state
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  
+  // Rastrear quais abas já foram visitadas (para manter cache)
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['overview']));
+  
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+    setVisitedTabs(prev => new Set([...prev, value]));
+  }, []);
 
   const crmEnabled = isModuleEnabled('crm');
 
@@ -127,52 +151,70 @@ export default function CRM() {
               </p>
             </div>
 
-            {/* PROMPT 29: Nova estrutura de 4 perspectivas (sem Avançado) */}
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
+            {/* Tabs com lazy loading */}
+            <Tabs value={activeTab} onValueChange={handleTabChange}>
               <TabsList className="mb-4">
-                {/* TAB 1: Visão Geral */}
                 <TabsTrigger value="overview" className="flex items-center gap-2">
                   <LayoutDashboard className="h-4 w-4" />
                   Visão Geral
                 </TabsTrigger>
                 
-                {/* TAB 2: Jornada */}
                 <TabsTrigger value="journey" className="flex items-center gap-2">
                   <ShoppingCart className="h-4 w-4" />
                   Jornada
                 </TabsTrigger>
                 
-                {/* TAB 3: Ascensão */}
                 <TabsTrigger value="ascension" className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
                   Ascensão
                 </TabsTrigger>
                 
-                {/* TAB 4: Mapa de Ascensão */}
                 <TabsTrigger value="flows" className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
                   Mapa de Ascensão
                 </TabsTrigger>
               </TabsList>
               
-              {/* TAB 1: Visão Geral (Macro, Executiva) */}
-              <TabsContent value="overview" className="mt-2">
-                <CustomerIntelligenceOverview />
+              {/* TAB 1: Visão Geral - Carrega imediatamente (default) */}
+              <TabsContent value="overview" className="mt-2" forceMount={visitedTabs.has('overview') || undefined}>
+                <div className={activeTab !== 'overview' ? 'hidden' : ''}>
+                  <Suspense fallback={<OverviewSkeleton />}>
+                    <CustomerIntelligenceOverview />
+                  </Suspense>
+                </div>
               </TabsContent>
               
-              {/* TAB 2: Jornada (com fallback silencioso) */}
-              <TabsContent value="journey" className="mt-2">
-                <CustomerJourneyWithFallback maxHeight="calc(100vh - 320px)" />
+              {/* TAB 2: Jornada - Só carrega quando clicada */}
+              <TabsContent value="journey" className="mt-2" forceMount={visitedTabs.has('journey') || undefined}>
+                <div className={activeTab !== 'journey' ? 'hidden' : ''}>
+                  {visitedTabs.has('journey') && (
+                    <Suspense fallback={<JourneySkeleton />}>
+                      <CustomerJourneyWithFallback maxHeight="calc(100vh - 320px)" />
+                    </Suspense>
+                  )}
+                </div>
               </TabsContent>
               
-              {/* TAB 3: Análise de Ascensão */}
-              <TabsContent value="ascension" className="mt-2">
-                <AscensionAnalysis />
+              {/* TAB 3: Ascensão - Só carrega quando clicada */}
+              <TabsContent value="ascension" className="mt-2" forceMount={visitedTabs.has('ascension') || undefined}>
+                <div className={activeTab !== 'ascension' ? 'hidden' : ''}>
+                  {visitedTabs.has('ascension') && (
+                    <Suspense fallback={<AscensionSkeleton />}>
+                      <AscensionAnalysis />
+                    </Suspense>
+                  )}
+                </div>
               </TabsContent>
               
-              {/* TAB 4: Mapa de Ascensão */}
-              <TabsContent value="flows" className="mt-2">
-                <CustomerFlowsAnalysis />
+              {/* TAB 4: Mapa de Ascensão - Só carrega quando clicada */}
+              <TabsContent value="flows" className="mt-2" forceMount={visitedTabs.has('flows') || undefined}>
+                <div className={activeTab !== 'flows' ? 'hidden' : ''}>
+                  {visitedTabs.has('flows') && (
+                    <Suspense fallback={<FlowsSkeleton />}>
+                      <CustomerFlowsAnalysis />
+                    </Suspense>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           </main>

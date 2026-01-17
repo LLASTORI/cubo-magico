@@ -24,7 +24,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, TrendingUp, ShoppingCart, Brain, LayoutDashboard, GitBranch } from 'lucide-react';
+import { Users, Loader2, Lock, TrendingUp, ShoppingCart, Brain, LayoutDashboard } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 
@@ -148,10 +148,10 @@ export default function CRM() {
                   Ascensão
                 </TabsTrigger>
                 
-                {/* TAB 4: Fluxos */}
+                {/* TAB 4: Mapa de Ascensão */}
                 <TabsTrigger value="flows" className="flex items-center gap-2">
-                  <GitBranch className="h-4 w-4" />
-                  Fluxos
+                  <TrendingUp className="h-4 w-4" />
+                  Mapa de Ascensão
                 </TabsTrigger>
               </TabsList>
               
@@ -170,7 +170,7 @@ export default function CRM() {
                 <AscensionAnalysis />
               </TabsContent>
               
-              {/* TAB 4: Fluxos de Clientes (visual) */}
+              {/* TAB 4: Mapa de Ascensão */}
               <TabsContent value="flows" className="mt-2">
                 <CustomerFlowsAnalysis />
               </TabsContent>

@@ -1,48 +1,38 @@
 /**
  * CRM - Inteligência de Clientes
  * 
- * PROMPT 28: Nova estrutura com Visão Geral como primeira aba
+ * PROMPT 29: Nova estrutura com fallback silencioso
  * 
  * 4 Perspectivas:
- * 1. Visão Geral (Macro, Executiva) - NOVA
- * 2. Jornada (Canônica – Orders Core)
- * 3. Ascensão (Canônica – Orders Core via offer_mappings)
- * 4. Avançado (Dados históricos para análise comparativa)
+ * 1. Visão Geral (Macro, Executiva)
+ * 2. Jornada (Clientes → Pedidos → Produtos)
+ * 3. Ascensão (Progressão estratégica)
+ * 4. Fluxos (Caminhos visuais)
  * 
- * Não existe mais conceito de "legado" no produto final.
- * Todos os dados são tratados como canônicos.
+ * Não existe conceito de "legado" no produto final.
+ * Fallback é silencioso e automático.
  */
 import { useState, lazy, Suspense } from 'react';
 import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AppHeader } from '@/components/AppHeader';
 import { CRMSubNav } from '@/components/crm/CRMSubNav';
 import { CustomerIntelligenceOverview } from '@/components/crm/CustomerIntelligenceOverview';
-import { CustomerJourneyOrders } from '@/components/crm/CustomerJourneyOrders';
+import { CustomerJourneyWithFallback } from '@/components/crm/CustomerJourneyWithFallback';
 import { AscensionAnalysis } from '@/components/crm/AscensionAnalysis';
+import { CustomerFlowsAnalysis } from '@/components/crm/CustomerFlowsAnalysis';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Loader2, Lock, TrendingUp, ShoppingCart, Brain, LayoutDashboard, Layers } from 'lucide-react';
+import { Users, Loader2, Lock, TrendingUp, ShoppingCart, Brain, LayoutDashboard, GitBranch } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
-import { Skeleton } from '@/components/ui/skeleton';
-
-// Avançado: Componente de jornada histórica carregado sob demanda
-const CustomerJourneyAnalysis = lazy(() => import('@/components/crm/CustomerJourneyAnalysis').then(m => ({ default: m.CustomerJourneyAnalysis })));
-
-const AdvancedTabLoader = () => (
-  <div className="space-y-4">
-    <Skeleton className="h-32 w-full" />
-    <Skeleton className="h-64 w-full" />
-  </div>
-);
 
 export default function CRM() {
   const { navigateTo } = useProjectNavigation();
   const { currentProject } = useProject();
   const { isModuleEnabled, isLoading } = useProjectModules();
-  // PROMPT 28: Tab padrão é 'overview' (Visão Geral)
+  // PROMPT 29: Tab padrão é 'overview' (Visão Geral)
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
@@ -126,7 +116,7 @@ export default function CRM() {
           />
           
           <main className="container mx-auto px-6">
-            {/* PROMPT 27: Novo header "Inteligência de Clientes" */}
+            {/* Header "Inteligência de Clientes" */}
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-1">
                 <Brain className="h-6 w-6 text-primary" />
@@ -137,31 +127,31 @@ export default function CRM() {
               </p>
             </div>
 
-            {/* PROMPT 28: Nova estrutura de 4 perspectivas */}
+            {/* PROMPT 29: Nova estrutura de 4 perspectivas (sem Avançado) */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="mb-4">
-                {/* TAB 1: Visão Geral (NOVA - PROMPT 28) */}
+                {/* TAB 1: Visão Geral */}
                 <TabsTrigger value="overview" className="flex items-center gap-2">
                   <LayoutDashboard className="h-4 w-4" />
                   Visão Geral
                 </TabsTrigger>
                 
-                {/* TAB 2: Jornada Canônica */}
+                {/* TAB 2: Jornada */}
                 <TabsTrigger value="journey" className="flex items-center gap-2">
                   <ShoppingCart className="h-4 w-4" />
                   Jornada
                 </TabsTrigger>
                 
-                {/* TAB 3: Ascensão Canônica */}
+                {/* TAB 3: Ascensão */}
                 <TabsTrigger value="ascension" className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
                   Ascensão
                 </TabsTrigger>
                 
-                {/* TAB 4: Avançado (dados históricos) */}
-                <TabsTrigger value="advanced" className="flex items-center gap-2 text-muted-foreground">
-                  <Layers className="h-4 w-4" />
-                  Avançado
+                {/* TAB 4: Fluxos */}
+                <TabsTrigger value="flows" className="flex items-center gap-2">
+                  <GitBranch className="h-4 w-4" />
+                  Fluxos
                 </TabsTrigger>
               </TabsList>
               
@@ -170,41 +160,19 @@ export default function CRM() {
                 <CustomerIntelligenceOverview />
               </TabsContent>
               
-              {/* TAB 2: Jornada Canônica (Orders Core) */}
+              {/* TAB 2: Jornada (com fallback silencioso) */}
               <TabsContent value="journey" className="mt-2">
-                <CustomerJourneyOrders maxHeight="calc(100vh - 320px)" />
+                <CustomerJourneyWithFallback maxHeight="calc(100vh - 320px)" />
               </TabsContent>
               
-              {/* TAB 3: Análise de Ascensão Canônica */}
+              {/* TAB 3: Análise de Ascensão */}
               <TabsContent value="ascension" className="mt-2">
                 <AscensionAnalysis />
               </TabsContent>
               
-              {/* TAB 4: Dados Históricos (para análise comparativa) */}
-              <TabsContent value="advanced" className="mt-2">
-                {activeTab === 'advanced' && (
-                  <Suspense fallback={<AdvancedTabLoader />}>
-                    <Card className="mb-4 border-muted">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-lg bg-muted">
-                            <Layers className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-base">
-                              Análise Avançada
-                            </CardTitle>
-                            <CardDescription className="mt-1">
-                              Visualização baseada em dados históricos de transações. 
-                              Use para análises comparativas e investigação detalhada.
-                            </CardDescription>
-                          </div>
-                        </div>
-                      </CardHeader>
-                    </Card>
-                    <CustomerJourneyAnalysis />
-                  </Suspense>
-                )}
+              {/* TAB 4: Fluxos de Clientes (visual) */}
+              <TabsContent value="flows" className="mt-2">
+                <CustomerFlowsAnalysis />
               </TabsContent>
             </Tabs>
           </main>

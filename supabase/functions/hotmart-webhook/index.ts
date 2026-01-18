@@ -45,11 +45,20 @@ const hotmartToLedgerEventType: Record<string, string> = {
   'SWITCH_PLAN': 'credit',
 };
 
-// Events that represent money coming IN
+// Events that represent money coming IN (FINANCIALLY EFFECTIVE)
 const creditEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE', 'SUBSCRIPTION_STARTED', 'SWITCH_PLAN'];
 
-// Events that represent money going OUT (inverted amounts)
+// Events that represent money going OUT (inverted amounts, FINANCIALLY EFFECTIVE)
 const debitEvents = ['PURCHASE_CANCELED', 'PURCHASE_REFUNDED', 'PURCHASE_CHARGEBACK', 'PURCHASE_RECURRENCE_CANCELLATION'];
+
+// Events that are INFORMATIONAL ONLY - should NOT impact financial values
+// These represent intent/status changes but NO money has been transferred
+const informationalEvents = ['PURCHASE_BILLET_PRINTED', 'PURCHASE_EXPIRED', 'PURCHASE_DELAYED', 'PURCHASE_PROTEST', 'PURCHASE_OUT_OF_SHOPPING_CART'];
+
+// Helper: Check if event is financially effective (should impact customer_paid)
+function isFinanciallyEffectiveEvent(eventName: string): boolean {
+  return creditEvents.includes(eventName) || debitEvents.includes(eventName);
+}
 
 // ============================================
 // ORDERS CORE SHADOW - Utility Functions
@@ -250,13 +259,47 @@ async function writeOrderShadow(
       : null;
     
     // ============================================
-    // 1. UPSERT ORDER (with accumulation)
+    // FINANCIAL DEDUPLICATION CHECK
+    // Verify if this specific transaction_id has already impacted finances
+    // ============================================
+    const isFinancialEvent = isFinanciallyEffectiveEvent(hotmartEvent);
+    let transactionAlreadyProcessedFinancially = false;
+    
+    if (isFinancialEvent && transactionId) {
+      const { data: existingMapping } = await supabase
+        .from('provider_order_map')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('provider', 'hotmart')
+        .eq('provider_transaction_id', transactionId)
+        .maybeSingle();
+      
+      transactionAlreadyProcessedFinancially = !!existingMapping;
+      
+      if (transactionAlreadyProcessedFinancially) {
+        console.log(`[OrdersShadow] Transaction ${transactionId} already processed financially, skipping value accumulation`);
+      }
+    }
+    
+    // Determine financial values for THIS event
+    // Only apply if: 1) financially effective event AND 2) not already processed
+    const shouldApplyFinancialValues = isFinancialEvent && !transactionAlreadyProcessedFinancially;
+    const financialCustomerPaid = shouldApplyFinancialValues ? thisEventCustomerPaid : 0;
+    const financialGrossBase = shouldApplyFinancialValues ? thisEventGrossBase : 0;
+    const financialProducerNet = shouldApplyFinancialValues ? thisEventProducerNet : 0;
+    
+    if (!isFinancialEvent) {
+      console.log(`[OrdersShadow] Event ${hotmartEvent} is INFORMATIONAL - no financial impact`);
+    }
+    
+    // ============================================
+    // 1. UPSERT ORDER (with conditional accumulation)
     // ============================================
     
     // Check if order exists and get current values
     const { data: existingOrder } = await supabase
       .from('orders')
-      .select('id, customer_paid, gross_base, producer_net')
+      .select('id, customer_paid, gross_base, producer_net, approved_at')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .eq('provider_order_id', providerOrderId)
@@ -265,21 +308,14 @@ async function writeOrderShadow(
     let orderId: string;
     
     if (existingOrder) {
-      // Check if this item was already added (avoid double counting on retries)
-      const { data: existingItem } = await supabase
-        .from('order_items')
-        .select('id')
-        .eq('order_id', existingOrder.id)
-        .eq('provider_product_id', orderItems[0]?.provider_product_id || 'unknown')
-        .maybeSingle();
-      
-      if (!existingItem) {
-        // ACCUMULATE values - this is a new item for existing order
-        const newCustomerPaid = (existingOrder.customer_paid || 0) + thisEventCustomerPaid;
-        const newGrossBase = (existingOrder.gross_base || 0) + thisEventGrossBase;
-        const newProducerNet = (existingOrder.producer_net || 0) + thisEventProducerNet;
+      // Order exists - only update financial values if this is a new financial event
+      if (shouldApplyFinancialValues && financialCustomerPaid > 0) {
+        // ACCUMULATE values - this is a new financially effective item
+        const newCustomerPaid = (existingOrder.customer_paid || 0) + financialCustomerPaid;
+        const newGrossBase = (existingOrder.gross_base || 0) + financialGrossBase;
+        const newProducerNet = (existingOrder.producer_net || 0) + financialProducerNet;
         
-        console.log(`[OrdersShadow] Accumulating: ${existingOrder.customer_paid} + ${thisEventCustomerPaid} = ${newCustomerPaid}`);
+        console.log(`[OrdersShadow] Financial accumulation: ${existingOrder.customer_paid} + ${financialCustomerPaid} = ${newCustomerPaid}`);
         
         const { error: updateError } = await supabase
           .from('orders')
@@ -298,13 +334,22 @@ async function writeOrderShadow(
           return result;
         }
       } else {
-        console.log(`[OrdersShadow] Item already exists, skipping accumulation`);
+        // Only update status and approved_at (no financial impact)
+        console.log(`[OrdersShadow] Updating order status only (no financial impact)`);
+        await supabase
+          .from('orders')
+          .update({
+            status,
+            approved_at: approvedAt || existingOrder.approved_at,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingOrder.id);
       }
       
       orderId = existingOrder.id;
       console.log(`[OrdersShadow] Updated order: ${orderId}`);
     } else {
-      // Insert new order with initial values INCLUDING MATERIALIZED UTMs
+      // Insert new order - only include financial values if this is a financial event
       const { data: newOrder, error: insertError } = await supabase
         .from('orders')
         .insert({
@@ -316,9 +361,9 @@ async function writeOrderShadow(
           contact_id: contactId,
           status,
           currency,
-          customer_paid: thisEventCustomerPaid,
-          gross_base: thisEventGrossBase || thisEventCustomerPaid,
-          producer_net: thisEventProducerNet,
+          customer_paid: financialCustomerPaid,
+          gross_base: financialGrossBase || financialCustomerPaid,
+          producer_net: financialProducerNet,
           ordered_at: orderedAt,
           approved_at: approvedAt,
           completed_at: status === 'completed' ? new Date().toISOString() : null,
@@ -343,156 +388,174 @@ async function writeOrderShadow(
       }
       
       orderId = newOrder.id;
-      console.log(`[OrdersShadow] Created order: ${orderId}`);
+      console.log(`[OrdersShadow] Created order: ${orderId} (financial values: ${shouldApplyFinancialValues})`);
     }
     
     result.orderId = orderId;
     
     // ============================================
-    // 2. CREATE ORDER ITEMS (if new order)
+    // 2. CREATE ORDER ITEMS (for ALL financial events, not just new orders)
+    // Order items should be created when we receive the financial event for each product
     // ============================================
-    if (!existingOrder) {
+    if (shouldApplyFinancialValues) {
       for (const item of orderItems) {
-        const { error: itemError } = await supabase
+        // Check if item already exists (avoid duplicates)
+        const { data: existingItem } = await supabase
           .from('order_items')
-          .insert({
-            order_id: orderId,
-            provider_product_id: item.provider_product_id,
-            provider_offer_id: item.provider_offer_id,
-            product_name: item.product_name,
-            offer_name: item.offer_name,
-            item_type: item.item_type,
-            base_price: item.base_price,
-            quantity: item.quantity,
-          });
+          .select('id')
+          .eq('order_id', orderId)
+          .eq('provider_product_id', item.provider_product_id)
+          .maybeSingle();
         
-        if (!itemError) {
-          result.itemsCreated++;
-          console.log(`[OrdersShadow] Created item: ${item.product_name} (${item.item_type})`);
+        if (!existingItem) {
+          const { error: itemError } = await supabase
+            .from('order_items')
+            .insert({
+              order_id: orderId,
+              provider_product_id: item.provider_product_id,
+              provider_offer_id: item.provider_offer_id,
+              product_name: item.product_name,
+              offer_name: item.offer_name,
+              item_type: item.item_type,
+              base_price: item.base_price,
+              quantity: item.quantity,
+            });
+          
+          if (!itemError) {
+            result.itemsCreated++;
+            console.log(`[OrdersShadow] Created item: ${item.product_name} (${item.item_type})`);
+          }
+        } else {
+          console.log(`[OrdersShadow] Item already exists: ${item.product_name}`);
         }
       }
     }
     
     // ============================================
-    // 3. CREATE LEDGER EVENTS
+    // 3. CREATE LEDGER EVENTS (only for financial events)
     // ============================================
     const occurredAt = orderedAt;
     const isDebit = debitEvents.includes(hotmartEvent);
     
-    for (const comm of commissions) {
-      const source = (comm.source || '').toUpperCase();
-      let value = comm.value ?? 0;
-      
-      if (value === 0) continue;
-      
-      // For refunds/chargebacks, amounts should be NEGATIVE
-      if (isDebit) {
-        value = -Math.abs(value);
-      }
-      
-      let eventType: string;
-      let actor: string;
-      let actorName: string | null = null;
-      
-      switch (source) {
-        case 'MARKETPLACE':
-          eventType = 'platform_fee';
-          actor = 'platform';
-          actorName = 'hotmart';
-          break;
-        case 'PRODUCER':
-          eventType = isDebit ? 'refund' : 'sale';
-          actor = 'producer';
-          break;
-        case 'CO_PRODUCER':
-          eventType = 'coproducer';
-          actor = 'coproducer';
-          actorName = data?.producer?.name || null;
-          break;
-        case 'AFFILIATE':
-          eventType = 'affiliate';
-          actor = 'affiliate';
-          actorName = data?.affiliates?.[0]?.name || null;
-          break;
-        default:
-          continue;
-      }
-      
-      // Check if event already exists
-      const { data: existingEvent } = await supabase
-        .from('ledger_events')
-        .select('id')
-        .eq('order_id', orderId)
-        .eq('event_type', eventType)
-        .eq('actor', actor)
-        .maybeSingle();
-      
-      if (!existingEvent) {
-        const { error: eventError } = await supabase
-          .from('ledger_events')
-          .insert({
-            order_id: orderId,
-            project_id: projectId,
-            provider: 'hotmart',
-            event_type: eventType,
-            actor,
-            actor_name: actorName,
-            amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
-            currency,
-            provider_event_id: `${transactionId}_${eventType}_${actor}`,
-            occurred_at: occurredAt,
-            raw_payload: comm,
-          });
+    // Only create ledger events for financially effective events
+    if (isFinancialEvent) {
+      for (const comm of commissions) {
+        const source = (comm.source || '').toUpperCase();
+        let value = comm.value ?? 0;
         
-        if (!eventError) {
-          result.eventsCreated++;
-          console.log(`[OrdersShadow] Created ledger event: ${eventType} (${actor}): ${value}`);
+        if (value === 0) continue;
+        
+        // For refunds/chargebacks, amounts should be NEGATIVE
+        if (isDebit) {
+          value = -Math.abs(value);
         }
-      }
-    }
-    
-    // ============================================
-    // 4. AUTO-ADD COPRODUCER if calculated
-    // ============================================
-    const hasCoProduction = data?.product?.has_co_production === true;
-    const hasCoproducerInCommissions = commissions.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
-    
-    if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenue !== null) {
-      const platformFee = commissions.find((c: any) => (c.source || '').toUpperCase() === 'MARKETPLACE')?.value || 0;
-      const affiliateAmount = commissions.find((c: any) => (c.source || '').toUpperCase() === 'AFFILIATE')?.value || 0;
-      const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenue;
-      
-      if (calculatedCoproducerCost > 0) {
-        const { data: existingCoproducer } = await supabase
+        
+        let eventType: string;
+        let actor: string;
+        let actorName: string | null = null;
+        
+        switch (source) {
+          case 'MARKETPLACE':
+            eventType = 'platform_fee';
+            actor = 'platform';
+            actorName = 'hotmart';
+            break;
+          case 'PRODUCER':
+            eventType = isDebit ? 'refund' : 'sale';
+            actor = 'producer';
+            break;
+          case 'CO_PRODUCER':
+            eventType = 'coproducer';
+            actor = 'coproducer';
+            actorName = data?.producer?.name || null;
+            break;
+          case 'AFFILIATE':
+            eventType = 'affiliate';
+            actor = 'affiliate';
+            actorName = data?.affiliates?.[0]?.name || null;
+            break;
+          default:
+            continue;
+        }
+        
+        // Check if event already exists
+        const { data: existingEvent } = await supabase
           .from('ledger_events')
           .select('id')
           .eq('order_id', orderId)
-          .eq('event_type', 'coproducer')
+          .eq('event_type', eventType)
+          .eq('actor', actor)
           .maybeSingle();
         
-        if (!existingCoproducer) {
-          const { error: coproducerError } = await supabase
+        if (!existingEvent) {
+          const { error: eventError } = await supabase
             .from('ledger_events')
             .insert({
               order_id: orderId,
               project_id: projectId,
               provider: 'hotmart',
-              event_type: 'coproducer',
-              actor: 'coproducer',
-              actor_name: null,
-              amount: -calculatedCoproducerCost,
+              event_type: eventType,
+              actor,
+              actor_name: actorName,
+              amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
               currency,
-              provider_event_id: `${transactionId}_coproducer_auto`,
+              provider_event_id: `${transactionId}_${eventType}_${actor}`,
               occurred_at: occurredAt,
-              raw_payload: { source: 'auto_calculated', has_co_production: true },
+              raw_payload: comm,
             });
           
-          if (!coproducerError) {
+          if (!eventError) {
             result.eventsCreated++;
-            console.log(`[OrdersShadow] Created auto-calculated coproducer: ${calculatedCoproducerCost}`);
+            console.log(`[OrdersShadow] Created ledger event: ${eventType} (${actor}): ${value}`);
           }
         }
       }
+      
+      // ============================================
+      // 4. AUTO-ADD COPRODUCER if calculated (only for financial events)
+      // ============================================
+      const hasCoProduction = data?.product?.has_co_production === true;
+      const hasCoproducerInCommissions = commissions.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
+      
+      if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenue !== null) {
+        const platformFee = commissions.find((c: any) => (c.source || '').toUpperCase() === 'MARKETPLACE')?.value || 0;
+        const affiliateAmount = commissions.find((c: any) => (c.source || '').toUpperCase() === 'AFFILIATE')?.value || 0;
+        const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenue;
+        
+        if (calculatedCoproducerCost > 0) {
+          const { data: existingCoproducer } = await supabase
+            .from('ledger_events')
+            .select('id')
+            .eq('order_id', orderId)
+            .eq('event_type', 'coproducer')
+            .maybeSingle();
+          
+          if (!existingCoproducer) {
+            const { error: coproducerError } = await supabase
+              .from('ledger_events')
+              .insert({
+                order_id: orderId,
+                project_id: projectId,
+                provider: 'hotmart',
+                event_type: 'coproducer',
+                actor: 'coproducer',
+                actor_name: null,
+                amount: -calculatedCoproducerCost,
+                currency,
+                provider_event_id: `${transactionId}_coproducer_auto`,
+                occurred_at: occurredAt,
+                raw_payload: { source: 'auto_calculated', has_co_production: true },
+              });
+            
+            if (!coproducerError) {
+              result.eventsCreated++;
+              console.log(`[OrdersShadow] Created auto-calculated coproducer: ${calculatedCoproducerCost}`);
+            }
+          }
+        }
+      }
+    } else {
+      console.log(`[OrdersShadow] Skipping ledger events for informational event: ${hotmartEvent}`);
     }
     
     // ============================================

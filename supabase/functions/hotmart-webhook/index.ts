@@ -65,6 +65,37 @@ function isFinanciallyEffectiveEvent(eventName: string): boolean {
 // ============================================
 
 /**
+ * Normalize Hotmart payment type to canonical format
+ * 
+ * REGRAS CANÔNICAS:
+ * ✓ Fonte: purchase.payment.type (ÚNICA)
+ * ✓ NUNCA inferir pelo valor ou status
+ * ✓ Se não souber, retorna 'unknown'
+ */
+function normalizePaymentMethod(rawPaymentType: string | null): string {
+  if (!rawPaymentType) return 'unknown';
+  
+  switch (rawPaymentType.toUpperCase()) {
+    case 'CREDIT_CARD':
+      return 'credit_card';
+    case 'PIX':
+      return 'pix';
+    case 'BILLET':
+      return 'billet';
+    case 'PAYPAL':
+      return 'paypal';
+    case 'APPLE_PAY':
+      return 'apple_pay';
+    case 'GOOGLE_PAY':
+      return 'google_pay';
+    case 'WALLET':
+      return 'wallet';
+    default:
+      return 'unknown';
+  }
+}
+
+/**
  * Resolve Hotmart Order ID from payload
  * Must group order bumps, upsells and downsells under the same parent order.
  * 
@@ -243,6 +274,17 @@ async function writeOrderShadow(
     
     console.log(`[OrdersShadow] UTM extraction: source=${parsedUTMs.utm_source}, campaign=${parsedUTMs.utm_campaign}, adset=${parsedUTMs.utm_medium}`);
     
+    // ============================================
+    // EXTRACT PAYMENT METHOD (PROMPT 2)
+    // Source of Truth: purchase.payment.type (ÚNICA)
+    // NUNCA inferir pelo valor, status ou outro campo
+    // ============================================
+    const rawPaymentType = purchase?.payment?.type || null;
+    const paymentMethod = normalizePaymentMethod(rawPaymentType);
+    const installments = purchase?.payment?.installments_number || 1;
+    
+    console.log(`[OrdersShadow] Payment: method=${paymentMethod}, type=${rawPaymentType}, installments=${installments}`);
+    
     // Calculate values from THIS webhook event only
     const orderItems = extractOrderItems(payload);
     const thisEventGrossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
@@ -326,6 +368,10 @@ async function writeOrderShadow(
             producer_net: newProducerNet,
             approved_at: approvedAt || existingOrder.approved_at,
             updated_at: new Date().toISOString(),
+            // PAYMENT METHOD (PROMPT 2) - backfill on financial event if missing
+            payment_method: paymentMethod,
+            payment_type: rawPaymentType,
+            installments: installments,
           })
           .eq('id', existingOrder.id);
         
@@ -378,6 +424,10 @@ async function writeOrderShadow(
           meta_campaign_id: parsedUTMs.meta_campaign_id,
           meta_adset_id: parsedUTMs.meta_adset_id,
           meta_ad_id: parsedUTMs.meta_ad_id,
+          // PAYMENT METHOD (PROMPT 2) - only when financial event
+          payment_method: shouldApplyFinancialValues ? paymentMethod : null,
+          payment_type: shouldApplyFinancialValues ? rawPaymentType : null,
+          installments: shouldApplyFinancialValues ? installments : null,
         })
         .select('id')
         .single();

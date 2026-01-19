@@ -5299,10 +5299,13 @@ export type Database = {
           customer_paid: number | null
           gross_base: number | null
           id: string
+          installments: number | null
           meta_ad_id: string | null
           meta_adset_id: string | null
           meta_campaign_id: string | null
           ordered_at: string | null
+          payment_method: string | null
+          payment_type: string | null
           producer_net: number | null
           project_id: string
           provider: string
@@ -5328,10 +5331,13 @@ export type Database = {
           customer_paid?: number | null
           gross_base?: number | null
           id?: string
+          installments?: number | null
           meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
           ordered_at?: string | null
+          payment_method?: string | null
+          payment_type?: string | null
           producer_net?: number | null
           project_id: string
           provider: string
@@ -5357,10 +5363,13 @@ export type Database = {
           customer_paid?: number | null
           gross_base?: number | null
           id?: string
+          installments?: number | null
           meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
           ordered_at?: string | null
+          payment_method?: string | null
+          payment_type?: string | null
           producer_net?: number | null
           project_id?: string
           provider?: string

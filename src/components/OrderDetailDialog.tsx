@@ -42,10 +42,12 @@ import {
   Info,
   CheckCircle,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Wallet
 } from "lucide-react";
 import { useOrdersCore, OrderRecord, LedgerBreakdown } from "@/hooks/useOrdersCore";
 import { supabase } from "@/integrations/supabase/client";
+import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
 
 interface OrderDetailDialogProps {
   orderId: string | null;
@@ -270,11 +272,19 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               </div>
             </div>
 
-            {/* Customer Info */}
+            {/* Customer Info + Payment Method */}
             <div className="bg-muted/50 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <span className="font-medium">Cliente</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">Cliente</span>
+                </div>
+                {/* Payment Method Badge (PROMPT 2) */}
+                <PaymentMethodBadge 
+                  paymentMethod={order.payment_method} 
+                  installments={order.installments}
+                  size="md"
+                />
               </div>
               <p className="text-foreground">{order.buyer_name || '-'}</p>
               <p className="text-sm text-muted-foreground">{order.buyer_email || '-'}</p>

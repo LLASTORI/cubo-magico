@@ -90,6 +90,11 @@ export interface OrderRecord {
   utm_placement?: string | null;
   utm_creative?: string | null;
   
+  // Payment method (PROMPT 2)
+  payment_method?: string | null;
+  payment_type?: string | null;
+  installments?: number | null;
+  
   // Computed
   economic_day: string;
 }

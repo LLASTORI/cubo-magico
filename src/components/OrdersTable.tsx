@@ -36,9 +36,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Eye, Package, Signal, SignalZero } from "lucide-react";
+import { Info, Eye, Package, Signal, SignalZero, CreditCard } from "lucide-react";
 import { OrderRecord } from "@/hooks/useOrdersCore";
 import { OrderDetailDialog } from "@/components/OrderDetailDialog";
+import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
 
 interface OrdersTableProps {
   orders: OrderRecord[];
@@ -203,6 +204,21 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                     </div>
                   </TableHead>
                   <TableHead className="text-muted-foreground">Status</TableHead>
+                  <TableHead className="text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      Pagamento
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <CreditCard className="w-3 h-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Método de pagamento e parcelas</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </TableHead>
                   <TableHead className="text-muted-foreground">Data</TableHead>
                   <TableHead className="text-muted-foreground">Ações</TableHead>
                 </TableRow>
@@ -267,6 +283,14 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                       <Badge variant="outline" className={getStatusColor(order.status)}>
                         {getStatusLabel(order.status)}
                       </Badge>
+                    </TableCell>
+                    {/* Payment Method (PROMPT 2) */}
+                    <TableCell>
+                      <PaymentMethodBadge 
+                        paymentMethod={order.payment_method} 
+                        installments={order.installments}
+                        size="sm"
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(order.ordered_at)}

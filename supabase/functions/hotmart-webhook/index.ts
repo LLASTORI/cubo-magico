@@ -432,13 +432,14 @@ async function writeOrderShadow(
     }
     
     // ============================================
-    // 3. CREATE LEDGER EVENTS (only for financial events)
+    // 3. CREATE LEDGER EVENTS (only for NEW financial events - respect deduplication)
     // ============================================
     const occurredAt = orderedAt;
     const isDebit = debitEvents.includes(hotmartEvent);
     
-    // Only create ledger events for financially effective events
-    if (isFinancialEvent) {
+    // Only create ledger events when shouldApplyFinancialValues is true
+    // This ensures ledger_events are consistent with customer_paid and order_items
+    if (shouldApplyFinancialValues) {
       for (const comm of commissions) {
         const source = (comm.source || '').toUpperCase();
         let value = comm.value ?? 0;
@@ -478,7 +479,7 @@ async function writeOrderShadow(
             continue;
         }
         
-        // Check if event already exists
+        // Check if event already exists (secondary deduplication)
         const { data: existingEvent } = await supabase
           .from('ledger_events')
           .select('id')
@@ -554,26 +555,27 @@ async function writeOrderShadow(
           }
         }
       }
-    } else {
-      console.log(`[OrdersShadow] Skipping ledger events for informational event: ${hotmartEvent}`);
-    }
-    
-    // ============================================
-    // 5. FILL provider_order_map
-    // ============================================
-    if (transactionId) {
-      await supabase
-        .from('provider_order_map')
-        .upsert({
-          project_id: projectId,
-          provider: 'hotmart',
-          provider_transaction_id: transactionId,
-          order_id: orderId,
-        }, {
-          onConflict: 'project_id,provider,provider_transaction_id',
-        });
       
-      console.log(`[OrdersShadow] Mapped transaction ${transactionId} -> order ${orderId}`);
+      // ============================================
+      // 5. FILL provider_order_map (only after financial processing)
+      // This marks the transaction as financially processed for deduplication
+      // ============================================
+      if (transactionId) {
+        await supabase
+          .from('provider_order_map')
+          .upsert({
+            project_id: projectId,
+            provider: 'hotmart',
+            provider_transaction_id: transactionId,
+            order_id: orderId,
+          }, {
+            onConflict: 'project_id,provider,provider_transaction_id',
+          });
+        
+        console.log(`[OrdersShadow] Mapped transaction ${transactionId} -> order ${orderId} (financial dedup marker)`);
+      }
+    } else {
+      console.log(`[OrdersShadow] Skipping ledger/mapping for ${hotmartEvent}: informational=${!isFinancialEvent}, already_processed=${transactionAlreadyProcessedFinancially}`);
     }
     
     return result;

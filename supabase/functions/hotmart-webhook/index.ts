@@ -381,13 +381,29 @@ async function writeOrderShadow(
         }
       } else {
         // Only update status and approved_at (no financial impact)
-        console.log(`[OrdersShadow] Updating order status only (no financial impact)`);
+        // BUT: backfill payment_method if still null (idempotent, no financial impact)
+        const backfillPaymentMethod = existingOrder.payment_method ?? paymentMethod;
+        const backfillPaymentType = existingOrder.payment_type ?? rawPaymentType;
+        const backfillInstallments = existingOrder.installments ?? installments;
+        
+        const needsPaymentBackfill = !existingOrder.payment_method && paymentMethod && paymentMethod !== 'unknown';
+        
+        if (needsPaymentBackfill) {
+          console.log(`[OrdersShadow] Backfilling payment method: ${backfillPaymentMethod} (was null)`);
+        } else {
+          console.log(`[OrdersShadow] Updating order status only (no financial impact)`);
+        }
+        
         await supabase
           .from('orders')
           .update({
             status,
             approved_at: approvedAt || existingOrder.approved_at,
             updated_at: new Date().toISOString(),
+            // PAYMENT BACKFILL (idempotent) - only fills if null, never overwrites
+            payment_method: backfillPaymentMethod,
+            payment_type: backfillPaymentType,
+            installments: backfillInstallments,
           })
           .eq('id', existingOrder.id);
       }

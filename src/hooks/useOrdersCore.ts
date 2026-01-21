@@ -819,6 +819,10 @@ export function useOrdersCore(): UseOrdersCoreResult {
         utm_adset: orderData.utm_adset || null,
         utm_placement: orderData.utm_placement || null,
         utm_creative: orderData.utm_creative || null,
+        // Payment method from ORDERS TABLE
+        payment_method: orderData.payment_method || null,
+        payment_type: orderData.payment_type || null,
+        installments: orderData.installments || null,
       };
 
       return { order, breakdown };

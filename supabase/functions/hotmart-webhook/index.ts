@@ -460,40 +460,41 @@ async function writeOrderShadow(
     result.orderId = orderId;
     
     // ============================================
-    // 2. CREATE ORDER ITEMS (for ALL financial events, not just new orders)
-    // Order items should be created when we receive the financial event for each product
+    // 2. CREATE ORDER ITEMS (STRUCTURAL - independent of financial processing)
+    // Order items represent the checkout composition, NOT financial values.
+    // They should ALWAYS be created when a valid order exists, regardless of
+    // whether financial values are being applied (avoids losing order bumps/items).
+    // Deduplication: order_id + provider_product_id ensures idempotency.
     // ============================================
-    if (shouldApplyFinancialValues) {
-      for (const item of orderItems) {
-        // Check if item already exists (avoid duplicates)
-        const { data: existingItem } = await supabase
+    for (const item of orderItems) {
+      // Check if item already exists (avoid duplicates - idempotent)
+      const { data: existingItem } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('provider_product_id', item.provider_product_id)
+        .maybeSingle();
+      
+      if (!existingItem) {
+        const { error: itemError } = await supabase
           .from('order_items')
-          .select('id')
-          .eq('order_id', orderId)
-          .eq('provider_product_id', item.provider_product_id)
-          .maybeSingle();
+          .insert({
+            order_id: orderId,
+            provider_product_id: item.provider_product_id,
+            provider_offer_id: item.provider_offer_id,
+            product_name: item.product_name,
+            offer_name: item.offer_name,
+            item_type: item.item_type,
+            base_price: item.base_price,
+            quantity: item.quantity,
+          });
         
-        if (!existingItem) {
-          const { error: itemError } = await supabase
-            .from('order_items')
-            .insert({
-              order_id: orderId,
-              provider_product_id: item.provider_product_id,
-              provider_offer_id: item.provider_offer_id,
-              product_name: item.product_name,
-              offer_name: item.offer_name,
-              item_type: item.item_type,
-              base_price: item.base_price,
-              quantity: item.quantity,
-            });
-          
-          if (!itemError) {
-            result.itemsCreated++;
-            console.log(`[OrdersShadow] Created item: ${item.product_name} (${item.item_type})`);
-          }
-        } else {
-          console.log(`[OrdersShadow] Item already exists: ${item.product_name}`);
+        if (!itemError) {
+          result.itemsCreated++;
+          console.log(`[OrdersShadow] Created item: ${item.product_name} (${item.item_type})`);
         }
+      } else {
+        console.log(`[OrdersShadow] Item already exists: ${item.product_name}`);
       }
     }
     

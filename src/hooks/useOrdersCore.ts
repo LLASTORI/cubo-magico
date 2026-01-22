@@ -582,6 +582,10 @@ export function useOrdersCore(): UseOrdersCoreResult {
         created_at: order.created_at,
         products: itemsByOrder[order.id] || [],
         economic_day: getEconomicDay(order.ordered_at),
+        // Payment fields (propagated as-is from database)
+        payment_method: order.payment_method || null,
+        payment_type: order.payment_type || null,
+        installments: order.installments || null,
         // UTM from MATERIALIZED COLUMNS (not parsed from raw_payload)
         utm_source: order.utm_source || null,
         utm_campaign: order.utm_campaign || null,

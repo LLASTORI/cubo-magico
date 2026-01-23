@@ -117,3 +117,7 @@ verify_jwt = false
 
 [functions.hotmart-credentials-export]
 verify_jwt = false
+
+[functions.backfill-item-type]
+verify_jwt = true
+max_duration = 300

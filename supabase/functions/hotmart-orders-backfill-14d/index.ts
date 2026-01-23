@@ -95,13 +95,23 @@ function getOriginalTransactionId(payload: any): string | null {
 function resolveItemType(payload: any): string {
   const purchase = payload?.data?.purchase;
   
-  if (purchase?.order_bump?.is_order_bump) {
-    return 'bump';
-  }
-  
+  // Upsell/Downsell detection (via offer name) - check first
   const offerName = purchase?.offer?.name?.toLowerCase() || '';
   if (offerName.includes('upsell')) return 'upsell';
   if (offerName.includes('downsell')) return 'downsell';
+  
+  // Order bump detection with SEMANTIC FALLBACK
+  // Hotmart may send is_order_bump=true for ALL items in a checkout.
+  // The REAL bump must have parent_purchase_transaction filled.
+  // If is_order_bump=true but parent_tx is null → it's actually the MAIN product.
+  if (purchase?.order_bump?.is_order_bump === true) {
+    if (purchase?.order_bump?.parent_purchase_transaction) {
+      return 'bump';
+    }
+    // is_order_bump=true + parent_tx=null → this is the main product
+    console.log('[resolveItemType] Semantic fallback: is_order_bump=true but no parent_tx → classifying as main');
+    return 'main';
+  }
   
   return 'main';
 }

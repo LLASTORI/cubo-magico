@@ -91,6 +91,13 @@ function getOriginalTransactionId(payload: any): string | null {
 
 /**
  * Determine item type from Hotmart payload
+ * 
+ * Rules:
+ * 1. is_order_bump=false → main
+ * 2. is_order_bump=true + parent_tx=null → main (semantic fallback)
+ * 3. is_order_bump=true + parent_tx === transaction (self-ref) → main
+ * 4. is_order_bump=true + parent_tx !== transaction → bump
+ * 5. offer name contains upsell/downsell → upsell/downsell
  */
 function resolveItemType(payload: any): string {
   const purchase = payload?.data?.purchase;
@@ -102,17 +109,28 @@ function resolveItemType(payload: any): string {
   
   // Order bump detection with SEMANTIC FALLBACK
   // Hotmart may send is_order_bump=true for ALL items in a checkout.
-  // The REAL bump must have parent_purchase_transaction filled.
-  // If is_order_bump=true but parent_tx is null → it's actually the MAIN product.
+  // The REAL bump must have parent_purchase_transaction filled AND different from its own transaction.
   if (purchase?.order_bump?.is_order_bump === true) {
-    if (purchase?.order_bump?.parent_purchase_transaction) {
+    const parentTx = purchase?.order_bump?.parent_purchase_transaction;
+    const ownTx = purchase?.transaction;
+    
+    // Check if it has a parent transaction (potential bump)
+    if (parentTx && parentTx !== '') {
+      // Self-referencing: parent equals own transaction → this is the main product
+      if (parentTx === ownTx) {
+        console.log(`[resolveItemType] Self-referencing: parent_tx === transaction (${ownTx}) → classifying as main`);
+        return 'main';
+      }
+      // Real bump: parent is different from own transaction
       return 'bump';
     }
+    
     // is_order_bump=true + parent_tx=null → this is the main product
     console.log('[resolveItemType] Semantic fallback: is_order_bump=true but no parent_tx → classifying as main');
     return 'main';
   }
   
+  // Default to main product
   return 'main';
 }
 

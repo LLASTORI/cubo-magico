@@ -25,6 +25,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Determine item type from Hotmart payload
+ * 
+ * Rules:
+ * 1. is_order_bump=false → main
+ * 2. is_order_bump=true + parent_tx=null → main (semantic fallback)
+ * 3. is_order_bump=true + parent_tx === transaction (self-ref) → main
+ * 4. is_order_bump=true + parent_tx !== transaction → bump
+ * 5. offer name contains upsell/downsell → upsell/downsell
+ */
 function resolveItemTypeFromPayload(payload: any): string {
   const purchase = payload?.data?.purchase;
   
@@ -35,7 +45,15 @@ function resolveItemTypeFromPayload(payload: any): string {
   
   // Order bump detection with SEMANTIC FALLBACK
   if (purchase?.order_bump?.is_order_bump === true) {
-    if (purchase?.order_bump?.parent_purchase_transaction) {
+    const parentTx = purchase?.order_bump?.parent_purchase_transaction;
+    const ownTx = purchase?.transaction;
+    
+    if (parentTx && parentTx !== '') {
+      // Self-referencing: parent equals own transaction → this is the main product
+      if (parentTx === ownTx) {
+        return 'main';
+      }
+      // Real bump: parent is different from own transaction
       return 'bump';
     }
     // is_order_bump=true + parent_tx=null → this is the main product

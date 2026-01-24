@@ -1,121 +1,68 @@
 project_id = "jcbzwxgayxrnxlgmmlni"
 
-[functions.hotmart-api]
-verify_jwt = true
+[functions.analytics-daily-process]
+verify_jwt = false
+
+[functions.analyze-comments]
+verify_jwt = false
+
+[functions.classify-comment]
+verify_jwt = false
+
+[functions.daily-summary-cron]
+verify_jwt = false
+
+[functions.generate-ai-reply]
+verify_jwt = false
+
+[functions.hotmart-backfill]
+verify_jwt = false
+
+[functions.hotmart-orders-backfill-14d]
+verify_jwt = false
+max_duration = 300
 
 [functions.hotmart-webhook]
 verify_jwt = false
 
-[functions.hotmart-backfill]
-verify_jwt = true
+[functions.ingest-meta-webhook]
+verify_jwt = false
+
+[functions.make-webhook]
+verify_jwt = false
+
+[functions.meta-ads-daily-pull]
+verify_jwt = false
+
+[functions.meta-ads-sync]
+verify_jwt = false
+
+[functions.migrate-hotmart-interactions-batch]
+verify_jwt = false
+
+[functions.orders-full-backfill]
+verify_jwt = false
 max_duration = 300
 
-[functions.hotmart-financial-sync]
-verify_jwt = true
-max_duration = 540
-
-[functions.hotmart-orders-backfill-14d]
-verify_jwt = true
-max_duration = 540
-
-[functions.hotmart-oauth-callback]
+[functions.process-quiz-submission]
 verify_jwt = false
 
-[functions.hotmart-oauth-state]
-verify_jwt = true
-
-[functions.hotmart-refresh-token]
-verify_jwt = true
-
-[functions.send-invite-email]
-verify_jwt = true
-
-[functions.send-welcome-email]
+[functions.rebuild-contact-profiles]
 verify_jwt = false
 
-[functions.meta-oauth-callback]
+[functions.send-whatsapp-message]
 verify_jwt = false
 
-[functions.meta-oauth-state]
-verify_jwt = true
-
-[functions.meta-api]
-verify_jwt = true
-max_duration = 300
-
-[functions.auto-sync]
+[functions.sync-meta-ads-accounts]
 verify_jwt = false
-max_duration = 540
-
-[functions.crm-webhook]
-verify_jwt = false
-
-[functions.evolution-api]
-verify_jwt = true
 
 [functions.whatsapp-webhook]
 verify_jwt = false
 
-[functions.automation-engine]
-verify_jwt = false
-max_duration = 300
-
-[functions.meta-audience-api]
-verify_jwt = true
-max_duration = 300
-
-[functions.social-comments-api]
-verify_jwt = true
-max_duration = 300
-
-[functions.social-listening-cron]
-verify_jwt = false
-max_duration = 540
-
-[functions.survey-webhook]
+[functions.backfill-item-type]
 verify_jwt = false
 
-[functions.survey-public]
-verify_jwt = false
-
-[functions.survey-ai-analysis]
-verify_jwt = true
-
-[functions.funnel-ai-analysis]
-verify_jwt = true
-max_duration = 120
-
-[functions.delete-user]
-verify_jwt = false
-
-[functions.delete-project]
-verify_jwt = true
-
-[functions.get-client-ip]
-verify_jwt = false
-
-[functions.quiz-public-start]
-verify_jwt = false
-
-[functions.quiz-public-answer]
-verify_jwt = false
-
-[functions.quiz-public-complete]
-verify_jwt = false
-
-[functions.quiz-identify]
-verify_jwt = false
-
-[functions.quiz-mark-abandoned]
-verify_jwt = false
-
-[functions.quiz-reprocess-scores]
-verify_jwt = true
-
-[functions.quiz-copilot]
-verify_jwt = false
-
-[functions.hotmart-credentials-export]
+[functions.recover-item-type]
 verify_jwt = false
 
 [functions.backfill-item-type]

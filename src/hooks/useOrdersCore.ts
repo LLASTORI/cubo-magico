@@ -258,6 +258,7 @@ const fetchFilteredOrderIds = async (
   const orderIds = baseOrders.map(o => o.id);
 
   // Now fetch order_items for these orders and filter
+  // CRITICAL FIX: Also fetch offer_mappings to resolve funnel via offer code
   const { data: itemsData, error: itemsError } = await supabase
     .from('order_items')
     .select('order_id, funnel_id, product_name, provider_offer_id')
@@ -266,6 +267,24 @@ const fetchFilteredOrderIds = async (
   if (itemsError || !itemsData) {
     console.warn('[useOrdersCore] Error fetching items for filter:', itemsError);
     return [];
+  }
+
+  // If funnel filter is active, fetch offer_mappings to resolve funnel via offer code
+  // This handles cases where order_items.funnel_id is NULL but offer_mappings links the offer to a funnel
+  let offerToFunnelMap = new Map<string, string>();
+  if (filters.funnelId && filters.funnelId.length > 0) {
+    const { data: mappings } = await supabase
+      .from('offer_mappings')
+      .select('codigo_oferta, funnel_id')
+      .in('funnel_id', filters.funnelId);
+    
+    if (mappings) {
+      for (const m of mappings) {
+        if (m.codigo_oferta && m.funnel_id) {
+          offerToFunnelMap.set(m.codigo_oferta, m.funnel_id);
+        }
+      }
+    }
   }
 
   // Group items by order_id
@@ -288,10 +307,23 @@ const fetchFilteredOrderIds = async (
     let matchesProduct = true;
     let matchesOffer = true;
 
-    // Check funnel filter
+    // Check funnel filter - now checks BOTH direct funnel_id AND via offer_mappings
     if (filters.funnelId && filters.funnelId.length > 0) {
       const funnelSet = new Set(filters.funnelId);
-      matchesFunnel = items.some(item => item.funnel_id && funnelSet.has(item.funnel_id));
+      matchesFunnel = items.some(item => {
+        // Direct match via order_items.funnel_id
+        if (item.funnel_id && funnelSet.has(item.funnel_id)) {
+          return true;
+        }
+        // Indirect match via offer_mappings (offer_code → funnel)
+        if (item.provider_offer_id) {
+          const mappedFunnel = offerToFunnelMap.get(item.provider_offer_id);
+          if (mappedFunnel && funnelSet.has(mappedFunnel)) {
+            return true;
+          }
+        }
+        return false;
+      });
     }
 
     // Check product filter

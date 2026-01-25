@@ -25,6 +25,10 @@ max_duration = 300
 [functions.hotmart-webhook]
 verify_jwt = false
 
+[functions.hotmart-ledger-full-backfill]
+verify_jwt = false
+max_duration = 300
+
 [functions.ingest-meta-webhook]
 verify_jwt = false
 
@@ -60,11 +64,8 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.backfill-item-type]
-verify_jwt = false
+verify_jwt = true
+max_duration = 300
 
 [functions.recover-item-type]
 verify_jwt = false
-
-[functions.backfill-item-type]
-verify_jwt = true
-max_duration = 300

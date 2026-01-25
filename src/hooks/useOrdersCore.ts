@@ -170,7 +170,7 @@ export interface UseOrdersCoreResult {
   error: string | null;
   pagination: OrdersCorePagination;
   totals: OrdersCoreTotals;
-  fetchData: (projectId: string, filters: OrdersCoreFilters, page?: number, pageSize?: number) => Promise<void>;
+  fetchData: (projectId: string, filters: OrdersCoreFilters, page?: number, pageSize?: number) => Promise<{ totalCount: number }>;
   fetchOrderDetail: (orderId: string) => Promise<{ order: OrderRecord | null; breakdown: LedgerBreakdown | null }>;
   countOrdersWithoutUtm: (projectId: string, filters: OrdersCoreFilters) => Promise<number>;
   nextPage: () => void;
@@ -519,7 +519,7 @@ export function useOrdersCore(): UseOrdersCoreResult {
           uniqueCustomers: 0,
           loading: false,
         });
-        return;
+        return { totalCount: 0 };
       }
 
       // ============================================
@@ -745,11 +745,13 @@ export function useOrdersCore(): UseOrdersCoreResult {
 
       fetchGlobalTotals();
 
+      return { totalCount: total };
     } catch (err: any) {
       console.error('[useOrdersCore] Error fetching data:', err);
       setError(err.message || 'Erro ao carregar dados');
       setOrders([]);
       setPagination(prev => ({ ...prev, totalCount: 0, totalPages: 0 }));
+      return { totalCount: 0 }; // Return count even on error
     } finally {
       setLoading(false);
     }

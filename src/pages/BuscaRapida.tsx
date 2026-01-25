@@ -150,7 +150,7 @@ const BuscaRapida = () => {
 
     setCurrentFilters(filters);
     const ordersFilters = convertToOrdersFilters(filters);
-    await fetchData(currentProject.id, ordersFilters, 1, pagination.pageSize);
+    const result = await fetchData(currentProject.id, ordersFilters, 1, pagination.pageSize);
     
     // Fetch count of orders without UTM if UTM filter is active
     if (hasUtmFilterActive(filters)) {
@@ -160,10 +160,12 @@ const BuscaRapida = () => {
       setOrdersWithoutUtmCount(0);
     }
     
+    // Use the count returned from fetchData to ensure consistency
+    // This prevents showing stale state from pagination.totalCount
     if (!error) {
       toast({
         title: "Dados carregados com sucesso!",
-        description: `${pagination.totalCount.toLocaleString('pt-BR')} pedidos encontrados`,
+        description: `${result.totalCount.toLocaleString('pt-BR')} pedidos encontrados`,
       });
     }
   };

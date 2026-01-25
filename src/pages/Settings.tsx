@@ -23,7 +23,7 @@ import { useHeaderPermissions } from '@/hooks/useHeaderPermissions';
 import { useTheme } from 'next-themes';
 import { MemberRoleManager } from '@/components/settings/MemberRoleManager';
 import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
-import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
+import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { TrackingSettingsManager } from '@/components/settings/TrackingSettingsManager';
 
 
@@ -658,9 +658,9 @@ const Settings = () => {
             <MediaLibraryManager />
           </TabsContent>
 
-          {/* Integrations Tab */}
+          {/* Providers Tab */}
           <TabsContent value="integrations">
-            <IntegrationsSettings />
+            <ProvidersSettings />
           </TabsContent>
 
           {/* Tracking Tab */}

@@ -571,36 +571,37 @@ async function writeOrderShadow(
             continue;
         }
         
-        // Check if event already exists (secondary deduplication)
-        const { data: existingEvent } = await supabase
-          .from('ledger_events')
-          .select('id')
-          .eq('order_id', orderId)
-          .eq('event_type', eventType)
-          .eq('actor', actor)
-          .maybeSingle();
+        // ============================================
+        // LEDGER DEDUPLICATION BY PROVIDER_EVENT_ID (TRANSACTION-LEVEL)
+        // Key: {transaction_id}_{event_type}_{actor}
+        // This allows multiple transactions (main + bumps) to have their own ledger entries
+        // ============================================
+        const providerEventId = `${transactionId}_${eventType}_${actor}`;
         
-        if (!existingEvent) {
-          const { error: eventError } = await supabase
-            .from('ledger_events')
-            .insert({
-              order_id: orderId,
-              project_id: projectId,
-              provider: 'hotmart',
-              event_type: eventType,
-              actor,
-              actor_name: actorName,
-              amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
-              currency,
-              provider_event_id: `${transactionId}_${eventType}_${actor}`,
-              occurred_at: occurredAt,
-              raw_payload: comm,
-            });
-          
-          if (!eventError) {
-            result.eventsCreated++;
-            console.log(`[OrdersShadow] Created ledger event: ${eventType} (${actor}): ${value}`);
-          }
+        const { error: eventError } = await supabase
+          .from('ledger_events')
+          .upsert({
+            order_id: orderId,
+            project_id: projectId,
+            provider: 'hotmart',
+            event_type: eventType,
+            actor,
+            actor_name: actorName,
+            amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
+            currency,
+            provider_event_id: providerEventId,
+            occurred_at: occurredAt,
+            raw_payload: comm,
+          }, {
+            onConflict: 'provider_event_id',
+            ignoreDuplicates: true,
+          });
+        
+        if (!eventError) {
+          result.eventsCreated++;
+          console.log(`[OrdersShadow] Upserted ledger event: ${eventType} (${actor}): ${value} [${providerEventId}]`);
+        } else {
+          console.log(`[OrdersShadow] Ledger event exists or error: ${providerEventId}`);
         }
       }
       
@@ -616,34 +617,30 @@ async function writeOrderShadow(
         const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenue;
         
         if (calculatedCoproducerCost > 0) {
-          const { data: existingCoproducer } = await supabase
-            .from('ledger_events')
-            .select('id')
-            .eq('order_id', orderId)
-            .eq('event_type', 'coproducer')
-            .maybeSingle();
+          const coproducerEventId = `${transactionId}_coproducer_auto`;
           
-          if (!existingCoproducer) {
-            const { error: coproducerError } = await supabase
-              .from('ledger_events')
-              .insert({
-                order_id: orderId,
-                project_id: projectId,
-                provider: 'hotmart',
-                event_type: 'coproducer',
-                actor: 'coproducer',
-                actor_name: null,
-                amount: -calculatedCoproducerCost,
-                currency,
-                provider_event_id: `${transactionId}_coproducer_auto`,
-                occurred_at: occurredAt,
-                raw_payload: { source: 'auto_calculated', has_co_production: true },
-              });
-            
-            if (!coproducerError) {
-              result.eventsCreated++;
-              console.log(`[OrdersShadow] Created auto-calculated coproducer: ${calculatedCoproducerCost}`);
-            }
+          const { error: coproducerError } = await supabase
+            .from('ledger_events')
+            .upsert({
+              order_id: orderId,
+              project_id: projectId,
+              provider: 'hotmart',
+              event_type: 'coproducer',
+              actor: 'coproducer',
+              actor_name: null,
+              amount: -calculatedCoproducerCost,
+              currency,
+              provider_event_id: coproducerEventId,
+              occurred_at: occurredAt,
+              raw_payload: { source: 'auto_calculated', has_co_production: true },
+            }, {
+              onConflict: 'provider_event_id',
+              ignoreDuplicates: true,
+            });
+          
+          if (!coproducerError) {
+            result.eventsCreated++;
+            console.log(`[OrdersShadow] Upserted auto-calculated coproducer: ${calculatedCoproducerCost} [${coproducerEventId}]`);
           }
         }
       }

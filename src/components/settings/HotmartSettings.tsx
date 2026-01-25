@@ -31,8 +31,7 @@ import {
   DollarSign,
   TrendingUp
 } from 'lucide-react';
-import { HotmartCSVImport } from './HotmartCSVImport';
-import { HotmartLedgerCSVImport } from './HotmartLedgerCSVImport';
+// CSV imports removed - now handled in Sales domain (BuscaRapida)
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -1022,86 +1021,13 @@ export const HotmartSettings = () => {
                       </div>
                     </div>
                     
-                    {financialSyncMessage && (
-                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                        <p className="text-sm text-green-700 dark:text-green-400">
-                          {financialSyncMessage}
-                        </p>
-                      </div>
-                    )}
-
-                    <Button
-                      onClick={async () => {
-                        if (!projectId) return;
-                        setFinancialSyncing(true);
-                        setFinancialSyncMessage('Iniciando sincronização financeira...');
-                        
-                        try {
-                          const { data, error } = await supabase.functions.invoke('hotmart-financial-sync', {
-                            body: { projectId, monthsBack: 24 },
-                          });
-
-                          if (error) throw error;
-
-                          const result = data as {
-                            eventsCreated: number;
-                            totalSales: number;
-                            salesWithCommissions: number;
-                            salesWithoutCommissions: number;
-                          };
-
-                          setFinancialSyncMessage(
-                            `✓ ${result.eventsCreated.toLocaleString()} eventos criados de ${result.salesWithCommissions.toLocaleString()} vendas com comissões`
-                          );
-
-                          toast({
-                            title: 'Sincronização financeira concluída!',
-                            description: `${result.eventsCreated.toLocaleString()} eventos de comissão processados.`,
-                          });
-
-                        } catch (error: any) {
-                          console.error('Financial sync error:', error);
-                          setFinancialSyncMessage(`Erro: ${error.message}`);
-                          toast({
-                            title: 'Erro na sincronização financeira',
-                            description: error.message || 'Erro ao sincronizar dados financeiros',
-                            variant: 'destructive',
-                          });
-                        } finally {
-                          setTimeout(() => {
-                            setFinancialSyncing(false);
-                          }, 3000);
-                        }
-                      }}
-                      disabled={financialSyncing || syncing || backfilling}
-                      className="w-full bg-green-600 hover:bg-green-700"
-                    >
-                      {financialSyncing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Sincronizando Ledger...
-                        </>
-                      ) : (
-                        <>
-                          <DollarSign className="h-4 w-4 mr-2" />
-                          Sincronizar Dados Financeiros
-                        </>
-                      )}
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Fonte única da verdade:</strong> Após sincronizar, o Cubo usará apenas estes dados para cálculos financeiros.
-                    </p>
+                    {/* Financial sync button removed - function deprecated */}
+                    {/* Webhooks are now the only source of financial data */}
                   </div>
                 </div>
 
-                {/* CSV Import Section - Contact Update */}
-                <Separator />
-                <HotmartCSVImport />
-                
-                {/* CSV Import Section - Official Ledger */}
-                <Separator />
-                <HotmartLedgerCSVImport />
+                {/* CSV Import moved to Sales domain (BuscaRapida) */}
+                {/* Following architectural contract: CSV belongs to functional domains, not Providers */}
               </>
             )}
 

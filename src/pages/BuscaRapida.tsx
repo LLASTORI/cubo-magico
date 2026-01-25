@@ -12,6 +12,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useOrdersCore, OrdersCoreFilters } from "@/hooks/useOrdersCore";
 import { Badge } from "@/components/ui/badge";
 import { useTenantNavigation } from "@/navigation";
+import { SalesHistoryCSVImport } from "@/components/sales/SalesHistoryCSVImport";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -384,6 +385,13 @@ const BuscaRapida = () => {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Sales History CSV Import - Domain-specific, collapsed by default */}
+        {currentProject && (
+          <div className="mt-8">
+            <SalesHistoryCSVImport />
           </div>
         )}
       </main>

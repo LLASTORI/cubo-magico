@@ -2,13 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ============================================
-// HOTMART LEDGER FULL BACKFILL
+// HOTMART LEDGER FULL BACKFILL (OPTIMIZED)
 // ============================================
 // This function reads raw_payload from provider_event_log
 // and creates ledger_events for EVERY transaction_id.
 // 
-// Key principle: Each Hotmart transaction generates its own
-// commissions[], so we create ledger entries per transaction.
+// OPTIMIZED: Pre-loads orders and mappings in batch to avoid
+// N+1 query problems and timeouts.
 // ============================================
 
 const corsHeaders = {
@@ -77,25 +77,6 @@ function getOriginalTransactionId(payload: any): string | null {
   return purchase?.transaction || purchase?.code || null;
 }
 
-/**
- * Extract financial breakdown from commissions array
- */
-function extractCommissions(commissions: any[]): Array<{
-  source: string;
-  value: number;
-  actorName: string | null;
-}> {
-  if (!commissions || !Array.isArray(commissions)) return [];
-  
-  return commissions
-    .filter(comm => comm.value && comm.value !== 0)
-    .map(comm => ({
-      source: (comm.source || '').toUpperCase(),
-      value: comm.value,
-      actorName: comm.name || null,
-    }));
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -107,7 +88,8 @@ serve(async (req) => {
     // Get projectId from header or body
     const projectCode = req.headers.get('X-Project-Code');
     let projectId: string | null = null;
-    let daysBack = 90; // Default to 90 days
+    let daysBack = 7; // Default to 7 days (safer)
+    let batchSize = 200; // Process max 200 events per run
 
     if (projectCode) {
       const { data: project } = await supabase
@@ -121,7 +103,8 @@ serve(async (req) => {
     if (!projectId) {
       const body = await req.json().catch(() => ({}));
       projectId = body.projectId || null;
-      daysBack = body.daysBack || 90;
+      daysBack = body.daysBack || 7;
+      batchSize = body.batchSize || 200;
     }
 
     if (!projectId) {
@@ -131,41 +114,97 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[LedgerBackfill] Starting for project ${projectId}, ${daysBack} days back`);
+    console.log(`[LedgerBackfill] Starting for project ${projectId}, ${daysBack} days back, batch ${batchSize}`);
 
     // Get events from specified period
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysBack);
 
+    // Step 1: Fetch events (limited to batch size)
     const { data: events, error: fetchError } = await supabase
       .from('provider_event_log')
       .select('id, provider_event_id, raw_payload, received_at')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .gte('received_at', startDate.toISOString())
-      .order('received_at', { ascending: true });
+      .order('received_at', { ascending: true })
+      .limit(batchSize);
 
     if (fetchError) throw fetchError;
 
     console.log(`[LedgerBackfill] Found ${events?.length || 0} events to process`);
 
+    // Filter only financially effective events first
+    const financialEvents = (events || []).filter(event => {
+      const hotmartEvent = event.raw_payload?.event || '';
+      return isFinanciallyEffectiveEvent(hotmartEvent);
+    });
+
+    console.log(`[LedgerBackfill] ${financialEvents.length} are financially effective`);
+
+    if (financialEvents.length === 0) {
+      return new Response(JSON.stringify({
+        success: true,
+        projectId,
+        daysBack,
+        totalEvents: events?.length || 0,
+        financialEvents: 0,
+        eventsProcessed: 0,
+        ledgerCreated: 0,
+        ledgerSkipped: 0,
+        errors: 0,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Step 2: Pre-load ALL orders for this project (batch query)
+    const { data: allOrders } = await supabase
+      .from('orders')
+      .select('id, provider_order_id')
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart');
+
+    const ordersByProviderOrderId = new Map<string, string>();
+    for (const order of allOrders || []) {
+      if (order.provider_order_id) {
+        ordersByProviderOrderId.set(order.provider_order_id, order.id);
+      }
+    }
+
+    console.log(`[LedgerBackfill] Pre-loaded ${ordersByProviderOrderId.size} orders`);
+
+    // Step 3: Pre-load ALL provider_order_map for this project (batch query)
+    const { data: allMappings } = await supabase
+      .from('provider_order_map')
+      .select('order_id, provider_transaction_id')
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart');
+
+    const ordersByTransactionId = new Map<string, string>();
+    for (const mapping of allMappings || []) {
+      if (mapping.provider_transaction_id) {
+        ordersByTransactionId.set(mapping.provider_transaction_id, mapping.order_id);
+      }
+    }
+
+    console.log(`[LedgerBackfill] Pre-loaded ${ordersByTransactionId.size} transaction mappings`);
+
+    // Step 4: Process events using in-memory lookups
     let eventsProcessed = 0;
     let ledgerCreated = 0;
     let ledgerSkipped = 0;
     let errors = 0;
 
-    for (const event of events || []) {
+    // Collect all ledger events to insert in batch
+    const ledgerEventsToInsert: any[] = [];
+
+    for (const event of financialEvents) {
       try {
         const payload = event.raw_payload;
         if (!payload) continue;
 
         const hotmartEvent = payload.event || '';
-        
-        // Only process financially effective events
-        if (!isFinanciallyEffectiveEvent(hotmartEvent)) {
-          continue;
-        }
-
         const data = payload.data;
         const purchase = data?.purchase;
         const commissions = data?.commissions || [];
@@ -175,56 +214,29 @@ serve(async (req) => {
         
         if (!providerOrderId || !transactionId) continue;
 
-        // Strategy 1: Find order by provider_order_id (for main transactions)
+        // Find order using pre-loaded maps (no queries!)
         let orderId: string | null = null;
         
-        const { data: order } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('project_id', projectId)
-          .eq('provider', 'hotmart')
-          .eq('provider_order_id', providerOrderId)
-          .maybeSingle();
+        // Strategy 1: By provider_order_id
+        orderId = ordersByProviderOrderId.get(providerOrderId) || null;
 
-        if (order) {
-          orderId = order.id;
-        } else {
-          // Strategy 2: Check provider_order_map for this transaction_id
-          const { data: mapping } = await supabase
-            .from('provider_order_map')
-            .select('order_id')
-            .eq('project_id', projectId)
-            .eq('provider', 'hotmart')
-            .eq('provider_transaction_id', transactionId)
-            .maybeSingle();
-          
-          if (mapping) {
-            orderId = mapping.order_id;
-          }
+        // Strategy 2: By transaction_id mapping
+        if (!orderId) {
+          orderId = ordersByTransactionId.get(transactionId) || null;
         }
 
+        // Strategy 3: For C1/C2 suffixed transactions, try parent
         if (!orderId) {
-          // Strategy 3: For C1/C2 suffixed transactions, try parent
           const baseTransactionId = transactionId.replace(/C\d+$/, '');
           if (baseTransactionId !== transactionId) {
-            const { data: parentOrder } = await supabase
-              .from('orders')
-              .select('id')
-              .eq('project_id', projectId)
-              .eq('provider', 'hotmart')
-              .eq('provider_order_id', baseTransactionId)
-              .maybeSingle();
-            
-            if (parentOrder) {
-              orderId = parentOrder.id;
-            }
+            orderId = ordersByProviderOrderId.get(baseTransactionId) || null;
           }
         }
 
         if (!orderId) {
-          // Final fallback: search in order_items by transaction reference
           continue; // Skip if no order found
         }
+
         const currency = purchase?.price?.currency_value || 'BRL';
         const occurredAt = purchase?.order_date 
           ? new Date(purchase.order_date).toISOString()
@@ -272,31 +284,19 @@ serve(async (req) => {
           
           const providerEventId = `${transactionId}_${eventType}_${actor}`;
           
-          // UPSERT with ON CONFLICT DO NOTHING (idempotent)
-          const { error: eventError } = await supabase
-            .from('ledger_events')
-            .upsert({
-              order_id: orderId,
-              project_id: projectId,
-              provider: 'hotmart',
-              event_type: eventType,
-              actor,
-              actor_name: actorName,
-              amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
-              currency,
-              provider_event_id: providerEventId,
-              occurred_at: occurredAt,
-              raw_payload: comm,
-            }, {
-              onConflict: 'provider_event_id',
-              ignoreDuplicates: true,
-            });
-          
-          if (!eventError) {
-            ledgerCreated++;
-          } else {
-            ledgerSkipped++;
-          }
+          ledgerEventsToInsert.push({
+            order_id: orderId,
+            project_id: projectId,
+            provider: 'hotmart',
+            event_type: eventType,
+            actor,
+            actor_name: actorName,
+            amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
+            currency,
+            provider_event_id: providerEventId,
+            occurred_at: occurredAt,
+            raw_payload: comm,
+          });
         }
 
         // Auto-calculate coproducer if needed
@@ -322,26 +322,19 @@ serve(async (req) => {
           if (calculatedCoproducerCost > 0) {
             const coproducerEventId = `${transactionId}_coproducer_auto`;
             
-            await supabase
-              .from('ledger_events')
-              .upsert({
-                order_id: orderId,
-                project_id: projectId,
-                provider: 'hotmart',
-                event_type: 'coproducer',
-                actor: 'coproducer',
-                actor_name: null,
-                amount: -calculatedCoproducerCost,
-                currency,
-                provider_event_id: coproducerEventId,
-                occurred_at: occurredAt,
-                raw_payload: { source: 'auto_calculated', has_co_production: true },
-              }, {
-                onConflict: 'provider_event_id',
-                ignoreDuplicates: true,
-              });
-            
-            ledgerCreated++;
+            ledgerEventsToInsert.push({
+              order_id: orderId,
+              project_id: projectId,
+              provider: 'hotmart',
+              event_type: 'coproducer',
+              actor: 'coproducer',
+              actor_name: null,
+              amount: -calculatedCoproducerCost,
+              currency,
+              provider_event_id: coproducerEventId,
+              occurred_at: occurredAt,
+              raw_payload: { source: 'auto_calculated', has_co_production: true },
+            });
           }
         }
 
@@ -353,11 +346,39 @@ serve(async (req) => {
       }
     }
 
+    // Step 5: Batch insert all ledger events (with upsert to skip duplicates)
+    console.log(`[LedgerBackfill] Batch inserting ${ledgerEventsToInsert.length} ledger events`);
+
+    if (ledgerEventsToInsert.length > 0) {
+      // Process in chunks of 100 to avoid payload size limits
+      const chunkSize = 100;
+      for (let i = 0; i < ledgerEventsToInsert.length; i += chunkSize) {
+        const chunk = ledgerEventsToInsert.slice(i, i + chunkSize);
+        
+        const { error: insertError, data: insertedData } = await supabase
+          .from('ledger_events')
+          .upsert(chunk, {
+            onConflict: 'provider_event_id',
+            ignoreDuplicates: true,
+          })
+          .select('id');
+
+        if (insertError) {
+          console.error(`[LedgerBackfill] Batch insert error:`, insertError);
+          errors += chunk.length;
+        } else {
+          ledgerCreated += insertedData?.length || 0;
+          ledgerSkipped += chunk.length - (insertedData?.length || 0);
+        }
+      }
+    }
+
     const result = {
       success: true,
       projectId,
       daysBack,
       totalEvents: events?.length || 0,
+      financialEvents: financialEvents.length,
       eventsProcessed,
       ledgerCreated,
       ledgerSkipped,

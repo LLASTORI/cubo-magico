@@ -1,17 +1,9 @@
 /**
- * PROMPT 30: Mapa de Ascensão - Visualização estratégica premium
+ * PROMPT 3: Mapa de Ascensão - Orders Core Consolidado
  * 
- * Pergunta que responde:
- * "Qual caminho os clientes realmente percorrem e onde estão as oportunidades?"
- * 
- * Layout:
- * 1. Painel de Filtros (período, passos, min. clientes)
- * 2. Gráfico Sankey (altura fixa, scroll horizontal)
- * 3. Insights Automáticos (caminho campeão, gargalo, produto de entrada)
- * 
- * NÃO contém:
- * ❌ Métricas globais ou resumo geral
- * ❌ Cards executivos
+ * Fonte: orders + order_items (via useFlowsOrdersCore)
+ * ❌ crm_transactions removido
+ * ✅ CSV e Webhook indistinguíveis
  */
 
 import { useState, useMemo } from 'react';
@@ -21,17 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProject } from '@/contexts/ProjectContext';
-import { usePaginatedQuery } from '@/hooks/usePaginatedQuery';
+import { useFlowsOrdersCore } from '@/hooks/useFlowsOrdersCore';
 import { TrendingUp, AlertCircle, Lightbulb, Target, ArrowRight, Trophy, AlertTriangle, Star } from 'lucide-react';
 import { format, subDays, subMonths, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-interface TransactionData {
-  contact_id: string;
-  product_name: string | null;
-  transaction_date: string | null;
-  total_price: number | null;
-}
 
 interface FlowNode {
   id: string;
@@ -107,28 +92,21 @@ export function CustomerFlowsAnalysis() {
     };
   }, [period]);
 
-  // Buscar transações (cache de 5 min via usePaginatedQuery)
-  const { data: transactions = [], isLoading } = usePaginatedQuery<TransactionData>(
-    ['crm-flows-transactions', projectId, period],
-    {
-      table: 'crm_transactions',
-      select: 'contact_id, product_name, transaction_date, total_price',
-      filters: { project_id: projectId },
-      inFilters: { status: ['APPROVED', 'COMPLETE'] },
-      orderBy: { column: 'transaction_date', ascending: true },
-      enabled: !!projectId,
-    }
-  );
+  // Buscar transações do Orders Core
+  const { items: ordersItems, isLoading } = useFlowsOrdersCore(dateRange);
+  
+  // Transformar para formato compatível
+  const transactions = useMemo(() => {
+    return ordersItems.map(item => ({
+      contact_id: item.buyer_email,
+      product_name: item.product_name,
+      transaction_date: item.ordered_at,
+      total_price: item.customer_paid,
+    }));
+  }, [ordersItems]);
 
-  // Filtrar por período
-  const filteredTransactions = useMemo(() => {
-    if (!dateRange) return transactions;
-    return transactions.filter(tx => {
-      if (!tx.transaction_date) return false;
-      const txDate = new Date(tx.transaction_date);
-      return txDate >= dateRange.start && txDate <= dateRange.end;
-    });
-  }, [transactions, dateRange]);
+  // Transações já filtradas pelo hook
+  const filteredTransactions = transactions;
 
   // Agrupar transações por contato para formar jornadas
   const journeys = useMemo(() => {

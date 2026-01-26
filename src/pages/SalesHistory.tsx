@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * VENDAS → HISTÓRICO (PLACEHOLDER)
+ * VENDAS → HISTÓRICO
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * PROPÓSITO:
@@ -14,7 +14,7 @@
  * - CSV NUNCA atualiza transações já existentes
  * - Hierarquia: Webhook (1º) > API (2º) > CSV (3º)
  * 
- * STATUS: CONGELADO - Apenas placeholder visual
+ * STATUS: ATIVO - Descongelado após auditoria completa
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -22,10 +22,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { History, AlertTriangle, Webhook, FileSpreadsheet, Lock } from "lucide-react";
+import { History, AlertTriangle, Webhook, FileSpreadsheet } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useTenantNavigation } from "@/navigation";
 import { Button } from "@/components/ui/button";
+import { SalesHistoryCSVImport } from "@/components/sales/SalesHistoryCSVImport";
 
 const SalesHistory = () => {
   const { currentProject } = useProject();
@@ -116,19 +117,8 @@ const SalesHistory = () => {
               </Card>
             </div>
 
-            {/* Frozen State */}
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Lock className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  Funcionalidade Temporariamente Desativada
-                </h3>
-                <p className="text-sm text-muted-foreground text-center max-w-md">
-                  A importação de CSV está em processo de validação de segurança.
-                  Será reativada em breve após confirmação dos contratos de integridade.
-                </p>
-              </CardContent>
-            </Card>
+            {/* CSV Import Component - DESCONGELADO */}
+            <SalesHistoryCSVImport defaultOpen={false} />
           </div>
         )}
       </main>

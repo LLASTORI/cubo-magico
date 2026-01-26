@@ -19,7 +19,8 @@ import {
   Kanban,
   Lightbulb,
   ClipboardList,
-  FileQuestion
+  FileQuestion,
+  History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -89,7 +90,7 @@ export const AppHeader = ({
   const currentPath = location.pathname;
   
   // Check if current page is in various dropdowns (accounting for new URL structure)
-  const isInBuscaRapida = currentPath.includes('/busca-rapida') || currentPath.includes('/meta-ads');
+  const isInBuscaRapida = currentPath.includes('/busca-rapida') || currentPath.includes('/meta-ads') || currentPath.includes('/vendas/historico');
   const isInAnalytics = currentPath.includes('/funnel-analysis') || currentPath.includes('/analise-mensal') || currentPath.includes('/launch-dashboard') || currentPath.includes('/undefined-offers');
   const isInCRM = currentPath.includes('/crm') || currentPath.includes('/automations') || currentPath.includes('/whatsapp');
   const isInInsights = currentPath.includes('/insights') || currentPath.includes('/quizzes');
@@ -160,12 +161,12 @@ export const AppHeader = ({
                     </Button>
                   )}
 
-                {/* Dropdown Busca Rápida */}
+                {/* Dropdown Vendas */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant={isInBuscaRapida ? "default" : "outline"} className="gap-2">
-                      <Search className="w-4 h-4" />
-                      Busca Rápida
+                      <ShoppingCart className="w-4 h-4" />
+                      Vendas
                       <ChevronDown className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -174,8 +175,15 @@ export const AppHeader = ({
                       onClick={() => navigateToProject('/busca-rapida')} 
                       className={`gap-2 cursor-pointer ${currentPath.includes('/busca-rapida') ? 'bg-muted' : ''}`}
                     >
-                      <ShoppingCart className="w-4 h-4" />
-                      Hotmart
+                      <Search className="w-4 h-4" />
+                      Pedidos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => navigateToProject('/vendas/historico')} 
+                      className={`gap-2 cursor-pointer ${currentPath.includes('/vendas/historico') ? 'bg-muted' : ''}`}
+                    >
+                      <History className="w-4 h-4" />
+                      Histórico
                     </DropdownMenuItem>
                     <TooltipProvider>
                       <Tooltip>

@@ -12,7 +12,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useOrdersCore, OrdersCoreFilters } from "@/hooks/useOrdersCore";
 import { Badge } from "@/components/ui/badge";
 import { useTenantNavigation } from "@/navigation";
-import { SalesHistoryCSVImport } from "@/components/sales/SalesHistoryCSVImport";
+// SalesHistoryCSVImport moved to SalesHistory page - frozen during validation
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════

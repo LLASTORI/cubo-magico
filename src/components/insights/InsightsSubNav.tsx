@@ -1,6 +1,7 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { ClipboardList, MessageCircle, FileQuestion } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTenantNavigation } from '@/navigation';
 
 interface NavItem {
   label: string;
@@ -35,15 +36,17 @@ interface InsightsSubNavProps {
 }
 
 export function InsightsSubNav({ rightContent }: InsightsSubNavProps) {
-  const navigate = useNavigate();
+  const { navigateTo, getProjectUrl } = useTenantNavigation();
   const location = useLocation();
   const currentPath = location.pathname;
 
   const isActive = (item: NavItem) => {
+    // Check against project-scoped paths
+    const projectPath = getProjectUrl(item.path);
     if (item.matchPaths) {
-      return item.matchPaths.some(p => currentPath.startsWith(p));
+      return item.matchPaths.some(p => currentPath.includes(p.replace('/', '')));
     }
-    return currentPath === item.path;
+    return currentPath.includes(item.path.replace('/', ''));
   };
 
   return (
@@ -58,7 +61,7 @@ export function InsightsSubNav({ rightContent }: InsightsSubNavProps) {
               return (
                 <button
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => navigateTo(item.path)}
                   className={cn(
                     "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
                     active 

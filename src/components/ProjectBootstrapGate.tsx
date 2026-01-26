@@ -31,7 +31,8 @@ const AUTH_ONLY_ROUTES = [
 ];
 
 // Rotas que disparam redirect para projeto
-const BOOTSTRAP_ROUTES = ['/', '/projects', '/dashboard'];
+// NOTA: /projects NÃO está aqui - é uma rota global de gestão, não de bootstrap
+const BOOTSTRAP_ROUTES = ['/', '/dashboard'];
 
 /**
  * ProjectBootstrapGate - Garante que usuário autenticado sempre tenha um projeto na URL.

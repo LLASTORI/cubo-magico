@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, User, Bell, Shield, Settings as SettingsIcon, Camera, Loader2, Link2, Facebook, CheckCircle, AlertCircle, ExternalLink, Crown, Sun, Moon, Monitor, Users, HardDrive, Activity } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { useProjectNavigation } from '@/hooks/useProjectNavigation';
+import { useTenantNavigation } from '@/navigation';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CubeLoader } from '@/components/CubeLoader';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -36,7 +36,7 @@ const Settings = () => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const { navigate } = useProjectNavigation();
+  const { navigateTo, navigateAbsolute } = useTenantNavigation();
   const { isSuperAdmin } = useUserPermissions();
   const { permissions } = useHeaderPermissions();
   const { theme, setTheme } = useTheme();
@@ -380,7 +380,14 @@ const Settings = () => {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => {
+              // Safe-back pattern: preserva contexto do projeto
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                navigateTo('/dashboard');
+              }
+            }} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="h-4 w-4" />
               Voltar
             </button>
@@ -446,7 +453,7 @@ const Settings = () => {
                 className="flex items-center gap-2"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate('/admin');
+                  navigateTo('/admin');
                 }}
               >
                 <Crown className="h-4 w-4" />

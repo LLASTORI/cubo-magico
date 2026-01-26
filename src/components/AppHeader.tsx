@@ -54,15 +54,16 @@ export const AppHeader = ({
   const { isModuleEnabled } = useProjectModules();
   const { permissions } = useHeaderPermissions();
   
-  // Helper for project-scoped navigation
+  // Helper for project-scoped navigation - NEVER falls back to legacy routes
   const navigateToProject = (path: string) => {
     if (projectCode) {
       navigate(`/app/${projectCode}${path}`);
     } else if (currentProject?.public_code) {
       navigate(`/app/${currentProject.public_code}${path}`);
     } else {
-      // Fallback to legacy route (will be caught and redirected)
-      navigate(path);
+      // CRITICAL: Redirect to project selector instead of legacy route
+      console.warn('[AppHeader] No project context, redirecting to /projects');
+      navigate('/projects');
     }
   };
   

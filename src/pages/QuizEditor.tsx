@@ -717,7 +717,7 @@ export default function QuizEditor() {
               <Button variant="outline" onClick={() => refetch()}>
                 Tentar novamente
               </Button>
-              <Button onClick={() => navigate('/quizzes')}>
+              <Button onClick={() => navigateTo('/quizzes')}>
                 Voltar para Quizzes
               </Button>
             </div>
@@ -736,7 +736,7 @@ export default function QuizEditor() {
       <div className="border-b bg-card/50">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/quizzes')}>
+            <Button variant="ghost" size="sm" onClick={() => navigateTo('/quizzes')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>

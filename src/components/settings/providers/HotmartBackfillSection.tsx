@@ -44,6 +44,10 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
 
   const isAPIConfigured = hotmartCredentials?.is_validated;
 
+  // State for ledger backfill
+  const [ledgerBackfilling, setLedgerBackfilling] = useState(false);
+  const [ledgerMessage, setLedgerMessage] = useState('');
+
   const handleBackfillHistory = async () => {
     setBackfilling(true);
     setBackfillMessage('Iniciando reconstrução do histórico...');
@@ -86,6 +90,57 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
       setTimeout(() => {
         setBackfilling(false);
         setBackfillMessage('');
+      }, 5000);
+    }
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LEDGER BACKFILL - Gera ledger_events para pedidos que não têm
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const handleLedgerBackfill = async () => {
+    setLedgerBackfilling(true);
+    setLedgerMessage('Reconstruindo ledger financeiro...');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('hotmart-ledger-full-backfill', {
+        body: {
+          projectId,
+          daysBack: 7,
+        },
+      });
+
+      if (error) throw error;
+
+      const result = data as {
+        success: boolean;
+        totalEvents: number;
+        eventsProcessed: number;
+        ledgerCreated: number;
+        ledgerSkipped: number;
+        errors: number;
+      };
+
+      setLedgerMessage(
+        `✓ ${result.ledgerCreated.toLocaleString()} eventos de ledger criados, ${result.ledgerSkipped.toLocaleString()} já existentes`
+      );
+
+      toast({
+        title: 'Ledger reconstruído!',
+        description: `${result.ledgerCreated.toLocaleString()} eventos financeiros criados.`,
+      });
+
+    } catch (error: any) {
+      console.error('Ledger backfill error:', error);
+      setLedgerMessage(error.message || 'Erro ao reconstruir ledger');
+      toast({
+        title: 'Erro na reconstrução do ledger',
+        description: error.message || 'Erro ao reconstruir ledger financeiro',
+        variant: 'destructive',
+      });
+    } finally {
+      setTimeout(() => {
+        setLedgerBackfilling(false);
+        setLedgerMessage('');
       }, 5000);
     }
   };
@@ -158,6 +213,45 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
             <strong>Idempotente:</strong> Pode ser executado várias vezes sem duplicar dados.
             <br />
             <strong>Nota:</strong> Eventos de backfill têm net_amount = 0 (não determinável via API).
+          </p>
+        </div>
+
+        {/* LEDGER BACKFILL - Gera ledger_events faltantes */}
+        <div className="p-4 rounded-lg border bg-card space-y-3">
+          <p className="text-sm text-muted-foreground">
+            <strong>Ledger Backfill (7 dias)</strong>: Reconstrói os eventos financeiros (taxas, coprodução, afiliados) 
+            para pedidos aprovados que estão sem decomposição no modal de detalhes.
+          </p>
+          
+          {ledgerMessage && (
+            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <p className="text-sm text-green-700 dark:text-green-400">
+                {ledgerMessage}
+              </p>
+            </div>
+          )}
+
+          <Button
+            onClick={handleLedgerBackfill}
+            disabled={ledgerBackfilling}
+            variant="outline"
+            className="w-full"
+          >
+            {ledgerBackfilling ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Reconstruindo Ledger...
+              </>
+            ) : (
+              <>
+                <History className="h-4 w-4 mr-2" />
+                Executar Ledger Backfill (7 dias)
+              </>
+            )}
+          </Button>
+
+          <p className="text-xs text-muted-foreground">
+            <strong>Idempotente:</strong> Não duplica eventos existentes.
           </p>
         </div>
       </CollapsibleContent>

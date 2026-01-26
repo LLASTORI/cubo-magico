@@ -1,51 +1,40 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * VENDAS → HISTÓRICO
+ * VENDAS → IMPORTAR HISTÓRICO
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * PROPÓSITO:
- * - Importação histórica de vendas (CSV unificado)
- * - Visualização de pedidos históricos
- * - Sistema inteligente: o usuário não precisa decidir nada
+ * - Importação única de histórico via CSV Hotmart
+ * - CSV é tratado como replay de webhook (backfill canônico)
+ * - Após importação, pedidos aparecem em Vendas → Pedidos
  * 
  * CONTRATO ARQUITETURAL:
- * - CSV NUNCA cria ledger_events
+ * - CSV escreve em orders, order_items, ledger_events
  * - CSV NUNCA sobrescreve dados de webhook
- * - CSV NUNCA atualiza transações já existentes
  * - Hierarquia: Webhook (1º) > API (2º) > CSV (3º)
  * 
  * STATUS: ATIVO
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import { useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  History, 
+  Upload, 
   Info,
-  ShoppingBag,
-  Upload
+  CheckCircle2,
+  ArrowRight
 } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useTenantNavigation } from "@/navigation";
 import { Button } from "@/components/ui/button";
 import { HotmartUnifiedCSVImport } from "@/components/sales/HotmartUnifiedCSVImport";
-import { SalesHistoryOrdersTable } from "@/components/sales/SalesHistoryOrdersTable";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 const SalesHistory = () => {
   const { currentProject } = useProject();
   const { navigateTo } = useTenantNavigation();
-  const [activeTab, setActiveTab] = useState<'orders' | 'import'>('orders');
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,30 +44,17 @@ const SalesHistory = () => {
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 rounded-lg bg-muted">
-            <History className="h-6 w-6 text-muted-foreground" />
+            <Upload className="h-6 w-6 text-muted-foreground" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              Histórico de Vendas
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
-                CSV
+              Importar Histórico
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                Uso Único
               </Badge>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-5 w-5 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-sm">
-                    <p className="text-sm">
-                      Dados históricos importados via CSV. Não interferem em vendas atuais, 
-                      métricas ou financeiro em tempo real.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </h1>
             <p className="text-sm text-muted-foreground">
-              Visualização e importação de dados históricos
+              Importe vendas anteriores ao webhook para unificar seu histórico
             </p>
           </div>
         </div>
@@ -86,43 +62,74 @@ const SalesHistory = () => {
         {!currentProject ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <History className="h-12 w-12 text-muted-foreground mb-4" />
+              <Upload className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">Selecione um projeto para continuar</p>
               <Button onClick={() => navigateTo('/projects')}>Gerenciar Projetos</Button>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Primary Info */}
-            <Alert className="border-blue-500/50 bg-blue-500/10">
-              <Info className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-blue-700 dark:text-blue-400">
-                <strong>ℹ️ Área de Histórico</strong> — Importe o CSV da Hotmart e o sistema processa automaticamente: 
-                histórico de vendas, enriquecimento de CRM e auditoria financeira.
-              </AlertDescription>
-            </Alert>
+            {/* Info Card */}
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Info className="h-5 w-5 text-blue-600" />
+                  Como funciona a importação?
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Pedidos Unificados</p>
+                      <p className="text-xs text-muted-foreground">
+                        CSV preenche vendas antigas que aparecem junto com as atuais
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">CRM Enriquecido</p>
+                      <p className="text-xs text-muted-foreground">
+                        Contatos são criados ou atualizados automaticamente
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-background/50">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Auditoria Financeira</p>
+                      <p className="text-xs text-muted-foreground">
+                        Eventos financeiros são registrados para conciliação
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'orders' | 'import')}>
-              <TabsList className="grid w-full grid-cols-2 max-w-md">
-                <TabsTrigger value="orders" className="flex items-center gap-2">
-                  <ShoppingBag className="h-4 w-4" />
-                  Pedidos Históricos
-                </TabsTrigger>
-                <TabsTrigger value="import" className="flex items-center gap-2">
-                  <Upload className="h-4 w-4" />
-                  Importar CSV
-                </TabsTrigger>
-              </TabsList>
+                <Alert className="border-muted bg-muted/30">
+                  <AlertDescription className="text-xs text-muted-foreground flex items-center gap-2">
+                    <ArrowRight className="h-4 w-4" />
+                    Após importar, acesse <strong>Vendas → Pedidos</strong> para ver todos os pedidos unificados.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
 
-              <TabsContent value="orders" className="mt-6">
-                <SalesHistoryOrdersTable />
-              </TabsContent>
-
-              <TabsContent value="import" className="mt-6">
+            {/* CSV Import Component */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Importar CSV da Hotmart</CardTitle>
+                <CardDescription>
+                  Exporte seu histórico completo da Hotmart e importe aqui. 
+                  Pedidos já existentes serão ignorados automaticamente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
                 <HotmartUnifiedCSVImport />
-              </TabsContent>
-            </Tabs>
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

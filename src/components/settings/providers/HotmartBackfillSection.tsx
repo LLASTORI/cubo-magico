@@ -106,6 +106,7 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
         body: {
           projectId,
           daysBack: 7,
+          pageSize: 1000,
         },
       });
 

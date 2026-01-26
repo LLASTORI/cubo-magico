@@ -350,17 +350,28 @@ serve(async (req) => {
     console.log(`[LedgerBackfill] Batch inserting ${ledgerEventsToInsert.length} ledger events`);
 
     if (ledgerEventsToInsert.length > 0) {
-      // Process in chunks of 100 to avoid payload size limits
-      const chunkSize = 100;
-      for (let i = 0; i < ledgerEventsToInsert.length; i += chunkSize) {
-        const chunk = ledgerEventsToInsert.slice(i, i + chunkSize);
+      // First, get all existing provider_event_ids to filter duplicates
+      const allProviderEventIds = ledgerEventsToInsert.map(e => e.provider_event_id);
+      
+      const { data: existingEvents } = await supabase
+        .from('ledger_events')
+        .select('provider_event_id')
+        .in('provider_event_id', allProviderEventIds);
+      
+      const existingIds = new Set((existingEvents || []).map(e => e.provider_event_id));
+      const newEvents = ledgerEventsToInsert.filter(e => !existingIds.has(e.provider_event_id));
+      
+      ledgerSkipped = ledgerEventsToInsert.length - newEvents.length;
+      console.log(`[LedgerBackfill] ${ledgerSkipped} already exist, inserting ${newEvents.length} new`);
+
+      // Process in chunks of 50 to avoid payload size limits
+      const chunkSize = 50;
+      for (let i = 0; i < newEvents.length; i += chunkSize) {
+        const chunk = newEvents.slice(i, i + chunkSize);
         
         const { error: insertError, data: insertedData } = await supabase
           .from('ledger_events')
-          .upsert(chunk, {
-            onConflict: 'provider_event_id',
-            ignoreDuplicates: true,
-          })
+          .insert(chunk)
           .select('id');
 
         if (insertError) {
@@ -368,7 +379,6 @@ serve(async (req) => {
           errors += chunk.length;
         } else {
           ledgerCreated += insertedData?.length || 0;
-          ledgerSkipped += chunk.length - (insertedData?.length || 0);
         }
       }
     }

@@ -40,6 +40,36 @@ export interface JourneyOrder {
   utmCampaign: string | null;
 }
 
+interface JourneyOrdersViewRow {
+  order_id: string;
+  provider_order_id: string | null;
+  contact_id: string | null;
+  contact_name: string | null;
+  contact_email: string;
+  ordered_at: string;
+  customer_paid: number;
+  producer_net: number;
+  currency: string;
+  provider: string;
+  utm_source: string | null;
+  utm_campaign: string | null;
+  utm_adset: string | null;
+  utm_placement: string | null;
+  utm_creative: string | null;
+  items_count: number;
+  status: string;
+  products_detail: Array<{
+    product_name: string;
+    offer_name: string | null;
+    base_price: number;
+    item_type: string;
+    funnel_id: string | null;
+  }>;
+  main_product_name: string | null;
+  main_funnel_id: string | null;
+  purchase_sequence: number;
+}
+
 interface OrdersCoreRow {
   id: string;
   buyer_email: string;
@@ -74,24 +104,28 @@ export function useCRMJourneyFallback() {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
 
-  // 1. Por enquanto, sempre usar crm_transactions até Orders Core estar completo
-  // Quando Orders Core tiver paridade com transactions, trocar useOrdersCore para true
-  const useOrdersCore = false;
+  // PROMPT FORENSE: Orders Core está populado via CSV canônico + webhook
+  // Ativando Orders Core como fonte primária conforme docs/CRM_CUSTOMER_INTELLIGENCE.md:177-183
+  const useOrdersCore = true;
 
-  // 2. Buscar dados de Orders Core (se disponível)
+  // 2. Buscar dados de Orders Core usando a view canônica (inclui produtos)
   const { data: ordersData = [], isLoading: loadingOrders } = useQuery({
     queryKey: ['orders-core-journey', projectId],
     queryFn: async () => {
       if (!projectId) return [];
+      
+      // Usar a view canônica que já traz produtos consolidados
       const { data, error } = await supabase
-        .from('orders')
-        .select('id, buyer_email, buyer_name, customer_paid, ordered_at, status, utm_source, utm_campaign')
+        .from('crm_journey_orders_view')
+        .select('*')
         .eq('project_id', projectId)
         .eq('status', 'approved')
         .order('ordered_at', { ascending: true })
         .limit(5000);
+      
       if (error) throw error;
-      return (data || []) as OrdersCoreRow[];
+      // Cast necessário devido ao tipo Json do products_detail
+      return (data || []) as unknown as JourneyOrdersViewRow[];
     },
     enabled: !!projectId && useOrdersCore,
     staleTime: 1000 * 60 * 5,
@@ -129,16 +163,18 @@ export function useCRMJourneyFallback() {
   // 5. Processar dados em formato unificado
   const customers = useMemo((): JourneyCustomer[] => {
     if (useOrdersCore) {
-      // Processar Orders Core
+      // Processar Orders Core via view canônica
       const customerMap = new Map<string, JourneyCustomer>();
 
-      ordersData.forEach((order, index) => {
-        const email = order.buyer_email;
+      ordersData.forEach((order) => {
+        const email = order.contact_email;
+        if (!email) return;
+
         if (!customerMap.has(email)) {
           customerMap.set(email, {
             email,
-            name: order.buyer_name,
-            contactId: null,
+            name: order.contact_name,
+            contactId: order.contact_id,
             orders: [],
             totalSpent: 0,
             orderCount: 0,
@@ -149,22 +185,33 @@ export function useCRMJourneyFallback() {
         }
 
         const customer = customerMap.get(email)!;
-        const isFirst = customer.orders.length === 0;
+        const isFirst = order.purchase_sequence === 1;
+        
+        // Extrair nome do produto principal
+        const productName = order.main_product_name || 'Pedido';
+        const mainProduct = order.products_detail?.[0];
+        const mainFunnelId = order.main_funnel_id || mainProduct?.funnel_id || null;
 
         customer.orders.push({
-          orderId: order.id,
+          orderId: order.order_id,
           orderedAt: order.ordered_at,
-          productName: 'Pedido', // Orders Core não tem product_name direto
-          offerName: null,
+          productName,
+          offerName: mainProduct?.offer_name || null,
           totalPrice: order.customer_paid,
           isFirstPurchase: isFirst,
-          funnelId: null,
+          funnelId: mainFunnelId,
           utmSource: order.utm_source,
           utmCampaign: order.utm_campaign,
         });
 
         customer.totalSpent += order.customer_paid;
         customer.orderCount++;
+        
+        // Adicionar produtos únicos
+        if (productName && !customer.products.includes(productName)) {
+          customer.products.push(productName);
+        }
+        
         if (order.ordered_at < customer.firstOrderAt) customer.firstOrderAt = order.ordered_at;
         if (order.ordered_at > customer.lastOrderAt) customer.lastOrderAt = order.ordered_at;
       });

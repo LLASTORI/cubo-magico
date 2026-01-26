@@ -179,6 +179,33 @@ const ITEM_TYPE_MAP: Record<string, string> = {
   'downsell': 'downsell',
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAYMENT METHOD NORMALIZATION (Correção #1)
+// Maps PT-BR CSV values to canonical payment_method values
+// ═══════════════════════════════════════════════════════════════════════════════
+const normalizePaymentMethod = (rawMethod: string): string => {
+  if (!rawMethod) return 'unknown';
+  
+  const normalized = rawMethod.toLowerCase().trim();
+  
+  // PIX
+  if (normalized.includes('pix')) return 'pix';
+  
+  // Credit Card - must check before "parcelado" since cards can be parcelado
+  if (normalized.includes('cartão') || normalized.includes('cartao') || normalized.includes('card')) return 'credit_card';
+  
+  // Boleto
+  if (normalized.includes('boleto') || normalized.includes('billet')) return 'billet';
+  
+  // Installment recovery (recuperador de vendas)
+  if (normalized.includes('recuperador')) return 'installment_recovery';
+  
+  // Parcelado (generic installments - often indicates credit card)
+  if (normalized.includes('parcelado')) return 'installments';
+  
+  return 'unknown';
+};
+
 interface ParsedCSVRow {
   transaction_id: string;
   logical_order_id: string; // Resolved from C1/C2 or parent_transaction
@@ -587,7 +614,7 @@ export function HotmartUnifiedCSVImport() {
           installment_fee: parseNumber(raw.installment_fee || ''),
           currency: raw.currency || 'BRL',
           
-          payment_method: raw.payment_method || '',
+          payment_method: normalizePaymentMethod(raw.payment_method || ''),
           payment_type: raw.payment_type || '',
           installments: parseInt(raw.installments || '1') || 1,
           
@@ -724,8 +751,12 @@ export function HotmartUnifiedCSVImport() {
           if (cancelRef.current) break;
 
           try {
-            // Skip if order already exists (webhook prevails)
+            // Skip if order already exists (webhook prevails) - IDEMPOTENCY GUARANTEE
             if (existingOrderIds.has(order.logical_order_id)) {
+              console.log('[CSV Import] Skipping existing order (webhook prevails):', {
+                logical_order_id: order.logical_order_id,
+                ignored_existing_order: true,
+              });
               result.ordersSkipped++;
               continue;
             }
@@ -819,7 +850,12 @@ export function HotmartUnifiedCSVImport() {
                 meta_campaign_id: mainItem.meta_campaign_id,
                 meta_adset_id: mainItem.meta_adset_id,
                 meta_ad_id: mainItem.meta_ad_id,
-                raw_payload: { source: 'csv', imported_by: user.id, imported_at: new Date().toISOString() },
+                raw_payload: { 
+                  source: 'csv', 
+                  imported_by: user.id, 
+                  imported_at: new Date().toISOString(),
+                  file_name: file?.name || 'unknown'
+                },
               })
               .select('id')
               .single();
@@ -861,9 +897,24 @@ export function HotmartUnifiedCSVImport() {
             }
 
             // Create LEDGER_EVENTS only for financially effective orders
+            // REGRA FINANCEIRA (Correção #2): Só gera ledger se:
+            // - status === approved AND producer_net > 0 AND gross_base > 0
             if (order.is_financial) {
               for (const item of order.items) {
+                // Skip items that are not financially effective
                 if (!item.is_financial) continue;
+                
+                // CRITICAL: Only create sale event if there's actual financial value
+                // This prevents phantom ledger entries for approved orders with zero values
+                if (item.producer_net <= 0 || item.gross_base <= 0) {
+                  console.log('[CSV Import] Skipping ledger for zero-value approved item:', {
+                    transaction_id: item.transaction_id,
+                    producer_net: item.producer_net,
+                    gross_base: item.gross_base,
+                    reason: 'no_financial_value'
+                  });
+                  continue;
+                }
 
                 // Sale event (positive)
                 const saleEventId = `csv_sale_${item.transaction_id}`;
@@ -879,7 +930,11 @@ export function HotmartUnifiedCSVImport() {
                     currency: item.currency,
                     provider_event_id: saleEventId,
                     occurred_at: item.confirmation_date?.toISOString() || item.order_date?.toISOString(),
-                    raw_payload: { source: 'csv', transaction_id: item.transaction_id },
+                    raw_payload: { 
+                      source: 'csv', 
+                      transaction_id: item.transaction_id,
+                      file_name: file?.name || 'unknown'
+                    },
                   });
 
                 if (!saleError) result.ledgerEventsCreated++;

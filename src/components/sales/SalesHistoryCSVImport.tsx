@@ -14,6 +14,7 @@
  * - Backfill histórico antes da ativação do webhook
  * - Recuperação excepcional de dados
  * - Auditoria/reconciliação (ledger_official)
+ * - Visualização de pedidos históricos (sales_history_orders)
  * 
  * ESTE COMPONENTE NÃO PERTENCE À TELA DE PROVIDERS.
  * Ele vive no domínio de VENDAS (/vendas, BuscaRapida).
@@ -33,12 +34,14 @@ import {
   ChevronDown, 
   AlertTriangle, 
   FileSpreadsheet,
-  Upload
+  Upload,
+  ShoppingBag
 } from 'lucide-react';
 
 // Lazy import the actual CSV components to keep bundle size down
 import { HotmartCSVImport } from '@/components/settings/HotmartCSVImport';
 import { HotmartLedgerCSVImport } from '@/components/settings/HotmartLedgerCSVImport';
+import { SalesHistoryOrdersImport } from '@/components/sales/SalesHistoryOrdersImport';
 
 interface SalesHistoryCSVImportProps {
   defaultOpen?: boolean;
@@ -47,7 +50,7 @@ interface SalesHistoryCSVImportProps {
 export function SalesHistoryCSVImport({ defaultOpen = false }: SalesHistoryCSVImportProps) {
   const { currentProject } = useProject();
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [activeImport, setActiveImport] = useState<'none' | 'contacts' | 'ledger'>('none');
+  const [activeImport, setActiveImport] = useState<'none' | 'contacts' | 'ledger' | 'orders'>('none');
 
   if (!currentProject) {
     return null;
@@ -99,7 +102,21 @@ export function SalesHistoryCSVImport({ defaultOpen = false }: SalesHistoryCSVIm
 
             {/* Import Type Selection */}
             {activeImport === 'none' && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col items-center gap-2"
+                  onClick={() => setActiveImport('orders')}
+                >
+                  <ShoppingBag className="h-5 w-5 text-blue-600" />
+                  <div className="text-center">
+                    <p className="font-medium text-sm">Pedidos Históricos</p>
+                    <p className="text-xs text-muted-foreground">
+                      Importar para visualização e análise
+                    </p>
+                  </div>
+                </Button>
+
                 <Button
                   variant="outline"
                   className="h-auto py-4 flex flex-col items-center gap-2"
@@ -109,7 +126,7 @@ export function SalesHistoryCSVImport({ defaultOpen = false }: SalesHistoryCSVIm
                   <div className="text-center">
                     <p className="font-medium text-sm">Atualizar Contatos</p>
                     <p className="text-xs text-muted-foreground">
-                      Enriquecer dados de contatos via CSV Hotmart
+                      Enriquecer dados de contatos via CSV
                     </p>
                   </div>
                 </Button>
@@ -127,6 +144,23 @@ export function SalesHistoryCSVImport({ defaultOpen = false }: SalesHistoryCSVIm
                     </p>
                   </div>
                 </Button>
+              </div>
+            )}
+
+            {/* Historical Orders Import */}
+            {activeImport === 'orders' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">Importar Pedidos Históricos</h4>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setActiveImport('none')}
+                  >
+                    ← Voltar
+                  </Button>
+                </div>
+                <SalesHistoryOrdersImport />
               </div>
             )}
 

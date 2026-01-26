@@ -7854,6 +7854,190 @@ export type Database = {
           },
         ]
       }
+      sales_history_import_batches: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_count: number | null
+          error_message: string | null
+          file_name: string | null
+          id: string
+          imported_by: string | null
+          imported_count: number | null
+          project_id: string
+          provider: string
+          skipped_count: number | null
+          started_at: string
+          status: string
+          total_rows: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_count?: number | null
+          error_message?: string | null
+          file_name?: string | null
+          id?: string
+          imported_by?: string | null
+          imported_count?: number | null
+          project_id: string
+          provider?: string
+          skipped_count?: number | null
+          started_at?: string
+          status?: string
+          total_rows?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_count?: number | null
+          error_message?: string | null
+          file_name?: string | null
+          id?: string
+          imported_by?: string | null
+          imported_count?: number | null
+          project_id?: string
+          provider?: string
+          skipped_count?: number | null
+          started_at?: string
+          status?: string
+          total_rows?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_history_import_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_history_orders: {
+        Row: {
+          affiliate_code: string | null
+          affiliate_commission: number | null
+          affiliate_name: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          confirmation_date: string | null
+          coproducer_commission: number | null
+          coproducer_name: string | null
+          created_at: string
+          exchange_rate: number | null
+          gross_value: number | null
+          id: string
+          import_batch_id: string | null
+          imported_at: string
+          imported_by: string | null
+          installments: number | null
+          net_value: number | null
+          net_value_brl: number | null
+          offer_code: string | null
+          offer_name: string | null
+          order_date: string | null
+          original_currency: string | null
+          payment_method: string | null
+          payment_type: string | null
+          payout_date: string | null
+          payout_id: string | null
+          platform_fee: number | null
+          product_code: string | null
+          product_name: string | null
+          project_id: string
+          provider: string
+          provider_transaction_id: string
+          source: string
+          status: string | null
+          taxes: number | null
+          updated_at: string
+        }
+        Insert: {
+          affiliate_code?: string | null
+          affiliate_commission?: number | null
+          affiliate_name?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          confirmation_date?: string | null
+          coproducer_commission?: number | null
+          coproducer_name?: string | null
+          created_at?: string
+          exchange_rate?: number | null
+          gross_value?: number | null
+          id?: string
+          import_batch_id?: string | null
+          imported_at?: string
+          imported_by?: string | null
+          installments?: number | null
+          net_value?: number | null
+          net_value_brl?: number | null
+          offer_code?: string | null
+          offer_name?: string | null
+          order_date?: string | null
+          original_currency?: string | null
+          payment_method?: string | null
+          payment_type?: string | null
+          payout_date?: string | null
+          payout_id?: string | null
+          platform_fee?: number | null
+          product_code?: string | null
+          product_name?: string | null
+          project_id: string
+          provider?: string
+          provider_transaction_id: string
+          source?: string
+          status?: string | null
+          taxes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          affiliate_code?: string | null
+          affiliate_commission?: number | null
+          affiliate_name?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          confirmation_date?: string | null
+          coproducer_commission?: number | null
+          coproducer_name?: string | null
+          created_at?: string
+          exchange_rate?: number | null
+          gross_value?: number | null
+          id?: string
+          import_batch_id?: string | null
+          imported_at?: string
+          imported_by?: string | null
+          installments?: number | null
+          net_value?: number | null
+          net_value_brl?: number | null
+          offer_code?: string | null
+          offer_name?: string | null
+          order_date?: string | null
+          original_currency?: string | null
+          payment_method?: string | null
+          payment_type?: string | null
+          payout_date?: string | null
+          payout_id?: string | null
+          platform_fee?: number | null
+          product_code?: string | null
+          product_name?: string | null
+          project_id?: string
+          provider?: string
+          provider_transaction_id?: string
+          source?: string
+          status?: string | null
+          taxes?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_history_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       semantic_profiles: {
         Row: {
           buying_style: string | null

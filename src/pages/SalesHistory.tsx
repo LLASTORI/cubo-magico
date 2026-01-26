@@ -5,6 +5,7 @@
  * 
  * PROPÓSITO:
  * - Importação histórica de vendas (antes da ativação do webhook)
+ * - Visualização de pedidos históricos
  * - Contingência excepcional
  * - Auditoria / Reconciliação
  * 
@@ -14,23 +15,45 @@
  * - CSV NUNCA atualiza transações já existentes
  * - Hierarquia: Webhook (1º) > API (2º) > CSV (3º)
  * 
- * STATUS: ATIVO - Descongelado após auditoria completa
+ * CAMADAS:
+ * - sales_history_orders: Pedidos históricos para visualização (Camada 3)
+ * - ledger_official: Reconciliação financeira (Auditoria)
+ * 
+ * STATUS: ATIVO
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
+import { useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { History, AlertTriangle, Webhook, FileSpreadsheet } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  History, 
+  AlertTriangle, 
+  Webhook, 
+  FileSpreadsheet,
+  ShoppingBag,
+  Scale,
+  Info
+} from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
 import { useTenantNavigation } from "@/navigation";
 import { Button } from "@/components/ui/button";
 import { SalesHistoryCSVImport } from "@/components/sales/SalesHistoryCSVImport";
+import { SalesHistoryOrdersTable } from "@/components/sales/SalesHistoryOrdersTable";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const SalesHistory = () => {
   const { currentProject } = useProject();
   const { navigateTo } = useTenantNavigation();
+  const [activeTab, setActiveTab] = useState<'orders' | 'import'>('orders');
 
   return (
     <div className="min-h-screen bg-background">
@@ -45,12 +68,25 @@ const SalesHistory = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               Histórico de Vendas
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                Contingência
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
+                Histórico
               </Badge>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-5 w-5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-sm">
+                    <p className="text-sm">
+                      Dados históricos importados via CSV. Não interferem em vendas atuais, 
+                      métricas ou financeiro em tempo real.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </h1>
             <p className="text-sm text-muted-foreground">
-              Importação de dados históricos e auditoria
+              Visualização e importação de dados históricos
             </p>
           </div>
         </div>
@@ -65,60 +101,80 @@ const SalesHistory = () => {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Primary Warning */}
-            <Alert className="border-amber-500/50 bg-amber-500/10">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
-                <strong className="block mb-2">⚠️ Esta área é destinada à importação de histórico de vendas ou contingência.</strong>
-                <p>O webhook é a fonte primária de dados financeiros. Transações existentes serão ignoradas.</p>
+            {/* Primary Info */}
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-400">
+                <strong>ℹ️ Área de Histórico</strong> — Dados importados via CSV para análise e auditoria. 
+                O webhook é a fonte primária para vendas operacionais.
               </AlertDescription>
             </Alert>
 
-            {/* Information Cards */}
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Webhook Priority */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Webhook className="h-5 w-5 text-emerald-500" />
-                    Webhook (Fonte Primária)
-                  </CardTitle>
-                  <CardDescription>
-                    Dados financeiros em tempo real com integridade total
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>✓ Ledger events criados automaticamente</li>
-                    <li>✓ Order items com composição correta</li>
-                    <li>✓ Métricas financeiras precisas</li>
-                  </ul>
-                </CardContent>
-              </Card>
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'orders' | 'import')}>
+              <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsTrigger value="orders" className="flex items-center gap-2">
+                  <ShoppingBag className="h-4 w-4" />
+                  Pedidos Históricos
+                </TabsTrigger>
+                <TabsTrigger value="import" className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Importar CSV
+                </TabsTrigger>
+              </TabsList>
 
-              {/* CSV Usage */}
-              <Card className="border-muted">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base text-muted-foreground">
-                    <FileSpreadsheet className="h-5 w-5" />
-                    CSV (Histórico / Contingência)
-                  </CardTitle>
-                  <CardDescription>
-                    Apenas para dados anteriores à ativação do webhook
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>✗ Não cria ledger events</li>
-                    <li>✗ Não sobrescreve dados existentes</li>
-                    <li>✗ Não substitui o webhook</li>
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
+              <TabsContent value="orders" className="mt-6">
+                <SalesHistoryOrdersTable />
+              </TabsContent>
 
-            {/* CSV Import Component - DESCONGELADO */}
-            <SalesHistoryCSVImport defaultOpen={false} />
+              <TabsContent value="import" className="mt-6 space-y-6">
+                {/* Information Cards */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Webhook Priority */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Webhook className="h-5 w-5 text-emerald-500" />
+                        Webhook (Fonte Primária)
+                      </CardTitle>
+                      <CardDescription>
+                        Dados financeiros em tempo real com integridade total
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>✓ Ledger events criados automaticamente</li>
+                        <li>✓ Order items com composição correta</li>
+                        <li>✓ Métricas financeiras precisas</li>
+                      </ul>
+                    </CardContent>
+                  </Card>
+
+                  {/* CSV Usage */}
+                  <Card className="border-muted">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base text-muted-foreground">
+                        <FileSpreadsheet className="h-5 w-5" />
+                        CSV (Histórico / Contingência)
+                      </CardTitle>
+                      <CardDescription>
+                        Apenas para dados anteriores à ativação do webhook
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>✗ Não cria ledger events</li>
+                        <li>✗ Não sobrescreve dados existentes</li>
+                        <li>✗ Não substitui o webhook</li>
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* CSV Import Component */}
+                <SalesHistoryCSVImport defaultOpen={true} />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </main>

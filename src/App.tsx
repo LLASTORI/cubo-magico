@@ -42,6 +42,7 @@ import MetaAds from "./pages/MetaAds";
 import UndefinedOffers from "./pages/UndefinedOffers";
 import LaunchDashboard from "./pages/LaunchDashboard";
 import AnaliseMensal from "./pages/AnaliseMensal";
+import SalesHistory from "./pages/SalesHistory";
 import CRM from "./pages/CRM";
 import CRMUTMBehavior from "./pages/CRMUTMBehavior";
 import CRMKanban from "./pages/CRMKanban";
@@ -177,8 +178,11 @@ const App = () => {
                       <Route index element={<ProjectOverview />} />
                       <Route path="dashboard" element={<ProjectOverview />} />
                       
-                      {/* Financial */}
+                      {/* Sales / Vendas */}
                       <Route path="busca-rapida" element={<BuscaRapida />} />
+                      <Route path="vendas/historico" element={<SalesHistory />} />
+                      
+                      {/* Analytics */}
                       <Route path="funnel-analysis" element={<FunnelAnalysis />} />
                       <Route path="analise-mensal" element={<AnaliseMensal />} />
                       <Route path="launch-dashboard" element={<LaunchDashboard />} />

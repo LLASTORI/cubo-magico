@@ -1,6 +1,6 @@
 # Inteligência de Clientes — Documentação Completa
 
-> **PROMPT 27 + 28 + 29**: Reestruturação completa da área de análise de clientes
+> **PROMPT 27 + 28 + 29 + PROMPT 3**: Reestruturação completa e consolidação Orders Core
 
 ---
 
@@ -12,7 +12,7 @@
 4. [Fontes de Dados](#fontes-de-dados)
 5. [Componentes](#componentes)
 6. [Métricas da View](#métricas-da-view)
-7. [Migração para Orders Core](#migração-para-orders-core)
+7. [Consolidação Orders Core](#consolidação-orders-core)
 
 ---
 
@@ -30,14 +30,14 @@ Inteligência de Clientes
 
 ## 🔑 Princípio-Chave
 
-### Fallback ≠ Legado
+### Orders Core = Fonte Única
 
-O fallback é uma **estratégia de transição arquitetural**, não dívida técnica.
+O sistema foi consolidado para usar **exclusivamente** o Orders Core como fonte de verdade:
 
-- ✅ Nada é chamado de "legado"
-- ✅ Nada fica confuso para o usuário
-- ✅ Nada será refeito depois
-- ✅ Transição silenciosa e automática
+- ✅ `orders` para todos os pedidos
+- ✅ `order_items` para detalhes de produtos
+- ✅ `ledger_events` para financeiro
+- ❌ `crm_transactions` removido de todas as queries
 
 ---
 
@@ -52,12 +52,8 @@ O fallback é uma **estratégia de transição arquitetural**, não dívida téc
 - Receita Total, LTV Médio, Ticket Médio
 - Taxa de Recompra, Clientes Recorrentes
 
-**NÃO contém:**
-- Listas de clientes
-- Fluxos visuais
-- Filtros avançados
-
 **Componente:** `CustomerIntelligenceOverview`
+**Fonte:** `crm_customer_intelligence_overview` (view baseada em `orders`)
 
 ---
 
@@ -72,6 +68,7 @@ O fallback é uma **estratégia de transição arquitetural**, não dívida téc
 - Badge "1ª Compra"
 
 **Componente:** `CustomerJourneyWithFallback`
+**Fonte:** `crm_journey_orders_view`
 
 ---
 
@@ -86,6 +83,7 @@ O fallback é uma **estratégia de transição arquitetural**, não dívida téc
 - Breakdown detalhado
 
 **Componente:** `AscensionAnalysis`
+**Fonte:** `orders` + `order_items` (via `useAscensionOrdersCore`)
 
 ---
 
@@ -99,30 +97,19 @@ O fallback é uma **estratégia de transição arquitetural**, não dívida téc
 - Legenda de produtos
 - Estatísticas de fluxo
 
-**NÃO contém:**
-- Total de contatos
-- LTV
-- Cards executivos
-
 **Componente:** `CustomerFlowsAnalysis`
+**Fonte:** `orders` + `order_items` (via `useFlowsOrdersCore`)
 
 ---
 
 ## 📂 Fontes de Dados
 
-| Aba | Fonte Atual | Fonte Final |
-|-----|-------------|-------------|
-| Visão Geral | `crm_customer_intelligence_overview` (view) | Orders Core |
-| Jornada | `crm_transactions` (via hook) | Orders Core |
-| Ascensão | `crm_transactions` + `offer_mappings` | Orders Core |
-| Fluxos | `crm_transactions` | Orders Core |
-
-### Como o Fallback Funciona
-
-1. **Visão Geral**: A view `crm_customer_intelligence_overview` usa `crm_transactions` diretamente
-2. **Jornada**: O hook `useCRMJourneyFallback` usa `crm_transactions` por padrão
-3. **Ascensão**: Continua usando `crm_transactions` + `offer_mappings`
-4. **Fluxos**: Usa `crm_transactions` para calcular transições
+| Aba | Fonte | Hook |
+|-----|-------|------|
+| Visão Geral | `crm_customer_intelligence_overview` | `useCustomerIntelligenceOverview` |
+| Jornada | `crm_journey_orders_view` | `useCRMJourneyFallback` |
+| Ascensão | `orders` + `order_items` | `useAscensionOrdersCore` |
+| Fluxos | `orders` + `order_items` | `useFlowsOrdersCore` |
 
 ---
 
@@ -143,7 +130,9 @@ O fallback é uma **estratégia de transição arquitetural**, não dívida téc
 | Hook | Descrição |
 |------|-----------|
 | `useCustomerIntelligenceOverview` | Métricas agregadas da view |
-| `useCRMJourneyFallback` | Jornada com fallback automático |
+| `useCRMJourneyFallback` | Jornada via Orders Core |
+| `useAscensionOrdersCore` | Ascensão via Orders Core |
+| `useFlowsOrdersCore` | Fluxos via Orders Core |
 
 ---
 
@@ -170,51 +159,46 @@ A view `crm_customer_intelligence_overview` retorna:
 
 ---
 
-## 🔄 Migração para Orders Core
+## 🔄 Consolidação Orders Core
 
-### ✅ Concluído (PROMPT FORENSE)
+### ✅ Concluído (PROMPT 3)
 
-A migração foi ativada após confirmação de que:
-- CSV Backfill escreve diretamente em `orders`, `order_items`, `ledger_events`
-- A view `crm_journey_orders_view` consolida todos os pedidos independente da origem
-- Não há distinção entre dados CSV e webhook na camada de apresentação
+A migração foi concluída com sucesso:
 
-```typescript
-// src/hooks/useCRMJourneyFallback.ts
-// ANTES:
-const useOrdersCore = false;
-// DEPOIS (ativado):
-const useOrdersCore = true;
+1. **View `crm_customer_intelligence_overview`** - Atualizada para usar apenas `orders`
+2. **Hook `useCRMJourneyFallback`** - Fallback removido, usa apenas `crm_journey_orders_view`
+3. **Hook `useAscensionOrdersCore`** - Criado para substituir `usePaginatedQuery` com `crm_transactions`
+4. **Hook `useFlowsOrdersCore`** - Criado para substituir `usePaginatedQuery` com `crm_transactions`
+
+### Arquitetura Atual
+
 ```
-
-### Passo 2: A View já está preparada
-A view `crm_customer_intelligence_overview` tem lógica de fallback inteligente.
-
-### Passo 3: Migrar Ascensão e Fluxos
-Gradualmente atualizar para usar `order_items` em vez de `crm_transactions`.
+CSV / Webhook
+      ↓
+   Orders Core (orders + order_items)
+      ↓
+   Views Derivadas
+      ↓
+   Hooks Canônicos
+      ↓
+   Componentes de UI
+```
 
 ---
 
 ## ❌ O que foi Removido
 
-- Aba "Avançado" (ex-Legado) — removida do MVP
+- Aba "Pedidos Históricos" — CSV é replay de webhook
+- Fallback para `crm_transactions` em todos os módulos
 - Referências a "legado" em todo o código
-- Mensagens de "quando for processado"
-- `CustomerJourneyAnalysis` da navegação principal
+- `usePaginatedQuery` com `crm_transactions` em Ascensão/Fluxos
 
 ---
 
-## 🚀 Próximos Passos
+## 🚀 Regra de Ouro
 
-### PROMPT 30
-- Refinar visual do Fluxos (Sankey premium)
-- Ajustar microcopy
-
-### PROMPT 31
-- Importar CSV
-- Popular Orders Core
-- Desligar fallback
+> **Todo novo módulo que envolva vendas, clientes ou receita deve consumir exclusivamente o Orders Core.**
 
 ---
 
-*Documentação atualizada pelo PROMPT 29 — Correção Estrutural*
+*Documentação atualizada pelo PROMPT 3 — Consolidação Total do Orders Core*

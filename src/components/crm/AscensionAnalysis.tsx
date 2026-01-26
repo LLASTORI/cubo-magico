@@ -1,3 +1,10 @@
+/**
+ * Análise de Ascensão - PROMPT 3: Orders Core Consolidado
+ * 
+ * Fonte: orders + order_items (via useAscensionOrdersCore)
+ * ❌ crm_transactions removido
+ */
+
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +23,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
-import { usePaginatedQuery } from '@/hooks/usePaginatedQuery';
+import { useAscensionOrdersCore } from '@/hooks/useAscensionOrdersCore';
 
 type SelectionType = 'product' | 'offer' | 'funnel';
 
@@ -55,18 +62,22 @@ export function AscensionAnalysis() {
   // Date range
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  // Fetch transactions with pagination (overcomes 1000 limit)
-  const { data: transactions = [], isLoading: loadingTransactions } = usePaginatedQuery<TransactionData>(
-    ['crm-ascension-transactions', projectId],
-    {
-      table: 'crm_transactions',
-      select: 'contact_id, product_name, product_code, offer_code, offer_name, status, transaction_date, funnel_id',
-      filters: { project_id: projectId },
-      inFilters: { status: ['APPROVED', 'COMPLETE'] },
-      orderBy: { column: 'id', ascending: true },
-      enabled: !!projectId,
-    }
-  );
+  // Fetch orders from Orders Core
+  const { items: ordersItems, isLoading: loadingOrders } = useAscensionOrdersCore();
+  
+  // Transformar para formato compatível com a lógica existente
+  const transactions = useMemo(() => {
+    return ordersItems.map(item => ({
+      contact_id: item.buyer_email, // usar email como identificador único
+      product_name: item.product_name,
+      product_code: item.provider_product_id,
+      offer_code: item.provider_offer_id,
+      offer_name: item.offer_name,
+      status: 'APPROVED',
+      transaction_date: item.ordered_at,
+      funnel_id: item.funnel_id,
+    }));
+  }, [ordersItems]);
 
   // Fetch offer mappings to include all configured offers
   const { data: offerMappings = [], isLoading: loadingOfferMappings } = useQuery({
@@ -344,7 +355,7 @@ export function AscensionAnalysis() {
     return `${value.toFixed(1)}%`;
   };
 
-  if (loadingTransactions || loadingOfferMappings || loadingFunnels) {
+  if (loadingOrders || loadingOfferMappings || loadingFunnels) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

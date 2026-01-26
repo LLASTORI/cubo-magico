@@ -172,14 +172,18 @@ A view `crm_customer_intelligence_overview` retorna:
 
 ## 🔄 Migração para Orders Core
 
-Quando Orders Core estiver completamente populado:
+### ✅ Concluído (PROMPT FORENSE)
 
-### Passo 1: Atualizar o Hook de Jornada
+A migração foi ativada após confirmação de que:
+- CSV Backfill escreve diretamente em `orders`, `order_items`, `ledger_events`
+- A view `crm_journey_orders_view` consolida todos os pedidos independente da origem
+- Não há distinção entre dados CSV e webhook na camada de apresentação
+
 ```typescript
 // src/hooks/useCRMJourneyFallback.ts
-// Trocar de:
+// ANTES:
 const useOrdersCore = false;
-// Para:
+// DEPOIS (ativado):
 const useOrdersCore = true;
 ```
 

@@ -215,18 +215,67 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
     return { name: '[Funil removido ou renomeado]', isRemoved: true };
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // VALIDAÇÃO DA DECOMPOSIÇÃO FINANCEIRA (BLOCO 2 - CORREÇÃO)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 
+  // EQUAÇÃO CANÔNICA:
+  //   gross_base - platform_fee - coproducer - affiliate - tax - refund - chargeback = producer_net
+  //
+  // NOTAS:
+  // - gross_base é a base econômica (sem juros de parcelamento)
+  // - customer_paid inclui juros de parcelamento (pode ser > gross_base)
+  // - Se não houver ledger_events, NÃO exibir diferença, apenas alerta
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  // Detectar se há ledger_events para este pedido
+  const hasLedgerEvents = useMemo(() => {
+    if (!breakdown) return false;
+    return (
+      breakdown.platform_fee > 0 ||
+      breakdown.coproducer > 0 ||
+      breakdown.affiliate > 0 ||
+      breakdown.tax > 0 ||
+      breakdown.refund > 0 ||
+      breakdown.chargeback > 0 ||
+      breakdown.sale > 0
+    );
+  }, [breakdown]);
+
+  // Calcular juros/encargos (quando customer_paid > gross_base)
+  const interestCharges = useMemo(() => {
+    if (!order) return 0;
+    const baseValue = order.gross_base ?? order.customer_paid;
+    return Math.max(0, order.customer_paid - baseValue);
+  }, [order]);
+
   // Validate ledger breakdown matches order values
   const validateBreakdown = () => {
     if (!order || !breakdown) return null;
     
-    const totalDeductions = breakdown.platform_fee + breakdown.coproducer + breakdown.affiliate;
-    const calculatedNet = order.customer_paid - totalDeductions;
+    // Se não há ledger_events, não validar
+    if (!hasLedgerEvents) return null;
+    
+    // Base econômica: usar gross_base se disponível, senão customer_paid
+    const economicBase = order.gross_base ?? order.customer_paid;
+    
+    // Equação completa: gross_base - todas as deduções = producer_net
+    const totalDeductions = 
+      breakdown.platform_fee + 
+      breakdown.coproducer + 
+      breakdown.affiliate + 
+      breakdown.tax + 
+      breakdown.refund + 
+      breakdown.chargeback;
+    
+    const calculatedNet = economicBase - totalDeductions;
     const difference = Math.abs(calculatedNet - order.producer_net);
     
     return {
-      matches: difference < 0.02, // Allow 2 cents tolerance for rounding
+      matches: difference < 0.10, // 10 centavos de tolerância para arredondamentos de plataforma
       calculatedNet,
       difference,
+      economicBase,
     };
   };
 
@@ -368,20 +417,16 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
             <Separator />
 
             {/* ═══════════════════════════════════════════════════════════════════════════════
-                DECOMPOSIÇÃO FINANCEIRA - NÍVEL DO PEDIDO (OBRIGATÓRIO)
+                DECOMPOSIÇÃO FINANCEIRA - NÍVEL DO PEDIDO (BLOCO 2 - CORREÇÃO)
                 ═══════════════════════════════════════════════════════════════════════════════
                 
-                REGRAS CANÔNICAS:
-                ✓ Cliente pagou = orders.customer_paid (NUNCA calcular soma de itens)
-                ✓ Taxas/deduções = ledger_events agregados por order_id
-                ✓ Produtor recebe = orders.producer_net (NUNCA calcular manualmente)
+                EQUAÇÃO CANÔNICA:
+                  gross_base - platform_fee - coproducer - affiliate - tax - refund - chargeback = producer_net
                 
-                PROIBIDO:
-                ❌ Calcular valores financeiros por item individual
-                ❌ Mostrar breakdown por produto
-                ❌ Usar valores de order_items para totais financeiros
-                
-                A decomposição é SEMPRE no nível do PEDIDO, independente da quantidade de produtos
+                REGRAS:
+                ✓ Base econômica = orders.gross_base (ou customer_paid se null)
+                ✓ Juros/encargos = customer_paid - gross_base (explícito quando > 0)
+                ✓ Se não houver ledger_events, exibir alerta claro
                 ═══════════════════════════════════════════════════════════════════════════════ */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -393,6 +438,21 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   Nível: Pedido
                 </span>
               </div>
+              
+              {/* ALERTA: Ledger ausente */}
+              {!hasLedgerEvents && (order.status === 'approved' || order.status === 'complete') && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                      Ledger financeiro ausente para este pedido
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-600/80 mt-1">
+                    A decomposição detalhada não está disponível. Execute o backfill de ledger para corrigir.
+                  </p>
+                </div>
+              )}
               
               {/* What customer paid (GROSS) - ALWAYS from orders.customer_paid */}
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-4">
@@ -408,12 +468,30 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-green-600/70 mt-1">
-                  Valor bruto total do pedido (orders.customer_paid)
+                  Valor total cobrado (inclui juros de parcelamento)
                 </p>
               </div>
 
+              {/* Juros/Encargos (quando customer_paid > gross_base) */}
+              {interestCharges > 0.01 && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="text-blue-700 dark:text-blue-400">Juros / Encargos de parcelamento</span>
+                    </div>
+                    <span className="font-medium text-blue-700 dark:text-blue-400">
+                      {formatCurrency(interestCharges)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-600/60 mt-1">
+                    Base econômica: {formatCurrency(order.gross_base ?? order.customer_paid)}
+                  </p>
+                </div>
+              )}
+
               {/* Total Deductions Summary */}
-              {breakdown && (
+              {breakdown && hasLedgerEvents && (
                 <div className="bg-muted/30 rounded-lg p-3 mb-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Total de deduções</span>
@@ -447,12 +525,12 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">
-                  Valor líquido total do produtor (orders.producer_net)
+                  Valor líquido final (orders.producer_net)
                 </p>
               </div>
 
-              {/* Validation: ledger breakdown should match order values */}
-              {breakdown && (
+              {/* Validation: ledger breakdown should match order values - ONLY if ledger exists */}
+              {breakdown && hasLedgerEvents && (
                 <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border/50">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="w-4 h-4 text-muted-foreground" />
@@ -461,11 +539,11 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     </span>
                   </div>
                   
-                  {/* Show the formula breakdown */}
+                  {/* Show the formula breakdown - usando gross_base como base */}
                   <div className="space-y-1 text-xs">
                     <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Cliente pagou</span>
-                      <span className="font-mono">{formatCurrency(order.customer_paid)}</span>
+                      <span>Base econômica</span>
+                      <span className="font-mono">{formatCurrency(order.gross_base ?? order.customer_paid)}</span>
                     </div>
                     {breakdown.platform_fee > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
@@ -533,8 +611,8 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-[300px] text-xs">
-                                <p>Pequenas diferenças ocorrem devido a arredondamentos no processamento da plataforma de pagamento.</p>
-                                <p className="mt-1 text-muted-foreground">Valores do ledger: {formatCurrency(validation.calculatedNet)}</p>
+                                <p>Pequenas diferenças de centavos ocorrem devido a arredondamentos no processamento da plataforma de pagamento.</p>
+                                <p className="mt-1 text-muted-foreground">Base: {formatCurrency(validation.economicBase)} → Calculado: {formatCurrency(validation.calculatedNet)}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

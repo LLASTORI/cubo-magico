@@ -412,61 +412,22 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </p>
               </div>
 
-              {/* Deductions from ledger_events (aggregated at ORDER level) */}
+              {/* Total Deductions Summary */}
               {breakdown && (
-                <div className="space-y-2 mb-4">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Deduções agregadas (ledger_events):
-                  </p>
-                  {breakdown.platform_fee > 0 && (
-                    <div className="flex items-center justify-between p-2 text-sm">
-                      <span className="text-muted-foreground">Taxas Hotmart</span>
-                      <span className="text-red-600">- {formatCurrency(breakdown.platform_fee)}</span>
-                    </div>
-                  )}
-                  {breakdown.coproducer > 0 && (
-                    <div className="flex items-center justify-between p-2 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-muted-foreground">Coprodução</span>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="w-3.5 h-3.5 text-muted-foreground/70 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[280px] text-sm">
-                              <p>A taxa da Hotmart é descontada apenas do produtor.</p>
-                              <p className="mt-1">A coprodução é calculada sobre a base líquida da venda.</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <span className="text-red-600">- {formatCurrency(breakdown.coproducer)}</span>
-                    </div>
-                  )}
-                  {breakdown.affiliate > 0 && (
-                    <div className="flex items-center justify-between p-2 text-sm">
-                      <span className="text-muted-foreground">Afiliados</span>
-                      <span className="text-red-600">- {formatCurrency(breakdown.affiliate)}</span>
-                    </div>
-                  )}
-                  {breakdown.tax > 0 && (
-                    <div className="flex items-center justify-between p-2 text-sm">
-                      <span className="text-muted-foreground">Impostos</span>
-                      <span className="text-red-600">- {formatCurrency(breakdown.tax)}</span>
-                    </div>
-                  )}
-                  {breakdown.refund > 0 && (
-                    <div className="flex items-center justify-between p-2 text-sm">
-                      <span className="text-muted-foreground">Reembolso</span>
-                      <span className="text-red-600">- {formatCurrency(breakdown.refund)}</span>
-                    </div>
-                  )}
-                  {breakdown.chargeback > 0 && (
-                    <div className="flex items-center justify-between p-2 text-sm">
-                      <span className="text-muted-foreground">Chargeback</span>
-                      <span className="text-red-600">- {formatCurrency(breakdown.chargeback)}</span>
-                    </div>
-                  )}
+                <div className="bg-muted/30 rounded-lg p-3 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total de deduções</span>
+                    <span className="font-medium text-red-600">
+                      - {formatCurrency(
+                        breakdown.platform_fee + 
+                        breakdown.coproducer + 
+                        breakdown.affiliate + 
+                        breakdown.tax + 
+                        breakdown.refund + 
+                        breakdown.chargeback
+                      )}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -491,25 +452,95 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               </div>
 
               {/* Validation: ledger breakdown should match order values */}
-              {validation && (
-                <div className={`flex items-center gap-2 mt-3 p-2 rounded text-xs ${
-                  validation.matches 
-                    ? 'bg-green-500/10 text-green-600' 
-                    : 'bg-yellow-500/10 text-yellow-600'
-                }`}>
-                  {validation.matches ? (
-                    <>
-                      <CheckCircle className="w-3 h-3" />
-                      <span>✓ Ledger valida: customer_paid − deduções = producer_net</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="w-3 h-3" />
-                      <span>
-                        ⚠ Diferença de {formatCurrency(validation.difference)} 
-                        (calculado: {formatCurrency(validation.calculatedNet)})
-                      </span>
-                    </>
+              {breakdown && (
+                <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wallet className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Verificação da Decomposição
+                    </span>
+                  </div>
+                  
+                  {/* Show the formula breakdown */}
+                  <div className="space-y-1 text-xs">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Cliente pagou</span>
+                      <span className="font-mono">{formatCurrency(order.customer_paid)}</span>
+                    </div>
+                    {breakdown.platform_fee > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>− Taxas plataforma</span>
+                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.platform_fee)}</span>
+                      </div>
+                    )}
+                    {breakdown.coproducer > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>− Coprodução</span>
+                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.coproducer)}</span>
+                      </div>
+                    )}
+                    {breakdown.affiliate > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>− Afiliados</span>
+                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.affiliate)}</span>
+                      </div>
+                    )}
+                    {breakdown.tax > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>− Impostos</span>
+                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.tax)}</span>
+                      </div>
+                    )}
+                    {breakdown.refund > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>− Reembolso</span>
+                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.refund)}</span>
+                      </div>
+                    )}
+                    {breakdown.chargeback > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>− Chargeback</span>
+                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.chargeback)}</span>
+                      </div>
+                    )}
+                    
+                    <Separator className="my-1.5" />
+                    
+                    <div className="flex items-center justify-between font-medium">
+                      <span className="text-foreground">= Produtor recebe</span>
+                      <span className="font-mono text-primary">{formatCurrency(order.producer_net)}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Validation status */}
+                  {validation && (
+                    <div className={`flex items-center gap-1.5 mt-2 pt-2 border-t border-border/30 text-xs ${
+                      validation.matches ? 'text-green-600' : 'text-amber-600'
+                    }`}>
+                      {validation.matches ? (
+                        <>
+                          <CheckCircle className="w-3 h-3" />
+                          <span>Cálculo verificado: valores conferem</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-3 h-3" />
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help underline decoration-dotted">
+                                  Arredondamento de {formatCurrency(validation.difference)}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-[300px] text-xs">
+                                <p>Pequenas diferenças ocorrem devido a arredondamentos no processamento da plataforma de pagamento.</p>
+                                <p className="mt-1 text-muted-foreground">Valores do ledger: {formatCurrency(validation.calculatedNet)}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

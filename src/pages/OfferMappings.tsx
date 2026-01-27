@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -121,6 +122,26 @@ export default function OfferMappingsAuto() {
   const { toast } = useToast();
   const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
+
+  // Hotmart OAuth status (used by hotmart-api). If not connected, avoid calling the function
+  // to prevent 500 errors and blank-screen runtime errors.
+  const { data: hotmartCredentials } = useQuery({
+    queryKey: ['project_credentials_hotmart_oauth', currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject?.id) return null;
+      const { data, error } = await supabase
+        .from('project_credentials')
+        .select('hotmart_refresh_token')
+        .eq('project_id', currentProject.id)
+        .eq('provider', 'hotmart')
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!currentProject?.id,
+  });
+
+  const isHotmartOAuthConnected = !!hotmartCredentials?.hotmart_refresh_token;
 
   useEffect(() => {
     if (!currentProject) {
@@ -296,64 +317,69 @@ export default function OfferMappingsAuto() {
       }
       
       console.log(`Found ${offersToImport.length} offers from sales data`);
-      setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. Buscando produtos da API...`);
-      
-      // Now also check the Hotmart Products API for additional offers
-      try {
-        const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
-          body: {
-            endpoint: '/products',
-            apiType: 'products',
-            projectId: currentProject.id
-          }
-        });
 
-        if (!productsError && productsData) {
-          const products: HotmartProduct[] = productsData.items || productsData || [];
-          console.log(`Found ${products.length} products from API`);
-          
-          for (let i = 0; i < products.length; i++) {
-            const product = products[i];
-            setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 30)}...`);
-            
-            try {
-              const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
-                body: {
-                  endpoint: `/products/${product.ucode}/offers`,
-                  apiType: 'products',
-                  projectId: currentProject.id
-                }
-              });
+      // Optionally enrich with Products API (requires OAuth). If not connected, skip to avoid 500s.
+      if (isHotmartOAuthConnected) {
+        setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. Buscando produtos da API...`);
 
-              if (!offersError && offersData) {
-                const offers: HotmartOffer[] = offersData.items || offersData || [];
-                
-                offers.forEach(offer => {
-                  if (!existingOfferCodes.has(offer.code) && !seenOfferCodes.has(offer.code)) {
-                    offersToImport.push({
-                      id_produto: product.ucode,
-                      id_produto_visual: `ID ${product.id}`,
-                      nome_produto: product.name,
-                      nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
-                      codigo_oferta: offer.code,
-                      valor: offer.price.value,
-                      status: 'Ativo',
-                      id_funil: 'A Definir',
-                      funnel_id: defaultFunnelId,
-                      data_ativacao: new Date().toISOString().split('T')[0],
-                      project_id: currentProject.id,
-                    });
-                    seenOfferCodes.add(offer.code);
+        try {
+          const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
+            body: {
+              endpoint: '/products',
+              apiType: 'products',
+              projectId: currentProject.id
+            }
+          });
+
+          if (!productsError && productsData) {
+            const products: HotmartProduct[] = productsData.items || productsData || [];
+            console.log(`Found ${products.length} products from API`);
+
+            for (let i = 0; i < products.length; i++) {
+              const product = products[i];
+              setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 30)}...`);
+
+              try {
+                const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
+                  body: {
+                    endpoint: `/products/${product.ucode}/offers`,
+                    apiType: 'products',
+                    projectId: currentProject.id
                   }
                 });
+
+                if (!offersError && offersData) {
+                  const offers: HotmartOffer[] = offersData.items || offersData || [];
+
+                  offers.forEach(offer => {
+                    if (!existingOfferCodes.has(offer.code) && !seenOfferCodes.has(offer.code)) {
+                      offersToImport.push({
+                        id_produto: product.ucode,
+                        id_produto_visual: `ID ${product.id}`,
+                        nome_produto: product.name,
+                        nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
+                        codigo_oferta: offer.code,
+                        valor: offer.price.value,
+                        status: 'Ativo',
+                        id_funil: 'A Definir',
+                        funnel_id: defaultFunnelId,
+                        data_ativacao: new Date().toISOString().split('T')[0],
+                        project_id: currentProject.id,
+                      });
+                      seenOfferCodes.add(offer.code);
+                    }
+                  });
+                }
+              } catch (error) {
+                console.error(`Error processing product ${product.ucode}:`, error);
               }
-            } catch (error) {
-              console.error(`Error processing product ${product.ucode}:`, error);
             }
           }
+        } catch (apiError) {
+          console.error('Error fetching from Hotmart API, continuing with sales data only:', apiError);
         }
-      } catch (apiError) {
-        console.error('Error fetching from Hotmart API, continuing with sales data only:', apiError);
+      } else {
+        setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. (OAuth não conectado — pulando API)`);
       }
       
       if (offersToImport.length === 0) {
@@ -410,6 +436,15 @@ export default function OfferMappingsAuto() {
       toast({
         title: 'Erro',
         description: 'Nenhum projeto selecionado',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!isHotmartOAuthConnected) {
+      toast({
+        title: 'Hotmart não conectado via OAuth',
+        description: 'Abra Configurações e clique em "Conectar Hotmart (OAuth)" para usar a sincronização via API.',
         variant: 'destructive',
       });
       return;
@@ -660,7 +695,7 @@ export default function OfferMappingsAuto() {
                     </Button>
                     <Button 
                       onClick={syncOffersWithHotmart}
-                      disabled={syncingOffers || mappings.length === 0}
+                      disabled={syncingOffers || mappings.length === 0 || !isHotmartOAuthConnected}
                       variant="outline"
                       className="gap-2"
                     >

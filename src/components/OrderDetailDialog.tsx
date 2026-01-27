@@ -271,8 +271,17 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
     const calculatedNet = economicBase - totalDeductions;
     const difference = Math.abs(calculatedNet - order.producer_net);
     
+    // Se há juros (customer_paid > gross_base), considerar decomposição válida
+    // Juros já são exibidos separadamente e não devem ser confundidos com arredondamento
+    const hasInterestCharges = order.customer_paid > (order.gross_base ?? order.customer_paid) + 0.01;
+    
+    // Arredondamento válido apenas para deltas residuais ≤ R$0.02
+    const isResidualRounding = difference <= 0.02;
+    
     return {
-      matches: difference < 0.10, // 10 centavos de tolerância para arredondamentos de plataforma
+      matches: hasInterestCharges || difference < 0.10,
+      isValidWithInterest: hasInterestCharges && difference >= 0.02,
+      isResidualRounding,
       calculatedNet,
       difference,
       economicBase,
@@ -283,7 +292,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
@@ -598,7 +607,19 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                       {validation.matches ? (
                         <>
                           <CheckCircle className="w-3 h-3" />
-                          <span>Cálculo verificado: valores conferem</span>
+                          <span>
+                            {validation.isValidWithInterest 
+                              ? 'Decomposição válida (inclui juros de parcelamento)'
+                              : 'Cálculo verificado: valores conferem'
+                            }
+                          </span>
+                        </>
+                      ) : validation.isResidualRounding ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 text-green-600" />
+                          <span className="text-green-600">
+                            Valores conferem (arredondamento residual de {formatCurrency(validation.difference)})
+                          </span>
                         </>
                       ) : (
                         <>
@@ -607,11 +628,11 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="cursor-help underline decoration-dotted">
-                                  Arredondamento de {formatCurrency(validation.difference)}
+                                  Diferença de {formatCurrency(validation.difference)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-[300px] text-xs">
-                                <p>Pequenas diferenças de centavos ocorrem devido a arredondamentos no processamento da plataforma de pagamento.</p>
+                                <p>Diferença identificada na decomposição financeira.</p>
                                 <p className="mt-1 text-muted-foreground">Base: {formatCurrency(validation.economicBase)} → Calculado: {formatCurrency(validation.calculatedNet)}</p>
                               </TooltipContent>
                             </Tooltip>

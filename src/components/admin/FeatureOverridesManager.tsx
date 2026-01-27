@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -29,10 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { format, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Search, Trash2, ShieldAlert, Loader2, User, FolderKanban } from 'lucide-react';
+import { Plus, Search, Trash2, ShieldAlert, Loader2, User, FolderKanban, Layers } from 'lucide-react';
 
 interface Feature {
   id: string;
@@ -73,6 +75,7 @@ export const FeatureOverridesManager = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showDialog, setShowDialog] = useState(false);
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -81,6 +84,14 @@ export const FeatureOverridesManager = () => {
     feature_id: '',
     enabled: true,
     expires_at: '',
+  });
+
+  const [batchForm, setBatchForm] = useState({
+    target_type: 'project' as 'user' | 'project',
+    target_id: '',
+    enabled: true,
+    expires_at: '',
+    selected_feature_ids: [] as string[],
   });
 
   const fetchData = async () => {
@@ -156,6 +167,17 @@ export const FeatureOverridesManager = () => {
     setShowDialog(true);
   };
 
+  const openBatchDialog = () => {
+    setBatchForm({
+      target_type: 'project',
+      target_id: '',
+      enabled: true,
+      expires_at: '',
+      selected_feature_ids: [],
+    });
+    setShowBatchDialog(true);
+  };
+
   const handleSave = async () => {
     if (!form.target_id || !form.feature_id) {
       toast.error('Selecione o alvo e a feature');
@@ -181,6 +203,62 @@ export const FeatureOverridesManager = () => {
       fetchData();
     } catch (error: any) {
       toast.error('Erro ao criar override', { description: error.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBatchSave = async () => {
+    if (!batchForm.target_id || batchForm.selected_feature_ids.length === 0) {
+      toast.error('Selecione o alvo e ao menos uma feature');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Get existing overrides for this target
+      const { data: existingOverrides } = await supabase
+        .from('feature_overrides' as any)
+        .select('feature_id')
+        .eq('target_type', batchForm.target_type)
+        .eq('target_id', batchForm.target_id) as { data: { feature_id: string }[] | null };
+
+      const existingFeatureIds = new Set((existingOverrides || []).map(o => o.feature_id));
+
+      // Filter out features that already have overrides
+      const newFeatureIds = batchForm.selected_feature_ids.filter(id => !existingFeatureIds.has(id));
+
+      if (newFeatureIds.length === 0) {
+        toast.info('Todas as features selecionadas já têm overrides para este alvo');
+        setShowBatchDialog(false);
+        return;
+      }
+
+      // Create batch insert
+      const inserts = newFeatureIds.map(feature_id => ({
+        target_type: batchForm.target_type,
+        target_id: batchForm.target_id,
+        feature_id,
+        enabled: batchForm.enabled,
+        expires_at: batchForm.expires_at || null,
+        created_by: user?.id,
+      }));
+
+      const { error } = await supabase
+        .from('feature_overrides' as any)
+        .insert(inserts);
+
+      if (error) throw error;
+
+      const skipped = batchForm.selected_feature_ids.length - newFeatureIds.length;
+      toast.success(
+        `${newFeatureIds.length} overrides criados com sucesso!` +
+        (skipped > 0 ? ` (${skipped} já existentes ignorados)` : '')
+      );
+      setShowBatchDialog(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error('Erro ao criar overrides em lote', { description: error.message });
     } finally {
       setSaving(false);
     }
@@ -217,6 +295,45 @@ export const FeatureOverridesManager = () => {
     }
   };
 
+  const toggleAllFeatures = (selectAll: boolean) => {
+    if (selectAll) {
+      setBatchForm({
+        ...batchForm,
+        selected_feature_ids: features.map(f => f.id),
+      });
+    } else {
+      setBatchForm({
+        ...batchForm,
+        selected_feature_ids: [],
+      });
+    }
+  };
+
+  const toggleFeature = (featureId: string) => {
+    const currentSelection = batchForm.selected_feature_ids;
+    if (currentSelection.includes(featureId)) {
+      setBatchForm({
+        ...batchForm,
+        selected_feature_ids: currentSelection.filter(id => id !== featureId),
+      });
+    } else {
+      setBatchForm({
+        ...batchForm,
+        selected_feature_ids: [...currentSelection, featureId],
+      });
+    }
+  };
+
+  // Group features by module
+  const groupedFeatures = features.reduce((acc, feature) => {
+    const module = feature.module_key || 'outros';
+    if (!acc[module]) {
+      acc[module] = [];
+    }
+    acc[module].push(feature);
+    return acc;
+  }, {} as Record<string, Feature[]>);
+
   const filteredOverrides = overrides.filter(o =>
     o.target_name?.toLowerCase().includes(search.toLowerCase()) ||
     o.feature?.name?.toLowerCase().includes(search.toLowerCase())
@@ -252,6 +369,10 @@ export const FeatureOverridesManager = () => {
                   className="pl-10"
                 />
               </div>
+              <Button variant="outline" onClick={openBatchDialog}>
+                <Layers className="w-4 h-4 mr-2" />
+                Criar em Lote
+              </Button>
               <Button onClick={openNewDialog}>
                 <Plus className="w-4 h-4 mr-2" />
                 Novo Override
@@ -334,6 +455,7 @@ export const FeatureOverridesManager = () => {
         </CardContent>
       </Card>
 
+      {/* Single Override Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
@@ -426,6 +548,140 @@ export const FeatureOverridesManager = () => {
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Criar Override
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Override Dialog */}
+      <Dialog open={showBatchDialog} onOpenChange={setShowBatchDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Criar Overrides em Lote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo de Alvo</Label>
+                <Select
+                  value={batchForm.target_type}
+                  onValueChange={(v) => setBatchForm({ ...batchForm, target_type: v as 'user' | 'project', target_id: '' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Usuário</SelectItem>
+                    <SelectItem value="project">Projeto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{batchForm.target_type === 'user' ? 'Usuário' : 'Projeto'}</Label>
+                <Select
+                  value={batchForm.target_id}
+                  onValueChange={(v) => setBatchForm({ ...batchForm, target_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {batchForm.target_type === 'user' ? (
+                      users.map(u => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.email} {u.full_name && `(${u.full_name})`}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      projects.map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={batchForm.enabled}
+                  onCheckedChange={(checked) => setBatchForm({ ...batchForm, enabled: checked })}
+                />
+                <Label>{batchForm.enabled ? 'Habilitar features' : 'Bloquear features'}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground">Expiração:</Label>
+                <Input
+                  type="date"
+                  value={batchForm.expires_at}
+                  onChange={(e) => setBatchForm({ ...batchForm, expires_at: e.target.value })}
+                  className="w-40"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Features ({batchForm.selected_feature_ids.length} selecionadas)</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleAllFeatures(true)}
+                  >
+                    Selecionar Todas
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleAllFeatures(false)}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+              <ScrollArea className="h-[300px] border rounded-md p-4">
+                <div className="space-y-4">
+                  {Object.entries(groupedFeatures).map(([module, moduleFeatures]) => (
+                    <div key={module} className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">
+                        {module}
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {moduleFeatures.map(feature => (
+                          <div
+                            key={feature.id}
+                            className="flex items-center space-x-2 p-2 rounded hover:bg-muted/50 cursor-pointer"
+                            onClick={() => toggleFeature(feature.id)}
+                          >
+                            <Checkbox
+                              checked={batchForm.selected_feature_ids.includes(feature.id)}
+                              onCheckedChange={() => toggleFeature(feature.id)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm truncate">{feature.name}</p>
+                              <code className="text-xs text-muted-foreground">{feature.feature_key}</code>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleBatchSave} disabled={saving || batchForm.selected_feature_ids.length === 0}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Criar {batchForm.selected_feature_ids.length} Overrides
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -201,39 +201,90 @@ serve(async (req) => {
     /**
      * Batch check for existing provider_event_ids
      * Using SELECT instead of upsert to work with partial unique index
-     * CRITICAL: Use small chunks (50) because provider_event_id strings are long
-     * and can exceed URL length limits when encoded in .in() queries
+     * CRITICAL: provider_event_id strings are long and PostgREST uses GET query params
+     * for filters. Some environments have strict URL length limits.
+     * We therefore use an adaptive strategy:
+     * - try a batch .in() query
+     * - if it fails (URI too long / network error), split the batch and retry
+     * - worst case: fallback to single-id .eq() queries
+     * This avoids both 500s and incorrect dedupe (which can cause insert failures).
      */
     const getExistingProviderEventIds = async (providerEventIds: string[]): Promise<Set<string>> => {
       const existing = new Set<string>();
       if (providerEventIds.length === 0) return existing;
-      
-      // Small chunk size to avoid URL length limits
-      // Each provider_event_id is ~40 chars, URL-encoded becomes ~60 chars
-      // Max safe URL is ~2000 chars, so ~30-50 IDs per query
-      const CHUNK = 50;
-      for (let i = 0; i < providerEventIds.length; i += CHUNK) {
-        const slice = providerEventIds.slice(i, i + CHUNK);
+
+      // Deduplicate to reduce query size.
+      const uniqueIds = Array.from(new Set(providerEventIds.filter(Boolean)));
+
+      const safeErrorMessage = (err: unknown) => {
+        if (err instanceof Error) return err.message;
+        if (typeof err === 'string') return err;
+        if (err && typeof err === 'object' && 'message' in err) return String((err as any).message);
         try {
-          const { data, error } = await supabase
-            .from('ledger_events')
-            .select('provider_event_id')
-            .in('provider_event_id', slice);
-          
-          if (error) {
-            console.error(`[LedgerBackfill] Error checking existing events chunk ${i}/${providerEventIds.length}:`, error);
-            // Continue processing other chunks instead of throwing
-            continue;
-          }
-          
-          for (const row of data || []) {
+          return JSON.stringify(err);
+        } catch {
+          return String(err);
+        }
+      };
+
+      const queryExistingIn = async (ids: string[]) => {
+        const { data, error } = await supabase
+          .from('ledger_events')
+          .select('provider_event_id')
+          .in('provider_event_id', ids);
+        if (error) throw error;
+        return data || [];
+      };
+
+      const queryExistingSingle = async (id: string) => {
+        const { data, error } = await supabase
+          .from('ledger_events')
+          .select('provider_event_id')
+          .eq('provider_event_id', id);
+        if (error) throw error;
+        return data || [];
+      };
+
+      // Start with a moderate chunk; we'll split further only when needed.
+      const INITIAL_CHUNK = 25;
+      const queue: string[][] = [];
+      for (let i = 0; i < uniqueIds.length; i += INITIAL_CHUNK) {
+        queue.push(uniqueIds.slice(i, i + INITIAL_CHUNK));
+      }
+
+      while (queue.length > 0) {
+        const ids = queue.shift()!;
+        if (ids.length === 0) continue;
+
+        try {
+          const rows = await queryExistingIn(ids);
+          for (const row of rows) {
             if (row.provider_event_id) existing.add(row.provider_event_id);
           }
         } catch (err) {
-          console.error(`[LedgerBackfill] Exception checking chunk ${i}:`, err);
-          // Continue with next chunk
+          const msg = safeErrorMessage(err);
+          console.error(`[LedgerBackfill] Existing check failed (n=${ids.length}). Will split/fallback.`, msg);
+
+          // If we are already down to 1 id, fallback to a single .eq() query.
+          if (ids.length === 1) {
+            const id = ids[0];
+            const rows = await queryExistingSingle(id);
+            for (const row of rows) {
+              if (row.provider_event_id) existing.add(row.provider_event_id);
+            }
+            continue;
+          }
+
+          // Split and retry.
+          const mid = Math.ceil(ids.length / 2);
+          const left = ids.slice(0, mid);
+          const right = ids.slice(mid);
+          // Prioritize retrying immediately.
+          queue.unshift(right);
+          queue.unshift(left);
         }
       }
+
       return existing;
     };
 
@@ -510,7 +561,14 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('[LedgerBackfill] Error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : error && typeof error === 'object' && 'message' in error
+            ? String((error as any).message)
+            : 'Unknown error';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

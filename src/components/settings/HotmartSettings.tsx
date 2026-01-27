@@ -142,21 +142,60 @@ export const HotmartSettings = () => {
     mutationFn: async (creds: typeof credentials) => {
       if (!projectId) throw new Error('Projeto não selecionado');
 
-      const { error } = await supabase
+      // CRITICAL: Use conditional update to protect client_secret from being overwritten with NULL
+      // First check if record exists
+      const { data: existing } = await supabase
         .from('project_credentials')
-        .upsert({
-          project_id: projectId,
-          provider: 'hotmart',
+        .select('id, client_secret')
+        .eq('project_id', projectId)
+        .eq('provider', 'hotmart')
+        .maybeSingle();
+
+      if (existing) {
+        // UPDATE existing record - only update fields that have values
+        const updateData: Record<string, any> = {
           client_id: creds.client_id,
-          client_secret: creds.client_secret,
-          basic_auth: creds.basic_auth,
-          is_configured: !!(creds.client_id && creds.client_secret),
+          is_configured: !!(creds.client_id && (creds.client_secret || existing.client_secret)),
           updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'project_id,provider'
-        });
-      
-      if (error) throw error;
+        };
+        
+        // Only update client_secret if a new non-empty value is provided
+        if (creds.client_secret && creds.client_secret.trim() !== '') {
+          updateData.client_secret = creds.client_secret;
+        }
+        
+        // Only update basic_auth if provided
+        if (creds.basic_auth !== undefined) {
+          updateData.basic_auth = creds.basic_auth;
+        }
+
+        const { error } = await supabase
+          .from('project_credentials')
+          .update(updateData)
+          .eq('project_id', projectId)
+          .eq('provider', 'hotmart');
+        
+        if (error) throw error;
+      } else {
+        // INSERT new record - require both client_id and client_secret
+        if (!creds.client_secret || creds.client_secret.trim() === '') {
+          throw new Error('Client Secret é obrigatório para a primeira configuração');
+        }
+
+        const { error } = await supabase
+          .from('project_credentials')
+          .insert({
+            project_id: projectId,
+            provider: 'hotmart',
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+            basic_auth: creds.basic_auth,
+            is_configured: !!(creds.client_id && creds.client_secret),
+            updated_at: new Date().toISOString()
+          });
+        
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });

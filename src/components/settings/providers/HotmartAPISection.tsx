@@ -41,7 +41,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('*')
+        .select('*, hotmart_refresh_token, hotmart_access_token, hotmart_expires_at')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -95,6 +95,34 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     },
   });
 
+  // Check if OAuth is connected
+  const isOAuthConnected = !!hotmartCredentials?.hotmart_refresh_token;
+
+  const handleSaveCredentials = async () => {
+    if (!credentials.client_id || !credentials.client_secret) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Client ID e Client Secret são necessários.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await saveCredentialsMutation.mutateAsync(credentials);
+      toast({
+        title: 'Credenciais salvas',
+        description: 'Credenciais salvas. Use o botão "Conectar Hotmart (OAuth)" na seção principal para autenticar.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao salvar',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleTestConnection = async () => {
     if (!credentials.client_id || !credentials.client_secret) {
       toast({
@@ -105,11 +133,18 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
       return;
     }
 
+    // Check if OAuth is configured
+    if (!isOAuthConnected) {
+      toast({
+        title: 'OAuth não configurado',
+        description: 'Primeiro salve as credenciais e complete o fluxo OAuth na seção "Conexão Hotmart" acima.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setTesting(true);
     try {
-      await saveCredentialsMutation.mutateAsync(credentials);
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
           endpoint: '/sales/summary',
@@ -198,6 +233,29 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-4">
+        {/* OAuth Status Alert */}
+        {!isOAuthConnected && (
+          <Alert className="border-blue-500/50 bg-blue-500/10">
+            <AlertTriangle className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-xs text-blue-700 dark:text-blue-400">
+              <strong>OAuth não conectado.</strong> Para usar a API Hotmart, primeiro:
+              <ol className="list-decimal list-inside mt-1 space-y-0.5">
+                <li>Salve suas credenciais abaixo</li>
+                <li>Use o botão "Conectar Hotmart (OAuth)" na seção "Conexão Hotmart" acima</li>
+              </ol>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {isOAuthConnected && (
+          <Alert className="border-green-500/50 bg-green-500/10">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-xs text-green-700 dark:text-green-400">
+              <strong>OAuth conectado!</strong> A API Hotmart está pronta para uso.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Alert className="border-amber-500/50 bg-amber-500/10">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-xs text-amber-700 dark:text-amber-400">
@@ -263,23 +321,39 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
           <div className="flex gap-3 pt-2">
             <Button
-              onClick={handleTestConnection}
-              disabled={testing || !credentials.client_id || !credentials.client_secret}
-              className="flex-1"
+              onClick={handleSaveCredentials}
+              disabled={saveCredentialsMutation.isPending || !credentials.client_id || !credentials.client_secret}
               variant="outline"
             >
-              {testing ? (
+              {saveCredentialsMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Testando...
+                  Salvando...
                 </>
               ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Salvar e Testar
-                </>
+                'Salvar Credenciais'
               )}
             </Button>
+
+            {isOAuthConnected && (
+              <Button
+                onClick={handleTestConnection}
+                disabled={testing || !credentials.client_id || !credentials.client_secret}
+                variant="outline"
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Testando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Testar API
+                  </>
+                )}
+              </Button>
+            )}
             
             {isConfigured && (
               <Button

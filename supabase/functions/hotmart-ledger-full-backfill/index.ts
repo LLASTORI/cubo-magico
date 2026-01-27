@@ -201,26 +201,37 @@ serve(async (req) => {
     /**
      * Batch check for existing provider_event_ids
      * Using SELECT instead of upsert to work with partial unique index
+     * CRITICAL: Use small chunks (50) because provider_event_id strings are long
+     * and can exceed URL length limits when encoded in .in() queries
      */
     const getExistingProviderEventIds = async (providerEventIds: string[]): Promise<Set<string>> => {
       const existing = new Set<string>();
       if (providerEventIds.length === 0) return existing;
       
-      const CHUNK = 500;
+      // Small chunk size to avoid URL length limits
+      // Each provider_event_id is ~40 chars, URL-encoded becomes ~60 chars
+      // Max safe URL is ~2000 chars, so ~30-50 IDs per query
+      const CHUNK = 50;
       for (let i = 0; i < providerEventIds.length; i += CHUNK) {
         const slice = providerEventIds.slice(i, i + CHUNK);
-        const { data, error } = await supabase
-          .from('ledger_events')
-          .select('provider_event_id')
-          .in('provider_event_id', slice);
-        
-        if (error) {
-          console.error(`[LedgerBackfill] Error checking existing events:`, error);
-          throw error;
-        }
-        
-        for (const row of data || []) {
-          if (row.provider_event_id) existing.add(row.provider_event_id);
+        try {
+          const { data, error } = await supabase
+            .from('ledger_events')
+            .select('provider_event_id')
+            .in('provider_event_id', slice);
+          
+          if (error) {
+            console.error(`[LedgerBackfill] Error checking existing events chunk ${i}/${providerEventIds.length}:`, error);
+            // Continue processing other chunks instead of throwing
+            continue;
+          }
+          
+          for (const row of data || []) {
+            if (row.provider_event_id) existing.add(row.provider_event_id);
+          }
+        } catch (err) {
+          console.error(`[LedgerBackfill] Exception checking chunk ${i}:`, err);
+          // Continue with next chunk
         }
       }
       return existing;

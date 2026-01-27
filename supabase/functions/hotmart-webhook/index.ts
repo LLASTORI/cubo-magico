@@ -526,12 +526,37 @@ async function writeOrderShadow(
     // ============================================
     // 3. CREATE LEDGER EVENTS (only for NEW financial events - respect deduplication)
     // ============================================
+    // 
+    // CRITICAL FIX: Using manual SELECT + INSERT instead of upsert
+    // PostgreSQL does NOT support ON CONFLICT on partial unique indexes.
+    // The ledger_events table has a partial unique index:
+    //   UNIQUE(provider_event_id) WHERE provider_event_id IS NOT NULL
+    // Using upsert with onConflict: 'provider_event_id' causes silent failures (error 42P10).
+    // ============================================
     const occurredAt = orderedAt;
     const isDebit = debitEvents.includes(hotmartEvent);
+    
+    // Track if ANY ledger event was created successfully (for conditional map creation)
+    let ledgerCreatedSuccessfully = false;
     
     // Only create ledger events when shouldApplyFinancialValues is true
     // This ensures ledger_events are consistent with customer_paid and order_items
     if (shouldApplyFinancialValues) {
+      // Collect all ledger events to create for THIS transaction
+      const ledgerEventsToCreate: Array<{
+        order_id: string;
+        project_id: string;
+        provider: string;
+        event_type: string;
+        actor: string;
+        actor_name: string | null;
+        amount: number;
+        currency: string;
+        provider_event_id: string;
+        occurred_at: string;
+        raw_payload: any;
+      }> = [];
+      
       for (const comm of commissions) {
         const source = (comm.source || '').toUpperCase();
         let value = comm.value ?? 0;
@@ -571,38 +596,23 @@ async function writeOrderShadow(
             continue;
         }
         
-        // ============================================
-        // LEDGER DEDUPLICATION BY PROVIDER_EVENT_ID (TRANSACTION-LEVEL)
+        // Build provider_event_id for deduplication
         // Key: {transaction_id}_{event_type}_{actor}
-        // This allows multiple transactions (main + bumps) to have their own ledger entries
-        // ============================================
         const providerEventId = `${transactionId}_${eventType}_${actor}`;
         
-        const { error: eventError } = await supabase
-          .from('ledger_events')
-          .upsert({
-            order_id: orderId,
-            project_id: projectId,
-            provider: 'hotmart',
-            event_type: eventType,
-            actor,
-            actor_name: actorName,
-            amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
-            currency,
-            provider_event_id: providerEventId,
-            occurred_at: occurredAt,
-            raw_payload: comm,
-          }, {
-            onConflict: 'provider_event_id',
-            ignoreDuplicates: true,
-          });
-        
-        if (!eventError) {
-          result.eventsCreated++;
-          console.log(`[OrdersShadow] Upserted ledger event: ${eventType} (${actor}): ${value} [${providerEventId}]`);
-        } else {
-          console.log(`[OrdersShadow] Ledger event exists or error: ${providerEventId}`);
-        }
+        ledgerEventsToCreate.push({
+          order_id: orderId,
+          project_id: projectId,
+          provider: 'hotmart',
+          event_type: eventType,
+          actor,
+          actor_name: actorName,
+          amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
+          currency,
+          provider_event_id: providerEventId,
+          occurred_at: occurredAt,
+          raw_payload: comm,
+        });
       }
       
       // ============================================
@@ -618,38 +628,81 @@ async function writeOrderShadow(
         
         if (calculatedCoproducerCost > 0) {
           const coproducerEventId = `${transactionId}_coproducer_auto`;
-          
-          const { error: coproducerError } = await supabase
-            .from('ledger_events')
-            .upsert({
-              order_id: orderId,
-              project_id: projectId,
-              provider: 'hotmart',
-              event_type: 'coproducer',
-              actor: 'coproducer',
-              actor_name: null,
-              amount: -calculatedCoproducerCost,
-              currency,
-              provider_event_id: coproducerEventId,
-              occurred_at: occurredAt,
-              raw_payload: { source: 'auto_calculated', has_co_production: true },
-            }, {
-              onConflict: 'provider_event_id',
-              ignoreDuplicates: true,
-            });
-          
-          if (!coproducerError) {
-            result.eventsCreated++;
-            console.log(`[OrdersShadow] Upserted auto-calculated coproducer: ${calculatedCoproducerCost} [${coproducerEventId}]`);
-          }
+          ledgerEventsToCreate.push({
+            order_id: orderId,
+            project_id: projectId,
+            provider: 'hotmart',
+            event_type: 'coproducer',
+            actor: 'coproducer',
+            actor_name: null,
+            amount: -calculatedCoproducerCost,
+            currency,
+            provider_event_id: coproducerEventId,
+            occurred_at: occurredAt,
+            raw_payload: { source: 'auto_calculated', has_co_production: true },
+          });
         }
       }
       
       // ============================================
-      // 5. FILL provider_order_map (only after financial processing)
-      // This marks the transaction as financially processed for deduplication
+      // 5. MANUAL SELECT + INSERT FOR EACH LEDGER EVENT (FIX FOR PARTIAL INDEX)
       // ============================================
-      if (transactionId) {
+      // Step 1: Batch-check which provider_event_ids already exist
+      const allProviderEventIds = ledgerEventsToCreate.map(e => e.provider_event_id);
+      const existingIds = new Set<string>();
+      
+      if (allProviderEventIds.length > 0) {
+        const { data: existingEvents, error: checkError } = await supabase
+          .from('ledger_events')
+          .select('provider_event_id')
+          .in('provider_event_id', allProviderEventIds);
+        
+        if (checkError) {
+          console.error(`[OrdersShadow] Error checking existing ledger events:`, checkError);
+          // DO NOT silently continue - log the error explicitly
+          throw new Error(`Ledger existence check failed: ${checkError.message}`);
+        }
+        
+        for (const row of existingEvents || []) {
+          if (row.provider_event_id) {
+            existingIds.add(row.provider_event_id);
+          }
+        }
+      }
+      
+      // Step 2: Filter to only new events
+      const newEvents = ledgerEventsToCreate.filter(e => !existingIds.has(e.provider_event_id));
+      
+      console.log(`[OrdersShadow] Ledger: ${allProviderEventIds.length} candidates, ${existingIds.size} already exist, ${newEvents.length} to insert`);
+      
+      // Step 3: Insert new events (one by one to capture individual errors)
+      for (const event of newEvents) {
+        const { error: insertError } = await supabase
+          .from('ledger_events')
+          .insert(event);
+        
+        if (insertError) {
+          // Explicit error handling - NEVER silently ignore
+          console.error(`[OrdersShadow] LEDGER INSERT FAILED for ${event.provider_event_id}:`, insertError);
+          throw new Error(`Ledger insert failed for ${event.provider_event_id}: ${insertError.message}`);
+        }
+        
+        result.eventsCreated++;
+        ledgerCreatedSuccessfully = true;
+        console.log(`[OrdersShadow] Created ledger event: ${event.event_type} (${event.actor}): ${event.amount} [${event.provider_event_id}]`);
+      }
+      
+      // If there were existing events, we still consider ledger as "processed"
+      if (existingIds.size > 0) {
+        ledgerCreatedSuccessfully = true;
+        console.log(`[OrdersShadow] Ledger already existed for ${existingIds.size} events - marking as processed`);
+      }
+      
+      // ============================================
+      // 6. FILL provider_order_map ONLY AFTER LEDGER SUCCESS
+      // This is the critical fix: never mark transaction as processed without ledger
+      // ============================================
+      if (transactionId && ledgerCreatedSuccessfully) {
         await supabase
           .from('provider_order_map')
           .upsert({
@@ -661,7 +714,9 @@ async function writeOrderShadow(
             onConflict: 'project_id,provider,provider_transaction_id',
           });
         
-        console.log(`[OrdersShadow] Mapped transaction ${transactionId} -> order ${orderId} (financial dedup marker)`);
+        console.log(`[OrdersShadow] Mapped transaction ${transactionId} -> order ${orderId} (ledger confirmed)`);
+      } else if (transactionId && !ledgerCreatedSuccessfully) {
+        console.warn(`[OrdersShadow] NOT mapping transaction ${transactionId} - ledger was not created`);
       }
     } else {
       console.log(`[OrdersShadow] Skipping ledger/mapping for ${hotmartEvent}: informational=${!isFinancialEvent}, already_processed=${transactionAlreadyProcessedFinancially}`);

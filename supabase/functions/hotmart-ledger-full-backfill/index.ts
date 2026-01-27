@@ -7,8 +7,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // This function reads raw_payload from provider_event_log
 // and creates ledger_events for EVERY transaction_id.
 // 
-// OPTIMIZED: Pre-loads orders and mappings in batch to avoid
-// N+1 query problems and timeouts.
+// CRITICAL FIX: Uses SELECT + INSERT pattern (NOT upsert)
+// PostgreSQL does NOT support ON CONFLICT on partial unique indexes.
+// The ledger_events table has:
+//   UNIQUE(provider_event_id) WHERE provider_event_id IS NOT NULL
+// Using upsert with onConflict causes silent failures (error 42P10).
 // ============================================
 
 const corsHeaders = {
@@ -88,8 +91,8 @@ serve(async (req) => {
     // Get projectId from header or body
     const projectCode = req.headers.get('X-Project-Code');
     let projectId: string | null = null;
-    let daysBack = 7; // Default to 7 days (safer)
-    let pageSize = 1000; // Fetch provider logs in pages (Supabase limit is typically 1000)
+    let daysBack = 30; // Default to 30 days for better coverage
+    let pageSize = 1000;
 
     if (projectCode) {
       const { data: project } = await supabase
@@ -103,8 +106,7 @@ serve(async (req) => {
     if (!projectId) {
       const body = await req.json().catch(() => ({}));
       projectId = body.projectId || null;
-      daysBack = body.daysBack || 7;
-      // Backwards compatibility: accept batchSize or pageSize
+      daysBack = body.daysBack || 30;
       pageSize = body.pageSize || body.batchSize || 1000;
     }
 
@@ -176,34 +178,47 @@ serve(async (req) => {
 
     console.log(`[LedgerBackfill] Pre-loaded ${ordersByTransactionId.size} transaction mappings`);
 
-    // Step 3: Process provider events with pagination to bypass 1000 limit
+    // Step 3: Process provider events with pagination
     let eventsProcessed = 0;
     let ledgerCreated = 0;
     let ledgerSkipped = 0;
+    let mappingsCreated = 0;
     let errors = 0;
     let totalEventsFetched = 0;
     let totalFinancialEvents = 0;
     let pages = 0;
 
+    // Relaxed filter: process ANY approved/complete order with producer_net > 0
     const shouldProcessOrder = (orderId: string): boolean => {
       const meta = ordersById.get(orderId);
       if (!meta) return false;
-      const isApproved = meta.status === 'approved' || meta.status === 'complete';
+      const isApproved = meta.status === 'approved' || meta.status === 'complete' || meta.status === 'completed';
       if (!isApproved) return false;
-      const base = meta.gross_base ?? meta.customer_paid;
-      return base > 0 && meta.producer_net > 0;
+      // Process if producer_net > 0 (this means there's actual revenue)
+      return meta.producer_net > 0;
     };
 
+    /**
+     * Batch check for existing provider_event_ids
+     * Using SELECT instead of upsert to work with partial unique index
+     */
     const getExistingProviderEventIds = async (providerEventIds: string[]): Promise<Set<string>> => {
       const existing = new Set<string>();
-      const CHUNK = 800;
+      if (providerEventIds.length === 0) return existing;
+      
+      const CHUNK = 500;
       for (let i = 0; i < providerEventIds.length; i += CHUNK) {
         const slice = providerEventIds.slice(i, i + CHUNK);
         const { data, error } = await supabase
           .from('ledger_events')
           .select('provider_event_id')
           .in('provider_event_id', slice);
-        if (error) throw error;
+        
+        if (error) {
+          console.error(`[LedgerBackfill] Error checking existing events:`, error);
+          throw error;
+        }
+        
         for (const row of data || []) {
           if (row.provider_event_id) existing.add(row.provider_event_id);
         }
@@ -220,7 +235,6 @@ serve(async (req) => {
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .gte('received_at', startDate.toISOString())
-        // newest first so recent issues are fixed first
         .order('received_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
 
@@ -229,11 +243,9 @@ serve(async (req) => {
       const events = pageEvents || [];
       totalEventsFetched += events.length;
 
-      if (events.length === 0) {
-        break;
-      }
+      if (events.length === 0) break;
 
-      // Filter only financially effective events first
+      // Filter only financially effective events
       const financialEvents = events.filter(event => {
         const hotmartEvent = event.raw_payload?.event || '';
         return isFinanciallyEffectiveEvent(hotmartEvent);
@@ -245,6 +257,8 @@ serve(async (req) => {
 
       // Collect ledger events to insert for THIS page
       const ledgerEventsToInsert: any[] = [];
+      // Track transaction → order mappings that need to be created
+      const transactionMappingsToCreate: Array<{ transactionId: string; orderId: string }> = [];
 
       for (const event of financialEvents) {
         try {
@@ -342,6 +356,7 @@ serve(async (req) => {
               provider_event_id: providerEventId,
               occurred_at: occurredAt,
               raw_payload: comm,
+              _transactionId: transactionId, // Track for mapping creation
             });
           }
 
@@ -379,9 +394,13 @@ serve(async (req) => {
                 provider_event_id: coproducerEventId,
                 occurred_at: occurredAt,
                 raw_payload: { source: 'auto_calculated', has_co_production: true },
+                _transactionId: transactionId,
               });
             }
           }
+
+          // Track mapping to create AFTER ledger success
+          transactionMappingsToCreate.push({ transactionId, orderId });
 
           eventsProcessed++;
         } catch (err) {
@@ -390,21 +409,27 @@ serve(async (req) => {
         }
       }
 
-      // Insert page events
+      // ============================================
+      // INSERT LEDGER EVENTS (SELECT + INSERT pattern)
+      // ============================================
       if (ledgerEventsToInsert.length > 0) {
         const allProviderEventIds = ledgerEventsToInsert.map(e => e.provider_event_id).filter(Boolean);
         const existingIds = await getExistingProviderEventIds(allProviderEventIds);
         const newEvents = ledgerEventsToInsert.filter(e => !existingIds.has(e.provider_event_id));
 
         ledgerSkipped += ledgerEventsToInsert.length - newEvents.length;
-        console.log(`[LedgerBackfill] Page ${pages}: ${ledgerEventsToInsert.length} candidates, ${newEvents.length} new`);
+        console.log(`[LedgerBackfill] Page ${pages}: ${ledgerEventsToInsert.length} candidates, ${existingIds.size} exist, ${newEvents.length} to insert`);
 
+        // Insert in chunks
         const chunkSize = 50;
         for (let i = 0; i < newEvents.length; i += chunkSize) {
           const chunk = newEvents.slice(i, i + chunkSize);
+          // Remove internal tracking field before insert
+          const cleanChunk = chunk.map(({ _transactionId, ...rest }) => rest);
+          
           const { error: insertError, data: insertedData } = await supabase
             .from('ledger_events')
-            .insert(chunk)
+            .insert(cleanChunk)
             .select('id');
 
           if (insertError) {
@@ -414,11 +439,41 @@ serve(async (req) => {
             ledgerCreated += insertedData?.length || 0;
           }
         }
+
+        // ============================================
+        // CREATE PROVIDER_ORDER_MAP ONLY AFTER LEDGER SUCCESS
+        // Deduplicate mappings by transactionId
+        // ============================================
+        const uniqueMappings = new Map<string, string>();
+        for (const m of transactionMappingsToCreate) {
+          uniqueMappings.set(m.transactionId, m.orderId);
+        }
+
+        for (const [txId, ordId] of uniqueMappings) {
+          // Check if mapping already exists
+          const alreadyMapped = ordersByTransactionId.has(txId);
+          if (alreadyMapped) continue;
+
+          const { error: mapError } = await supabase
+            .from('provider_order_map')
+            .upsert({
+              project_id: projectId,
+              provider: 'hotmart',
+              provider_transaction_id: txId,
+              order_id: ordId,
+            }, {
+              onConflict: 'project_id,provider,provider_transaction_id',
+            });
+
+          if (!mapError) {
+            mappingsCreated++;
+            // Update local cache
+            ordersByTransactionId.set(txId, ordId);
+          }
+        }
       }
 
-      if (events.length < pageSize) {
-        break;
-      }
+      if (events.length < pageSize) break;
     }
 
     const result = {
@@ -432,6 +487,7 @@ serve(async (req) => {
       eventsProcessed,
       ledgerCreated,
       ledgerSkipped,
+      mappingsCreated,
       errors,
     };
 

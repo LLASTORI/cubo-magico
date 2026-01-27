@@ -453,7 +453,7 @@ const Settings = () => {
                 className="flex items-center gap-2"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigateTo('/admin');
+                  navigateAbsolute('/admin');
                 }}
               >
                 <Crown className="h-4 w-4" />

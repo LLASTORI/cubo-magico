@@ -259,90 +259,10 @@ const Projects = () => {
     }
   };
 
-  const handleSaveCredentials = async () => {
-    if (!selectedProject) return;
-
-    if (!credentials.client_id || !credentials.client_secret) {
-      toast({ title: 'Client ID e Client Secret são obrigatórios', variant: 'destructive' });
-      return;
-    }
-
-    setSubmitting(true);
-    const { error } = await saveCredentials(selectedProject.id, credentials);
-    setSubmitting(false);
-
-    if (error) {
-      toast({ title: 'Erro ao salvar credenciais', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'Credenciais salvas! Agora teste a conexão.' });
-      // Update local status
-      setProjectCredentials(prev => ({
-        ...prev,
-        [selectedProject.id]: { is_configured: true, is_validated: false }
-      }));
-    }
-  };
-
-  const handleTestConnection = async () => {
-    if (!selectedProject) return;
-
-    if (!credentials.client_id || !credentials.client_secret) {
-      toast({ title: 'Client ID e Client Secret são obrigatórios', variant: 'destructive' });
-      return;
-    }
-
-    setTesting(true);
-    try {
-      // Save credentials first
-      const { error: saveError } = await saveCredentials(selectedProject.id, credentials);
-      if (saveError) {
-        throw new Error('Erro ao salvar credenciais: ' + saveError.message);
-      }
-
-      // Wait a moment for the database to sync
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Then test connection
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          endpoint: '/sales/summary',
-          params: {},
-          projectId: selectedProject.id,
-        },
-      });
-
-      if (error) throw error;
-
-      // Mark as validated
-      await markCredentialsValidated(selectedProject.id);
-      
-      // Update local status
-      setProjectCredentials(prev => ({
-        ...prev,
-        [selectedProject.id]: { is_configured: true, is_validated: true }
-      }));
-
-      toast({ 
-        title: '✓ Conexão bem-sucedida!', 
-        description: 'Credenciais validadas. Você pode acessar o Dashboard agora.' 
-      });
-      
-      setIsCredentialsOpen(false);
-      setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
-    } catch (error: any) {
-      toast({ 
-        title: '✗ Falha na conexão', 
-        description: error.message || 'Verifique suas credenciais',
-        variant: 'destructive' 
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
+  // Legacy credential functions removed - now handled in Settings > Integrations > Hotmart
 
   const openCredentialsDialog = (project: Project) => {
     setSelectedProject(project);
-    setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
     setIsCredentialsOpen(true);
   };
 
@@ -726,10 +646,10 @@ const Projects = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => openCredentialsDialog(project)}
-                            title="Credenciais"
+                            onClick={() => navigate(`/app/${project.public_code}/settings`)}
+                            title="Configurações"
                           >
-                            <Key className="w-3 h-3" />
+                            <Settings className="w-3 h-3" />
                           </Button>
                         </>
                       )}
@@ -791,71 +711,41 @@ const Projects = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Credentials Dialog */}
+        {/* Credentials Dialog - DEPRECATED: Now redirects to Settings > Integrations > Hotmart */}
         <Dialog open={isCredentialsOpen} onOpenChange={setIsCredentialsOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Credenciais Hotmart</DialogTitle>
+              <DialogTitle>Configurar Hotmart</DialogTitle>
               <DialogDescription>
-                Configure as credenciais da API Hotmart para "{selectedProject?.name}"
+                A configuração de credenciais foi movida para Integrações
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  ⚠️ Você precisa configurar e <strong>testar a conexão</strong> antes de acessar o Dashboard.
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  Para configurar as credenciais da Hotmart, acesse:
                 </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="client-id">Client ID *</Label>
-                <Input
-                  id="client-id"
-                  placeholder="Seu Client ID da Hotmart"
-                  value={credentials.client_id}
-                  onChange={(e) => setCredentials({ ...credentials, client_id: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="client-secret">Client Secret *</Label>
-                <Input
-                  id="client-secret"
-                  type="password"
-                  placeholder="Seu Client Secret da Hotmart"
-                  value={credentials.client_secret}
-                  onChange={(e) => setCredentials({ ...credentials, client_secret: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="basic-auth">Basic Auth (opcional)</Label>
-                <Input
-                  id="basic-auth"
-                  type="password"
-                  placeholder="Token Basic Auth"
-                  value={credentials.basic_auth}
-                  onChange={(e) => setCredentials({ ...credentials, basic_auth: e.target.value })}
-                />
+                <p className="text-sm font-medium mt-2">
+                  Configurações → Integrações → Financeiro → Hotmart
+                </p>
               </div>
             </div>
             <DialogFooter className="flex-col sm:flex-row gap-2">
-              <Button variant="outline" onClick={() => setIsCredentialsOpen(false)} className="sm:mr-auto">
-                Cancelar
+              <Button variant="outline" onClick={() => setIsCredentialsOpen(false)}>
+                Fechar
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleSaveCredentials} 
-                disabled={submitting || !credentials.client_id || !credentials.client_secret}
-              >
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Salvar
-              </Button>
-              <Button 
-                onClick={handleTestConnection} 
-                disabled={testing || !credentials.client_id || !credentials.client_secret}
-                className="gap-2"
-              >
-              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                Salvar e Testar Conexão
-              </Button>
+              {selectedProject && (
+                <Button 
+                  onClick={() => {
+                    setIsCredentialsOpen(false);
+                    navigate(`/app/${selectedProject.public_code}/settings`);
+                  }}
+                  className="gap-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  Ir para Configurações
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -126,30 +126,55 @@ export const HotmartSettings = () => {
     enabled: !!projectId,
   });
 
+  // FIXED: Only sync credentials from backend on INITIAL load, not on every refetch
+  // This prevents user input from being overwritten when queryClient invalidates
+  const [hasInitialized, setHasInitialized] = useState(false);
+  
   useEffect(() => {
-    if (hotmartCredentials) {
+    // Only populate form on first load when we don't have user input yet
+    if (hotmartCredentials && !hasInitialized) {
+      console.log('[FORENSIC] Initial credentials load from DB:', {
+        client_id: hotmartCredentials.client_id ? 'present' : 'missing',
+        client_secret: hotmartCredentials.client_secret ? 'present' : 'missing',
+      });
       setCredentials({
         client_id: hotmartCredentials.client_id || '',
-        client_secret: hotmartCredentials.client_secret || '',
+        client_secret: '', // NEVER populate secret from DB - user must re-enter for security
         basic_auth: hotmartCredentials.basic_auth || ''
       });
-    } else {
+      setHasInitialized(true);
+    } else if (!hotmartCredentials && !hasInitialized) {
       setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
+      setHasInitialized(true);
     }
-  }, [hotmartCredentials]);
+  }, [hotmartCredentials, hasInitialized]);
 
   const saveCredentialsMutation = useMutation({
     mutationFn: async (creds: typeof credentials) => {
       if (!projectId) throw new Error('Projeto não selecionado');
 
+      // FORENSIC LOGGING - Debug credential saving
+      console.log('[FORENSIC] saveCredentialsMutation called:', {
+        projectId,
+        client_id: creds.client_id ? `${creds.client_id.substring(0, 8)}...` : 'EMPTY',
+        client_secret: creds.client_secret ? `${creds.client_secret.length} chars` : 'EMPTY',
+        basic_auth: creds.basic_auth ? 'present' : 'empty'
+      });
+
       // CRITICAL: Use conditional update to protect client_secret from being overwritten with NULL
       // First check if record exists
-      const { data: existing } = await supabase
+      const { data: existing, error: selectError } = await supabase
         .from('project_credentials')
         .select('id, client_secret')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
+
+      console.log('[FORENSIC] Existing record check:', {
+        exists: !!existing,
+        hasExistingSecret: !!existing?.client_secret,
+        selectError: selectError?.message
+      });
 
       if (existing) {
         // UPDATE existing record - only update fields that have values
@@ -162,6 +187,9 @@ export const HotmartSettings = () => {
         // Only update client_secret if a new non-empty value is provided
         if (creds.client_secret && creds.client_secret.trim() !== '') {
           updateData.client_secret = creds.client_secret;
+          console.log('[FORENSIC] ✅ Will UPDATE client_secret (new value provided)');
+        } else {
+          console.log('[FORENSIC] ⚠️ Will NOT update client_secret (no new value)');
         }
         
         // Only update basic_auth if provided
@@ -169,11 +197,15 @@ export const HotmartSettings = () => {
           updateData.basic_auth = creds.basic_auth;
         }
 
-        const { error } = await supabase
+        console.log('[FORENSIC] Update payload:', JSON.stringify(updateData, null, 2));
+
+        const { error, count } = await supabase
           .from('project_credentials')
           .update(updateData)
           .eq('project_id', projectId)
           .eq('provider', 'hotmart');
+        
+        console.log('[FORENSIC] Update result:', { error: error?.message, count });
         
         if (error) throw error;
       } else {

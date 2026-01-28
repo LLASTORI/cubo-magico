@@ -8,7 +8,6 @@ import { ShoppingCart, Lock, ArrowLeft } from 'lucide-react';
 
 import { HotmartWebhookStatus } from './HotmartWebhookStatus';
 import { HotmartWebhookSection } from './HotmartWebhookSection';
-import { HotmartOAuthSection } from './HotmartOAuthSection';
 import { HotmartAPISection } from './HotmartAPISection';
 import { HotmartBackfillSection } from './HotmartBackfillSection';
 
@@ -72,9 +71,6 @@ export function HotmartProviderSettings({ onBack }: HotmartProviderSettingsProps
           {/* Status Operacional - ALWAYS AT TOP */}
           <HotmartWebhookStatus projectId={projectId} />
 
-          {/* OAuth Section - Required for API features */}
-          <HotmartOAuthSection projectId={projectId} />
-
           {/* Webhook Section - PRIMARY/MANDATORY */}
           <Card>
             <CardHeader>
@@ -88,21 +84,21 @@ export function HotmartProviderSettings({ onBack }: HotmartProviderSettingsProps
             </CardContent>
           </Card>
 
-          {/* Advanced Sections */}
+          {/* Advanced Sections - API + Backfill unified */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base text-muted-foreground">Configurações Avançadas</CardTitle>
               <CardDescription>
-                Funcionalidades para uso interno e técnico
+                API Hotmart para importação e sincronização de ofertas
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* API Section - COLLAPSED BY DEFAULT */}
+              {/* API Section with integrated OAuth */}
               <HotmartAPISection projectId={projectId} />
 
               <Separator />
 
-              {/* Backfill Section - COLLAPSED BY DEFAULT */}
+              {/* Backfill Section */}
               <HotmartBackfillSection projectId={projectId} />
             </CardContent>
           </Card>

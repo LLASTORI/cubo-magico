@@ -523,8 +523,13 @@ const BROWSER_HEADERS = {
 // ============================================
 // CLIENT CREDENTIALS FLOW - For Products/Offers API
 // ============================================
-// Uses client_id + client_secret to get access_token
+// Uses client_id + client_secret + basic (pre-generated auth)
 // NO user OAuth required - this is the original working flow
+// 
+// HOTMART STANDARD: 3 REQUIRED FIELDS
+// - client_id: Application client ID
+// - client_secret: Application client secret  
+// - basic: Pre-generated Base64(client_id:client_secret) header
 // ============================================
 async function getAccessTokenViaClientCredentials(
   supabase: any,
@@ -542,16 +547,25 @@ async function getAccessTokenViaClientCredentials(
   }
   
   const hotmartCred = decryptedCreds?.find((c: any) => c.provider === 'hotmart')
-  if (!hotmartCred?.client_id || !hotmartCred?.client_secret) {
-    throw new Error('Client ID/Secret não configurados. Acesse Configurações > Integrações > Hotmart.')
+  
+  // Validate all 3 required fields
+  if (!hotmartCred?.client_id) {
+    throw new Error('Client ID não configurado. Acesse Configurações > Integrações > Hotmart.')
   }
+  if (!hotmartCred?.client_secret) {
+    throw new Error('Client Secret não configurado. Acesse Configurações > Integrações > Hotmart.')
+  }
+  if (!hotmartCred?.basic_auth) {
+    throw new Error('Basic Auth não configurado. Acesse Configurações > Integrações > Hotmart.')
+  }
+  
+  console.log('[CLIENT_CREDENTIALS] All 3 credentials found (client_id, client_secret, basic)')
   
   const tokenUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token'
   
-  // Create Basic Auth header (using btoa for Deno compatibility)
-  const encoder = new TextEncoder()
-  const credentials = `${hotmartCred.client_id}:${hotmartCred.client_secret}`
-  const basicAuth = btoa(credentials)
+  // Use the pre-generated basic_auth header from Hotmart dashboard
+  // This is the STANDARD way - Hotmart provides this value directly
+  const basicAuth = hotmartCred.basic_auth
   
   const tokenBody = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -562,7 +576,6 @@ async function getAccessTokenViaClientCredentials(
   const tokenResponse = await fetch(tokenUrl, {
     method: 'POST',
     headers: {
-      ...BROWSER_HEADERS,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Authorization': `Basic ${basicAuth}`,
     },
@@ -572,13 +585,23 @@ async function getAccessTokenViaClientCredentials(
   const tokenText = await tokenResponse.text()
   
   if (!tokenResponse.ok) {
-    console.error('[CLIENT_CREDENTIALS] Token request failed:', tokenText.slice(0, 500))
+    console.error('[CLIENT_CREDENTIALS] Token request failed:', tokenResponse.status, tokenText.slice(0, 500))
     
     if (tokenText.includes('<!DOCTYPE') || tokenText.includes('<html')) {
       throw new Error('Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.')
     }
     
-    throw new Error(`Client Credentials failed: ${tokenText.slice(0, 200)}`)
+    // Parse error for better messages
+    try {
+      const errorData = JSON.parse(tokenText)
+      if (errorData.error === 'invalid_client') {
+        throw new Error('Credenciais inválidas. Verifique client_id, client_secret e basic.')
+      }
+      throw new Error(`Hotmart auth error: ${errorData.error_description || errorData.error || tokenText.slice(0, 100)}`)
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('Credenciais')) throw e
+      throw new Error(`Client Credentials failed (${tokenResponse.status}): ${tokenText.slice(0, 200)}`)
+    }
   }
   
   let tokenData
@@ -599,6 +622,7 @@ async function getAccessTokenViaClientCredentials(
 }
 
 // Call Hotmart Products API with Client Credentials (no OAuth required)
+// CORRECT URL: https://developers.hotmart.com/product/api/v1/...
 async function callHotmartProductsAPI(
   projectId: string,
   path: string,
@@ -609,19 +633,27 @@ async function callHotmartProductsAPI(
   // Get access token via Client Credentials (NOT OAuth)
   const access_token = await getAccessTokenViaClientCredentials(supabase, projectId)
   
-  // Build URL with query params
-  const url = new URL(`https://developers.hotmart.com${path}`)
+  // Ensure path starts with /product/api/v1 for products endpoint
+  let fullPath = path
+  if (path === '/products' || path.startsWith('/products/')) {
+    fullPath = `/product/api/v1${path}`
+  } else if (!path.startsWith('/product/api/v1')) {
+    fullPath = `/product/api/v1${path}`
+  }
+  
+  // Build URL with query params - CORRECT base URL
+  const url = new URL(`https://developers.hotmart.com${fullPath}`)
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.append(key, value)
   }
   
-  console.log(`[HOTMART-PRODUCTS-API] GET ${url.pathname}`)
+  console.log(`[HOTMART-PRODUCTS-API] GET ${url.toString()}`)
   
   const response = await fetch(url.toString(), {
     method: 'GET',
     headers: {
-      ...BROWSER_HEADERS,
       'Authorization': `Bearer ${access_token}`,
+      'Accept': 'application/json',
     },
   })
   

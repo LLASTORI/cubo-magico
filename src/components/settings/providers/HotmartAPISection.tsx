@@ -28,8 +28,11 @@ interface HotmartAPISectionProps {
 /**
  * HotmartAPISection - Configuração da API Hotmart para Produtos/Ofertas
  * 
- * IMPORTANTE: A API de Produtos/Ofertas da Hotmart usa Client Credentials,
- * NÃO requer OAuth de usuário. Apenas client_id e client_secret são necessários.
+ * IMPORTANTE: A API de Produtos/Ofertas da Hotmart usa Client Credentials.
+ * São obrigatórios os 3 campos conforme padrão Hotmart:
+ * - client_id: ID do aplicativo
+ * - client_secret: Secret do aplicativo
+ * - basic: Header de autorização pré-gerado (Base64 de client_id:client_secret)
  */
 export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
   const { toast } = useToast();
@@ -42,7 +45,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
   const [credentials, setCredentials] = useState({
     client_id: '',
     client_secret: '',
-    basic_auth: ''
+    basic_auth: ''  // Campo obrigatório - Basic header pré-gerado
   });
 
   const { data: hotmartCredentials, isLoading } = useQuery({
@@ -79,7 +82,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
   const isValidated = hotmartCredentials?.is_validated;
   const hasCredentialsInDB = !!hotmartCredentials?.client_id;
 
-  // Save credentials
+  // Save credentials - All 3 fields are required for first setup
   const handleSave = async () => {
     if (!credentials.client_id) {
       toast({
@@ -90,14 +93,24 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
       return;
     }
 
-    // If no existing credentials, require secret
-    if (!hasCredentialsInDB && !credentials.client_secret) {
-      toast({
-        title: 'Campo obrigatório',
-        description: 'Client Secret é necessário para a primeira configuração.',
-        variant: 'destructive',
-      });
-      return;
+    // If no existing credentials, require ALL 3 fields
+    if (!hasCredentialsInDB) {
+      if (!credentials.client_secret) {
+        toast({
+          title: 'Campo obrigatório',
+          description: 'Client Secret é necessário para a primeira configuração.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!credentials.basic_auth) {
+        toast({
+          title: 'Campo obrigatório',
+          description: 'Basic Auth é necessário. Copie o valor "Basic" do painel Hotmart.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     setSaving(true);
@@ -260,7 +273,10 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     }
   };
 
-  const canSave = credentials.client_id && (credentials.client_secret || hasCredentialsInDB);
+  // All 3 fields required for new setup, or just client_id for updates (secrets optional if already saved)
+  const canSave = credentials.client_id && (
+    hasCredentialsInDB || (credentials.client_secret && credentials.basic_auth)
+  );
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="space-y-4">
@@ -298,10 +314,10 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
           </AlertDescription>
         </Alert>
 
-        {/* Credentials Form */}
+        {/* Credentials Form - 3 REQUIRED FIELDS */}
         <div className="space-y-4 p-4 rounded-lg border bg-card">
           <div className="space-y-2">
-            <Label htmlFor="client_id">Client ID</Label>
+            <Label htmlFor="client_id">Client ID *</Label>
             <Input
               id="client_id"
               value={credentials.client_id}
@@ -312,7 +328,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
           <div className="space-y-2">
             <Label htmlFor="client_secret">
-              Client Secret
+              Client Secret *
               {hasCredentialsInDB && (
                 <span className="text-xs text-muted-foreground ml-2">(deixe vazio para manter o atual)</span>
               )}
@@ -336,6 +352,37 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
               </Button>
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="basic_auth">
+              Basic *
+              {hasCredentialsInDB && (
+                <span className="text-xs text-muted-foreground ml-2">(deixe vazio para manter o atual)</span>
+              )}
+            </Label>
+            <div className="relative">
+              <Input
+                id="basic_auth"
+                type={showSecrets ? 'text' : 'password'}
+                value={credentials.basic_auth}
+                onChange={(e) => setCredentials(prev => ({ ...prev, basic_auth: e.target.value }))}
+                placeholder={hasCredentialsInDB ? '••••••••••••' : 'Valor do campo Basic do painel Hotmart'}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full"
+                onClick={() => setShowSecrets(!showSecrets)}
+              >
+                {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Copie o valor exato do campo "Basic" no painel de credenciais da Hotmart (sem o prefixo "Basic ").
+            </p>
+          </div>
+
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 pt-2">
@@ -409,7 +456,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
           <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
             <li>Acesse o painel da Hotmart</li>
             <li>Vá em <strong>Ferramentas</strong> → <strong>Credenciais de API</strong></li>
-            <li>Copie o Client ID e Client Secret</li>
+            <li>Copie os 3 valores: <strong>Client ID</strong>, <strong>Client Secret</strong> e <strong>Basic</strong></li>
           </ol>
         </div>
       </CollapsibleContent>

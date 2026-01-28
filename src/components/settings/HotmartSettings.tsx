@@ -501,8 +501,11 @@ export const HotmartSettings = () => {
   const handleOAuthConnect = async () => {
     if (!projectId) return;
 
-    // Check if client_id and client_secret are configured first
-    if (!credentials.client_id || !credentials.client_secret) {
+    // Check if credentials are configured either in form OR already saved in database
+    const hasFormCredentials = credentials.client_id && credentials.client_secret;
+    const hasSavedCredentials = hotmartCredentials?.is_configured && hotmartCredentials?.client_id;
+
+    if (!hasFormCredentials && !hasSavedCredentials) {
       toast({
         title: 'Configure as credenciais primeiro',
         description: 'Client ID e Client Secret são necessários antes de conectar via OAuth.',
@@ -511,8 +514,10 @@ export const HotmartSettings = () => {
       return;
     }
 
-    // Save credentials first if they changed
-    await saveCredentialsMutation.mutateAsync(credentials);
+    // Save credentials first if user entered new values
+    if (credentials.client_secret) {
+      await saveCredentialsMutation.mutateAsync(credentials);
+    }
 
     setOauthConnecting(true);
     try {
@@ -536,9 +541,15 @@ export const HotmartSettings = () => {
       if (!data?.state) throw new Error('Estado OAuth não gerado');
 
       // Build Hotmart authorization URL (correct endpoint)
+      // Use client_id from form if available, otherwise from saved credentials
+      const clientIdForAuth = credentials.client_id || hotmartCredentials?.client_id;
+      if (!clientIdForAuth) {
+        throw new Error('Client ID não encontrado');
+      }
+
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hotmart-oauth-callback`;
       const authUrl = new URL('https://api-sec-vlc.hotmart.com/security/oauth/authorize');
-      authUrl.searchParams.set('client_id', credentials.client_id);
+      authUrl.searchParams.set('client_id', clientIdForAuth);
       authUrl.searchParams.set('redirect_uri', redirectUri);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('scope', 'all');
@@ -906,7 +917,7 @@ export const HotmartSettings = () => {
 
                     <Button
                       onClick={handleOAuthConnect}
-                      disabled={oauthConnecting || !credentials.client_id || !credentials.client_secret}
+                      disabled={oauthConnecting || (!credentials.client_id && !hotmartCredentials?.client_id)}
                       className="w-full"
                       variant={isOAuthConnected ? 'outline' : 'default'}
                     >

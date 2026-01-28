@@ -159,16 +159,19 @@ Deno.serve(async (req) => {
     // Create Supabase admin client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Get project credentials to get client_id and client_secret
-    const { data: credentials, error: credError } = await supabase
-      .from('project_credentials')
-      .select('client_id, client_secret')
-      .eq('project_id', projectId)
-      .eq('provider', 'hotmart')
-      .maybeSingle()
+    // Get project credentials using RPC to decrypt client_secret
+    const { data: credentialsArray, error: credError } = await supabase
+      .rpc('get_project_credentials_internal', { p_project_id: projectId })
 
-    if (credError || !credentials?.client_id || !credentials?.client_secret) {
-      console.error('[HOTMART-OAUTH] Credentials not found:', credError)
+    if (credError) {
+      console.error('[HOTMART-OAUTH] RPC error:', credError)
+      return redirectWithError('Erro ao obter credenciais', redirectUrl, corsHeaders)
+    }
+
+    const credentials = credentialsArray?.find((c: any) => c.provider === 'hotmart')
+    
+    if (!credentials?.client_id || !credentials?.client_secret) {
+      console.error('[HOTMART-OAUTH] Credentials not found or incomplete')
       return redirectWithError('Credenciais Hotmart não configuradas. Configure Client ID e Secret primeiro.', redirectUrl, corsHeaders)
     }
 

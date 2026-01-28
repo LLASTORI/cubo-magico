@@ -127,45 +127,55 @@ export async function getValidAccessToken(
   supabase: any,
   projectId: string
 ): Promise<string> {
-  // Get current credentials
-  const { data: credentials, error: credError } = await supabase
+  // Get OAuth tokens from raw table (they're not encrypted)
+  const { data: oauthData, error: oauthError } = await supabase
     .from('project_credentials')
-    .select('client_id, client_secret, hotmart_access_token, hotmart_refresh_token, hotmart_expires_at')
+    .select('hotmart_access_token, hotmart_refresh_token, hotmart_expires_at')
     .eq('project_id', projectId)
     .eq('provider', 'hotmart')
     .maybeSingle()
 
-  if (credError || !credentials) {
+  if (oauthError || !oauthData) {
     throw new Error('Hotmart credentials not found')
   }
 
   // Check if we have OAuth tokens
-  if (!credentials.hotmart_refresh_token) {
+  if (!oauthData.hotmart_refresh_token) {
     throw new Error('Hotmart não conectado via OAuth. Use o botão "Conectar Hotmart (OAuth)" nas configurações.')
   }
 
   // Check if token is still valid (with 5 minute buffer)
-  const expiresAt = credentials.hotmart_expires_at ? new Date(credentials.hotmart_expires_at) : null
+  const expiresAt = oauthData.hotmart_expires_at ? new Date(oauthData.hotmart_expires_at) : null
   const now = new Date()
   const bufferMs = 5 * 60 * 1000 // 5 minutes
 
-  if (credentials.hotmart_access_token && expiresAt && expiresAt.getTime() > now.getTime() + bufferMs) {
+  if (oauthData.hotmart_access_token && expiresAt && expiresAt.getTime() > now.getTime() + bufferMs) {
     // Token still valid
     console.log('[REFRESH] Token still valid, expires:', expiresAt.toISOString())
-    return credentials.hotmart_access_token
+    return oauthData.hotmart_access_token
   }
 
-  // Token expired or about to expire - refresh it
+  // Token expired or about to expire - need to refresh
   console.log('[REFRESH] Token expired or expiring soon, refreshing...')
-  
-  if (!credentials.client_id || !credentials.client_secret) {
-    throw new Error('Client ID/Secret não configurados')
+
+  // Get decrypted credentials using RPC (client_id, client_secret are encrypted)
+  const { data: decryptedCreds, error: rpcError } = await supabase
+    .rpc('get_project_credentials_internal', { p_project_id: projectId })
+
+  if (rpcError) {
+    console.error('[REFRESH] RPC error:', rpcError)
+    throw new Error('Erro ao obter credenciais: ' + rpcError.message)
+  }
+
+  const hotmartCred = decryptedCreds?.find((c: any) => c.provider === 'hotmart')
+  if (!hotmartCred?.client_id || !hotmartCred?.client_secret) {
+    throw new Error('Client ID/Secret não configurados. Reconfigure as credenciais.')
   }
 
   const result = await refreshAccessToken(supabase, projectId, {
-    client_id: credentials.client_id,
-    client_secret: credentials.client_secret,
-    hotmart_refresh_token: credentials.hotmart_refresh_token,
+    client_id: hotmartCred.client_id,
+    client_secret: hotmartCred.client_secret,
+    hotmart_refresh_token: oauthData.hotmart_refresh_token,
   })
 
   return result.access_token

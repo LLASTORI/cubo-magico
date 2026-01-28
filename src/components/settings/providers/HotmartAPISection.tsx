@@ -30,6 +30,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const [credentials, setCredentials] = useState({
     client_id: '',
     client_secret: '',
@@ -51,44 +52,59 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     enabled: !!projectId,
   });
 
+  // FIXED: Only sync credentials from backend on INITIAL load, not on every refetch
   useEffect(() => {
-    if (hotmartCredentials) {
+    if (hotmartCredentials && !hasInitialized) {
       setCredentials({
         client_id: hotmartCredentials.client_id || '',
-        client_secret: hotmartCredentials.client_secret || '',
+        client_secret: '', // NEVER populate secret from DB - user must re-enter
         basic_auth: hotmartCredentials.basic_auth || ''
       });
+      setHasInitialized(true);
+    } else if (!hotmartCredentials && !hasInitialized) {
+      setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
+      setHasInitialized(true);
     }
-  }, [hotmartCredentials]);
+  }, [hotmartCredentials, hasInitialized]);
 
   const saveCredentialsMutation = useMutation({
     mutationFn: async (creds: typeof credentials) => {
+      // FORENSIC LOGGING
+      console.log('[FORENSIC-API] saveCredentialsMutation called:', {
+        projectId,
+        client_id: creds.client_id ? `${creds.client_id.substring(0, 8)}...` : 'EMPTY',
+        client_secret: creds.client_secret ? `${creds.client_secret.length} chars` : 'EMPTY',
+      });
+
       // CRITICAL: Use conditional update to protect client_secret from being overwritten with NULL
-      // First check if record exists
-      const { data: existing } = await supabase
+      const { data: existing, error: selectError } = await supabase
         .from('project_credentials')
         .select('id, client_secret')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
 
+      console.log('[FORENSIC-API] Existing record:', { exists: !!existing, selectError: selectError?.message });
+
       if (existing) {
-        // UPDATE existing record - only update fields that have values
         const updateData: Record<string, any> = {
           client_id: creds.client_id,
           is_configured: !!(creds.client_id && (creds.client_secret || existing.client_secret)),
           updated_at: new Date().toISOString()
         };
         
-        // Only update client_secret if a new non-empty value is provided
         if (creds.client_secret && creds.client_secret.trim() !== '') {
           updateData.client_secret = creds.client_secret;
+          console.log('[FORENSIC-API] ✅ Will UPDATE client_secret');
+        } else {
+          console.log('[FORENSIC-API] ⚠️ Will NOT update client_secret');
         }
         
-        // Only update basic_auth if provided
         if (creds.basic_auth !== undefined) {
           updateData.basic_auth = creds.basic_auth;
         }
+
+        console.log('[FORENSIC-API] Update payload:', JSON.stringify(updateData, null, 2));
 
         const { error } = await supabase
           .from('project_credentials')
@@ -96,6 +112,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
           .eq('project_id', projectId)
           .eq('provider', 'hotmart');
         
+        console.log('[FORENSIC-API] Update result:', { error: error?.message });
         if (error) throw error;
       } else {
         // INSERT new record - require both client_id and client_secret

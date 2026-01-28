@@ -490,10 +490,19 @@ function determineSaleCategory(
 }
 
 // ============================================
-// OAUTH REFRESH TOKEN FLOW - Direct Hotmart API Access
+// AUTHENTICATION FLOWS
 // ============================================
-// Uses refresh_token from browser OAuth flow to get fresh access_token
-// Then calls Hotmart API directly with browser-like headers
+// FLOW 1: Client Credentials (for Products/Offers/Plans API)
+//   - Uses client_id + client_secret
+//   - grant_type: client_credentials
+//   - NO user OAuth required
+//   - Used by: /product/api/v1/products, /offers, /plans
+//
+// FLOW 2: OAuth Refresh Token (for Sales/Payments API)
+//   - Uses refresh_token from browser OAuth flow
+//   - grant_type: refresh_token
+//   - Requires user authorization
+//   - Used by: /payments/api/v1/sales (historical only)
 // ============================================
 
 // Browser-like headers to avoid WAF blocks
@@ -511,6 +520,133 @@ const BROWSER_HEADERS = {
   "Sec-Ch-Ua-Platform": '"Windows"',
 }
 
+// ============================================
+// CLIENT CREDENTIALS FLOW - For Products/Offers API
+// ============================================
+// Uses client_id + client_secret to get access_token
+// NO user OAuth required - this is the original working flow
+// ============================================
+async function getAccessTokenViaClientCredentials(
+  supabase: any,
+  projectId: string
+): Promise<string> {
+  console.log('[CLIENT_CREDENTIALS] Getting access token for project:', projectId)
+  
+  // Get decrypted credentials using RPC
+  const { data: decryptedCreds, error: rpcError } = await supabase
+    .rpc('get_project_credentials_internal', { p_project_id: projectId })
+  
+  if (rpcError) {
+    console.error('[CLIENT_CREDENTIALS] RPC error:', rpcError)
+    throw new Error('Erro ao obter credenciais: ' + rpcError.message)
+  }
+  
+  const hotmartCred = decryptedCreds?.find((c: any) => c.provider === 'hotmart')
+  if (!hotmartCred?.client_id || !hotmartCred?.client_secret) {
+    throw new Error('Client ID/Secret não configurados. Acesse Configurações > Integrações > Hotmart.')
+  }
+  
+  const tokenUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token'
+  
+  // Create Basic Auth header (using btoa for Deno compatibility)
+  const encoder = new TextEncoder()
+  const credentials = `${hotmartCred.client_id}:${hotmartCred.client_secret}`
+  const basicAuth = btoa(credentials)
+  
+  const tokenBody = new URLSearchParams({
+    grant_type: 'client_credentials',
+  })
+  
+  console.log('[CLIENT_CREDENTIALS] Requesting token from:', tokenUrl)
+  
+  const tokenResponse = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      ...BROWSER_HEADERS,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${basicAuth}`,
+    },
+    body: tokenBody,
+  })
+  
+  const tokenText = await tokenResponse.text()
+  
+  if (!tokenResponse.ok) {
+    console.error('[CLIENT_CREDENTIALS] Token request failed:', tokenText.slice(0, 500))
+    
+    if (tokenText.includes('<!DOCTYPE') || tokenText.includes('<html')) {
+      throw new Error('Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.')
+    }
+    
+    throw new Error(`Client Credentials failed: ${tokenText.slice(0, 200)}`)
+  }
+  
+  let tokenData
+  try {
+    tokenData = JSON.parse(tokenText)
+  } catch {
+    throw new Error(`Invalid JSON from token endpoint: ${tokenText.slice(0, 200)}`)
+  }
+  
+  const { access_token } = tokenData
+  
+  if (!access_token) {
+    throw new Error('No access_token in response')
+  }
+  
+  console.log('[CLIENT_CREDENTIALS] ✅ Access token obtained successfully')
+  return access_token
+}
+
+// Call Hotmart Products API with Client Credentials (no OAuth required)
+async function callHotmartProductsAPI(
+  projectId: string,
+  path: string,
+  params: Record<string, string> = {}
+): Promise<any> {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  
+  // Get access token via Client Credentials (NOT OAuth)
+  const access_token = await getAccessTokenViaClientCredentials(supabase, projectId)
+  
+  // Build URL with query params
+  const url = new URL(`https://developers.hotmart.com${path}`)
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.append(key, value)
+  }
+  
+  console.log(`[HOTMART-PRODUCTS-API] GET ${url.pathname}`)
+  
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      ...BROWSER_HEADERS,
+      'Authorization': `Bearer ${access_token}`,
+    },
+  })
+  
+  const rawText = await response.text()
+  
+  if (!response.ok) {
+    console.error(`[HOTMART-PRODUCTS-API] Error (${response.status}):`, rawText.slice(0, 500))
+    
+    if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
+      throw new Error('Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.')
+    }
+    
+    throw new Error(`Hotmart Products API error (${response.status}): ${rawText.slice(0, 200)}`)
+  }
+  
+  try {
+    return JSON.parse(rawText)
+  } catch {
+    throw new Error(`Invalid JSON from Hotmart: ${rawText.slice(0, 200)}`)
+  }
+}
+
+// ============================================
+// OAUTH REFRESH TOKEN FLOW - For Sales/Payments API (legacy)
+// ============================================
 // Refresh the access token using refresh_token
 async function refreshAccessToken(
   supabase: any,
@@ -1322,13 +1458,21 @@ serve(async (req) => {
       });
     }
 
-    // API passthrough logic - Direct OAuth
-    console.log(`[hotmart-api] Passthrough request: ${endpoint}`);
+    // API passthrough logic
+    console.log(`[hotmart-api] Passthrough request: ${endpoint}, apiType: ${apiType}`);
     
-    const fullPath = apiType === 'products' 
-      ? `/products/api/v1/${endpoint}`
-      : `/payments/api/v1/${endpoint}`;
+    // Use Client Credentials for Products API (no OAuth required)
+    // Use OAuth for Payments API (requires user authorization)
+    if (apiType === 'products') {
+      const fullPath = `/product/api/v1${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+      const data = await callHotmartProductsAPI(projectId, fullPath, params || {});
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
+    // Default: Payments API via OAuth
+    const fullPath = `/payments/api/v1/${endpoint}`;
     const data = await callHotmartAPI(projectId, fullPath, params || {});
     
     return new Response(JSON.stringify(data), {

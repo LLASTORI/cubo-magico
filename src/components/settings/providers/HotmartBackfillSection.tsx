@@ -26,13 +26,13 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState('');
 
-  // Check if API is configured
+  // Check if API is configured (client_id exists - NO OAuth required)
   const { data: hotmartCredentials } = useQuery({
     queryKey: ['hotmart_credentials', projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('is_validated')
+        .select('client_id')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -42,7 +42,8 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
     enabled: !!projectId,
   });
 
-  const isAPIConfigured = hotmartCredentials?.is_validated;
+  // API is available if client_id is configured (NO OAuth required)
+  const isAPIConfigured = !!hotmartCredentials?.client_id;
 
   // State for ledger backfill
   const [ledgerBackfilling, setLedgerBackfilling] = useState(false);

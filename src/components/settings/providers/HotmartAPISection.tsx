@@ -18,14 +18,19 @@ import {
   Loader2, 
   CheckCircle, 
   ChevronDown,
-  AlertTriangle,
-  ExternalLink
+  Save
 } from 'lucide-react';
 
 interface HotmartAPISectionProps {
   projectId: string;
 }
 
+/**
+ * HotmartAPISection - Configuração da API Hotmart para Produtos/Ofertas
+ * 
+ * IMPORTANTE: A API de Produtos/Ofertas da Hotmart usa Client Credentials,
+ * NÃO requer OAuth de usuário. Apenas client_id e client_secret são necessários.
+ */
 export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -45,7 +50,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('*, hotmart_refresh_token, hotmart_access_token, hotmart_expires_at, hotmart_connected_at')
+        .select('client_id, is_configured, is_validated, validated_at, updated_at')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -60,8 +65,8 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     if (hotmartCredentials && !hasInitialized) {
       setCredentials({
         client_id: hotmartCredentials.client_id || '',
-        client_secret: '', // NEVER populate secret from DB - user must re-enter
-        basic_auth: hotmartCredentials.basic_auth || ''
+        client_secret: '', // NEVER populate secret from DB - security
+        basic_auth: ''
       });
       setHasInitialized(true);
     } else if (!hotmartCredentials && !hasInitialized) {
@@ -70,41 +75,12 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     }
   }, [hotmartCredentials, hasInitialized]);
 
-  // Check for OAuth callback result
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hotmartConnected = params.get('hotmart_connected');
-    const hotmartError = params.get('hotmart_error');
-
-    if (hotmartConnected === 'true') {
-      toast({
-        title: 'Hotmart conectado com sucesso!',
-        description: 'API pronta para importação e sincronização de ofertas.',
-      });
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
-    }
-
-    if (hotmartError) {
-      toast({
-        title: 'Erro na conexão OAuth',
-        description: hotmartError,
-        variant: 'destructive',
-      });
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-    }
-  }, []);
-
-  const isOAuthConnected = !!hotmartCredentials?.hotmart_refresh_token;
-  const isConfigured = hotmartCredentials?.is_configured;
+  const isConfigured = !!hotmartCredentials?.client_id;
   const isValidated = hotmartCredentials?.is_validated;
-  const hasCredentialsInDB = hotmartCredentials?.client_id;
+  const hasCredentialsInDB = !!hotmartCredentials?.client_id;
 
-  // Unified Save + OAuth flow
-  const handleSaveAndConnect = async () => {
-    // Validate: require client_id always, require client_secret only if no existing credentials
+  // Save credentials
+  const handleSave = async () => {
     if (!credentials.client_id) {
       toast({
         title: 'Campo obrigatório',
@@ -126,10 +102,9 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
     setSaving(true);
     try {
-      // Step 1: Save credentials
       const { data: existing } = await supabase
         .from('project_credentials')
-        .select('id, client_secret')
+        .select('id')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -137,10 +112,11 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
       if (existing) {
         const updateData: Record<string, any> = {
           client_id: credentials.client_id,
-          is_configured: !!(credentials.client_id && (credentials.client_secret || existing.client_secret)),
+          is_configured: true,
           updated_at: new Date().toISOString()
         };
         
+        // Only update secret if provided
         if (credentials.client_secret && credentials.client_secret.trim() !== '') {
           updateData.client_secret = credentials.client_secret;
         }
@@ -165,23 +141,22 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
             client_id: credentials.client_id,
             client_secret: credentials.client_secret,
             basic_auth: credentials.basic_auth,
-            is_configured: !!(credentials.client_id && credentials.client_secret),
+            is_configured: true,
             updated_at: new Date().toISOString()
           });
         
         if (error) throw error;
       }
 
-      // Refetch to get updated data
       await queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
 
       toast({
-        title: 'Credenciais salvas',
-        description: 'Iniciando autorização OAuth...',
+        title: 'Credenciais salvas!',
+        description: 'API Hotmart configurada. Teste a conexão para validar.',
       });
 
-      // Step 2: Start OAuth flow
-      await startOAuthFlow();
+      // Clear the secret field after successful save
+      setCredentials(prev => ({ ...prev, client_secret: '' }));
 
     } catch (error: any) {
       console.error('Save error:', error);
@@ -190,96 +165,17 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
         description: error.message,
         variant: 'destructive',
       });
+    } finally {
       setSaving(false);
     }
   };
 
-  const startOAuthFlow = async () => {
-    try {
-      const pathParts = window.location.pathname.split('/');
-      const projectCodeFromPath = pathParts[1] === 'app' ? pathParts[2] : undefined;
-      const redirectBackUrl = projectCodeFromPath
-        ? `${window.location.origin}/app/${projectCodeFromPath}/settings`
-        : `${window.location.origin}/projects`;
-
-      const { data, error } = await supabase.functions.invoke('hotmart-oauth-state', {
-        body: {
-          projectId,
-          redirectUrl: redirectBackUrl,
-        },
-      });
-
-      if (error) throw error;
-      if (!data?.state) throw new Error('Estado OAuth não gerado');
-
-      // Use the client_id from form or from DB
-      const clientIdForAuth = credentials.client_id || hotmartCredentials?.client_id;
-      if (!clientIdForAuth) {
-        throw new Error('Client ID não encontrado');
-      }
-
-      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hotmart-oauth-callback`;
-      const authUrl = new URL('https://api-sec-vlc.hotmart.com/security/oauth/authorize');
-      authUrl.searchParams.set('client_id', clientIdForAuth);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', 'all');
-      authUrl.searchParams.set('state', data.state);
-
-      // Check if in iframe
-      const isInIframe = (() => {
-        try {
-          return window.self !== window.top;
-        } catch {
-          return true;
-        }
-      })();
-
-      if (isInIframe) {
-        const opened = window.open(authUrl.toString(), '_blank', 'noopener,noreferrer');
-        if (!opened) {
-          window.location.href = authUrl.toString();
-          return;
-        }
-        toast({
-          title: 'Continue a autorização na nova aba',
-          description: 'Após autorizar, você voltará automaticamente.',
-        });
-        setSaving(false);
-        return;
-      }
-
-      window.location.href = authUrl.toString();
-    } catch (error: any) {
-      console.error('OAuth error:', error);
-      toast({
-        title: 'Erro ao iniciar OAuth',
-        description: error.message || 'Não foi possível iniciar a autorização',
-        variant: 'destructive',
-      });
-      setSaving(false);
-    }
-  };
-
-  const handleReconnectOAuth = async () => {
-    setSaving(true);
-    try {
-      await startOAuthFlow();
-    } catch (error: any) {
-      toast({
-        title: 'Erro',
-        description: error.message,
-        variant: 'destructive',
-      });
-      setSaving(false);
-    }
-  };
-
+  // Test connection using Client Credentials
   const handleTestConnection = async () => {
-    if (!isOAuthConnected) {
+    if (!isConfigured) {
       toast({
-        title: 'OAuth não configurado',
-        description: 'Complete o fluxo de autorização primeiro.',
+        title: 'API não configurada',
+        description: 'Salve as credenciais primeiro.',
         variant: 'destructive',
       });
       return;
@@ -287,16 +183,18 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
     setTesting(true);
     try {
+      // Call products API (uses Client Credentials, no OAuth)
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
-          endpoint: '/sales/summary',
-          params: {},
+          endpoint: '/products',
+          apiType: 'products',
           projectId,
         },
       });
 
       if (error) throw error;
 
+      // Mark as validated
       await supabase
         .from('project_credentials')
         .update({ 
@@ -308,11 +206,13 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
       queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
 
+      const productCount = data?.items?.length ?? data?.length ?? 0;
       toast({
         title: 'Conexão bem-sucedida!',
-        description: 'API Hotmart validada e pronta para uso.',
+        description: `API Hotmart validada. ${productCount} produtos encontrados.`,
       });
     } catch (error: any) {
+      console.error('Test error:', error);
       toast({
         title: 'Falha na conexão',
         description: error.message || 'Verifique suas credenciais.',
@@ -360,8 +260,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     }
   };
 
-  // Determine button state
-  const canSaveAndConnect = credentials.client_id && (credentials.client_secret || hasCredentialsInDB);
+  const canSave = credentials.client_id && (credentials.client_secret || hasCredentialsInDB);
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="space-y-4">
@@ -370,15 +269,10 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5 text-muted-foreground" />
             <h3 className="font-semibold text-muted-foreground">API Hotmart</h3>
-            {isOAuthConnected ? (
+            {isConfigured ? (
               <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
                 <CheckCircle className="h-3 w-3 mr-1" />
-                Conectado
-              </Badge>
-            ) : hasCredentialsInDB ? (
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                OAuth Pendente
+                Configurado
               </Badge>
             ) : (
               <Badge variant="outline" className="bg-muted text-muted-foreground border-muted-foreground/30">
@@ -391,32 +285,18 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-4">
-        {/* Status Section */}
-        {isOAuthConnected ? (
-          <Alert className="border-green-500/50 bg-green-500/10">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-sm text-green-700 dark:text-green-400">
-              <strong>OAuth conectado!</strong> A API está pronta para importação e sincronização de ofertas.
-              {hotmartCredentials?.hotmart_connected_at && (
-                <span className="block text-xs mt-1 opacity-80">
-                  Conectado em: {formatDate(hotmartCredentials.hotmart_connected_at)}
-                </span>
-              )}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert className="border-blue-500/50 bg-blue-500/10">
-            <ExternalLink className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-sm text-blue-700 dark:text-blue-400">
-              <strong>Configure suas credenciais</strong> e clique em "Salvar e Conectar" para autorizar acesso à API Hotmart.
-              <ul className="list-disc list-inside mt-2 text-xs space-y-0.5">
-                <li><strong>Importação de ofertas</strong> via API</li>
-                <li><strong>Sincronização de ofertas</strong> com preços atualizados</li>
-                <li><strong>Criação automática de ofertas</strong> quando uma venda acontece</li>
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Info Alert */}
+        <Alert className="border-blue-500/50 bg-blue-500/10">
+          <Database className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-sm text-blue-700 dark:text-blue-400">
+            <strong>API de Produtos/Ofertas</strong> — usa Client Credentials (não requer OAuth).
+            <ul className="list-disc list-inside mt-2 text-xs space-y-0.5">
+              <li><strong>Importação de ofertas</strong> via API</li>
+              <li><strong>Sincronização de ofertas</strong> com preços atualizados</li>
+              <li><strong>Criação automática de ofertas</strong> quando uma venda acontece</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
 
         {/* Credentials Form */}
         <div className="space-y-4 p-4 rounded-lg border bg-card">
@@ -457,41 +337,26 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="basic_auth">Basic Auth (opcional)</Label>
-            <Input
-              id="basic_auth"
-              type={showSecrets ? 'text' : 'password'}
-              value={credentials.basic_auth}
-              onChange={(e) => setCredentials(prev => ({ ...prev, basic_auth: e.target.value }))}
-              placeholder="Basic auth se necessário"
-            />
-            <p className="text-xs text-muted-foreground">
-              Usado apenas em algumas configurações específicas da Hotmart.
-            </p>
-          </div>
-
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 pt-2">
-            {!isOAuthConnected ? (
-              <Button
-                onClick={handleSaveAndConnect}
-                disabled={saving || !canSaveAndConnect}
-                className="flex-1"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Salvando e Conectando...
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Salvar e Conectar
-                  </>
-                )}
-              </Button>
-            ) : (
+            <Button
+              onClick={handleSave}
+              disabled={saving || !canSave}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar Credenciais
+                </>
+              )}
+            </Button>
+
+            {isConfigured && (
               <>
                 <Button
                   onClick={handleTestConnection}
@@ -510,34 +375,15 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
                     </>
                   )}
                 </Button>
+                
                 <Button
-                  onClick={handleReconnectOAuth}
-                  disabled={saving}
-                  variant="outline"
+                  variant="destructive"
+                  onClick={() => disconnectMutation.mutate()}
+                  disabled={disconnectMutation.isPending}
                 >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Reconectando...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Reconectar OAuth
-                    </>
-                  )}
+                  {disconnectMutation.isPending ? 'Removendo...' : 'Remover'}
                 </Button>
               </>
-            )}
-            
-            {isConfigured && (
-              <Button
-                variant="destructive"
-                onClick={() => disconnectMutation.mutate()}
-                disabled={disconnectMutation.isPending}
-              >
-                {disconnectMutation.isPending ? 'Removendo...' : 'Remover'}
-              </Button>
             )}
           </div>
 
@@ -546,7 +392,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
             <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
               <div className="flex items-center gap-2 text-green-600 text-sm">
                 <CheckCircle className="h-4 w-4" />
-                <span className="font-medium">API validada</span>
+                <span className="font-medium">API validada e pronta para uso</span>
               </div>
               {hotmartCredentials?.validated_at && (
                 <p className="text-xs text-muted-foreground mt-1">

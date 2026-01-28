@@ -123,15 +123,15 @@ export default function OfferMappingsAuto() {
   const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
 
-  // Hotmart OAuth status (used by hotmart-api). If not connected, avoid calling the function
-  // to prevent 500 errors and blank-screen runtime errors.
+  // Check if Hotmart API is configured (client_id exists)
+  // NOTE: OAuth is NOT required for Products/Offers API - only client_credentials
   const { data: hotmartCredentials } = useQuery({
-    queryKey: ['project_credentials_hotmart_oauth', currentProject?.id],
+    queryKey: ['project_credentials_hotmart', currentProject?.id],
     queryFn: async () => {
       if (!currentProject?.id) return null;
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('hotmart_refresh_token')
+        .select('client_id')
         .eq('project_id', currentProject.id)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -141,7 +141,8 @@ export default function OfferMappingsAuto() {
     enabled: !!currentProject?.id,
   });
 
-  const isHotmartOAuthConnected = !!hotmartCredentials?.hotmart_refresh_token;
+  // API is available if client_id is configured (NO OAuth required for products API)
+  const isHotmartAPIConfigured = !!hotmartCredentials?.client_id;
 
   useEffect(() => {
     if (!currentProject) {
@@ -318,8 +319,8 @@ export default function OfferMappingsAuto() {
       
       console.log(`Found ${offersToImport.length} offers from sales data`);
 
-      // Optionally enrich with Products API (requires OAuth). If not connected, skip to avoid 500s.
-      if (isHotmartOAuthConnected) {
+      // Enrich with Products API (uses Client Credentials - NO OAuth required)
+      if (isHotmartAPIConfigured) {
         setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. Buscando produtos da API...`);
 
         try {
@@ -379,7 +380,7 @@ export default function OfferMappingsAuto() {
           console.error('Error fetching from Hotmart API, continuing with sales data only:', apiError);
         }
       } else {
-        setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. (OAuth não conectado — pulando API)`);
+        setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. (API não configurada — pulando enriquecimento)`);
       }
       
       if (offersToImport.length === 0) {
@@ -441,10 +442,10 @@ export default function OfferMappingsAuto() {
       return;
     }
 
-    if (!isHotmartOAuthConnected) {
+    if (!isHotmartAPIConfigured) {
       toast({
-        title: 'Hotmart não conectado via OAuth',
-        description: 'Abra Configurações e clique em "Conectar Hotmart (OAuth)" para usar a sincronização via API.',
+        title: 'API Hotmart não configurada',
+        description: 'Acesse Configurações > Integrações > Hotmart e configure o Client ID e Secret.',
         variant: 'destructive',
       });
       return;
@@ -695,7 +696,7 @@ export default function OfferMappingsAuto() {
                     </Button>
                     <Button 
                       onClick={syncOffersWithHotmart}
-                      disabled={syncingOffers || mappings.length === 0 || !isHotmartOAuthConnected}
+                      disabled={syncingOffers || mappings.length === 0 || !isHotmartAPIConfigured}
                       variant="outline"
                       className="gap-2"
                     >

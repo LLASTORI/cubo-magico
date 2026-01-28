@@ -8,6 +8,7 @@ import { ShoppingCart, Lock, ArrowLeft } from 'lucide-react';
 
 import { HotmartWebhookStatus } from './HotmartWebhookStatus';
 import { HotmartWebhookSection } from './HotmartWebhookSection';
+import { HotmartOAuthSection } from './HotmartOAuthSection';
 import { HotmartAPISection } from './HotmartAPISection';
 import { HotmartBackfillSection } from './HotmartBackfillSection';
 
@@ -70,6 +71,9 @@ export function HotmartProviderSettings({ onBack }: HotmartProviderSettingsProps
         <div className="space-y-6">
           {/* Status Operacional - ALWAYS AT TOP */}
           <HotmartWebhookStatus projectId={projectId} />
+
+          {/* OAuth Section - Required for API features */}
+          <HotmartOAuthSection projectId={projectId} />
 
           {/* Webhook Section - PRIMARY/MANDATORY */}
           <Card>

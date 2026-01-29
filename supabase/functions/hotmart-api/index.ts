@@ -562,12 +562,12 @@ async function getAccessTokenViaClientCredentials(
   console.log('[CLIENT_CREDENTIALS] All 3 credentials found (client_id, client_secret, basic_auth)')
   
   // ============================================
-  // OFFICIAL HOTMART TOKEN ENDPOINT
-  // URL: https://api.hotmart.com/security/oauth/token
+  // OFFICIAL HOTMART TOKEN ENDPOINT (Client Credentials)
+  // URL: https://api-sec-vlc.hotmart.com/security/oauth/token
   // Auth: Basic {basic} (pre-generated from Hotmart dashboard)
   // Body: grant_type=client_credentials
   // ============================================
-  const tokenUrl = 'https://api.hotmart.com/security/oauth/token'
+  const tokenUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token'
   
   // Use the pre-generated basic_auth header from Hotmart dashboard
   // This is the STANDARD way - Hotmart provides this value directly
@@ -630,11 +630,11 @@ async function getAccessTokenViaClientCredentials(
 // ============================================
 // HOTMART PRODUCTS API (Client Credentials)
 // ============================================
-// BASE URL: https://developers.hotmart.com
+// BASE URL: https://api.hotmart.com
 // ENDPOINTS:
-//   - /products/api/v1/products
-//   - /products/api/v1/products/{ucode}/offers
-//   - /products/api/v1/products/{ucode}/plans
+//   - GET /products/api/v1/products
+//   - GET /products/api/v1/products/{ucode}/offers
+//   - GET /products/api/v1/products/{ucode}/plans
 // AUTH: Bearer {access_token}
 // ============================================
 async function callHotmartProductsAPI(
@@ -647,30 +647,29 @@ async function callHotmartProductsAPI(
   // Get access token via Client Credentials (NOT OAuth)
   const access_token = await getAccessTokenViaClientCredentials(supabase, projectId)
   
-  // Build the correct path - endpoints are under /products/api/v1/
+  // Build the correct path for https://api.hotmart.com/products/api/v1/...
   // Input: /products → Output: /products/api/v1/products
-  // Input: /products/123/offers → Output: /products/api/v1/products/123/offers
+  // Input: /products/ABC123/offers → Output: /products/api/v1/products/ABC123/offers
   let apiPath = path
   
-  // Remove any existing prefix to avoid duplication
-  if (apiPath.startsWith('/products/api/v1')) {
-    // Already has full prefix, use as is
-  } else if (apiPath.startsWith('/product/api/v1')) {
-    // Wrong prefix, convert to correct one
-    apiPath = apiPath.replace('/product/api/v1', '/products/api/v1')
-  } else if (apiPath.startsWith('/products')) {
-    // Has /products but no api/v1 prefix
-    apiPath = `/products/api/v1${apiPath}`
-  } else if (apiPath.startsWith('/')) {
-    // Just starts with /, add full prefix
-    apiPath = `/products/api/v1${apiPath}`
-  } else {
-    // No leading slash
-    apiPath = `/products/api/v1/${apiPath}`
+  // Normalize path - remove any incorrect prefixes and build correct one
+  // Clean up path first
+  apiPath = apiPath
+    .replace(/^\/products\/api\/v1/, '') // Remove if already has full prefix
+    .replace(/^\/product\/api\/v1/, '')  // Remove wrong singular prefix
+    .replace(/^\//, '')                   // Remove leading slash
+  
+  // Now apiPath should be like "products" or "products/ABC123/offers"
+  // If it starts with "products", keep it; otherwise add "products/"
+  if (!apiPath.startsWith('products')) {
+    apiPath = 'products/' + apiPath
   }
   
-  // Build URL with query params
-  const url = new URL(`https://developers.hotmart.com${apiPath}`)
+  // Final path: /products/api/v1/products or /products/api/v1/products/{ucode}/offers
+  const finalPath = `/products/api/v1/${apiPath}`
+  
+  // Build URL with query params - BASE: https://api.hotmart.com
+  const url = new URL(`https://api.hotmart.com${finalPath}`)
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.append(key, value)
   }

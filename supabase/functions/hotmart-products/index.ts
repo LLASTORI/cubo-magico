@@ -80,13 +80,18 @@ async function getAccessToken(credentials: HotmartCredentials): Promise<string> 
     grant_type: 'client_credentials',
   })
 
-  console.log('[HOTMART-PRODUCTS] Requesting access token...')
-
   // Normalize basic_auth: remove "Basic " prefix if user included it
   let basicAuth = credentials.basic_auth.trim()
   if (basicAuth.toLowerCase().startsWith('basic ')) {
     basicAuth = basicAuth.substring(6).trim()
   }
+
+  // Diagnostic logging (masked for security)
+  const basicAuthPreview = basicAuth.length > 10 
+    ? `${basicAuth.slice(0, 5)}...${basicAuth.slice(-5)} (len: ${basicAuth.length})` 
+    : `[too short: ${basicAuth.length}]`
+  console.log(`[HOTMART-PRODUCTS] Requesting access token with Basic: ${basicAuthPreview}`)
+  console.log(`[HOTMART-PRODUCTS] Client ID: ${credentials.client_id}`)
 
   const response = await fetch(HOTMART_TOKEN_URL, {
     method: 'POST',

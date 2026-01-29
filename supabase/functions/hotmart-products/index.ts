@@ -22,9 +22,10 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// Hotmart API endpoints (official documentation)
+// Hotmart API endpoints (OFFICIAL DOCUMENTATION)
+// Ref: https://developers.hotmart.com/docs/pt-BR/v1/product/product-offers/
 const HOTMART_TOKEN_URL = 'https://api-sec-vlc.hotmart.com/security/oauth/token'
-const HOTMART_PRODUCTS_BASE = 'https://api.hotmart.com/products/api/v1'
+const HOTMART_PRODUCTS_BASE = 'https://developers.hotmart.com/products/api/v1'
 
 // Browser-like headers to avoid WAF blocks
 const BROWSER_HEADERS = {

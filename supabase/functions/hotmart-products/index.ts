@@ -78,8 +78,6 @@ interface HotmartOffer {
 async function getAccessToken(credentials: HotmartCredentials): Promise<string> {
   const tokenBody = new URLSearchParams({
     grant_type: 'client_credentials',
-    client_id: credentials.client_id,
-    client_secret: credentials.client_secret,
   })
 
   console.log('[HOTMART-PRODUCTS] Requesting access token...')
@@ -110,7 +108,7 @@ async function getAccessToken(credentials: HotmartCredentials): Promise<string> 
       throw new Error('Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.')
     }
     
-    throw new Error(`Falha na autenticação: ${responseText.slice(0, 200)}`)
+    throw new Error(`Falha na autenticação (${response.status}): ${responseText.slice(0, 200)}`)
   }
 
   let tokenData: TokenResponse

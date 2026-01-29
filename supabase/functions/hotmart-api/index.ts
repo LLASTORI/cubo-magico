@@ -1432,6 +1432,216 @@ serve(async (req) => {
       throw new Error('Project ID is required. Pass X-Project-Code header or projectId in body.');
     }
 
+    // ============================================
+    // ACTION: test-connection (CLEAN-ROOM)
+    // ============================================
+    // Isolated test of Client Credentials flow
+    // Does NOT save anything to database
+    // Returns raw API response for debugging
+    // ============================================
+    if (action === 'test-connection') {
+      console.log('[TEST-CONNECTION] Clean-room test starting...')
+      
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
+      // Step 1: Get credentials
+      console.log('[TEST-CONNECTION] Step 1: Fetching credentials...')
+      const { data: decryptedCreds, error: rpcError } = await supabase
+        .rpc('get_project_credentials_internal', { p_project_id: projectId })
+      
+      if (rpcError) {
+        console.error('[TEST-CONNECTION] RPC error:', rpcError)
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'credentials',
+          error: 'Erro ao obter credenciais: ' + rpcError.message,
+          credentials: null
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      const hotmartCred = decryptedCreds?.find((c: any) => c.provider === 'hotmart')
+      
+      // Validate 3 required fields
+      const credentialStatus = {
+        client_id: !!hotmartCred?.client_id,
+        client_secret: !!hotmartCred?.client_secret,
+        basic_auth: !!hotmartCred?.basic_auth,
+      }
+      
+      console.log('[TEST-CONNECTION] Credential status:', credentialStatus)
+      
+      if (!hotmartCred?.client_id || !hotmartCred?.client_secret || !hotmartCred?.basic_auth) {
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'credentials',
+          error: 'Credenciais incompletas. São necessários: client_id, client_secret e basic.',
+          credentials: credentialStatus
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Step 2: Get access token via Client Credentials
+      console.log('[TEST-CONNECTION] Step 2: Requesting access token...')
+      const tokenUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token'
+      const basicAuth = hotmartCred.basic_auth
+      
+      const tokenBody = new URLSearchParams({
+        grant_type: 'client_credentials',
+      })
+      
+      console.log('[TEST-CONNECTION] Token URL:', tokenUrl)
+      
+      const tokenResponse = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`,
+        },
+        body: tokenBody,
+      })
+      
+      const tokenText = await tokenResponse.text()
+      console.log('[TEST-CONNECTION] Token response status:', tokenResponse.status)
+      
+      if (!tokenResponse.ok) {
+        console.error('[TEST-CONNECTION] Token request failed:', tokenText.slice(0, 500))
+        
+        const isHtml = tokenText.includes('<!DOCTYPE') || tokenText.includes('<html')
+        
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'token',
+          error: isHtml 
+            ? 'Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.'
+            : `Token request failed (${tokenResponse.status}): ${tokenText.slice(0, 300)}`,
+          credentials: credentialStatus,
+          tokenUrl,
+          httpStatus: tokenResponse.status,
+          isHtmlResponse: isHtml
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      let tokenData
+      try {
+        tokenData = JSON.parse(tokenText)
+      } catch {
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'token',
+          error: `Invalid JSON from token endpoint: ${tokenText.slice(0, 200)}`,
+          credentials: credentialStatus
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      if (!tokenData.access_token) {
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'token',
+          error: 'No access_token in response',
+          tokenResponse: tokenData,
+          credentials: credentialStatus
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('[TEST-CONNECTION] ✅ Access token obtained!')
+      
+      // Step 3: Call Products API
+      console.log('[TEST-CONNECTION] Step 3: Calling Products API...')
+      const productsUrl = 'https://api.hotmart.com/products/api/v1/products'
+      
+      const productsResponse = await fetch(productsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'Accept': 'application/json',
+        },
+      })
+      
+      const productsText = await productsResponse.text()
+      console.log('[TEST-CONNECTION] Products response status:', productsResponse.status)
+      
+      if (!productsResponse.ok) {
+        console.error('[TEST-CONNECTION] Products API failed:', productsText.slice(0, 500))
+        
+        const isHtml = productsText.includes('<!DOCTYPE') || productsText.includes('<html')
+        
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'products_api',
+          error: isHtml 
+            ? 'Hotmart bloqueou a requisição (WAF). Tente novamente em alguns minutos.'
+            : `Products API failed (${productsResponse.status}): ${productsText.slice(0, 300)}`,
+          credentials: credentialStatus,
+          tokenObtained: true,
+          productsUrl,
+          httpStatus: productsResponse.status,
+          isHtmlResponse: isHtml
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      let productsData
+      try {
+        productsData = JSON.parse(productsText)
+      } catch {
+        return new Response(JSON.stringify({
+          success: false,
+          step: 'products_api',
+          error: `Invalid JSON from products API: ${productsText.slice(0, 200)}`,
+          credentials: credentialStatus,
+          tokenObtained: true
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // SUCCESS!
+      const productCount = Array.isArray(productsData?.items) ? productsData.items.length : 0
+      const productNames = Array.isArray(productsData?.items) 
+        ? productsData.items.slice(0, 5).map((p: any) => p.name || 'Unnamed')
+        : []
+      
+      console.log('[TEST-CONNECTION] ✅ SUCCESS! Products found:', productCount)
+      
+      return new Response(JSON.stringify({
+        success: true,
+        step: 'complete',
+        message: `API funcionando! ${productCount} produtos encontrados.`,
+        credentials: credentialStatus,
+        tokenObtained: true,
+        productCount,
+        sampleProducts: productNames,
+        // Raw response for debugging (truncated)
+        rawResponse: {
+          tokenEndpoint: tokenUrl,
+          productsEndpoint: productsUrl,
+          tokenType: tokenData.token_type,
+          expiresIn: tokenData.expires_in,
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Handle sync_sales action
     if (action === 'sync_sales') {
       if (!startDate || !endDate) {

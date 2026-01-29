@@ -184,7 +184,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     }
   };
 
-  // Test connection using Client Credentials
+  // Test connection using Client Credentials (clean-room test)
   const handleTestConnection = async () => {
     if (!isConfigured) {
       toast({
@@ -197,16 +197,30 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
     setTesting(true);
     try {
-      // Call products API (uses Client Credentials, no OAuth)
+      // Use clean-room test-connection action for detailed diagnostics
       const { data, error } = await supabase.functions.invoke('hotmart-api', {
         body: {
-          endpoint: '/products',
-          apiType: 'products',
+          action: 'test-connection',
           projectId,
         },
       });
 
       if (error) throw error;
+
+      // Check test result
+      if (!data?.success) {
+        // Show detailed error from clean-room test
+        const errorMsg = data?.error || 'Erro desconhecido';
+        const step = data?.step || 'unknown';
+        const credStatus = data?.credentials;
+        
+        let detailedMsg = errorMsg;
+        if (credStatus && (!credStatus.client_secret || !credStatus.basic_auth)) {
+          detailedMsg = 'Credenciais incompletas no banco. Reinsira os 3 campos (Client ID, Client Secret e Basic).';
+        }
+        
+        throw new Error(detailedMsg);
+      }
 
       // Mark as validated
       await supabase
@@ -220,10 +234,9 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
       queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
 
-      const productCount = data?.items?.length ?? data?.length ?? 0;
       toast({
         title: 'Conexão bem-sucedida!',
-        description: `API Hotmart validada. ${productCount} produtos encontrados.`,
+        description: data.message || `API Hotmart validada. ${data.productCount || 0} produtos encontrados.`,
       });
     } catch (error: any) {
       console.error('Test error:', error);

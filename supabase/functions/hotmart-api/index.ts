@@ -559,9 +559,15 @@ async function getAccessTokenViaClientCredentials(
     throw new Error('Basic Auth não configurado. Acesse Configurações > Integrações > Hotmart.')
   }
   
-  console.log('[CLIENT_CREDENTIALS] All 3 credentials found (client_id, client_secret, basic)')
+  console.log('[CLIENT_CREDENTIALS] All 3 credentials found (client_id, client_secret, basic_auth)')
   
-  const tokenUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token'
+  // ============================================
+  // OFFICIAL HOTMART TOKEN ENDPOINT
+  // URL: https://api.hotmart.com/security/oauth/token
+  // Auth: Basic {basic} (pre-generated from Hotmart dashboard)
+  // Body: grant_type=client_credentials
+  // ============================================
+  const tokenUrl = 'https://api.hotmart.com/security/oauth/token'
   
   // Use the pre-generated basic_auth header from Hotmart dashboard
   // This is the STANDARD way - Hotmart provides this value directly
@@ -621,8 +627,16 @@ async function getAccessTokenViaClientCredentials(
   return access_token
 }
 
-// Call Hotmart Products API with Client Credentials (no OAuth required)
-// CORRECT URL: https://developers.hotmart.com/product/api/v1/...
+// ============================================
+// HOTMART PRODUCTS API (Client Credentials)
+// ============================================
+// BASE URL: https://developers.hotmart.com
+// ENDPOINTS:
+//   - /products/api/v1/products
+//   - /products/api/v1/products/{ucode}/offers
+//   - /products/api/v1/products/{ucode}/plans
+// AUTH: Bearer {access_token}
+// ============================================
 async function callHotmartProductsAPI(
   projectId: string,
   path: string,
@@ -633,16 +647,30 @@ async function callHotmartProductsAPI(
   // Get access token via Client Credentials (NOT OAuth)
   const access_token = await getAccessTokenViaClientCredentials(supabase, projectId)
   
-  // Ensure path starts with /product/api/v1 for products endpoint
-  let fullPath = path
-  if (path === '/products' || path.startsWith('/products/')) {
-    fullPath = `/product/api/v1${path}`
-  } else if (!path.startsWith('/product/api/v1')) {
-    fullPath = `/product/api/v1${path}`
+  // Build the correct path - endpoints are under /products/api/v1/
+  // Input: /products → Output: /products/api/v1/products
+  // Input: /products/123/offers → Output: /products/api/v1/products/123/offers
+  let apiPath = path
+  
+  // Remove any existing prefix to avoid duplication
+  if (apiPath.startsWith('/products/api/v1')) {
+    // Already has full prefix, use as is
+  } else if (apiPath.startsWith('/product/api/v1')) {
+    // Wrong prefix, convert to correct one
+    apiPath = apiPath.replace('/product/api/v1', '/products/api/v1')
+  } else if (apiPath.startsWith('/products')) {
+    // Has /products but no api/v1 prefix
+    apiPath = `/products/api/v1${apiPath}`
+  } else if (apiPath.startsWith('/')) {
+    // Just starts with /, add full prefix
+    apiPath = `/products/api/v1${apiPath}`
+  } else {
+    // No leading slash
+    apiPath = `/products/api/v1/${apiPath}`
   }
   
-  // Build URL with query params - CORRECT base URL
-  const url = new URL(`https://developers.hotmart.com${fullPath}`)
+  // Build URL with query params
+  const url = new URL(`https://developers.hotmart.com${apiPath}`)
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.append(key, value)
   }
@@ -1493,11 +1521,16 @@ serve(async (req) => {
     // API passthrough logic
     console.log(`[hotmart-api] Passthrough request: ${endpoint}, apiType: ${apiType}`);
     
-    // Use Client Credentials for Products API (no OAuth required)
-    // Use OAuth for Payments API (requires user authorization)
+    // ============================================
+    // API ROUTING
+    // ============================================
+    // Products API → Client Credentials (no OAuth required)
+    // Payments API → OAuth (requires user authorization)
+    // ============================================
     if (apiType === 'products') {
-      const fullPath = `/product/api/v1${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-      const data = await callHotmartProductsAPI(projectId, fullPath, params || {});
+      // Pass endpoint directly - callHotmartProductsAPI handles path normalization
+      // endpoint examples: /products, /products/123/offers, /products/123/plans
+      const data = await callHotmartProductsAPI(projectId, endpoint, params || {});
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

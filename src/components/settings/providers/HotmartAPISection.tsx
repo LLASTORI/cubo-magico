@@ -129,12 +129,13 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
           updated_at: new Date().toISOString()
         };
         
-        // Only update secret if provided
+        // Only update secret if provided (not empty)
         if (credentials.client_secret && credentials.client_secret.trim() !== '') {
           updateData.client_secret = credentials.client_secret;
         }
         
-        if (credentials.basic_auth !== undefined) {
+        // Only update basic_auth if provided (not empty)
+        if (credentials.basic_auth && credentials.basic_auth.trim() !== '') {
           updateData.basic_auth = credentials.basic_auth;
         }
 
@@ -168,8 +169,8 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
         description: 'API Hotmart configurada. Teste a conexão para validar.',
       });
 
-      // Clear the secret field after successful save
-      setCredentials(prev => ({ ...prev, client_secret: '' }));
+      // Clear the secret fields after successful save (security)
+      setCredentials(prev => ({ ...prev, client_secret: '', basic_auth: '' }));
 
     } catch (error: any) {
       console.error('Save error:', error);

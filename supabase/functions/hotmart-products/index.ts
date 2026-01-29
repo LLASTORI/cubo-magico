@@ -391,6 +391,7 @@ Deno.serve(async (req) => {
                 .from('offer_mappings')
                 .select('id, funnel_id, id_funil')
                 .eq('project_id', projectId)
+                .eq('provider', 'hotmart')
                 .eq('codigo_oferta', offer.code)
                 .maybeSingle()
 
@@ -421,6 +422,7 @@ Deno.serve(async (req) => {
                   .from('offer_mappings')
                   .insert({
                     project_id: projectId,
+                    provider: 'hotmart',
                     id_produto: product.ucode,
                     id_produto_visual: `ID ${product.id}`,
                     nome_produto: product.name,
@@ -432,6 +434,7 @@ Deno.serve(async (req) => {
                     id_funil: 'A Definir',
                     funnel_id: defaultFunnelId,
                     data_ativacao: new Date().toISOString().split('T')[0],
+                    origem: 'api_sync',
                   })
 
                 if (insertError) {

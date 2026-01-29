@@ -573,6 +573,50 @@ serve(async (req) => {
               itemsCreated++;
             }
           }
+          
+          // ============================================
+          // OFFER MAPPINGS FALLBACK (CATÁLOGO SEMÂNTICO)
+          // NÃO É FINANCEIRO - apenas cria mapeamento se não existir
+          // ============================================
+          if (item.provider_offer_id) {
+            const { data: existingMapping } = await supabase
+              .from('offer_mappings')
+              .select('id')
+              .eq('project_id', projectId)
+              .eq('provider', 'hotmart')
+              .eq('codigo_oferta', item.provider_offer_id)
+              .maybeSingle();
+            
+            if (!existingMapping) {
+              const { data: defaultFunnel } = await supabase
+                .from('funnels')
+                .select('id')
+                .eq('project_id', projectId)
+                .eq('name', 'A Definir')
+                .maybeSingle();
+              
+              const { error: mappingError } = await supabase
+                .from('offer_mappings')
+                .insert({
+                  project_id: projectId,
+                  provider: 'hotmart',
+                  codigo_oferta: item.provider_offer_id,
+                  id_produto: item.provider_product_id,
+                  nome_produto: item.product_name || 'Produto (via venda)',
+                  nome_oferta: item.offer_name || 'Oferta (via venda)',
+                  valor: null,
+                  moeda: 'BRL',
+                  status: 'Ativo',
+                  funnel_id: defaultFunnel?.id || null,
+                  id_funil: 'A Definir',
+                  origem: 'sale_fallback',
+                });
+              
+              if (mappingError && mappingError.code !== '23505') {
+                console.error(`[OfferMappingsFallback] Error: ${mappingError.message}`);
+              }
+            }
+          }
         }
 
         // ============================================

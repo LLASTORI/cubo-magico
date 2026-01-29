@@ -521,6 +521,57 @@ async function writeOrderShadow(
       } else {
         console.log(`[OrdersShadow] Item already exists: ${item.product_name}`);
       }
+      
+      // ============================================
+      // OFFER MAPPINGS FALLBACK (CATÁLOGO SEMÂNTICO)
+      // NÃO É FINANCEIRO - apenas cria mapeamento se não existir
+      // REGRA: Se a oferta não existe em offer_mappings, criar entrada mínima
+      // ============================================
+      if (item.provider_offer_id) {
+        const { data: existingMapping } = await supabase
+          .from('offer_mappings')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('provider', 'hotmart')
+          .eq('codigo_oferta', item.provider_offer_id)
+          .maybeSingle();
+        
+        if (!existingMapping) {
+          // Fetch default "A Definir" funnel for this project
+          const { data: defaultFunnel } = await supabase
+            .from('funnels')
+            .select('id')
+            .eq('project_id', projectId)
+            .eq('name', 'A Definir')
+            .maybeSingle();
+          
+          const { error: mappingError } = await supabase
+            .from('offer_mappings')
+            .insert({
+              project_id: projectId,
+              provider: 'hotmart',
+              codigo_oferta: item.provider_offer_id,
+              id_produto: item.provider_product_id,
+              nome_produto: item.product_name || 'Produto (via venda)',
+              nome_oferta: item.offer_name || 'Oferta (via venda)',
+              valor: null, // Não usar valor financeiro - apenas catálogo
+              moeda: 'BRL',
+              status: 'Ativo',
+              funnel_id: defaultFunnel?.id || null,
+              id_funil: 'A Definir',
+              origem: 'sale_fallback',
+            });
+          
+          if (mappingError) {
+            // Ignore duplicate key errors (race condition safe)
+            if (mappingError.code !== '23505') {
+              console.error(`[OfferMappingsFallback] Error creating mapping for ${item.provider_offer_id}:`, mappingError.message);
+            }
+          } else {
+            console.log(`[OfferMappingsFallback] Created mapping for offer ${item.provider_offer_id} (${item.offer_name || 'Unknown'})`);
+          }
+        }
+      }
     }
     
     // ============================================

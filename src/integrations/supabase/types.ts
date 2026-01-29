@@ -5067,7 +5067,9 @@ export type Database = {
           nome_posicao: string | null
           nome_produto: string
           ordem_posicao: number | null
+          origem: string | null
           project_id: string | null
+          provider: string
           status: string | null
           tipo_posicao: string | null
           updated_at: string
@@ -5090,7 +5092,9 @@ export type Database = {
           nome_posicao?: string | null
           nome_produto: string
           ordem_posicao?: number | null
+          origem?: string | null
           project_id?: string | null
+          provider?: string
           status?: string | null
           tipo_posicao?: string | null
           updated_at?: string
@@ -5113,7 +5117,9 @@ export type Database = {
           nome_posicao?: string | null
           nome_produto?: string
           ordem_posicao?: number | null
+          origem?: string | null
           project_id?: string | null
+          provider?: string
           status?: string | null
           tipo_posicao?: string | null
           updated_at?: string

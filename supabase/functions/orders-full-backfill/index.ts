@@ -130,11 +130,12 @@ serve(async (req) => {
 
     console.log(`[FullBackfill] Extracted SCK for ${transactionSCKMap.size} transactions`);
 
-    // PHASE 3: Get offer_mappings
+    // PHASE 3: Get offer_mappings (filter by provider for multi-provider support)
     const { data: offerMappings } = await supabase
       .from('offer_mappings')
       .select('codigo_oferta, funnel_id')
-      .eq('project_id', projectId);
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart');
 
     const offerToFunnelMap = new Map<string, string>();
     offerMappings?.forEach(m => {

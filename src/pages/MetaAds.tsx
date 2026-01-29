@@ -555,37 +555,8 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     setNeedsSync(false); // Clear the needs sync flag
     const accountIdsToSync = adAccounts.filter(a => a.is_active).map(a => a.account_id);
     
-    // Sync Meta Ads
+    // Sync Meta Ads only - Hotmart sales sync is handled by webhook/CSV, not API
     await handleSyncWithAccounts(accountIdsToSync);
-    
-    // Also sync Hotmart sales
-    try {
-      const startMs = new Date(startDate).getTime();
-      const endMs = new Date(endDate).getTime();
-      
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
-        body: {
-          projectId,
-          action: 'sync_sales',
-          startDate: startMs,
-          endDate: endMs,
-        },
-      });
-      
-      if (error) {
-        console.error('Hotmart sync error:', error);
-      } else {
-        const total = (data?.synced || 0) + (data?.updated || 0);
-        if (total > 0) {
-          toast({
-            title: 'Hotmart sincronizado',
-            description: `${total} vendas processadas`,
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Hotmart sync error:', err);
-    }
   };
 
   // Calculate totals from insights

@@ -197,8 +197,8 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
     setTesting(true);
     try {
-      // Use clean-room test-connection action for detailed diagnostics
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+      // Use new hotmart-products function (Client Credentials only)
+      const { data, error } = await supabase.functions.invoke('hotmart-products', {
         body: {
           action: 'test-connection',
           projectId,

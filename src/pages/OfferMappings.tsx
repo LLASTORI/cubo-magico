@@ -324,55 +324,33 @@ export default function OfferMappingsAuto() {
         setImportProgress(`Encontradas ${offersToImport.length} ofertas nas vendas. Buscando produtos da API...`);
 
         try {
-          const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
+          // Use new hotmart-products function
+          const { data: allOffersData, error: apiError } = await supabase.functions.invoke('hotmart-products', {
             body: {
-              endpoint: '/products',
-              apiType: 'products',
+              action: 'get-all-offers',
               projectId: currentProject.id
             }
           });
 
-          if (!productsError && productsData) {
-            const products: HotmartProduct[] = productsData.items || productsData || [];
-            console.log(`Found ${products.length} products from API`);
+          if (!apiError && allOffersData?.success && allOffersData.offers) {
+            console.log(`Found ${allOffersData.offers.length} offers from API`);
 
-            for (let i = 0; i < products.length; i++) {
-              const product = products[i];
-              setImportProgress(`Buscando ofertas do produto ${i + 1}/${products.length}: ${product.name.substring(0, 30)}...`);
-
-              try {
-                const { data: offersData, error: offersError } = await supabase.functions.invoke('hotmart-api', {
-                  body: {
-                    endpoint: `/products/${product.ucode}/offers`,
-                    apiType: 'products',
-                    projectId: currentProject.id
-                  }
+            for (const offer of allOffersData.offers) {
+              if (!existingOfferCodes.has(offer.code) && !seenOfferCodes.has(offer.code)) {
+                offersToImport.push({
+                  id_produto: offer.product_ucode,
+                  id_produto_visual: `ID ${offer.product_id}`,
+                  nome_produto: offer.product_name,
+                  nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
+                  codigo_oferta: offer.code,
+                  valor: offer.price?.value || null,
+                  status: 'Ativo',
+                  id_funil: 'A Definir',
+                  funnel_id: defaultFunnelId,
+                  data_ativacao: new Date().toISOString().split('T')[0],
+                  project_id: currentProject.id,
                 });
-
-                if (!offersError && offersData) {
-                  const offers: HotmartOffer[] = offersData.items || offersData || [];
-
-                  offers.forEach(offer => {
-                    if (!existingOfferCodes.has(offer.code) && !seenOfferCodes.has(offer.code)) {
-                      offersToImport.push({
-                        id_produto: product.ucode,
-                        id_produto_visual: `ID ${product.id}`,
-                        nome_produto: product.name,
-                        nome_oferta: offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome'),
-                        codigo_oferta: offer.code,
-                        valor: offer.price.value,
-                        status: 'Ativo',
-                        id_funil: 'A Definir',
-                        funnel_id: defaultFunnelId,
-                        data_ativacao: new Date().toISOString().split('T')[0],
-                        project_id: currentProject.id,
-                      });
-                      seenOfferCodes.add(offer.code);
-                    }
-                  });
-                }
-              } catch (error) {
-                console.error(`Error processing product ${product.ucode}:`, error);
+                seenOfferCodes.add(offer.code);
               }
             }
           }
@@ -456,122 +434,29 @@ export default function OfferMappingsAuto() {
       
       toast({
         title: 'Sincronizando...',
-        description: 'Buscando todos os produtos da Hotmart',
+        description: 'Buscando e atualizando ofertas da Hotmart',
       });
       
-      // Buscar todos os produtos da Hotmart
-      const { data: productsData, error: productsError } = await supabase.functions.invoke('hotmart-api', {
+      // Use new hotmart-products function with sync-offers action
+      const { data: syncResult, error: syncError } = await supabase.functions.invoke('hotmart-products', {
         body: {
-          endpoint: '/products',
-          apiType: 'products',
+          action: 'sync-offers',
           projectId: currentProject.id
         }
       });
 
-      if (productsError) throw productsError;
+      if (syncError) throw syncError;
       
-      const products: HotmartProduct[] = productsData.items || productsData || [];
-      
-      if (products.length === 0) {
-        toast({
-          title: 'Nenhum produto encontrado',
-          description: 'Não foram encontrados produtos na sua conta Hotmart',
-        });
-        return;
+      if (!syncResult?.success) {
+        throw new Error(syncResult?.error || 'Erro desconhecido na sincronização');
       }
       
-      let updatedCount = 0;
-      const changes: string[] = [];
+      toast({
+        title: 'Sincronização concluída!',
+        description: syncResult.message || `${syncResult.synced} novas ofertas, ${syncResult.updated} atualizadas`,
+      });
       
-      // Para cada produto, buscar suas ofertas
-      for (const product of products) {
-        try {
-          const { data, error } = await supabase.functions.invoke('hotmart-api', {
-            body: {
-              endpoint: `/products/${product.ucode}/offers`,
-              apiType: 'products',
-              projectId: currentProject.id
-            }
-          });
-          
-          if (error) continue;
-          
-          const offers: HotmartOffer[] = data.items || data || [];
-          
-          // Para cada oferta, verificar se existe no banco e atualizar
-          for (const offer of offers) {
-            const existingMapping = mappings.find(m => m.codigo_oferta === offer.code);
-            
-            if (existingMapping) {
-              const updates: Record<string, any> = {};
-              const changeNotes: string[] = [];
-              
-              const offerName = offer.name || (offer.is_main_offer ? 'Oferta Principal' : 'Sem Nome');
-              if (existingMapping.nome_oferta !== offerName) {
-                updates.nome_oferta = offerName;
-                changeNotes.push(`Nome: ${existingMapping.nome_oferta} → ${offerName}`);
-              }
-              
-              if (existingMapping.valor !== offer.price.value) {
-                updates.valor = offer.price.value;
-                changeNotes.push(`Valor: R$ ${existingMapping.valor || 0} → R$ ${offer.price.value}`);
-              }
-              
-              // Atualizar nome do produto se diferente
-              if (existingMapping.nome_produto !== product.name) {
-                updates.nome_produto = product.name;
-                changeNotes.push(`Produto: ${existingMapping.nome_produto} → ${product.name}`);
-              }
-              
-              // Atualizar id_produto para o ucode correto
-              if (existingMapping.id_produto !== product.ucode) {
-                updates.id_produto = product.ucode;
-              }
-              
-              // Atualizar id_produto_visual
-              const visualId = `ID ${product.id}`;
-              if (existingMapping.id_produto_visual !== visualId) {
-                updates.id_produto_visual = visualId;
-              }
-              
-              if (Object.keys(updates).length > 0) {
-                if (changeNotes.length > 0) {
-                  const timestamp = new Date().toLocaleDateString('pt-BR');
-                  const annotation = `[${timestamp}] Sincronizado com Hotmart:\n${changeNotes.join('\n')}`;
-                  updates.anotacoes = existingMapping.anotacoes 
-                    ? `${existingMapping.anotacoes}\n\n${annotation}`
-                    : annotation;
-                }
-                
-                const { error: updateError } = await supabase
-                  .from('offer_mappings')
-                  .update(updates)
-                  .eq('id', existingMapping.id);
-                
-                if (!updateError && changeNotes.length > 0) {
-                  updatedCount++;
-                  changes.push(`${existingMapping.nome_produto}: ${changeNotes.join(', ')}`);
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Error syncing product ${product.ucode}:`, error);
-        }
-      }
-      
-      if (updatedCount > 0) {
-        toast({
-          title: 'Sincronização concluída!',
-          description: `${updatedCount} ofertas atualizadas`,
-        });
-        fetchMappings();
-      } else {
-        toast({
-          title: 'Sincronização concluída',
-          description: 'Todas as ofertas já estão atualizadas',
-        });
-      }
+      fetchMappings();
       
     } catch (error: any) {
       console.error('Error syncing offers:', error);

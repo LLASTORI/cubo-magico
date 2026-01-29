@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useProject } from '@/contexts/ProjectContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,7 @@ interface HotmartAPISectionProps {
 export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { refreshProjects } = useProject();
   const [isOpen, setIsOpen] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -232,7 +234,9 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
         .eq('project_id', projectId)
         .eq('provider', 'hotmart');
 
+      // Refresh project status in ProjectContext so the UI updates immediately
       queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
+      await refreshProjects();
 
       toast({
         title: 'Conexão bem-sucedida!',

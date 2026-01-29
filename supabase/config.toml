@@ -29,6 +29,9 @@ verify_jwt = false
 verify_jwt = false
 max_duration = 300
 
+[functions.hotmart-products]
+verify_jwt = false
+
 [functions.ingest-meta-webhook]
 verify_jwt = false
 

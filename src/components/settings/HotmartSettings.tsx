@@ -51,15 +51,9 @@ export const HotmartSettings = () => {
   });
   const [showSecrets, setShowSecrets] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [syncMessage, setSyncMessage] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState('');
-  const [financialSyncing, setFinancialSyncing] = useState(false);
-  const [financialSyncMessage, setFinancialSyncMessage] = useState('');
-  const [oauthConnecting, setOauthConnecting] = useState(false);
 
   const projectId = currentProject?.id;
 
@@ -248,10 +242,10 @@ export const HotmartSettings = () => {
   const handleTestConnection = async () => {
     if (!projectId) return;
 
-    if (!credentials.client_id || !credentials.client_secret) {
+    if (!credentials.client_id) {
       toast({
-        title: 'Campos obrigatórios',
-        description: 'Client ID e Client Secret são necessários.',
+        title: 'Campo obrigatório',
+        description: 'Client ID é necessário.',
         variant: 'destructive',
       });
       return;
@@ -259,33 +253,31 @@ export const HotmartSettings = () => {
 
     setTesting(true);
     try {
-      await saveCredentialsMutation.mutateAsync(credentials);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Save credentials first if new values provided
+      if (credentials.client_secret || credentials.basic_auth) {
+        await saveCredentialsMutation.mutateAsync(credentials);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
-      const { data, error } = await supabase.functions.invoke('hotmart-api', {
+      // Use new hotmart-products function to test connection
+      const { data, error } = await supabase.functions.invoke('hotmart-products', {
         body: {
-          endpoint: '/sales/summary',
-          params: {},
+          action: 'test-connection',
           projectId,
         },
       });
 
       if (error) throw error;
-
-      await supabase
-        .from('project_credentials')
-        .update({ 
-          is_validated: true, 
-          validated_at: new Date().toISOString() 
-        })
-        .eq('project_id', projectId)
-        .eq('provider', 'hotmart');
+      
+      if (!data?.success) {
+        throw new Error(data?.error || 'Falha ao testar conexão');
+      }
 
       queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
 
       toast({
         title: 'Conexão bem-sucedida!',
-        description: 'Credenciais Hotmart validadas com sucesso.',
+        description: data.message || `${data.productCount} produtos encontrados.`,
       });
     } catch (error: any) {
       toast({
@@ -298,94 +290,8 @@ export const HotmartSettings = () => {
     }
   };
 
-  const handleSyncHotmart = async () => {
-    if (!projectId || !isConfigured) return;
-
-    setSyncing(true);
-    setSyncProgress(10);
-    setSyncMessage('Iniciando sincronização...');
-
-    try {
-      const endDate = new Date();
-      const hotmartStartDate = subMonths(endDate, 24);
-
-      const chunks: { start: number; end: number }[] = [];
-      let chunkStart = new Date(hotmartStartDate);
-      
-      while (chunkStart < endDate) {
-        const chunkEnd = new Date(chunkStart);
-        chunkEnd.setMonth(chunkEnd.getMonth() + 3);
-        if (chunkEnd > endDate) {
-          chunkEnd.setTime(endDate.getTime());
-        }
-        
-        chunks.push({
-          start: chunkStart.getTime(),
-          end: chunkEnd.getTime(),
-        });
-        
-        chunkStart = new Date(chunkEnd);
-        chunkStart.setDate(chunkStart.getDate() + 1);
-      }
-
-      let totalSynced = 0;
-
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        const chunkProgress = 10 + ((i + 1) / chunks.length) * 80;
-        
-        const chunkStartDate = new Date(chunk.start);
-        const chunkEndDate = new Date(chunk.end);
-        
-        setSyncMessage(`Sincronizando ${format(chunkStartDate, 'MMM yyyy', { locale: ptBR })} - ${format(chunkEndDate, 'MMM yyyy', { locale: ptBR })}... (${i + 1}/${chunks.length})`);
-        setSyncProgress(chunkProgress);
-
-        const { data, error } = await supabase.functions.invoke('hotmart-api', {
-          body: {
-            action: 'sync_sales',
-            projectId,
-            startDate: chunk.start,
-            endDate: chunk.end,
-          },
-        });
-
-        if (error) {
-          console.error(`Hotmart chunk ${i + 1} error:`, error);
-        } else {
-          totalSynced += (data?.synced || 0) + (data?.updated || 0);
-        }
-
-        if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      setSyncProgress(100);
-      setSyncMessage(`${totalSynced.toLocaleString()} vendas sincronizadas!`);
-
-      toast({
-        title: 'Sincronização concluída!',
-        description: `${totalSynced.toLocaleString()} vendas processadas.`,
-      });
-
-      refetchStats();
-
-    } catch (error: any) {
-      console.error('Hotmart sync error:', error);
-      setSyncMessage(error.message || 'Erro ao sincronizar');
-      toast({
-        title: 'Erro na sincronização',
-        description: error.message || 'Erro ao sincronizar dados do Hotmart',
-        variant: 'destructive',
-      });
-    } finally {
-      setTimeout(() => {
-        setSyncing(false);
-        setSyncProgress(0);
-        setSyncMessage('');
-      }, 3000);
-    }
-  };
+  // Removed handleSyncHotmart - sales sync must come from webhook or CSV, not API
+  // The API is now exclusively for Products/Offers catalog management
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -486,7 +392,6 @@ export const HotmartSettings = () => {
 
   const isConfigured = hotmartCredentials?.is_configured;
   const isValidated = hotmartCredentials?.is_validated;
-  const isOAuthConnected = !!hotmartCredentials?.hotmart_refresh_token;
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';
@@ -496,135 +401,6 @@ export const HotmartSettings = () => {
       return dateStr;
     }
   };
-
-  // Handle OAuth connection
-  const handleOAuthConnect = async () => {
-    if (!projectId) return;
-
-    // Check if credentials are configured either in form OR already saved in database
-    const hasFormCredentials = credentials.client_id && credentials.client_secret;
-    const hasSavedCredentials = hotmartCredentials?.is_configured && hotmartCredentials?.client_id;
-
-    if (!hasFormCredentials && !hasSavedCredentials) {
-      toast({
-        title: 'Configure as credenciais primeiro',
-        description: 'Client ID e Client Secret são necessários antes de conectar via OAuth.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Save credentials first if user entered new values
-    if (credentials.client_secret) {
-      await saveCredentialsMutation.mutateAsync(credentials);
-    }
-
-    setOauthConnecting(true);
-    try {
-      // Build a safe redirect back URL to this project's settings.
-      // IMPORTANT: projectCode must come from the URL (/app/:projectCode/*), never from projectId (UUID).
-      const pathParts = window.location.pathname.split('/');
-      const projectCodeFromPath = pathParts[1] === 'app' ? pathParts[2] : undefined;
-      const redirectBackUrl = projectCodeFromPath
-        ? `${window.location.origin}/app/${projectCodeFromPath}/settings`
-        : `${window.location.origin}/projects`;
-
-      // Get signed state from backend function
-      const { data, error } = await supabase.functions.invoke('hotmart-oauth-state', {
-        body: {
-          projectId,
-          redirectUrl: redirectBackUrl,
-        },
-      });
-
-      if (error) throw error;
-      if (!data?.state) throw new Error('Estado OAuth não gerado');
-
-      // Build Hotmart authorization URL (correct endpoint)
-      // Use client_id from form if available, otherwise from saved credentials
-      const clientIdForAuth = credentials.client_id || hotmartCredentials?.client_id;
-      if (!clientIdForAuth) {
-        throw new Error('Client ID não encontrado');
-      }
-
-      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hotmart-oauth-callback`;
-      const authUrl = new URL('https://api-sec-vlc.hotmart.com/security/oauth/authorize');
-      authUrl.searchParams.set('client_id', clientIdForAuth);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', 'all');
-      authUrl.searchParams.set('state', data.state);
-
-      // In the preview (iframe), Hotmart blocks rendering, so we open a new tab.
-      const isInIframe = (() => {
-        try {
-          return window.self !== window.top;
-        } catch {
-          return true;
-        }
-      })();
-
-      if (isInIframe) {
-        const opened = window.open(authUrl.toString(), '_blank', 'noopener,noreferrer');
-
-        // If the popup was blocked, fallback to same-tab navigation.
-        if (!opened) {
-          window.location.href = authUrl.toString();
-          return;
-        }
-
-        toast({
-          title: 'Continue a autorização na nova aba',
-          description: 'A Hotmart não abre dentro do preview. Depois de autorizar, você voltará para as Configurações.',
-        });
-
-        setOauthConnecting(false);
-        return;
-      }
-
-      // Production: same-tab redirect
-      window.location.href = authUrl.toString();
-
-    } catch (error: any) {
-      console.error('OAuth error:', error);
-      toast({
-        title: 'Erro ao conectar OAuth',
-        description: error.message || 'Não foi possível iniciar conexão OAuth',
-        variant: 'destructive',
-      });
-      setOauthConnecting(false);
-    }
-  };
-
-  // Check for OAuth callback result
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hotmartConnected = params.get('hotmart_connected');
-    const hotmartError = params.get('hotmart_error');
-
-    if (hotmartConnected === 'true') {
-      toast({
-        title: 'Hotmart conectado com sucesso!',
-        description: 'Agora você pode sincronizar dados financeiros.',
-      });
-      // Clean URL
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-      // Refetch credentials
-      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
-    }
-
-    if (hotmartError) {
-      toast({
-        title: 'Erro na conexão OAuth',
-        description: hotmartError,
-        variant: 'destructive',
-      });
-      // Clean URL
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-    }
-  }, []);
 
   return (
     <Card>
@@ -865,253 +641,89 @@ export const HotmartSettings = () => {
               )}
             </div>
 
-            {/* OAuth Connection Section - Show after credentials are saved */}
+            {/* Note about API usage */}
             {isConfigured && (
-              <>
-                <Separator />
-                
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <ExternalLink className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Conexão OAuth (Autorização Oficial)</h3>
-                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
-                      Recomendado
-                    </Badge>
-                  </div>
-
-                  <div className="p-4 rounded-lg border bg-card space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      A conexão OAuth permite acesso seguro à API da Hotmart para sincronização de <strong>comissões detalhadas</strong> e cálculo da <strong>receita líquida real</strong>.
-                    </p>
-                    
-                    {isOAuthConnected ? (
-                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                        <div className="flex items-center gap-2 text-green-600 text-sm">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="font-medium">OAuth conectado com sucesso!</span>
-                        </div>
-                        {hotmartCredentials?.hotmart_connected_at && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Conectado em: {new Date(hotmartCredentials.hotmart_connected_at).toLocaleString('pt-BR')}
-                          </p>
-                        )}
-                        {hotmartCredentials?.hotmart_expires_at && (
-                          <p className="text-xs text-muted-foreground">
-                            Token expira em: {new Date(hotmartCredentials.hotmart_expires_at).toLocaleString('pt-BR')}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                          <div className="text-xs text-amber-700 dark:text-amber-400">
-                            <strong>OAuth não conectado.</strong>
-                            <p className="mt-1">
-                              Clique no botão abaixo para autorizar o Cubo Mágico a acessar seus dados da Hotmart.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <Button
-                      onClick={handleOAuthConnect}
-                      disabled={oauthConnecting || (!credentials.client_id && !hotmartCredentials?.client_id)}
-                      className="w-full"
-                      variant={isOAuthConnected ? 'outline' : 'default'}
-                    >
-                      {oauthConnecting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Conectando...
-                        </>
-                      ) : isOAuthConnected ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Reconectar OAuth
-                        </>
-                      ) : (
-                        <>
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Conectar Hotmart (OAuth)
-                        </>
-                      )}
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      Você será redirecionado para a página de autorização da Hotmart e retornará automaticamente após autorizar.
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <div className="text-sm text-blue-700 dark:text-blue-400">
+                    <strong>API configurada para Produtos/Ofertas</strong>
+                    <p className="mt-1 text-xs">
+                      A API Hotmart é usada apenas para importar e sincronizar ofertas. 
+                      As vendas são recebidas via <strong>Webhook</strong> ou <strong>CSV</strong>.
                     </p>
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
-            {/* Sync Section - Only show when OAuth connected */}
-            {isOAuthConnected && (
-              <>
-                <Separator />
+            {/* Backfill Section */}
+            <Separator />
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">Reconstrução de Histórico</h3>
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                  Novo
+                </Badge>
+              </div>
+
+              <div className="p-4 rounded-lg border bg-card space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Reconstrói os eventos de vendas no módulo Sales Core a partir dos dados sincronizados.
+                  Isso permite que a <strong>Busca Rápida</strong>, <strong>Funis</strong> e <strong>Insights</strong> mostrem 100% das vendas históricas.
+                </p>
                 
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Database className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Sincronização de Dados Históricos</h3>
+                {backfillMessage && (
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      {backfillMessage}
+                    </p>
                   </div>
+                )}
 
-                  {/* Stats */}
-                  <div className="p-4 rounded-lg border bg-card space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Vendas sincronizadas:</span>
-                      <span className="font-medium">{dataStats?.count?.toLocaleString() || 0}</span>
-                    </div>
-                    {dataStats?.abandonedCount > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Abandonos de carrinho:</span>
-                        <span className="font-medium text-orange-600">{dataStats.abandonedCount.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Período disponível:</span>
-                      <span className="font-medium">
-                        {dataStats?.minDate && dataStats?.maxDate 
-                          ? `${formatDate(dataStats.minDate)} - ${formatDate(dataStats.maxDate)}`
-                          : 'Sem dados'
-                        }
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Sincroniza os últimos 24 meses de vendas</span>
-                    </div>
-                  </div>
-
-                  {/* Progress */}
-                  {syncing && (
-                    <div className="space-y-2">
-                      <Progress value={syncProgress} className="h-2" />
-                      <p className="text-sm text-muted-foreground text-center">
-                        {syncMessage}
-                      </p>
-                    </div>
+                <Button
+                  onClick={handleBackfillHistory}
+                  disabled={backfilling}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {backfilling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Reconstruindo...
+                    </>
+                  ) : (
+                    <>
+                      <History className="h-4 w-4 mr-2" />
+                      Reconstruir Histórico de Vendas
+                    </>
                   )}
+                </Button>
 
-                  {/* Sync Button */}
-                  <Button
-                    onClick={handleSyncHotmart}
-                    disabled={syncing}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    {syncing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Sincronizando...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Sincronizar Vendas Hotmart
-                      </>
-                    )}
-                  </Button>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Idempotente:</strong> Pode ser executado várias vezes sem duplicar dados.
+                </p>
+              </div>
+            </div>
 
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Nota:</strong> A sincronização em lote via API não inclui telefone. Use o webhook para capturar telefones em tempo real.
-                  </p>
-                </div>
+            {/* Financial Info Section */}
+            <Separator />
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">Dados Financeiros</h3>
+              </div>
 
-                {/* Backfill Section */}
-                <Separator />
-                
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <History className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Reconstrução de Histórico</h3>
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                      Novo
-                    </Badge>
-                  </div>
-
-                  <div className="p-4 rounded-lg border bg-card space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Reconstrói os eventos de vendas no módulo Sales Core a partir dos dados sincronizados via API.
-                      Isso permite que a <strong>Busca Rápida</strong>, <strong>Funis</strong> e <strong>Insights</strong> mostrem 100% das vendas históricas.
-                    </p>
-                    
-                    {backfillMessage && (
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <p className="text-sm text-blue-700 dark:text-blue-400">
-                          {backfillMessage}
-                        </p>
-                      </div>
-                    )}
-
-                    <Button
-                      onClick={handleBackfillHistory}
-                      disabled={backfilling || syncing}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      {backfilling ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Reconstruindo...
-                        </>
-                      ) : (
-                        <>
-                          <History className="h-4 w-4 mr-2" />
-                          Reconstruir Histórico de Vendas
-                        </>
-                      )}
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Idempotente:</strong> Pode ser executado várias vezes sem duplicar dados.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Financial Ledger Sync Section */}
-                <Separator />
-                
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Sincronização Financeira (Ledger)</h3>
-                    <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                      Receita Real
-                    </Badge>
-                  </div>
-
-                  <div className="p-4 rounded-lg border bg-card space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Sincroniza as <strong>comissões detalhadas</strong> da Hotmart para calcular a receita líquida real do produtor.
-                      Este é o único método que garante 100% de precisão no ROAS e lucro.
-                    </p>
-                    
-                    <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                      <div className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
-                        <p><strong>O que será sincronizado:</strong></p>
-                        <ul className="list-disc list-inside ml-2 space-y-0.5">
-                          <li>Comissão do Produtor (sua receita líquida)</li>
-                          <li>Taxa da Plataforma Hotmart</li>
-                          <li>Comissões de Afiliados</li>
-                          <li>Comissões de Coprodutores</li>
-                          <li>Reembolsos e Chargebacks</li>
-                        </ul>
-                      </div>
-                    </div>
-                    
-                    {/* Financial sync button removed - function deprecated */}
-                    {/* Webhooks are now the only source of financial data */}
-                  </div>
-                </div>
-
-                {/* CSV Import moved to Sales domain (BuscaRapida) */}
-                {/* Following architectural contract: CSV belongs to functional domains, not Providers */}
-              </>
-            )}
+              <div className="p-4 rounded-lg border bg-card space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Os dados financeiros são recebidos via <strong>Webhook</strong> em tempo real.
+                  Configure o webhook acima para capturar vendas, reembolsos e chargebacks.
+                </p>
+              </div>
+            </div>
 
             {/* Help Section */}
             <div className="p-4 rounded-lg bg-muted">

@@ -11,11 +11,48 @@ Contratos são documentos que definem:
 - **Limites de responsabilidade** entre domínios
 - **Invariantes** que devem ser preservadas em qualquer mudança
 
+---
+
 ## Contratos Ativos
 
 | Contrato | Domínio | Status |
 |----------|---------|--------|
 | [offer-mappings.md](./offer-mappings.md) | Catálogo de Ofertas | ✅ Ativo |
+| [ledger.md](./ledger.md) | Contabilidade Financeira | ✅ Ativo |
+| [webhook.md](./webhook.md) | Ingestão de Eventos | ✅ Ativo |
+| [providers.md](./providers.md) | Integrações Externas | ✅ Ativo |
+
+---
+
+## Hierarquia de Domínios
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         PROVIDERS                            │
+│              (Hotmart, Eduzz, Kiwify - futuro)              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                         WEBHOOK                              │
+│              (Fonte de Verdade Financeira)                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+┌─────────────────────────┐   ┌─────────────────────────┐
+│      ORDERS CORE        │   │    OFFER MAPPINGS       │
+│  (orders, order_items)  │   │  (Catálogo Semântico)   │
+└───────────┬─────────────┘   └─────────────────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│         LEDGER          │
+│  (Contabilidade Real)   │
+└─────────────────────────┘
+```
+
+---
 
 ## Regras de Governança
 
@@ -35,6 +72,7 @@ Qualquer PR que altere comportamento de:
 - Webhooks
 - Providers
 - Ledger financeiro
+- Orders Core
 
 **DEVE** respeitar os contratos desta pasta.
 
@@ -45,12 +83,41 @@ Mudanças em contratos requerem:
 - Análise de impacto em sistemas dependentes
 - Aprovação explícita do arquiteto responsável
 
+### 5. Proibições
+
+| Ação | Status |
+|------|--------|
+| Duplicar regras em outro local | ❌ Proibido |
+| Mover para Notion/Confluence | ❌ Proibido |
+| Criar documentação paralela | ❌ Proibido |
+| Simplificar sem aprovação | ❌ Proibido |
+
+---
+
 ## Audiência
 
 - Desenvolvedores
 - Produto
 - Agentes de IA
 - Arquitetos de sistema
+
+---
+
+## Princípios Fundamentais
+
+### Orders Core como Fonte de Verdade
+
+O **Orders Core** (tabelas `orders`, `order_items` e `ledger_events`) é a única fonte de verdade para todo o sistema, incluindo CRM, Jornada, Dashboard e Análises.
+
+### Webhook como Autoridade Financeira
+
+O **Webhook** é a autoridade máxima para dados financeiros. CSVs realizam replay histórico sem sobrescrever dados operacionais.
+
+### Separação de Domínios
+
+- **Offer Mappings**: Catálogo semântico (NÃO financeiro)
+- **Ledger**: Contabilidade transacional (financeiro)
+- **Orders**: Dados operacionais de vendas
 
 ---
 

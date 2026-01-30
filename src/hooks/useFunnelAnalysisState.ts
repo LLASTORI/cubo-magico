@@ -12,7 +12,6 @@ interface FunnelAnalysisPersistedState {
   appliedEndDate: Date;
   selectedPeriod: string | null;
   activeTab: string;
-  metaSyncInProgress: boolean;
   cachedAIAnalysis: Record<string, any>;
   lastProjectId: string | null;
 }
@@ -24,7 +23,6 @@ const DEFAULT_STATE: FunnelAnalysisPersistedState = {
   appliedEndDate: new Date(),
   selectedPeriod: "7d",
   activeTab: "overview",
-  metaSyncInProgress: false,
   cachedAIAnalysis: {},
   lastProjectId: null,
 };
@@ -52,7 +50,6 @@ export function useFunnelAnalysisState(projectId: string | undefined) {
   const [appliedEndDate, setAppliedEndDateLocal] = useState<Date>(globalState.appliedEndDate);
   const [selectedPeriod, setSelectedPeriodLocal] = useState<string | null>(globalState.selectedPeriod);
   const [activeTab, setActiveTabLocal] = useState<string>(globalState.activeTab);
-  const [metaSyncInProgress, setMetaSyncInProgressLocal] = useState<boolean>(globalState.metaSyncInProgress);
   const [cachedAIAnalysis, setCachedAIAnalysisLocal] = useState<Record<string, any>>(globalState.cachedAIAnalysis);
 
   // Sync changes back to global state
@@ -62,7 +59,6 @@ export function useFunnelAnalysisState(projectId: string | undefined) {
   useEffect(() => { globalState.appliedEndDate = appliedEndDate; }, [appliedEndDate]);
   useEffect(() => { globalState.selectedPeriod = selectedPeriod; }, [selectedPeriod]);
   useEffect(() => { globalState.activeTab = activeTab; }, [activeTab]);
-  useEffect(() => { globalState.metaSyncInProgress = metaSyncInProgress; }, [metaSyncInProgress]);
   useEffect(() => { globalState.cachedAIAnalysis = cachedAIAnalysis; }, [cachedAIAnalysis]);
 
   // Wrapped setters that also persist
@@ -84,9 +80,6 @@ export function useFunnelAnalysisState(projectId: string | undefined) {
   const setActiveTab = useCallback((t: string) => {
     setActiveTabLocal(t);
   }, []);
-  const setMetaSyncInProgress = useCallback((v: boolean) => {
-    setMetaSyncInProgressLocal(v);
-  }, []);
   const setCachedAIAnalysis = useCallback((v: React.SetStateAction<Record<string, any>>) => {
     setCachedAIAnalysisLocal(v);
   }, []);
@@ -104,8 +97,6 @@ export function useFunnelAnalysisState(projectId: string | undefined) {
     setSelectedPeriod,
     activeTab,
     setActiveTab,
-    metaSyncInProgress,
-    setMetaSyncInProgress,
     cachedAIAnalysis,
     setCachedAIAnalysis,
   };

@@ -44,6 +44,7 @@ export async function getMetrics(
       .eq('project_id', projectId)
       .gte('date_start', dateRange.start)
       .lte('date_start', dateRange.end)
+      .not('ad_id', 'is', null) // Require ad-level granularity (matches legacy invariant)
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
     if (accountIds && accountIds.length > 0) {

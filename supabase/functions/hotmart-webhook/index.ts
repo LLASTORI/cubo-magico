@@ -598,6 +598,9 @@ async function writeOrderShadow(
     // The ledger_events table has a partial unique index:
     //   UNIQUE(provider_event_id) WHERE provider_event_id IS NOT NULL
     // Using upsert with onConflict: 'provider_event_id' causes silent failures (error 42P10).
+    //
+    // REGRA CANÔNICA: Refunds/cancelamentos SÓ geram ledger se houver venda prévia
+    // para a mesma transação. Cancelamento de bump sem venda NÃO gera ledger.
     // ============================================
     const occurredAt = orderedAt;
     const isDebit = debitEvents.includes(hotmartEvent);
@@ -605,9 +608,32 @@ async function writeOrderShadow(
     // Track if ANY ledger event was created successfully (for conditional map creation)
     let ledgerCreatedSuccessfully = false;
     
-    // Only create ledger events when shouldApplyFinancialValues is true
+    // ============================================
+    // REGRA CANÔNICA: Para eventos de DÉBITO (refund/cancel/chargeback),
+    // verificar se existe uma VENDA prévia para esta transação específica.
+    // Se não houver, NÃO criar ledger_events (evita órfãos).
+    // ============================================
+    let skipLedgerCreation = false;
+    
+    if (isDebit && transactionId) {
+      // Verificar se existe ledger_event de 'sale' para esta transação
+      const saleEventIdPrefix = `${transactionId}_sale_`;
+      const { data: existingSale } = await supabase
+        .from('ledger_events')
+        .select('id')
+        .eq('order_id', orderId)
+        .ilike('provider_event_id', `${saleEventIdPrefix}%`)
+        .maybeSingle();
+      
+      if (!existingSale) {
+        console.log(`[OrdersShadow] SKIP ledger: Debit event ${hotmartEvent} for transaction ${transactionId} - no prior sale found`);
+        skipLedgerCreation = true;
+      }
+    }
+    
+    // Only create ledger events when shouldApplyFinancialValues is true AND not skipped
     // This ensures ledger_events are consistent with customer_paid and order_items
-    if (shouldApplyFinancialValues) {
+    if (shouldApplyFinancialValues && !skipLedgerCreation) {
       // Collect all ledger events to create for THIS transaction
       const ledgerEventsToCreate: Array<{
         order_id: string;

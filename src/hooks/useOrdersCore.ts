@@ -190,10 +190,21 @@ const getEconomicDay = (dateString: string | null): string => {
   return format(zonedDate, "yyyy-MM-dd", { timeZone: SAO_PAULO_TIMEZONE });
 };
 
+/**
+ * REGRA CANÔNICA: Status derivado do Ledger
+ * 
+ * O status do pedido é derivado automaticamente via trigger do ledger:
+ * - approved: venda > 0 AND refund = 0
+ * - partial_refund: venda > refund AND refund > 0
+ * - cancelled: venda <= refund
+ * 
+ * O filtro padrão DEVE incluir partial_refund para não esconder pedidos com valor positivo.
+ */
 const buildStatusFilter = (statuses: string[]): string[] => {
   const mappedStatuses = statuses.map(s => s.toLowerCase());
   if (mappedStatuses.length === 0) {
-    return ['approved', 'complete'];
+    // REGRA: Incluir partial_refund por padrão - pedidos com valor líquido positivo
+    return ['approved', 'complete', 'partial_refund'];
   }
   return mappedStatuses;
 };

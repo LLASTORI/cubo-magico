@@ -11629,6 +11629,10 @@ export type Database = {
         Returns: string
       }
       decrypt_sensitive: { Args: { p_encrypted_data: string }; Returns: string }
+      derive_order_status_from_ledger: {
+        Args: { p_order_id: string }
+        Returns: string
+      }
       encrypt_sensitive: { Args: { p_data: string }; Returns: string }
       get_contact_document: {
         Args: { p_contact_id: string; p_project_id: string }

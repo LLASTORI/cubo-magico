@@ -208,13 +208,20 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: Fetch from funnel_orders_view (replaces finance_tracking_view)
+  // Status filter applied at application layer (same logic as Busca Rápida)
   // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // CANONICAL STATUS FILTER: Same as Busca Rápida (useOrdersCore)
+  // Includes 'partial_refund' to show orders with positive net value after partial refund
+  const VALID_ORDER_STATUSES = ['approved', 'complete', 'partial_refund'];
+  
   const ordersQuery = useQuery({
     queryKey: ['funnel-orders', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       console.log(`[useFunnelData] Fetching orders from funnel_orders_view for ${startDateStr} to ${endDateStr}`);
       
       // Fetch ALL orders with pagination to bypass 1000 limit
+      // Status filter applied here (view no longer has hardcoded WHERE)
       const PAGE_SIZE = 1000;
       let allData: OrderRecord[] = [];
       let page = 0;
@@ -250,6 +257,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
             upsell_revenue
           `)
           .eq('project_id', projectId!)
+          .in('status', VALID_ORDER_STATUSES)
           .gte('economic_day', startDateStr)
           .lte('economic_day', endDateStr)
           .order('order_id', { ascending: true })

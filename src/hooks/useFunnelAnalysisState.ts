@@ -31,26 +31,54 @@ const DEFAULT_STATE: FunnelAnalysisPersistedState = {
 let globalState: FunnelAnalysisPersistedState = { ...DEFAULT_STATE };
 
 /**
+ * Returns the initial state for the hook, handling project reset logic.
+ * This is a pure function that computes state without side effects during render.
+ */
+function getInitialState(projectId: string | undefined): FunnelAnalysisPersistedState {
+  const shouldReset = projectId && globalState.lastProjectId && globalState.lastProjectId !== projectId;
+  if (shouldReset) {
+    return { ...DEFAULT_STATE, lastProjectId: projectId };
+  }
+  if (projectId && !globalState.lastProjectId) {
+    return { ...globalState, lastProjectId: projectId };
+  }
+  return globalState;
+}
+
+/**
  * Hook to persist FunnelAnalysis state across navigations.
  * When the component mounts it restores the previous state.
  * When state changes, it saves to the global store.
  */
 export function useFunnelAnalysisState(projectId: string | undefined) {
-  // Reset state if project changed
-  const shouldReset = projectId && globalState.lastProjectId && globalState.lastProjectId !== projectId;
-  if (shouldReset) {
-    globalState = { ...DEFAULT_STATE, lastProjectId: projectId };
-  } else if (projectId && !globalState.lastProjectId) {
-    globalState.lastProjectId = projectId;
-  }
+  // Compute initial state once using lazy initializer (safe for React)
+  const [startDate, setStartDateLocal] = useState<Date>(() => getInitialState(projectId).startDate);
+  const [endDate, setEndDateLocal] = useState<Date>(() => getInitialState(projectId).endDate);
+  const [appliedStartDate, setAppliedStartDateLocal] = useState<Date>(() => getInitialState(projectId).appliedStartDate);
+  const [appliedEndDate, setAppliedEndDateLocal] = useState<Date>(() => getInitialState(projectId).appliedEndDate);
+  const [selectedPeriod, setSelectedPeriodLocal] = useState<string | null>(() => getInitialState(projectId).selectedPeriod);
+  const [activeTab, setActiveTabLocal] = useState<string>(() => getInitialState(projectId).activeTab);
+  const [cachedAIAnalysis, setCachedAIAnalysisLocal] = useState<Record<string, any>>(() => getInitialState(projectId).cachedAIAnalysis);
 
-  const [startDate, setStartDateLocal] = useState<Date>(globalState.startDate);
-  const [endDate, setEndDateLocal] = useState<Date>(globalState.endDate);
-  const [appliedStartDate, setAppliedStartDateLocal] = useState<Date>(globalState.appliedStartDate);
-  const [appliedEndDate, setAppliedEndDateLocal] = useState<Date>(globalState.appliedEndDate);
-  const [selectedPeriod, setSelectedPeriodLocal] = useState<string | null>(globalState.selectedPeriod);
-  const [activeTab, setActiveTabLocal] = useState<string>(globalState.activeTab);
-  const [cachedAIAnalysis, setCachedAIAnalysisLocal] = useState<Record<string, any>>(globalState.cachedAIAnalysis);
+  // Handle project change - reset all state via effect (not during render)
+  const prevProjectIdRef = useRef<string | undefined>(projectId);
+  useEffect(() => {
+    if (projectId && prevProjectIdRef.current && prevProjectIdRef.current !== projectId) {
+      // Project changed - reset to defaults
+      const defaults = { ...DEFAULT_STATE, lastProjectId: projectId };
+      setStartDateLocal(defaults.startDate);
+      setEndDateLocal(defaults.endDate);
+      setAppliedStartDateLocal(defaults.appliedStartDate);
+      setAppliedEndDateLocal(defaults.appliedEndDate);
+      setSelectedPeriodLocal(defaults.selectedPeriod);
+      setActiveTabLocal(defaults.activeTab);
+      setCachedAIAnalysisLocal(defaults.cachedAIAnalysis);
+      globalState = defaults;
+    } else if (projectId) {
+      globalState.lastProjectId = projectId;
+    }
+    prevProjectIdRef.current = projectId;
+  }, [projectId]);
 
   // Sync changes back to global state
   useEffect(() => { globalState.startDate = startDate; }, [startDate]);

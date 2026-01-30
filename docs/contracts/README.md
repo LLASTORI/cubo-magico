@@ -21,6 +21,10 @@ Contratos são documentos que definem:
 | [ledger.md](./ledger.md) | Contabilidade Financeira | ✅ Ativo |
 | [webhook.md](./webhook.md) | Ingestão de Eventos | ✅ Ativo |
 | [providers.md](./providers.md) | Integrações Externas | ✅ Ativo |
+| [funnel-core.md](./funnel-core.md) | Modelo Semântico de Funil | ✅ Ativo |
+| [funnel-health-metrics.md](./funnel-health-metrics.md) | Métricas de Saúde | ✅ Ativo |
+| [paid-media-domain.md](./paid-media-domain.md) | Domínio de Mídia Paga | ✅ Ativo |
+| [paid-media-provider-interface.md](./paid-media-provider-interface.md) | Interface de Providers | ✅ Ativo |
 
 ---
 

@@ -1,8 +1,25 @@
+/**
+ * useLaunchData
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * LAUNCH FUNNEL DATA HOOK - PAID MEDIA DOMAIN INTEGRATION
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * Investment data now comes from Paid Media Domain (provider-agnostic).
+ * Sales data still uses hotmart_sales (to be migrated to Orders Core in future).
+ * 
+ * ARCHITECTURE:
+ * - Paid Media metrics fetched via src/domains/paid-media
+ * - Decoupled from provider-specific code (Meta/Google/TikTok)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
+import { PaidMediaDomain } from "@/domains/paid-media";
 
 interface UseLaunchDataProps {
   projectId: string | undefined;
@@ -140,7 +157,49 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
     staleTime: 2 * 60 * 1000,
   });
 
-  // Fetch Meta insights with pagination
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PAID MEDIA DOMAIN: Fetch aggregated metrics via provider-agnostic domain layer
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const { data: paidMediaData, isLoading: loadingPaidMedia, refetch: refetchPaidMedia } = useQuery({
+    queryKey: ['paid-media-metrics-lancamento', projectId, activeAccountIds, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      if (!projectId || activeAccountIds.length === 0) {
+        return { metrics: [], aggregated: { spend: 0, impressions: 0, clicks: 0, reach: 0 } };
+      }
+      
+      const dateRange = {
+        start: format(startDate, 'yyyy-MM-dd'),
+        end: format(endDate, 'yyyy-MM-dd'),
+      };
+      
+      console.log(`[useLaunchData] Fetching paid media metrics via domain`);
+      
+      try {
+        const dailyMetrics = await PaidMediaDomain.getAggregatedMetrics(projectId, dateRange, activeAccountIds);
+        
+        const aggregated = dailyMetrics.reduce((acc, day) => ({
+          spend: acc.spend + day.spend,
+          impressions: acc.impressions + day.impressions,
+          clicks: acc.clicks + day.clicks,
+          reach: acc.reach + day.reach,
+        }), { spend: 0, impressions: 0, clicks: 0, reach: 0 });
+        
+        console.log(`[useLaunchData] Paid Media Domain: ${dailyMetrics.length} days, total spend: ${aggregated.spend.toFixed(2)}`);
+        
+        return { metrics: dailyMetrics, aggregated };
+      } catch (error) {
+        console.error(`[useLaunchData] Error fetching paid media from domain:`, error);
+        throw error;
+      }
+    },
+    enabled: !!projectId && activeAccountIds.length > 0,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LEGACY: Keep raw insights query for campaign-level spend attribution
+  // This is needed to match spend to specific campaign patterns per funnel
+  // ═══════════════════════════════════════════════════════════════════════════════
   const { data: metaInsights = [], isLoading: loadingInsights, refetch: refetchInsights } = useQuery({
     queryKey: ['meta-insights-lancamento', projectId, activeAccountIds, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
     queryFn: async () => {
@@ -327,8 +386,11 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
   }, [launchMetrics, funnels.length]);
 
   const refetchAll = async () => {
-    await Promise.all([refetchSales(), refetchInsights()]);
+    await Promise.all([refetchSales(), refetchInsights(), refetchPaidMedia()]);
   };
+
+  // Expose paid media aggregated data for potential future use
+  const paidMediaAggregated = paidMediaData?.aggregated;
 
   return {
     funnels,
@@ -338,9 +400,10 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
     launchMetrics,
     summaryMetrics,
     activeAccountIds,
+    paidMediaAggregated, // New: Aggregated spend from Paid Media Domain
     isLoading: loadingFunnels || loadingMappings,
     loadingSales,
-    loadingInsights,
+    loadingInsights: loadingInsights || loadingPaidMedia,
     refetchAll,
   };
 };

@@ -86,7 +86,9 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
 
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
-  const [transactionStatus, setTransactionStatus] = useState<string[]>(["approved", "complete"]);
+  // REGRA CANÔNICA: Incluir partial_refund no filtro padrão
+  // Pedidos com refund parcial ainda têm valor líquido positivo e DEVEM aparecer
+  const [transactionStatus, setTransactionStatus] = useState<string[]>(["approved", "complete", "partial_refund"]);
   const [idFunil, setIdFunil] = useState<string[]>([]);
   const [productName, setProductName] = useState<string[]>([]);
   const [offerCode, setOfferCode] = useState<string[]>([]);
@@ -152,10 +154,11 @@ const SalesFilters = ({ onFilter, availableProducts = [], availableOffers = [], 
   const displayProducts = availableProducts.length > 0 ? availableProducts : mappedProducts;
   const displayOffers = availableOffers.length > 0 ? availableOffers : mappedOffers;
 
-  // Convert to MultiSelect options - all statuses from Hotmart
+  // Convert to MultiSelect options - all statuses including partial_refund (derivado do ledger)
   const statusOptions: MultiSelectOption[] = [
     { value: "approved", label: "Aprovada", description: "Pagamento aprovado pela operadora. O cliente já tem acesso ao produto e você receberá o valor." },
     { value: "complete", label: "Completa", description: "Transação 100% finalizada. Pagamento liquidado, produto entregue e prazo de garantia encerrado." },
+    { value: "partial_refund", label: "Refund Parcial", description: "Pedido com reembolso parcial. O valor líquido ainda é positivo (ex: bump cancelado, venda principal aprovada)." },
     { value: "pending", label: "Pendente", description: "Pagamento iniciado mas ainda não processado. Comum em cartões aguardando autorização da bandeira." },
     { value: "waiting_payment", label: "Aguardando Pagamento", description: "Boleto ou PIX gerado pelo cliente. O pagamento ainda não foi identificado no sistema bancário." },
     { value: "billet_printed", label: "Boleto Gerado", description: "Boleto bancário emitido e disponível. Cliente tem até o vencimento para realizar o pagamento." },

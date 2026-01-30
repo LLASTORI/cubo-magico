@@ -375,6 +375,19 @@ async function writeOrderShadow(
     let orderId: string;
     
     if (existingOrder) {
+      // ============================================
+      // REGRA CANÔNICA: STATUS DERIVADO DO LEDGER
+      // ============================================
+      // NÃO atualizar orders.status diretamente aqui.
+      // O status será derivado automaticamente pelo trigger
+      // que monitora ledger_events (derive_order_status_from_ledger).
+      //
+      // Isso garante que:
+      // 1. Cancelamento de order bump NUNCA cancela pedido pai
+      // 2. Status sempre reflete o estado financeiro REAL do ledger
+      // 3. Pedidos com valor líquido positivo NUNCA "desaparecem"
+      // ============================================
+      
       // Order exists - only update financial values if this is a new financial event
       if (shouldApplyFinancialValues && financialCustomerPaid > 0) {
         // ACCUMULATE values - this is a new financially effective item
@@ -384,10 +397,11 @@ async function writeOrderShadow(
         
         console.log(`[OrdersShadow] Financial accumulation: ${existingOrder.customer_paid} + ${financialCustomerPaid} = ${newCustomerPaid}`);
         
+        // NÃO ATUALIZAR STATUS AQUI - será derivado do ledger via trigger
         const { error: updateError } = await supabase
           .from('orders')
           .update({
-            status,
+            // status, ← REMOVIDO: Derivado do ledger automaticamente
             customer_paid: newCustomerPaid,
             gross_base: newGrossBase,
             producer_net: newProducerNet,
@@ -405,8 +419,8 @@ async function writeOrderShadow(
           return result;
         }
       } else {
-        // Only update status and approved_at (no financial impact)
-        // BUT: backfill payment_method if still null (idempotent, no financial impact)
+        // Only update approved_at and payment metadata (no financial impact)
+        // STATUS NÃO É ATUALIZADO - derivado do ledger
         const backfillPaymentMethod = existingOrder.payment_method ?? paymentMethod;
         const backfillPaymentType = existingOrder.payment_type ?? rawPaymentType;
         const backfillInstallments = existingOrder.installments ?? installments;
@@ -416,13 +430,14 @@ async function writeOrderShadow(
         if (needsPaymentBackfill) {
           console.log(`[OrdersShadow] Backfilling payment method: ${backfillPaymentMethod} (was null)`);
         } else {
-          console.log(`[OrdersShadow] Updating order status only (no financial impact)`);
+          console.log(`[OrdersShadow] Non-financial event - status derivado do ledger`);
         }
         
+        // NÃO ATUALIZAR STATUS - derivado do ledger automaticamente
         await supabase
           .from('orders')
           .update({
-            status,
+            // status, ← REMOVIDO: Derivado do ledger automaticamente
             approved_at: approvedAt || existingOrder.approved_at,
             updated_at: new Date().toISOString(),
             // PAYMENT BACKFILL (idempotent) - only fills if null, never overwrites

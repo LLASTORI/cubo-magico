@@ -2,11 +2,16 @@
  * useFunnelData
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
- * CANONICAL FUNNEL DATA HOOK - ORDERS CORE MIGRATION
+ * CANONICAL FUNNEL DATA HOOK - ORDERS CORE + PAID MEDIA DOMAIN
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * Sales data comes EXCLUSIVELY from funnel_orders_view (Orders Core).
- * Investment data comes from meta_insights (ad-level, deduplicated).
+ * Investment data comes from Paid Media Domain (provider-agnostic).
+ * 
+ * ARCHITECTURE:
+ * - Paid Media metrics are fetched via src/domains/paid-media
+ * - This decouples FunnelAnalysis from provider-specific code
+ * - Supports future Google Ads / TikTok Ads integration
  * 
  * FILTER RULES:
  * - Date: economic_day (DATE type, São Paulo timezone)
@@ -17,6 +22,7 @@
  * ❌ finance_tracking_view - DEPRECATED, replaced by funnel_orders_view
  * ❌ sales_core_events
  * ❌ sales_core_view
+ * ❌ Direct meta_* table access for metrics (use Paid Media Domain)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -25,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useMetaHierarchy } from "./useMetaHierarchy";
+import { PaidMediaDomain } from "@/domains/paid-media";
 
 interface UseFunnelDataProps {
   projectId: string | undefined;
@@ -275,6 +282,50 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // Get active account IDs first before building insights query
   const activeAccountIds = accountsQuery.data || [];
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PAID MEDIA DOMAIN: Fetch metrics via provider-agnostic domain layer
+  // This replaces direct meta_insights queries for aggregated metrics
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const paidMediaMetricsQuery = useQuery({
+    queryKey: ['paid-media-metrics', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
+    queryFn: async () => {
+      if (activeAccountIds.length === 0) {
+        console.log(`[useFunnelData] No active accounts, skipping paid media metrics fetch`);
+        return { metrics: [], aggregated: { spend: 0, impressions: 0, clicks: 0, reach: 0 } };
+      }
+      
+      console.log(`[useFunnelData] Fetching paid media metrics via domain for project=${projectId}, dates=${startDateStr} to ${endDateStr}`);
+      
+      try {
+        const dateRange = { start: startDateStr, end: endDateStr };
+        const dailyMetrics = await PaidMediaDomain.getAggregatedMetrics(projectId!, dateRange, activeAccountIds);
+        
+        // Aggregate totals from daily metrics
+        const aggregated = dailyMetrics.reduce((acc, day) => ({
+          spend: acc.spend + day.spend,
+          impressions: acc.impressions + day.impressions,
+          clicks: acc.clicks + day.clicks,
+          reach: acc.reach + day.reach,
+        }), { spend: 0, impressions: 0, clicks: 0, reach: 0 });
+        
+        console.log(`[useFunnelData] Paid Media Domain: ${dailyMetrics.length} days, total spend: ${aggregated.spend.toFixed(2)}`);
+        
+        return { metrics: dailyMetrics, aggregated };
+      } catch (error) {
+        console.error(`[useFunnelData] Error fetching paid media metrics from domain:`, error);
+        throw error;
+      }
+    },
+    enabled: enabled && activeAccountIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LEGACY: Keep raw insights query for hierarchy and ad-level detail
+  // This is still needed for useMetaHierarchy and detailed breakdowns
+  // Will be migrated in a future phase
+  // ═══════════════════════════════════════════════════════════════════════════════
   const insightsQuery = useQuery({
     queryKey: ['insights', projectId, startDateStr, endDateStr, activeAccountIds.join(',')],
     queryFn: async () => {
@@ -283,7 +334,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         return [];
       }
       
-      console.log(`[useFunnelData] Fetching insights for project=${projectId}, dates=${startDateStr} to ${endDateStr}, accounts=${activeAccountIds.join(',')}`);
+      console.log(`[useFunnelData] Fetching raw insights for hierarchy, project=${projectId}`);
       
       // Fetch ALL ad-level insights with pagination to handle any time period
       const PAGE_SIZE = 1000;
@@ -291,24 +342,22 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       let page = 0;
       let hasMore = true;
       
-        while (hasMore) {
-          const { data, error } = await supabase
-            .from('meta_insights')
-            .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, actions, date_start, date_stop')
-            .eq('project_id', projectId!)
-            .in('ad_account_id', activeAccountIds)
-            .not('ad_id', 'is', null)
-            .gte('date_start', startDateStr)
-            .lte('date_start', endDateStr)
-            .order('id', { ascending: true })
-            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_insights')
+          .select('id, campaign_id, adset_id, ad_id, ad_account_id, spend, impressions, clicks, reach, ctr, cpc, cpm, actions, date_start, date_stop')
+          .eq('project_id', projectId!)
+          .in('ad_account_id', activeAccountIds)
+          .not('ad_id', 'is', null)
+          .gte('date_start', startDateStr)
+          .lte('date_start', endDateStr)
+          .order('id', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         
         if (error) {
           console.error(`[useFunnelData] Error fetching insights:`, error);
           throw error;
         }
-        
-        console.log(`[useFunnelData] Page ${page}: ${data?.length || 0} records`);
         
         if (data && data.length > 0) {
           allData = [...allData, ...data];
@@ -319,12 +368,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         }
       }
       
-      console.log(`[useFunnelData] Ad-level insights loaded: ${allData.length}, total spend: ${allData.reduce((s, i) => s + (i.spend || 0), 0).toFixed(2)}`);
+      console.log(`[useFunnelData] Raw insights for hierarchy: ${allData.length} records`);
       return allData as MetaInsight[];
     },
     enabled: enabled && activeAccountIds.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   // Use unified hook for Meta hierarchy (campaigns, adsets, ads)
@@ -373,7 +422,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
 
   // Loading states
   const loadingSales = ordersQuery.isLoading;
-  const loadingInsights = insightsQuery.isLoading;
+  const loadingInsights = insightsQuery.isLoading || paidMediaMetricsQuery.isLoading;
   const isLoading = loadingSales;
 
   // Sorted mappings
@@ -398,13 +447,39 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     return rawInsights.filter(i => i.ad_id !== null);
   }, [rawInsights]);
 
-  // Total Meta investment (sum of all ad-level insights)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // PAID MEDIA DOMAIN: Use aggregated metrics from domain layer
+  // Falls back to raw insights if domain fails
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const paidMediaAggregated = paidMediaMetricsQuery.data?.aggregated;
+  
+  // Total investment from Paid Media Domain (provider-agnostic)
   const totalMetaInvestment = useMemo(() => {
+    // Primary: Use Paid Media Domain aggregated metrics
+    if (paidMediaAggregated) {
+      return paidMediaAggregated.spend;
+    }
+    // Fallback: Calculate from raw insights (legacy behavior)
     return adLevelInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
-  }, [adLevelInsights]);
+  }, [paidMediaAggregated, adLevelInsights]);
 
-  // Meta metrics (aggregated from ad-level insights)
+  // Meta metrics from Paid Media Domain (derived metrics calculated here per contract)
   const metaMetrics = useMemo(() => {
+    // Primary: Use Paid Media Domain
+    if (paidMediaAggregated) {
+      const { spend, impressions, clicks, reach } = paidMediaAggregated;
+      return {
+        spend,
+        impressions,
+        clicks,
+        reach,
+        // CTR and CPC are DERIVED at domain consumer level (not provider level)
+        ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+        cpc: clicks > 0 ? spend / clicks : 0,
+      };
+    }
+    
+    // Fallback: Calculate from raw insights (legacy behavior)
     const spend = adLevelInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
     const impressions = adLevelInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
     const clicks = adLevelInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
@@ -418,7 +493,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
     };
-  }, [adLevelInsights]);
+  }, [paidMediaAggregated, adLevelInsights]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: New metrics calculation using order-level data
@@ -564,6 +639,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     const results = await Promise.all([
       ordersQuery.refetch(),
       insightsQuery.refetch(),
+      paidMediaMetricsQuery.refetch(),
     ]);
     console.log(`[useFunnelData] Refetch complete. Orders: ${results[0].data?.length || 0}, Insights: ${results[1].data?.length || 0}`);
   };

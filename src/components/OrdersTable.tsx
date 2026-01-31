@@ -167,7 +167,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                   </TableHead>
                   <TableHead className="text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      Valor Bruto
+                      Valor Pago
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger>

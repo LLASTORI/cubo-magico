@@ -265,7 +265,17 @@ serve(async (req) => {
           const purchase = data?.purchase;
           const commissions = data?.commissions || [];
           const currency = purchase?.price?.currency_value || 'BRL';
-          const occurredAt = purchase?.approved_date || purchase?.order_date || event.received_at;
+          
+          // Convert timestamps - Hotmart sends milliseconds, DB expects ISO string
+          let occurredAt: string;
+          const rawOccurredAt = purchase?.approved_date || purchase?.order_date;
+          if (rawOccurredAt && typeof rawOccurredAt === 'number') {
+            occurredAt = new Date(rawOccurredAt).toISOString();
+          } else if (rawOccurredAt && typeof rawOccurredAt === 'string') {
+            occurredAt = rawOccurredAt;
+          } else {
+            occurredAt = event.received_at;
+          }
 
           // Process commissions with BRL extraction
           const ledgerEventsToCreate: any[] = [];

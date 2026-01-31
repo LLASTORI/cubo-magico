@@ -553,7 +553,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     {breakdown.platform_fee > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Taxas plataforma</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.platform_fee, order.currency)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.platform_fee, 'BRL')}</span>
                       </div>
                     )}
                     {breakdown.coproducer > 0 && (

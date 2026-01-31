@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ShoppingCart, CreditCard, Calendar, Package } from 'lucide-react';
+import { Loader2, ShoppingCart, Calendar, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatMoney } from '@/utils/formatMoney';
 
 /**
  * 🚫 LEGACY TABLES FORBIDDEN
@@ -27,6 +28,7 @@ interface Order {
   status: string;
   customer_paid: number;
   producer_net: number;
+  currency: string;
   item_count: number;
   has_bump: boolean;
   funnel_name: string | null;
@@ -77,7 +79,7 @@ export function ContactTransactionsList({ contactEmail, projectId }: ContactTran
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_orders_view')
-        .select('order_id, provider_order_id, ordered_at, approved_at, status, customer_paid, producer_net, item_count, has_bump, funnel_name')
+        .select('order_id, provider_order_id, ordered_at, approved_at, status, customer_paid, producer_net, currency, item_count, has_bump, funnel_name')
         .eq('project_id', projectId)
         .ilike('buyer_email', contactEmail)
         .order('ordered_at', { ascending: false });
@@ -113,9 +115,9 @@ export function ContactTransactionsList({ contactEmail, projectId }: ContactTran
     return acc;
   }, {} as Record<string, OrderItem[]>);
 
-  const formatCurrency = (value: number | null) => {
-    if (value === null || value === undefined) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatValue = (value: number | null, currency: string) => {
+    if (value === null || value === undefined) return formatMoney(0, currency);
+    return formatMoney(value, currency);
   };
 
   const isLoading = ordersLoading || itemsLoading;
@@ -181,10 +183,10 @@ export function ContactTransactionsList({ contactEmail, projectId }: ContactTran
               <div className="text-right flex-shrink-0">
                 <div className="space-y-0.5">
                   <p className={`font-semibold text-sm ${status === 'approved' || status === 'completed' ? 'text-green-600' : ''}`}>
-                    {formatCurrency(order.customer_paid)}
+                    {formatValue(order.customer_paid, order.currency)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Líquido: {formatCurrency(order.producer_net)}
+                    Líquido: {formatValue(order.producer_net, order.currency)}
                   </p>
                 </div>
               </div>
@@ -207,7 +209,7 @@ export function ContactTransactionsList({ contactEmail, projectId }: ContactTran
                         <span className="truncate">{item.product_name}</span>
                       </div>
                       <span className="text-muted-foreground shrink-0 ml-2">
-                        {formatCurrency(item.base_price)}
+                        {formatValue(item.base_price, order.currency)}
                       </span>
                     </div>
                   ))}

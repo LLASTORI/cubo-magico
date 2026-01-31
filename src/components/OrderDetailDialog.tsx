@@ -485,7 +485,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                       <span className="text-blue-700 dark:text-blue-400">Juros / Encargos de parcelamento</span>
                     </div>
                     <span className="font-medium text-blue-700 dark:text-blue-400">
-                      {formatMoney(interestCharges, order.currency)}
+                      {formatMoney(interestCharges, 'BRL')}
                     </span>
                   </div>
                   <p className="text-xs text-blue-600/60 mt-1">

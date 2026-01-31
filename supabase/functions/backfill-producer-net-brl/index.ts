@@ -29,18 +29,29 @@ function extractProducerNetBrl(payload: any): number | null {
     const commissions = payload?.data?.commissions;
     if (!Array.isArray(commissions)) return null;
 
+    // Primeiro, tentar PRODUCER (user é produtor principal)
     const producerComm = commissions.find((c: Commission) => c.source === 'PRODUCER');
-    if (!producerComm) return null;
-
-    // Priority: converted_value (BRL) > value (fallback, assumed BRL)
-    const convertedValue = producerComm.currency_conversion?.converted_value;
-    if (typeof convertedValue === 'number') {
-      return convertedValue;
+    if (producerComm) {
+      // Priority: converted_value (BRL) > value (fallback, assumed BRL)
+      const convertedValue = producerComm.currency_conversion?.converted_value;
+      if (typeof convertedValue === 'number') {
+        return convertedValue;
+      }
+      if (typeof producerComm.value === 'number') {
+        return producerComm.value;
+      }
     }
 
-    // Fallback: assume value is already BRL
-    if (typeof producerComm.value === 'number') {
-      return producerComm.value;
+    // Se não houver PRODUCER, tentar CO_PRODUCER (user é co-produtor)
+    const coproducerComm = commissions.find((c: Commission) => c.source === 'COPRODUCER' || c.source === 'CO_PRODUCER');
+    if (coproducerComm) {
+      const convertedValue = coproducerComm.currency_conversion?.converted_value;
+      if (typeof convertedValue === 'number') {
+        return convertedValue;
+      }
+      if (typeof coproducerComm.value === 'number') {
+        return coproducerComm.value;
+      }
     }
 
     return null;

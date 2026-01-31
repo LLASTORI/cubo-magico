@@ -284,6 +284,7 @@ serve(async (req) => {
           let materializedPlatformFeeBrl: number | null = null;
           let materializedAffiliateBrl: number | null = null;
           let materializedCoproducerBrl: number | null = null;
+          let materializedProducerNetBrl: number | null = null;
 
           for (const comm of commissions) {
             const source = (comm.source || '').toUpperCase();
@@ -311,14 +312,26 @@ serve(async (req) => {
               case 'PRODUCER':
                 eventType = 'sale';
                 actor = 'producer';
+                // PRODUCER = valor que o produtor principal recebe (user é produtor)
+                materializedProducerNetBrl = brlExtraction.amount_brl !== null ? Math.abs(brlExtraction.amount_brl) : null;
                 if (brlExtraction.source_type === 'native_brl') results.brlNative++;
                 if (brlExtraction.source_type === 'converted') results.brlConverted++;
                 break;
               case 'CO_PRODUCER':
+              case 'COPRODUCER':
                 eventType = 'coproducer';
                 actor = 'coproducer';
                 actorName = data?.producer?.name || null;
-                materializedCoproducerBrl = brlExtraction.amount_brl !== null ? Math.abs(brlExtraction.amount_brl) : null;
+                // CO_PRODUCER/COPRODUCER = valor que o co-produtor recebe
+                // Se user é co-produtor, este é o producer_net_brl dele
+                // Se já temos PRODUCER, coproducer_brl é custo; senão, é receita do user
+                if (materializedProducerNetBrl === null) {
+                  // User é co-produtor - este valor é o que ele recebe
+                  materializedProducerNetBrl = brlExtraction.amount_brl !== null ? Math.abs(brlExtraction.amount_brl) : null;
+                } else {
+                  // User é produtor - este valor é custo de co-produção
+                  materializedCoproducerBrl = brlExtraction.amount_brl !== null ? Math.abs(brlExtraction.amount_brl) : null;
+                }
                 break;
               case 'AFFILIATE':
                 eventType = 'affiliate';
@@ -404,6 +417,7 @@ serve(async (req) => {
             if (materializedPlatformFeeBrl !== null) orderUpdate.platform_fee_brl = materializedPlatformFeeBrl;
             if (materializedAffiliateBrl !== null) orderUpdate.affiliate_brl = materializedAffiliateBrl;
             if (materializedCoproducerBrl !== null) orderUpdate.coproducer_brl = materializedCoproducerBrl;
+            if (materializedProducerNetBrl !== null) orderUpdate.producer_net_brl = materializedProducerNetBrl;
 
             const { error: updateError } = await supabase
               .from('orders')

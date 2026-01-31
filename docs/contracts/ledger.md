@@ -1,9 +1,9 @@
 # Contrato: Ledger
 
-**Versão:** 1.0  
-**Data:** 2026-01-29  
+**Versão:** 2.0  
+**Data:** 2026-01-31  
 **Status:** ✅ Ativo  
-**Domínio:** Contabilidade Financeira
+**Domínio:** Contabilidade Financeira BRL
 
 ---
 
@@ -12,6 +12,10 @@
 O **Ledger** é o sistema de contabilidade transacional do Cubo Mágico.
 
 Ele registra **todos os eventos financeiros** de forma imutável e auditável.
+
+### ⚠️ REGRA DE OURO v2.0
+
+**O Ledger APENAS contém valores BRL REAIS liquidados pela Hotmart.**
 
 ---
 
@@ -26,16 +30,76 @@ CREATE TABLE ledger_events (
   order_id UUID NOT NULL,
   transaction_id TEXT NOT NULL,
   event_type TEXT NOT NULL,
-  amount NUMERIC NOT NULL,
+  actor TEXT NOT NULL,
+  actor_name TEXT,
+  
+  -- LEGACY (mantido para compatibilidade)
+  amount NUMERIC NOT NULL,           -- Valor contábil com sinal
   currency TEXT DEFAULT 'BRL',
-  metadata JSONB,
+  
+  -- NOVOS CAMPOS BRL (v2.0)
+  amount_brl NUMERIC,                -- Valor BRL REAL (fonte de verdade)
+  amount_accounting NUMERIC,         -- Valor contábil original (USD/MXN)
+  currency_accounting TEXT,          -- Moeda do valor contábil
+  conversion_rate NUMERIC,           -- Taxa de conversão (se aplicável)
+  source_type TEXT DEFAULT 'legacy', -- native_brl | converted | blocked | legacy
+  
+  -- METADADOS
+  provider_event_id TEXT,
+  occurred_at TIMESTAMPTZ,
+  raw_payload JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
 ---
 
-## 3. REGRA DE OURO (ABSOLUTA)
+## 3. REGRAS CANÔNICAS v2.0
+
+### 🔒 REGRA 1: Apenas BRL Real
+
+O campo `amount_brl` é a **única fonte de verdade financeira**.
+
+O campo `amount` (legacy) é mantido apenas para compatibilidade.
+
+### 🔒 REGRA 2: Valores Contábeis ≠ Caixa
+
+`commissions[].value` (USD/MXN) é dado **CONTÁBIL** e **NÃO representa caixa**.
+
+Nunca usar `amount` diretamente para cálculos de receita líquida.
+
+### 🔒 REGRA 3: Fonte de Conversão
+
+Sempre que existir `currency_conversion.converted_value`, ele é a fonte.
+
+```typescript
+// CORRETO
+const brl = commission.currency_conversion?.converted_value;
+
+// INCORRETO
+const brl = commission.value * someRate;  // ❌ NUNCA!
+```
+
+### 🔒 REGRA 4: Sem Conversão Manual
+
+Nenhuma conversão manual é permitida.
+
+Se o webhook não fornecer conversão, o evento NÃO entra no ledger.
+
+### 🔒 REGRA 5: Decisão B (Plataforma Internacional)
+
+Para pedidos internacionais onde `MARKETPLACE` não possui `currency_conversion`:
+
+| Ação | Descrição |
+|------|-----------|
+| ❌ NÃO gerar evento | Não criar `platform_fee` |
+| ❌ NÃO calcular | Não usar taxa do producer |
+| ❌ NÃO estimar | Nenhum valor aproximado |
+| ✅ Marcar status | `ledger_status = 'partial'` |
+
+---
+
+## 4. IMUTABILIDADE
 
 ### 🔒 O Ledger é IMUTÁVEL
 
@@ -47,71 +111,124 @@ CREATE TABLE ledger_events (
 
 ---
 
-## 4. TIPOS DE EVENTOS
+## 5. TIPOS DE EVENTOS
 
-| `event_type` | Descrição | Sinal |
-|--------------|-----------|-------|
-| `sale` | Venda aprovada | + |
-| `refund` | Reembolso | - |
-| `chargeback` | Contestação | - |
-| `chargeback_reversal` | Reversão de chargeback | + |
-| `commission` | Comissão de afiliado | - |
-| `fee` | Taxa de plataforma | - |
+| `event_type` | Descrição | `amount_brl` | Sinal |
+|--------------|-----------|--------------|-------|
+| `sale` | Venda aprovada (producer) | BRL real | + |
+| `platform_fee` | Taxa de plataforma | BRL real | - |
+| `affiliate` | Comissão de afiliado | BRL real | - |
+| `coproducer` | Comissão de coprodução | BRL real | - |
+| `refund` | Reembolso | BRL real | - |
+| `chargeback` | Contestação | BRL real | - |
+| `chargeback_reversal` | Reversão de chargeback | BRL real | + |
 
 ---
 
-## 5. INTEGRIDADE FINANCEIRA
+## 6. SOURCE_TYPE (Origem do BRL)
 
-### 5.1 Contabilidade por Transação
+| `source_type` | Descrição | Conversão |
+|---------------|-----------|-----------|
+| `native_brl` | Pedido doméstico | `amount = amount_brl` |
+| `converted` | Pedido internacional | `currency_conversion.converted_value` |
+| `blocked` | Sem conversão disponível | `amount_brl = NULL` |
+| `legacy` | Migrado de sistema anterior | Auditoria necessária |
 
-Cada `transaction_id` individual deve ter seus próprios eventos de ledger.
+---
 
-```
-Checkout com 2 itens:
-├── Transaction A (Produto Principal)
-│   └── ledger_event: sale +R$197
-└── Transaction B (Order Bump)
-    └── ledger_event: sale +R$47
-```
+## 7. LEDGER STATUS (Cobertura)
 
-### 5.2 Decomposição Financeira
+Materializado em `orders.ledger_status`:
 
-Para cada venda aprovada, o sistema deve registrar:
+| Status | Descrição |
+|--------|-----------|
+| `complete` | Todos os eventos têm BRL válido |
+| `partial` | Alguns eventos bloqueados (ex: platform_fee intl) |
+| `pending` | Aguardando processamento |
+| `blocked` | Dados insuficientes para gerar ledger |
+
+---
+
+## 8. CAMPOS MATERIALIZADOS EM ORDERS
+
+Para performance e UI, valores BRL são materializados:
 
 | Campo | Descrição |
 |-------|-----------|
-| `gross_base` | Base econômica (sem juros) |
-| `customer_paid` | Valor pago pelo cliente (com juros) |
-| `platform_fee` | Taxa da plataforma |
-| `affiliate_fee` | Comissão de afiliado |
-| `coproducer_fee` | Comissão de coprodução |
-| `producer_net` | Valor líquido do produtor |
-
-### 5.3 Validação
-
-```
-producer_net = gross_base - platform_fee - affiliate_fee - coproducer_fee
-```
-
-Se `customer_paid > gross_base`, a diferença são juros de parcelamento.
+| `orders.producer_net_brl` | Valor líquido do produtor em BRL |
+| `orders.platform_fee_brl` | Taxa de plataforma em BRL |
+| `orders.affiliate_brl` | Comissão de afiliado em BRL |
+| `orders.coproducer_brl` | Comissão de coprodução em BRL |
+| `orders.tax_brl` | Impostos em BRL |
+| `orders.ledger_status` | Status de cobertura |
 
 ---
 
-## 6. POLÍTICA DE COBERTURA
+## 9. VALIDAÇÃO FINANCEIRA
 
-### 🚨 ESTADO INVÁLIDO
+### Golden Rule
 
-Um pedido com status `approved` ou `complete` **SEM** `ledger_events` correspondentes é considerado **ESTADO INVÁLIDO DO SISTEMA**.
+Para pedidos `complete`:
 
-### Resolução
+```
+customer_paid_brl - platform_fee_brl - affiliate_brl - coproducer_brl - tax_brl 
+= producer_net_brl (± R$ 0.02)
+```
 
-A edge function `hotmart-ledger-full-backfill` é o padrão para resolver lacunas, garantindo 100% de cobertura contábil.
+### Estado Inválido
+
+Pedido com status `approved`/`complete` SEM `ledger_events` = **ESTADO INVÁLIDO**.
 
 ---
 
-## 7. FONTE DE DADOS
+## 10. FLUXO DE INGESTÃO
 
-### Hierarquia de Autoridade
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WEBHOOK HOTMART                          │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+          ┌──────────────────────────────┐
+          │  extractBrlFromCommission()  │
+          │  Para cada commission:       │
+          └──────────────┬───────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│  native_brl  │ │  converted   │ │   blocked    │
+│  currency=BRL│ │  has c_conv  │ │  no c_conv   │
+│  amount_brl= │ │  amount_brl= │ │  amount_brl= │
+│  comm.value  │ │  c_conv.val  │ │  NULL        │
+└──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+       │                │                │
+       ▼                ▼                ▼
+   [CREATE]         [CREATE]      [SKIP EVENT]
+   ledger_event     ledger_event   Decision B
+       │                │                │
+       └────────────────┴────────────────┘
+                         │
+                         ▼
+          ┌──────────────────────────────┐
+          │  determineLedgerStatus()     │
+          │  complete | partial | blocked│
+          └──────────────────────────────┘
+                         │
+                         ▼
+          ┌──────────────────────────────┐
+          │  UPDATE orders SET           │
+          │    ledger_status,            │
+          │    platform_fee_brl,         │
+          │    affiliate_brl,            │
+          │    coproducer_brl            │
+          └──────────────────────────────┘
+```
+
+---
+
+## 11. HIERARQUIA DE AUTORIDADE
 
 ```
 1. Webhook (tempo real) → Autoridade máxima
@@ -119,25 +236,19 @@ A edge function `hotmart-ledger-full-backfill` é o padrão para resolver lacuna
 3. CSV (replay histórico) → Nunca sobrescreve webhook
 ```
 
-### Reconstrução de Ledger
+---
 
-Para backfill, utilizar `provider_event_log` como fonte:
+## 12. EDGE FUNCTIONS
 
-```sql
-SELECT * FROM provider_event_log
-WHERE project_id = $1
-AND event_type IN ('PURCHASE_APPROVED', 'PURCHASE_COMPLETE')
-AND NOT EXISTS (
-  SELECT 1 FROM ledger_events le
-  WHERE le.transaction_id = provider_event_log.transaction
-);
-```
+| Função | Responsabilidade |
+|--------|------------------|
+| `hotmart-webhook` | Criação de eventos em tempo real (v2.0 BRL) |
+| `hotmart-ledger-brl-backfill` | Reconstrução com lógica BRL v2.0 |
+| `hotmart-ledger-full-backfill` | Backfill legacy (deprecated) |
 
 ---
 
-## 8. LIMITES TÉCNICOS
-
-### 8.1 Processamento em Lotes
+## 13. LIMITES TÉCNICOS
 
 | Operação | Limite |
 |----------|--------|
@@ -145,13 +256,9 @@ AND NOT EXISTS (
 | Inserção de ledger_events | 100 por lote |
 | Filtros `.in()` | 50 IDs por chunk |
 
-### 8.2 Justificativa
-
-Evitar timeouts e erros de limite de URI (PostgREST/Supabase).
-
 ---
 
-## 9. AÇÕES PROIBIDAS
+## 14. AÇÕES PROIBIDAS
 
 | Ação | Consequência |
 |------|--------------|
@@ -159,41 +266,22 @@ Evitar timeouts e erros de limite de URI (PostgREST/Supabase).
 | ❌ Modificar valores existentes | ERRO GRAVE |
 | ❌ Criar ledger paralelo | ERRO GRAVE |
 | ❌ Calcular financeiro fora do ledger | ERRO GRAVE |
-| ❌ Usar offer_mappings como fonte financeira | ERRO GRAVE |
+| ❌ Usar `amount` para cálculos (v2.0) | ERRO GRAVE |
+| ❌ Converter USD→BRL manualmente | ERRO GRAVE |
+| ❌ Gerar evento sem `amount_brl` válido | ERRO GRAVE |
 
 ---
 
-## 10. EDGE FUNCTIONS RELACIONADAS
-
-| Função | Responsabilidade |
-|--------|------------------|
-| `hotmart-webhook` | Criação de eventos em tempo real |
-| `hotmart-ledger-full-backfill` | Reconstrução de lacunas |
-| `hotmart-orders-backfill-14d` | Backfill de pedidos recentes |
-| `orders-full-backfill` | Backfill histórico completo |
-
----
-
-## 11. VIEWS DEPENDENTES
-
-O Ledger alimenta todas as views financeiras:
-
-- `crm_customer_intelligence_overview`
-- `crm_journey_orders_view`
-- Dashboards de receita
-- Análises de LTV, Ticket Médio, Recorrência
-
----
-
-## 12. INVARIANTES
+## 15. INVARIANTES
 
 | Invariante | Descrição |
 |------------|-----------|
-| Cobertura 100% | Todo pedido aprovado tem eventos |
-| Consistência | Soma do ledger = receita total |
-| Rastreabilidade | Todo evento tem transaction_id |
+| BRL-Only | `amount_brl` é a única fonte de verdade |
+| Cobertura Explícita | `ledger_status` reflete cobertura real |
+| Rastreabilidade | Todo evento tem `source_type` |
 | Imutabilidade | Eventos nunca são alterados |
+| Consistência | Soma de `amount_brl` = receita BRL |
 
 ---
 
-*Este documento é a fonte oficial de verdade para o domínio de Contabilidade Financeira.*
+*Este documento é a fonte oficial de verdade para o domínio de Contabilidade Financeira BRL (v2.0).*

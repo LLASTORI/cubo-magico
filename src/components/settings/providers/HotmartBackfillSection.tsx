@@ -96,18 +96,19 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
   };
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // LEDGER BACKFILL - Gera ledger_events para pedidos que não têm
+  // LEDGER BRL BACKFILL - Nova função com valores BRL nativos
   // ═══════════════════════════════════════════════════════════════════════════════
   const handleLedgerBackfill = async () => {
     setLedgerBackfilling(true);
-    setLedgerMessage('Reconstruindo ledger financeiro...');
+    setLedgerMessage('Reconstruindo ledger financeiro BRL...');
 
     try {
-      const { data, error } = await supabase.functions.invoke('hotmart-ledger-full-backfill', {
+      const { data, error } = await supabase.functions.invoke('hotmart-ledger-brl-backfill', {
         body: {
           projectId,
-          daysBack: 7,
-          pageSize: 1000,
+          daysBack: 30,
+          pageSize: 500,
+          dryRun: false,
         },
       });
 
@@ -119,23 +120,31 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
         eventsProcessed: number;
         ledgerCreated: number;
         ledgerSkipped: number;
+        ledgerBlocked: number;
+        ordersUpdated: number;
+        brlNative: number;
+        brlConverted: number;
         errors: number;
       };
 
+      const statusMsg = result.ledgerBlocked > 0 
+        ? ` (${result.ledgerBlocked} bloqueados - sem conversão BRL)`
+        : '';
+
       setLedgerMessage(
-        `✓ ${result.ledgerCreated.toLocaleString()} eventos de ledger criados, ${result.ledgerSkipped.toLocaleString()} já existentes`
+        `✓ ${result.ledgerCreated.toLocaleString()} eventos criados (${result.brlNative} BRL nativo, ${result.brlConverted} convertidos)${statusMsg}`
       );
 
       toast({
-        title: 'Ledger reconstruído!',
-        description: `${result.ledgerCreated.toLocaleString()} eventos financeiros criados.`,
+        title: 'Ledger BRL reconstruído!',
+        description: `${result.ledgerCreated.toLocaleString()} eventos financeiros em BRL.`,
       });
 
     } catch (error: any) {
-      console.error('Ledger backfill error:', error);
-      setLedgerMessage(error.message || 'Erro ao reconstruir ledger');
+      console.error('Ledger BRL backfill error:', error);
+      setLedgerMessage(error.message || 'Erro ao reconstruir ledger BRL');
       toast({
-        title: 'Erro na reconstrução do ledger',
+        title: 'Erro na reconstrução do ledger BRL',
         description: error.message || 'Erro ao reconstruir ledger financeiro',
         variant: 'destructive',
       });
@@ -218,11 +227,12 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
           </p>
         </div>
 
-        {/* LEDGER BACKFILL - Gera ledger_events faltantes */}
+        {/* LEDGER BRL BACKFILL - Gera ledger_events com valores BRL nativos */}
         <div className="p-4 rounded-lg border bg-card space-y-3">
           <p className="text-sm text-muted-foreground">
-            <strong>Ledger Backfill (7 dias)</strong>: Reconstrói os eventos financeiros (taxas, coprodução, afiliados) 
-            para pedidos aprovados que estão sem decomposição no modal de detalhes.
+            <strong>Ledger BRL Backfill (30 dias)</strong>: Reconstrói os eventos financeiros com valores BRL 
+            reais extraídos de <code>currency_conversion.converted_value</code>. Pedidos internacionais 
+            sem conversão terão <code>ledger_status = 'partial'</code>.
           </p>
           
           {ledgerMessage && (
@@ -242,18 +252,20 @@ export function HotmartBackfillSection({ projectId }: HotmartBackfillSectionProp
             {ledgerBackfilling ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Reconstruindo Ledger...
+                Reconstruindo Ledger BRL...
               </>
             ) : (
               <>
                 <History className="h-4 w-4 mr-2" />
-                Executar Ledger Backfill (7 dias)
+                Executar Ledger BRL Backfill (30 dias)
               </>
             )}
           </Button>
 
           <p className="text-xs text-muted-foreground">
             <strong>Idempotente:</strong> Não duplica eventos existentes.
+            <br />
+            <strong>Decisão B:</strong> Taxas de plataforma internacionais sem conversão NÃO entram no ledger.
           </p>
         </div>
       </CollapsibleContent>

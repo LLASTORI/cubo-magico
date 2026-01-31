@@ -4046,8 +4046,12 @@ export type Database = {
           actor: string | null
           actor_name: string | null
           amount: number
+          amount_accounting: number | null
+          amount_brl: number | null
+          conversion_rate: number | null
           created_at: string
           currency: string
+          currency_accounting: string | null
           event_type: string
           id: string
           occurred_at: string | null
@@ -4056,13 +4060,18 @@ export type Database = {
           provider: string
           provider_event_id: string | null
           raw_payload: Json | null
+          source_type: string | null
         }
         Insert: {
           actor?: string | null
           actor_name?: string | null
           amount?: number
+          amount_accounting?: number | null
+          amount_brl?: number | null
+          conversion_rate?: number | null
           created_at?: string
           currency?: string
+          currency_accounting?: string | null
           event_type: string
           id?: string
           occurred_at?: string | null
@@ -4071,13 +4080,18 @@ export type Database = {
           provider: string
           provider_event_id?: string | null
           raw_payload?: Json | null
+          source_type?: string | null
         }
         Update: {
           actor?: string | null
           actor_name?: string | null
           amount?: number
+          amount_accounting?: number | null
+          amount_brl?: number | null
+          conversion_rate?: number | null
           created_at?: string
           currency?: string
+          currency_accounting?: string | null
           event_type?: string
           id?: string
           occurred_at?: string | null
@@ -4086,6 +4100,7 @@ export type Database = {
           provider?: string
           provider_event_id?: string | null
           raw_payload?: Json | null
+          source_type?: string | null
         }
         Relationships: [
           {
@@ -5295,23 +5310,27 @@ export type Database = {
       }
       orders: {
         Row: {
+          affiliate_brl: number | null
           approved_at: string | null
           buyer_email: string | null
           buyer_name: string | null
           completed_at: string | null
           contact_id: string | null
+          coproducer_brl: number | null
           created_at: string
           currency: string
           customer_paid: number | null
           gross_base: number | null
           id: string
           installments: number | null
+          ledger_status: string | null
           meta_ad_id: string | null
           meta_adset_id: string | null
           meta_campaign_id: string | null
           ordered_at: string | null
           payment_method: string | null
           payment_type: string | null
+          platform_fee_brl: number | null
           producer_net: number | null
           producer_net_brl: number | null
           project_id: string
@@ -5320,6 +5339,7 @@ export type Database = {
           raw_payload: Json | null
           raw_sck: string | null
           status: string
+          tax_brl: number | null
           updated_at: string
           utm_adset: string | null
           utm_campaign: string | null
@@ -5328,23 +5348,27 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          affiliate_brl?: number | null
           approved_at?: string | null
           buyer_email?: string | null
           buyer_name?: string | null
           completed_at?: string | null
           contact_id?: string | null
+          coproducer_brl?: number | null
           created_at?: string
           currency?: string
           customer_paid?: number | null
           gross_base?: number | null
           id?: string
           installments?: number | null
+          ledger_status?: string | null
           meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
           ordered_at?: string | null
           payment_method?: string | null
           payment_type?: string | null
+          platform_fee_brl?: number | null
           producer_net?: number | null
           producer_net_brl?: number | null
           project_id: string
@@ -5353,6 +5377,7 @@ export type Database = {
           raw_payload?: Json | null
           raw_sck?: string | null
           status?: string
+          tax_brl?: number | null
           updated_at?: string
           utm_adset?: string | null
           utm_campaign?: string | null
@@ -5361,23 +5386,27 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          affiliate_brl?: number | null
           approved_at?: string | null
           buyer_email?: string | null
           buyer_name?: string | null
           completed_at?: string | null
           contact_id?: string | null
+          coproducer_brl?: number | null
           created_at?: string
           currency?: string
           customer_paid?: number | null
           gross_base?: number | null
           id?: string
           installments?: number | null
+          ledger_status?: string | null
           meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
           ordered_at?: string | null
           payment_method?: string | null
           payment_type?: string | null
+          platform_fee_brl?: number | null
           producer_net?: number | null
           producer_net_brl?: number | null
           project_id?: string
@@ -5386,6 +5415,7 @@ export type Database = {
           raw_payload?: Json | null
           raw_sck?: string | null
           status?: string
+          tax_brl?: number | null
           updated_at?: string
           utm_adset?: string | null
           utm_campaign?: string | null

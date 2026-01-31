@@ -61,6 +61,106 @@ function isFinanciallyEffectiveEvent(eventName: string): boolean {
 }
 
 // ============================================
+// BRL LEDGER EXTRACTION - CANONICAL RULES
+// ============================================
+// 
+// REGRA 1: Ledger financeiro APENAS contém valores BRL REAIS
+// REGRA 2: commissions[].value (USD) é dado CONTÁBIL, não caixa
+// REGRA 3: currency_conversion.converted_value é a fonte de verdade para BRL
+// REGRA 4: Nenhuma conversão manual é permitida
+// REGRA 5: Sem conversão no webhook = sem entrada no ledger (bloqueado)
+// 
+// DECISÃO B: Para internacionais sem currency_conversion em MARKETPLACE,
+//            NÃO gerar evento de platform_fee (marcar ledger_status = 'partial')
+// ============================================
+
+interface BrlExtraction {
+  amount_brl: number | null;         // Valor BRL real (fonte de verdade)
+  amount_accounting: number;         // Valor contábil original (USD/MXN)
+  currency_accounting: string;       // Moeda do valor contábil
+  conversion_rate: number | null;    // Taxa de conversão (se aplicável)
+  source_type: 'native_brl' | 'converted' | 'blocked';  // Origem do BRL
+  should_create_event: boolean;      // Se deve criar ledger event
+  block_reason: string | null;       // Motivo do bloqueio (se houver)
+}
+
+/**
+ * Extract BRL value from a Hotmart commission entry following canonical rules.
+ * 
+ * @param commission - Raw commission object from webhook
+ * @param orderCurrency - Currency of the order (from purchase.price.currency_value)
+ * @returns BRL extraction result with source tracking
+ */
+function extractBrlFromCommission(
+  commission: any,
+  orderCurrency: string
+): BrlExtraction {
+  const accountingValue = commission.value ?? 0;
+  const accountingCurrency = commission.currency_code || commission.currency_value || orderCurrency || 'BRL';
+  const source = (commission.source || '').toUpperCase();
+  
+  // Case 1: Native BRL order - value is already in BRL
+  if (accountingCurrency === 'BRL') {
+    return {
+      amount_brl: accountingValue,
+      amount_accounting: accountingValue,
+      currency_accounting: 'BRL',
+      conversion_rate: 1,
+      source_type: 'native_brl',
+      should_create_event: accountingValue !== 0,
+      block_reason: null,
+    };
+  }
+  
+  // Case 2: International order - need currency_conversion
+  const currencyConversion = commission.currency_conversion;
+  
+  if (currencyConversion && currencyConversion.converted_value !== undefined) {
+    // Has explicit BRL conversion - use it
+    return {
+      amount_brl: currencyConversion.converted_value,
+      amount_accounting: accountingValue,
+      currency_accounting: accountingCurrency,
+      conversion_rate: currencyConversion.rate || null,
+      source_type: 'converted',
+      should_create_event: currencyConversion.converted_value !== 0,
+      block_reason: null,
+    };
+  }
+  
+  // Case 3: International WITHOUT currency_conversion
+  // DECISÃO B: NÃO criar evento, marcar como blocked
+  return {
+    amount_brl: null,
+    amount_accounting: accountingValue,
+    currency_accounting: accountingCurrency,
+    conversion_rate: null,
+    source_type: 'blocked',
+    should_create_event: false,
+    block_reason: `No currency_conversion for ${source} in ${accountingCurrency} order (Decision B)`,
+  };
+}
+
+/**
+ * Determine ledger_status based on BRL coverage of all commissions
+ * 
+ * @param extractions - Array of BRL extractions from all commissions
+ * @returns 'complete' | 'partial' | 'blocked'
+ */
+function determineLedgerStatus(extractions: BrlExtraction[]): 'complete' | 'partial' | 'blocked' {
+  const hasBlocked = extractions.some(e => e.source_type === 'blocked');
+  const hasCreated = extractions.some(e => e.should_create_event);
+  
+  if (hasBlocked && hasCreated) {
+    return 'partial'; // Some events created, some blocked
+  }
+  if (hasBlocked && !hasCreated) {
+    return 'blocked'; // All blocked
+  }
+  return 'complete'; // All events have BRL values
+}
+
+// ============================================
 // ORDERS CORE SHADOW - Utility Functions
 // ============================================
 
@@ -641,6 +741,12 @@ async function writeOrderShadow(
     // Only create ledger events when shouldApplyFinancialValues is true AND not skipped
     // This ensures ledger_events are consistent with customer_paid and order_items
     if (shouldApplyFinancialValues && !skipLedgerCreation) {
+      // ============================================
+      // NEW BRL-NATIVE LEDGER LOGIC
+      // Using extractBrlFromCommission for canonical BRL values
+      // DECISÃO B: No platform_fee for intl without conversion
+      // ============================================
+      
       // Collect all ledger events to create for THIS transaction
       const ledgerEventsToCreate: Array<{
         order_id: string;
@@ -649,22 +755,48 @@ async function writeOrderShadow(
         event_type: string;
         actor: string;
         actor_name: string | null;
-        amount: number;
+        amount: number;  // Legacy field (accounting value)
+        amount_brl: number | null;  // NEW: Real BRL value
+        amount_accounting: number;   // NEW: Original accounting value
+        currency_accounting: string; // NEW: Original currency
+        conversion_rate: number | null; // NEW: Conversion rate
+        source_type: string;  // NEW: native_brl | converted | blocked
         currency: string;
         provider_event_id: string;
         occurred_at: string;
         raw_payload: any;
       }> = [];
       
+      // Track BRL extractions for ledger_status determination
+      const brlExtractions: BrlExtraction[] = [];
+      
+      // Track materialized BRL values for orders table
+      let materializedPlatformFeeBrl: number | null = null;
+      let materializedAffiliateBrl: number | null = null;
+      let materializedCoproducerBrl: number | null = null;
+      
       for (const comm of commissions) {
         const source = (comm.source || '').toUpperCase();
-        let value = comm.value ?? 0;
         
-        if (value === 0) continue;
+        // Extract BRL value using canonical logic
+        const brlExtraction = extractBrlFromCommission(comm, currency);
+        brlExtractions.push(brlExtraction);
+        
+        // Skip if no event should be created (blocked or zero value)
+        if (!brlExtraction.should_create_event) {
+          if (brlExtraction.block_reason) {
+            console.log(`[OrdersShadow] BRL BLOCKED: ${brlExtraction.block_reason}`);
+          }
+          continue;
+        }
+        
+        let accountingValue = brlExtraction.amount_accounting;
+        let brlValue = brlExtraction.amount_brl;
         
         // For refunds/chargebacks, amounts should be NEGATIVE
         if (isDebit) {
-          value = -Math.abs(value);
+          accountingValue = -Math.abs(accountingValue);
+          brlValue = brlValue !== null ? -Math.abs(brlValue) : null;
         }
         
         let eventType: string;
@@ -676,6 +808,8 @@ async function writeOrderShadow(
             eventType = 'platform_fee';
             actor = 'platform';
             actorName = 'hotmart';
+            // Materialize for orders table
+            materializedPlatformFeeBrl = brlValue !== null ? Math.abs(brlValue) : null;
             break;
           case 'PRODUCER':
             eventType = isDebit ? 'refund' : 'sale';
@@ -685,11 +819,15 @@ async function writeOrderShadow(
             eventType = 'coproducer';
             actor = 'coproducer';
             actorName = data?.producer?.name || null;
+            // Materialize for orders table
+            materializedCoproducerBrl = brlValue !== null ? Math.abs(brlValue) : null;
             break;
           case 'AFFILIATE':
             eventType = 'affiliate';
             actor = 'affiliate';
             actorName = data?.affiliates?.[0]?.name || null;
+            // Materialize for orders table
+            materializedAffiliateBrl = brlValue !== null ? Math.abs(brlValue) : null;
             break;
           default:
             continue;
@@ -699,6 +837,11 @@ async function writeOrderShadow(
         // Key: {transaction_id}_{event_type}_{actor}
         const providerEventId = `${transactionId}_${eventType}_${actor}`;
         
+        // Determine display amount (BRL for 'sale', negative for deductions)
+        const displayAmount = eventType === 'sale' 
+          ? Math.abs(accountingValue) 
+          : -Math.abs(accountingValue);
+        
         ledgerEventsToCreate.push({
           order_id: orderId,
           project_id: projectId,
@@ -706,24 +849,33 @@ async function writeOrderShadow(
           event_type: eventType,
           actor,
           actor_name: actorName,
-          amount: eventType === 'sale' ? Math.abs(value) : -Math.abs(value),
+          amount: displayAmount,  // Legacy: accounting value with sign
+          amount_brl: brlValue,   // NEW: Real BRL value
+          amount_accounting: Math.abs(brlExtraction.amount_accounting),
+          currency_accounting: brlExtraction.currency_accounting,
+          conversion_rate: brlExtraction.conversion_rate,
+          source_type: brlExtraction.source_type,
           currency,
           provider_event_id: providerEventId,
           occurred_at: occurredAt,
           raw_payload: comm,
         });
+        
+        console.log(`[OrdersShadow] BRL extraction: ${source} → amount_brl=${brlValue}, source_type=${brlExtraction.source_type}`);
       }
       
       // ============================================
       // 4. AUTO-ADD COPRODUCER if calculated (only for financial events)
+      // Only for native BRL orders (no conversion needed)
       // ============================================
       const hasCoProduction = data?.product?.has_co_production === true;
       const hasCoproducerInCommissions = commissions.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
       
-      if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenue !== null) {
-        const platformFee = commissions.find((c: any) => (c.source || '').toUpperCase() === 'MARKETPLACE')?.value || 0;
-        const affiliateAmount = commissions.find((c: any) => (c.source || '').toUpperCase() === 'AFFILIATE')?.value || 0;
-        const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenue;
+      if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenueBrl !== null && currency === 'BRL') {
+        // For native BRL, calculate coproducer from real values
+        const platformFee = materializedPlatformFeeBrl || 0;
+        const affiliateAmount = materializedAffiliateBrl || 0;
+        const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenueBrl;
         
         if (calculatedCoproducerCost > 0) {
           const coproducerEventId = `${transactionId}_coproducer_auto`;
@@ -735,16 +887,28 @@ async function writeOrderShadow(
             actor: 'coproducer',
             actor_name: null,
             amount: -calculatedCoproducerCost,
+            amount_brl: -calculatedCoproducerCost,  // Same as amount for native BRL
+            amount_accounting: calculatedCoproducerCost,
+            currency_accounting: 'BRL',
+            conversion_rate: 1,
+            source_type: 'native_brl',
             currency,
             provider_event_id: coproducerEventId,
             occurred_at: occurredAt,
             raw_payload: { source: 'auto_calculated', has_co_production: true },
           });
+          materializedCoproducerBrl = calculatedCoproducerCost;
         }
       }
       
       // ============================================
-      // 5. MANUAL SELECT + INSERT FOR EACH LEDGER EVENT (FIX FOR PARTIAL INDEX)
+      // 5. DETERMINE LEDGER STATUS
+      // ============================================
+      const ledgerStatus = determineLedgerStatus(brlExtractions);
+      console.log(`[OrdersShadow] Ledger status: ${ledgerStatus} (${brlExtractions.length} extractions)`);
+      
+      // ============================================
+      // 6. MANUAL SELECT + INSERT FOR EACH LEDGER EVENT (FIX FOR PARTIAL INDEX)
       // ============================================
       // Step 1: Batch-check which provider_event_ids already exist
       const allProviderEventIds = ledgerEventsToCreate.map(e => e.provider_event_id);
@@ -788,7 +952,7 @@ async function writeOrderShadow(
         
         result.eventsCreated++;
         ledgerCreatedSuccessfully = true;
-        console.log(`[OrdersShadow] Created ledger event: ${event.event_type} (${event.actor}): ${event.amount} [${event.provider_event_id}]`);
+        console.log(`[OrdersShadow] Created ledger event: ${event.event_type} (${event.actor}): amount_brl=${event.amount_brl}, source=${event.source_type} [${event.provider_event_id}]`);
       }
       
       // If there were existing events, we still consider ledger as "processed"
@@ -798,7 +962,37 @@ async function writeOrderShadow(
       }
       
       // ============================================
-      // 6. FILL provider_order_map ONLY AFTER LEDGER SUCCESS
+      // 7. UPDATE ORDER WITH BRL MATERIALIZED VALUES + LEDGER STATUS
+      // ============================================
+      const orderBrlUpdate: Record<string, any> = {
+        ledger_status: ledgerStatus,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Only update *_brl fields if we have real values
+      if (materializedPlatformFeeBrl !== null) {
+        orderBrlUpdate.platform_fee_brl = materializedPlatformFeeBrl;
+      }
+      if (materializedAffiliateBrl !== null) {
+        orderBrlUpdate.affiliate_brl = materializedAffiliateBrl;
+      }
+      if (materializedCoproducerBrl !== null) {
+        orderBrlUpdate.coproducer_brl = materializedCoproducerBrl;
+      }
+      
+      const { error: brlUpdateError } = await supabase
+        .from('orders')
+        .update(orderBrlUpdate)
+        .eq('id', orderId);
+      
+      if (brlUpdateError) {
+        console.error(`[OrdersShadow] Error updating order BRL fields:`, brlUpdateError);
+      } else {
+        console.log(`[OrdersShadow] Updated order ${orderId} with BRL fields: ledger_status=${ledgerStatus}, platform_fee_brl=${materializedPlatformFeeBrl}, affiliate_brl=${materializedAffiliateBrl}, coproducer_brl=${materializedCoproducerBrl}`);
+      }
+      
+      // ============================================
+      // 8. FILL provider_order_map ONLY AFTER LEDGER SUCCESS
       // This is the critical fix: never mark transaction as processed without ledger
       // ============================================
       if (transactionId && ledgerCreatedSuccessfully) {

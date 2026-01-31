@@ -526,7 +526,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     </span>
                   </div>
                   <span className="text-xl font-bold text-primary">
-                    {formatMoney(order.producer_net, 'BRL')}
+                    {formatMoney(order.producer_net_brl ?? order.producer_net, 'BRL')}
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">

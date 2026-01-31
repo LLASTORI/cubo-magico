@@ -72,6 +72,7 @@ export interface OrderRecord {
   customer_paid: number;
   gross_base: number | null;
   producer_net: number;
+  producer_net_brl: number | null;
   ordered_at: string | null;
   approved_at: string | null;
   completed_at: string | null;
@@ -619,6 +620,7 @@ export function useOrdersCore(): UseOrdersCoreResult {
         customer_paid: Number(order.customer_paid) || 0,
         gross_base: order.gross_base ? Number(order.gross_base) : null,
         producer_net: Number(order.producer_net) || 0,
+        producer_net_brl: order.producer_net_brl ? Number(order.producer_net_brl) : null,
         ordered_at: order.ordered_at,
         approved_at: order.approved_at,
         completed_at: order.completed_at,
@@ -846,6 +848,7 @@ export function useOrdersCore(): UseOrdersCoreResult {
         customer_paid: Number(orderData.customer_paid) || 0,
         gross_base: orderData.gross_base ? Number(orderData.gross_base) : null,
         producer_net: Number(orderData.producer_net) || 0,
+        producer_net_brl: orderData.producer_net_brl ? Number(orderData.producer_net_brl) : null,
         ordered_at: orderData.ordered_at,
         approved_at: orderData.approved_at,
         completed_at: orderData.completed_at,

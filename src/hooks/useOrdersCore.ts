@@ -78,10 +78,17 @@ export interface OrderRecord {
   completed_at: string | null;
   created_at: string;
   
+  // BRL Materialized Fields (Ledger v2.0)
+  platform_fee_brl: number | null;
+  affiliate_brl: number | null;
+  coproducer_brl: number | null;
+  tax_brl: number | null;
+  ledger_status: string | null;
+  
   // Aggregated from order_items
   products: OrderItemRecord[];
   
-  // Aggregated from ledger_events (for breakdown)
+  // Aggregated from ledger_events (for breakdown) - DEPRECATED, use *_brl fields
   ledger_breakdown?: LedgerBreakdown;
   
   // UTM from orders table (MATERIALIZED COLUMNS)
@@ -628,6 +635,12 @@ export function useOrdersCore(): UseOrdersCoreResult {
         gross_base: order.gross_base ? Number(order.gross_base) : null,
         producer_net: Number(order.producer_net) || 0,
         producer_net_brl: order.producer_net_brl ? Number(order.producer_net_brl) : null,
+        // BRL Materialized Fields (Ledger v2.0)
+        platform_fee_brl: order.platform_fee_brl ? Number(order.platform_fee_brl) : null,
+        affiliate_brl: order.affiliate_brl ? Number(order.affiliate_brl) : null,
+        coproducer_brl: order.coproducer_brl ? Number(order.coproducer_brl) : null,
+        tax_brl: order.tax_brl ? Number(order.tax_brl) : null,
+        ledger_status: order.ledger_status || null,
         ordered_at: order.ordered_at,
         approved_at: order.approved_at,
         completed_at: order.completed_at,
@@ -889,6 +902,12 @@ export function useOrdersCore(): UseOrdersCoreResult {
         gross_base: orderData.gross_base ? Number(orderData.gross_base) : null,
         producer_net: Number(orderData.producer_net) || 0,
         producer_net_brl: orderData.producer_net_brl ? Number(orderData.producer_net_brl) : null,
+        // BRL Materialized Fields (Ledger v2.0)
+        platform_fee_brl: orderData.platform_fee_brl ? Number(orderData.platform_fee_brl) : null,
+        affiliate_brl: orderData.affiliate_brl ? Number(orderData.affiliate_brl) : null,
+        coproducer_brl: orderData.coproducer_brl ? Number(orderData.coproducer_brl) : null,
+        tax_brl: orderData.tax_brl ? Number(orderData.tax_brl) : null,
+        ledger_status: orderData.ledger_status || null,
         ordered_at: orderData.ordered_at,
         approved_at: orderData.approved_at,
         completed_at: orderData.completed_at,

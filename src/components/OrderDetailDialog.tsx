@@ -2,20 +2,24 @@
  * OrderDetailDialog
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
- * FONTE DE PRODUTOS: order_items (ÚNICA E EXCLUSIVA)
+ * LEDGER BRL v2.0 - DECOMPOSIÇÃO FINANCEIRA MATERIALIZADA
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * REGRAS OBRIGATÓRIAS:
+ * REGRAS CANÔNICAS:
+ * ✓ Usar EXCLUSIVAMENTE campos *_brl materializados em orders
+ * ✓ NUNCA ler ledger_events diretamente na UI
+ * ✓ NUNCA converter moedas no frontend
+ * ✓ Se ledger_status != 'complete', ocultar decomposição detalhada
+ * ✓ Se campo *_brl é NULL ou zero, não exibir linha
+ * 
+ * FONTE DE PRODUTOS: order_items (ÚNICA E EXCLUSIVA)
  * ✓ Buscar produtos SOMENTE de order_items por order_id
  * ✓ Cada produto exibe: nome, tipo, preço base
- * ✓ Soma visual dos produtos = orders.customer_paid
  * 
  * PROIBIDO:
  * ❌ Buscar produtos por transaction_id
  * ❌ Usar ledger_events para listar produtos
  * ❌ Qualquer fonte que não seja order_items
- * 
- * Ledger EXPLICA a decomposição financeira, mas NUNCA altera valores
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -43,10 +47,8 @@ import {
   CheckCircle,
   AlertCircle,
   AlertTriangle,
-  Wallet,
-  Globe
 } from "lucide-react";
-import { useOrdersCore, OrderRecord, LedgerBreakdown } from "@/hooks/useOrdersCore";
+import { useOrdersCore, OrderRecord } from "@/hooks/useOrdersCore";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
 import { formatMoney } from "@/utils/formatMoney";
@@ -153,21 +155,18 @@ type FunnelNameMap = Record<string, string>;
 export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDialogProps) {
   const { fetchOrderDetail } = useOrdersCore();
   const [order, setOrder] = useState<OrderRecord | null>(null);
-  const [breakdown, setBreakdown] = useState<LedgerBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
   const [funnelNames, setFunnelNames] = useState<FunnelNameMap>({});
 
   useEffect(() => {
     if (open && orderId) {
       setLoading(true);
-      fetchOrderDetail(orderId).then(({ order, breakdown }) => {
+      fetchOrderDetail(orderId).then(({ order }) => {
         setOrder(order);
-        setBreakdown(breakdown);
         setLoading(false);
       });
     } else {
       setOrder(null);
-      setBreakdown(null);
       setFunnelNames({});
     }
   }, [open, orderId, fetchOrderDetail]);
@@ -212,79 +211,33 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
   };
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // VALIDAÇÃO DA DECOMPOSIÇÃO FINANCEIRA (BLOCO 2 - CORREÇÃO)
+  // DECOMPOSIÇÃO FINANCEIRA BRL v2.0
   // ═══════════════════════════════════════════════════════════════════════════════
   // 
-  // EQUAÇÃO CANÔNICA:
-  //   gross_base - platform_fee - coproducer - affiliate - tax - refund - chargeback = producer_net
-  //
-  // NOTAS:
-  // - gross_base é a base econômica (sem juros de parcelamento)
-  // - customer_paid inclui juros de parcelamento (pode ser > gross_base)
-  // - Se não houver ledger_events, NÃO exibir diferença, apenas alerta
+  // REGRAS CANÔNICAS:
+  // - Usar EXCLUSIVAMENTE campos *_brl materializados em orders
+  // - NUNCA ler ledger_events diretamente
+  // - NUNCA converter moedas no frontend
+  // - Se ledger_status != 'complete', ocultar decomposição
+  // - Se campo *_brl é NULL ou zero, não exibir linha
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  // Detectar se há ledger_events para este pedido
-  const hasLedgerEvents = useMemo(() => {
-    if (!breakdown) return false;
-    return (
-      breakdown.platform_fee > 0 ||
-      breakdown.coproducer > 0 ||
-      breakdown.affiliate > 0 ||
-      breakdown.tax > 0 ||
-      breakdown.refund > 0 ||
-      breakdown.chargeback > 0 ||
-      breakdown.sale > 0
-    );
-  }, [breakdown]);
-
-  // Calcular juros/encargos (quando customer_paid > gross_base)
-  const interestCharges = useMemo(() => {
-    if (!order) return 0;
-    const baseValue = order.gross_base ?? order.customer_paid;
-    return Math.max(0, order.customer_paid - baseValue);
+  // Verificar se o ledger está completo para exibir decomposição
+  const isLedgerComplete = useMemo(() => {
+    if (!order) return false;
+    return order.ledger_status === 'complete';
   }, [order]);
 
-  // Validate ledger breakdown matches order values
-  const validateBreakdown = () => {
-    if (!order || !breakdown) return null;
-    
-    // Se não há ledger_events, não validar
-    if (!hasLedgerEvents) return null;
-    
-    // Base econômica: usar gross_base se disponível, senão customer_paid
-    const economicBase = order.gross_base ?? order.customer_paid;
-    
-    // Equação completa: gross_base - todas as deduções = producer_net
-    const totalDeductions = 
-      breakdown.platform_fee + 
-      breakdown.coproducer + 
-      breakdown.affiliate + 
-      breakdown.tax + 
-      breakdown.refund + 
-      breakdown.chargeback;
-    
-    const calculatedNet = economicBase - totalDeductions;
-    const difference = Math.abs(calculatedNet - order.producer_net);
-    
-    // Se há juros (customer_paid > gross_base), considerar decomposição válida
-    // Juros já são exibidos separadamente e não devem ser confundidos com arredondamento
-    const hasInterestCharges = order.customer_paid > (order.gross_base ?? order.customer_paid) + 0.01;
-    
-    // Arredondamento válido apenas para deltas residuais ≤ R$0.02
-    const isResidualRounding = difference <= 0.02;
-    
-    return {
-      matches: hasInterestCharges || difference < 0.10,
-      isValidWithInterest: hasInterestCharges && difference >= 0.02,
-      isResidualRounding,
-      calculatedNet,
-      difference,
-      economicBase,
-    };
-  };
-
-  const validation = validateBreakdown();
+  // Verificar se há algum campo BRL materializado para exibir
+  const hasBrlDecomposition = useMemo(() => {
+    if (!order) return false;
+    return (
+      (order.platform_fee_brl != null && order.platform_fee_brl > 0) ||
+      (order.affiliate_brl != null && order.affiliate_brl > 0) ||
+      (order.coproducer_brl != null && order.coproducer_brl > 0) ||
+      (order.tax_brl != null && order.tax_brl > 0)
+    );
+  }, [order]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -451,16 +404,15 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
             <Separator />
 
             {/* ═══════════════════════════════════════════════════════════════════════════════
-                DECOMPOSIÇÃO FINANCEIRA - NÍVEL DO PEDIDO (BLOCO 2 - CORREÇÃO)
+                DECOMPOSIÇÃO FINANCEIRA BRL v2.0 - NÍVEL DO PEDIDO
                 ═══════════════════════════════════════════════════════════════════════════════
                 
-                EQUAÇÃO CANÔNICA:
-                  gross_base - platform_fee - coproducer - affiliate - tax - refund - chargeback = producer_net
-                
-                REGRAS:
-                ✓ Base econômica = orders.gross_base (ou customer_paid se null)
-                ✓ Juros/encargos = customer_paid - gross_base (explícito quando > 0)
-                ✓ Se não houver ledger_events, exibir alerta claro
+                REGRAS CANÔNICAS v2.0:
+                ✓ Usar EXCLUSIVAMENTE campos *_brl materializados em orders
+                ✓ NUNCA ler ledger_events diretamente na UI
+                ✓ NUNCA converter moedas no frontend
+                ✓ Se ledger_status != 'complete', ocultar decomposição
+                ✓ Se campo *_brl é NULL ou zero, não exibir linha
                 ═══════════════════════════════════════════════════════════════════════════════ */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -469,26 +421,30 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   <span className="font-medium">Decomposição Financeira</span>
                 </div>
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  Nível: Pedido
+                  Ledger BRL v2.0
                 </span>
               </div>
               
-              {/* ALERTA: Ledger ausente */}
-              {!hasLedgerEvents && (order.status === 'approved' || order.status === 'complete') && (
+              {/* ALERTA: Ledger incompleto ou ausente */}
+              {!isLedgerComplete && (order.status === 'approved' || order.status === 'complete') && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-600" />
                     <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                      Ledger financeiro ausente para este pedido
+                      {order.ledger_status === 'partial' 
+                        ? 'Decomposição parcial (pedido internacional)' 
+                        : 'Ledger financeiro não disponível'}
                     </span>
                   </div>
                   <p className="text-xs text-amber-600/80 mt-1">
-                    A decomposição detalhada não está disponível. Execute o backfill de ledger para corrigir.
+                    {order.ledger_status === 'partial'
+                      ? 'Algumas deduções não possuem conversão BRL disponível.'
+                      : 'Execute o backfill de ledger BRL para habilitar a decomposição.'}
                   </p>
                 </div>
               )}
               
-              {/* What customer paid (GROSS) - ALWAYS from orders.customer_paid */}
+              {/* O que o cliente pagou - orders.customer_paid */}
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -502,48 +458,56 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-green-600/70 mt-1">
-                  Valor total cobrado (inclui juros de parcelamento)
+                  Valor total cobrado em BRL
                 </p>
               </div>
 
-              {/* Juros/Encargos (quando customer_paid > gross_base) */}
-              {interestCharges > 0.01 && (
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <Info className="w-3.5 h-3.5 text-blue-600" />
-                      <span className="text-blue-700 dark:text-blue-400">Juros / Encargos de parcelamento</span>
+              {/* Decomposição das deduções (APENAS se ledger_status = 'complete') */}
+              {isLedgerComplete && hasBrlDecomposition && (
+                <div className="space-y-2 mb-4">
+                  {/* Taxa da Plataforma */}
+                  {order.platform_fee_brl != null && order.platform_fee_brl > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-sm">
+                      <span className="text-red-600 dark:text-red-400">Taxa da Plataforma</span>
+                      <span className="font-medium text-red-600 dark:text-red-400">
+                        - {formatMoney(order.platform_fee_brl, 'BRL')}
+                      </span>
                     </div>
-                    <span className="font-medium text-blue-700 dark:text-blue-400">
-                      {formatMoney(interestCharges, 'BRL')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-blue-600/60 mt-1">
-                    Base econômica: {formatMoney(order.gross_base ?? order.customer_paid, order.currency)}
-                  </p>
+                  )}
+                  
+                  {/* Afiliado */}
+                  {order.affiliate_brl != null && order.affiliate_brl > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg text-sm">
+                      <span className="text-orange-600 dark:text-orange-400">Comissão Afiliado</span>
+                      <span className="font-medium text-orange-600 dark:text-orange-400">
+                        - {formatMoney(order.affiliate_brl, 'BRL')}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Coprodução */}
+                  {order.coproducer_brl != null && order.coproducer_brl > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg text-sm">
+                      <span className="text-purple-600 dark:text-purple-400">Comissão Coprodução</span>
+                      <span className="font-medium text-purple-600 dark:text-purple-400">
+                        - {formatMoney(order.coproducer_brl, 'BRL')}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Impostos */}
+                  {order.tax_brl != null && order.tax_brl > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-slate-500/5 border border-slate-500/10 rounded-lg text-sm">
+                      <span className="text-slate-600 dark:text-slate-400">Impostos</span>
+                      <span className="font-medium text-slate-600 dark:text-slate-400">
+                        - {formatMoney(order.tax_brl, 'BRL')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* 
-                ═══════════════════════════════════════════════════════════════════════════════
-                🚧 SEÇÕES TEMPORARIAMENTE OCULTAS
-                ═══════════════════════════════════════════════════════════════════════════════
-                
-                Motivo: Os campos *_brl (platform_fee_brl, coproducer_brl, etc.) ainda não 
-                foram materializados no backend. Exibir valores em moeda estrangeira como 
-                se fossem BRL seria semanticamente incorreto.
-                
-                Reativar após:
-                - Materialização dos campos *_brl na tabela ledger_events
-                - Backfill dos valores convertidos para BRL
-                
-                Seções ocultas:
-                - Total de deduções
-                - Verificação da Decomposição
-                ═══════════════════════════════════════════════════════════════════════════════
-              */}
-
-              {/* What producer receives (NET) - ALWAYS from orders.producer_net */}
+              {/* O que o produtor recebe - orders.producer_net_brl */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -557,7 +521,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">
-                  Valor líquido final em BRL (orders.producer_net_brl)
+                  Valor líquido final em BRL
                 </p>
               </div>
             </div>
@@ -692,7 +656,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
             {/* Data Source Badge */}
             <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center pt-2">
               <CheckCircle className="w-3 h-3 text-emerald-500" />
-              Fonte canônica: orders + order_items + ledger_events
+              Ledger BRL v2.0 • orders + order_items
             </div>
           </div>
         ) : (

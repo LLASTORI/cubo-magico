@@ -10453,6 +10453,7 @@ export type Database = {
           approved_at: string | null
           buyer_email: string | null
           buyer_name: string | null
+          currency: string | null
           customer_paid: number | null
           funnel_id: string | null
           funnel_name: string | null
@@ -10470,6 +10471,7 @@ export type Database = {
           approved_at?: string | null
           buyer_email?: string | null
           buyer_name?: string | null
+          currency?: string | null
           customer_paid?: number | null
           funnel_id?: never
           funnel_name?: never
@@ -10487,6 +10489,7 @@ export type Database = {
           approved_at?: string | null
           buyer_email?: string | null
           buyer_name?: string | null
+          currency?: string | null
           customer_paid?: number | null
           funnel_id?: never
           funnel_name?: never

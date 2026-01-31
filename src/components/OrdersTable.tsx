@@ -40,6 +40,7 @@ import { Info, Eye, Package, Signal, SignalZero, CreditCard } from "lucide-react
 import { OrderRecord } from "@/hooks/useOrdersCore";
 import { OrderDetailDialog } from "@/components/OrderDetailDialog";
 import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
+import { formatMoney } from "@/utils/formatMoney";
 
 interface OrdersTableProps {
   orders: OrderRecord[];
@@ -50,13 +51,6 @@ interface OrdersTableProps {
 // Helper to check if order has any UTM
 const hasUtm = (order: OrderRecord): boolean => {
   return !!(order.utm_source || order.utm_campaign || order.utm_adset || order.utm_placement || order.utm_creative);
-};
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
 };
 
 const formatDate = (dateString: string | null) => {
@@ -274,10 +268,10 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-foreground">
-                      {formatCurrency(order.customer_paid)}
+                      {formatMoney(order.customer_paid, order.currency)}
                     </TableCell>
                     <TableCell className="font-semibold text-primary">
-                      {formatCurrency(order.producer_net)}
+                      {formatMoney(order.producer_net, order.currency)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={getStatusColor(order.status)}>

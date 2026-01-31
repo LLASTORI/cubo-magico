@@ -507,7 +507,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                         breakdown.tax + 
                         breakdown.refund + 
                         breakdown.chargeback,
-                        order.currency
+                        'BRL'
                       )}
                     </span>
                   </div>

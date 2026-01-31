@@ -1,5 +1,9 @@
 project_id = "jcbzwxgayxrnxlgmmlni"
 
+[functions.backfill-producer-net-brl]
+verify_jwt = false
+max_duration = 300
+
 [functions.analytics-daily-process]
 verify_jwt = false
 

@@ -55,12 +55,7 @@ interface OrderDetailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-};
+import { formatMoney } from "@/utils/formatMoney";
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return '-';
@@ -387,7 +382,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                       )}
                     </div>
                     <span className="font-semibold ml-4 shrink-0">
-                      {formatCurrency(item.base_price)}
+                      {formatMoney(item.base_price, order.currency)}
                     </span>
                   </div>
                 ))}
@@ -410,7 +405,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     </span>
                     <div className="flex items-center gap-2">
                       <span className={`font-semibold ${matches ? 'text-green-600' : 'text-yellow-600'}`}>
-                        {formatCurrency(productsSum)}
+                        {formatMoney(productsSum, order.currency)}
                       </span>
                       {matches ? (
                         <CheckCircle className="w-4 h-4 text-green-500" />
@@ -473,7 +468,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     </span>
                   </div>
                   <span className="text-xl font-bold text-green-700 dark:text-green-400">
-                    {formatCurrency(order.customer_paid)}
+                    {formatMoney(order.customer_paid, order.currency)}
                   </span>
                 </div>
                 <p className="text-xs text-green-600/70 mt-1">
@@ -490,11 +485,11 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                       <span className="text-blue-700 dark:text-blue-400">Juros / Encargos de parcelamento</span>
                     </div>
                     <span className="font-medium text-blue-700 dark:text-blue-400">
-                      {formatCurrency(interestCharges)}
+                      {formatMoney(interestCharges, order.currency)}
                     </span>
                   </div>
                   <p className="text-xs text-blue-600/60 mt-1">
-                    Base econômica: {formatCurrency(order.gross_base ?? order.customer_paid)}
+                    Base econômica: {formatMoney(order.gross_base ?? order.customer_paid, order.currency)}
                   </p>
                 </div>
               )}
@@ -505,13 +500,14 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Total de deduções</span>
                     <span className="font-medium text-red-600">
-                      - {formatCurrency(
+                      - {formatMoney(
                         breakdown.platform_fee + 
                         breakdown.coproducer + 
                         breakdown.affiliate + 
                         breakdown.tax + 
                         breakdown.refund + 
-                        breakdown.chargeback
+                        breakdown.chargeback,
+                        order.currency
                       )}
                     </span>
                   </div>
@@ -530,7 +526,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     </span>
                   </div>
                   <span className="text-xl font-bold text-primary">
-                    {formatCurrency(order.producer_net)}
+                    {formatMoney(order.producer_net, order.currency)}
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">
@@ -552,42 +548,42 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   <div className="space-y-1 text-xs">
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Base econômica</span>
-                      <span className="font-mono">{formatCurrency(order.gross_base ?? order.customer_paid)}</span>
+                      <span className="font-mono">{formatMoney(order.gross_base ?? order.customer_paid, order.currency)}</span>
                     </div>
                     {breakdown.platform_fee > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Taxas plataforma</span>
-                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.platform_fee)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.platform_fee, order.currency)}</span>
                       </div>
                     )}
                     {breakdown.coproducer > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Coprodução</span>
-                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.coproducer)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.coproducer, order.currency)}</span>
                       </div>
                     )}
                     {breakdown.affiliate > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Afiliados</span>
-                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.affiliate)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.affiliate, order.currency)}</span>
                       </div>
                     )}
                     {breakdown.tax > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Impostos</span>
-                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.tax)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.tax, order.currency)}</span>
                       </div>
                     )}
                     {breakdown.refund > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Reembolso</span>
-                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.refund)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.refund, order.currency)}</span>
                       </div>
                     )}
                     {breakdown.chargeback > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>− Chargeback</span>
-                        <span className="font-mono text-red-500/70">-{formatCurrency(breakdown.chargeback)}</span>
+                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.chargeback, order.currency)}</span>
                       </div>
                     )}
                     
@@ -595,7 +591,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     
                     <div className="flex items-center justify-between font-medium">
                       <span className="text-foreground">= Produtor recebe</span>
-                      <span className="font-mono text-primary">{formatCurrency(order.producer_net)}</span>
+                      <span className="font-mono text-primary">{formatMoney(order.producer_net, order.currency)}</span>
                     </div>
                   </div>
                   
@@ -618,7 +614,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                         <>
                           <CheckCircle className="w-3 h-3 text-green-600" />
                           <span className="text-green-600">
-                            Valores conferem (arredondamento residual de {formatCurrency(validation.difference)})
+                            Valores conferem (arredondamento residual de {formatMoney(validation.difference, order.currency)})
                           </span>
                         </>
                       ) : (
@@ -628,12 +624,12 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="cursor-help underline decoration-dotted">
-                                  Diferença de {formatCurrency(validation.difference)}
+                                  Diferença de {formatMoney(validation.difference, order.currency)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-[300px] text-xs">
                                 <p>Diferença identificada na decomposição financeira.</p>
-                                <p className="mt-1 text-muted-foreground">Base: {formatCurrency(validation.economicBase)} → Calculado: {formatCurrency(validation.calculatedNet)}</p>
+                                <p className="mt-1 text-muted-foreground">Base: {formatMoney(validation.economicBase, order.currency)} → Calculado: {formatMoney(validation.calculatedNet, order.currency)}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

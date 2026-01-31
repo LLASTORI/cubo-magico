@@ -167,15 +167,15 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                   </TableHead>
                   <TableHead className="text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      Valor Pago
+                      Valor da Oferta
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger>
                             <Info className="w-3 h-3" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>customer_paid</p>
-                            <p className="text-xs text-muted-foreground">O que o cliente pagou</p>
+                            <p>gross_base</p>
+                            <p className="text-xs text-muted-foreground">Valor nominal da oferta</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -268,10 +268,10 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-foreground">
-                      {formatMoney(order.customer_paid, order.currency)}
+                      {formatMoney(order.gross_base, order.currency)}
                     </TableCell>
                     <TableCell className="font-semibold text-primary">
-                      {formatMoney(order.producer_net, order.currency)}
+                      {formatMoney(order.producer_net, 'BRL')}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={getStatusColor(order.status)}>

@@ -494,27 +494,24 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </div>
               )}
 
-              {/* Total Deductions Summary */}
-              {breakdown && hasLedgerEvents && (
-                <div className="bg-muted/30 rounded-lg p-3 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Total de deduções</span>
-                    <span className="font-medium text-red-600">
-                      - {formatMoney(
-                        breakdown.platform_fee + 
-                        breakdown.coproducer + 
-                        breakdown.affiliate + 
-                        breakdown.tax + 
-                        breakdown.refund + 
-                        breakdown.chargeback,
-                        'BRL'
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <Separator className="my-2" />
+              {/* 
+                ═══════════════════════════════════════════════════════════════════════════════
+                🚧 SEÇÕES TEMPORARIAMENTE OCULTAS
+                ═══════════════════════════════════════════════════════════════════════════════
+                
+                Motivo: Os campos *_brl (platform_fee_brl, coproducer_brl, etc.) ainda não 
+                foram materializados no backend. Exibir valores em moeda estrangeira como 
+                se fossem BRL seria semanticamente incorreto.
+                
+                Reativar após:
+                - Materialização dos campos *_brl na tabela ledger_events
+                - Backfill dos valores convertidos para BRL
+                
+                Seções ocultas:
+                - Total de deduções
+                - Verificação da Decomposição
+                ═══════════════════════════════════════════════════════════════════════════════
+              */}
 
               {/* What producer receives (NET) - ALWAYS from orders.producer_net */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
@@ -530,115 +527,9 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">
-                  Valor líquido final (orders.producer_net)
+                  Valor líquido final em BRL (orders.producer_net_brl)
                 </p>
               </div>
-
-              {/* Validation: ledger breakdown should match order values - ONLY if ledger exists */}
-              {breakdown && hasLedgerEvents && (
-                <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border/50">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Wallet className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Verificação da Decomposição
-                    </span>
-                  </div>
-                  
-                  {/* Show the formula breakdown - usando gross_base como base */}
-                  <div className="space-y-1 text-xs">
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Base econômica</span>
-                      <span className="font-mono">{formatMoney(order.gross_base ?? order.customer_paid, order.currency)}</span>
-                    </div>
-                    {breakdown.platform_fee > 0 && (
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>− Taxas plataforma</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.platform_fee, 'BRL')}</span>
-                      </div>
-                    )}
-                    {breakdown.coproducer > 0 && (
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>− Coprodução</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.coproducer, order.currency)}</span>
-                      </div>
-                    )}
-                    {breakdown.affiliate > 0 && (
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>− Afiliados</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.affiliate, order.currency)}</span>
-                      </div>
-                    )}
-                    {breakdown.tax > 0 && (
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>− Impostos</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.tax, order.currency)}</span>
-                      </div>
-                    )}
-                    {breakdown.refund > 0 && (
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>− Reembolso</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.refund, order.currency)}</span>
-                      </div>
-                    )}
-                    {breakdown.chargeback > 0 && (
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>− Chargeback</span>
-                        <span className="font-mono text-red-500/70">-{formatMoney(breakdown.chargeback, order.currency)}</span>
-                      </div>
-                    )}
-                    
-                    <Separator className="my-1.5" />
-                    
-                    <div className="flex items-center justify-between font-medium">
-                      <span className="text-foreground">= Produtor recebe</span>
-                      <span className="font-mono text-primary">{formatMoney(order.producer_net, order.currency)}</span>
-                    </div>
-                  </div>
-                  
-                  {/* Validation status */}
-                  {validation && (
-                    <div className={`flex items-center gap-1.5 mt-2 pt-2 border-t border-border/30 text-xs ${
-                      validation.matches ? 'text-green-600' : 'text-amber-600'
-                    }`}>
-                      {validation.matches ? (
-                        <>
-                          <CheckCircle className="w-3 h-3" />
-                          <span>
-                            {validation.isValidWithInterest 
-                              ? 'Decomposição válida (inclui juros de parcelamento)'
-                              : 'Cálculo verificado: valores conferem'
-                            }
-                          </span>
-                        </>
-                      ) : validation.isResidualRounding ? (
-                        <>
-                          <CheckCircle className="w-3 h-3 text-green-600" />
-                          <span className="text-green-600">
-                            Valores conferem (arredondamento residual de {formatMoney(validation.difference, order.currency)})
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="w-3 h-3" />
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help underline decoration-dotted">
-                                  Diferença de {formatMoney(validation.difference, order.currency)}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-[300px] text-xs">
-                                <p>Diferença identificada na decomposição financeira.</p>
-                                <p className="mt-1 text-muted-foreground">Base: {formatMoney(validation.economicBase, order.currency)} → Calculado: {formatMoney(validation.calculatedNet, order.currency)}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* ═══════════════════════════════════════════════════════════════════════════════

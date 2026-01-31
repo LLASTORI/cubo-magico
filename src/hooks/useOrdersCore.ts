@@ -37,12 +37,14 @@
  * │                                                                             │
  * └─────────────────────────────────────────────────────────────────────────────┘
  * 
- * DATA SOURCES (Canonical):
- * - orders: customer_paid, producer_net, provider, utm_* (COLUNAS MATERIALIZADAS)
+ * DATA SOURCES (Canonical - Ledger BRL v2.0):
+ * - orders: customer_paid, producer_net_brl, platform_fee_brl, coproducer_brl, affiliate_brl, tax_brl
+ * - orders.ledger_status: 'complete' = métricas financeiras válidas
  * - order_items: Products list with base_price, funnel_id
- * - ledger_events: Financial breakdown (EXPLANATION ONLY)
  * 
  * FORBIDDEN:
+ * ❌ producer_net (legado) - usar producer_net_brl
+ * ❌ ledger_events para agregação - usar campos *_brl materializados
  * ❌ parseSck() em runtime - UTMs são colunas materializadas
  * ❌ .filter() client-side
  * ❌ Filtragem após paginação
@@ -662,13 +664,19 @@ export function useOrdersCore(): UseOrdersCoreResult {
       setOrders(transformedOrders);
 
       // ============================================
-      // QUERY 4: CALCULATE GLOBAL TOTALS (same filters, no pagination)
+      // QUERY 4: CALCULATE GLOBAL TOTALS (Ledger BRL v2.0)
+      // ============================================
+      // CANONICAL: Usa EXCLUSIVAMENTE campos *_brl da tabela orders
+      // REGRA: Métricas financeiras apenas para ledger_status = 'complete'
+      // REGRA: Contagem de pedidos e clientes únicos = todos os pedidos filtrados
       // ============================================
       setTotals(prev => ({ ...prev, loading: true }));
       
       const fetchGlobalTotals = async () => {
         try {
-          // Fetch all orders for totals (paginated to bypass 1000 limit)
+          // ============================================
+          // BRL v2.0 - Buscar campos materializados da tabela orders
+          // ============================================
           const allOrdersData: any[] = [];
           let totalsPage = 0;
           const totalsPageSize = 1000;
@@ -677,7 +685,17 @@ export function useOrdersCore(): UseOrdersCoreResult {
           while (hasMoreTotals) {
             let totalsQuery = supabase
               .from('orders')
-              .select('customer_paid, producer_net, buyer_email, id')
+              .select(`
+                id,
+                buyer_email,
+                ledger_status,
+                customer_paid,
+                producer_net_brl,
+                platform_fee_brl,
+                coproducer_brl,
+                affiliate_brl,
+                tax_brl
+              `)
               .range(totalsPage * totalsPageSize, (totalsPage + 1) * totalsPageSize - 1);
 
             totalsQuery = applyOrdersFilters(
@@ -706,67 +724,44 @@ export function useOrdersCore(): UseOrdersCoreResult {
             }
           }
 
-          // Fetch ledger totals for cost breakdown
-          const allOrderIds = allOrdersData.map(o => o.id);
-          let ledgerTotals = {
-            platform_fee: 0,
-            coproducer: 0,
-            affiliate: 0,
-            refund: 0,
-          };
-
-          if (allOrderIds.length > 0) {
-            // Fetch ledger events in batches
-            for (let i = 0; i < allOrderIds.length; i += 500) {
-              const batchIds = allOrderIds.slice(i, i + 500);
-              const { data: ledgerData, error: ledgerError } = await supabase
-                .from('ledger_events')
-                .select('event_type, amount')
-                .in('order_id', batchIds);
-
-              if (!ledgerError && ledgerData) {
-                for (const event of ledgerData) {
-                  const absAmount = Math.abs(Number(event.amount) || 0);
-                  switch (event.event_type) {
-                    case 'platform_fee':
-                      ledgerTotals.platform_fee += absAmount;
-                      break;
-                    case 'coproducer':
-                      ledgerTotals.coproducer += absAmount;
-                      break;
-                    case 'affiliate':
-                      ledgerTotals.affiliate += absAmount;
-                      break;
-                    case 'refund':
-                      ledgerTotals.refund += absAmount;
-                      break;
-                  }
-                }
-              }
-            }
-          }
-
-          // Calculate totals
-          const customerPaid = allOrdersData.reduce((sum, row) => sum + (Number(row.customer_paid) || 0), 0);
-          const producerNet = allOrdersData.reduce((sum, row) => sum + (Number(row.producer_net) || 0), 0);
+          // ============================================
+          // REGRA CANÔNICA: Separar contagem (todos) de valores (ledger_status='complete')
+          // ============================================
+          const totalOrders = allOrdersData.length;
           const uniqueEmails = new Set(allOrdersData.map(row => row.buyer_email).filter(Boolean));
 
-          console.log('[useOrdersCore] TOTALS from Orders Core (100% SQL filtered):', {
-            totalOrders: allOrdersData.length,
+          // Filtrar apenas pedidos com ledger completo para métricas financeiras
+          const completeLedgerOrders = allOrdersData.filter(row => row.ledger_status === 'complete');
+
+          // ============================================
+          // SOMAS BRL v2.0 - SOMENTE pedidos com ledger_status = 'complete'
+          // ============================================
+          const customerPaid = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.customer_paid) || 0), 0);
+          const producerNetBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.producer_net_brl) || 0), 0);
+          const platformFeeBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.platform_fee_brl) || 0), 0);
+          const coproducerBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.coproducer_brl) || 0), 0);
+          const affiliateBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.affiliate_brl) || 0), 0);
+          const taxBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.tax_brl) || 0), 0);
+
+          console.log('[useOrdersCore] TOTALS BRL v2.0 (100% SQL filtered):', {
+            totalOrders,
+            ordersWithCompleteLedger: completeLedgerOrders.length,
             customerPaid,
-            producerNet,
-            platformFee: ledgerTotals.platform_fee,
-            coproducerCost: ledgerTotals.coproducer,
+            producerNetBrl,
+            platformFeeBrl,
+            coproducerBrl,
+            affiliateBrl,
+            taxBrl,
           });
 
           setTotals({
-            totalOrders: allOrdersData.length,
+            totalOrders,
             customerPaid,
-            producerNet,
-            platformFee: ledgerTotals.platform_fee,
-            coproducerCost: ledgerTotals.coproducer,
-            affiliateCost: ledgerTotals.affiliate,
-            refunds: ledgerTotals.refund,
+            producerNet: producerNetBrl,  // MIGRADO: producer_net → producer_net_brl
+            platformFee: platformFeeBrl,   // MIGRADO: ledger_events → platform_fee_brl
+            coproducerCost: coproducerBrl, // MIGRADO: ledger_events → coproducer_brl
+            affiliateCost: affiliateBrl,   // MIGRADO: ledger_events → affiliate_brl
+            refunds: taxBrl,               // MIGRADO: ledger_events → tax_brl (reembolsos + impostos)
             uniqueCustomers: uniqueEmails.size,
             loading: false,
           });

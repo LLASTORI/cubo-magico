@@ -38,30 +38,32 @@ import { useTenantNavigation } from "@/navigation";
  * │                                                                             │
  * └─────────────────────────────────────────────────────────────────────────────┘
  * 
- * DATA SOURCES (Orders Core - Canonical):
- * - orders: customer_paid (GROSS), producer_net (NET), provider
+ * DATA SOURCES (Ledger BRL v2.0 - Canonical):
+ * - orders: customer_paid, producer_net_brl, platform_fee_brl, coproducer_brl, affiliate_brl, tax_brl
+ * - orders.ledger_status: 'complete' = métricas financeiras válidas
  * - order_items: products list
- * - ledger_events: breakdown (EXPLANATION ONLY)
  * 
  * FORBIDDEN SOURCES:
+ * ❌ producer_net (legado)
+ * ❌ ledger_events para agregação
  * ❌ finance_ledger_summary
  * ❌ useFinanceLedger hook
  * ❌ hotmart_sales (legacy)
  * ❌ crm_transactions
  * 
- * CARD DEFINITIONS:
- * - Receita Bruta: SUM(orders.customer_paid)
- * - Receita Líquida do Produtor: SUM(orders.producer_net)
- * - Taxas Plataforma: SUM(ledger_events WHERE event_type='platform_fee')
- * - Coprodução: SUM(ledger_events WHERE event_type='coproducer')
- * - Afiliados: SUM(ledger_events WHERE event_type='affiliate')
- * - Reembolsos: SUM(ledger_events WHERE event_type='refund')
+ * CARD DEFINITIONS (Ledger BRL v2.0):
+ * - Receita Bruta: SUM(orders.customer_paid) WHERE ledger_status='complete'
+ * - Receita Líquida do Produtor: SUM(orders.producer_net_brl) WHERE ledger_status='complete'
+ * - Taxas Plataforma: SUM(orders.platform_fee_brl) WHERE ledger_status='complete'
+ * - Coprodução: SUM(orders.coproducer_brl) WHERE ledger_status='complete'
+ * - Afiliados: SUM(orders.affiliate_brl) WHERE ledger_status='complete'
+ * - Reembolsos: SUM(orders.tax_brl) WHERE ledger_status='complete'
  * 
  * TABLE: Each row = 1 order (NOT transaction events)
  * 
  * VALIDATION CASE: Juliane Coeli (HP3609747213C1)
  * - customer_paid = 205.00 ✓
- * - producer_net = 94.43 ✓
+ * - producer_net_brl = 94.43 ✓
  * - 3 items (97 + 39 + 69) ✓
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -280,13 +282,13 @@ const BuscaRapida = () => {
               </div>
             ) : orders.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
-                {/* Data Source Info */}
+                {/* Data Source Info - Ledger BRL v2.0 */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                   <span>
-                    Fonte canônica: <strong>Orders Core</strong> • 
+                    Fonte canônica: <strong>Ledger BRL v2.0</strong> • 
                     Receita Bruta = <strong>customer_paid</strong> • 
-                    Receita Líquida = <strong>producer_net</strong> •
+                    Receita Líquida = <strong>producer_net_brl</strong> •
                     <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> pedidos no total
                   </span>
                 </div>

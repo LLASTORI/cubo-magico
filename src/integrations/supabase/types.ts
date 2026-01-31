@@ -5313,6 +5313,7 @@ export type Database = {
           payment_method: string | null
           payment_type: string | null
           producer_net: number | null
+          producer_net_brl: number | null
           project_id: string
           provider: string
           provider_order_id: string
@@ -5345,6 +5346,7 @@ export type Database = {
           payment_method?: string | null
           payment_type?: string | null
           producer_net?: number | null
+          producer_net_brl?: number | null
           project_id: string
           provider: string
           provider_order_id: string
@@ -5377,6 +5379,7 @@ export type Database = {
           payment_method?: string | null
           payment_type?: string | null
           producer_net?: number | null
+          producer_net_brl?: number | null
           project_id?: string
           provider?: string
           provider_order_id?: string

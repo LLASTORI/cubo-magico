@@ -167,34 +167,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                   </TableHead>
                   <TableHead className="text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      Valor da Oferta
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Info className="w-3 h-3" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>gross_base</p>
-                            <p className="text-xs text-muted-foreground">Valor nominal da oferta</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      Valor Líquido
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Info className="w-3 h-3" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>producer_net</p>
-                            <p className="text-xs text-muted-foreground">O que o produtor recebe</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      Produtor Recebe
                     </div>
                   </TableHead>
                   <TableHead className="text-muted-foreground">Status</TableHead>
@@ -266,9 +239,6 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                           </span>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell className="font-semibold text-foreground">
-                      {formatMoney(order.gross_base, order.currency)}
                     </TableCell>
                     <TableCell className="font-semibold text-primary">
                       {formatMoney(order.producer_net, 'BRL')}

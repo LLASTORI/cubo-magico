@@ -43,19 +43,20 @@ import {
   CheckCircle,
   AlertCircle,
   AlertTriangle,
-  Wallet
+  Wallet,
+  Globe
 } from "lucide-react";
 import { useOrdersCore, OrderRecord, LedgerBreakdown } from "@/hooks/useOrdersCore";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
+import { formatMoney } from "@/utils/formatMoney";
+import { getCountryFlag, getCountryName } from "@/utils/countryUtils";
 
 interface OrderDetailDialogProps {
   orderId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-import { formatMoney } from "@/utils/formatMoney";
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return '-';
@@ -325,19 +326,28 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               </div>
             </div>
 
-            {/* Customer Info + Payment Method */}
+            {/* Customer Info + Payment Method + Country */}
             <div className="bg-muted/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium">Cliente</span>
                 </div>
-                {/* Payment Method Badge (PROMPT 2) */}
-                <PaymentMethodBadge 
-                  paymentMethod={order.payment_method} 
-                  installments={order.installments}
-                  size="md"
-                />
+                <div className="flex items-center gap-2">
+                  {/* Country Badge (when not Brazil) */}
+                  {order.buyer_country_iso && order.buyer_country_iso !== 'BR' && (
+                    <Badge variant="outline" className="text-xs gap-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
+                      <span className="text-sm">{getCountryFlag(order.buyer_country_iso)}</span>
+                      {getCountryName(order.buyer_country_iso)}
+                    </Badge>
+                  )}
+                  {/* Payment Method Badge (PROMPT 2) */}
+                  <PaymentMethodBadge 
+                    paymentMethod={order.payment_method} 
+                    installments={order.installments}
+                    size="md"
+                  />
+                </div>
               </div>
               <p className="text-foreground">{order.buyer_name || '-'}</p>
               <p className="text-sm text-muted-foreground">{order.buyer_email || '-'}</p>
@@ -360,32 +370,52 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 {/* ORDENAÇÃO: main → orderbump → upsell → downsell → addon (APENAS VISUAL) */}
                 {[...order.products]
                   .sort((a, b) => getItemTypeSortOrder(a.item_type) - getItemTypeSortOrder(b.item_type))
-                  .map((item) => (
-                  <div 
-                    key={item.id} 
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium truncate">{item.product_name || 'Produto sem nome'}</p>
-                        <Badge 
-                          variant="outline" 
-                          className={`text-xs shrink-0 ${getItemTypeBadgeColor(item.item_type)}`}
-                        >
-                          {getItemTypeLabel(item.item_type)}
-                        </Badge>
+                  .map((item) => {
+                    // Determinar qual moeda/valor exibir como principal
+                    // Se temos moeda da oferta diferente da moeda do checkout, usar oferta como principal
+                    const hasOfferCurrency = item.offer_currency && item.offer_price !== null;
+                    const isCheckoutDifferent = hasOfferCurrency && item.offer_currency !== order.currency;
+                    
+                    // Valor principal: moeda da oferta se disponível, senão checkout
+                    const primaryCurrency = hasOfferCurrency ? item.offer_currency! : order.currency;
+                    const primaryPrice = hasOfferCurrency ? item.offer_price! : item.base_price;
+                    
+                    return (
+                      <div 
+                        key={item.id} 
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium truncate">{item.product_name || 'Produto sem nome'}</p>
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs shrink-0 ${getItemTypeBadgeColor(item.item_type)}`}
+                            >
+                              {getItemTypeLabel(item.item_type)}
+                            </Badge>
+                          </div>
+                          {item.offer_name && (
+                            <p className="text-sm text-muted-foreground truncate">
+                              {item.offer_name}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end ml-4 shrink-0">
+                          {/* Preço principal (moeda da oferta) */}
+                          <span className="font-semibold">
+                            {formatMoney(primaryPrice, primaryCurrency)}
+                          </span>
+                          {/* Preço no checkout (moeda local) - apenas se diferente */}
+                          {isCheckoutDifferent && (
+                            <span className="text-xs text-muted-foreground">
+                              Checkout: {formatMoney(item.base_price, order.currency)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      {item.offer_name && (
-                        <p className="text-sm text-muted-foreground truncate">
-                          {item.offer_name}
-                        </p>
-                      )}
-                    </div>
-                    <span className="font-semibold ml-4 shrink-0">
-                      {formatMoney(item.base_price, order.currency)}
-                    </span>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
               
               {/* Soma dos produtos vs customer_paid */}

@@ -96,6 +96,10 @@ export interface OrderRecord {
   payment_type?: string | null;
   installments?: number | null;
   
+  // Buyer country (from raw_payload)
+  buyer_country_iso?: string | null;
+  buyer_country_name?: string | null;
+  
   // Computed
   economic_day: string;
 }
@@ -109,6 +113,9 @@ export interface OrderItemRecord {
   funnel_id: string | null;
   provider_product_id: string | null;
   provider_offer_id: string | null;
+  // Offer currency from offer_mappings (may differ from checkout currency)
+  offer_currency?: string | null;
+  offer_price?: number | null;
 }
 
 export interface LedgerBreakdown {
@@ -789,6 +796,39 @@ export function useOrdersCore(): UseOrdersCoreResult {
         .select('*')
         .eq('order_id', orderId);
 
+      // Fetch offer_mappings for all items to get offer currency
+      const offerCodes = (itemsData || [])
+        .map(item => item.provider_offer_id)
+        .filter((code): code is string => !!code);
+      
+      let offerMappings: Record<string, { moeda: string | null; valor: number | null }> = {};
+      if (offerCodes.length > 0) {
+        const { data: mappingsData } = await supabase
+          .from('offer_mappings')
+          .select('codigo_oferta, moeda, valor')
+          .eq('project_id', orderData.project_id)
+          .in('codigo_oferta', offerCodes);
+        
+        if (mappingsData) {
+          for (const m of mappingsData) {
+            offerMappings[m.codigo_oferta] = { moeda: m.moeda, valor: m.valor };
+          }
+        }
+      }
+
+      // Extract buyer country from raw_payload
+      let buyerCountryIso: string | null = null;
+      let buyerCountryName: string | null = null;
+      try {
+        const rawPayload = orderData.raw_payload as any;
+        if (rawPayload?.data?.buyer?.address) {
+          buyerCountryIso = rawPayload.data.buyer.address.country_iso || null;
+          buyerCountryName = rawPayload.data.buyer.address.country || null;
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+
       // Fetch ledger events
       const { data: ledgerData } = await supabase
         .from('ledger_events')
@@ -853,16 +893,21 @@ export function useOrdersCore(): UseOrdersCoreResult {
         approved_at: orderData.approved_at,
         completed_at: orderData.completed_at,
         created_at: orderData.created_at,
-        products: (itemsData || []).map(item => ({
-          id: item.id,
-          product_name: item.product_name,
-          offer_name: item.offer_name,
-          item_type: item.item_type,
-          base_price: Number(item.base_price) || 0,
-          funnel_id: item.funnel_id,
-          provider_product_id: item.provider_product_id,
-          provider_offer_id: item.provider_offer_id,
-        })),
+        products: (itemsData || []).map(item => {
+          const mapping = item.provider_offer_id ? offerMappings[item.provider_offer_id] : null;
+          return {
+            id: item.id,
+            product_name: item.product_name,
+            offer_name: item.offer_name,
+            item_type: item.item_type,
+            base_price: Number(item.base_price) || 0,
+            funnel_id: item.funnel_id,
+            provider_product_id: item.provider_product_id,
+            provider_offer_id: item.provider_offer_id,
+            offer_currency: mapping?.moeda || null,
+            offer_price: mapping?.valor || null,
+          };
+        }),
         ledger_breakdown: breakdown,
         economic_day: getEconomicDay(orderData.ordered_at),
         // UTM from MATERIALIZED COLUMNS
@@ -875,6 +920,9 @@ export function useOrdersCore(): UseOrdersCoreResult {
         payment_method: orderData.payment_method || null,
         payment_type: orderData.payment_type || null,
         installments: orderData.installments || null,
+        // Buyer country from raw_payload
+        buyer_country_iso: buyerCountryIso,
+        buyer_country_name: buyerCountryName,
       };
 
       return { order, breakdown };

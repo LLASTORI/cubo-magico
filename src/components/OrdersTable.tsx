@@ -41,6 +41,7 @@ import { OrderRecord } from "@/hooks/useOrdersCore";
 import { OrderDetailDialog } from "@/components/OrderDetailDialog";
 import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
 import { formatMoney } from "@/utils/formatMoney";
+import { getCountryFlag } from "@/utils/countryUtils";
 
 interface OrdersTableProps {
   orders: OrderRecord[];
@@ -241,7 +242,30 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-primary">
-                      {formatMoney(order.producer_net, 'BRL')}
+                      <div className="flex items-center gap-1.5">
+                        {order.currency && order.currency !== 'BRL' && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-sm">{getCountryFlag(
+                                  order.currency === 'MXN' ? 'MX' :
+                                  order.currency === 'ARS' ? 'AR' :
+                                  order.currency === 'CLP' ? 'CL' :
+                                  order.currency === 'COP' ? 'CO' :
+                                  order.currency === 'PEN' ? 'PE' :
+                                  order.currency === 'USD' ? 'US' :
+                                  order.currency === 'EUR' ? 'EU' :
+                                  null
+                                )}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Checkout em {order.currency}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        <span>{formatMoney(order.producer_net, 'BRL')}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={getStatusColor(order.status)}>

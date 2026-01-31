@@ -265,6 +265,7 @@ async function writeOrderShadow(
   payload: any,
   totalPriceBrl: number | null,
   ownerNetRevenue: number | null,
+  ownerNetRevenueBrl: number | null, // NEW: BRL converted value for producer
   contactId: string | null
 ): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number }> {
   const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0 };
@@ -315,6 +316,7 @@ async function writeOrderShadow(
     const thisEventGrossBase = orderItems.reduce((sum, item) => sum + (item.base_price || 0), 0);
     const thisEventCustomerPaid = totalPriceBrl || 0;
     const thisEventProducerNet = ownerNetRevenue || 0;
+    const thisEventProducerNetBrl = ownerNetRevenueBrl || 0; // BRL value for cash flow
     
     // Parse dates
     const orderedAt = purchase?.order_date 
@@ -354,6 +356,7 @@ async function writeOrderShadow(
     const financialCustomerPaid = shouldApplyFinancialValues ? thisEventCustomerPaid : 0;
     const financialGrossBase = shouldApplyFinancialValues ? thisEventGrossBase : 0;
     const financialProducerNet = shouldApplyFinancialValues ? thisEventProducerNet : 0;
+    const financialProducerNetBrl = shouldApplyFinancialValues ? thisEventProducerNetBrl : 0; // BRL value
     
     if (!isFinancialEvent) {
       console.log(`[OrdersShadow] Event ${hotmartEvent} is INFORMATIONAL - no financial impact`);
@@ -366,7 +369,7 @@ async function writeOrderShadow(
     // Check if order exists and get current values
     const { data: existingOrder } = await supabase
       .from('orders')
-      .select('id, customer_paid, gross_base, producer_net, approved_at')
+      .select('id, customer_paid, gross_base, producer_net, producer_net_brl, approved_at')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .eq('provider_order_id', providerOrderId)
@@ -394,8 +397,10 @@ async function writeOrderShadow(
         const newCustomerPaid = (existingOrder.customer_paid || 0) + financialCustomerPaid;
         const newGrossBase = (existingOrder.gross_base || 0) + financialGrossBase;
         const newProducerNet = (existingOrder.producer_net || 0) + financialProducerNet;
+        const newProducerNetBrl = (existingOrder.producer_net_brl || 0) + financialProducerNetBrl; // BRL accumulation
         
         console.log(`[OrdersShadow] Financial accumulation: ${existingOrder.customer_paid} + ${financialCustomerPaid} = ${newCustomerPaid}`);
+        console.log(`[OrdersShadow] Producer BRL accumulation: ${existingOrder.producer_net_brl || 0} + ${financialProducerNetBrl} = ${newProducerNetBrl}`);
         
         // NÃO ATUALIZAR STATUS AQUI - será derivado do ledger via trigger
         const { error: updateError } = await supabase
@@ -405,6 +410,7 @@ async function writeOrderShadow(
             customer_paid: newCustomerPaid,
             gross_base: newGrossBase,
             producer_net: newProducerNet,
+            producer_net_brl: newProducerNetBrl, // NEW: BRL value
             approved_at: approvedAt || existingOrder.approved_at,
             updated_at: new Date().toISOString(),
             // PAYMENT METHOD (PROMPT 2) - backfill on financial event if missing
@@ -466,6 +472,7 @@ async function writeOrderShadow(
           customer_paid: financialCustomerPaid,
           gross_base: financialGrossBase || financialCustomerPaid,
           producer_net: financialProducerNet,
+          producer_net_brl: financialProducerNetBrl, // NEW: BRL value
           ordered_at: orderedAt,
           approved_at: approvedAt,
           completed_at: status === 'completed' ? new Date().toISOString() : null,
@@ -1366,6 +1373,10 @@ interface HotmartWebhookPayload {
       value?: number;
       currency_value?: string;
       source?: string;
+      currency_conversion?: {
+        converted_value?: number;
+        currency?: string;
+      };
     }>;
     purchase?: {
       approved_date?: number;
@@ -1725,9 +1736,13 @@ serve(async (req) => {
     // - PRODUCER = Owner's net revenue ("Você recebeu")
     // - CO_PRODUCER = Coproducer commission
     // - AFFILIATE = Affiliate commission
+    // 
+    // PRODUCER_NET_BRL: For international orders, Hotmart provides
+    // currency_conversion.converted_value which is the BRL liquidation value.
     // ============================================
     let platformFee: number | null = null;
     let ownerNetRevenue: number | null = null;
+    let ownerNetRevenueBrl: number | null = null; // NEW: BRL converted value
     let coproducerAmount: number | null = null;
     let affiliateAmount: number | null = null;
     
@@ -1736,12 +1751,17 @@ serve(async (req) => {
         const source = (comm.source || '').toUpperCase();
         const value = comm.value ?? null;
         
+        // Extract currency_conversion.converted_value for PRODUCER (BRL liquidation)
+        const convertedValue = comm.currency_conversion?.converted_value ?? null;
+        
         switch (source) {
           case 'MARKETPLACE':
             platformFee = value;
             break;
           case 'PRODUCER':
             ownerNetRevenue = value;
+            // If currency_conversion exists, use it; otherwise, value is already BRL
+            ownerNetRevenueBrl = convertedValue ?? value;
             break;
           case 'CO_PRODUCER':
             coproducerAmount = value;
@@ -1752,6 +1772,10 @@ serve(async (req) => {
         }
       }
     }
+    
+    console.log(`[Financial Mapping] Producer BRL extraction:`);
+    console.log(`  - producer_net (contract): ${ownerNetRevenue}`);
+    console.log(`  - producer_net_brl (cash): ${ownerNetRevenueBrl}`);
     
     // ============================================
     // AUTO-CALCULATE COPRODUCER COST when:
@@ -2121,6 +2145,7 @@ serve(async (req) => {
         payload,
         totalPriceBrl,
         ownerNetRevenue,
+        ownerNetRevenueBrl, // NEW: Pass BRL converted value
         contactId
       );
       

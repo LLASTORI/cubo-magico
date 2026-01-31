@@ -468,7 +468,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                     </span>
                   </div>
                   <span className="text-xl font-bold text-green-700 dark:text-green-400">
-                    {formatMoney(order.customer_paid, order.currency)}
+                    {formatMoney(order.customer_paid, 'BRL')}
                   </span>
                 </div>
                 <p className="text-xs text-green-600/70 mt-1">

@@ -725,25 +725,34 @@ export function useOrdersCore(): UseOrdersCoreResult {
           }
 
           // ============================================
-          // REGRA CANÔNICA: Separar contagem (todos) de valores (ledger_status='complete')
+          // REGRA CANÔNICA CORRIGIDA:
+          // - Receita Bruta (customer_paid) = TODOS os pedidos (sem filtro ledger_status)
+          // - Receita Líquida e Custos = apenas ledger_status = 'complete'
+          // - Contagem e Clientes Únicos = todos os pedidos
           // ============================================
           const totalOrders = allOrdersData.length;
           const uniqueEmails = new Set(allOrdersData.map(row => row.buyer_email).filter(Boolean));
 
-          // Filtrar apenas pedidos com ledger completo para métricas financeiras
+          // ============================================
+          // RECEITA BRUTA = SUM(customer_paid) de TODOS os pedidos
+          // Justificativa: customer_paid é dinheiro real pago pelo cliente
+          // NÃO depende de decomposição do ledger
+          // ============================================
+          const customerPaid = allOrdersData.reduce((sum, row) => sum + (Number(row.customer_paid) || 0), 0);
+
+          // Filtrar apenas pedidos com ledger completo para métricas de CUSTO/LÍQUIDO
           const completeLedgerOrders = allOrdersData.filter(row => row.ledger_status === 'complete');
 
           // ============================================
-          // SOMAS BRL v2.0 - SOMENTE pedidos com ledger_status = 'complete'
+          // RECEITA LÍQUIDA E CUSTOS - SOMENTE ledger_status = 'complete'
           // ============================================
-          const customerPaid = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.customer_paid) || 0), 0);
           const producerNetBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.producer_net_brl) || 0), 0);
           const platformFeeBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.platform_fee_brl) || 0), 0);
           const coproducerBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.coproducer_brl) || 0), 0);
           const affiliateBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.affiliate_brl) || 0), 0);
           const taxBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.tax_brl) || 0), 0);
 
-          console.log('[useOrdersCore] TOTALS BRL v2.0 (100% SQL filtered):', {
+          console.log('[useOrdersCore] TOTALS BRL v2.0 (Receita Bruta = TODOS, Custos = complete):', {
             totalOrders,
             ordersWithCompleteLedger: completeLedgerOrders.length,
             customerPaid,

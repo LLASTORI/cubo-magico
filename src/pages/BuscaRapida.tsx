@@ -51,8 +51,8 @@ import { useTenantNavigation } from "@/navigation";
  * ❌ hotmart_sales (legacy)
  * ❌ crm_transactions
  * 
- * CARD DEFINITIONS (Ledger BRL v2.0):
- * - Receita Bruta: SUM(orders.customer_paid) WHERE ledger_status='complete'
+ * CARD DEFINITIONS (Ledger BRL v2.0 - CORRIGIDO):
+ * - Receita Bruta: SUM(orders.customer_paid) [TODOS os pedidos, sem filtro ledger_status]
  * - Receita Líquida do Produtor: SUM(orders.producer_net_brl) WHERE ledger_status='complete'
  * - Taxas Plataforma: SUM(orders.platform_fee_brl) WHERE ledger_status='complete'
  * - Coprodução: SUM(orders.coproducer_brl) WHERE ledger_status='complete'

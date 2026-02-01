@@ -83,3 +83,7 @@ max_duration = 300
 
 [functions.recover-item-type]
 verify_jwt = false
+
+[functions.fix-legacy-ledger-brl]
+verify_jwt = false
+max_duration = 300

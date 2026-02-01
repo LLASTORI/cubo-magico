@@ -168,7 +168,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                   </TableHead>
                   <TableHead className="text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      Produtor Recebe
+                      Receita Bruta
                     </div>
                   </TableHead>
                   <TableHead className="text-muted-foreground">Status</TableHead>
@@ -264,7 +264,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                             </Tooltip>
                           </TooltipProvider>
                         )}
-                        <span>{formatMoney(order.producer_net, 'BRL')}</span>
+                        <span>{formatMoney(order.customer_paid, 'BRL')}</span>
                       </div>
                     </TableCell>
                     <TableCell>

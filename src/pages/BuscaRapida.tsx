@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Filter, Settings, FolderOpen, CheckCircle, Database, SearchX } from "lucide-react";
+import { RefreshCw, Filter, Settings, FolderOpen, CheckCircle, Database, SearchX, DollarSign, TrendingUp, ShoppingCart, Users } from "lucide-react";
 import { OrdersTable } from "@/components/OrdersTable";
 import SalesTablePagination from "@/components/SalesTablePagination";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
@@ -11,7 +11,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { useOrdersCore, OrdersCoreFilters } from "@/hooks/useOrdersCore";
 import { Badge } from "@/components/ui/badge";
 import { useTenantNavigation } from "@/navigation";
-// SalesHistoryCSVImport moved to SalesHistory page - frozen during validation
+import MetricCard from "@/components/MetricCard";
+import { formatMoney } from "@/utils/formatMoney";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -262,6 +263,30 @@ const BuscaRapida = () => {
               </div>
             ) : orders.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
+                {/* Global Metric Cards - População Única v3.0 */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard
+                    title="Faturamento Bruto"
+                    value={formatMoney(totals.customerPaid, "BRL")}
+                    icon={DollarSign}
+                  />
+                  <MetricCard
+                    title="Faturamento Líquido"
+                    value={formatMoney(totals.producerNet, "BRL")}
+                    icon={TrendingUp}
+                  />
+                  <MetricCard
+                    title="Número de Pedidos"
+                    value={totals.totalOrders.toLocaleString('pt-BR')}
+                    icon={ShoppingCart}
+                  />
+                  <MetricCard
+                    title="Clientes Únicos"
+                    value={totals.uniqueCustomers.toLocaleString('pt-BR')}
+                    icon={Users}
+                  />
+                </div>
+
                 {/* Data Source Info - Ledger BRL v2.0 */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />

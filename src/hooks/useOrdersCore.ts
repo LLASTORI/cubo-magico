@@ -694,7 +694,8 @@ export function useOrdersCore(): UseOrdersCoreResult {
                 platform_fee_brl,
                 coproducer_brl,
                 affiliate_brl,
-                tax_brl
+                tax_brl,
+                raw_payload
               `)
               .range(totalsPage * totalsPageSize, (totalsPage + 1) * totalsPageSize - 1);
 
@@ -725,10 +726,10 @@ export function useOrdersCore(): UseOrdersCoreResult {
           }
 
           // ============================================
-          // REGRA CANÔNICA v3.0 - POPULAÇÃO ÚNICA:
-          // TODAS as métricas globais usam allOrdersData.
-          // NÃO há subpopulações por ledger_status.
-          // Campos nulos são tratados como 0.
+          // REGRA CANÔNICA v3.1 - FATURAMENTO LÍQUIDO EXCLUSIVO PRODUCER:
+          // - customerPaid, totalOrders, uniqueCustomers = TODOS os pedidos
+          // - producerNetBrl = APENAS pedidos onde projeto é PRODUCER
+          //   (identificado via commissions[source=PRODUCER] no raw_payload)
           // ============================================
           const totalOrders = allOrdersData.length;
           const uniqueEmails = new Set(allOrdersData.map(row => row.buyer_email).filter(Boolean));
@@ -736,17 +737,38 @@ export function useOrdersCore(): UseOrdersCoreResult {
           // RECEITA BRUTA = SUM(customer_paid) de TODOS os pedidos
           const customerPaid = allOrdersData.reduce((sum, row) => sum + (Number(row.customer_paid) || 0), 0);
 
-          // RECEITA LÍQUIDA E CUSTOS = TODOS os pedidos (campos nulos = 0)
-          const producerNetBrl = allOrdersData.reduce((sum, row) => sum + (Number(row.producer_net_brl) || 0), 0);
+          // ============================================
+          // FATURAMENTO LÍQUIDO - APENAS PAPEL PRODUCER
+          // Critério: EXISTS commission.source = 'PRODUCER' no raw_payload
+          // Pedidos onde projeto é COPRODUCER são EXCLUÍDOS deste cálculo
+          // ============================================
+          const isProjectProducer = (row: any): boolean => {
+            try {
+              const commissions = row.raw_payload?.data?.commissions;
+              if (!Array.isArray(commissions)) return false;
+              return commissions.some((c: any) => c.source === 'PRODUCER');
+            } catch {
+              return false;
+            }
+          };
+
+          // Subpopulação: pedidos onde projeto é PRODUCER
+          const producerOrders = allOrdersData.filter(isProjectProducer);
+          const producerNetBrl = producerOrders.reduce((sum, row) => sum + (Number(row.producer_net_brl) || 0), 0);
+          
+          // Outros custos continuam sobre TODA a população
           const platformFeeBrl = allOrdersData.reduce((sum, row) => sum + (Number(row.platform_fee_brl) || 0), 0);
           const coproducerBrl = allOrdersData.reduce((sum, row) => sum + (Number(row.coproducer_brl) || 0), 0);
           const affiliateBrl = allOrdersData.reduce((sum, row) => sum + (Number(row.affiliate_brl) || 0), 0);
 
-          console.log('[useOrdersCore] TOTALS v3.0 (POPULAÇÃO ÚNICA - allOrdersData):', {
+          console.log('[useOrdersCore] TOTALS v3.1 (PRODUCER-ONLY NET):', {
             totalOrders,
+            producerOrdersCount: producerOrders.length,
+            coproducerOrdersCount: totalOrders - producerOrders.length,
             uniqueCustomers: uniqueEmails.size,
             customerPaid,
             producerNetBrl,
+            marginPct: customerPaid > 0 ? ((producerNetBrl / customerPaid) * 100).toFixed(2) + '%' : 'N/A',
             platformFeeBrl,
             coproducerBrl,
             affiliateBrl,
@@ -755,11 +777,11 @@ export function useOrdersCore(): UseOrdersCoreResult {
           setTotals({
             totalOrders,
             customerPaid,
-            producerNet: producerNetBrl,  // MIGRADO: producer_net → producer_net_brl
-            platformFee: platformFeeBrl,   // MIGRADO: ledger_events → platform_fee_brl
-            coproducerCost: coproducerBrl, // MIGRADO: ledger_events → coproducer_brl
-            affiliateCost: affiliateBrl,   // MIGRADO: ledger_events → affiliate_brl
-            refunds: 0,                    // CORREÇÃO S1: Reembolsos só disponíveis via CSV contábil (Ledger v2.1). Não usar tax_brl.
+            producerNet: producerNetBrl,  // v3.1: APENAS pedidos PRODUCER
+            platformFee: platformFeeBrl,
+            coproducerCost: coproducerBrl,
+            affiliateCost: affiliateBrl,
+            refunds: 0,
             uniqueCustomers: uniqueEmails.size,
             loading: false,
           });

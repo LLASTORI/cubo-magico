@@ -223,9 +223,10 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
   // ═══════════════════════════════════════════════════════════════════════════════
 
   // Verificar se o ledger está completo para exibir decomposição
+  // CORREÇÃO S7: Incluir accounting_complete (Ledger v2.1 - CSV contábil)
   const isLedgerComplete = useMemo(() => {
     if (!order) return false;
-    return order.ledger_status === 'complete';
+    return order.ledger_status === 'complete' || order.ledger_status === 'accounting_complete';
   }, [order]);
 
   // Verificar se há algum campo BRL materializado para exibir

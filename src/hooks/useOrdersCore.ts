@@ -782,7 +782,7 @@ export function useOrdersCore(): UseOrdersCoreResult {
             platformFee: platformFeeBrl,   // MIGRADO: ledger_events → platform_fee_brl
             coproducerCost: coproducerBrl, // MIGRADO: ledger_events → coproducer_brl
             affiliateCost: affiliateBrl,   // MIGRADO: ledger_events → affiliate_brl
-            refunds: taxBrl,               // MIGRADO: ledger_events → tax_brl (reembolsos + impostos)
+            refunds: 0,                    // CORREÇÃO S1: Reembolsos só disponíveis via CSV contábil (Ledger v2.1). Não usar tax_brl.
             uniqueCustomers: uniqueEmails.size,
             loading: false,
           });

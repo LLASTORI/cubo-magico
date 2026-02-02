@@ -725,9 +725,10 @@ export function useOrdersCore(): UseOrdersCoreResult {
           }
 
           // ============================================
-          // REGRA CANÔNICA CORRIGIDA:
+          // REGRA CANÔNICA v2.1:
           // - Receita Bruta (customer_paid) = TODOS os pedidos (sem filtro ledger_status)
-          // - Receita Líquida e Custos = apenas ledger_status = 'complete'
+          // - Receita Líquida e Custos = ledger_status IN ('complete', 'accounting_complete')
+          // - Prioridade: accounting_complete > complete > partial
           // - Contagem e Clientes Únicos = todos os pedidos
           // ============================================
           const totalOrders = allOrdersData.length;
@@ -740,11 +741,16 @@ export function useOrdersCore(): UseOrdersCoreResult {
           // ============================================
           const customerPaid = allOrdersData.reduce((sum, row) => sum + (Number(row.customer_paid) || 0), 0);
 
-          // Filtrar apenas pedidos com ledger completo para métricas de CUSTO/LÍQUIDO
-          const completeLedgerOrders = allOrdersData.filter(row => row.ledger_status === 'complete');
+          // ============================================
+          // LEDGER v2.1: Incluir accounting_complete (CSV contábil)
+          // Prioridade: accounting_complete > complete > partial
+          // ============================================
+          const completeLedgerOrders = allOrdersData.filter(row => 
+            row.ledger_status === 'complete' || row.ledger_status === 'accounting_complete'
+          );
 
           // ============================================
-          // RECEITA LÍQUIDA E CUSTOS - SOMENTE ledger_status = 'complete'
+          // RECEITA LÍQUIDA E CUSTOS - ledger_status IN ('complete', 'accounting_complete')
           // ============================================
           const producerNetBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.producer_net_brl) || 0), 0);
           const platformFeeBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.platform_fee_brl) || 0), 0);
@@ -752,9 +758,15 @@ export function useOrdersCore(): UseOrdersCoreResult {
           const affiliateBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.affiliate_brl) || 0), 0);
           const taxBrl = completeLedgerOrders.reduce((sum, row) => sum + (Number(row.tax_brl) || 0), 0);
 
-          console.log('[useOrdersCore] TOTALS BRL v2.0 (Receita Bruta = TODOS, Custos = complete):', {
+          // Contar por status para log
+          const accountingCompleteCount = allOrdersData.filter(r => r.ledger_status === 'accounting_complete').length;
+          const completeCount = allOrdersData.filter(r => r.ledger_status === 'complete').length;
+
+          console.log('[useOrdersCore] TOTALS BRL v2.1 (Receita Bruta = TODOS, Custos = complete + accounting_complete):', {
             totalOrders,
             ordersWithCompleteLedger: completeLedgerOrders.length,
+            accountingCompleteCount,
+            completeCount,
             customerPaid,
             producerNetBrl,
             platformFeeBrl,

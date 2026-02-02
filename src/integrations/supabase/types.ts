@@ -4048,6 +4048,7 @@ export type Database = {
           amount: number
           amount_accounting: number | null
           amount_brl: number | null
+          confidence_level: string | null
           conversion_rate: number | null
           created_at: string
           currency: string
@@ -4060,6 +4061,8 @@ export type Database = {
           provider: string
           provider_event_id: string | null
           raw_payload: Json | null
+          reference_period: string | null
+          source_origin: string | null
           source_type: string | null
         }
         Insert: {
@@ -4068,6 +4071,7 @@ export type Database = {
           amount?: number
           amount_accounting?: number | null
           amount_brl?: number | null
+          confidence_level?: string | null
           conversion_rate?: number | null
           created_at?: string
           currency?: string
@@ -4080,6 +4084,8 @@ export type Database = {
           provider: string
           provider_event_id?: string | null
           raw_payload?: Json | null
+          reference_period?: string | null
+          source_origin?: string | null
           source_type?: string | null
         }
         Update: {
@@ -4088,6 +4094,7 @@ export type Database = {
           amount?: number
           amount_accounting?: number | null
           amount_brl?: number | null
+          confidence_level?: string | null
           conversion_rate?: number | null
           created_at?: string
           currency?: string
@@ -4100,6 +4107,8 @@ export type Database = {
           provider?: string
           provider_event_id?: string | null
           raw_payload?: Json | null
+          reference_period?: string | null
+          source_origin?: string | null
           source_type?: string | null
         }
         Relationships: [

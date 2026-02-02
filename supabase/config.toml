@@ -87,3 +87,7 @@ verify_jwt = false
 [functions.fix-legacy-ledger-brl]
 verify_jwt = false
 max_duration = 300
+
+[functions.csv-ledger-v21-import]
+verify_jwt = false
+max_duration = 300

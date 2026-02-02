@@ -475,7 +475,7 @@ export const HotmartLedgerCSVImport = () => {
     cancelImportRef.current = false;
     setImporting(true);
     setProgress(0);
-    setProgressMessage('Preparando importação financeira...');
+    setProgressMessage('Preparando importação financeira v2.1...');
     setImportResult(null);
 
     const result: ImportResult = {
@@ -497,8 +497,85 @@ export const HotmartLedgerCSVImport = () => {
     };
 
     try {
+      // ============================================
+      // LEDGER v2.1 - Chamar edge function
+      // ============================================
+      setProgressMessage('Criando eventos ledger via CSV v2.1...');
+
+      // Detectar período de referência do CSV
+      let referenceDate = new Date().toISOString().split('T')[0];
+      const saleDates = parsedData
+        .map(r => r.sale_date)
+        .filter(Boolean)
+        .map(d => new Date(d!));
+      
+      if (saleDates.length > 0) {
+        const maxDate = new Date(Math.max(...saleDates.map(d => d.getTime())));
+        referenceDate = maxDate.toISOString().split('T')[0];
+      }
+
+      // Mapear dados para o formato da edge function
+      const csvRows = parsedData.map(row => ({
+        transaction_id: row.transaction_id,
+        gross_value: row.gross_value,
+        net_value: row.net_value,
+        net_value_brl: row.net_value_brl,
+        platform_fee: row.platform_fee,
+        affiliate_commission: row.affiliate_commission,
+        coproducer_commission: row.coproducer_commission,
+        taxes: row.taxes,
+        original_currency: row.original_currency,
+        exchange_rate: row.exchange_rate,
+        sale_date: row.sale_date,
+        status: row.status,
+        buyer_email: row.buyer_email,
+        product_name: row.product_name,
+      }));
+
+      setProgress(30);
+      setProgressMessage('Processando via csv-ledger-v21-import...');
+
+      // Chamar edge function v2.1
+      const { data: edgeResult, error: edgeError } = await supabase.functions.invoke('csv-ledger-v21-import', {
+        body: {
+          project_id: projectId,
+          rows: csvRows,
+          reference_period: referenceDate,
+          file_name: file?.name,
+        },
+      });
+
+      if (edgeError) {
+        throw new Error(`Erro na edge function: ${edgeError.message}`);
+      }
+
+      if (!edgeResult?.success) {
+        throw new Error(edgeResult?.error || 'Erro desconhecido na importação');
+      }
+
+      setProgress(80);
+
+      // Mapear resultado da edge function
+      const edgeData = edgeResult.result;
+      result.imported = edgeData.orders_processed || 0;
+      result.new_transactions = edgeData.ledger_events_created || 0;
+      result.reconciled = edgeData.orders_updated_to_accounting_complete || 0;
+      result.totals.net = edgeData.totals?.producer_net_brl || 0;
+      result.totals.platform_fees = edgeData.totals?.platform_fee_brl || 0;
+      result.totals.affiliate_commissions = edgeData.totals?.affiliate_brl || 0;
+      result.totals.coproducer_commissions = edgeData.totals?.coproducer_brl || 0;
+      result.totals.taxes = edgeData.totals?.tax_brl || 0;
+
+      if (edgeData.errors && edgeData.errors.length > 0) {
+        result.errors = edgeData.errors;
+      }
+
+      // ============================================
+      // LEGACY: Manter import para ledger_official (reconciliação)
+      // ============================================
+      setProgressMessage('Atualizando ledger_official para reconciliação...');
+
       // Create import batch
-      setProgressMessage('Criando lote de importação...');
       const batchId = crypto.randomUUID();
       
       const { error: batchError } = await supabase
@@ -515,11 +592,10 @@ export const HotmartLedgerCSVImport = () => {
         });
 
       if (batchError) {
-        throw new Error(`Erro ao criar lote: ${batchError.message}`);
+        console.warn('Batch creation failed (non-critical):', batchError.message);
       }
 
       // Fetch existing finance_ledger data for reconciliation
-      setProgressMessage('Buscando dados do webhook para reconciliação...');
       const transactionIds = parsedData.map(r => r.transaction_id);
       
       const { data: existingLedger } = await supabase
@@ -541,169 +617,64 @@ export const HotmartLedgerCSVImport = () => {
         }
       }
 
-      // Process in batches
-      const batchSize = 100;
-      const batches: ParsedLedgerRow[][] = [];
-      
-      for (let i = 0; i < parsedData.length; i += batchSize) {
-        batches.push(parsedData.slice(i, i + batchSize));
+      setProgress(90);
+
+      // Check for divergences
+      for (const row of parsedData) {
+        const webhookNet = webhookNetMap.get(row.transaction_id);
+        
+        if (webhookNet !== undefined) {
+          const diff = Math.abs(row.net_value_brl - webhookNet);
+          const diffPct = webhookNet !== 0 ? (diff / Math.abs(webhookNet)) * 100 : 0;
+          
+          if (diff >= 0.01 && diffPct >= 0.1) {
+            result.divergent++;
+            result.divergences.push({
+              transaction_id: row.transaction_id,
+              csv_net: row.net_value_brl,
+              webhook_net: webhookNet,
+              difference: row.net_value_brl - webhookNet,
+              difference_pct: diffPct,
+              status: 'divergent',
+              divergence_type: 'net_value',
+            });
+          }
+        }
       }
 
-      let periodStart: Date | null = null;
-      let periodEnd: Date | null = null;
-
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        if (cancelImportRef.current) {
-          result.errors.push('Importação cancelada pelo usuário');
-          break;
-        }
-
-        const batch = batches[batchIndex];
-        const batchProgress = ((batchIndex + 1) / batches.length) * 100;
-        
-        setProgress(batchProgress);
-        setProgressMessage(`Processando lote ${batchIndex + 1} de ${batches.length}...`);
-
-        const ledgerRows = batch.map((row, rowIndex) => {
-          // Calculate totals
-          result.totals.gross += row.gross_value;
-          result.totals.net += row.net_value_brl;
-          result.totals.platform_fees += row.platform_fee || 0;
-          result.totals.affiliate_commissions += row.affiliate_commission || 0;
-          result.totals.coproducer_commissions += row.coproducer_commission || 0;
-          result.totals.taxes += row.taxes || 0;
-
-          // Track date range
-          if (row.sale_date) {
-            const saleDate = new Date(row.sale_date);
-            if (!periodStart || saleDate < periodStart) periodStart = saleDate;
-            if (!periodEnd || saleDate > periodEnd) periodEnd = saleDate;
-          }
-
-          // Reconciliation check
-          const webhookNet = webhookNetMap.get(row.transaction_id);
-          let isReconciled = false;
-          let hasDivergence = false;
-          let divergenceType: string | undefined;
-          let divergenceAmount: number | undefined;
-
-          if (webhookNet !== undefined) {
-            const diff = Math.abs(row.net_value_brl - webhookNet);
-            const diffPct = webhookNet !== 0 ? (diff / Math.abs(webhookNet)) * 100 : 0;
-            
-            if (diff < 0.01 || diffPct < 0.1) {
-              isReconciled = true;
-              result.reconciled++;
-            } else {
-              hasDivergence = true;
-              divergenceType = 'net_value';
-              divergenceAmount = diff;
-              result.divergent++;
-              result.divergences.push({
-                transaction_id: row.transaction_id,
-                csv_net: row.net_value_brl,
-                webhook_net: webhookNet,
-                difference: row.net_value_brl - webhookNet,
-                difference_pct: diffPct,
-                status: 'divergent',
-                divergence_type: 'net_value',
-              });
-            }
-          } else {
-            result.new_transactions++;
-          }
-
-          return {
-            project_id: projectId,
-            transaction_id: row.transaction_id,
-            gross_value: row.gross_value,
-            product_price: row.product_price,
-            offer_price: row.offer_price,
-            platform_fee: row.platform_fee || 0,
-            affiliate_commission: row.affiliate_commission || 0,
-            coproducer_commission: row.coproducer_commission || 0,
-            taxes: row.taxes || 0,
-            net_value: row.net_value,
-            original_currency: row.original_currency || 'BRL',
-            exchange_rate: row.exchange_rate || 1.0,
-            net_value_brl: row.net_value_brl,
-            payout_id: row.payout_id,
-            payout_date: row.payout_date ? new Date(row.payout_date).toISOString().split('T')[0] : null,
-            sale_date: row.sale_date,
-            confirmation_date: row.confirmation_date,
-            status: row.status,
-            payment_method: row.payment_method,
-            payment_type: row.payment_type,
-            installments: row.installments,
-            product_code: row.product_code,
-            product_name: row.product_name,
-            offer_code: row.offer_code,
-            offer_name: row.offer_name,
-            buyer_email: row.buyer_email,
-            buyer_name: row.buyer_name,
-            affiliate_code: row.affiliate_code,
-            affiliate_name: row.affiliate_name,
-            coproducer_name: row.coproducer_name,
-            is_reconciled: isReconciled,
-            reconciled_at: isReconciled ? new Date().toISOString() : null,
-            reconciled_by: isReconciled ? userId : null,
-            has_divergence: hasDivergence,
-            divergence_type: divergenceType,
-            divergence_webhook_value: webhookNet,
-            divergence_csv_value: row.net_value_brl,
-            divergence_amount: divergenceAmount,
-            import_batch_id: batchId,
-            imported_by: userId,
-            source_file_name: file?.name,
-            source_row_number: batchIndex * batchSize + rowIndex + 1,
-            raw_csv_row: row.raw_row,
-          };
-        });
-
-        // Upsert to ledger_official
-        const { error: upsertError } = await supabase
-          .from('ledger_official')
-          .upsert(ledgerRows, {
-            onConflict: 'project_id,transaction_id',
-            ignoreDuplicates: false,
-          });
-
-        if (upsertError) {
-          result.errors.push(`Erro no lote ${batchIndex + 1}: ${upsertError.message}`);
-        } else {
-          result.imported += ledgerRows.length;
-        }
-
-        // Small delay between batches
-        if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
+      // Calculate totals from parsed data
+      result.totals.gross = parsedData.reduce((s, r) => s + r.gross_value, 0);
+      if (result.totals.net === 0) {
+        result.totals.net = parsedData.reduce((s, r) => s + r.net_value_brl, 0);
+      }
+      if (result.totals.platform_fees === 0) {
+        result.totals.platform_fees = parsedData.reduce((s, r) => s + (r.platform_fee || 0), 0);
       }
 
       // Update batch with final stats
-      await supabase
-        .from('ledger_import_batches')
-        .update({
-          imported_rows: result.imported,
-          skipped_rows: result.skipped,
-          error_rows: result.errors.length,
-          reconciled_count: result.reconciled,
-          divergence_count: result.divergent,
-          new_transactions_count: result.new_transactions,
-          total_gross: result.totals.gross,
-          total_net: result.totals.net,
-          total_platform_fees: result.totals.platform_fees,
-          total_affiliate_commissions: result.totals.affiliate_commissions,
-          total_coproducer_commissions: result.totals.coproducer_commissions,
-          total_taxes: result.totals.taxes,
-          period_start: periodStart?.toISOString().split('T')[0],
-          period_end: periodEnd?.toISOString().split('T')[0],
-          status: 'completed',
-        })
-        .eq('id', batchId);
+      if (!batchError) {
+        await supabase
+          .from('ledger_import_batches')
+          .update({
+            imported_rows: result.imported,
+            skipped_rows: result.skipped,
+            error_rows: result.errors.length,
+            reconciled_count: result.reconciled,
+            divergence_count: result.divergent,
+            new_transactions_count: result.new_transactions,
+            total_gross: result.totals.gross,
+            total_net: result.totals.net,
+            total_platform_fees: result.totals.platform_fees,
+            total_affiliate_commissions: result.totals.affiliate_commissions,
+            total_coproducer_commissions: result.totals.coproducer_commissions,
+            total_taxes: result.totals.taxes,
+            status: 'completed',
+          })
+          .eq('id', batchId);
+      }
 
       setProgress(100);
-      setProgressMessage('Importação concluída!');
+      setProgressMessage('Importação v2.1 concluída!');
       setImportResult(result);
       setActiveTab('result');
 
@@ -711,22 +682,21 @@ export const HotmartLedgerCSVImport = () => {
       await supabase.from('user_activity_logs').insert({
         user_id: userId,
         project_id: projectId,
-        action: 'ledger_csv_import',
-        entity_type: 'ledger_official',
-        entity_name: file?.name || 'Ledger CSV Import',
+        action: 'ledger_csv_v21_import',
+        entity_type: 'ledger_events',
+        entity_name: file?.name || 'Ledger CSV v2.1 Import',
         details: {
-          batch_id: batchId,
-          imported: result.imported,
-          reconciled: result.reconciled,
-          divergent: result.divergent,
-          new_transactions: result.new_transactions,
+          orders_processed: result.imported,
+          ledger_events_created: result.new_transactions,
+          orders_accounting_complete: result.reconciled,
+          divergences: result.divergent,
           totals: result.totals,
         },
       });
 
       toast({
-        title: 'Importação concluída!',
-        description: `${result.imported} transações importadas. ${result.reconciled} reconciliadas, ${result.divergent} com divergências.`,
+        title: 'Importação v2.1 concluída!',
+        description: `${result.imported} pedidos processados. ${result.new_transactions} eventos ledger criados. ${result.reconciled} marcados como accounting_complete.`,
         variant: result.errors.length > 0 ? 'destructive' : 'default',
       });
 

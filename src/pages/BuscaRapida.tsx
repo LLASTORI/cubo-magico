@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, RefreshCw, Filter, Settings, FolderOpen, CheckCircle, Percent, Database, SearchX } from "lucide-react";
-import MetricCard from "@/components/MetricCard";
+import { RefreshCw, Filter, Settings, FolderOpen, CheckCircle, Database, SearchX } from "lucide-react";
 import { OrdersTable } from "@/components/OrdersTable";
 import SalesTablePagination from "@/components/SalesTablePagination";
 import SalesFilters, { FilterParams } from "@/components/SalesFilters";
@@ -180,25 +179,6 @@ const BuscaRapida = () => {
     }
   };
 
-  // Format metrics from totals
-  const globalMetrics = useMemo(() => {
-    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-
-    return {
-      customerPaid: formatCurrency(totals.customerPaid),
-      producerNet: formatCurrency(totals.producerNet),
-      platformFee: formatCurrency(totals.platformFee),
-      coproducerCost: formatCurrency(totals.coproducerCost),
-      affiliateCost: formatCurrency(totals.affiliateCost),
-      refunds: formatCurrency(totals.refunds),
-      totalOrders: totals.totalOrders,
-      uniqueCustomers: totals.uniqueCustomers,
-      loading: totals.loading,
-    };
-  }, [totals]);
 
   // Extract unique products from orders
   const availableProducts = useMemo(() => {
@@ -293,64 +273,6 @@ const BuscaRapida = () => {
                   </span>
                 </div>
 
-                {/* Primary Metrics - Revenue */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <MetricCard
-                    title="Receita Bruta"
-                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.customerPaid}
-                    icon={DollarSign}
-                  />
-                  <MetricCard
-                    title="Receita Líquida do Produtor"
-                    value={globalMetrics.loading ? "Calculando..." : globalMetrics.producerNet}
-                    icon={TrendingUp}
-                  />
-                  <MetricCard
-                    title="Pedidos"
-                    value={globalMetrics.loading ? "..." : globalMetrics.totalOrders}
-                    icon={ShoppingCart}
-                  />
-                  <MetricCard
-                    title="Clientes Únicos"
-                    value={globalMetrics.loading ? "..." : globalMetrics.uniqueCustomers}
-                    icon={Users}
-                  />
-                </div>
-
-                {/* Secondary Metrics - Informativos (Ledger v2.1)
-                    ═══════════════════════════════════════════════════════════════════════════════
-                    CORREÇÃO SEMÂNTICA DEFINITIVA:
-                    ✓ Coprodução e Afiliado NÃO são custos adicionais
-                    ✓ producer_net_brl JÁ É o valor líquido final (já descontado)
-                    ✓ Estes valores são apenas INFORMATIVOS de distribuição da venda
-                    ✓ NUNCA subtrair novamente de producer_net_brl
-                    ═══════════════════════════════════════════════════════════════════════════════ */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <MetricCard
-                    title="Taxas Plataforma"
-                    value={globalMetrics.loading ? "..." : globalMetrics.platformFee}
-                    icon={Percent}
-                    tooltip="Taxas retidas pela plataforma (já descontadas da receita líquida)."
-                  />
-                  <MetricCard
-                    title="Distribuído p/ Coprodução"
-                    value={globalMetrics.loading ? "..." : globalMetrics.coproducerCost}
-                    icon={Users}
-                    tooltip="Valor distribuído para coprodutores. Informativo - já descontado em producer_net_brl."
-                  />
-                  <MetricCard
-                    title="Distribuído p/ Afiliados"
-                    value={globalMetrics.loading ? "..." : globalMetrics.affiliateCost}
-                    icon={Users}
-                    tooltip="Valor distribuído para afiliados. Informativo - já descontado em producer_net_brl."
-                  />
-                  <MetricCard
-                    title="Reembolsos"
-                    value={globalMetrics.loading ? "..." : "R$ 0,00"}
-                    icon={Percent}
-                    tooltip="Reembolsos são contabilizados apenas quando disponíveis via CSV contábil (Ledger v2.1)."
-                  />
-                </div>
 
                 {/* Orders Table */}
                 {orders.length > 0 && (

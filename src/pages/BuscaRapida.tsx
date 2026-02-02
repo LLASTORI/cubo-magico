@@ -263,16 +263,16 @@ const BuscaRapida = () => {
               </div>
             ) : orders.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
-                {/* Global Metric Cards - População Única v3.0 */}
+                {/* Global Metric Cards - Domínio Checkout/Funil */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <MetricCard
-                    title="Faturamento Bruto"
+                    title="Receita Bruta (Checkout)"
                     value={formatMoney(totals.customerPaid, "BRL")}
                     icon={DollarSign}
                   />
                   <MetricCard
-                    title="Faturamento Líquido"
-                    value={formatMoney(totals.producerNet, "BRL")}
+                    title="Receita Pós-Plataforma"
+                    value={formatMoney(totals.customerPaid - totals.platformFee, "BRL")}
                     icon={TrendingUp}
                   />
                   <MetricCard
@@ -287,14 +287,13 @@ const BuscaRapida = () => {
                   />
                 </div>
 
-                {/* Data Source Info - Ledger BRL v2.0 */}
+                {/* Data Source Info - Domínio Checkout/Funil */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                   <span>
-                    Fonte canônica: <strong>Ledger BRL v2.0</strong> • 
-                    Receita Bruta = <strong>customer_paid</strong> • 
-                    Receita Líquida = <strong>producer_net_brl</strong> •
-                    <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> pedidos no total
+                    Dados de checkout (funil) conforme status selecionados • 
+                    <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> pedidos •
+                    Não inclui divisão entre produtores, coprodutores ou afiliados
                   </span>
                 </div>
 

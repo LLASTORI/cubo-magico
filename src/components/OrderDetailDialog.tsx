@@ -463,46 +463,70 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </p>
               </div>
 
-              {/* Decomposição das deduções (APENAS se ledger_status = 'complete') */}
+              {/* ═══════════════════════════════════════════════════════════════════════════════
+                  CORREÇÃO SEMÂNTICA v2.1:
+                  ✓ Taxa da Plataforma = dedução real (sinal negativo)
+                  ✓ Coprodução e Afiliado = DISTRIBUIÇÃO, não dedução
+                  ✓ producer_net_brl JÁ É líquido (coprod/affil já descontados)
+                  ✓ Nunca mostrar coprod/affil como custos que reduzem receita
+                  ═══════════════════════════════════════════════════════════════════════════════ */}
               {isLedgerComplete && hasBrlDecomposition && (
-                <div className="space-y-2 mb-4">
-                  {/* Taxa da Plataforma */}
-                  {order.platform_fee_brl != null && order.platform_fee_brl > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-sm">
-                      <span className="text-red-600 dark:text-red-400">Taxa da Plataforma</span>
-                      <span className="font-medium text-red-600 dark:text-red-400">
-                        - {formatMoney(order.platform_fee_brl, 'BRL')}
-                      </span>
-                    </div>
-                  )}
+                <div className="space-y-4 mb-4">
+                  {/* SEÇÃO 1: Deduções Reais (Taxa Plataforma + Impostos) */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deduções</p>
+                    
+                    {/* Taxa da Plataforma - DEDUÇÃO REAL */}
+                    {order.platform_fee_brl != null && order.platform_fee_brl > 0 && (
+                      <div className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-sm">
+                        <span className="text-red-600 dark:text-red-400">Taxa da Plataforma</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          - {formatMoney(order.platform_fee_brl, 'BRL')}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Impostos - DEDUÇÃO REAL */}
+                    {order.tax_brl != null && order.tax_brl > 0 && (
+                      <div className="flex items-center justify-between p-3 bg-slate-500/5 border border-slate-500/10 rounded-lg text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Impostos</span>
+                        <span className="font-medium text-slate-600 dark:text-slate-400">
+                          - {formatMoney(order.tax_brl, 'BRL')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   
-                  {/* Afiliado */}
-                  {order.affiliate_brl != null && order.affiliate_brl > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg text-sm">
-                      <span className="text-orange-600 dark:text-orange-400">Comissão Afiliado</span>
-                      <span className="font-medium text-orange-600 dark:text-orange-400">
-                        - {formatMoney(order.affiliate_brl, 'BRL')}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Coprodução */}
-                  {order.coproducer_brl != null && order.coproducer_brl > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg text-sm">
-                      <span className="text-purple-600 dark:text-purple-400">Comissão Coprodução</span>
-                      <span className="font-medium text-purple-600 dark:text-purple-400">
-                        - {formatMoney(order.coproducer_brl, 'BRL')}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Impostos */}
-                  {order.tax_brl != null && order.tax_brl > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-slate-500/5 border border-slate-500/10 rounded-lg text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">Impostos</span>
-                      <span className="font-medium text-slate-600 dark:text-slate-400">
-                        - {formatMoney(order.tax_brl, 'BRL')}
-                      </span>
+                  {/* SEÇÃO 2: Distribuição da Venda (Informativo - SEM sinal negativo) */}
+                  {((order.affiliate_brl != null && order.affiliate_brl > 0) || 
+                    (order.coproducer_brl != null && order.coproducer_brl > 0)) && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Distribuição da Venda
+                        <span className="ml-2 text-[10px] font-normal normal-case opacity-70">
+                          (já incluso no cálculo do valor líquido)
+                        </span>
+                      </p>
+                      
+                      {/* Afiliado - INFORMATIVO */}
+                      {order.affiliate_brl != null && order.affiliate_brl > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg text-sm">
+                          <span className="text-orange-600 dark:text-orange-400">Comissão Afiliado</span>
+                          <span className="font-medium text-orange-600 dark:text-orange-400">
+                            {formatMoney(order.affiliate_brl, 'BRL')}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Coprodução - INFORMATIVO */}
+                      {order.coproducer_brl != null && order.coproducer_brl > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg text-sm">
+                          <span className="text-purple-600 dark:text-purple-400">Comissão Coprodução</span>
+                          <span className="font-medium text-purple-600 dark:text-purple-400">
+                            {formatMoney(order.coproducer_brl, 'BRL')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

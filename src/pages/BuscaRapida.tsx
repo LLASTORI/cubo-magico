@@ -317,22 +317,32 @@ const BuscaRapida = () => {
                   />
                 </div>
 
-                {/* Secondary Metrics - Costs from Ledger */}
+                {/* Secondary Metrics - Informativos (Ledger v2.1)
+                    ═══════════════════════════════════════════════════════════════════════════════
+                    CORREÇÃO SEMÂNTICA DEFINITIVA:
+                    ✓ Coprodução e Afiliado NÃO são custos adicionais
+                    ✓ producer_net_brl JÁ É o valor líquido final (já descontado)
+                    ✓ Estes valores são apenas INFORMATIVOS de distribuição da venda
+                    ✓ NUNCA subtrair novamente de producer_net_brl
+                    ═══════════════════════════════════════════════════════════════════════════════ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <MetricCard
                     title="Taxas Plataforma"
                     value={globalMetrics.loading ? "..." : globalMetrics.platformFee}
                     icon={Percent}
+                    tooltip="Taxas retidas pela plataforma (já descontadas da receita líquida)."
                   />
                   <MetricCard
-                    title="Custo Coprodução"
+                    title="Distribuído p/ Coprodução"
                     value={globalMetrics.loading ? "..." : globalMetrics.coproducerCost}
-                    icon={Percent}
+                    icon={Users}
+                    tooltip="Valor distribuído para coprodutores. Informativo - já descontado em producer_net_brl."
                   />
                   <MetricCard
-                    title="Custo Afiliados"
+                    title="Distribuído p/ Afiliados"
                     value={globalMetrics.loading ? "..." : globalMetrics.affiliateCost}
-                    icon={Percent}
+                    icon={Users}
+                    tooltip="Valor distribuído para afiliados. Informativo - já descontado em producer_net_brl."
                   />
                   <MetricCard
                     title="Reembolsos"

@@ -336,8 +336,9 @@ const BuscaRapida = () => {
                   />
                   <MetricCard
                     title="Reembolsos"
-                    value={globalMetrics.loading ? "..." : globalMetrics.refunds}
+                    value={globalMetrics.loading ? "..." : "R$ 0,00"}
                     icon={Percent}
+                    tooltip="Reembolsos são contabilizados apenas quando disponíveis via CSV contábil (Ledger v2.1)."
                   />
                 </div>
 

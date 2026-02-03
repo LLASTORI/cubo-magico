@@ -438,21 +438,21 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </div>
               )}
               
-              {/* O que o cliente pagou - orders.customer_paid */}
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-4">
+              {/* O que o cliente pagou - orders.customer_paid (somente para contexto interno) */}
+              <div className="bg-muted/30 border border-border rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ArrowDown className="w-4 h-4 text-green-600" />
-                    <span className="font-medium text-green-700 dark:text-green-400">
+                    <ArrowDown className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-medium text-foreground">
                       Cliente pagou
                     </span>
                   </div>
-                  <span className="text-xl font-bold text-green-700 dark:text-green-400">
+                  <span className="text-xl font-bold text-foreground">
                     {formatMoney(order.customer_paid, 'BRL')}
                   </span>
                 </div>
-                <p className="text-xs text-green-600/70 mt-1">
-                  Valor total cobrado em BRL
+                <p className="text-xs text-muted-foreground mt-1">
+                  Valor total cobrado no checkout (BRL)
                 </p>
               </div>
 
@@ -526,20 +526,20 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               )}
 
               {/* O que o produtor recebe - source=PRODUCER */}
-              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ArrowUp className="w-4 h-4 text-primary" />
-                    <span className="font-medium text-primary">
+                    <ArrowUp className="w-4 h-4 text-emerald-600" />
+                    <span className="font-medium text-emerald-700 dark:text-emerald-400">
                       Produtor recebeu
                     </span>
                   </div>
-                  <span className="text-xl font-bold text-primary">
+                  <span className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
                     {formatMoney(order.producer_net_brl ?? order.producer_net, 'BRL')}
                   </span>
                 </div>
-                <p className="text-xs text-primary/70 mt-1">
-                  Valor informado pelo provider (você recebeu)
+                <p className="text-xs text-emerald-600/70 mt-1">
+                  Valor creditado conforme informado pelo provider
                 </p>
               </div>
               

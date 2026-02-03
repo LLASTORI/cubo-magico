@@ -168,7 +168,17 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                   </TableHead>
                   <TableHead className="text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      Receita Bruta
+                      Produtor recebeu
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="w-3 h-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Valor creditado ao produtor</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </TableHead>
                   <TableHead className="text-muted-foreground">Status</TableHead>
@@ -259,12 +269,12 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                                 )}</span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Checkout em {order.currency}</p>
+                                <p>Pedido internacional convertido para BRL</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         )}
-                        <span>{formatMoney(order.customer_paid, 'BRL')}</span>
+                        <span>{formatMoney(order.producer_net_brl ?? order.producer_net, 'BRL')}</span>
                       </div>
                     </TableCell>
                     <TableCell>

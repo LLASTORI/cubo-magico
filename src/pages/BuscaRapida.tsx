@@ -263,37 +263,37 @@ const BuscaRapida = () => {
               </div>
             ) : orders.length > 0 ? (
               <div className="space-y-6 animate-fade-in">
-                {/* Global Metric Cards - Domínio Checkout/Funil */}
+                {/* Global Metric Cards - Contrato Canônico */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <MetricCard
-                    title="Receita Bruta (Checkout)"
-                    value={formatMoney(totals.customerPaid, "BRL")}
+                    title="Produtor recebeu (BRL)"
+                    value={formatMoney(totals.producerNet, "BRL")}
                     icon={DollarSign}
+                    tooltip="Valor creditado ao produtor conforme informado pelo provider"
                   />
                   <MetricCard
-                    title="Receita Pós-Plataforma"
-                    value={formatMoney(totals.customerPaid - totals.platformFee, "BRL")}
+                    title="Taxa do Provider"
+                    value={formatMoney(totals.platformFee, "BRL")}
                     icon={TrendingUp}
+                    tooltip="Taxa cobrada pela plataforma de vendas"
                   />
                   <MetricCard
-                    title="Número de Pedidos"
+                    title="Pedidos"
                     value={totals.totalOrders.toLocaleString('pt-BR')}
                     icon={ShoppingCart}
                   />
                   <MetricCard
-                    title="Clientes Únicos"
+                    title="Clientes únicos"
                     value={totals.uniqueCustomers.toLocaleString('pt-BR')}
                     icon={Users}
                   />
                 </div>
 
-                {/* Data Source Info - Domínio Checkout/Funil */}
+                {/* Data Source Info - Simplificado */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                   <span>
-                    Dados de checkout (funil) conforme status selecionados • 
-                    <strong> {pagination.totalCount.toLocaleString('pt-BR')}</strong> pedidos •
-                    Não inclui divisão entre produtores, coprodutores ou afiliados
+                    <strong>{pagination.totalCount.toLocaleString('pt-BR')}</strong> pedidos conforme filtros selecionados
                   </span>
                 </div>
 

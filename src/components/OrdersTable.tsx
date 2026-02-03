@@ -175,7 +175,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                             <Info className="w-3 h-3" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Valor creditado ao produtor</p>
+                            <p>Valor creditado ao produtor conforme informado pelo provider</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -269,7 +269,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                                 )}</span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Pedido internacional convertido para BRL</p>
+                                <p>Pedido em moeda estrangeira convertido para BRL</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

@@ -421,26 +421,19 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   <DollarSign className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium">Decomposição Financeira</span>
                 </div>
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  Ledger BRL v2.0
-                </span>
               </div>
               
-              {/* ALERTA: Ledger incompleto ou ausente */}
+              {/* ALERTA: Dados parciais */}
               {!isLedgerComplete && (order.status === 'approved' || order.status === 'complete') && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-600" />
                     <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                      {order.ledger_status === 'partial' 
-                        ? 'Decomposição parcial (pedido internacional)' 
-                        : 'Ledger financeiro não disponível'}
+                      Dados parciais disponíveis
                     </span>
                   </div>
                   <p className="text-xs text-amber-600/80 mt-1">
-                    {order.ledger_status === 'partial'
-                      ? 'Algumas deduções não possuem conversão BRL disponível.'
-                      : 'Execute o backfill de ledger BRL para habilitar a decomposição.'}
+                    Alguns detalhes financeiros não foram informados pelo provider.
                   </p>
                 </div>
               )}
@@ -472,21 +465,21 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   ═══════════════════════════════════════════════════════════════════════════════ */}
               {isLedgerComplete && hasBrlDecomposition && (
                 <div className="space-y-4 mb-4">
-                  {/* SEÇÃO 1: Deduções Reais (Taxa Plataforma + Impostos) */}
+                  {/* SEÇÃO 1: Taxa do Provider */}
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deduções</p>
                     
-                    {/* Taxa da Plataforma - DEDUÇÃO REAL */}
+                    {/* Taxa do Provider - source=MARKETPLACE */}
                     {order.platform_fee_brl != null && order.platform_fee_brl > 0 && (
                       <div className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-sm">
-                        <span className="text-red-600 dark:text-red-400">Taxa da Plataforma</span>
+                        <span className="text-red-600 dark:text-red-400">Taxa do Provider</span>
                         <span className="font-medium text-red-600 dark:text-red-400">
                           - {formatMoney(order.platform_fee_brl, 'BRL')}
                         </span>
                       </div>
                     )}
                     
-                    {/* Impostos - DEDUÇÃO REAL */}
+                    {/* Impostos */}
                     {order.tax_brl != null && order.tax_brl > 0 && (
                       <div className="flex items-center justify-between p-3 bg-slate-500/5 border border-slate-500/10 rounded-lg text-sm">
                         <span className="text-slate-600 dark:text-slate-400">Impostos</span>
@@ -508,20 +501,20 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                         </span>
                       </p>
                       
-                      {/* Afiliado - INFORMATIVO */}
+                      {/* Afiliado recebeu - source=AFFILIATE */}
                       {order.affiliate_brl != null && order.affiliate_brl > 0 && (
                         <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg text-sm">
-                          <span className="text-orange-600 dark:text-orange-400">Comissão Afiliado</span>
+                          <span className="text-orange-600 dark:text-orange-400">Afiliado recebeu</span>
                           <span className="font-medium text-orange-600 dark:text-orange-400">
                             {formatMoney(order.affiliate_brl, 'BRL')}
                           </span>
                         </div>
                       )}
                       
-                      {/* Coprodução - INFORMATIVO */}
+                      {/* Coprodutor recebeu - source=COPRODUCER */}
                       {order.coproducer_brl != null && order.coproducer_brl > 0 && (
                         <div className="flex items-center justify-between p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg text-sm">
-                          <span className="text-purple-600 dark:text-purple-400">Comissão Coprodução</span>
+                          <span className="text-purple-600 dark:text-purple-400">Coprodutor recebeu</span>
                           <span className="font-medium text-purple-600 dark:text-purple-400">
                             {formatMoney(order.coproducer_brl, 'BRL')}
                           </span>
@@ -532,13 +525,13 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </div>
               )}
 
-              {/* O que o produtor recebe - orders.producer_net_brl */}
+              {/* O que o produtor recebe - source=PRODUCER */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ArrowUp className="w-4 h-4 text-primary" />
                     <span className="font-medium text-primary">
-                      Produtor recebe
+                      Produtor recebeu
                     </span>
                   </div>
                   <span className="text-xl font-bold text-primary">
@@ -546,9 +539,52 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   </span>
                 </div>
                 <p className="text-xs text-primary/70 mt-1">
-                  Valor líquido final em BRL
+                  Valor informado pelo provider (você recebeu)
                 </p>
               </div>
+              
+              {/* Valores não detalhados pelo provider */}
+              {(() => {
+                const declaredTotal = 
+                  (order.platform_fee_brl || 0) + 
+                  (order.affiliate_brl || 0) + 
+                  (order.coproducer_brl || 0) + 
+                  (order.tax_brl || 0) + 
+                  (order.producer_net_brl ?? order.producer_net);
+                const difference = order.customer_paid - declaredTotal;
+                
+                if (Math.abs(difference) > 0.01) {
+                  return (
+                    <div className="bg-muted/50 border border-border rounded-lg p-3 mt-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2 cursor-help">
+                                  <Info className="w-4 h-4 text-muted-foreground" />
+                                  <span className="text-sm text-muted-foreground">
+                                    Valores não detalhados pelo provider
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-[280px]">
+                                <p className="text-xs">
+                                  Inclui juros de parcelamento, afiliados e/ou divisões que não foram informadas no webhook.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {formatMoney(difference, 'BRL')}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             {/* ═══════════════════════════════════════════════════════════════════════════════
@@ -681,7 +717,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
             {/* Data Source Badge */}
             <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center pt-2">
               <CheckCircle className="w-3 h-3 text-emerald-500" />
-              Ledger BRL v2.0 • orders + order_items
+              Fonte: {order.provider.toUpperCase()}
             </div>
           </div>
         ) : (

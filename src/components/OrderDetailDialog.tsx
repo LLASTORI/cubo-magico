@@ -321,18 +321,33 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </span>
               </div>
               <div className="space-y-2">
+                {/* 
+                  ═══════════════════════════════════════════════════════════════════════════════
+                  CONTRATO VISUAL DE PRODUTOS - MOEDA ORIGINAL DO CHECKOUT
+                  ═══════════════════════════════════════════════════════════════════════════════
+                  
+                  REGRA CANÔNICA (PROMPT UI):
+                  ✓ Preço do produto SEMPRE na moeda ORIGINAL do checkout
+                  ✓ Usar order_items.base_price + orders.currency
+                  ✓ NUNCA converter para BRL na UI
+                  ✓ NUNCA usar offer_price/offer_currency para exibição principal
+                  
+                  EXEMPLOS CORRETOS:
+                  - Checkout em USD → "US$ 47,00"
+                  - Checkout em MXN → "MX$ 495,78"
+                  - Checkout em BRL → "R$ 197,00"
+                  ═══════════════════════════════════════════════════════════════════════════════
+                */}
                 {/* ORDENAÇÃO: main → orderbump → upsell → downsell → addon (APENAS VISUAL) */}
                 {[...order.products]
                   .sort((a, b) => getItemTypeSortOrder(a.item_type) - getItemTypeSortOrder(b.item_type))
                   .map((item) => {
-                    // Determinar qual moeda/valor exibir como principal
-                    // Se temos moeda da oferta diferente da moeda do checkout, usar oferta como principal
-                    const hasOfferCurrency = item.offer_currency && item.offer_price !== null;
-                    const isCheckoutDifferent = hasOfferCurrency && item.offer_currency !== order.currency;
-                    
-                    // Valor principal: moeda da oferta se disponível, senão checkout
-                    const primaryCurrency = hasOfferCurrency ? item.offer_currency! : order.currency;
-                    const primaryPrice = hasOfferCurrency ? item.offer_price! : item.base_price;
+                    // ═══════════════════════════════════════════════════════════════════════════════
+                    // VALOR PRINCIPAL: SEMPRE base_price + orders.currency (moeda do checkout)
+                    // Isso garante que pedidos internacionais exibam USD, MXN, ARS, etc.
+                    // ═══════════════════════════════════════════════════════════════════════════════
+                    const displayPrice = item.base_price;
+                    const displayCurrency = order.currency;
                     
                     return (
                       <div 
@@ -356,16 +371,10 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                           )}
                         </div>
                         <div className="flex flex-col items-end ml-4 shrink-0">
-                          {/* Preço principal (moeda da oferta) */}
+                          {/* Preço do produto na moeda ORIGINAL do checkout */}
                           <span className="font-semibold">
-                            {formatMoney(primaryPrice, primaryCurrency)}
+                            {formatMoney(displayPrice, displayCurrency)}
                           </span>
-                          {/* Preço no checkout (moeda local) - apenas se diferente */}
-                          {isCheckoutDifferent && (
-                            <span className="text-xs text-muted-foreground">
-                              Checkout: {formatMoney(item.base_price, order.currency)}
-                            </span>
-                          )}
                         </div>
                       </div>
                     );

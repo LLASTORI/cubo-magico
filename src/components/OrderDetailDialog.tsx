@@ -323,19 +323,17 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               <div className="space-y-2">
                 {/* 
                   ═══════════════════════════════════════════════════════════════════════════════
-                  CONTRATO VISUAL DE PRODUTOS - MOEDA ORIGINAL DO CHECKOUT
+                  CONTRATO VISUAL DE PRODUTOS - MOEDA DA OFERTA (offer_mappings)
                   ═══════════════════════════════════════════════════════════════════════════════
                   
-                  REGRA CANÔNICA (PROMPT UI):
-                  ✓ Preço do produto SEMPRE na moeda ORIGINAL do checkout
-                  ✓ Usar order_items.base_price + orders.currency
-                  ✓ NUNCA converter para BRL na UI
-                  ✓ NUNCA usar offer_price/offer_currency para exibição principal
+                  REGRA CANÔNICA (CONTRATO SEMÂNTICO):
+                  ✓ Preço do produto = preço ECONÔMICO da oferta (offer_mappings.valor)
+                  ✓ Moeda do produto = moeda da oferta (offer_mappings.moeda)
+                  ✓ Se offer_currency ausente → exibir aviso visual, NÃO inferir
+                  ✓ NUNCA usar base_price como valor visual principal
+                  ✓ NUNCA usar orders.currency para produtos
                   
-                  EXEMPLOS CORRETOS:
-                  - Checkout em USD → "US$ 47,00"
-                  - Checkout em MXN → "MX$ 495,78"
-                  - Checkout em BRL → "R$ 197,00"
+                  A UI NÃO CORRIGE DADOS, APENAS OS EXIBE.
                   ═══════════════════════════════════════════════════════════════════════════════
                 */}
                 {/* ORDENAÇÃO: main → orderbump → upsell → downsell → addon (APENAS VISUAL) */}
@@ -343,11 +341,10 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   .sort((a, b) => getItemTypeSortOrder(a.item_type) - getItemTypeSortOrder(b.item_type))
                   .map((item) => {
                     // ═══════════════════════════════════════════════════════════════════════════════
-                    // VALOR PRINCIPAL: SEMPRE base_price + orders.currency (moeda do checkout)
-                    // Isso garante que pedidos internacionais exibam USD, MXN, ARS, etc.
+                    // VALOR PRINCIPAL: offer_mappings.valor + offer_mappings.moeda
+                    // Se ausente, exibir aviso visual sem inferir ou converter
                     // ═══════════════════════════════════════════════════════════════════════════════
-                    const displayPrice = item.base_price;
-                    const displayCurrency = order.currency;
+                    const hasOfferData = item.offer_currency && item.offer_price !== null;
                     
                     return (
                       <div 
@@ -371,10 +368,29 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                           )}
                         </div>
                         <div className="flex flex-col items-end ml-4 shrink-0">
-                          {/* Preço do produto na moeda ORIGINAL do checkout */}
-                          <span className="font-semibold">
-                            {formatMoney(displayPrice, displayCurrency)}
-                          </span>
+                          {hasOfferData ? (
+                            /* Preço econômico da oferta (offer_mappings) */
+                            <span className="font-semibold">
+                              {formatMoney(item.offer_price!, item.offer_currency!)}
+                            </span>
+                          ) : (
+                            /* Oferta sem mapeamento de moeda - exibir aviso */
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="font-semibold text-muted-foreground flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-yellow-500" />
+                                    {formatMoney(item.base_price, 'BRL')}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs max-w-[200px]">
+                                    Moeda da oferta não informada. Valor técnico exibido em BRL.
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
                       </div>
                     );

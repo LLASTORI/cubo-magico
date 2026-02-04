@@ -41,7 +41,7 @@ import { OrderRecord } from "@/hooks/useOrdersCore";
 import { OrderDetailDialog } from "@/components/OrderDetailDialog";
 import { PaymentMethodBadge } from "@/components/PaymentMethodBadge";
 import { formatMoney } from "@/utils/formatMoney";
-import { getCountryFlag } from "@/utils/countryUtils";
+
 
 interface OrdersTableProps {
   orders: OrderRecord[];
@@ -257,16 +257,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="text-sm">{getCountryFlag(
-                                  order.currency === 'MXN' ? 'MX' :
-                                  order.currency === 'ARS' ? 'AR' :
-                                  order.currency === 'CLP' ? 'CL' :
-                                  order.currency === 'COP' ? 'CO' :
-                                  order.currency === 'PEN' ? 'PE' :
-                                  order.currency === 'USD' ? 'US' :
-                                  order.currency === 'EUR' ? 'EU' :
-                                  null
-                                )}</span>
+                                <span className="text-sm cursor-help">🌍</span>
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>Pedido internacional convertido para BRL conforme liquidação do provider</p>

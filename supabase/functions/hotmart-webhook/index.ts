@@ -367,8 +367,8 @@ async function writeOrderShadow(
   ownerNetRevenue: number | null,
   ownerNetRevenueBrl: number | null, // NEW: BRL converted value for producer
   contactId: string | null
-): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number }> {
-  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0 };
+): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number; ledgerProcessed: boolean; brlUpdated: boolean }> {
+  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false };
   
   try {
     const data = payload?.data;
@@ -522,7 +522,7 @@ async function writeOrderShadow(
         
         if (updateError) {
           console.error('[OrdersShadow] Error updating order:', updateError);
-          return result;
+          throw new Error(`Orders update failed: ${updateError.message}`);
         }
       } else {
         // Only update approved_at and payment metadata (no financial impact)
@@ -540,7 +540,7 @@ async function writeOrderShadow(
         }
         
         // NÃO ATUALIZAR STATUS - derivado do ledger automaticamente
-        await supabase
+        const { error: nonFinancialUpdateError } = await supabase
           .from('orders')
           .update({
             // status, ← REMOVIDO: Derivado do ledger automaticamente
@@ -552,6 +552,11 @@ async function writeOrderShadow(
             installments: backfillInstallments,
           })
           .eq('id', existingOrder.id);
+
+        if (nonFinancialUpdateError) {
+          console.error('[OrdersShadow] Error updating order (non-financial):', nonFinancialUpdateError);
+          throw new Error(`Orders update failed: ${nonFinancialUpdateError.message}`);
+        }
       }
       
       orderId = existingOrder.id;
@@ -597,7 +602,7 @@ async function writeOrderShadow(
       
       if (insertError) {
         console.error('[OrdersShadow] Error inserting order:', insertError);
-        return result;
+        throw new Error(`Orders insert failed: ${insertError.message}`);
       }
       
       orderId = newOrder.id;
@@ -933,6 +938,8 @@ async function writeOrderShadow(
         console.log(`[OrdersShadow] Ledger already existed for ${existingIds.size} events - marking as processed`);
       }
       
+      result.ledgerProcessed = ledgerCreatedSuccessfully;
+      
       // ============================================
       // 7. UPDATE ORDER WITH BRL MATERIALIZED VALUES + LEDGER STATUS
       // ============================================
@@ -959,8 +966,10 @@ async function writeOrderShadow(
       
       if (brlUpdateError) {
         console.error(`[OrdersShadow] Error updating order BRL fields:`, brlUpdateError);
+        throw new Error(`Orders BRL update failed: ${brlUpdateError.message}`);
       } else {
         console.log(`[OrdersShadow] Updated order ${orderId} with BRL fields: ledger_status=${ledgerStatus}, platform_fee_brl=${materializedPlatformFeeBrl}, affiliate_brl=${materializedAffiliateBrl}, coproducer_brl=${materializedCoproducerBrl}`);
+        result.brlUpdated = true;
       }
       
       // ============================================
@@ -984,14 +993,19 @@ async function writeOrderShadow(
         console.warn(`[OrdersShadow] NOT mapping transaction ${transactionId} - ledger was not created`);
       }
     } else {
+      if (shouldApplyFinancialValues && skipLedgerCreation) {
+        throw new Error(`Ledger creation blocked for ${hotmartEvent} on transaction ${transactionId}: no prior sale found.`);
+      }
       console.log(`[OrdersShadow] Skipping ledger/mapping for ${hotmartEvent}: informational=${!isFinancialEvent}, already_processed=${transactionAlreadyProcessedFinancially}`);
+      result.ledgerProcessed = true;
+      result.brlUpdated = true;
     }
     
     return result;
     
   } catch (error) {
     console.error('[OrdersShadow] Error:', error);
-    return result;
+    throw error;
   }
 }
 
@@ -1161,17 +1175,40 @@ async function logProviderEvent(
   projectId: string,
   providerEventId: string,
   rawPayload: any,
-  status: 'processed' | 'ignored' | 'error' = 'processed'
+  status: 'processed' | 'ignored' | 'error',
+  errorMessage?: string | null,
+  errorStack?: string | null
 ): Promise<void> {
   try {
-    await supabase.from('provider_event_log').insert({
+    const payload = {
       project_id: projectId,
       provider: 'hotmart',
       provider_event_id: providerEventId,
       received_at: new Date().toISOString(),
       raw_payload: rawPayload,
       status,
-    });
+      error_message: errorMessage ?? null,
+      error_stack: errorStack ?? null,
+    };
+
+    const { error } = await supabase.from('provider_event_log').insert(payload);
+
+    if (error) {
+      if (error.code === '23505') {
+        const { error: updateError } = await supabase
+          .from('provider_event_log')
+          .update(payload)
+          .eq('project_id', projectId)
+          .eq('provider', 'hotmart')
+          .eq('provider_event_id', providerEventId);
+
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
     console.error('[SalesCore] Error logging provider event:', error);
   }
@@ -1384,79 +1421,77 @@ async function writeSalesCoreEvent(
   const economicDay = calculateEconomicDay(occurredAt);
   const receivedAt = new Date().toISOString();
   
-  try {
-    // Check if event already exists (for versioning)
-    const { data: existing } = await supabase
-      .from('sales_core_events')
-      .select('id, version, gross_amount, net_amount, is_active')
-      .eq('project_id', projectId)
-      .eq('provider_event_id', providerEventId)
-      .eq('is_active', true)
-      .maybeSingle();
+  // Check if event already exists (for versioning)
+  const { data: existing } = await supabase
+    .from('sales_core_events')
+    .select('id, version, gross_amount, net_amount, is_active')
+    .eq('project_id', projectId)
+    .eq('provider_event_id', providerEventId)
+    .eq('is_active', true)
+    .maybeSingle();
+  
+  let version = 1;
+  
+  if (existing) {
+    // Check if values changed - if so, create new version
+    const hasChanges = 
+      existing.gross_amount !== grossAmount ||
+      existing.net_amount !== netAmount;
     
-    let version = 1;
-    
-    if (existing) {
-      // Check if values changed - if so, create new version
-      const hasChanges = 
-        existing.gross_amount !== grossAmount ||
-        existing.net_amount !== netAmount;
+    if (hasChanges) {
+      // Mark old version as inactive
+      const { error: deactivateError } = await supabase
+        .from('sales_core_events')
+        .update({ is_active: false })
+        .eq('id', existing.id);
       
-      if (hasChanges) {
-        // Mark old version as inactive
-        await supabase
-          .from('sales_core_events')
-          .update({ is_active: false })
-          .eq('id', existing.id);
-        
-        version = existing.version + 1;
-        console.log(`[SalesCore] Creating version ${version} for ${providerEventId}`);
-      } else {
-        // No changes, skip insert
-        console.log(`[SalesCore] Event ${providerEventId} unchanged, skipping`);
-        return { id: existing.id, version: existing.version };
+      if (deactivateError) {
+        throw new Error(`Sales core deactivate failed: ${deactivateError.message}`);
       }
+      
+      version = existing.version + 1;
+      console.log(`[SalesCore] Creating version ${version} for ${providerEventId}`);
+    } else {
+      // No changes, skip insert
+      console.log(`[SalesCore] Event ${providerEventId} unchanged, skipping`);
+      return { id: existing.id, version: existing.version };
     }
-    
-    // Insert new canonical event with financial breakdown
-    const { data, error } = await supabase
-      .from('sales_core_events')
-      .insert({
-        project_id: projectId,
-        provider: 'hotmart',
-        provider_event_id: providerEventId,
-        event_type: canonicalEventType,
-        gross_amount: grossAmount,
-        net_amount: netAmount,
-        // NEW: Financial breakdown columns
-        platform_fee: financialBreakdown?.platform_fee ?? 0,
-        affiliate_cost: financialBreakdown?.affiliate_cost ?? 0,
-        coproducer_cost: financialBreakdown?.coproducer_cost ?? 0,
-        currency,
-        occurred_at: occurredAt.toISOString(),
-        received_at: receivedAt,
-        economic_day: economicDay,
-        attribution,
-        contact_id: contactId,
-        raw_payload: rawPayload,
-        version,
-        is_active: true,
-      })
-      .select('id, version')
-      .single();
-    
-    if (error) {
-      console.error('[SalesCore] Error inserting canonical event:', error);
-      return null;
-    }
-    
-    console.log(`[SalesCore] Created canonical event: ${canonicalEventType} v${version} for ${transactionId} (platform_fee=${financialBreakdown?.platform_fee}, affiliate=${financialBreakdown?.affiliate_cost}, coproducer=${financialBreakdown?.coproducer_cost})`);
-    return data;
-    
-  } catch (error) {
-    console.error('[SalesCore] Exception writing canonical event:', error);
-    return null;
   }
+  
+  // Insert new canonical event with financial breakdown
+  const { data, error } = await supabase
+    .from('sales_core_events')
+    .insert({
+      project_id: projectId,
+      provider: 'hotmart',
+      provider_event_id: providerEventId,
+      event_type: canonicalEventType,
+      gross_amount: grossAmount,
+      net_amount: netAmount,
+      // NEW: Financial breakdown columns
+      platform_fee: financialBreakdown?.platform_fee ?? 0,
+      affiliate_cost: financialBreakdown?.affiliate_cost ?? 0,
+      coproducer_cost: financialBreakdown?.coproducer_cost ?? 0,
+      currency,
+      occurred_at: occurredAt.toISOString(),
+      received_at: receivedAt,
+      economic_day: economicDay,
+      attribution,
+      contact_id: contactId,
+      raw_payload: rawPayload,
+      version,
+      is_active: true,
+    })
+    .select('id, version')
+    .single();
+  
+  if (error) {
+    console.error('[SalesCore] Error inserting canonical event:', error);
+    throw new Error(`Sales core insert failed: ${error.message}`);
+  }
+  
+  console.log(`[SalesCore] Created canonical event: ${canonicalEventType} v${version} for ${transactionId} (platform_fee=${financialBreakdown?.platform_fee}, affiliate=${financialBreakdown?.affiliate_cost}, coproducer=${financialBreakdown?.coproducer_cost})`);
+  return data;
 }
 
 // Find or lookup CRM contact by email/phone
@@ -1645,6 +1680,12 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let supabase: any | null = null;
+  let payload: HotmartWebhookPayload | null = null;
+  let projectId: string | null = null;
+  let transactionId: string | null = null;
+  let providerEventId: string | null = null;
+
   try {
     // Extract project_id from URL path: /hotmart-webhook/:project_id
     const url = new URL(req.url);
@@ -1652,8 +1693,6 @@ serve(async (req) => {
     
     // The project_id should be the last part of the path
     // URL format: /hotmart-webhook/PROJECT_ID
-    let projectId: string | null = null;
-    
     if (pathParts.length >= 2) {
       projectId = pathParts[pathParts.length - 1];
     }
@@ -1676,7 +1715,7 @@ serve(async (req) => {
     const hottok = req.headers.get('x-hotmart-hottok');
     
     // Parse the webhook payload
-    const payload: HotmartWebhookPayload = await req.json();
+    payload = await req.json();
     
     console.log('=== HOTMART WEBHOOK RECEIVED ===');
     console.log('Project ID:', projectId);
@@ -1688,7 +1727,7 @@ serve(async (req) => {
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Validate project exists and has Hotmart configured
     const { data: project, error: projectError } = await supabase
@@ -1752,7 +1791,31 @@ serve(async (req) => {
     }
     
     // For abandoned carts, we might not have a transaction ID
-    const transactionId = purchase?.transaction || `abandoned_${payload.id}`;
+    transactionId = purchase?.transaction || `abandoned_${payload.id}`;
+    providerEventId = `hotmart_${transactionId}_${event}`;
+
+    const { data: existingProviderEvent, error: existingProviderEventError } = await supabase
+      .from('provider_event_log')
+      .select('status')
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart')
+      .eq('provider_event_id', providerEventId)
+      .maybeSingle();
+    
+    if (existingProviderEventError) {
+      throw new Error(`Provider event lookup failed: ${existingProviderEventError.message}`);
+    }
+    
+    if (existingProviderEvent?.status === 'processed') {
+      console.log(`[Webhook] Provider event ${providerEventId} already processed, ignoring`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Duplicate event already processed',
+        transaction: transactionId,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     // Parse phone data from webhook
     let buyerPhone: string | null = null;
@@ -2094,20 +2157,27 @@ serve(async (req) => {
       if (insertError) {
         // Handle unique constraint violation gracefully (concurrent request)
         if (insertError.code === '23505') {
-          console.log(`Duplicate webhook for transaction ${transactionId}, ignoring`);
-          return new Response(JSON.stringify({ 
-            success: true, 
-            message: 'Duplicate event, already processed',
-            transaction: transactionId,
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          console.log(`Duplicate sale insert for transaction ${transactionId}, continuing`);
+          const { data: existingAfterInsert } = await supabase
+            .from('hotmart_sales')
+            .select('id')
+            .eq('project_id', projectId)
+            .eq('transaction_id', transactionId)
+            .maybeSingle();
+          
+          if (!existingAfterInsert) {
+            throw new Error(`Duplicate sale insert without existing record for ${transactionId}`);
+          }
+          
+          upsertResult = existingAfterInsert;
+        } else {
+          console.error('Error inserting sale:', insertError);
+          console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
+          throw insertError;
         }
-        console.error('Error inserting sale:', insertError);
-        console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
-        throw insertError;
+      } else {
+        upsertResult = insertData;
       }
-      upsertResult = insertData;
     }
     
     console.log('=== SALE UPSERTED SUCCESSFULLY ===');
@@ -2119,51 +2189,43 @@ serve(async (req) => {
     // =====================================================
     // SALES CORE - Write canonical revenue event
     // =====================================================
-    try {
-      console.log('[SalesCore] Writing canonical revenue event...');
-      
-      // Log raw event to provider_event_log
-      await logProviderEvent(supabase, projectId, `hotmart_${transactionId}_${event}`, payload);
-      
-      // Find contact for binding
-      const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
-      
-      // Extract attribution from purchase origin
-      const attribution = extractAttribution(purchase, checkoutOrigin);
-      
-      // Parse occurred_at from Hotmart event
-      const occurredAt = purchase?.order_date 
-        ? new Date(purchase.order_date)
-        : new Date(payload.creation_date);
-      
-      // Write canonical event with financial breakdown
-      const financialBreakdown: FinancialBreakdown = {
-        platform_fee: platformFee,
-        affiliate_cost: affiliateAmount,
-        coproducer_cost: coproducerAmount,
-      };
-      
-      const coreEventResult = await writeSalesCoreEvent(
-        supabase,
-        projectId,
-        event,
-        transactionId,
-        totalPriceBrl, // gross_amount (valor pago pelo comprador, converted to BRL)
-        ownerNetRevenue, // CORRECT: net_amount = PRODUCER commission ("Você recebeu")
-        'BRL', // Always store in BRL
-        occurredAt,
-        attribution,
-        contactId,
-        payload,
-        financialBreakdown // NEW: Pass financial breakdown for fee columns
-      );
-      
-      if (coreEventResult) {
-        console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
-      }
-    } catch (salesCoreError) {
-      // Don't fail the webhook if Sales Core fails
-      console.error('[SalesCore] Error writing canonical event:', salesCoreError);
+    console.log('[SalesCore] Writing canonical revenue event...');
+    
+    // Find contact for binding
+    const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+    
+    // Extract attribution from purchase origin
+    const attribution = extractAttribution(purchase, checkoutOrigin);
+    
+    // Parse occurred_at from Hotmart event
+    const occurredAt = purchase?.order_date 
+      ? new Date(purchase.order_date)
+      : new Date(payload.creation_date);
+    
+    // Write canonical event with financial breakdown
+    const financialBreakdown: FinancialBreakdown = {
+      platform_fee: platformFee,
+      affiliate_cost: affiliateAmount,
+      coproducer_cost: coproducerAmount,
+    };
+    
+    const coreEventResult = await writeSalesCoreEvent(
+      supabase,
+      projectId,
+      event,
+      transactionId,
+      totalPriceBrl, // gross_amount (valor pago pelo comprador, converted to BRL)
+      ownerNetRevenue, // CORRECT: net_amount = PRODUCER commission ("Você recebeu")
+      'BRL', // Always store in BRL
+      occurredAt,
+      attribution,
+      contactId,
+      payload,
+      financialBreakdown // NEW: Pass financial breakdown for fee columns
+    );
+    
+    if (coreEventResult) {
+      console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
     }
     
     // =====================================================
@@ -2176,119 +2238,114 @@ serve(async (req) => {
     let ledgerWritten = 0;
     let ledgerSkipped = 0;
     
-    try {
-      console.log('[FinanceLedger] Processing financial entries from webhook...');
+    console.log('[FinanceLedger] Processing financial entries from webhook...');
+    
+    // Parse occurred_at from Hotmart event
+    const occurredAtLedger = purchase?.order_date 
+      ? new Date(purchase.order_date)
+      : new Date(payload.creation_date);
+    
+    // PROMPT 6: Extract attribution for ledger entries
+    const ledgerAttribution = extractAttribution(purchase, rawCheckoutOrigin);
+    
+    // Only process events that have financial implications
+    const financialEvents = [...creditEvents, ...debitEvents];
+    
+    if (financialEvents.includes(event)) {
+      let commissionsToProcess = commissions || [];
       
-      // Parse occurred_at from Hotmart event
-      const occurredAt = purchase?.order_date 
-        ? new Date(purchase.order_date)
-        : new Date(payload.creation_date);
-      
-      // PROMPT 6: Extract attribution for ledger entries
-      const ledgerAttribution = extractAttribution(purchase, rawCheckoutOrigin);
-      
-      // Only process events that have financial implications
-      const financialEvents = [...creditEvents, ...debitEvents];
-      
-      if (financialEvents.includes(event)) {
-        let commissionsToProcess = commissions || [];
+      // For refunds/chargebacks WITHOUT commissions, inherit from original transaction
+      if (debitEvents.includes(event) && (!commissionsToProcess || commissionsToProcess.length === 0)) {
+        console.log(`[FinanceLedger] ${event} without commissions, looking up original values...`);
         
-        // For refunds/chargebacks WITHOUT commissions, inherit from original transaction
-        if (debitEvents.includes(event) && (!commissionsToProcess || commissionsToProcess.length === 0)) {
-          console.log(`[FinanceLedger] ${event} without commissions, looking up original values...`);
+        const previousValues = await lookupPreviousTransactionValues(supabase, projectId, transactionId);
+        
+        if (previousValues.producerAmount !== null) {
+          console.log(`[FinanceLedger] Found original producer amount: ${previousValues.producerAmount}`);
           
-          const previousValues = await lookupPreviousTransactionValues(supabase, projectId, transactionId);
+          // Create synthetic commissions array for the refund (use any[] to avoid type conflicts)
+          const syntheticCommissions: any[] = [];
           
-          if (previousValues.producerAmount !== null) {
-            console.log(`[FinanceLedger] Found original producer amount: ${previousValues.producerAmount}`);
-            
-            // Create synthetic commissions array for the refund (use any[] to avoid type conflicts)
-            const syntheticCommissions: any[] = [];
-            
-            if (previousValues.producerAmount) {
-              syntheticCommissions.push({
-                source: 'PRODUCER',
-                value: previousValues.producerAmount,
-                currency_value: 'BRL'
-              });
-            }
-            if (previousValues.platformFee) {
-              syntheticCommissions.push({
-                source: 'MARKETPLACE',
-                value: previousValues.platformFee,
-                currency_value: 'BRL'
-              });
-            }
-            if (previousValues.affiliateAmount) {
-              syntheticCommissions.push({
-                source: 'AFFILIATE',
-                value: previousValues.affiliateAmount,
-                currency_value: 'BRL'
-              });
-            }
-            if (previousValues.coproducerAmount) {
-              syntheticCommissions.push({
-                source: 'CO_PRODUCER',
-                value: previousValues.coproducerAmount,
-                currency_value: 'BRL'
-              });
-            }
-            
-            commissionsToProcess = syntheticCommissions;
-          } else {
-            console.warn(`[FinanceLedger] No previous values found for ${transactionId}, refund will have zero amounts`);
+          if (previousValues.producerAmount) {
+            syntheticCommissions.push({
+              source: 'PRODUCER',
+              value: previousValues.producerAmount,
+              currency_value: 'BRL'
+            });
           }
-        }
-        
-        // ============================================
-        // AUTO-ADD COPRODUCER to commissions when:
-        // 1. product.has_co_production = true
-        // 2. CO_PRODUCER is NOT in commissions array
-        // 3. We calculated coproducerAmount above
-        // ============================================
-        const hasCoProduction = product?.has_co_production === true;
-        const hasCoproducerInCommissions = commissionsToProcess.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
-        
-        if (hasCoProduction && !hasCoproducerInCommissions && coproducerAmount && coproducerAmount > 0) {
-          console.log(`[FinanceLedger] Adding synthetic CO_PRODUCER entry: ${coproducerAmount}`);
-          commissionsToProcess.push({
-            source: 'CO_PRODUCER',
-            value: coproducerAmount,
-            currency_value: 'BRL'
-          });
-        }
-        
-        if (commissionsToProcess && commissionsToProcess.length > 0) {
-          const ledgerEntries = parseCommissionsToLedgerEntries(
-            projectId,
-            transactionId,
-            commissionsToProcess,
-            occurredAt,
-            event,
-            affiliate,
-            data?.producer,
-            payload,
-            ledgerAttribution // PROMPT 6: Pass attribution to ledger entries
-          );
-          
-          console.log(`[FinanceLedger] Generated ${ledgerEntries.length} ledger entries for ${event}`);
-          
-          if (ledgerEntries.length > 0) {
-            const result = await writeFinanceLedgerEntries(supabase, ledgerEntries);
-            ledgerWritten = result.written;
-            ledgerSkipped = result.skipped;
-            
-            console.log(`[FinanceLedger] Written: ${ledgerWritten}, Skipped: ${ledgerSkipped}`);
+          if (previousValues.platformFee) {
+            syntheticCommissions.push({
+              source: 'MARKETPLACE',
+              value: previousValues.platformFee,
+              currency_value: 'BRL'
+            });
           }
+          if (previousValues.affiliateAmount) {
+            syntheticCommissions.push({
+              source: 'AFFILIATE',
+              value: previousValues.affiliateAmount,
+              currency_value: 'BRL'
+            });
+          }
+          if (previousValues.coproducerAmount) {
+            syntheticCommissions.push({
+              source: 'CO_PRODUCER',
+              value: previousValues.coproducerAmount,
+              currency_value: 'BRL'
+            });
+          }
+          
+          commissionsToProcess = syntheticCommissions;
         } else {
-          console.log(`[FinanceLedger] No commissions to process for ${event}`);
+          console.warn(`[FinanceLedger] No previous values found for ${transactionId}, refund will have zero amounts`);
+        }
+      }
+      
+      // ============================================
+      // AUTO-ADD COPRODUCER to commissions when:
+      // 1. product.has_co_production = true
+      // 2. CO_PRODUCER is NOT in commissions array
+      // 3. We calculated coproducerAmount above
+      // ============================================
+      const hasCoProduction = product?.has_co_production === true;
+      const hasCoproducerInCommissions = commissionsToProcess.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
+      
+      if (hasCoProduction && !hasCoproducerInCommissions && coproducerAmount && coproducerAmount > 0) {
+        console.log(`[FinanceLedger] Adding synthetic CO_PRODUCER entry: ${coproducerAmount}`);
+        commissionsToProcess.push({
+          source: 'CO_PRODUCER',
+          value: coproducerAmount,
+          currency_value: 'BRL'
+        });
+      }
+      
+      if (commissionsToProcess && commissionsToProcess.length > 0) {
+        const ledgerEntries = parseCommissionsToLedgerEntries(
+          projectId,
+          transactionId,
+          commissionsToProcess,
+          occurredAtLedger,
+          event,
+          affiliate,
+          data?.producer,
+          payload,
+          ledgerAttribution // PROMPT 6: Pass attribution to ledger entries
+        );
+        
+        console.log(`[FinanceLedger] Generated ${ledgerEntries.length} ledger entries for ${event}`);
+        
+        if (ledgerEntries.length > 0) {
+          const result = await writeFinanceLedgerEntries(supabase, ledgerEntries);
+          ledgerWritten = result.written;
+          ledgerSkipped = result.skipped;
+          
+          console.log(`[FinanceLedger] Written: ${ledgerWritten}, Skipped: ${ledgerSkipped}`);
         }
       } else {
-        console.log(`[FinanceLedger] Event ${event} is not a financial event, skipping ledger`);
+        console.log(`[FinanceLedger] No commissions to process for ${event}`);
       }
-    } catch (ledgerError) {
-      // Don't fail the webhook if ledger fails
-      console.error('[FinanceLedger] Error processing ledger entries:', ledgerError);
+    } else {
+      console.log(`[FinanceLedger] Event ${event} is not a financial event, skipping ledger`);
     }
     
     // =====================================================
@@ -2296,31 +2353,38 @@ serve(async (req) => {
     // Duplicate data to new canonical structure
     // This runs in parallel, doesn't affect existing system
     // =====================================================
-    let ordersShadowResult = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0 };
+    let ordersShadowResult = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false };
     
-    try {
-      console.log('[OrdersShadow] Writing to Orders Core (shadow mode)...');
-      
-      // Find contact for binding
-      const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
-      
-      ordersShadowResult = await writeOrderShadow(
-        supabase,
-        projectId,
-        event,
-        payload,
-        totalPriceBrl,
-        ownerNetRevenue,
-        ownerNetRevenueBrl, // NEW: Pass BRL converted value
-        contactId
-      );
-      
-      if (ordersShadowResult.orderId) {
-        console.log(`[OrdersShadow] Success: order=${ordersShadowResult.orderId}, items=${ordersShadowResult.itemsCreated}, events=${ordersShadowResult.eventsCreated}`);
-      }
-    } catch (ordersShadowError) {
-      // Don't fail the webhook if Orders Shadow fails
-      console.error('[OrdersShadow] Error (non-blocking):', ordersShadowError);
+    console.log('[OrdersShadow] Writing to Orders Core (shadow mode)...');
+    
+    // Find contact for binding
+    const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+    
+    ordersShadowResult = await writeOrderShadow(
+      supabase,
+      projectId,
+      event,
+      payload,
+      totalPriceBrl,
+      ownerNetRevenue,
+      ownerNetRevenueBrl, // NEW: Pass BRL converted value
+      contactId
+    );
+    
+    if (ordersShadowResult.orderId) {
+      console.log(`[OrdersShadow] Success: order=${ordersShadowResult.orderId}, items=${ordersShadowResult.itemsCreated}, events=${ordersShadowResult.eventsCreated}`);
+    }
+
+    if (!ordersShadowResult.orderId) {
+      throw new Error('Orders Shadow did not return an order ID.');
+    }
+    
+    if (!ordersShadowResult.ledgerProcessed) {
+      throw new Error('Orders Shadow did not confirm ledger processing.');
+    }
+    
+    if (!ordersShadowResult.brlUpdated) {
+      throw new Error('Orders Shadow did not confirm BRL field updates.');
     }
     
     // =====================================================
@@ -2798,6 +2862,8 @@ serve(async (req) => {
     console.log('Ledger written:', ledgerWritten);
     console.log('Ledger skipped:', ledgerSkipped);
     console.log('Orders Shadow:', ordersShadowResult.orderId ? 'success' : 'skipped');
+
+    await logProviderEvent(supabase, projectId, providerEventId, payload, 'processed');
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -2827,6 +2893,22 @@ serve(async (req) => {
     
   } catch (error) {
     console.error('Webhook error:', error);
+    try {
+      if (supabase && projectId && payload && providerEventId) {
+        await logProviderEvent(
+          supabase,
+          projectId,
+          providerEventId,
+          payload,
+          'error',
+          error instanceof Error ? error.message : 'Unknown error',
+          error instanceof Error ? error.stack ?? null : null
+        );
+      }
+    } catch (logError) {
+      console.error('Failed to log provider event error:', logError);
+    }
+
     return new Response(JSON.stringify({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 

@@ -568,17 +568,21 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                 </p>
               </div>
               
-              {/* Valores não detalhados pelo provider */}
+              {/* Valores não detalhados pela Hotmart */}
               {(() => {
-                const declaredTotal = 
-                  (order.platform_fee_brl || 0) + 
-                  (order.affiliate_brl || 0) + 
-                  (order.coproducer_brl || 0) + 
-                  (order.tax_brl || 0) + 
+                if (order.provider !== 'hotmart') {
+                  return null;
+                }
+
+                const declaredTotal =
+                  (order.platform_fee_brl ?? 0) +
+                  (order.affiliate_brl ?? 0) +
+                  (order.coproducer_brl ?? 0) +
+                  (order.tax_brl ?? 0) +
                   (order.producer_net_brl ?? order.producer_net);
-                const difference = order.customer_paid - declaredTotal;
-                
-                if (Math.abs(difference) > 0.01) {
+                const unattributedAmount = order.customer_paid - declaredTotal;
+
+                if (unattributedAmount > 0) {
                   return (
                     <div className="bg-muted/50 border border-border rounded-lg p-3 mt-3">
                       <div className="flex items-center justify-between">
@@ -589,25 +593,26 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                                 <div className="flex items-center gap-2 cursor-help">
                                   <Info className="w-4 h-4 text-muted-foreground" />
                                   <span className="text-sm text-muted-foreground">
-                                    Valores não detalhados pelo provider
+                                    Valores não detalhados pela Hotmart
                                   </span>
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-[280px]">
                                 <p className="text-xs">
-                                  Inclui juros de parcelamento, afiliados e/ou divisões que não foram informadas no webhook.
+                                  Inclui juros de parcelamento, comissões de afiliados, coprodução e/ou outros valores não informados pela Hotmart no webhook.
                                 </p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </div>
                         <span className="text-sm font-medium text-muted-foreground">
-                          {formatMoney(difference, 'BRL')}
+                          {formatMoney(unattributedAmount, order.currency)}
                         </span>
                       </div>
                     </div>
                   );
                 }
+
                 return null;
               })()}
             </div>

@@ -269,7 +269,7 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                                 )}</span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Pedido em moeda estrangeira convertido para BRL</p>
+                                <p>Pedido internacional convertido para BRL conforme liquidação do provider</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

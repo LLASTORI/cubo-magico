@@ -865,41 +865,13 @@ async function writeOrderShadow(
       }
       
       // ============================================
-      // 4. AUTO-ADD COPRODUCER if calculated (only for financial events)
-      // Only for native BRL orders (no conversion needed)
+      // 4. COPRODUCER POLICY: EXPLICIT ONLY
       // ============================================
-      const hasCoProduction = data?.product?.has_co_production === true;
-      const hasCoproducerInCommissions = commissions.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
-      
-      if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenueBrl !== null && currency === 'BRL') {
-        // For native BRL, calculate coproducer from real values
-        const platformFee = materializedPlatformFeeBrl || 0;
-        const affiliateAmount = materializedAffiliateBrl || 0;
-        const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenueBrl;
-        
-        if (calculatedCoproducerCost > 0) {
-          const coproducerEventId = `${transactionId}_coproducer_auto`;
-          ledgerEventsToCreate.push({
-            order_id: orderId,
-            project_id: projectId,
-            provider: 'hotmart',
-            event_type: 'coproducer',
-            actor: 'coproducer',
-            actor_name: null,
-            amount: -calculatedCoproducerCost,
-            amount_brl: -calculatedCoproducerCost,  // Same as amount for native BRL
-            amount_accounting: calculatedCoproducerCost,
-            currency_accounting: 'BRL',
-            conversion_rate: 1,
-            source_type: 'native_brl',
-            currency,
-            provider_event_id: coproducerEventId,
-            occurred_at: occurredAt,
-            raw_payload: { source: 'auto_calculated', has_co_production: true },
-          });
-          materializedCoproducerBrl = calculatedCoproducerCost;
-        }
-      }
+      // coproducer_brl is ONLY set from commissions[source=COPRODUCER]
+      // If no explicit commission exists, value remains NULL
+      // has_co_production flag is METADATA ONLY - never triggers value creation
+      // This ensures 100% data fidelity with provider payload
+      // ============================================
       
       // ============================================
       // 5. DETERMINE LEDGER STATUS

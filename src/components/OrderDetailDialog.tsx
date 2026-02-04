@@ -570,7 +570,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
               
               {/* Valores não detalhados pela Hotmart */}
               {(() => {
-                if (order.provider !== 'hotmart') {
+                if ((order.provider || '').toLowerCase() !== 'hotmart') {
                   return null;
                 }
 

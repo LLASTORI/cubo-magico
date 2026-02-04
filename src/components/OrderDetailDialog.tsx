@@ -385,7 +385,7 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p className="text-xs max-w-[200px]">
-                                    Moeda da oferta não informada. Valor técnico exibido em BRL.
+                                    Moeda da oferta não informada pelo provider. Valor técnico exibido conforme dados disponíveis.
                                   </p>
                                 </TooltipContent>
                               </Tooltip>

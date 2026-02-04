@@ -2006,31 +2006,11 @@ serve(async (req) => {
     console.log(`  - producer_net (contract): ${ownerNetRevenue}`);
     console.log(`  - producer_net_brl (cash): ${ownerNetRevenueBrl}`);
     
-    // ============================================
-    // AUTO-CALCULATE COPRODUCER COST when:
-    // 1. product.has_co_production = true
-    // 2. CO_PRODUCER is NOT in commissions array
-    // Formula: coproducer_cost = gross - platform_fee - affiliate - net
-    // ============================================
-    const hasCoProduction = product?.has_co_production === true;
-    const hasCoproducerInCommissions = coproducerAmount !== null && coproducerAmount > 0;
-    
-    if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenue !== null) {
-      const calculatedCoproducerCost = totalPriceBrl - (platformFee || 0) - (affiliateAmount || 0) - ownerNetRevenue;
-      
-      if (calculatedCoproducerCost > 0) {
-        coproducerAmount = Math.round(calculatedCoproducerCost * 100) / 100; // Round to 2 decimal places
-        console.log(`[Financial Mapping] AUTO-CALCULATED coproducer_cost: ${coproducerAmount}`);
-        console.log(`  Formula: ${totalPriceBrl} - ${platformFee || 0} - ${affiliateAmount || 0} - ${ownerNetRevenue} = ${coproducerAmount}`);
-      }
-    }
-    
     console.log('[Financial Mapping] Extracted from commissions:');
     console.log(`  - Platform Fee (MARKETPLACE): ${platformFee}`);
     console.log(`  - Owner Net (PRODUCER): ${ownerNetRevenue}`);
-    console.log(`  - Coproducer: ${coproducerAmount}${hasCoProduction && !hasCoproducerInCommissions ? ' (auto-calculated)' : ''}`);
+    console.log(`  - Coproducer: ${coproducerAmount}`);
     console.log(`  - Affiliate: ${affiliateAmount}`);
-    console.log(`  - has_co_production: ${hasCoProduction}`);
     
     // DEPRECATED: Old incorrect logic was using commissions[0] as net
     // const netRevenue = commissions?.[0]?.value || null; // WRONG!
@@ -2287,36 +2267,10 @@ serve(async (req) => {
               currency_value: 'BRL'
             });
           }
-          if (previousValues.coproducerAmount) {
-            syntheticCommissions.push({
-              source: 'CO_PRODUCER',
-              value: previousValues.coproducerAmount,
-              currency_value: 'BRL'
-            });
-          }
-          
           commissionsToProcess = syntheticCommissions;
         } else {
           console.warn(`[FinanceLedger] No previous values found for ${transactionId}, refund will have zero amounts`);
         }
-      }
-      
-      // ============================================
-      // AUTO-ADD COPRODUCER to commissions when:
-      // 1. product.has_co_production = true
-      // 2. CO_PRODUCER is NOT in commissions array
-      // 3. We calculated coproducerAmount above
-      // ============================================
-      const hasCoProduction = product?.has_co_production === true;
-      const hasCoproducerInCommissions = commissionsToProcess.some((c: any) => (c.source || '').toUpperCase() === 'CO_PRODUCER');
-      
-      if (hasCoProduction && !hasCoproducerInCommissions && coproducerAmount && coproducerAmount > 0) {
-        console.log(`[FinanceLedger] Adding synthetic CO_PRODUCER entry: ${coproducerAmount}`);
-        commissionsToProcess.push({
-          source: 'CO_PRODUCER',
-          value: coproducerAmount,
-          currency_value: 'BRL'
-        });
       }
       
       if (commissionsToProcess && commissionsToProcess.length > 0) {

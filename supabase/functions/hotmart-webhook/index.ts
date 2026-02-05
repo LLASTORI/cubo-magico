@@ -367,8 +367,8 @@ async function writeOrderShadow(
   ownerNetRevenue: number | null,
   ownerNetRevenueBrl: number | null, // NEW: BRL converted value for producer
   contactId: string | null
-): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number; ledgerProcessed: boolean; brlUpdated: boolean }> {
-  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false };
+): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number; ledgerProcessed: boolean; brlUpdated: boolean; errorMessage?: string | null; ignoredReason?: string | null }> {
+  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false, errorMessage: null as string | null, ignoredReason: null as string | null };
   
   try {
     const data = payload?.data;
@@ -522,7 +522,8 @@ async function writeOrderShadow(
         
         if (updateError) {
           console.error('[OrdersShadow] Error updating order:', updateError);
-          throw new Error(`Orders update failed: ${updateError.message}`);
+          result.errorMessage = `Orders update failed: ${updateError.message}`;
+          return result;
         }
       } else {
         // Only update approved_at and payment metadata (no financial impact)
@@ -555,7 +556,8 @@ async function writeOrderShadow(
 
         if (nonFinancialUpdateError) {
           console.error('[OrdersShadow] Error updating order (non-financial):', nonFinancialUpdateError);
-          throw new Error(`Orders update failed: ${nonFinancialUpdateError.message}`);
+          result.errorMessage = `Orders update failed: ${nonFinancialUpdateError.message}`;
+          return result;
         }
       }
       
@@ -602,7 +604,8 @@ async function writeOrderShadow(
       
       if (insertError) {
         console.error('[OrdersShadow] Error inserting order:', insertError);
-        throw new Error(`Orders insert failed: ${insertError.message}`);
+        result.errorMessage = `Orders insert failed: ${insertError.message}`;
+        return result;
       }
       
       orderId = newOrder.id;
@@ -899,8 +902,8 @@ async function writeOrderShadow(
         
         if (checkError) {
           console.error(`[OrdersShadow] Error checking existing ledger events:`, checkError);
-          // DO NOT silently continue - log the error explicitly
-          throw new Error(`Ledger existence check failed: ${checkError.message}`);
+          result.errorMessage = `Ledger existence check failed: ${checkError.message}`;
+          return result;
         }
         
         for (const row of existingEvents || []) {
@@ -924,7 +927,8 @@ async function writeOrderShadow(
         if (insertError) {
           // Explicit error handling - NEVER silently ignore
           console.error(`[OrdersShadow] LEDGER INSERT FAILED for ${event.provider_event_id}:`, insertError);
-          throw new Error(`Ledger insert failed for ${event.provider_event_id}: ${insertError.message}`);
+          result.errorMessage = `Ledger insert failed for ${event.provider_event_id}: ${insertError.message}`;
+          return result;
         }
         
         result.eventsCreated++;
@@ -966,7 +970,8 @@ async function writeOrderShadow(
       
       if (brlUpdateError) {
         console.error(`[OrdersShadow] Error updating order BRL fields:`, brlUpdateError);
-        throw new Error(`Orders BRL update failed: ${brlUpdateError.message}`);
+        result.errorMessage = `Orders BRL update failed: ${brlUpdateError.message}`;
+        return result;
       } else {
         console.log(`[OrdersShadow] Updated order ${orderId} with BRL fields: ledger_status=${ledgerStatus}, platform_fee_brl=${materializedPlatformFeeBrl}, affiliate_brl=${materializedAffiliateBrl}, coproducer_brl=${materializedCoproducerBrl}`);
         result.brlUpdated = true;
@@ -994,7 +999,9 @@ async function writeOrderShadow(
       }
     } else {
       if (shouldApplyFinancialValues && skipLedgerCreation) {
-        throw new Error(`Ledger creation blocked for ${hotmartEvent} on transaction ${transactionId}: no prior sale found.`);
+        const message = `Ledger creation blocked for ${hotmartEvent} on transaction ${transactionId}: no prior sale found.`;
+        console.warn(`[OrdersShadow] ${message}`);
+        result.ignoredReason = 'debit_without_sale';
       }
       console.log(`[OrdersShadow] Skipping ledger/mapping for ${hotmartEvent}: informational=${!isFinancialEvent}, already_processed=${transactionAlreadyProcessedFinancially}`);
       result.ledgerProcessed = true;
@@ -1005,7 +1012,8 @@ async function writeOrderShadow(
     
   } catch (error) {
     console.error('[OrdersShadow] Error:', error);
-    throw error;
+    result.errorMessage = error instanceof Error ? error.message : 'Unknown OrdersShadow error';
+    return result;
   }
 }
 
@@ -2165,6 +2173,9 @@ serve(async (req) => {
     
     const operation = upsertResult ? 'upserted' : 'processed';
     console.log(`${operation} sale ${transactionId}`);
+
+    let providerEventStatus: 'processed' | 'ignored' | 'error' = 'processed';
+    let providerEventErrorMessage: string | null = null;
     
     // =====================================================
     // SALES CORE - Write canonical revenue event
@@ -2189,23 +2200,29 @@ serve(async (req) => {
       coproducer_cost: coproducerAmount,
     };
     
-    const coreEventResult = await writeSalesCoreEvent(
-      supabase,
-      projectId,
-      event,
-      transactionId,
-      totalPriceBrl, // gross_amount (valor pago pelo comprador, converted to BRL)
-      ownerNetRevenue, // CORRECT: net_amount = PRODUCER commission ("Você recebeu")
-      'BRL', // Always store in BRL
-      occurredAt,
-      attribution,
-      contactId,
-      payload,
-      financialBreakdown // NEW: Pass financial breakdown for fee columns
-    );
-    
-    if (coreEventResult) {
-      console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
+    try {
+      const coreEventResult = await writeSalesCoreEvent(
+        supabase,
+        projectId,
+        event,
+        transactionId,
+        totalPriceBrl, // gross_amount (valor pago pelo comprador, converted to BRL)
+        ownerNetRevenue, // CORRECT: net_amount = PRODUCER commission ("Você recebeu")
+        'BRL', // Always store in BRL
+        occurredAt,
+        attribution,
+        contactId,
+        payload,
+        financialBreakdown // NEW: Pass financial breakdown for fee columns
+      );
+      
+      if (coreEventResult) {
+        console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
+      }
+    } catch (salesCoreError) {
+      providerEventStatus = 'error';
+      providerEventErrorMessage = `[SalesCore] ${salesCoreError instanceof Error ? salesCoreError.message : 'Unknown error'}`;
+      console.error('[SalesCore] Error writing canonical event:', salesCoreError);
     }
     
     // =====================================================
@@ -2328,17 +2345,44 @@ serve(async (req) => {
     if (ordersShadowResult.orderId) {
       console.log(`[OrdersShadow] Success: order=${ordersShadowResult.orderId}, items=${ordersShadowResult.itemsCreated}, events=${ordersShadowResult.eventsCreated}`);
     }
-
+    
+    if (ordersShadowResult.errorMessage) {
+      providerEventStatus = 'error';
+      providerEventErrorMessage = `[OrdersShadow] ${ordersShadowResult.errorMessage}`;
+      console.error('[OrdersShadow] Non-blocking error:', ordersShadowResult.errorMessage);
+    }
+    
+    if (ordersShadowResult.ignoredReason === 'debit_without_sale') {
+      const ignoreMessage = 'Debit event without prior sale - ignored.';
+      await logProviderEvent(supabase, projectId, providerEventId, payload, 'ignored', ignoreMessage);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: ignoreMessage,
+        transaction: transactionId,
+        event,
+        status,
+        ignored: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     if (!ordersShadowResult.orderId) {
-      throw new Error('Orders Shadow did not return an order ID.');
+      providerEventStatus = 'error';
+      providerEventErrorMessage = providerEventErrorMessage || '[OrdersShadow] No order ID returned.';
+      console.error('[OrdersShadow] No order ID returned.');
     }
     
     if (!ordersShadowResult.ledgerProcessed) {
-      throw new Error('Orders Shadow did not confirm ledger processing.');
+      providerEventStatus = 'error';
+      providerEventErrorMessage = providerEventErrorMessage || '[OrdersShadow] Ledger not confirmed.';
+      console.error('[OrdersShadow] Ledger not confirmed.');
     }
     
     if (!ordersShadowResult.brlUpdated) {
-      throw new Error('Orders Shadow did not confirm BRL field updates.');
+      providerEventStatus = 'error';
+      providerEventErrorMessage = providerEventErrorMessage || '[OrdersShadow] BRL fields not updated.';
+      console.error('[OrdersShadow] BRL fields not updated.');
     }
     
     // =====================================================
@@ -2817,7 +2861,7 @@ serve(async (req) => {
     console.log('Ledger skipped:', ledgerSkipped);
     console.log('Orders Shadow:', ordersShadowResult.orderId ? 'success' : 'skipped');
 
-    await logProviderEvent(supabase, projectId, providerEventId, payload, 'processed');
+    await logProviderEvent(supabase, projectId, providerEventId, payload, providerEventStatus, providerEventErrorMessage);
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -2848,6 +2892,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('Webhook error:', error);
     try {
+      if (payload && !providerEventId) {
+        providerEventId = payload.id ? `hotmart_payload_${payload.id}` : null;
+      }
       if (supabase && projectId && payload && providerEventId) {
         await logProviderEvent(
           supabase,
@@ -2867,7 +2914,7 @@ serve(async (req) => {
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
     }), {
-      status: 200, // Return 200 to prevent Hotmart retries
+      status: 500, // Force Hotmart retry on internal error
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

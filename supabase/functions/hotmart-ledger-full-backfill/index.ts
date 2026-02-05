@@ -390,7 +390,7 @@ serve(async (req) => {
                 eventType = isDebit ? 'refund' : 'sale';
                 actor = 'producer';
                 break;
-              case 'CO_PRODUCER':
+              case 'COPRODUCER':
                 eventType = 'coproducer';
                 actor = 'coproducer';
                 actorName = data?.producer?.name || null;
@@ -420,45 +420,6 @@ serve(async (req) => {
               raw_payload: comm,
               _transactionId: transactionId, // Track for mapping creation
             });
-          }
-
-          // Auto-calculate coproducer if needed
-          const hasCoProduction = data?.product?.has_co_production === true;
-          const hasCoproducerInCommissions = commissions.some((c: any) =>
-            (c.source || '').toUpperCase() === 'CO_PRODUCER'
-          );
-
-          const totalPriceBrl = purchase?.full_price?.value || purchase?.price?.value || null;
-          const ownerNetRevenue = commissions.find((c: any) =>
-            (c.source || '').toUpperCase() === 'PRODUCER'
-          )?.value || null;
-
-          if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && ownerNetRevenue !== null) {
-            const platformFee = commissions.find((c: any) =>
-              (c.source || '').toUpperCase() === 'MARKETPLACE'
-            )?.value || 0;
-            const affiliateAmount = commissions.find((c: any) =>
-              (c.source || '').toUpperCase() === 'AFFILIATE'
-            )?.value || 0;
-            const calculatedCoproducerCost = totalPriceBrl - platformFee - affiliateAmount - ownerNetRevenue;
-
-            if (calculatedCoproducerCost > 0) {
-              const coproducerEventId = `${transactionId}_coproducer_auto`;
-              ledgerEventsToInsert.push({
-                order_id: orderId,
-                project_id: projectId,
-                provider: 'hotmart',
-                event_type: 'coproducer',
-                actor: 'coproducer',
-                actor_name: null,
-                amount: -calculatedCoproducerCost,
-                currency,
-                provider_event_id: coproducerEventId,
-                occurred_at: occurredAt,
-                raw_payload: { source: 'auto_calculated', has_co_production: true },
-                _transactionId: transactionId,
-              });
-            }
           }
 
           // Track mapping to create AFTER ledger success

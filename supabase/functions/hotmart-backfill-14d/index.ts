@@ -125,7 +125,7 @@ function extractFinancials(commissions: any[]): {
       case 'MARKETPLACE': result.platformFee = value; break;
       case 'PRODUCER': result.ownerNet = value; break;
       case 'AFFILIATE': result.affiliateAmount = value; break;
-      case 'CO_PRODUCER': result.coproducerAmount = value; break;
+      case 'COPRODUCER': result.coproducerAmount = value; break;
     }
   }
   
@@ -207,10 +207,6 @@ serve(async (req) => {
         const commissions = data?.commissions || [];
         const financials = extractFinancials(commissions);
         
-        // Check for co-production
-        const product = data?.product;
-        const hasCoProduction = product?.has_co_production === true;
-        
         // Calculate gross in BRL
         const currencyCode = purchase?.price?.currency_value || purchase?.price?.currency_code || 'BRL';
         const totalPrice = purchase?.full_price?.value || purchase?.price?.value || null;
@@ -223,23 +219,7 @@ serve(async (req) => {
           totalPriceBrl = totalPrice * (exchangeRates[currencyCode] || 1);
         }
 
-        // ============================================
-        // AUTO-CALCULATE COPRODUCER COST when:
-        // 1. product.has_co_production = true
-        // 2. CO_PRODUCER is NOT in commissions array
-        // Formula: coproducer_cost = gross - platform_fee - affiliate - net
-        // ============================================
-        let finalCoproducerCost = financials.coproducerAmount;
-        const hasCoproducerInCommissions = financials.coproducerAmount !== null && financials.coproducerAmount > 0;
-        
-        if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && financials.ownerNet !== null) {
-          const calculatedCoproducerCost = totalPriceBrl - (financials.platformFee || 0) - (financials.affiliateAmount || 0) - financials.ownerNet;
-          
-          if (calculatedCoproducerCost > 0) {
-            finalCoproducerCost = Math.round(calculatedCoproducerCost * 100) / 100;
-            console.log(`[Backfill14d] AUTO-CALCULATED coproducer_cost for ${transactionId}: ${finalCoproducerCost}`);
-          }
-        }
+        const finalCoproducerCost = financials.coproducerAmount;
 
         // Build attribution object (100% RAW)
         const attribution = {
@@ -289,34 +269,7 @@ serve(async (req) => {
         if (!salesError) salesUpdated++;
 
         // ============================================
-        // 2. INSERT coproducer entry in finance_ledger if calculated
-        // ============================================
-        if (hasCoProduction && finalCoproducerCost && finalCoproducerCost > 0 && !hasCoproducerInCommissions) {
-          const eventDate = payload.data?.purchase?.approved_date || event.received_at;
-          
-          await supabase
-            .from('finance_ledger')
-            .upsert({
-              project_id: projectId,
-              provider: 'hotmart',
-              transaction_id: transactionId,
-              hotmart_sale_id: transactionId,
-              event_type: 'coproducer',
-              actor_type: 'coproducer',
-              actor_id: null,
-              amount: finalCoproducerCost,
-              currency: 'BRL',
-              occurred_at: eventDate,
-              source_api: 'backfill',
-              attribution,
-            }, { 
-              onConflict: 'project_id,provider,transaction_id,event_type,actor_type',
-              ignoreDuplicates: false 
-            });
-        }
-
-        // ============================================
-        // 3. UPDATE sales_core_events.attribution
+        // 2. UPDATE sales_core_events.attribution
         // ============================================
         const providerEventId = event.provider_event_id;
         
@@ -328,7 +281,7 @@ serve(async (req) => {
             net_amount: financials.ownerNet ?? 0,
             platform_fee: financials.platformFee ?? 0,
             affiliate_cost: financials.affiliateAmount ?? 0,
-            coproducer_cost: finalCoproducerCost ?? 0,
+            coproducer_cost: finalCoproducerCost,
           })
           .eq('project_id', projectId)
           .eq('provider_event_id', providerEventId);

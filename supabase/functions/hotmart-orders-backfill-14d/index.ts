@@ -287,7 +287,7 @@ function extractFinancials(commissions: any[]): {
       case 'MARKETPLACE': result.platformFee = value; break;
       case 'PRODUCER': result.ownerNet = value; break;
       case 'AFFILIATE': result.affiliateAmount = value; break;
-      case 'CO_PRODUCER': result.coproducerAmount = value; break;
+      case 'COPRODUCER': result.coproducerAmount = value; break;
     }
   }
   
@@ -392,17 +392,7 @@ serve(async (req) => {
           totalPriceBrl = totalPrice * (exchangeRates[currencyCode] || 1);
         }
 
-        // Auto-calculate coproducer if needed
-        const hasCoProduction = data?.product?.has_co_production === true;
-        const hasCoproducerInCommissions = financials.coproducerAmount !== null && financials.coproducerAmount > 0;
-        let finalCoproducerCost = financials.coproducerAmount;
-        
-        if (hasCoProduction && !hasCoproducerInCommissions && totalPriceBrl !== null && financials.ownerNet !== null) {
-          const calculated = totalPriceBrl - (financials.platformFee || 0) - (financials.affiliateAmount || 0) - financials.ownerNet;
-          if (calculated > 0) {
-            finalCoproducerCost = Math.round(calculated * 100) / 100;
-          }
-        }
+        const finalCoproducerCost = financials.coproducerAmount;
 
         // Extract order items
         const orderItems = extractOrderItems(payload);
@@ -645,7 +635,7 @@ serve(async (req) => {
               eventType = isDebit ? 'refund' : 'sale';
               actor = 'producer';
               break;
-            case 'CO_PRODUCER':
+            case 'COPRODUCER':
               eventType = 'coproducer';
               actor = 'coproducer';
               actorName = data?.producer?.name || null;
@@ -686,40 +676,6 @@ serve(async (req) => {
               });
 
             if (!eventError) {
-              ledgerEventsCreated++;
-            }
-          }
-        }
-
-        // Add auto-calculated coproducer if needed
-        if (hasCoProduction && !hasCoproducerInCommissions && finalCoproducerCost && finalCoproducerCost > 0) {
-          // Use provider_event_id to allow multiple coproducer entries per item
-          const coproducerEventId = `${transactionId}_coproducer_auto`;
-          const { data: existingCoproducer } = await supabase
-            .from('ledger_events')
-            .select('id')
-            .eq('order_id', orderId)
-            .eq('provider_event_id', coproducerEventId)
-            .maybeSingle();
-
-          if (!existingCoproducer) {
-            const { error: coproducerError } = await supabase
-              .from('ledger_events')
-              .insert({
-                order_id: orderId,
-                project_id: projectId,
-                provider: 'hotmart',
-                event_type: 'coproducer',
-                actor: 'coproducer',
-                actor_name: null,
-                amount: -finalCoproducerCost,
-                currency: currencyCode,
-                provider_event_id: `${transactionId}_coproducer_auto`,
-                occurred_at: orderedAt,
-                raw_payload: { source: 'auto_calculated', has_co_production: true },
-              });
-
-            if (!coproducerError) {
               ledgerEventsCreated++;
             }
           }

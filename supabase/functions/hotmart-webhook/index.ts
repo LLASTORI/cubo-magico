@@ -823,7 +823,7 @@ async function writeOrderShadow(
             eventType = isDebit ? 'refund' : 'sale';
             actor = 'producer';
             break;
-          case 'CO_PRODUCER':
+          case 'COPRODUCER':
             eventType = 'coproducer';
             actor = 'coproducer';
             actorName = data?.producer?.name || null;
@@ -949,6 +949,7 @@ async function writeOrderShadow(
       // ============================================
       const orderBrlUpdate: Record<string, any> = {
         ledger_status: ledgerStatus,
+        coproducer_brl: materializedCoproducerBrl,
         updated_at: new Date().toISOString(),
       };
       
@@ -959,10 +960,6 @@ async function writeOrderShadow(
       if (materializedAffiliateBrl !== null) {
         orderBrlUpdate.affiliate_brl = materializedAffiliateBrl;
       }
-      if (materializedCoproducerBrl !== null) {
-        orderBrlUpdate.coproducer_brl = materializedCoproducerBrl;
-      }
-      
       const { error: brlUpdateError } = await supabase
         .from('orders')
         .update(orderBrlUpdate)
@@ -1284,7 +1281,7 @@ function parseCommissionsToLedgerEntries(
         eventType = isDebit ? hotmartToLedgerEventType[hotmartEvent] || 'refund' : 'credit';
         actorType = 'producer';
         break;
-      case 'CO_PRODUCER':
+      case 'COPRODUCER':
         eventType = 'coproducer';
         actorType = 'coproducer';
         actorId = producerData?.name || null;
@@ -1352,48 +1349,6 @@ async function writeFinanceLedgerEntries(
   }
 
   return { written, skipped };
-}
-
-// Lookup previous transaction values for inheritance (refunds without commissions)
-async function lookupPreviousTransactionValues(
-  supabase: any,
-  projectId: string,
-  transactionId: string
-): Promise<{ producerAmount: number | null; platformFee: number | null; affiliateAmount: number | null; coproducerAmount: number | null }> {
-  try {
-    const { data } = await supabase
-      .from('finance_ledger')
-      .select('event_type, actor_type, amount')
-      .eq('project_id', projectId)
-      .eq('transaction_id', transactionId)
-      .eq('provider', 'hotmart');
-
-    if (!data || data.length === 0) {
-      return { producerAmount: null, platformFee: null, affiliateAmount: null, coproducerAmount: null };
-    }
-
-    let producerAmount: number | null = null;
-    let platformFee: number | null = null;
-    let affiliateAmount: number | null = null;
-    let coproducerAmount: number | null = null;
-
-    for (const entry of data) {
-      if (entry.actor_type === 'producer' && entry.event_type === 'credit') {
-        producerAmount = Math.abs(entry.amount);
-      } else if (entry.actor_type === 'platform') {
-        platformFee = Math.abs(entry.amount);
-      } else if (entry.actor_type === 'affiliate') {
-        affiliateAmount = Math.abs(entry.amount);
-      } else if (entry.actor_type === 'coproducer') {
-        coproducerAmount = Math.abs(entry.amount);
-      }
-    }
-
-    return { producerAmount, platformFee, affiliateAmount, coproducerAmount };
-  } catch (error) {
-    console.error('[FinanceLedger] Error looking up previous values:', error);
-    return { producerAmount: null, platformFee: null, affiliateAmount: null, coproducerAmount: null };
-  }
 }
 
 // Financial breakdown for sales_core_events
@@ -1971,7 +1926,7 @@ serve(async (req) => {
     // CORRECT FINANCIAL MAPPING from commissions:
     // - MARKETPLACE = Platform fee (taxa Hotmart) - NOT the net!
     // - PRODUCER = Owner's net revenue ("Você recebeu")
-    // - CO_PRODUCER = Coproducer commission
+    // - COPRODUCER = Coproducer commission
     // - AFFILIATE = Affiliate commission
     // 
     // PRODUCER_NET_BRL: For international orders, Hotmart provides
@@ -2000,7 +1955,7 @@ serve(async (req) => {
             // If currency_conversion exists, use it; otherwise, value is already BRL
             ownerNetRevenueBrl = convertedValue ?? value;
             break;
-          case 'CO_PRODUCER':
+          case 'COPRODUCER':
             coproducerAmount = value;
             break;
           case 'AFFILIATE':
@@ -2043,7 +1998,7 @@ serve(async (req) => {
       gross_amount: totalPriceBrl,           // Valor pago pelo comprador (em BRL)
       platform_fee: platformFee,             // Taxa Hotmart (MARKETPLACE)
       affiliate_cost: affiliateAmount,       // Comissão afiliado (AFFILIATE)
-      coproducer_cost: coproducerAmount,     // Comissão coprodutor (CO_PRODUCER)
+      coproducer_cost: coproducerAmount,     // Comissão coprodutor (COPRODUCER)
       net_amount: ownerNetRevenue,           // Líquido do owner (PRODUCER)
       status,
       sale_date: saleDate,
@@ -2249,46 +2204,7 @@ serve(async (req) => {
     const financialEvents = [...creditEvents, ...debitEvents];
     
     if (financialEvents.includes(event)) {
-      let commissionsToProcess = commissions || [];
-      
-      // For refunds/chargebacks WITHOUT commissions, inherit from original transaction
-      if (debitEvents.includes(event) && (!commissionsToProcess || commissionsToProcess.length === 0)) {
-        console.log(`[FinanceLedger] ${event} without commissions, looking up original values...`);
-        
-        const previousValues = await lookupPreviousTransactionValues(supabase, projectId, transactionId);
-        
-        if (previousValues.producerAmount !== null) {
-          console.log(`[FinanceLedger] Found original producer amount: ${previousValues.producerAmount}`);
-          
-          // Create synthetic commissions array for the refund (use any[] to avoid type conflicts)
-          const syntheticCommissions: any[] = [];
-          
-          if (previousValues.producerAmount) {
-            syntheticCommissions.push({
-              source: 'PRODUCER',
-              value: previousValues.producerAmount,
-              currency_value: 'BRL'
-            });
-          }
-          if (previousValues.platformFee) {
-            syntheticCommissions.push({
-              source: 'MARKETPLACE',
-              value: previousValues.platformFee,
-              currency_value: 'BRL'
-            });
-          }
-          if (previousValues.affiliateAmount) {
-            syntheticCommissions.push({
-              source: 'AFFILIATE',
-              value: previousValues.affiliateAmount,
-              currency_value: 'BRL'
-            });
-          }
-          commissionsToProcess = syntheticCommissions;
-        } else {
-          console.warn(`[FinanceLedger] No previous values found for ${transactionId}, refund will have zero amounts`);
-        }
-      }
+      const commissionsToProcess = commissions || [];
       
       if (commissionsToProcess && commissionsToProcess.length > 0) {
         const ledgerEntries = parseCommissionsToLedgerEntries(

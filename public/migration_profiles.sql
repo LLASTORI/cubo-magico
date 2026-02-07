@@ -1,0 +1,16 @@
+-- ============================================================================
+-- MIGRAÇÃO: profiles
+-- Gerado em: 2026-02-07
+-- ============================================================================
+
+INSERT INTO public.profiles (id, email, full_name, avatar_url, phone, phone_country_code, phone_ddd, company_name, company_role, timezone, is_active, account_activated, can_create_projects, max_projects, onboarding_completed, signup_source, whatsapp_opt_in, crm_contact_id, last_login_at, created_at, updated_at) VALUES
+('874a9af8-a0bf-463c-84e3-ca27e19a9b7c', 'gindro@gmail.com', 'Luiz Gindro', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 1, false, 'legacy', false, NULL, '2026-01-16 11:33:41.03342+00', '2025-12-11 16:32:30.02644+00', '2026-01-16 11:33:41.03342+00'),
+('ba9366d6-f075-4108-807b-3d6548ce8cc8', 'stefscoelho@gmail.com', 'Stefano Coelho', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 0, false, 'legacy', false, NULL, '2026-01-22 19:26:42.387666+00', '2026-01-05 14:12:21.239839+00', '2026-01-22 19:26:42.387666+00'),
+('34cf7f8b-d7cf-4edc-9d86-dbb667607208', 'marketing.leticiafaria@gmail.com', 'Leticia Faria', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 1, false, 'legacy', false, NULL, '2026-01-07 15:03:24.454383+00', '2025-12-23 13:05:33.894031+00', '2026-01-07 15:03:24.454383+00'),
+('8da04b56-1c1e-46b7-99df-224a443dbc9d', 'ivan@agenciavolante.com.br', 'Ivan Luiz Torres Junior', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 1, false, 'legacy', false, NULL, '2026-01-10 10:46:24.817659+00', '2025-12-11 16:32:53.031317+00', '2026-01-10 10:46:24.817659+00'),
+('1bb2d4ae-3ea7-4cb5-997e-e6163c502666', 'renanv.pontes@gmail.com', 'Renan Villar', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 0, false, 'legacy', false, NULL, '2026-01-06 15:36:10.118668+00', '2026-01-05 17:48:23.648317+00', '2026-01-06 21:50:08.833281+00'),
+('3ea295e2-2b1f-4ecc-ac8a-4b0a03cb19f1', 'revisor@metarevisor.com', 'Meta Revisor', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 0, false, 'legacy', false, NULL, '2026-01-02 01:18:52.348471+00', '2026-01-01 14:54:44.70809+00', '2026-01-06 21:50:08.833281+00'),
+('9bb7f3a7-9ca3-4e00-ae91-71958dd78881', 'leandrolastori@gmail.com', 'Leandro Lastori', 'https://jcbzwxgayxrnxlgmmlni.supabase.co/storage/v1/object/public/avatars/9bb7f3a7-9ca3-4e00-ae91-71958dd78881/avatar.jpg?t=1765806199533', NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, true, 0, false, 'legacy', false, NULL, '2026-02-07 12:31:36.412718+00', '2025-12-03 01:44:45.439324+00', '2026-02-07 12:31:36.412718+00'),
+('77192605-4000-4be7-808e-65ffcbbb96cf', 'edumendoncafho@gmail.com', 'Eduardo Filho', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 0, false, 'invited', false, NULL, '2026-01-18 12:59:56.622839+00', '2026-01-13 01:22:26.704174+00', '2026-01-18 12:59:56.622839+00'),
+('d5b016e7-893d-49ce-8e78-58783dde3b56', 'pameladonato5@gmail.com', 'Pamela Lastori', NULL, NULL, '55', NULL, NULL, NULL, 'America/Sao_Paulo', true, true, false, 0, false, 'invited', false, NULL, NULL, '2026-01-07 03:21:27.948127+00', '2026-01-07 03:21:28.707514+00')
+ON CONFLICT (id) DO NOTHING;

@@ -21,7 +21,7 @@ export function HotmartWebhookSection({ projectId }: HotmartWebhookSectionProps)
   const { toast } = useToast();
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  const webhookUrl = `https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-webhook/${projectId}`;
+  const webhookUrl = `https://yioldpwkkgsdsukxfcnr.supabase.co/functions/v1/hotmart-webhook/${projectId}`;
 
   const handleCopyWebhookUrl = async () => {
     try {

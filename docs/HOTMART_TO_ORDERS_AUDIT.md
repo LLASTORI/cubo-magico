@@ -194,7 +194,7 @@ customer_paid (39.00)
 ```bash
 # Executar via curl
 curl -X POST \
-  https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-orders-backfill-14d \
+  https://yioldpwkkgsdsukxfcnr.supabase.co/functions/v1/hotmart-orders-backfill-14d \
   -H "Authorization: Bearer YOUR_JWT" \
   -H "Content-Type: application/json" \
   -d '{"projectId": "YOUR_PROJECT_ID"}'

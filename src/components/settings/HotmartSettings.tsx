@@ -59,8 +59,9 @@ export const HotmartSettings = () => {
 
   // Generate unique webhook URL for this project
   const webhookUrl = projectId 
-    ? `https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-webhook/${projectId}`
-    : '';
+  ? `https://yioldpwkkgsdsukxfcnr.supabase.co/functions/v1/hotmart-webhook/${projectId}`
+  : '';
+
 
   const { data: hotmartCredentials, isLoading } = useQuery({
     queryKey: ['hotmart_credentials', projectId],
@@ -121,177 +122,124 @@ export const HotmartSettings = () => {
   });
 
   // FIXED: Only sync credentials from backend on INITIAL load, not on every refetch
-  // This prevents user input from being overwritten when queryClient invalidates
-  const [hasInitialized, setHasInitialized] = useState(false);
-  
-  useEffect(() => {
-    // Only populate form on first load when we don't have user input yet
-    if (hotmartCredentials && !hasInitialized) {
-      console.log('[FORENSIC] Initial credentials load from DB:', {
-        client_id: hotmartCredentials.client_id ? 'present' : 'missing',
-        client_secret: hotmartCredentials.client_secret ? 'present' : 'missing',
-      });
-      setCredentials({
-        client_id: hotmartCredentials.client_id || '',
-        client_secret: '', // NEVER populate secret from DB - user must re-enter for security
-        basic_auth: hotmartCredentials.basic_auth || ''
-      });
-      setHasInitialized(true);
-    } else if (!hotmartCredentials && !hasInitialized) {
-      setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
-      setHasInitialized(true);
-    }
-  }, [hotmartCredentials, hasInitialized]);
+// This prevents user input from being overwritten when queryClient invalidates
+const [hasInitialized, setHasInitialized] = useState(false);
 
-  const saveCredentialsMutation = useMutation({
-    mutationFn: async (creds: typeof credentials) => {
-      if (!projectId) throw new Error('Projeto não selecionado');
+useEffect(() => {
+  // Only populate form on first load when we don't have user input yet
+  if (hotmartCredentials && !hasInitialized) {
+    console.log('[FORENSIC] Initial credentials load from DB:', {
+      client_id: hotmartCredentials.client_id ? 'present' : 'missing',
+      client_secret: hotmartCredentials.client_secret ? 'present' : 'missing',
+    });
 
-      // FORENSIC LOGGING - Debug credential saving
-      console.log('[FORENSIC] saveCredentialsMutation called:', {
-        projectId,
-        client_id: creds.client_id ? `${creds.client_id.substring(0, 8)}...` : 'EMPTY',
-        client_secret: creds.client_secret ? `${creds.client_secret.length} chars` : 'EMPTY',
-        basic_auth: creds.basic_auth ? 'present' : 'empty'
-      });
+    setCredentials({
+      client_id: hotmartCredentials.client_id || '',
+      client_secret: '', // NEVER populate secret from DB - user must re-enter for security
+      basic_auth: hotmartCredentials.basic_auth || '',
+    });
 
-      // CRITICAL: Use conditional update to protect client_secret from being overwritten with NULL
-      // First check if record exists
-      const { data: existing, error: selectError } = await supabase
-        .from('project_credentials')
-        .select('id, client_secret')
-        .eq('project_id', projectId)
-        .eq('provider', 'hotmart')
-        .maybeSingle();
+    setHasInitialized(true);
 
-      console.log('[FORENSIC] Existing record check:', {
-        exists: !!existing,
-        hasExistingSecret: !!existing?.client_secret,
-        selectError: selectError?.message
-      });
+  } else if (!hotmartCredentials && !hasInitialized) {
 
-      if (existing) {
-        // UPDATE existing record - only update fields that have values
-        const updateData: Record<string, any> = {
-          client_id: creds.client_id,
-          is_configured: !!(creds.client_id && (creds.client_secret || existing.client_secret)),
-          updated_at: new Date().toISOString()
-        };
-        
-        // Only update client_secret if a new non-empty value is provided
-        if (creds.client_secret && creds.client_secret.trim() !== '') {
-          updateData.client_secret = creds.client_secret;
-          console.log('[FORENSIC] ✅ Will UPDATE client_secret (new value provided)');
-        } else {
-          console.log('[FORENSIC] ⚠️ Will NOT update client_secret (no new value)');
-        }
-        
-        // Only update basic_auth if provided
-        if (creds.basic_auth !== undefined) {
-          updateData.basic_auth = creds.basic_auth;
-        }
+    setCredentials({
+      client_id: '',
+      client_secret: '',
+      basic_auth: '',
+    });
 
-        console.log('[FORENSIC] Update payload:', JSON.stringify(updateData, null, 2));
+    setHasInitialized(true);
+  }
 
-        const { error, count } = await supabase
-          .from('project_credentials')
-          .update(updateData)
-          .eq('project_id', projectId)
-          .eq('provider', 'hotmart');
-        
-        console.log('[FORENSIC] Update result:', { error: error?.message, count });
-        
-        if (error) throw error;
-      } else {
-        // INSERT new record - require both client_id and client_secret
-        if (!creds.client_secret || creds.client_secret.trim() === '') {
-          throw new Error('Client Secret é obrigatório para a primeira configuração');
-        }
+}, [hotmartCredentials, hasInitialized]);
 
-        const { error } = await supabase
-          .from('project_credentials')
-          .insert({
-            project_id: projectId,
-            provider: 'hotmart',
-            client_id: creds.client_id,
-            client_secret: creds.client_secret,
-            basic_auth: creds.basic_auth,
-            is_configured: !!(creds.client_id && creds.client_secret),
-            updated_at: new Date().toISOString()
-          });
-        
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
-      toast({
-        title: 'Credenciais salvas',
-        description: 'Suas credenciais Hotmart foram atualizadas.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Erro ao salvar',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
+const saveCredentialsMutation = useMutation({
 
-  const handleTestConnection = async () => {
-    if (!projectId) return;
+  mutationFn: async (creds: typeof credentials) => {
 
-    if (!credentials.client_id) {
-      toast({
-        title: 'Campo obrigatório',
-        description: 'Client ID é necessário.',
-        variant: 'destructive',
-      });
-      return;
+    if (!projectId) {
+      throw new Error('Projeto não selecionado');
     }
 
-    setTesting(true);
-    try {
-      // Save credentials first if new values provided
-      if (credentials.client_secret || credentials.basic_auth) {
-        await saveCredentialsMutation.mutateAsync(credentials);
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+    console.log('[FORENSIC] saveCredentialsMutation called:', {
+      projectId,
+      client_id: creds.client_id
+        ? `${creds.client_id.substring(0, 8)}...`
+        : 'EMPTY',
+      client_secret: creds.client_secret
+        ? `${creds.client_secret.length} chars`
+        : 'EMPTY',
+      basic_auth: creds.basic_auth ? 'present' : 'empty',
+    });
 
-      // Use new hotmart-products function to test connection
-      const { data, error } = await supabase.functions.invoke('hotmart-products', {
-        body: {
-          action: 'test-connection',
-          projectId,
-        },
-      });
 
-      if (error) throw error;
-      
-      if (!data?.success) {
-        throw new Error(data?.error || 'Falha ao testar conexão');
-      }
+    const payload: Record<string, any> = {
+      project_id: projectId,
+      provider: 'hotmart',
+      client_id: creds.client_id,
+      is_configured: !!(creds.client_id && creds.client_secret),
+      updated_at: new Date().toISOString(),
+    };
 
-      queryClient.invalidateQueries({ queryKey: ['hotmart_credentials'] });
 
-      toast({
-        title: 'Conexão bem-sucedida!',
-        description: data.message || `${data.productCount} produtos encontrados.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Falha na conexão',
-        description: error.message || 'Verifique suas credenciais.',
-        variant: 'destructive',
-      });
-    } finally {
-      setTesting(false);
+    // Send client_secret when provided (trigger will encrypt)
+    if (creds.client_secret && creds.client_secret.trim() !== '') {
+      payload.client_secret = creds.client_secret;
     }
-  };
 
-  // Removed handleSyncHotmart - sales sync must come from webhook or CSV, not API
-  // The API is now exclusively for Products/Offers catalog management
+
+    // Send basic_auth when provided
+    if (creds.basic_auth && creds.basic_auth.trim() !== '') {
+      payload.basic_auth = creds.basic_auth;
+    }
+
+
+    console.log('[FORENSIC] Upsert payload:', JSON.stringify(payload, null, 2));
+
+
+    const { error } = await supabase
+      .from('project_credentials')
+      .upsert(payload, {
+        onConflict: 'project_id,provider',
+      });
+
+
+    if (error) {
+      throw error;
+    }
+
+  },
+
+
+  onSuccess: () => {
+
+    queryClient.invalidateQueries({
+      queryKey: ['hotmart_credentials'],
+    });
+
+    toast({
+      title: 'Credenciais salvas',
+      description: 'Suas credenciais Hotmart foram atualizadas.',
+    });
+  },
+
+
+  onError: (error: any) => {
+
+    toast({
+      title: 'Erro ao salvar',
+      description: error.message,
+      variant: 'destructive',
+    });
+  },
+
+});
+
+
+// Removed handleSyncHotmart - sales sync must come from webhook or CSV, not API
+// The API is now exclusively for Products/Offers catalog management
+
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {

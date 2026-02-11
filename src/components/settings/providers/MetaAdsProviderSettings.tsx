@@ -60,7 +60,8 @@ export function MetaAdsProviderSettings({ onBack }: MetaAdsProviderSettingsProps
       const { data, error } = await supabase.functions.invoke('meta-oauth-state', {
         body: {
           projectId: currentProject.id,
-          redirectUrl: window.location.href,
+          redirectUrl: `${window.location.origin}/app/${currentProject.public_code}/settings`,
+
         },
       });
 

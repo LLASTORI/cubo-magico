@@ -145,13 +145,13 @@ USING (is_super_admin(auth.uid()))
 WITH CHECK (is_super_admin(auth.uid()));
 
 -- funnel_score_history
-CREATE POLICY "Super admins can view all funnel score history" 
-ON public.funnel_score_history 
-FOR SELECT 
-USING (is_super_admin(auth.uid()));
+-- CREATE POLICY "Super admins can view all funnel score history" 
+-- ON public.funnel_score_history 
+-- FOR SELECT 
+-- USING (is_super_admin(auth.uid()));
 
-CREATE POLICY "Super admins can manage all funnel score history" 
-ON public.funnel_score_history 
-FOR ALL 
-USING (is_super_admin(auth.uid()))
-WITH CHECK (is_super_admin(auth.uid()));
+-- CREATE POLICY "Super admins can manage all funnel score history" 
+-- ON public.funnel_score_history 
+-- FOR ALL 
+-- USING (is_super_admin(auth.uid()))
+-- WITH CHECK (is_super_admin(auth.uid()));

@@ -18,15 +18,20 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   }
 }
 
-const META_APP_ID = Deno.env.get('META_APP_ID')
-const META_APP_SECRET = Deno.env.get('META_APP_SECRET')
+const META_APP_ID = Deno.env.get('META_APP_ID')!
+const META_APP_SECRET = Deno.env.get('META_APP_SECRET')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+if (!META_APP_ID || !META_APP_SECRET) {
+  console.error('Missing META_APP_ID or META_APP_SECRET in callback')
+  throw new Error('Meta OAuth env vars not configured')
+}
 
 // SECURITY: Generate HMAC signature for state validation
 async function generateHmac(data: string): Promise<string> {
   const encoder = new TextEncoder()
-  const keyData = encoder.encode(META_APP_SECRET || 'fallback-secret')
+  const keyData = encoder.encode(META_APP_SECRET)
   const messageData = encoder.encode(data)
   
   const key = await crypto.subtle.importKey(
@@ -36,6 +41,7 @@ async function generateHmac(data: string): Promise<string> {
     false,
     ['sign']
   )
+
   
   const signature = await crypto.subtle.sign('HMAC', key, messageData)
   return new TextDecoder().decode(hexEncode(new Uint8Array(signature)))
@@ -137,12 +143,15 @@ Deno.serve(async (req) => {
 
     // Exchange code for access token
     const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token`
-    const tokenParams = new URLSearchParams({
-      client_id: META_APP_ID!,
-      client_secret: META_APP_SECRET!,
-      redirect_uri: `${SUPABASE_URL}/functions/v1/meta-oauth-callback`,
-      code,
-    })
+    const callbackUrl = `${new URL(req.url).origin}/functions/v1/meta-oauth-callback`
+
+const tokenParams = new URLSearchParams({
+  client_id: META_APP_ID!,
+  client_secret: META_APP_SECRET!,
+  redirect_uri: callbackUrl,
+  code,
+})
+
 
     console.log('Exchanging code for token...')
     const tokenResponse = await fetch(`${tokenUrl}?${tokenParams}`)

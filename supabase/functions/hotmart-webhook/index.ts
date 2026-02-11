@@ -1638,6 +1638,8 @@ const saleEvents = [
 ];
 
 serve(async (req) => {
+  let contactId: string | null = null;
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1650,29 +1652,38 @@ serve(async (req) => {
   let providerEventId: string | null = null;
 
   try {
-    // Extract project_id from URL path: /hotmart-webhook/:project_id
-    const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // The project_id should be the last part of the path
-    // URL format: /hotmart-webhook/PROJECT_ID
-    if (pathParts.length >= 2) {
-      projectId = pathParts[pathParts.length - 1];
-    }
-    
-    // Validate project_id format (UUID)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!projectId || !uuidRegex.test(projectId)) {
-      console.error('Invalid or missing project_id in URL:', url.pathname);
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Invalid webhook URL. Project ID is required.',
-        hint: 'URL format should be: /hotmart-webhook/YOUR_PROJECT_ID'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+   // Resolve project_id via URL (Hotmart padrão)
+const url = new URL(req.url);
+const pathParts = url.pathname.split('/').filter(Boolean);
+
+// Esperado: /functions/v1/hotmart-webhook/{project_id}
+const projectIdFromUrl = pathParts[pathParts.length - 1];
+
+// Validar se é UUID
+const uuidRegex =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+if (!projectIdFromUrl || !uuidRegex.test(projectIdFromUrl)) {
+  console.error('Invalid project_id in URL:', url.pathname);
+
+  return new Response(JSON.stringify({
+    success: false,
+    error: 'Invalid webhook URL',
+    hint: 'Use /hotmart-webhook/{project_id}'
+  }), {
+    status: 400,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+// Preenche a variável principal
+projectId = projectIdFromUrl;
+
 
     // Get hottok from header for additional validation (optional)
     const hottok = req.headers.get('x-hotmart-hottok');
@@ -1687,10 +1698,6 @@ serve(async (req) => {
     console.log('Hottok present:', !!hottok);
     console.log('Webhook version:', payload.version);
     
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Validate project exists and has Hotmart configured
     const { data: project, error: projectError } = await supabase
@@ -2138,7 +2145,7 @@ serve(async (req) => {
     console.log('[SalesCore] Writing canonical revenue event...');
     
     // Find contact for binding
-    const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+    contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
     
     // Extract attribution from purchase origin
     const attribution = extractAttribution(purchase, checkoutOrigin);
@@ -2245,7 +2252,7 @@ serve(async (req) => {
     console.log('[OrdersShadow] Writing to Orders Core (shadow mode)...');
     
     // Find contact for binding
-    const contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+    contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
     
     ordersShadowResult = await writeOrderShadow(
       supabase,

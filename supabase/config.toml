@@ -1,95 +1,56 @@
-project_id = "jcbzwxgayxrnxlgmmlni"
+project_id = "yioldpwkkgsdsukxfcnr"
 
 [functions.backfill-producer-net-brl]
 verify_jwt = false
-max_duration = 300
 
-[functions.analytics-daily-process]
-verify_jwt = false
-
-[functions.analyze-comments]
-verify_jwt = false
-
-[functions.classify-comment]
-verify_jwt = false
-
-[functions.daily-summary-cron]
-verify_jwt = false
-
-[functions.generate-ai-reply]
-verify_jwt = false
 
 [functions.hotmart-backfill]
 verify_jwt = false
 
 [functions.hotmart-orders-backfill-14d]
 verify_jwt = false
-max_duration = 300
+
 
 [functions.hotmart-webhook]
 verify_jwt = false
 
 [functions.hotmart-ledger-full-backfill]
 verify_jwt = false
-max_duration = 300
+
 
 [functions.hotmart-ledger-brl-backfill]
 verify_jwt = false
-max_duration = 300
+
 
 [functions.hotmart-products]
 verify_jwt = false
 
-[functions.ingest-meta-webhook]
-verify_jwt = false
-
-[functions.make-webhook]
-verify_jwt = false
-
-[functions.meta-ads-daily-pull]
-verify_jwt = false
-
-[functions.meta-ads-sync]
-verify_jwt = false
 
 [functions.meta-insights-cron]
 verify_jwt = false
 
-[functions.migrate-hotmart-interactions-batch]
-verify_jwt = false
-
 [functions.orders-full-backfill]
 verify_jwt = false
-max_duration = 300
 
-[functions.process-quiz-submission]
-verify_jwt = false
 
-[functions.rebuild-contact-profiles]
-verify_jwt = false
-
-[functions.send-whatsapp-message]
-verify_jwt = false
-
-[functions.sync-meta-ads-accounts]
-verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
 
 [functions.backfill-item-type]
 verify_jwt = true
-max_duration = 300
+
 
 [functions.recover-item-type]
 verify_jwt = false
 
 [functions.fix-legacy-ledger-brl]
 verify_jwt = false
-max_duration = 300
+
 
 [functions.csv-ledger-v21-import]
 verify_jwt = false
+<<<<<<< Updated upstream
 max_duration = 300
 
 [functions.export-om-full]
@@ -99,4 +60,11 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.export-operational-data]
+=======
+
+[functions.meta-oauth-state]
+verify_jwt = false
+
+[functions.meta-oauth-callback]
+>>>>>>> Stashed changes
 verify_jwt = false

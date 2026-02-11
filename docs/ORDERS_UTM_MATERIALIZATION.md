@@ -141,7 +141,7 @@ ORDER BY total DESC;
 Para popular UTMs em orders existentes:
 
 ```bash
-curl -X POST https://jcbzwxgayxrnxlgmmlni.supabase.co/functions/v1/hotmart-orders-backfill-14d \
+curl -X POST https://yioldpwkkgsdsukxfcnr.supabase.co/functions/v1/hotmart-orders-backfill-14d \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <ANON_KEY>" \
   -d '{"projectId": "YOUR_PROJECT_ID"}'

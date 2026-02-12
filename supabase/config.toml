@@ -1,8 +1,11 @@
 project_id = "yioldpwkkgsdsukxfcnr"
 
+# =====================================
+# HOTMART / FINANCE
+# =====================================
+
 [functions.backfill-producer-net-brl]
 verify_jwt = false
-
 
 [functions.hotmart-backfill]
 verify_jwt = false
@@ -10,48 +13,74 @@ verify_jwt = false
 [functions.hotmart-orders-backfill-14d]
 verify_jwt = false
 
-
 [functions.hotmart-webhook]
 verify_jwt = false
 
 [functions.hotmart-ledger-full-backfill]
 verify_jwt = false
 
-
 [functions.hotmart-ledger-brl-backfill]
 verify_jwt = false
 
-
 [functions.hotmart-products]
-verify_jwt = false
-
-
-[functions.meta-insights-cron]
 verify_jwt = false
 
 [functions.orders-full-backfill]
 verify_jwt = false
 
+[functions.fix-legacy-ledger-brl]
+verify_jwt = false
 
+[functions.csv-ledger-v21-import]
+verify_jwt = false
+
+# =====================================
+# META
+# =====================================
+
+[functions.meta-oauth-state]
+verify_jwt = false
+
+[functions.meta-oauth-callback]
+verify_jwt = false
+
+[functions.meta-insights-cron]
+verify_jwt = false
+
+# =====================================
+# SOCIAL LISTENING
+# =====================================
+
+[functions.social-comments-api]
+verify_jwt = false
+
+# =====================================
+# META API
+# =====================================
+
+[functions.meta-api]
+verify_jwt = false
+
+# =====================================
+# WHATSAPP
+# =====================================
 
 [functions.whatsapp-webhook]
 verify_jwt = false
 
+# =====================================
+# UTILS / RECOVERY
+# =====================================
+
 [functions.backfill-item-type]
 verify_jwt = true
-
 
 [functions.recover-item-type]
 verify_jwt = false
 
-[functions.fix-legacy-ledger-brl]
-verify_jwt = false
-
-
-[functions.csv-ledger-v21-import]
-verify_jwt = false
-<<<<<<< Updated upstream
-max_duration = 300
+# =====================================
+# EXPORTS
+# =====================================
 
 [functions.export-om-full]
 verify_jwt = false
@@ -60,11 +89,5 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.export-operational-data]
-=======
-
-[functions.meta-oauth-state]
 verify_jwt = false
 
-[functions.meta-oauth-callback]
->>>>>>> Stashed changes
-verify_jwt = false

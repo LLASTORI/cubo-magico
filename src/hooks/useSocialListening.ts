@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useParams } from 'react-router-dom';
 
 export interface SocialPost {
   id: string;
@@ -85,6 +86,14 @@ export interface SocialStats {
 export function useSocialListening(projectId: string | undefined) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { projectCode } = useParams<{ projectCode: string }>();
+
+  const invokeSocialApi = async (body: Record<string, unknown>) => {
+    return supabase.functions.invoke('social-comments-api', {
+      body,
+      headers: projectCode ? { 'X-Project-Code': projectCode } : undefined,
+    });
+  };
 
   // Fetch posts
   const { data: posts, isLoading: postsLoading, refetch: refetchPosts } = useQuery({
@@ -164,9 +173,7 @@ export function useSocialListening(projectId: string | undefined) {
     queryFn: async () => {
       if (!projectId) return null;
 
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'get_stats', projectId },
-      });
+      const { data, error } = await invokeSocialApi({ action: 'get_stats', projectId });
 
       if (error) throw error;
       
@@ -191,9 +198,7 @@ export function useSocialListening(projectId: string | undefined) {
   // Sync posts mutation
   const syncPosts = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'sync_posts', projectId },
-      });
+      const { data, error } = await invokeSocialApi({ action: 'sync_posts', projectId });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -218,9 +223,7 @@ export function useSocialListening(projectId: string | undefined) {
   // Sync comments mutation
   const syncComments = useMutation({
     mutationFn: async (postId?: string) => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'sync_comments', projectId, postId },
-      });
+      const { data, error } = await invokeSocialApi({ action: 'sync_comments', projectId, postId });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -247,9 +250,7 @@ export function useSocialListening(projectId: string | undefined) {
   // Process AI mutation
   const processAI = useMutation({
     mutationFn: async (limit: number = 100) => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'process_ai', projectId, limit },
-      });
+      const { data, error } = await invokeSocialApi({ action: 'process_ai', projectId, limit });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -319,9 +320,7 @@ export function useSocialListening(projectId: string | undefined) {
   // Link to CRM mutation
   const linkToCRM = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'link_crm_contacts', projectId },
-      });
+      const { data, error } = await invokeSocialApi({ action: 'link_crm_contacts', projectId });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -346,9 +345,7 @@ export function useSocialListening(projectId: string | undefined) {
   // Sync ad comments mutation
   const syncAdComments = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'sync_ad_comments', projectId },
-      });
+      const { data, error } = await invokeSocialApi({ action: 'sync_ad_comments', projectId });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

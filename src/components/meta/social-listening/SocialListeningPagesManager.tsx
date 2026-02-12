@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Facebook, Instagram, Check, AlertCircle, Search, Trash2 } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 
 interface SocialListeningPagesManagerProps {
   projectId: string;
@@ -35,18 +36,24 @@ interface SavedPage {
 }
 
 export function SocialListeningPagesManager({ projectId, onPagesConfigured }: SocialListeningPagesManagerProps) {
+  const { projectCode } = useParams<{ projectCode: string }>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPages, setSelectedPages] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
+  const invokeSocialApi = async (body: Record<string, unknown>) => {
+    return supabase.functions.invoke('social-comments-api', {
+      body,
+      headers: projectCode ? { 'X-Project-Code': projectCode } : undefined,
+    });
+  };
+
   // Fetch saved pages
   const { data: savedPages, isLoading: loadingSaved } = useQuery({
     queryKey: ['social-listening-pages', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'get_saved_pages', projectId }
-      });
+      const { data, error } = await invokeSocialApi({ action: 'get_saved_pages', projectId });
       if (error) throw error;
       return data?.pages as SavedPage[] || [];
     },
@@ -56,9 +63,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   const { data: availablePages, isLoading: loadingAvailable, refetch: refetchAvailable, isFetching } = useQuery({
     queryKey: ['available-social-pages', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'get_available_pages', projectId }
-      });
+      const { data, error } = await invokeSocialApi({ action: 'get_available_pages', projectId });
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       return data?.pages as AvailablePage[] || [];
@@ -69,9 +74,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   // Save selected pages
   const saveMutation = useMutation({
     mutationFn: async (pages: AvailablePage[]) => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'save_pages', projectId, pages }
-      });
+      const { data, error } = await invokeSocialApi({ action: 'save_pages', projectId, pages });
       if (error) throw error;
       if (!data.success && data.errors?.length > 0) {
         throw new Error(data.errors.join(', '));
@@ -99,9 +102,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   // Remove a page
   const removeMutation = useMutation({
     mutationFn: async (pageId: string) => {
-      const { data, error } = await supabase.functions.invoke('social-comments-api', {
-        body: { action: 'remove_page', projectId, pageId }
-      });
+      const { data, error } = await invokeSocialApi({ action: 'remove_page', projectId, pageId });
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       return data;

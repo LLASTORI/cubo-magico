@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveProjectFromRequest } from '../_shared/projectResolver.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -386,9 +387,26 @@ Deno.serve(async (req) => {
     const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const body = await req.json()
-    const { action, projectId, postId, limit } = body
+    const { action, projectId: bodyProjectId, postId, limit } = body
 
-    console.log('Social Comments API request:', { action, projectId })
+    const resolution = await resolveProjectFromRequest(req, serviceSupabase, body)
+    if (resolution.error || !resolution.projectId) {
+      return new Response(JSON.stringify({
+        error: resolution.error || 'Projeto inválido',
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const projectId = resolution.projectId
+
+    console.log('Social Comments API request:', {
+      action,
+      projectId,
+      projectCode: resolution.projectCode,
+      bodyProjectId,
+    })
 
     // Get Meta credentials
     const { data: credentials, error: credError } = await supabase

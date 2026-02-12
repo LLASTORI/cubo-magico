@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { resolveProjectFromRequest } from '../_shared/projectResolver.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +13,7 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const GRAPH_API_VERSION = 'v19.0'
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -387,25 +387,20 @@ Deno.serve(async (req) => {
     const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const body = await req.json()
-    const { action, projectId: bodyProjectId, postId, limit } = body
+    const { action, projectId, postId, limit } = body
 
-    const resolution = await resolveProjectFromRequest(req, serviceSupabase, body)
-    if (resolution.error || !resolution.projectId) {
+    if (!projectId || typeof projectId !== 'string' || !UUID_REGEX.test(projectId)) {
       return new Response(JSON.stringify({
-        error: resolution.error || 'Projeto inválido',
+        error: 'projectId é obrigatório e deve ser um UUID válido',
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const projectId = resolution.projectId
-
     console.log('Social Comments API request:', {
       action,
       projectId,
-      projectCode: resolution.projectCode,
-      bodyProjectId,
     })
 
     // Get Meta credentials

@@ -30,7 +30,7 @@ import {
   Lock,
   Edit3
 } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -80,7 +80,6 @@ const classificationConfig: Record<string, { label: string; icon: any; color: st
 };
 
 export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
-  const { projectCode } = useParams<{ projectCode: string }>();
   const [activeSubTab, setActiveSubTab] = useState('dashboard');
   const [filters, setFilters] = useState({
     sentiment: 'all',
@@ -109,7 +108,6 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('social-comments-api', {
         body: { action: 'get_saved_pages', projectId },
-        headers: projectCode ? { 'X-Project-Code': projectCode } : undefined,
       });
       if (error) throw error;
       return data?.pages || [];

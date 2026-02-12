@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useParams } from 'react-router-dom';
 
 export interface SocialPost {
   id: string;
@@ -86,12 +85,10 @@ export interface SocialStats {
 export function useSocialListening(projectId: string | undefined) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { projectCode } = useParams<{ projectCode: string }>();
 
   const invokeSocialApi = async (body: Record<string, unknown>) => {
     return supabase.functions.invoke('social-comments-api', {
       body,
-      headers: projectCode ? { 'X-Project-Code': projectCode } : undefined,
     });
   };
 

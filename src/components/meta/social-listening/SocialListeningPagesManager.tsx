@@ -8,7 +8,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Facebook, Instagram, Check, AlertCircle, Search, Trash2 } from 'lucide-react';
-import { useParams } from 'react-router-dom';
 
 interface SocialListeningPagesManagerProps {
   projectId: string;
@@ -36,7 +35,6 @@ interface SavedPage {
 }
 
 export function SocialListeningPagesManager({ projectId, onPagesConfigured }: SocialListeningPagesManagerProps) {
-  const { projectCode } = useParams<{ projectCode: string }>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPages, setSelectedPages] = useState<Set<string>>(new Set());
@@ -45,7 +43,6 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   const invokeSocialApi = async (body: Record<string, unknown>) => {
     return supabase.functions.invoke('social-comments-api', {
       body,
-      headers: projectCode ? { 'X-Project-Code': projectCode } : undefined,
     });
   };
 

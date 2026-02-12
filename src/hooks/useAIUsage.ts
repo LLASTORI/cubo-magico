@@ -1,14 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useParams } from 'react-router-dom';
 
 export function useAIUsage(projectId: string | undefined) {
-  const { projectCode } = useParams<{ projectCode: string }>();
-
   const invokeSocialApi = async (body: Record<string, unknown>) => {
     return supabase.functions.invoke('social-comments-api', {
       body,
-      headers: projectCode ? { 'X-Project-Code': projectCode } : undefined,
     });
   };
 

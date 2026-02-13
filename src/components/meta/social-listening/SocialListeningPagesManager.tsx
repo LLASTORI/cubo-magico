@@ -31,6 +31,7 @@ interface SavePagePayload {
   platform: 'facebook' | 'instagram';
   access_token: string;
   instagram_account_id: string | null;
+  instagram_username: string | null;
 }
 
 interface AvailablePageApiResponse {
@@ -84,9 +85,12 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   const [searchQuery, setSearchQuery] = useState('');
 
   const invokeSocialApi = async (body: Record<string, unknown>) => {
-    return supabase.functions.invoke('social-comments-api', {
+    console.log('[SOCIAL_LISTENING][invokeSocialApi] request', body);
+    const response = await supabase.functions.invoke('social-comments-api', {
       body,
     });
+    console.log('[SOCIAL_LISTENING][invokeSocialApi] response', response);
+    return response;
   };
 
   // Fetch saved pages
@@ -95,8 +99,11 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
     queryFn: async () => {
       const { data, error } = await invokeSocialApi({ action: 'get_saved_pages', projectId });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      console.log('[SOCIAL_LISTENING][get_saved_pages] count', data?.pages?.length || 0);
       return data?.pages as SavedPage[] || [];
     },
+    retry: false,
   });
 
   // Fetch available pages from Meta
@@ -153,7 +160,10 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
         platform: page.platform,
         access_token: page.pageAccessToken,
         instagram_account_id: page.instagramAccountId || null,
+        instagram_username: page.instagramUsername || null,
       }));
+
+      console.log('[SOCIAL_LISTENING][save_pages] payload', { projectId, count: payloadPages.length, payloadPages });
 
       const { data, error } = await invokeSocialApi({
         action: 'save_pages',
@@ -162,6 +172,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       if (!data.success && data.errors?.length > 0) {
         throw new Error(data.errors.join(', '));
       }
@@ -174,6 +185,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
         description: `${savedCount} página(s) configurada(s) para monitoramento.`,
       });
       queryClient.invalidateQueries({ queryKey: ['social-listening-pages', projectId] });
+      queryClient.refetchQueries({ queryKey: ['social-listening-pages', projectId] });
       setSelectedPages(new Set());
       onPagesConfigured?.();
     },

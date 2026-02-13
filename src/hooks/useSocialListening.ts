@@ -87,9 +87,14 @@ export function useSocialListening(projectId: string | undefined) {
   const queryClient = useQueryClient();
 
   const invokeSocialApi = async (body: Record<string, unknown>) => {
-    return supabase.functions.invoke('social-comments-api', {
+    console.log('[SOCIAL_LISTENING][invokeSocialApi] request', body);
+    const response = await supabase.functions.invoke('social-comments-api', {
       body,
     });
+    console.log('[SOCIAL_LISTENING][invokeSocialApi] response', response);
+    if (response.error) throw response.error;
+    if (response.data?.error) throw new Error(response.data.error);
+    return response;
   };
 
   // Fetch posts

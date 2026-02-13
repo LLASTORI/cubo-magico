@@ -64,6 +64,14 @@ interface CustomKeywords {
   spam: string[]
 }
 
+const ACTIONS_REQUIRING_META_CREDENTIALS = new Set([
+  'get_available_pages',
+  'save_pages',
+  'sync_posts',
+  'sync_comments',
+  'sync_ad_comments',
+])
+
 function classifyByKeywords(text: string, customKeywords?: CustomKeywords): KeywordClassificationResult {
   if (!text || text.trim().length === 0) {
     return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio', classificationMethod: 'keyword_empty' }
@@ -398,52 +406,67 @@ Deno.serve(async (req) => {
       })
     }
 
-    console.log('Social Comments API request:', {
-      action,
-      projectId,
-    })
+    console.log('Social Comments API request:', { action, projectId })
 
-    // Get Meta credentials
-    const { data: credentials, error: credError } = await supabase
-      .from('meta_credentials')
-      .select('*')
+    const { data: membership, error: membershipError } = await supabase
+      .from('project_members')
+      .select('id')
       .eq('project_id', projectId)
+      .limit(1)
       .maybeSingle()
 
-    if (credError || !credentials) {
-      return new Response(JSON.stringify({ 
-        error: 'Meta não conectado',
-        needsConnection: true 
-      }), {
-        status: 400,
+    if (membershipError || !membership) {
+      return new Response(JSON.stringify({ error: 'Acesso negado ao projeto' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const accessToken = credentials.access_token
+    let accessToken: string | undefined
+    if (ACTIONS_REQUIRING_META_CREDENTIALS.has(action)) {
+      // Get Meta credentials only for actions that actually call Graph API
+      const { data: credentials, error: credError } = await supabase
+        .from('meta_credentials')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle()
+
+      if (credError || !credentials) {
+        return new Response(JSON.stringify({ 
+          error: 'Meta não conectado',
+          needsConnection: true 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      accessToken = credentials.access_token
+    }
 
     let result: any
 
     switch (action) {
       case 'get_available_pages':
-        result = await getAvailablePages(accessToken)
+        result = await getAvailablePages(accessToken!)
         break
 
-      case 'save_pages':
+      case 'save_pages': {
         const { pages } = body
-        result = await saveSelectedPages(serviceSupabase, projectId, accessToken, pages)
+        result = await saveSelectedPages(serviceSupabase, projectId, pages)
         break
+      }
 
       case 'get_saved_pages':
-        result = await getSavedPages(supabase, projectId)
+        result = await getSavedPages(serviceSupabase, projectId)
         break
 
       case 'sync_posts':
-        result = await syncPosts(serviceSupabase, projectId, accessToken)
+        result = await syncPosts(serviceSupabase, projectId, accessToken!)
         break
 
       case 'sync_comments':
-        result = await syncComments(serviceSupabase, projectId, accessToken, postId)
+        result = await syncComments(serviceSupabase, projectId, accessToken!, postId)
         break
 
       case 'process_ai':
@@ -458,19 +481,21 @@ Deno.serve(async (req) => {
         result = await getStats(supabase, projectId)
         break
 
-      case 'remove_page':
+      case 'remove_page': {
         const { pageId: removePageId } = body
         result = await removePage(serviceSupabase, projectId, removePageId)
         break
+      }
 
       case 'sync_ad_comments':
-        result = await syncAdComments(serviceSupabase, projectId, accessToken)
+        result = await syncAdComments(serviceSupabase, projectId, accessToken!)
         break
 
-      case 'generate_reply':
+      case 'generate_reply': {
         const { commentId } = body
         result = await generateReply(serviceSupabase, projectId, commentId)
         break
+      }
 
       case 'get_ai_usage':
         result = await getAIUsage(supabase, projectId)
@@ -1444,45 +1469,66 @@ async function getAvailablePages(accessToken: string) {
   return { pages }
 }
 
-async function saveSelectedPages(supabase: any, projectId: string, accessToken: string, pages: any[]) {
+async function saveSelectedPages(supabase: any, projectId: string, pages: any[]) {
   const normalizedPages = Array.isArray(pages) ? pages : []
   console.log(`[SAVE_PAGES] Received ${normalizedPages.length} page(s) for project ${projectId}`)
 
   let insertedCount = 0
+  const errors: string[] = []
 
   for (const page of normalizedPages) {
     if (!page?.page_id || !page?.name || !page?.platform || !page?.access_token) {
       console.warn('[SAVE_PAGES] Skipping invalid page payload:', page)
+      errors.push(`Payload inválido para página ${page?.id || 'unknown'}`)
       continue
     }
 
-    const { error } = await supabase
+    console.log(`[SAVE_PAGES] Upserting page: ${page.page_id} (${page.platform})`)
+
+    const { data: upsertedPage, error } = await supabase
       .from('social_listening_pages')
       .upsert({
         project_id: projectId,
-        page_id: page.page_id, // ✅ ID REAL da página
+        page_id: page.page_id, // ✅ ID REAL da página Meta
         page_name: page.name,
         platform: page.platform,
         page_access_token: page.access_token,
         instagram_account_id: page.instagram_account_id || null,
+        instagram_username: page.instagram_username || null,
         is_active: true,
       }, { onConflict: 'project_id,page_id' })
+      .select('id, page_id, platform')
+      .single()
 
     if (error) {
-      console.error('Error saving page:', error)
+      console.error('[SAVE_PAGES] Error saving page:', error)
+      errors.push(`${page.page_id}: ${error.message}`)
       continue
     }
 
+    console.log('[SAVE_PAGES] Upsert result:', upsertedPage)
     insertedCount += 1
   }
 
-  console.log(`[SAVE_PAGES] Upserted ${insertedCount} page(s)`)
+  console.log(
+    `[SAVE_PAGES] Upserted ${insertedCount} page(s) for project ${projectId} using conflict key (project_id, page_id)`
+  )
 
-  return { success: true, savedCount: insertedCount }
+  if (errors.length > 0) {
+    console.warn('[SAVE_PAGES] Errors:', errors)
+  }
+
+  return {
+    success: errors.length === 0,
+    savedCount: insertedCount,
+    errors,
+  }
 }
 
 
+
 async function getSavedPages(supabase: any, projectId: string) {
+  console.log(`[GET_SAVED_PAGES] Fetching saved pages for project ${projectId}`)
   const { data, error } = await supabase
     .from('social_listening_pages')
     .select('*')
@@ -1492,6 +1538,8 @@ async function getSavedPages(supabase: any, projectId: string) {
   if (error) {
     throw new Error(error.message)
   }
+
+  console.log(`[GET_SAVED_PAGES] Found ${(data || []).length} active page(s) for project ${projectId}`)
 
   return { pages: data || [] }
 }

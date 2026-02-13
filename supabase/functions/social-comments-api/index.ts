@@ -406,10 +406,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    console.log('Social Comments API request:', {
-      action,
-      projectId,
-    })
+    console.log('Social Comments API request:', { action, projectId })
 
     const { data: membership, error: membershipError } = await supabase
       .from('project_members')

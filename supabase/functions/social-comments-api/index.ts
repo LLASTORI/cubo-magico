@@ -1476,25 +1476,32 @@ async function saveSelectedPages(supabase: any, projectId: string, pages: any[])
   let insertedCount = 0
   const errors: string[] = []
 
-  for (const page of normalizedPages) {
-    if (!page?.page_id || !page?.name || !page?.platform || !page?.access_token) {
-      console.warn('[SAVE_PAGES] Skipping invalid page payload:', page)
-      errors.push(`Payload inválido para página ${page?.id || 'unknown'}`)
+  for (const rawPage of normalizedPages) {
+
+    // 🔥 NORMALIZAÇÃO INTELIGENTE (resolve seu erro)
+    const page_id = rawPage?.page_id || rawPage?.id
+    const name = rawPage?.name
+    const platform = rawPage?.platform
+    const access_token = rawPage?.access_token
+
+    if (!page_id || !name || !platform || !access_token) {
+      console.warn('[SAVE_PAGES] Skipping invalid page payload:', rawPage)
+      errors.push(`Payload inválido para página ${rawPage?.id || 'unknown'}`)
       continue
     }
 
-    console.log(`[SAVE_PAGES] Upserting page: ${page.page_id} (${page.platform})`)
+    console.log(`[SAVE_PAGES] Upserting page: ${page_id} (${platform})`)
 
     const { data: upsertedPage, error } = await supabase
       .from('social_listening_pages')
       .upsert({
         project_id: projectId,
-        page_id: page.page_id, // ✅ ID REAL da página Meta
-        page_name: page.name,
-        platform: page.platform,
-        page_access_token: page.access_token,
-        instagram_account_id: page.instagram_account_id || null,
-        instagram_username: page.instagram_username || null,
+        page_id: page_id, // ✅ sempre ID real
+        page_name: name,
+        platform: platform,
+        page_access_token: access_token,
+        instagram_account_id: rawPage?.instagram_account_id || null,
+        instagram_username: rawPage?.instagram_username || null,
         is_active: true,
       }, { onConflict: 'project_id,page_id' })
       .select('id, page_id, platform')
@@ -1502,7 +1509,7 @@ async function saveSelectedPages(supabase: any, projectId: string, pages: any[])
 
     if (error) {
       console.error('[SAVE_PAGES] Error saving page:', error)
-      errors.push(`${page.page_id}: ${error.message}`)
+      errors.push(`${page_id}: ${error.message}`)
       continue
     }
 
@@ -1511,7 +1518,7 @@ async function saveSelectedPages(supabase: any, projectId: string, pages: any[])
   }
 
   console.log(
-    `[SAVE_PAGES] Upserted ${insertedCount} page(s) for project ${projectId} using conflict key (project_id, page_id)`
+    `[SAVE_PAGES] Upserted ${insertedCount} page(s) for project ${projectId}`
   )
 
   if (errors.length > 0) {
@@ -1525,38 +1532,6 @@ async function saveSelectedPages(supabase: any, projectId: string, pages: any[])
   }
 }
 
-
-
-async function getSavedPages(supabase: any, projectId: string) {
-  console.log(`[GET_SAVED_PAGES] Fetching saved pages for project ${projectId}`)
-  const { data, error } = await supabase
-    .from('social_listening_pages')
-    .select('*')
-    .eq('project_id', projectId)
-    .eq('is_active', true)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  console.log(`[GET_SAVED_PAGES] Found ${(data || []).length} active page(s) for project ${projectId}`)
-
-  return { pages: data || [] }
-}
-
-async function removePage(supabase: any, projectId: string, pageId: string) {
-  const { error } = await supabase
-    .from('social_listening_pages')
-    .update({ is_active: false })
-    .eq('project_id', projectId)
-    .eq('page_id', pageId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return { success: true }
-}
 
 // ============= AD COMMENTS SYNC =============
 

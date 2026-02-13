@@ -1451,7 +1451,7 @@ async function saveSelectedPages(supabase: any, projectId: string, accessToken: 
   let insertedCount = 0
 
   for (const page of normalizedPages) {
-    if (!page?.id || !page?.name || !page?.platform || !page?.access_token) {
+    if (!page?.page_id || !page?.name || !page?.platform || !page?.access_token) {
       console.warn('[SAVE_PAGES] Skipping invalid page payload:', page)
       continue
     }
@@ -1460,7 +1460,7 @@ async function saveSelectedPages(supabase: any, projectId: string, accessToken: 
       .from('social_listening_pages')
       .upsert({
         project_id: projectId,
-        page_id: page.id,
+        page_id: page.page_id, // ✅ ID REAL da página
         page_name: page.name,
         platform: page.platform,
         page_access_token: page.access_token,
@@ -1476,10 +1476,11 @@ async function saveSelectedPages(supabase: any, projectId: string, accessToken: 
     insertedCount += 1
   }
 
-  console.log(`[SAVE_PAGES] Upserted ${insertedCount} page(s) for project ${projectId} using conflict key (project_id, page_id)`)
+  console.log(`[SAVE_PAGES] Upserted ${insertedCount} page(s)`)
 
   return { success: true, savedCount: insertedCount }
 }
+
 
 async function getSavedPages(supabase: any, projectId: string) {
   const { data, error } = await supabase

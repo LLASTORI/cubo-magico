@@ -25,6 +25,14 @@ interface AvailablePage {
   instagramPicture?: string;
 }
 
+interface SavePagePayload {
+  id: string;
+  name: string;
+  platform: 'facebook' | 'instagram';
+  access_token: string;
+  instagram_account_id: string | null;
+}
+
 interface AvailablePageApiResponse {
   id: string;
   page_id: string;
@@ -139,7 +147,20 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   // Save selected pages
   const saveMutation = useMutation({
     mutationFn: async (pages: AvailablePage[]) => {
-      const { data, error } = await invokeSocialApi({ action: 'save_pages', projectId, pages });
+      const payloadPages: SavePagePayload[] = pages.map((page) => ({
+        id: page.pageId,
+        name: page.pageName,
+        platform: page.platform,
+        access_token: page.pageAccessToken,
+        instagram_account_id: page.instagramAccountId || null,
+      }));
+
+      const { data, error } = await invokeSocialApi({
+        action: 'save_pages',
+        projectId,
+        pages: payloadPages,
+      });
+
       if (error) throw error;
       if (!data.success && data.errors?.length > 0) {
         throw new Error(data.errors.join(', '));
@@ -147,7 +168,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
       return data;
     },
     onSuccess: (data) => {
-      const savedCount = data.savedCount ?? data.saved ?? 0;
+      const savedCount = data.savedCount ?? 0;
       toast({
         title: 'Páginas salvas!',
         description: `${savedCount} página(s) configurada(s) para monitoramento.`,

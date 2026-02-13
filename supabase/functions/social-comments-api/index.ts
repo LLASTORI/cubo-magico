@@ -1445,7 +1445,17 @@ async function getAvailablePages(accessToken: string) {
 }
 
 async function saveSelectedPages(supabase: any, projectId: string, accessToken: string, pages: any[]) {
-  for (const page of pages) {
+  const normalizedPages = Array.isArray(pages) ? pages : []
+  console.log(`[SAVE_PAGES] Received ${normalizedPages.length} page(s) for project ${projectId}`)
+
+  let insertedCount = 0
+
+  for (const page of normalizedPages) {
+    if (!page?.id || !page?.name || !page?.platform || !page?.access_token) {
+      console.warn('[SAVE_PAGES] Skipping invalid page payload:', page)
+      continue
+    }
+
     const { error } = await supabase
       .from('social_listening_pages')
       .upsert({
@@ -1460,10 +1470,15 @@ async function saveSelectedPages(supabase: any, projectId: string, accessToken: 
 
     if (error) {
       console.error('Error saving page:', error)
+      continue
     }
+
+    insertedCount += 1
   }
 
-  return { success: true, savedCount: pages.length }
+  console.log(`[SAVE_PAGES] Upserted ${insertedCount} page(s) for project ${projectId} using conflict key (project_id, page_id)`)
+
+  return { success: true, savedCount: insertedCount }
 }
 
 async function getSavedPages(supabase: any, projectId: string) {

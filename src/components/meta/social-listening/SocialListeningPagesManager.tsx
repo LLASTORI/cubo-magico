@@ -25,6 +25,17 @@ interface AvailablePage {
   instagramPicture?: string;
 }
 
+interface AvailablePageApiResponse {
+  id: string;
+  page_id: string;
+  name: string;
+  platform: 'facebook' | 'instagram';
+  access_token: string;
+  instagram_account_id?: string;
+  instagram_username?: string;
+  profile_picture?: string;
+}
+
 interface SavedPage {
   id: string;
   page_id: string;
@@ -39,6 +50,8 @@ interface AvailablePagesResult {
   permissionError: boolean;
   errorMessage?: string;
 }
+
+const EMPTY_AVAILABLE_PAGES: AvailablePage[] = [];
 
 const PERMISSION_ERROR_PATTERNS = [
   'oauth',
@@ -98,15 +111,28 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
         };
       }
 
+      const normalizedPages: AvailablePage[] = Array.isArray(data?.pages)
+        ? (data.pages as AvailablePageApiResponse[]).map((page) => ({
+            pageId: page.page_id,
+            pageName: page.name,
+            pageAccessToken: page.access_token,
+            pagePicture: page.profile_picture,
+            platform: page.platform,
+            instagramAccountId: page.instagram_account_id,
+            instagramUsername: page.instagram_username,
+            instagramPicture: page.profile_picture,
+          }))
+        : [];
+
       return {
-        pages: Array.isArray(data?.pages) ? (data.pages as AvailablePage[]) : [],
+        pages: normalizedPages,
         permissionError: false,
       };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const availablePages = availablePagesResult?.pages || [];
+  const availablePages = availablePagesResult?.pages ?? EMPTY_AVAILABLE_PAGES;
   const hasPermissionError = availablePagesResult?.permissionError || false;
   const availablePagesErrorMessage = availablePagesResult?.errorMessage;
 
@@ -121,9 +147,10 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
       return data;
     },
     onSuccess: (data) => {
+      const savedCount = data.savedCount ?? data.saved ?? 0;
       toast({
         title: 'Páginas salvas!',
-        description: `${data.saved} página(s) configurada(s) para monitoramento.`,
+        description: `${savedCount} página(s) configurada(s) para monitoramento.`,
       });
       queryClient.invalidateQueries({ queryKey: ['social-listening-pages', projectId] });
       setSelectedPages(new Set());
@@ -190,14 +217,14 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
 
   // Filter pages based on search query
   const filteredPages = useMemo(() => {
-    if (!availablePages.length) return [];
+    if (!Array.isArray(availablePages) || availablePages.length === 0) return [];
     if (!searchQuery.trim()) return availablePages;
     
     const query = searchQuery.toLowerCase();
     return availablePages.filter(page => 
-      page.pageName.toLowerCase().includes(query) ||
+      (page.pageName || '').toLowerCase().includes(query) ||
       (page.instagramUsername && page.instagramUsername.toLowerCase().includes(query)) ||
-      page.platform.toLowerCase().includes(query)
+      (page.platform || '').toLowerCase().includes(query)
     );
   }, [availablePages, searchQuery]);
 

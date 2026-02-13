@@ -34,6 +34,28 @@ interface SavedPage {
   is_active: boolean;
 }
 
+interface AvailablePagesResult {
+  pages: AvailablePage[];
+  permissionError: boolean;
+  errorMessage?: string;
+}
+
+const PERMISSION_ERROR_PATTERNS = [
+  'oauth',
+  'permission',
+  'permissions error',
+  'insufficient permission',
+  'pages_show_list',
+  'pages_read_engagement',
+  'requires pages',
+];
+
+const isPermissionError = (message: string | undefined): boolean => {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return PERMISSION_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern));
+};
+
 export function SocialListeningPagesManager({ projectId, onPagesConfigured }: SocialListeningPagesManagerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,16 +79,36 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   });
 
   // Fetch available pages from Meta
-  const { data: availablePages, isLoading: loadingAvailable, refetch: refetchAvailable, isFetching } = useQuery({
+  const {
+    data: availablePagesResult,
+    isLoading: loadingAvailable,
+    refetch: refetchAvailable,
+    isFetching,
+  } = useQuery<AvailablePagesResult>({
     queryKey: ['available-social-pages', projectId],
     queryFn: async () => {
       const { data, error } = await invokeSocialApi({ action: 'get_available_pages', projectId });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      return data?.pages as AvailablePage[] || [];
+
+      if (error) {
+        const message = error.message || 'Erro ao buscar páginas disponíveis';
+        return {
+          pages: [],
+          permissionError: isPermissionError(message),
+          errorMessage: message,
+        };
+      }
+
+      return {
+        pages: Array.isArray(data?.pages) ? (data.pages as AvailablePage[]) : [],
+        permissionError: false,
+      };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  const availablePages = availablePagesResult?.pages || [];
+  const hasPermissionError = availablePagesResult?.permissionError || false;
+  const availablePagesErrorMessage = availablePagesResult?.errorMessage;
 
   // Save selected pages
   const saveMutation = useMutation({
@@ -131,7 +173,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   };
 
   const handleSaveSelected = () => {
-    const pagesToSave = availablePages?.filter(p => selectedPages.has(`${p.pageId}_${p.platform}`)) || [];
+    const pagesToSave = availablePages.filter(p => selectedPages.has(`${p.pageId}_${p.platform}`));
     if (pagesToSave.length > 0) {
       saveMutation.mutate(pagesToSave);
     }
@@ -148,7 +190,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
 
   // Filter pages based on search query
   const filteredPages = useMemo(() => {
-    if (!availablePages) return [];
+    if (!availablePages.length) return [];
     if (!searchQuery.trim()) return availablePages;
     
     const query = searchQuery.toLowerCase();
@@ -173,7 +215,7 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
   }
 
   // Show configuration needed state
-  if (!availablePages || availablePages.length === 0) {
+  if (hasPermissionError) {
     return (
       <Card className="border-yellow-500/50 bg-yellow-500/5">
         <CardHeader>
@@ -196,6 +238,9 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
               Tentar Novamente
             </Button>
           </div>
+          {availablePagesErrorMessage && (
+            <p className="text-xs text-muted-foreground">Detalhe: {availablePagesErrorMessage}</p>
+          )}
           <div className="rounded-lg bg-muted p-4">
             <p className="text-sm font-medium mb-2">Permissões necessárias (disponíveis em modo de desenvolvimento):</p>
             <ul className="text-sm text-muted-foreground space-y-1">
@@ -206,6 +251,28 @@ export function SocialListeningPagesManager({ projectId, onPagesConfigured }: So
               Nota: Permissões avançadas (instagram_basic, instagram_manage_comments) requerem App Review do Meta.
             </p>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (availablePages.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <AlertCircle className="h-5 w-5 text-muted-foreground" />
+            Nenhuma página encontrada
+          </CardTitle>
+          <CardDescription>
+            Conexão com o Meta ativa, mas nenhuma página disponível foi retornada para este token.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => refetchAvailable()} disabled={isFetching} variant="outline" className="gap-2">
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Atualizar páginas
+          </Button>
         </CardContent>
       </Card>
     );

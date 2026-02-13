@@ -110,8 +110,11 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
         body: { action: 'get_saved_pages', projectId },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      console.log('[SOCIAL_LISTENING][get_saved_pages][tab] count', data?.pages?.length || 0);
       return data?.pages || [];
     },
+    retry: false,
     refetchInterval: 30000, // Refresh every 30 seconds to update sync status
   });
 

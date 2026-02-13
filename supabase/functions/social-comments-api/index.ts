@@ -15,6 +15,26 @@ const GRAPH_API_VERSION = 'v19.0'
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+const SOCIAL_API_LOG_PREFIX = '[SOCIAL_API]'
+
+const logInfo = (message: string, data?: Record<string, unknown>) => {
+  console.log(`${SOCIAL_API_LOG_PREFIX} ${message}`, data || {})
+}
+
+const logWarn = (message: string, data?: Record<string, unknown>) => {
+  console.warn(`${SOCIAL_API_LOG_PREFIX} ${message}`, data || {})
+}
+
+const logError = (message: string, data?: Record<string, unknown>) => {
+  console.error(`${SOCIAL_API_LOG_PREFIX} ${message}`, data || {})
+}
+
+const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -382,10 +402,8 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      logWarn('Authorization header ausente')
+      return jsonResponse({ success: false, error: 'Não autorizado' }, 401)
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -397,16 +415,18 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action, projectId, postId, limit } = body
 
-    if (!projectId || typeof projectId !== 'string' || !UUID_REGEX.test(projectId)) {
-      return new Response(JSON.stringify({
-        error: 'projectId é obrigatório e deve ser um UUID válido',
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (!action || typeof action !== 'string') {
+      return jsonResponse({ success: false, error: 'action é obrigatória' }, 400)
     }
 
-    console.log('Social Comments API request:', { action, projectId })
+    if (!projectId || typeof projectId !== 'string' || !UUID_REGEX.test(projectId)) {
+      return jsonResponse({
+        success: false,
+        error: 'projectId é obrigatório e deve ser um UUID válido',
+      }, 400)
+    }
+
+    logInfo('Request recebida', { action, projectId })
 
     const { data: membership, error: membershipError } = await supabase
       .from('project_members')
@@ -416,10 +436,8 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (membershipError || !membership) {
-      return new Response(JSON.stringify({ error: 'Acesso negado ao projeto' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      logWarn('Acesso negado ao projeto', { projectId, membershipError: membershipError?.message })
+      return jsonResponse({ success: false, error: 'Acesso negado ao projeto' }, 403)
     }
 
     let accessToken: string | undefined
@@ -432,97 +450,111 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (credError || !credentials) {
-        return new Response(JSON.stringify({ 
+        return jsonResponse({ 
+          success: false,
           error: 'Meta não conectado',
           needsConnection: true 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        }, 200)
       }
 
       accessToken = credentials.access_token
     }
 
-    let result: any
+    let result: any = { success: false, error: 'Ação não executada' }
 
-    switch (action) {
-      case 'get_available_pages':
-        result = await getAvailablePages(accessToken!)
-        break
+    try {
+      switch (action) {
+        case 'get_available_pages':
+          result = await getAvailablePages(accessToken!)
+          break
 
-      case 'save_pages': {
-        const { pages } = body
-        result = await saveSelectedPages(serviceSupabase, projectId, pages)
-        break
+        case 'save_pages': {
+          const { pages } = body
+          if (!Array.isArray(pages)) {
+            result = { success: false, error: 'pages deve ser um array' }
+            break
+          }
+          result = await saveSelectedPages(serviceSupabase, projectId, pages)
+          break
+        }
+
+        case 'get_saved_pages':
+          result = await getSavedPages(serviceSupabase, projectId)
+          break
+
+        case 'sync_posts':
+          result = await syncPosts(serviceSupabase, projectId, accessToken!)
+          break
+
+        case 'sync_comments':
+          result = await syncComments(serviceSupabase, projectId, accessToken!, postId)
+          break
+
+        case 'process_ai':
+          result = await processCommentsWithAI(serviceSupabase, projectId, limit || 50)
+          break
+
+        case 'link_crm_contacts':
+          result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
+          break
+
+        case 'get_stats':
+          result = await getStats(supabase, projectId)
+          break
+
+        case 'remove_page': {
+          const { pageId: removePageId } = body
+          if (!removePageId || typeof removePageId !== 'string') {
+            result = { success: false, error: 'pageId é obrigatório para remove_page' }
+            break
+          }
+          result = await removePage(serviceSupabase, projectId, removePageId)
+          break
+        }
+
+        case 'sync_ad_comments':
+          result = await syncAdComments(serviceSupabase, projectId, accessToken!)
+          break
+
+        case 'generate_reply': {
+          const { commentId } = body
+          if (!commentId || typeof commentId !== 'string') {
+            result = { success: false, error: 'commentId é obrigatório para generate_reply' }
+            break
+          }
+          result = await generateReply(serviceSupabase, projectId, commentId)
+          break
+        }
+
+        case 'get_ai_usage':
+          result = await getAIUsage(supabase, projectId)
+          break
+
+        case 'get_ai_quota':
+          result = await getAIQuota(supabase, projectId)
+          break
+
+        default:
+          result = { success: false, error: 'Ação inválida' }
       }
-
-      case 'get_saved_pages':
-        result = await getSavedPages(serviceSupabase, projectId)
-        break
-
-      case 'sync_posts':
-        result = await syncPosts(serviceSupabase, projectId, accessToken!)
-        break
-
-      case 'sync_comments':
-        result = await syncComments(serviceSupabase, projectId, accessToken!, postId)
-        break
-
-      case 'process_ai':
-        result = await processCommentsWithAI(serviceSupabase, projectId, limit || 50)
-        break
-
-      case 'link_crm_contacts':
-        result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
-        break
-
-      case 'get_stats':
-        result = await getStats(supabase, projectId)
-        break
-
-      case 'remove_page': {
-        const { pageId: removePageId } = body
-        result = await removePage(serviceSupabase, projectId, removePageId)
-        break
-      }
-
-      case 'sync_ad_comments':
-        result = await syncAdComments(serviceSupabase, projectId, accessToken!)
-        break
-
-      case 'generate_reply': {
-        const { commentId } = body
-        result = await generateReply(serviceSupabase, projectId, commentId)
-        break
-      }
-
-      case 'get_ai_usage':
-        result = await getAIUsage(supabase, projectId)
-        break
-
-      case 'get_ai_quota':
-        result = await getAIQuota(supabase, projectId)
-        break
-
-      default:
-        return new Response(JSON.stringify({ error: 'Ação inválida' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+    } catch (actionError: unknown) {
+      const errorMessage = actionError instanceof Error ? actionError.message : 'Erro interno da action'
+      logError('Falha ao executar action', { action, projectId, error: errorMessage })
+      result = { success: false, error: errorMessage }
     }
 
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    if (typeof result?.success !== 'boolean') {
+      result = { success: true, ...result }
+    }
+
+    return jsonResponse(result)
 
   } catch (error: unknown) {
-    console.error('Social Comments API error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    logError('Erro não tratado no request', {
+      error: error instanceof Error ? error.message : String(error),
     })
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return jsonResponse({ success: false, error: errorMessage }, 200)
   }
 })
 
@@ -1349,6 +1381,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 // ============= STATS AND USAGE =============
 
 async function getStats(supabase: any, projectId: string) {
+  try {
   const [totalRes, pendingRes, sentimentRes, classificationRes] = await Promise.all([
     supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
     supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('ai_processing_status', 'pending'),
@@ -1367,15 +1400,29 @@ async function getStats(supabase: any, projectId: string) {
   }
 
   return {
+    success: true,
     total: totalRes.count || 0,
     pending: pendingRes.count || 0,
     processed: (totalRes.count || 0) - (pendingRes.count || 0),
     sentiment: sentimentCounts,
     classification: classificationCounts,
   }
+  } catch (error: unknown) {
+    logError('Erro em get_stats', { projectId, error: error instanceof Error ? error.message : String(error) })
+    return {
+      success: false,
+      total: 0,
+      pending: 0,
+      processed: 0,
+      sentiment: {},
+      classification: {},
+      error: 'Falha ao carregar estatísticas',
+    }
+  }
 }
 
 async function getAIUsage(supabase: any, projectId: string) {
+  try {
   const today = new Date()
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
@@ -1405,13 +1452,25 @@ async function getAIUsage(supabase: any, projectId: string) {
   const monthlyCost = (monthlyRes.data || []).reduce((sum: number, r: any) => sum + parseFloat(r.cost_estimate || 0), 0)
 
   return {
+    success: true,
     daily: { items: dailyItems, cost: dailyCost.toFixed(4) },
     monthly: { items: monthlyItems, cost: monthlyCost.toFixed(4) },
     recent: recentRes.data || [],
   }
+  } catch (error: unknown) {
+    logError('Erro em get_ai_usage', { projectId, error: error instanceof Error ? error.message : String(error) })
+    return {
+      success: false,
+      daily: { items: 0, cost: '0.0000' },
+      monthly: { items: 0, cost: '0.0000' },
+      recent: [],
+      error: 'Falha ao carregar uso de IA',
+    }
+  }
 }
 
 async function getAIQuota(supabase: any, projectId: string) {
+  try {
   const { data, error } = await supabase
     .from('ai_project_quotas')
     .select('*')
@@ -1419,54 +1478,70 @@ async function getAIQuota(supabase: any, projectId: string) {
     .maybeSingle()
 
   if (error) {
-    return { error: error.message }
+    logWarn('Erro ao consultar cota de IA', { projectId, error: error.message })
+    return { success: false, error: 'Falha ao carregar cota de IA' }
   }
 
-  return data || {
+  return {
+    success: true,
+    ...(data || {
     daily_limit: 100,
     monthly_limit: 3000,
     current_daily_usage: 0,
     current_monthly_usage: 0,
     is_unlimited: false,
     provider_preference: 'openai'
+  })
+  }
+  } catch (error: unknown) {
+    logError('Erro em get_ai_quota', { projectId, error: error instanceof Error ? error.message : String(error) })
+    return { success: false, error: 'Falha ao carregar cota de IA' }
   }
 }
 
 // ============= PAGE MANAGEMENT =============
 
 async function getAvailablePages(accessToken: string) {
-  const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
-  const response = await fetch(pagesUrl)
-  const data = await response.json()
+  try {
+    const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
+    const response = await fetch(pagesUrl)
+    const data = await response.json()
 
-  if (data.error) {
-    throw new Error(data.error.message)
-  }
+    if (data.error) {
+      return { success: false, pages: [], error: data.error.message }
+    }
 
-  const pages: any[] = []
-  for (const page of data.data || []) {
-    pages.push({
-      id: `${page.id}_facebook`,
-      page_id: page.id,
-      name: `${page.name} (Facebook)`,
-      platform: 'facebook',
-      access_token: page.access_token,
-    })
-
-    if (page.instagram_business_account) {
+    const pages: any[] = []
+    for (const page of data.data || []) {
       pages.push({
-        id: `${page.id}_instagram`,
+        id: `${page.id}_facebook`,
         page_id: page.id,
-        instagram_account_id: page.instagram_business_account.id,
-        name: `@${page.instagram_business_account.username || page.name} (Instagram)`,
-        platform: 'instagram',
+        name: `${page.name} (Facebook)`,
+        platform: 'facebook',
         access_token: page.access_token,
-        profile_picture: page.instagram_business_account.profile_picture_url,
       })
+
+      if (page.instagram_business_account) {
+        pages.push({
+          id: `${page.id}_instagram`,
+          page_id: page.id,
+          instagram_account_id: page.instagram_business_account.id,
+          name: `@${page.instagram_business_account.username || page.name} (Instagram)`,
+          platform: 'instagram',
+          access_token: page.access_token,
+          profile_picture: page.instagram_business_account.profile_picture_url,
+        })
+      }
+    }
+
+    return { success: true, pages }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      pages: [],
+      error: error instanceof Error ? error.message : 'Falha ao buscar páginas',
     }
   }
-
-  return { pages }
 }
 
 async function saveSelectedPages(supabase: any, projectId: string, pages: any[]) {
@@ -1477,11 +1552,14 @@ async function saveSelectedPages(supabase: any, projectId: string, pages: any[])
   const errors: string[] = []
 
   for (const rawPage of normalizedPages) {
+    const rawId = typeof rawPage?.id === 'string' ? rawPage.id : ''
+    const idParts = rawId.split('_')
+    const fallbackPageId = idParts.length > 0 ? idParts[0] : undefined
+    const fallbackPlatform = idParts.length > 1 ? idParts[1] : undefined
 
-    // 🔥 NORMALIZAÇÃO INTELIGENTE (resolve seu erro)
-    const page_id = rawPage?.page_id || rawPage?.id
+    const page_id = rawPage?.page_id || fallbackPageId
     const name = rawPage?.name
-    const platform = rawPage?.platform
+    const platform = rawPage?.platform || fallbackPlatform
     const access_token = rawPage?.access_token
 
     if (!page_id || !name || !platform || !access_token) {
@@ -1529,6 +1607,47 @@ async function saveSelectedPages(supabase: any, projectId: string, pages: any[])
     success: errors.length === 0,
     savedCount: insertedCount,
     errors,
+  }
+}
+
+async function getSavedPages(supabase: any, projectId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('social_listening_pages')
+      .select('id, page_id, page_name, platform, instagram_account_id, instagram_username, is_active, created_at, updated_at')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      logError('Erro ao listar páginas salvas', { projectId, error: error.message })
+      return { success: false, pages: [], error: 'Falha ao carregar páginas salvas' }
+    }
+
+    return { success: true, pages: data || [] }
+  } catch (error: unknown) {
+    logError('Falha não tratada ao listar páginas salvas', { projectId, error: error instanceof Error ? error.message : String(error) })
+    return { success: false, pages: [], error: 'Falha ao carregar páginas salvas' }
+  }
+}
+
+async function removePage(supabase: any, projectId: string, pageId: string) {
+  try {
+    const { error } = await supabase
+      .from('social_listening_pages')
+      .update({ is_active: false })
+      .eq('project_id', projectId)
+      .eq('page_id', pageId)
+
+    if (error) {
+      logError('Erro ao remover página', { projectId, pageId, error: error.message })
+      return { success: false, error: 'Falha ao remover página' }
+    }
+
+    return { success: true, removedPageId: pageId }
+  } catch (error: unknown) {
+    logError('Falha não tratada ao remover página', { projectId, pageId, error: error instanceof Error ? error.message : String(error) })
+    return { success: false, error: 'Falha ao remover página' }
   }
 }
 

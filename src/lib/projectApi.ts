@@ -3,8 +3,7 @@
  * ==================
  * Canonical helper for calling Edge Functions with project context.
  * 
- * CRITICAL: This module ensures ALL edge function calls include the correct project_code
- * via the X-Project-Code header. The backend MUST resolve project_id from this code.
+ * This module ensures edge function calls carry project context in the request body.
  * 
  * Usage:
  *   import { invokeProjectFunction } from '@/lib/projectApi';
@@ -51,11 +50,11 @@ export async function invokeProjectFunction<T = any>(
   console.log(`[ProjectAPI] Invoking ${functionName} for project: ${projectCode}`);
 
   const { data, error } = await supabase.functions.invoke(functionName, {
-    body,
-    headers: {
-      ...headers,
-      'X-Project-Code': projectCode,
+    body: {
+      ...body,
+      projectCode,
     },
+    headers,
   });
 
   if (error) {
@@ -110,10 +109,10 @@ export async function invokeWithProjectId(
   body: Record<string, any> = {},
   headers: Record<string, string> = {}
 ): Promise<InvokeFunctionResult> {
-  console.warn('[ProjectAPI] DEPRECATED: invokeWithProjectId used. Migrate to invokeProjectFunction with project_code.');
+  console.warn('[ProjectAPI] DEPRECATED: invokeWithProjectId used. Migrate to invokeProjectFunction with projectCode in body.');
   
   // Still passes projectId in body for backward compatibility
-  // But this should be migrated to use project_code headers
+  // But this should be migrated to use projectCode in body
   const { data, error } = await supabase.functions.invoke(functionName, {
     body: { ...body, projectId },
     headers,

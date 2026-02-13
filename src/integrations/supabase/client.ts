@@ -5,10 +5,54 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+const FORBIDDEN_HEADERS = new Set(['x-project-code']);
+
+const stripForbiddenHeaders = (headers: Headers): Headers => {
+  const cleanedHeaders = new Headers();
+
+  headers.forEach((value, key) => {
+    if (!FORBIDDEN_HEADERS.has(key.toLowerCase())) {
+      cleanedHeaders.set(key, value);
+    }
+  });
+
+  return cleanedHeaders;
+};
+
+const buildSanitizedHeaders = (headers?: HeadersInit): Headers | undefined => {
+  if (!headers) return undefined;
+  return stripForbiddenHeaders(new Headers(headers));
+};
+
+const sanitizedSupabaseFetch: typeof fetch = (input, init) => {
+  if (input instanceof Request) {
+    const requestHeaders = stripForbiddenHeaders(input.headers);
+
+    const request = new Request(input, {
+      ...init,
+      headers: buildSanitizedHeaders(init?.headers) ?? requestHeaders,
+    });
+
+    return fetch(request);
+  }
+
+  return fetch(input, {
+    ...init,
+    headers: buildSanitizedHeaders(init?.headers),
+  });
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  global: {
+    fetch: sanitizedSupabaseFetch,
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      'x-client-info': 'supabase-js-web',
+    },
+  },
   auth: {
     storage: localStorage,
     persistSession: true,

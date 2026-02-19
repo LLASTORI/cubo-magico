@@ -13,27 +13,6 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const GRAPH_API_VERSION = 'v19.0'
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
-const SOCIAL_API_LOG_PREFIX = '[SOCIAL_API]'
-
-const logInfo = (message: string, data?: Record<string, unknown>) => {
-  console.log(`${SOCIAL_API_LOG_PREFIX} ${message}`, data || {})
-}
-
-const logWarn = (message: string, data?: Record<string, unknown>) => {
-  console.warn(`${SOCIAL_API_LOG_PREFIX} ${message}`, data || {})
-}
-
-const logError = (message: string, data?: Record<string, unknown>) => {
-  console.error(`${SOCIAL_API_LOG_PREFIX} ${message}`, data || {})
-}
-
-const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
-  new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
 
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -83,14 +62,6 @@ interface CustomKeywords {
   praise: string[]
   spam: string[]
 }
-
-const ACTIONS_REQUIRING_META_CREDENTIALS = new Set([
-  'get_available_pages',
-  'save_pages',
-  'sync_posts',
-  'sync_comments',
-  'sync_ad_comments',
-])
 
 function classifyByKeywords(text: string, customKeywords?: CustomKeywords): KeywordClassificationResult {
   if (!text || text.trim().length === 0) {
@@ -402,8 +373,10 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      logWarn('Authorization header ausente')
-      return jsonResponse({ success: false, error: 'Não autorizado' }, 401)
+      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -415,146 +388,103 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action, projectId, postId, limit } = body
 
-    if (!action || typeof action !== 'string') {
-      return jsonResponse({ success: false, error: 'action é obrigatória' }, 400)
-    }
+    console.log('Social Comments API request:', { action, projectId })
 
-    if (!projectId || typeof projectId !== 'string' || !UUID_REGEX.test(projectId)) {
-      return jsonResponse({
-        success: false,
-        error: 'projectId é obrigatório e deve ser um UUID válido',
-      }, 400)
-    }
-
-    logInfo('Request recebida', { action, projectId })
-
-    const { data: membership, error: membershipError } = await supabase
-      .from('project_members')
-      .select('id')
+    // Get Meta credentials
+    const { data: credentials, error: credError } = await supabase
+      .from('meta_credentials')
+      .select('*')
       .eq('project_id', projectId)
-      .limit(1)
       .maybeSingle()
 
-    if (membershipError || !membership) {
-      logWarn('Acesso negado ao projeto', { projectId, membershipError: membershipError?.message })
-      return jsonResponse({ success: false, error: 'Acesso negado ao projeto' }, 403)
+    if (credError || !credentials) {
+      return new Response(JSON.stringify({ 
+        error: 'Meta não conectado',
+        needsConnection: true 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
-    let accessToken: string | undefined
-    if (ACTIONS_REQUIRING_META_CREDENTIALS.has(action)) {
-      // Get Meta credentials only for actions that actually call Graph API
-      const { data: credentials, error: credError } = await supabase
-        .from('meta_credentials')
-        .select('*')
-        .eq('project_id', projectId)
-        .maybeSingle()
+    const accessToken = credentials.access_token
 
-      if (credError || !credentials) {
-        return jsonResponse({ 
-          success: false,
-          error: 'Meta não conectado',
-          needsConnection: true 
-        }, 200)
-      }
+    let result: any
 
-      accessToken = credentials.access_token
+    switch (action) {
+      case 'get_available_pages':
+        result = await getAvailablePages(accessToken)
+        break
+
+      case 'save_pages':
+        const { pages } = body
+        result = await saveSelectedPages(serviceSupabase, projectId, accessToken, pages)
+        break
+
+      case 'get_saved_pages':
+        result = await getSavedPages(supabase, projectId)
+        break
+
+      case 'sync_posts':
+        result = await syncPosts(serviceSupabase, projectId, accessToken)
+        break
+
+      case 'sync_comments':
+        result = await syncComments(serviceSupabase, projectId, accessToken, postId)
+        break
+
+      case 'process_ai':
+        result = await processCommentsWithAI(serviceSupabase, projectId, limit || 50)
+        break
+
+      case 'link_crm_contacts':
+        result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
+        break
+
+      case 'get_stats':
+        result = await getStats(supabase, projectId)
+        break
+
+      case 'remove_page':
+        const { pageId: removePageId } = body
+        result = await removePage(serviceSupabase, projectId, removePageId)
+        break
+
+      case 'sync_ad_comments':
+        result = await syncAdComments(serviceSupabase, projectId, accessToken)
+        break
+
+      case 'generate_reply':
+        const { commentId } = body
+        result = await generateReply(serviceSupabase, projectId, commentId)
+        break
+
+      case 'get_ai_usage':
+        result = await getAIUsage(supabase, projectId)
+        break
+
+      case 'get_ai_quota':
+        result = await getAIQuota(supabase, projectId)
+        break
+
+      default:
+        return new Response(JSON.stringify({ error: 'Ação inválida' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
     }
 
-    let result: any = { success: false, error: 'Ação não executada' }
-
-    try {
-      switch (action) {
-        case 'get_available_pages':
-          result = await getAvailablePages(accessToken!)
-          break
-
-        case 'save_pages': {
-          const { pages } = body
-          if (!Array.isArray(pages)) {
-            result = { success: false, error: 'pages deve ser um array' }
-            break
-          }
-          result = await saveSelectedPages(serviceSupabase, projectId, pages)
-          break
-        }
-
-        case 'get_saved_pages':
-          result = await getSavedPages(serviceSupabase, projectId)
-          break
-
-        case 'sync_posts':
-          result = await syncPosts(serviceSupabase, projectId, accessToken!)
-          break
-
-        case 'sync_comments':
-          result = await syncComments(serviceSupabase, projectId, accessToken!, postId)
-          break
-
-        case 'process_ai':
-          result = await processCommentsWithAI(serviceSupabase, projectId, limit || 50)
-          break
-
-        case 'link_crm_contacts':
-          result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
-          break
-
-        case 'get_stats':
-          result = await getStats(supabase, projectId)
-          break
-
-        case 'remove_page': {
-          const { pageId: removePageId } = body
-          if (!removePageId || typeof removePageId !== 'string') {
-            result = { success: false, error: 'pageId é obrigatório para remove_page' }
-            break
-          }
-          result = await removePage(serviceSupabase, projectId, removePageId)
-          break
-        }
-
-        case 'sync_ad_comments':
-          result = await syncAdComments(serviceSupabase, projectId, accessToken!)
-          break
-
-        case 'generate_reply': {
-          const { commentId } = body
-          if (!commentId || typeof commentId !== 'string') {
-            result = { success: false, error: 'commentId é obrigatório para generate_reply' }
-            break
-          }
-          result = await generateReply(serviceSupabase, projectId, commentId)
-          break
-        }
-
-        case 'get_ai_usage':
-          result = await getAIUsage(supabase, projectId)
-          break
-
-        case 'get_ai_quota':
-          result = await getAIQuota(supabase, projectId)
-          break
-
-        default:
-          result = { success: false, error: 'Ação inválida' }
-      }
-    } catch (actionError: unknown) {
-      const errorMessage = actionError instanceof Error ? actionError.message : 'Erro interno da action'
-      logError('Falha ao executar action', { action, projectId, error: errorMessage })
-      result = { success: false, error: errorMessage }
-    }
-
-    if (typeof result?.success !== 'boolean') {
-      result = { success: true, ...result }
-    }
-
-    return jsonResponse(result)
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
 
   } catch (error: unknown) {
-    logError('Erro não tratado no request', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+    console.error('Social Comments API error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
-    return jsonResponse({ success: false, error: errorMessage }, 200)
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 })
 
@@ -1381,7 +1311,6 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 // ============= STATS AND USAGE =============
 
 async function getStats(supabase: any, projectId: string) {
-  try {
   const [totalRes, pendingRes, sentimentRes, classificationRes] = await Promise.all([
     supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
     supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('ai_processing_status', 'pending'),
@@ -1400,29 +1329,15 @@ async function getStats(supabase: any, projectId: string) {
   }
 
   return {
-    success: true,
     total: totalRes.count || 0,
     pending: pendingRes.count || 0,
     processed: (totalRes.count || 0) - (pendingRes.count || 0),
     sentiment: sentimentCounts,
     classification: classificationCounts,
   }
-  } catch (error: unknown) {
-    logError('Erro em get_stats', { projectId, error: error instanceof Error ? error.message : String(error) })
-    return {
-      success: false,
-      total: 0,
-      pending: 0,
-      processed: 0,
-      sentiment: {},
-      classification: {},
-      error: 'Falha ao carregar estatísticas',
-    }
-  }
 }
 
 async function getAIUsage(supabase: any, projectId: string) {
-  try {
   const today = new Date()
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
@@ -1452,25 +1367,13 @@ async function getAIUsage(supabase: any, projectId: string) {
   const monthlyCost = (monthlyRes.data || []).reduce((sum: number, r: any) => sum + parseFloat(r.cost_estimate || 0), 0)
 
   return {
-    success: true,
     daily: { items: dailyItems, cost: dailyCost.toFixed(4) },
     monthly: { items: monthlyItems, cost: monthlyCost.toFixed(4) },
     recent: recentRes.data || [],
   }
-  } catch (error: unknown) {
-    logError('Erro em get_ai_usage', { projectId, error: error instanceof Error ? error.message : String(error) })
-    return {
-      success: false,
-      daily: { items: 0, cost: '0.0000' },
-      monthly: { items: 0, cost: '0.0000' },
-      recent: [],
-      error: 'Falha ao carregar uso de IA',
-    }
-  }
 }
 
 async function getAIQuota(supabase: any, projectId: string) {
-  try {
   const { data, error } = await supabase
     .from('ai_project_quotas')
     .select('*')
@@ -1478,179 +1381,105 @@ async function getAIQuota(supabase: any, projectId: string) {
     .maybeSingle()
 
   if (error) {
-    logWarn('Erro ao consultar cota de IA', { projectId, error: error.message })
-    return { success: false, error: 'Falha ao carregar cota de IA' }
+    return { error: error.message }
   }
 
-  return {
-    success: true,
-    ...(data || {
+  return data || {
     daily_limit: 100,
     monthly_limit: 3000,
     current_daily_usage: 0,
     current_monthly_usage: 0,
     is_unlimited: false,
     provider_preference: 'openai'
-  })
-  }
-  } catch (error: unknown) {
-    logError('Erro em get_ai_quota', { projectId, error: error instanceof Error ? error.message : String(error) })
-    return { success: false, error: 'Falha ao carregar cota de IA' }
   }
 }
 
 // ============= PAGE MANAGEMENT =============
 
 async function getAvailablePages(accessToken: string) {
-  try {
-    const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
-    const response = await fetch(pagesUrl)
-    const data = await response.json()
+  const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
+  const response = await fetch(pagesUrl)
+  const data = await response.json()
 
-    if (data.error) {
-      return { success: false, pages: [], error: data.error.message }
-    }
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
 
-    const pages: any[] = []
-    for (const page of data.data || []) {
+  const pages: any[] = []
+  for (const page of data.data || []) {
+    pages.push({
+      id: `${page.id}_facebook`,
+      page_id: page.id,
+      name: `${page.name} (Facebook)`,
+      platform: 'facebook',
+      access_token: page.access_token,
+    })
+
+    if (page.instagram_business_account) {
       pages.push({
-        id: `${page.id}_facebook`,
+        id: `${page.id}_instagram`,
         page_id: page.id,
-        name: `${page.name} (Facebook)`,
-        platform: 'facebook',
+        instagram_account_id: page.instagram_business_account.id,
+        name: `@${page.instagram_business_account.username || page.name} (Instagram)`,
+        platform: 'instagram',
         access_token: page.access_token,
+        profile_picture: page.instagram_business_account.profile_picture_url,
       })
-
-      if (page.instagram_business_account) {
-        pages.push({
-          id: `${page.id}_instagram`,
-          page_id: page.id,
-          instagram_account_id: page.instagram_business_account.id,
-          name: `@${page.instagram_business_account.username || page.name} (Instagram)`,
-          platform: 'instagram',
-          access_token: page.access_token,
-          profile_picture: page.instagram_business_account.profile_picture_url,
-        })
-      }
-    }
-
-    return { success: true, pages }
-  } catch (error: unknown) {
-    return {
-      success: false,
-      pages: [],
-      error: error instanceof Error ? error.message : 'Falha ao buscar páginas',
     }
   }
+
+  return { pages }
 }
 
-async function saveSelectedPages(supabase: any, projectId: string, pages: any[]) {
-  const normalizedPages = Array.isArray(pages) ? pages : []
-  console.log(`[SAVE_PAGES] Received ${normalizedPages.length} page(s) for project ${projectId}`)
-
-  let insertedCount = 0
-  const errors: string[] = []
-
-  for (const rawPage of normalizedPages) {
-    const rawId = typeof rawPage?.id === 'string' ? rawPage.id : ''
-    const idParts = rawId.split('_')
-    const fallbackPageId = idParts.length > 0 ? idParts[0] : undefined
-    const fallbackPlatform = idParts.length > 1 ? idParts[1] : undefined
-
-    const page_id = rawPage?.page_id || fallbackPageId
-    const name = rawPage?.name
-    const platform = rawPage?.platform || fallbackPlatform
-    const access_token = rawPage?.access_token
-
-    if (!page_id || !name || !platform || !access_token) {
-      console.warn('[SAVE_PAGES] Skipping invalid page payload:', rawPage)
-      errors.push(`Payload inválido para página ${rawPage?.id || 'unknown'}`)
-      continue
-    }
-
-    console.log(`[SAVE_PAGES] Upserting page: ${page_id} (${platform})`)
-
-    const { data: upsertedPage, error } = await supabase
+async function saveSelectedPages(supabase: any, projectId: string, accessToken: string, pages: any[]) {
+  for (const page of pages) {
+    const { error } = await supabase
       .from('social_listening_pages')
       .upsert({
         project_id: projectId,
-        page_id: page_id, // ✅ sempre ID real
-        page_name: name,
-        platform: platform,
-        page_access_token: access_token,
-        instagram_account_id: rawPage?.instagram_account_id || null,
-        instagram_username: rawPage?.instagram_username || null,
+        page_id: page.id,
+        page_name: page.name,
+        platform: page.platform,
+        page_access_token: page.access_token,
+        instagram_account_id: page.instagram_account_id || null,
         is_active: true,
       }, { onConflict: 'project_id,page_id' })
-      .select('id, page_id, platform')
-      .single()
 
     if (error) {
-      console.error('[SAVE_PAGES] Error saving page:', error)
-      errors.push(`${page_id}: ${error.message}`)
-      continue
+      console.error('Error saving page:', error)
     }
-
-    console.log('[SAVE_PAGES] Upsert result:', upsertedPage)
-    insertedCount += 1
   }
 
-  console.log(
-    `[SAVE_PAGES] Upserted ${insertedCount} page(s) for project ${projectId}`
-  )
-
-  if (errors.length > 0) {
-    console.warn('[SAVE_PAGES] Errors:', errors)
-  }
-
-  return {
-    success: errors.length === 0,
-    savedCount: insertedCount,
-    errors,
-  }
+  return { success: true, savedCount: pages.length }
 }
 
 async function getSavedPages(supabase: any, projectId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('social_listening_pages')
-      .select('id, page_id, page_name, platform, instagram_account_id, instagram_username, is_active, created_at, updated_at')
-      .eq('project_id', projectId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+  const { data, error } = await supabase
+    .from('social_listening_pages')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
 
-    if (error) {
-      logError('Erro ao listar páginas salvas', { projectId, error: error.message })
-      return { success: false, pages: [], error: 'Falha ao carregar páginas salvas' }
-    }
-
-    return { success: true, pages: data || [] }
-  } catch (error: unknown) {
-    logError('Falha não tratada ao listar páginas salvas', { projectId, error: error instanceof Error ? error.message : String(error) })
-    return { success: false, pages: [], error: 'Falha ao carregar páginas salvas' }
+  if (error) {
+    throw new Error(error.message)
   }
+
+  return { pages: data || [] }
 }
 
 async function removePage(supabase: any, projectId: string, pageId: string) {
-  try {
-    const { error } = await supabase
-      .from('social_listening_pages')
-      .update({ is_active: false })
-      .eq('project_id', projectId)
-      .eq('page_id', pageId)
+  const { error } = await supabase
+    .from('social_listening_pages')
+    .update({ is_active: false })
+    .eq('project_id', projectId)
+    .eq('page_id', pageId)
 
-    if (error) {
-      logError('Erro ao remover página', { projectId, pageId, error: error.message })
-      return { success: false, error: 'Falha ao remover página' }
-    }
-
-    return { success: true, removedPageId: pageId }
-  } catch (error: unknown) {
-    logError('Falha não tratada ao remover página', { projectId, pageId, error: error instanceof Error ? error.message : String(error) })
-    return { success: false, error: 'Falha ao remover página' }
+  if (error) {
+    throw new Error(error.message)
   }
-}
 
+  return { success: true }
+}
 
 // ============= AD COMMENTS SYNC =============
 

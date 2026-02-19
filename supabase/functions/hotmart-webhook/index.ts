@@ -2741,31 +2741,40 @@ projectId = projectIdFromUrl;
       if (transaction && transaction.contact_id) {
         console.log('[Hotmart Webhook] Triggering automation for transaction:', transaction.id);
         
-        const { error: automationError } = await supabase.functions.invoke('automation-engine', {
-          body: {
-            action: 'trigger_transaction',
-            projectId,
-            contactId: transaction.contact_id,
-            transaction: {
-              id: transaction.id,
-              status: transaction.status,
-              product_name: transaction.product_name,
-              product_code: transaction.product_code,
-              offer_code: transaction.offer_code,
-              offer_name: transaction.offer_name,
-              total_price: transaction.total_price,
-              total_price_brl: transaction.total_price_brl,
-              payment_method: transaction.payment_method,
-              transaction_date: transaction.transaction_date,
-            }
-          }
-        });
-        
-        if (automationError) {
-          console.error('[Hotmart Webhook] Automation trigger error:', automationError);
-        } else {
-          console.log('[Hotmart Webhook] Automation triggered successfully');
-        }
+        const automationUrl = `${supabaseUrl}/functions/v1/automation-engine`;
+
+const automationResponse = await fetch(automationUrl, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${supabaseServiceKey}`, // backend → backend auth
+  },
+  body: JSON.stringify({
+    action: 'trigger_transaction',
+    projectId,
+    contactId: transaction.contact_id,
+    transaction: {
+      id: transaction.id,
+      status: transaction.status,
+      product_name: transaction.product_name,
+      product_code: transaction.product_code,
+      offer_code: transaction.offer_code,
+      offer_name: transaction.offer_name,
+      total_price: transaction.total_price,
+      total_price_brl: transaction.total_price_brl,
+      payment_method: transaction.payment_method,
+      transaction_date: transaction.transaction_date,
+    }
+  }),
+});
+
+if (!automationResponse.ok) {
+  const text = await automationResponse.text();
+  console.error('[Hotmart Webhook] Automation trigger error:', text);
+} else {
+  console.log('[Hotmart Webhook] Automation triggered successfully');
+}
+
       }
     } catch (automationError) {
       // Don't fail the webhook if automation fails

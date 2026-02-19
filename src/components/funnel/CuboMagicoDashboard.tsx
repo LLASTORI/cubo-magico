@@ -17,7 +17,7 @@
  * ❌ total_price_brl
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-
+import { useProject } from '@/contexts/ProjectContext';
 import { useState, useMemo, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -145,16 +145,26 @@ interface FunnelMetrics {
   initiateCheckouts: number;
   purchases: number;
 }
+export function CuboMagicoDashboard(props: CuboMagicoDashboardProps) {
 
-export function CuboMagicoDashboard({ 
-  projectId, 
-  externalStartDate, 
-  externalEndDate, 
-  embedded = false,
-  onFunnelSelect,
-  salesData: externalSalesData,
-  insightsData: externalInsightsData
-}: CuboMagicoDashboardProps) {
+  const { activeProject } = useProject();
+
+// 🔒 GATE CANÔNICO DO CUBO
+if (!props.projectId) {
+  console.log('[CUBO] aguardando projectId...');
+  return null;
+}
+
+  const {
+    projectId,
+    externalStartDate,
+    externalEndDate,
+    embedded = false,
+    onFunnelSelect,
+    salesData: externalSalesData,
+    insightsData: externalInsightsData
+  } = props;
+
   const { isModuleEnabled } = useProjectModules();
   const isMetaAdsEnabled = isModuleEnabled('meta_ads');
   const isHotmartEnabled = isModuleEnabled('hotmart');
@@ -179,6 +189,7 @@ export function CuboMagicoDashboard({
     startDate,
     endDate,
   });
+
 
   // Fetch funnels with config - ONLY perpetuo funnels (exclude 'A Definir' and 'Lançamento')
   const { data: funnels, isLoading: loadingFunnels } = useQuery({

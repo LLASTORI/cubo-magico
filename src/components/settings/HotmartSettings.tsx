@@ -59,7 +59,7 @@ export const HotmartSettings = () => {
 
   // Generate unique webhook URL for this project
   const webhookUrl = projectId 
-  ? `https://yioldpwkkgsdsukxfcnr.supabase.co/functions/v1/hotmart-webhook/${projectId}`
+  ? `https://mqaygpnfjuyslnxpvipa.supabase.co/functions/v1/hotmart-webhook/${projectId}`
   : '';
 
 

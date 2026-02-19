@@ -1,353 +1,253 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { encode as hexEncode } from 'https://deno.land/std@0.208.0/encoding/hex.ts'
+import { encode as hexEncode } from "https://deno.land/std@0.208.0/encoding/hex.ts"
 
-/* ======================================================
-   CONFIG
-====================================================== */
-
+// SECURITY: Restrict CORS to specific origins
 const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
-  'https://cubomagicoleandrolastoricombr.vercel.app',
+  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
 ]
 
-const ALLOWED_REDIRECT_BASES = [
-  'https://cubomagico.leandrolastori.com.br',
-  'https://cubomagicoleandrolastoricombr.vercel.app',
-]
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(o => origin.startsWith(o.replace('https://', '').split('.')[0]) || origin === o)
+    ? origin
+    : ALLOWED_ORIGINS[0]
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
+}
 
 const META_APP_ID = Deno.env.get('META_APP_ID')!
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_ROLE_KEY =
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-if (!META_APP_ID || !META_APP_SECRET || !SUPABASE_URL) {
-  throw new Error('Missing env vars for Meta OAuth')
+if (!META_APP_ID || !META_APP_SECRET) {
+  console.error('Missing META_APP_ID or META_APP_SECRET in callback')
+  throw new Error('Meta OAuth env vars not configured')
 }
 
-/* ======================================================
-   CORS
-====================================================== */
-
-function getCorsHeaders(origin: string | null) {
-  const allowed =
-    origin && ALLOWED_ORIGINS.includes(origin)
-      ? origin
-      : ALLOWED_ORIGINS[0]
-
-  return {
-    'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Headers':
-      'authorization, x-client-info, apikey, content-type',
-  }
-}
-
-/* ======================================================
-   HMAC
-====================================================== */
-
+// SECURITY: Generate HMAC signature for state validation
 async function generateHmac(data: string): Promise<string> {
   const encoder = new TextEncoder()
-
+  const keyData = encoder.encode(META_APP_SECRET)
+  const messageData = encoder.encode(data)
+  
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(META_APP_SECRET),
+    keyData,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   )
 
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    encoder.encode(data)
-  )
-
+  
+  const signature = await crypto.subtle.sign('HMAC', key, messageData)
   return new TextDecoder().decode(hexEncode(new Uint8Array(signature)))
 }
 
-async function validateHmac(data: string, sig: string) {
-  const expected = await generateHmac(data)
-  return sig === expected
+// SECURITY: Validate HMAC signature
+async function validateHmac(data: string, signature: string): Promise<boolean> {
+  const expectedSignature = await generateHmac(data)
+  return signature === expectedSignature
 }
 
-/* ======================================================
-   HELPERS
-====================================================== */
-
-function isRedirectAllowed(url: string) {
-  return ALLOWED_REDIRECT_BASES.some((base) =>
-    url.startsWith(base)
-  )
+// Helper to create signed state
+export async function createSignedState(projectId: string, userId: string, redirectUrl: string): Promise<string> {
+  const timestamp = Date.now()
+  const stateData = { projectId, userId, redirectUrl, timestamp }
+  const stateJson = JSON.stringify(stateData)
+  const signature = await generateHmac(stateJson)
+  
+  return btoa(JSON.stringify({ data: stateData, sig: signature }))
 }
-
-function errorRedirect(
-  msg: string,
-  redirect: string,
-  cors: Record<string, string>
-) {
-  const url = new URL(redirect)
-
-  url.searchParams.set('meta_error', msg)
-
-  return new Response(null, {
-    status: 302,
-    headers: {
-      ...cors,
-      Location: url.toString(),
-    },
-  })
-}
-
-/* ======================================================
-   MAIN
-====================================================== */
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin')
-  const cors = getCorsHeaders(origin)
+  const corsHeaders = getCorsHeaders(origin)
 
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: cors })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
     const url = new URL(req.url)
-
     const code = url.searchParams.get('code')
-    const state = url.searchParams.get('state')
+    const state = url.searchParams.get('state') // Contains projectId, userId and signature
     const error = url.searchParams.get('error')
-    const errorDesc = url.searchParams.get('error_description')
+    const errorDescription = url.searchParams.get('error_description')
 
-    /* ======================================
-       Decode state
-    ====================================== */
+    console.log('OAuth callback received:', { code: !!code, state: !!state, error })
 
-    if (!state) {
-      return errorRedirect(
-        'State ausente',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
+    // Parse state first to get redirect URL
+    let stateData: { projectId: string; userId: string; redirectUrl: string; timestamp: number } | null = null
+    let signature: string | null = null
+    
+    if (state) {
+      try {
+        const parsed = JSON.parse(atob(state))
+        // Check if it's the new signed format
+        if (parsed.data && parsed.sig) {
+          stateData = parsed.data
+          signature = parsed.sig
+        } else {
+          // Legacy format (backwards compatibility)
+          stateData = parsed
+          console.warn('⚠️ Legacy state format detected (no signature)')
+        }
+      } catch (e) {
+        console.error('Invalid state:', e)
+      }
     }
-
-    let parsedState: any
-
-    try {
-      parsedState = JSON.parse(atob(state))
-    } catch {
-      return errorRedirect(
-        'State inválido',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
-    }
-
-    if (!parsedState.data || !parsedState.sig) {
-      return errorRedirect(
-        'State malformado',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
-    }
-
-    const stateData = parsedState.data
-    const signature = parsedState.sig
-
-    const stateJson = JSON.stringify(stateData)
-
-    const valid = await validateHmac(stateJson, signature)
-
-    if (!valid) {
-      return errorRedirect(
-        'Assinatura inválida',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
-    }
-
-    const age = Date.now() - stateData.timestamp
-
-    if (age > 10 * 60 * 1000) {
-      return errorRedirect(
-        'Sessão expirada',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
-    }
-
-    const { projectId, redirectUrl } = stateData
-
-    if (!projectId || !redirectUrl) {
-      return errorRedirect(
-        'State incompleto',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
-    }
-
-    if (!isRedirectAllowed(redirectUrl)) {
-      console.error('Blocked redirect:', redirectUrl)
-
-      return errorRedirect(
-        'Redirect não autorizado',
-        ALLOWED_REDIRECT_BASES[0],
-        cors
-      )
-    }
-
-    /* ======================================
-       OAuth Errors
-    ====================================== */
+    
+    const baseRedirectUrl = stateData?.redirectUrl || `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
 
     if (error) {
-      return errorRedirect(
-        errorDesc || error,
-        redirectUrl,
-        cors
-      )
+      console.error('OAuth error:', error, errorDescription)
+      return redirectWithError(`Erro no login: ${errorDescription || error}`, baseRedirectUrl, corsHeaders)
     }
 
-    if (!code) {
-      return errorRedirect('Code ausente', redirectUrl, cors)
+    if (!code || !stateData) {
+      console.error('Missing code or state')
+      return redirectWithError('Parâmetros inválidos', baseRedirectUrl, corsHeaders)
     }
 
-    /* ======================================
-       Exchange Token
-    ====================================== */
+    // SECURITY: Validate HMAC signature if present
+    if (signature) {
+      const stateJson = JSON.stringify(stateData)
+      const isValid = await validateHmac(stateJson, signature)
+      
+      if (!isValid) {
+        console.error('❌ Invalid state signature - potential CSRF attack')
+        return redirectWithError('Assinatura inválida. Tente novamente.', baseRedirectUrl, corsHeaders)
+      }
+      
+      // Check timestamp (state expires after 10 minutes)
+      const stateAge = Date.now() - stateData.timestamp
+      const maxAge = 10 * 60 * 1000 // 10 minutes
+      
+      if (stateAge > maxAge) {
+        console.error('❌ State expired:', stateAge, 'ms')
+        return redirectWithError('Sessão expirada. Tente novamente.', baseRedirectUrl, corsHeaders)
+      }
+      
+      console.log('✅ State signature validated successfully')
+    } else {
+      console.warn('⚠️ No signature in state - accepting for backwards compatibility')
+    }
 
-    const callbackUrl =
-      `${SUPABASE_URL}/functions/v1/meta-oauth-callback`
+    const { projectId, userId, redirectUrl } = stateData
+    console.log('State parsed:', { projectId, userId })
 
-    const tokenParams = new URLSearchParams({
-      client_id: META_APP_ID,
-      client_secret: META_APP_SECRET,
-      redirect_uri: callbackUrl,
-      code,
-    })
+    // Exchange code for access token
+    const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token`
+    const callbackUrl = `${new URL(req.url).origin}/functions/v1/meta-oauth-callback`
 
-    const tokenRes = await fetch(
-      `https://graph.facebook.com/v19.0/oauth/access_token?${tokenParams}`
-    )
+const tokenParams = new URLSearchParams({
+  client_id: META_APP_ID!,
+  client_secret: META_APP_SECRET!,
+  redirect_uri: callbackUrl,
+  code,
+})
 
-    const tokenData = await tokenRes.json()
+
+    console.log('Exchanging code for token...')
+    const tokenResponse = await fetch(`${tokenUrl}?${tokenParams}`)
+    const tokenData = await tokenResponse.json()
 
     if (tokenData.error) {
-      console.error('TOKEN ERROR:', tokenData)
-
-      return errorRedirect(
-        tokenData.error.message,
-        redirectUrl,
-        cors
-      )
+      console.error('Token exchange error:', tokenData.error)
+      return redirectWithError(`Erro ao obter token: ${tokenData.error.message}`, redirectUrl, corsHeaders)
     }
 
-    const shortToken = tokenData.access_token
-    const shortExpires = tokenData.expires_in
+    const { access_token, expires_in } = tokenData
+    console.log('Token obtained, expires_in:', expires_in)
 
-    /* ======================================
-       Long-lived token
-    ====================================== */
-
-    const longParams = new URLSearchParams({
+    // Get long-lived token
+    const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token`
+    const longLivedParams = new URLSearchParams({
       grant_type: 'fb_exchange_token',
-      client_id: META_APP_ID,
-      client_secret: META_APP_SECRET,
-      fb_exchange_token: shortToken,
+      client_id: META_APP_ID!,
+      client_secret: META_APP_SECRET!,
+      fb_exchange_token: access_token,
     })
 
-    const longRes = await fetch(
-      `https://graph.facebook.com/v19.0/oauth/access_token?${longParams}`
-    )
+    console.log('Getting long-lived token...')
+    const longLivedResponse = await fetch(`${longLivedUrl}?${longLivedParams}`)
+    const longLivedData = await longLivedResponse.json()
 
-    const longData = await longRes.json()
+    const finalToken = longLivedData.access_token || access_token
+    const finalExpires = longLivedData.expires_in || expires_in
+    console.log('Final token obtained, expires_in:', finalExpires)
 
-    const finalToken = longData.access_token || shortToken
-    const finalExpires = longData.expires_in || shortExpires
-
-    /* ======================================
-       User Info
-    ====================================== */
-
-    const meRes = await fetch(
+    // Get user info
+    const userResponse = await fetch(
       `https://graph.facebook.com/v19.0/me?access_token=${finalToken}`
     )
+    const userData = await userResponse.json()
+    console.log('User data:', userData)
 
-    const me = await meRes.json()
-
-    if (!me?.id) {
-      console.error('INVALID META USER:', me)
-
-      return errorRedirect(
-        'Erro ao obter usuário Meta',
-        redirectUrl,
-        cors
-      )
-    }
-
-    /* ======================================
-       Save DB
-    ====================================== */
-
-    const expiresAt = finalExpires
+    // Calculate expiration date
+    const expiresAt = finalExpires 
       ? new Date(Date.now() + finalExpires * 1000).toISOString()
       : null
 
-    const payload = {
-      project_id: projectId,
-      access_token: finalToken,
-      token_type: 'Bearer',
-      expires_at: expiresAt,
-      user_id: me.id,
-      user_name: me.name || null,
-      updated_at: new Date().toISOString(),
-    }
+    // Save to database using service role
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    console.log('UPSERT META_CREDENTIALS:', payload)
-
-    const supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY
-    )
-
-    const { error: dbError } = await supabase
+    const { error: upsertError } = await supabase
       .from('meta_credentials')
-      .upsert(payload, {
+      .upsert({
+        project_id: projectId,
+        access_token: finalToken,
+        token_type: 'Bearer',
+        expires_at: expiresAt,
+        user_id: userData.id,
+        user_name: userData.name,
+        updated_at: new Date().toISOString(),
+      }, {
         onConflict: 'project_id',
       })
 
-    if (dbError) {
-      console.error('DB ERROR META_CREDENTIALS:', dbError)
-
-      return errorRedirect(
-        'Erro ao salvar token: ' + dbError.message,
-        redirectUrl,
-        cors
-      )
+    if (upsertError) {
+      console.error('Database error:', upsertError)
+      return redirectWithError('Erro ao salvar credenciais', redirectUrl, corsHeaders)
     }
 
-    /* ======================================
-       Redirect Success
-    ====================================== */
+    console.log('✅ Credentials saved successfully')
 
-    const success = new URL(redirectUrl)
-
-    success.searchParams.set('meta_connected', 'true')
-
+    // Redirect back to app with success
+    const successUrl = new URL(redirectUrl)
+    successUrl.searchParams.set('meta_connected', 'true')
+    
     return new Response(null, {
       status: 302,
       headers: {
-        ...cors,
-        Location: success.toString(),
+        ...corsHeaders,
+        'Location': successUrl.toString(),
       },
     })
-  } catch (err) {
-    console.error('OAUTH CRASH:', err)
 
-    return errorRedirect(
-      'Erro interno: ' + String(err),
-      ALLOWED_REDIRECT_BASES[0],
-      getCorsHeaders(null)
-    )
+  } catch (error) {
+    console.error('Unexpected error:', error)
+    // Use a fallback URL for unexpected errors
+    const fallbackUrl = `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
+    return redirectWithError('Erro inesperado', fallbackUrl, getCorsHeaders(null))
   }
 })
+
+function redirectWithError(message: string, redirectUrl: string, corsHeaders: Record<string, string>): Response {
+  // Redirect to app with error
+  const errorUrl = new URL(redirectUrl)
+  errorUrl.searchParams.set('meta_error', message)
+  
+  return new Response(null, {
+    status: 302,
+    headers: {
+      ...corsHeaders,
+      'Location': errorUrl.toString(),
+    },
+  })
+}

@@ -97,6 +97,27 @@ FROM funnel_orders_view
 WHERE transaction_id = 'HP3609747213C1';
 ```
 
+### Query de Diagnóstico de Integridade (`order_items` x `offer_mappings`)
+
+Use esta consulta para detectar itens de pedido cujo `project_id` diverge do `project_id` do mapeamento de oferta vinculado:
+
+```sql
+SELECT
+    oi.id AS order_item_id,
+    oi.project_id AS order_project,
+    om.project_id AS mapping_project,
+    oi.offer_mapping_id,
+    oi.product_name,
+    oi.offer_code
+FROM order_items oi
+JOIN offer_mappings om
+    ON om.id = oi.offer_mapping_id
+WHERE oi.project_id <> om.project_id
+LIMIT 50;
+```
+
+Se a consulta retornar linhas, existem inconsistências entre catálogo semântico e Orders Core que devem ser corrigidas antes de análises por funil/projeto.
+
 ### Resultado ✅
 
 | Campo | Valor |

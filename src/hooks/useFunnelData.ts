@@ -201,20 +201,9 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       const allProjectFunnels = (allFunnels as FunnelConfig[]) || [];
       if (allProjectFunnels.length === 0) return [];
 
-      const { data: activeMappings, error: mappingsError } = await supabase
-        .from('offer_mappings')
-        .select('funnel_id, id_funil')
-        .eq('project_id', projectId!)
-        .in('status', ACTIVE_MAPPING_STATUS_VARIANTS);
-
-      if (mappingsError) throw mappingsError;
-
-      const mappedFunnelIds = new Set((activeMappings || []).map(m => m.funnel_id).filter(Boolean));
-      const mappedFunnelNames = new Set((activeMappings || []).map(m => m.id_funil?.trim()).filter(Boolean));
-
-      return allProjectFunnels.filter(funnel =>
-        mappedFunnelIds.has(funnel.id) || mappedFunnelNames.has(funnel.name)
-      );
+      // IMPORTANT: include all project funnels in fallback, even without offer mappings.
+      // This avoids hidden funnels while integrations (ex: Meta Ads API) are unstable.
+      return allProjectFunnels;
     },
     enabled,
     staleTime: 5 * 60 * 1000,

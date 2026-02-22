@@ -80,6 +80,20 @@ function AIInsightsTab({
   setCachedAnalysis,
 }: AIInsightsTabProps) {
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>(funnels[0]?.id || '');
+
+  useEffect(() => {
+    if (!funnels.length) {
+      setSelectedFunnelId('');
+      return;
+    }
+
+    setSelectedFunnelId((currentId) => {
+      if (currentId && funnels.some((funnel) => funnel.id === currentId)) {
+        return currentId;
+      }
+      return funnels[0].id;
+    });
+  }, [funnels]);
   
   const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
   
@@ -189,7 +203,6 @@ const FunnelAnalysis = () => {
     activeAccountIds,
     aggregatedMetrics,
     summaryMetrics,
-    isLoading,
     loadingSales,
     loadingInsights,
     refetchAll,
@@ -220,8 +233,9 @@ const FunnelAnalysis = () => {
 
   // Quick date setters
   const setQuickDate = (days: number) => {
-    setEndDate(new Date());
-    setStartDate(subDays(new Date(), days));
+    const now = new Date();
+    setEndDate(now);
+    setStartDate(subDays(now, days));
     setSelectedPeriod(days === 0 ? 'today' : `${days}d`);
   };
 
@@ -261,16 +275,12 @@ const FunnelAnalysis = () => {
     setEndDatePopoverOpen(false);
   };
 
-  // ROAS status
-  const roasStatus = useMemo(() => {
-    if (summaryMetrics.investimento === 0) return 'neutral';
-    if (summaryMetrics.roas >= summaryMetrics.roasTarget * 1.2) return 'excellent';
-    if (summaryMetrics.roas >= summaryMetrics.roasTarget) return 'good';
-    if (summaryMetrics.roas >= summaryMetrics.roasTarget * 0.8) return 'warning';
-    return 'danger';
-  }, [summaryMetrics]);
-
-  const datesChanged = startDate.getTime() !== appliedStartDate.getTime() || endDate.getTime() !== appliedEndDate.getTime();
+  const datesChanged = useMemo(() => {
+    return (
+      formatBrazilDate(startDate) !== formatBrazilDate(appliedStartDate) ||
+      formatBrazilDate(endDate) !== formatBrazilDate(appliedEndDate)
+    );
+  }, [startDate, appliedStartDate, endDate, appliedEndDate]);
   
   // Check if end date is "today"
   const isEndDateToday = useMemo(() => {

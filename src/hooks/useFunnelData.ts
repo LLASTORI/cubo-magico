@@ -60,6 +60,9 @@ interface FunnelConfig {
   roas_target: number | null;
 }
 
+const PERPETUO_TYPE_VARIANTS = ['perpetuo', 'perpétuo', 'PERPETUO', 'PERPÉTUO', 'Perpetuo', 'Perpétuo'];
+const ACTIVE_MAPPING_STATUS_VARIANTS = ['Ativo', 'ativo', 'ATIVO', 'active', 'ACTIVE'];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ORDERS CORE: New canonical order record from funnel_orders_view
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -115,6 +118,18 @@ interface SaleRecord {
   recurrence: number | null;
 }
 
+interface CanonicalSaleEvent {
+  external_id: string | null;
+  product_name: string | null;
+  offer_code: string | null;
+  gross_value_brl: number | null;
+  net_value_brl: number | null;
+  contact_email: string | null;
+  event_timestamp: string | null;
+  canonical_status: string | null;
+  funnel_id: string | null;
+}
+
 interface MetaInsight {
   id: string;
   campaign_id: string | null;
@@ -160,17 +175,46 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const enabled = !!projectId;
 
   // STABLE individual queries - no useQueries to avoid hooks order issues
-  // Filter only 'perpetuo' funnels (canonical behavior for this page).
+  // Prefer 'perpetuo' funnels for this page.
+  // Fallback: if migration left funnel_type inconsistent, use any funnel with active mapping.
   const funnelsQuery = useQuery({
     queryKey: ['funnels-perpetuo', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: funnelData, error } = await supabase
         .from('funnels')
         .select('id, name, campaign_name_pattern, roas_target')
         .eq('project_id', projectId!)
-        .eq('funnel_type', 'perpetuo');
+        .in('funnel_type', PERPETUO_TYPE_VARIANTS);
       if (error) throw error;
-      return (data as FunnelConfig[]) || [];
+
+      const perpetuoFunnels = (funnelData as FunnelConfig[]) || [];
+      if (perpetuoFunnels.length > 0) {
+        return perpetuoFunnels;
+      }
+
+      const { data: allFunnels, error: fallbackError } = await supabase
+        .from('funnels')
+        .select('id, name, campaign_name_pattern, roas_target')
+        .eq('project_id', projectId!);
+
+      if (fallbackError) throw fallbackError;
+      const allProjectFunnels = (allFunnels as FunnelConfig[]) || [];
+      if (allProjectFunnels.length === 0) return [];
+
+      const { data: activeMappings, error: mappingsError } = await supabase
+        .from('offer_mappings')
+        .select('funnel_id, id_funil')
+        .eq('project_id', projectId!)
+        .in('status', ACTIVE_MAPPING_STATUS_VARIANTS);
+
+      if (mappingsError) throw mappingsError;
+
+      const mappedFunnelIds = new Set((activeMappings || []).map(m => m.funnel_id).filter(Boolean));
+      const mappedFunnelNames = new Set((activeMappings || []).map(m => m.id_funil?.trim()).filter(Boolean));
+
+      return allProjectFunnels.filter(funnel =>
+        mappedFunnelIds.has(funnel.id) || mappedFunnelNames.has(funnel.name)
+      );
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -183,7 +227,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         .from('offer_mappings')
         .select('*')
         .eq('project_id', projectId!)
-        .eq('status', 'Ativo');
+        .in('status', ACTIVE_MAPPING_STATUS_VARIANTS);
       if (error) throw error;
       return (data as OfferMapping[]) || [];
     },
@@ -281,6 +325,31 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       const totalProducerNet = allData.reduce((s, o) => s + (o.producer_net || 0), 0);
       console.log(`[useFunnelData] Total orders from funnel_orders_view: ${allData.length}, customer_paid: R$${totalCustomerPaid.toFixed(2)}, producer_net: R$${totalProducerNet.toFixed(2)}`);
       return allData;
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const canonicalSalesQuery = useQuery({
+    queryKey: ['canonical-sales-fallback', projectId, startDateStr, endDateStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('canonical_sale_events')
+        .select('external_id, product_name, offer_code, gross_value_brl, net_value_brl, contact_email, event_timestamp, canonical_status, funnel_id')
+        .eq('project_id', projectId!)
+        .eq('event_type', 'sale')
+        .eq('canonical_status', 'confirmed')
+        .not('funnel_id', 'is', null)
+        .gte('event_timestamp', `${startDateStr}T00:00:00`)
+        .lte('event_timestamp', `${endDateStr}T23:59:59`);
+
+      if (error) {
+        console.error('[useFunnelData] Error fetching canonical_sale_events fallback:', error);
+        throw error;
+      }
+
+      return (data as CanonicalSaleEvent[]) || [];
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -395,13 +464,45 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const funnels = funnelsQuery.data || [];
   const mappings = mappingsQuery.data || [];
   const ordersData = ordersQuery.data || [];
+  const canonicalSalesData = canonicalSalesQuery.data || [];
   const rawInsights = insightsQuery.data || [];
+
+  const hasUsableOrderFunnelSignals = useMemo(
+    () => ordersData.some(order => !!order.funnel_id || !!order.main_offer_code),
+    [ordersData]
+  );
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ADAPTER: Convert OrderRecord to SaleRecord for backward compatibility
   // This allows gradual migration without breaking existing components
   // ═══════════════════════════════════════════════════════════════════════════════
   const salesData: SaleRecord[] = useMemo(() => {
+    if (!hasUsableOrderFunnelSignals && canonicalSalesData.length > 0) {
+      return canonicalSalesData.map((sale) => ({
+        transaction_id: sale.external_id || '',
+        product_name: sale.product_name,
+        offer_code: sale.offer_code,
+        gross_amount: sale.gross_value_brl,
+        net_amount: sale.net_value_brl,
+        buyer_email: sale.contact_email,
+        economic_day: sale.event_timestamp ? sale.event_timestamp.slice(0, 10) : null,
+        purchase_date: sale.event_timestamp,
+        hotmart_status: sale.canonical_status?.toUpperCase() || 'APPROVED',
+        funnel_id: sale.funnel_id,
+        funnel_name: null,
+        meta_campaign_id: null,
+        meta_adset_id: null,
+        meta_ad_id: null,
+        utm_source: null,
+        utm_campaign: null,
+        utm_adset: null,
+        utm_creative: null,
+        utm_placement: null,
+        payment_method: null,
+        recurrence: 1,
+      }));
+    }
+
     return ordersData.map(order => ({
       transaction_id: order.transaction_id,
       product_name: order.main_product,
@@ -426,10 +527,10 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       payment_method: null,
       recurrence: 1, // Orders are always unique (no parcelas duplicated)
     }));
-  }, [ordersData]);
+  }, [ordersData, canonicalSalesData, hasUsableOrderFunnelSignals]);
 
   // Loading states
-  const loadingSales = ordersQuery.isLoading;
+  const loadingSales = ordersQuery.isLoading || canonicalSalesQuery.isLoading;
   const loadingInsights = insightsQuery.isLoading || paidMediaMetricsQuery.isLoading;
   const isLoading = loadingSales;
 
@@ -507,31 +608,16 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // ORDERS CORE: New metrics calculation using order-level data
   // ═══════════════════════════════════════════════════════════════════════════════
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
-    if (!ordersData.length) return [];
+    if (!salesData.length) return [];
 
-    // Build offer code revenue map from all_offer_codes in orders
+    // Build offer code revenue map from sales records
     const salesByOffer: Record<string, { count: number; revenue: number }> = {};
-    
-    ordersData.forEach(order => {
-      const offerCodes = order.all_offer_codes || [order.main_offer_code].filter(Boolean);
-      
-      // For each order, count 1 sale for the main offer code
-      const mainCode = order.main_offer_code || 'SEM_CODIGO';
-      if (!salesByOffer[mainCode]) salesByOffer[mainCode] = { count: 0, revenue: 0 };
-      salesByOffer[mainCode].count += 1;
-      salesByOffer[mainCode].revenue += order.main_revenue || 0;
-      
-      // Add bump revenue if has_bump or if bump_revenue > 0
-      if (order.bump_revenue > 0) {
-        // Find bump offer codes from all_offer_codes (exclude main)
-        const bumpCodes = (order.all_offer_codes || []).filter(c => c !== mainCode);
-        bumpCodes.forEach(code => {
-          if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
-          salesByOffer[code].count += 1;
-          // Distribute bump_revenue evenly (simplified)
-          salesByOffer[code].revenue += order.bump_revenue / Math.max(bumpCodes.length, 1);
-        });
-      }
+
+    salesData.forEach((sale) => {
+      const code = sale.offer_code || 'SEM_CODIGO';
+      if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
+      salesByOffer[code].count += 1;
+      salesByOffer[code].revenue += sale.gross_amount || 0;
     });
 
     const mappedOffers = new Set(sortedMappings.map(m => m.codigo_oferta));
@@ -575,20 +661,15 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }));
 
     return [...mappedMetrics, ...unmappedOffers];
-  }, [sortedMappings, ordersData]);
+  }, [sortedMappings, salesData]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: Summary metrics using order-level aggregations
   // ═══════════════════════════════════════════════════════════════════════════════
   const summaryMetrics = useMemo(() => {
-    // Count unique orders (not transactions/parcelas)
-    const totalVendas = ordersData.length;
-    
-    // Total revenue = sum of customer_paid
-    const totalReceita = ordersData.reduce((sum, o) => sum + (o.customer_paid || 0), 0);
-    
-    // Producer net
-    const totalProducerNet = ordersData.reduce((sum, o) => sum + (o.producer_net || 0), 0);
+    const totalVendas = salesData.length;
+    const totalReceita = salesData.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
+    const totalProducerNet = salesData.reduce((sum, s) => sum + (s.net_amount || 0), 0);
     
     // Front-end sales (orders with main offer in FRONT position)
     const frontOfferCodes = new Set(
@@ -596,12 +677,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         .filter(m => m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE')
         .map(m => m.codigo_oferta)
     );
-    const vendasFront = ordersData.filter(o => 
-      frontOfferCodes.has(o.main_offer_code || '')
+    const vendasFront = salesData.filter(s =>
+      frontOfferCodes.has(s.offer_code || '')
     ).length;
     
     // Unique customers
-    const uniqueCustomers = new Set(ordersData.map(o => o.buyer_email).filter(Boolean)).size;
+    const uniqueCustomers = new Set(salesData.map(s => s.buyer_email).filter(Boolean)).size;
     
     // Ticket médio = customer_paid / orders
     const baseVendas = vendasFront > 0 ? vendasFront : totalVendas;
@@ -616,8 +697,18 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     const roas = totalMetaInvestment > 0 ? totalReceita / totalMetaInvestment : 0;
     
     // Order composition rates
-    const ordersWithBump = ordersData.filter(o => o.has_bump || o.bump_revenue > 0).length;
-    const ordersWithUpsell = ordersData.filter(o => o.has_upsell || o.upsell_revenue > 0).length;
+    const bumpOfferCodes = new Set(
+      sortedMappings
+        .filter(m => m.tipo_posicao === 'OB')
+        .map(m => m.codigo_oferta)
+    );
+    const upsellOfferCodes = new Set(
+      sortedMappings
+        .filter(m => m.tipo_posicao === 'US' || m.tipo_posicao === 'DS')
+        .map(m => m.codigo_oferta)
+    );
+    const ordersWithBump = salesData.filter(s => bumpOfferCodes.has(s.offer_code || '')).length;
+    const ordersWithUpsell = salesData.filter(s => upsellOfferCodes.has(s.offer_code || '')).length;
     const bumpRate = totalVendas > 0 ? (ordersWithBump / totalVendas) * 100 : 0;
     const upsellRate = totalVendas > 0 ? (ordersWithUpsell / totalVendas) * 100 : 0;
 
@@ -639,17 +730,18 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       ordersWithBump,
       ordersWithUpsell,
     };
-  }, [ordersData, sortedMappings, totalMetaInvestment, funnels]);
+  }, [salesData, sortedMappings, totalMetaInvestment, funnels]);
 
   // Refetch functions
   const refetchAll = async () => {
     console.log(`[useFunnelData] Refetching all data...`);
     const results = await Promise.all([
       ordersQuery.refetch(),
+      canonicalSalesQuery.refetch(),
       insightsQuery.refetch(),
       paidMediaMetricsQuery.refetch(),
     ]);
-    console.log(`[useFunnelData] Refetch complete. Orders: ${results[0].data?.length || 0}, Insights: ${results[1].data?.length || 0}`);
+    console.log(`[useFunnelData] Refetch complete. Orders: ${results[0].data?.length || 0}, CanonicalSales: ${results[1].data?.length || 0}, Insights: ${results[2].data?.length || 0}`);
   };
 
   return {

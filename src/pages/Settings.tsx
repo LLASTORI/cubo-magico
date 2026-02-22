@@ -25,6 +25,7 @@ import { MemberRoleManager } from '@/components/settings/MemberRoleManager';
 import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { TrackingSettingsManager } from '@/components/settings/TrackingSettingsManager';
+import { getFunctionErrorMessage } from '@/lib/supabaseFunctionError';
 
 
 const META_APP_ID = '845927421602166';
@@ -147,7 +148,8 @@ const Settings = () => {
       });
 
       if (error || !data?.state) {
-        throw new Error(error?.message || 'Falha ao gerar estado de autenticação');
+        const message = await getFunctionErrorMessage(error, 'Falha ao gerar estado de autenticação');
+        throw new Error(message);
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;

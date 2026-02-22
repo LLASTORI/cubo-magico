@@ -47,10 +47,16 @@ Deno.serve(async (req) => {
 
   // Validate env
   if (!META_APP_ID || !META_APP_SECRET) {
-    console.error('Missing META_APP_ID or META_APP_SECRET')
+    const missingVars = [
+      !META_APP_ID ? 'META_APP_ID' : null,
+      !META_APP_SECRET ? 'META_APP_SECRET' : null,
+    ].filter(Boolean)
+
+    console.error('Missing required Meta env vars:', missingVars)
 
     return new Response(JSON.stringify({
       error: 'Meta OAuth not configured',
+      details: `Missing env vars: ${missingVars.join(', ')}`,
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Facebook, CheckCircle, AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { getFunctionErrorMessage } from '@/lib/supabaseFunctionError';
 
 const META_APP_ID = '845927421602166';
 
@@ -66,7 +67,8 @@ export function MetaAdsProviderSettings({ onBack }: MetaAdsProviderSettingsProps
       });
 
       if (error || !data?.state) {
-        throw new Error(error?.message || 'Falha ao gerar estado de autenticação');
+        const message = await getFunctionErrorMessage(error, 'Falha ao gerar estado de autenticação');
+        throw new Error(message);
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;

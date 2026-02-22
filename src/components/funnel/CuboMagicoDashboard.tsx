@@ -220,22 +220,11 @@ if (!props.projectId) {
 
       if (allError) throw allError;
 
-      const { data: offerMappings, error: mappingError } = await supabase
-        .from('offer_mappings')
-        .select('funnel_id, id_funil')
-        .eq('project_id', projectId)
-        .in('status', ACTIVE_MAPPING_STATUS_VARIANTS);
-
-      if (mappingError) throw mappingError;
-
-      const mappedFunnelIds = new Set((offerMappings || []).map(m => m.funnel_id).filter(Boolean));
-      const mappedFunnelNames = new Set((offerMappings || []).map(m => m.id_funil?.trim()).filter(Boolean));
-      const fallbackFunnels = ((allFunnels as FunnelWithConfig[]) || []).filter(f =>
-        mappedFunnelIds.has(f.id) || mappedFunnelNames.has(f.name)
-      );
-
-      console.log(`[CuboMagico] Fallback funnels loaded (non-perpetuo type): ${fallbackFunnels.length}`);
-      return fallbackFunnels;
+      const projectFunnels = (allFunnels as FunnelWithConfig[]) || [];
+      // IMPORTANT: Show all project funnels even without offer mappings.
+      // This keeps Funnel Analysis usable while Meta API / integrations are unstable.
+      console.log(`[CuboMagico] Fallback to all project funnels (non-perpetuo type): ${projectFunnels.length}`);
+      return projectFunnels;
     },
     enabled: !!projectId,
   });
@@ -432,9 +421,11 @@ if (!props.projectId) {
     enabled: !!projectId,
   });
 
+  const campaigns = campaignsData || [];
+
   // Calculate metrics for each funnel
   const funnelMetrics = useMemo((): FunnelMetrics[] => {
-    if (!funnels || !offerMappings || !salesData || !campaignsData || !insightsData) {
+    if (!funnels || !offerMappings || !salesData || !insightsData) {
       return [];
     }
 
@@ -448,7 +439,7 @@ if (!props.projectId) {
       // Find campaigns matching the pattern (Padrão do Nome da Campanha)
       // Use a more robust matching that handles special characters
       const matchingCampaigns = pattern 
-        ? campaignsData.filter(c => {
+        ? campaigns.filter(c => {
             const campaignName = c.campaign_name?.toLowerCase() || '';
             // Direct includes check - works with special chars like "+"
             return campaignName.includes(pattern);
@@ -646,7 +637,7 @@ if (!props.projectId) {
         purchases,
       };
     });
-  }, [funnels, offerMappings, salesData, campaignsData, insightsData]);
+  }, [funnels, offerMappings, salesData, campaigns, insightsData]);
 
   // Total investment from ALL ad-level insights (the real total)
   const totalInvestmentAll = useMemo(() => {
@@ -997,10 +988,10 @@ if (!props.projectId) {
       <Card className="p-8">
         <div className="text-center space-y-4">
           <Target className="w-12 h-12 text-muted-foreground mx-auto" />
-          <h3 className="text-lg font-semibold">Nenhum funil perpétuo encontrado</h3>
+          <h3 className="text-lg font-semibold">Nenhum funil encontrado</h3>
           {funnelTypeCounts.lancamento > 0 || funnelTypeCounts.indefinido > 0 ? (
             <p className="text-muted-foreground text-sm max-w-xl mx-auto">
-              Este dashboard exibe apenas funis do tipo <strong>perpétuo</strong>. Neste projeto, encontramos{' '}
+              Este dashboard prioriza funis do tipo <strong>perpétuo</strong>. Neste projeto, encontramos{' '}
               <strong>{funnelTypeCounts.lancamento}</strong> funil(is) de lançamento e{' '}
               <strong>{funnelTypeCounts.indefinido}</strong> funil(is) indefinido(s). Ajuste o tipo em Configurações → Funis.
             </p>

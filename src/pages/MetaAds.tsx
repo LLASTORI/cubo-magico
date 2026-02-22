@@ -28,6 +28,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { MetaROIDashboard } from '@/components/meta/MetaROIDashboard';
 import { MetaAudiencesTab } from '@/components/meta/audiences';
+import { getFunctionErrorMessage } from '@/lib/supabaseFunctionError';
 
 const META_APP_ID = '845927421602166';
 
@@ -163,7 +164,8 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       });
 
       if (error || !data?.state) {
-        throw new Error(error?.message || 'Falha ao gerar estado de autenticação');
+        const message = await getFunctionErrorMessage(error, 'Falha ao gerar estado de autenticação');
+        throw new Error(message);
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;

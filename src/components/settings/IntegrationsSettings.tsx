@@ -12,6 +12,7 @@ import { CRMWebhookKeysManager } from './CRMWebhookKeysManager';
 import { FullDataSync } from '@/components/FullDataSync';
 import { useToast } from '@/hooks/use-toast';
 import { useCRMWebhookKeys } from '@/hooks/useCRMWebhookKeys';
+import { getFunctionErrorMessage } from '@/lib/supabaseFunctionError';
 
 const META_APP_ID = '845927421602166';
 
@@ -97,7 +98,8 @@ export function IntegrationsSettings() {
       });
 
       if (error || !data?.state) {
-        throw new Error(error?.message || 'Falha ao gerar estado de autenticação');
+        const message = await getFunctionErrorMessage(error, 'Falha ao gerar estado de autenticação');
+        throw new Error(message);
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;

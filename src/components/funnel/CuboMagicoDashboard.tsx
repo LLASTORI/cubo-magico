@@ -191,7 +191,7 @@ if (!props.projectId) {
   });
 
 
-  // Fetch funnels with config - ONLY perpetuo funnels (exclude 'A Definir' and 'Lançamento')
+  // Fetch ONLY perpetuo funnels (canonical behavior for this page).
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
     queryKey: ['funnels-with-config-perpetuo', projectId],
     queryFn: async () => {
@@ -207,6 +207,32 @@ if (!props.projectId) {
     },
     enabled: !!projectId,
   });
+
+  // Diagnostic helper for better empty-state guidance.
+  const { data: funnelTypesForProject } = useQuery({
+    queryKey: ['funnels-types-diagnostic', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funnels')
+        .select('funnel_type')
+        .eq('project_id', projectId);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  });
+
+  const funnelTypeCounts = useMemo(() => {
+    const counts = { perpetuo: 0, lancamento: 0, indefinido: 0 };
+    (funnelTypesForProject || []).forEach((f: { funnel_type: string | null }) => {
+      if (f.funnel_type === 'perpetuo') counts.perpetuo += 1;
+      else if (f.funnel_type === 'lancamento') counts.lancamento += 1;
+      else if (f.funnel_type === 'indefinido') counts.indefinido += 1;
+    });
+    return counts;
+  }, [funnelTypesForProject]);
 
   // Fetch offer mappings - use unified query key
   const { data: offerMappings } = useQuery({
@@ -939,10 +965,18 @@ if (!props.projectId) {
       <Card className="p-8">
         <div className="text-center space-y-4">
           <Target className="w-12 h-12 text-muted-foreground mx-auto" />
-          <h3 className="text-lg font-semibold">Nenhum funil configurado</h3>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Para usar o dashboard Cubo Mágico, configure o <strong>padrão de nome da campanha</strong> e o <strong>ROAS alvo</strong> em cada funil no menu Configurações → Funis.
-          </p>
+          <h3 className="text-lg font-semibold">Nenhum funil perpétuo encontrado</h3>
+          {funnelTypeCounts.lancamento > 0 || funnelTypeCounts.indefinido > 0 ? (
+            <p className="text-muted-foreground text-sm max-w-xl mx-auto">
+              Este dashboard exibe apenas funis do tipo <strong>perpétuo</strong>. Neste projeto, encontramos{' '}
+              <strong>{funnelTypeCounts.lancamento}</strong> funil(is) de lançamento e{' '}
+              <strong>{funnelTypeCounts.indefinido}</strong> funil(is) indefinido(s). Ajuste o tipo em Configurações → Funis.
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              Para usar o dashboard Cubo Mágico, configure o <strong>padrão de nome da campanha</strong> e o <strong>ROAS alvo</strong> em cada funil no menu Configurações → Funis.
+            </p>
+          )}
         </div>
       </Card>
     );

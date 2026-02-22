@@ -160,7 +160,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const enabled = !!projectId;
 
   // STABLE individual queries - no useQueries to avoid hooks order issues
-  // Filter only 'perpetuo' funnels (exclude 'A Definir' and 'Lançamento')
+  // Filter only 'perpetuo' funnels (canonical behavior for this page).
   const funnelsQuery = useQuery({
     queryKey: ['funnels-perpetuo', projectId],
     queryFn: async () => {

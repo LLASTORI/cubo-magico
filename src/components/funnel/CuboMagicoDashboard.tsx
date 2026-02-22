@@ -145,6 +145,10 @@ interface FunnelMetrics {
   initiateCheckouts: number;
   purchases: number;
 }
+
+const PERPETUO_TYPE_VARIANTS = ['perpetuo', 'perpétuo', 'PERPETUO', 'PERPÉTUO', 'Perpetuo', 'Perpétuo'];
+const ACTIVE_MAPPING_STATUS_VARIANTS = ['Ativo', 'ativo', 'ATIVO', 'active', 'ACTIVE'];
+
 export function CuboMagicoDashboard(props: CuboMagicoDashboardProps) {
 
   const { activeProject } = useProject();
@@ -191,7 +195,8 @@ if (!props.projectId) {
   });
 
 
-  // Fetch ONLY perpetuo funnels (canonical behavior for this page).
+  // Prefer ONLY perpetuo funnels for this page.
+  // Fallback: when migration left funnel_type inconsistent, use mapped funnels from the project.
   const { data: funnels, isLoading: loadingFunnels } = useQuery({
     queryKey: ['funnels-with-config-perpetuo', projectId],
     queryFn: async () => {
@@ -199,11 +204,38 @@ if (!props.projectId) {
         .from('funnels')
         .select('id, name, roas_target, campaign_name_pattern')
         .eq('project_id', projectId)
-        .eq('funnel_type', 'perpetuo');
+        .in('funnel_type', PERPETUO_TYPE_VARIANTS);
       
       if (error) throw error;
-      console.log(`[CuboMagico] Perpetuo funnels loaded: ${data?.length || 0}`);
-      return (data as FunnelWithConfig[]) || [];
+      const perpetuoFunnels = (data as FunnelWithConfig[]) || [];
+      if (perpetuoFunnels.length > 0) {
+        console.log(`[CuboMagico] Perpetuo funnels loaded: ${perpetuoFunnels.length}`);
+        return perpetuoFunnels;
+      }
+
+      const { data: allFunnels, error: allError } = await supabase
+        .from('funnels')
+        .select('id, name, roas_target, campaign_name_pattern')
+        .eq('project_id', projectId);
+
+      if (allError) throw allError;
+
+      const { data: offerMappings, error: mappingError } = await supabase
+        .from('offer_mappings')
+        .select('funnel_id, id_funil')
+        .eq('project_id', projectId)
+        .in('status', ACTIVE_MAPPING_STATUS_VARIANTS);
+
+      if (mappingError) throw mappingError;
+
+      const mappedFunnelIds = new Set((offerMappings || []).map(m => m.funnel_id).filter(Boolean));
+      const mappedFunnelNames = new Set((offerMappings || []).map(m => m.id_funil?.trim()).filter(Boolean));
+      const fallbackFunnels = ((allFunnels as FunnelWithConfig[]) || []).filter(f =>
+        mappedFunnelIds.has(f.id) || mappedFunnelNames.has(f.name)
+      );
+
+      console.log(`[CuboMagico] Fallback funnels loaded (non-perpetuo type): ${fallbackFunnels.length}`);
+      return fallbackFunnels;
     },
     enabled: !!projectId,
   });
@@ -242,7 +274,7 @@ if (!props.projectId) {
         .from('offer_mappings')
         .select('id_funil, funnel_id, codigo_oferta, tipo_posicao, nome_posicao, valor, ordem_posicao, nome_produto, nome_oferta')
         .eq('project_id', projectId)
-        .eq('status', 'Ativo');
+        .in('status', ACTIVE_MAPPING_STATUS_VARIANTS);
       
       if (error) throw error;
       return data || [];

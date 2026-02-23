@@ -670,10 +670,12 @@ async function writeOrderShadow(
           // Fetch default "A Definir" funnel for this project
           const { data: defaultFunnel } = await supabase
             .from('funnels')
-            .select('id')
+            .select('id, project_id')
             .eq('project_id', projectId)
             .eq('name', 'A Definir')
             .maybeSingle();
+
+          const defaultFunnelId = defaultFunnel?.project_id === projectId ? defaultFunnel.id : null;
           
           const { error: mappingError } = await supabase
             .from('offer_mappings')
@@ -687,7 +689,7 @@ async function writeOrderShadow(
               valor: null, // Não usar valor financeiro - apenas catálogo
               moeda: 'BRL',
               status: 'Ativo',
-              funnel_id: defaultFunnel?.id || null,
+              funnel_id: defaultFunnelId,
               id_funil: 'A Definir',
               origem: 'sale_fallback',
             });

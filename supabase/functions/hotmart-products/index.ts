@@ -374,12 +374,12 @@ Deno.serve(async (req) => {
         // Get the "A Definir" funnel for new offers
         const { data: defaultFunnel } = await supabase
           .from('funnels')
-          .select('id')
+          .select('id, project_id')
           .eq('project_id', projectId)
           .eq('name', 'A Definir')
           .maybeSingle()
         
-        const defaultFunnelId = defaultFunnel?.id || null
+        const defaultFunnelId = defaultFunnel?.project_id === projectId ? defaultFunnel.id : null
 
         for (const product of products) {
           try {
@@ -410,6 +410,7 @@ Deno.serve(async (req) => {
                     updated_at: new Date().toISOString(),
                   })
                   .eq('id', existing.id)
+                  .eq('project_id', projectId)
 
                 if (updateError) {
                   errors.push(`Erro ao atualizar ${offer.code}: ${updateError.message}`)

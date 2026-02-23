@@ -45,19 +45,20 @@ Deno.serve(async (req) => {
   }
 
   // Validate env
-  if (!META_APP_SECRET) {
-    const missingVars = ['META_APP_SECRET']
+if (!META_APP_SECRET) {
+  const missingVars = ['META_APP_SECRET']
 
-    console.error('Missing required Meta env vars:', missingVars)
+  console.error('Missing required Meta env vars:', missingVars)
 
-    return new Response(JSON.stringify({
-      error: 'Meta OAuth not configured',
-      details: `Missing env vars: ${missingVars.join(', ')}`,
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
+  return new Response(JSON.stringify({
+    error: 'Meta OAuth not configured',
+    details: `Missing env vars: ${missingVars.join(', ')}`,
+  }), {
+    status: 500,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
 
   try {
     const authHeader = req.headers.get('Authorization')

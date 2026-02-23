@@ -580,11 +580,13 @@ serve(async (req) => {
             if (!existingMapping) {
               const { data: defaultFunnel } = await supabase
                 .from('funnels')
-                .select('id')
+                .select('id, project_id')
                 .eq('project_id', projectId)
                 .eq('name', 'A Definir')
                 .maybeSingle();
               
+              const defaultFunnelId = defaultFunnel?.project_id === projectId ? defaultFunnel.id : null;
+
               const { error: mappingError } = await supabase
                 .from('offer_mappings')
                 .insert({
@@ -597,7 +599,7 @@ serve(async (req) => {
                   valor: null,
                   moeda: 'BRL',
                   status: 'Ativo',
-                  funnel_id: defaultFunnel?.id || null,
+                  funnel_id: defaultFunnelId,
                   id_funil: 'A Definir',
                   origem: 'sale_fallback',
                 });

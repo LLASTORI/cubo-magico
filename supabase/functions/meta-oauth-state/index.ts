@@ -1,19 +1,36 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { encode as hexEncode } from 'https://deno.land/std@0.208.0/encoding/hex.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// SECURITY: Restrict CORS to specific origins
+const ALLOWED_ORIGINS = [
+  'https://cubomagico.leandrolastori.com.br',
+  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
+]
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(o => origin.startsWith(o.replace('https://', '').split('.')[0]) || origin === o)
+    ? origin
+    : ALLOWED_ORIGINS[0]
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
+const META_APP_ID = Deno.env.get('META_APP_ID')
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 
 async function generateHmac(data: string): Promise<string> {
+  if (!META_APP_SECRET) {
+    throw new Error('Missing META_APP_SECRET for OAuth state signing')
+  }
+
   const encoder = new TextEncoder()
 
-  const keyData = encoder.encode(META_APP_SECRET || '')
+  const keyData = encoder.encode(META_APP_SECRET)
   const messageData = encoder.encode(data)
 
   const key = await crypto.subtle.importKey(
@@ -30,6 +47,8 @@ async function generateHmac(data: string): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
 
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -37,28 +56,28 @@ Deno.serve(async (req) => {
       status: 204,
       headers: {
         ...corsHeaders,
-        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
       },
     })
   }
 
   // Validate env
-if (!META_APP_SECRET) {
-  const missingVars = ['META_APP_SECRET']
+  if (!META_APP_ID || !META_APP_SECRET) {
+    const missingVars = [
+      ...(!META_APP_ID ? ['META_APP_ID'] : []),
+      ...(!META_APP_SECRET ? ['META_APP_SECRET'] : []),
+    ]
 
-  console.error('Missing required Meta env vars:', missingVars)
+    console.error('Missing required Meta env vars:', missingVars)
 
-  return new Response(JSON.stringify({
-    error: 'Meta OAuth not configured',
-    details: `Missing env vars: ${missingVars.join(', ')}`,
-  }), {
-    status: 500,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
-
+    return new Response(JSON.stringify({
+      error: 'Meta OAuth not configured',
+      details: `Missing env vars: ${missingVars.join(', ')}`,
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
 
   try {
     const authHeader = req.headers.get('Authorization')

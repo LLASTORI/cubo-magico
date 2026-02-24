@@ -191,9 +191,21 @@ async function batchWriteSpendCoreEvents(
 // END SPEND CORE PROVIDER
 // =====================================================
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// SECURITY: Restrict CORS to specific origins
+const ALLOWED_ORIGINS = [
+  'https://cubomagico.leandrolastori.com.br',
+  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
+]
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(o => origin.startsWith(o.replace('https://', '').split('.')[0]) || origin === o)
+    ? origin
+    : ALLOWED_ORIGINS[0]
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -538,9 +550,18 @@ async function batchUpsert(
 }
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      },
+    })
   }
 
   try {

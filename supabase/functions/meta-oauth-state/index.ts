@@ -109,14 +109,23 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
 
-    const { projectId, redirectUrl } = body
+    const { projectId, redirectUrl: rawRedirectUrl } = body
 
-    if (!projectId || !redirectUrl) {
-      return new Response(JSON.stringify({ error: 'Missing projectId or redirectUrl' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+const PUBLIC_APP_URL =
+  Deno.env.get('PUBLIC_APP_URL') ||
+  'https://cubomagico.leandrolastori.com.br'
+
+// sanitiza redirect vindo do frontend
+let redirectUrl = rawRedirectUrl
+
+// se vier vazio, localhost ou algo inválido → força domínio real
+if (
+  !redirectUrl ||
+  typeof redirectUrl !== 'string' ||
+  redirectUrl.includes('localhost')
+) {
+  redirectUrl = `${PUBLIC_APP_URL}/app`
+}
 
     const { data: projectAccess, error: accessError } = await supabase
       .from('project_members')

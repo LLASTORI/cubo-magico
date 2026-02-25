@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
     // Exchange code for access token
     const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token`
-    const callbackUrl = `${new URL(req.url).origin}/functions/v1/meta-oauth-callback`
+    const callbackUrl = `https://mqaygpnfjuyslnxpvipa.supabase.co/functions/v1/meta-oauth-callback`
 
 const tokenParams = new URLSearchParams({
   client_id: META_APP_ID!,

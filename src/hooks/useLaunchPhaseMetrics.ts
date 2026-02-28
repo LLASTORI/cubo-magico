@@ -41,6 +41,15 @@ export interface PhaseMetrics {
   campaignCount: number;
 }
 
+
+const shouldRetryQuery = (_failureCount: number, error: any) => {
+  if (!error) return false;
+  if (error?.code?.startsWith?.('PGRST') || error?.status === 400 || error?.status === 404) {
+    return false;
+  }
+  return _failureCount < 2;
+};
+
 export const useLaunchPhaseMetrics = ({
   projectId,
   funnelId,
@@ -56,13 +65,13 @@ export const useLaunchPhaseMetrics = ({
         .from("launch_phases")
         .select("*")
         .eq("project_id", projectId)
-        .eq("funnel_id", funnelId)
         .order("phase_order");
       if (error) throw error;
-      return data || [];
+      return (data || []).filter((phase) => phase.funnel_id === funnelId);
     },
     enabled: !!projectId && !!funnelId,
     staleTime: 5 * 60 * 1000,
+    retry: shouldRetryQuery,
   });
 
   // Fetch phase_campaigns (manual links)
@@ -80,6 +89,7 @@ export const useLaunchPhaseMetrics = ({
     },
     enabled: !!projectId && phases.length > 0,
     staleTime: 5 * 60 * 1000,
+    retry: shouldRetryQuery,
   });
 
   // Fetch all campaigns for pattern matching
@@ -96,6 +106,7 @@ export const useLaunchPhaseMetrics = ({
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
+    retry: shouldRetryQuery,
   });
 
   // Fetch Meta insights
@@ -140,6 +151,7 @@ export const useLaunchPhaseMetrics = ({
     },
     enabled: !!projectId,
     staleTime: 2 * 60 * 1000,
+    retry: shouldRetryQuery,
   });
 
   // Calculate metrics per phase

@@ -24,19 +24,50 @@ const buildSanitizedHeaders = (headers?: HeadersInit): Headers | undefined => {
   return stripForbiddenHeaders(new Headers(headers));
 };
 
+
+const sanitizeLaunchPhasesUrl = (url: string): string => {
+  try {
+    const parsedUrl = new URL(url);
+    const isLaunchPhasesEndpoint = parsedUrl.pathname.endsWith('/rest/v1/launch_phases');
+
+    if (!isLaunchPhasesEndpoint) return url;
+
+    if (parsedUrl.searchParams.has('funnel_id')) {
+      parsedUrl.searchParams.delete('funnel_id');
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return url;
+  }
+};
+
 const sanitizedSupabaseFetch: typeof fetch = (input, init) => {
   if (input instanceof Request) {
     const requestHeaders = stripForbiddenHeaders(input.headers);
+    const sanitizedUrl = sanitizeLaunchPhasesUrl(input.url);
 
-    const request = new Request(input, {
-      ...init,
+    const request = new Request(sanitizedUrl, {
+      method: input.method,
       headers: buildSanitizedHeaders(init?.headers) ?? requestHeaders,
+      body: init?.body ?? input.body,
+      mode: input.mode,
+      credentials: input.credentials,
+      cache: input.cache,
+      redirect: input.redirect,
+      referrer: input.referrer,
+      referrerPolicy: input.referrerPolicy,
+      integrity: input.integrity,
+      keepalive: input.keepalive,
+      signal: init?.signal ?? input.signal,
     });
 
     return fetch(request);
   }
 
-  return fetch(input, {
+  const sanitizedInput = typeof input === 'string' ? sanitizeLaunchPhasesUrl(input) : input;
+
+  return fetch(sanitizedInput, {
     ...init,
     headers: buildSanitizedHeaders(init?.headers),
   });

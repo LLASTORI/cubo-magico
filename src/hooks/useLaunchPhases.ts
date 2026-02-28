@@ -56,6 +56,15 @@ export const PRODUCT_TYPES = [
   { value: 'downsell', label: 'Downsell', description: 'Versão menor para quem não comprou' },
 ] as const;
 
+
+const shouldRetryQuery = (_failureCount: number, error: any) => {
+  if (!error) return false;
+  if (error?.code?.startsWith?.('PGRST') || error?.status === 400 || error?.status === 404) {
+    return false;
+  }
+  return _failureCount < 2;
+};
+
 export const useLaunchPhases = (projectId: string | undefined, funnelId?: string) => {
   const queryClient = useQueryClient();
 
@@ -64,21 +73,24 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
     queryKey: ['launch-phases', projectId, funnelId],
     queryFn: async () => {
       if (!projectId) return [];
-      let query = supabase
+
+      // Always query by project_id only to avoid backend 400 noise in
+      // environments with stale PostgREST schema cache for funnel_id.
+      const { data, error } = await supabase
         .from('launch_phases')
         .select('*')
         .eq('project_id', projectId)
         .order('phase_order');
-      
-      if (funnelId) {
-        query = query.eq('funnel_id', funnelId);
-      }
-      
-      const { data, error } = await query;
+
       if (error) throw error;
-      return data as LaunchPhase[];
+
+      const allPhases = data as LaunchPhase[];
+      if (!funnelId) return allPhases;
+
+      return allPhases.filter(phase => phase.funnel_id === funnelId);
     },
     enabled: !!projectId,
+    retry: shouldRetryQuery,
   });
 
   // Fetch phase campaigns
@@ -95,6 +107,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       return data as PhaseCampaign[];
     },
     enabled: !!projectId && phases.length > 0,
+    retry: shouldRetryQuery,
   });
 
   // Fetch launch products
@@ -116,6 +129,7 @@ export const useLaunchPhases = (projectId: string | undefined, funnelId?: string
       return data as LaunchProduct[];
     },
     enabled: !!projectId,
+    retry: shouldRetryQuery,
   });
 
   // Create phase

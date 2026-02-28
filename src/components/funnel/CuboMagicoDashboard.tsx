@@ -438,13 +438,35 @@ if (!props.projectId) {
 
       // Find campaigns matching the pattern (Padrão do Nome da Campanha)
       // Use a more robust matching that handles special characters
-      const matchingCampaigns = pattern 
+      let matchingCampaigns = pattern
         ? campaigns.filter(c => {
             const campaignName = c.campaign_name?.toLowerCase() || '';
             // Direct includes check - works with special chars like "+"
             return campaignName.includes(pattern);
           })
         : [];
+
+      // Fallback path for legacy backfill: campaign_name may be numeric ID (from insights backfill).
+      // In this case, pattern matching returns 0 and the dashboard looks empty even with valid insights.
+      if (pattern && matchingCampaigns.length === 0) {
+        const linkedMetaAccountUuids = (funnelMetaAccounts || [])
+          .filter(fma => fma.funnel_id === funnel.id)
+          .map(fma => fma.meta_account_id);
+
+        const linkedAccountIds = new Set(
+          (metaAdAccountsWithIds || [])
+            .filter(ma => linkedMetaAccountUuids.includes(ma.id))
+            .map(ma => ma.account_id)
+        );
+
+        if (linkedAccountIds.size > 0) {
+          matchingCampaigns = campaigns.filter(c => linkedAccountIds.has(c.ad_account_id));
+          console.log(
+            `[CuboMagico] Funnel "${funnel.name}" pattern fallback: using linked accounts (${linkedAccountIds.size}) -> ${matchingCampaigns.length} campaigns`
+          );
+        }
+      }
+
       // Ensure campaign IDs are strings for consistent comparison
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
 

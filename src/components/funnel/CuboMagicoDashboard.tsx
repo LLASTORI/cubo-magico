@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useProjectModules } from '@/hooks/useProjectModules';
 import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -430,42 +431,31 @@ if (!props.projectId) {
     }
 
     return funnels.map(funnel => {
-      // IMPORTANT: Escape special regex characters in pattern for includes() 
-      // The "+" character doesn't need escaping for includes(), but we normalize the comparison
+      // Normalize values to make campaign pattern matching more resilient
+      // (accents, extra spaces, casing differences).
+      const normalizeForMatch = (value: string | null | undefined) =>
+        (value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim();
+
       const rawPattern = funnel.campaign_name_pattern || '';
-      const pattern = rawPattern.toLowerCase();
+      const pattern = normalizeForMatch(rawPattern);
       const roasTarget = funnel.roas_target || 2;
 
       // Find campaigns matching the pattern (Padrão do Nome da Campanha)
-      // Use a more robust matching that handles special characters
       let matchingCampaigns = pattern
         ? campaigns.filter(c => {
-            const campaignName = c.campaign_name?.toLowerCase() || '';
-            // Direct includes check - works with special chars like "+"
+            const campaignName = normalizeForMatch(c.campaign_name);
             return campaignName.includes(pattern);
           })
         : [];
 
-      // Fallback path for legacy backfill: campaign_name may be numeric ID (from insights backfill).
-      // In this case, pattern matching returns 0 and the dashboard looks empty even with valid insights.
-      if (pattern && matchingCampaigns.length === 0) {
-        const linkedMetaAccountUuids = (funnelMetaAccounts || [])
-          .filter(fma => fma.funnel_id === funnel.id)
-          .map(fma => fma.meta_account_id);
-
-        const linkedAccountIds = new Set(
-          (metaAdAccountsWithIds || [])
-            .filter(ma => linkedMetaAccountUuids.includes(ma.id))
-            .map(ma => ma.account_id)
-        );
-
-        if (linkedAccountIds.size > 0) {
-          matchingCampaigns = campaigns.filter(c => linkedAccountIds.has(c.ad_account_id));
-          console.log(
-            `[CuboMagico] Funnel "${funnel.name}" pattern fallback: using linked accounts (${linkedAccountIds.size}) -> ${matchingCampaigns.length} campaigns`
-          );
-        }
-      }
+      // Canonical legacy rule: NO fallback for investment attribution.
+      // If campaign_name_pattern doesn't match campaign_name in meta_campaigns,
+      // this funnel's investment remains zero.
 
       // Ensure campaign IDs are strings for consistent comparison
       const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
@@ -706,6 +696,22 @@ if (!props.projectId) {
     };
   }, [funnelMetrics, totalInvestmentAll, faturamentoTotal, totalProdutosReal]);
 
+  const diagnostics = useMemo(() => {
+    const activeAccountsCount = activeAccountIds.length;
+    const campaignsCount = campaigns.length;
+    const insightsCount = insightsData?.length || 0;
+    const funnelsWithPattern = (funnels || []).filter(f => !!(f.campaign_name_pattern || '').trim()).length;
+
+    const shouldWarnCatalogMissing = activeAccountsCount > 0 && insightsCount > 0 && campaignsCount === 0;
+    return {
+      activeAccountsCount,
+      campaignsCount,
+      insightsCount,
+      funnelsWithPattern,
+      shouldWarnCatalogMissing,
+    };
+  }, [activeAccountIds.length, campaigns.length, insightsData, funnels]);
+
   // Helper to get offer codes for a specific funnel
   // IMPORTANT: Prioritize funnel_id (FK), use id_funil only as fallback when funnel_id is null
   const getOfferCodesForFunnel = (funnelId: string, funnelName: string): string[] => {
@@ -828,15 +834,22 @@ if (!props.projectId) {
     let filteredInsights: typeof insightsData = [];
     let filteredCampaigns: typeof campaignsData = [];
     let hasConfig = false;
+    const normalizeForMatch = (value: string | null | undefined) =>
+      (value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
 
     // PRIORITY 1: Use campaign pattern (this is the proven approach that CuboMagico uses)
     if (campaignPattern) {
       hasConfig = true;
-      const pattern = campaignPattern.toLowerCase();
+      const pattern = normalizeForMatch(campaignPattern);
       
       // Filter campaigns by pattern
       filteredCampaigns = campaignsData.filter(c => 
-        c.campaign_name?.toLowerCase().includes(pattern)
+        normalizeForMatch(c.campaign_name).includes(pattern)
       );
       
       // Get campaign IDs as strings for consistent comparison
@@ -846,7 +859,7 @@ if (!props.projectId) {
       filteredInsights = insightsData.filter(i => 
         matchingCampaignIds.has(String(i.campaign_id || ''))
       );
-      
+
       console.log(`[getFilteredMetaDataForFunnel] Funnel ${funnelId}: pattern="${pattern}", campaigns=${filteredCampaigns.length}, insights=${filteredInsights.length}`);
     } else {
       // PRIORITY 2: If no pattern, try using linked Meta accounts
@@ -1372,6 +1385,18 @@ if (!props.projectId) {
           );
         })()}
       </div>
+
+      {diagnostics.shouldWarnCatalogMissing && (
+        <Alert className="border-yellow-500/40 bg-yellow-500/10">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+            <strong>Diagnóstico de catálogo Meta:</strong> há insights no período ({diagnostics.insightsCount}),
+            mas nenhuma campanha em <code>meta_campaigns</code>. Pela regra canônica desta tela,
+            investimento por funil depende de <code>campaign_name_pattern</code> casar com
+            <code>meta_campaigns.campaign_name</code>; sem catálogo de campanhas o investimento pode ficar zerado.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Funnel Table with Drill-down */}
       <Card>

@@ -53,6 +53,61 @@ async function logProviderEvent(
   }
 }
 
+// Fallback: rebuild minimal campaign catalog from insights payload
+// when Meta campaigns endpoint returns empty or unavailable.
+async function upsertCampaignsFromInsights(
+  supabase: any,
+  projectId: string,
+  insights: any[]
+): Promise<{ inserted: number }> {
+  const byCampaign = new Map<string, { campaign_id: string; campaign_name: string | null; ad_account_id: string }>()
+
+  for (const insight of insights) {
+    const campaignId = insight?.campaign_id
+    const accountId = insight?.ad_account_id
+    if (!campaignId || !accountId) continue
+
+    const key = `${campaignId}::${accountId}`
+    const existing = byCampaign.get(key)
+    const insightName = insight?.campaign_name ? String(insight.campaign_name) : null
+
+    if (!existing) {
+      byCampaign.set(key, {
+        campaign_id: String(campaignId),
+        campaign_name: insightName,
+        ad_account_id: String(accountId),
+      })
+      continue
+    }
+
+    // Prefer a non-empty campaign name if we only had null before
+    if (!existing.campaign_name && insightName) {
+      existing.campaign_name = insightName
+    }
+  }
+
+  const records = Array.from(byCampaign.values()).map((campaign) => ({
+    project_id: projectId,
+    ad_account_id: campaign.ad_account_id,
+    campaign_id: campaign.campaign_id,
+    campaign_name: campaign.campaign_name,
+    updated_at: new Date().toISOString(),
+  }))
+
+  if (records.length === 0) return { inserted: 0 }
+
+  const { error } = await supabase
+    .from('meta_campaigns')
+    .upsert(records, { onConflict: 'project_id,campaign_id' })
+
+  if (error) {
+    console.error('Error upserting fallback campaigns from insights:', error)
+    throw error
+  }
+
+  return { inserted: records.length }
+}
+
 // Write canonical spend record to spend_core_events with versioning
 async function writeSpendCoreEvent(
   supabase: any,
@@ -799,7 +854,21 @@ async function syncAdAccounts(
 }
 
 async function getCampaignsForAccount(accessToken: string, accountId: string) {
-  const url = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&access_token=${accessToken}`
+  // IMPORTANT: include non-active statuses.
+  // Without effective_status, Meta may return only active campaigns,
+  // which breaks historical attribution in Funnel Analysis.
+  // Campaign-level valid effective statuses.
+  // Using ad/adset-only statuses may cause Graph API to return empty/error.
+  const effectiveStatus = encodeURIComponent(JSON.stringify([
+    'ACTIVE',
+    'PAUSED',
+    'DELETED',
+    'ARCHIVED',
+    'IN_PROCESS',
+    'WITH_ISSUES',
+  ]))
+
+  const url = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&access_token=${accessToken}`
   
   const data = await fetchWithRetry(url, `Campaigns for ${accountId}`)
 
@@ -845,7 +914,16 @@ async function getCampaigns(accessToken: string, rawAccountIds: any[]) {
 // Sync campaigns to database with pagination
 async function getCampaignsForAccountWithPagination(accessToken: string, accountId: string) {
   const allCampaigns: any[] = []
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&limit=500&access_token=${accessToken}`
+  const effectiveStatus = encodeURIComponent(JSON.stringify([
+    'ACTIVE',
+    'PAUSED',
+    'DELETED',
+    'ARCHIVED',
+    'IN_PROCESS',
+    'WITH_ISSUES',
+  ]))
+
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50 // Safety limit
   
@@ -1603,6 +1681,27 @@ async function syncInsightsSmartOptimized(
       console.log('Writing to Spend Core Events...')
       const spendResult = await batchWriteSpendCoreEvents(supabase, projectId, insights, projectTimezone)
       console.log(`Spend Core: ${spendResult.success} written, ${spendResult.failed} failed`)
+
+      // Safety net: keep campaign catalog usable for Funnel Analysis,
+      // even when /campaigns endpoint returns empty in this sync cycle.
+      try {
+        const fallbackCampaigns = await upsertCampaignsFromInsights(supabase, projectId, insights)
+        await logProviderEvent(
+          supabase,
+          projectId,
+          `meta_campaign_fallback_${projectId}_${Date.now()}`,
+          { campaigns_upserted_from_insights: fallbackCampaigns.inserted },
+          'processed'
+        )
+      } catch (fallbackErr: any) {
+        await logProviderEvent(
+          supabase,
+          projectId,
+          `meta_campaign_fallback_error_${projectId}_${Date.now()}`,
+          { error: fallbackErr?.message || 'unknown_error' },
+          'error'
+        )
+      }
       
       // =====================================================
       // END SPEND CORE INTEGRATION

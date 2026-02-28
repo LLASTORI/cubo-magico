@@ -470,7 +470,13 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
       if (rpcError) {
         // Backward-compatible fallback for environments where migration
         // with delete_funnel_safe has not been applied yet.
-        if (rpcError.code !== '42883') throw rpcError;
+        const errorText = `${rpcError.message || ''} ${rpcError.details || ''}`;
+        const functionMissingCodes = new Set(['42883', 'PGRST202']);
+        const isMissingDeleteFunction = functionMissingCodes.has(rpcError.code) ||
+          rpcError.code === '404' ||
+          (errorText.includes('delete_funnel_safe') && errorText.includes('schema cache'));
+
+        if (!isMissingDeleteFunction) throw rpcError;
 
         const { error: detachOffersError } = await supabase
           .from('offer_mappings')

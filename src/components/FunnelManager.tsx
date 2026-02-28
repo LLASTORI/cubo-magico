@@ -463,12 +463,33 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     if (!funnelToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('funnels')
-        .delete()
-        .eq('id', funnelToDelete.id);
+      const { error: rpcError } = await supabase.rpc('delete_funnel_safe', {
+        p_funnel_id: funnelToDelete.id,
+      });
 
-      if (error) throw error;
+      if (rpcError) {
+        // Backward-compatible fallback for environments where migration
+        // with delete_funnel_safe has not been applied yet.
+        if (rpcError.code !== '42883') throw rpcError;
+
+        const { error: detachOffersError } = await supabase
+          .from('offer_mappings')
+          .update({
+            funnel_id: null,
+            id_funil: 'A Definir',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('funnel_id', funnelToDelete.id);
+
+        if (detachOffersError) throw detachOffersError;
+
+        const { error: deleteError } = await supabase
+          .from('funnels')
+          .delete()
+          .eq('id', funnelToDelete.id);
+
+        if (deleteError) throw deleteError;
+      }
 
       toast({
         title: 'Sucesso!',

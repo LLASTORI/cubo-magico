@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useLaunchPhases, PhaseCampaign, LaunchPhase } from "@/hooks/useLaunchPhases";
 import { useToast } from "@/hooks/use-toast";
+import { matchesCampaignPattern } from "@/lib/campaignPatternMatcher";
 
 interface MetaCampaign {
   id: string;
@@ -72,18 +73,9 @@ export const PhaseCampaignsManager = ({
   // Get campaigns matching the pattern (automatic)
   const patternMatchedCampaigns = useMemo(() => {
     if (!phase.campaign_name_pattern?.trim()) return [];
-    // Normalize to handle special characters like Ç, Ã, etc.
-    const patternNormalized = phase.campaign_name_pattern
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    return allCampaigns.filter(c => {
-      const campaignNormalized = c.campaign_name
-        ?.normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
-      return campaignNormalized?.includes(patternNormalized);
-    });
+    return allCampaigns.filter(c =>
+      matchesCampaignPattern(c.campaign_name, phase.campaign_name_pattern)
+    );
   }, [allCampaigns, phase.campaign_name_pattern]);
 
   // Combined: pattern matched + manually linked (unique)
@@ -106,18 +98,9 @@ export const PhaseCampaignsManager = ({
   // Preview of what the current pattern would match
   const patternPreview = useMemo(() => {
     if (!pattern.trim()) return [];
-    // Normalize to handle special characters like Ç, Ã, etc.
-    const patternNormalized = pattern
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    return allCampaigns.filter(c => {
-      const campaignNormalized = c.campaign_name
-        ?.normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
-      return campaignNormalized?.includes(patternNormalized);
-    });
+    return allCampaigns.filter(c =>
+      matchesCampaignPattern(c.campaign_name, pattern)
+    );
   }, [allCampaigns, pattern]);
 
   const handleSavePattern = async () => {

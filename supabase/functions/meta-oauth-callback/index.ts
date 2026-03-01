@@ -198,18 +198,17 @@ const tokenParams = new URLSearchParams({
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const { error: upsertError } = await supabase
-      .from('meta_credentials')
-      .upsert({
-        project_id: projectId,
-        access_token: finalToken,
-        token_type: 'Bearer',
-        expires_at: expiresAt,
-        user_id: userData.id,
-        user_name: userData.name,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'project_id',
-      })
+  .from('meta_credentials')
+  .upsert({
+    project_id: projectId,
+    access_token: finalToken,
+    user_id: userData.id,
+    user_name: userData.name,
+    expires_at: expiresAt,
+    updated_at: new Date().toISOString()
+  }, {
+    onConflict: 'project_id',
+  })
 
     if (upsertError) {
       console.error('Database error:', upsertError)

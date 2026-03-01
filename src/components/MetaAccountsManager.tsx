@@ -31,7 +31,7 @@ interface MetaAdAccount {
   account_id: string;
   account_name: string | null;
   currency: string | null;
-  timezone_name: string | null;
+  timezone: string | null;
   is_active: boolean | null;
   created_at: string;
 }
@@ -40,391 +40,114 @@ interface AvailableAccount {
   id: string;
   name: string;
   currency: string;
-  business_name?: string;
 }
 
-interface MetaAccountsManagerProps {
+interface Props {
   projectId: string;
   onAccountsChange?: () => void;
 }
 
-export function MetaAccountsManager({ projectId, onAccountsChange }: MetaAccountsManagerProps) {
+export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
   const [savedAccounts, setSavedAccounts] = useState<MetaAdAccount[]>([]);
   const [availableAccounts, setAvailableAccounts] = useState<AvailableAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [accountToDelete, setAccountToDelete] = useState<MetaAdAccount | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
   const fetchSavedAccounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('meta_ad_accounts')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('account_name');
+    const { data } = await supabase
+      .from('meta_ad_accounts')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('account_name');
 
-      if (error) throw error;
-      setSavedAccounts(data || []);
-    } catch (error: any) {
-      console.error('Error fetching saved accounts:', error);
-      toast({
-        title: 'Erro ao carregar contas',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+    setSavedAccounts(data || []);
+    setLoading(false);
   };
 
   const fetchAvailableAccounts = async () => {
     setFetching(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('meta-api', {
-        body: {
-          action: 'get_ad_accounts',
-          projectId,
-        },
-      });
-
-      if (error) throw error;
-      
-      if (data?.accounts) {
-        setAvailableAccounts(data.accounts);
-      }
-    } catch (error: any) {
-      console.error('Error fetching available accounts:', error);
-      toast({
-        title: 'Erro ao buscar contas do Meta',
-        description: error.message || 'Verifique se o Meta está conectado.',
-        variant: 'destructive',
-      });
-    } finally {
-      setFetching(false);
-    }
+    const { data } = await supabase.functions.invoke('meta-api', {
+      body: { action: 'get_ad_accounts', projectId },
+    });
+    setAvailableAccounts(data?.accounts || []);
+    setFetching(false);
   };
 
   useEffect(() => {
-    // Reset state when project changes
-    setSavedAccounts([]);
-    setAvailableAccounts([]);
-    setLoading(true);
     fetchSavedAccounts();
   }, [projectId]);
 
-  const handleToggleActive = async (account: MetaAdAccount) => {
-    try {
-      const { error } = await supabase
-        .from('meta_ad_accounts')
-        .update({ is_active: !account.is_active })
-        .eq('id', account.id);
-
-      if (error) throw error;
-
-      setSavedAccounts(prev =>
-        prev.map(a => a.id === account.id ? { ...a, is_active: !a.is_active } : a)
-      );
-
-      toast({
-        title: account.is_active ? 'Conta desativada' : 'Conta ativada',
-        description: `${account.account_name || account.account_id} foi ${account.is_active ? 'desativada' : 'ativada'}.`,
-      });
-
-      onAccountsChange?.();
-    } catch (error: any) {
-      console.error('Error toggling account:', error);
-      toast({
-        title: 'Erro ao atualizar conta',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleAddAccount = async (account: AvailableAccount) => {
-    // Check if already exists
-    if (savedAccounts.some(a => a.account_id === account.id)) {
-      toast({
-        title: 'Conta já adicionada',
-        description: 'Esta conta já está vinculada ao projeto.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setSyncing(true);
     try {
-      const { error } = await supabase
-        .from('meta_ad_accounts')
-        .insert({
-          project_id: projectId,
-          account_id: account.id,
-          account_name: account.name,
-          currency: account.currency,
-          is_active: true,
-        });
-
+      const { error } = await supabase.functions.invoke(
+        'meta-save-accounts',
+        {
+          body: { projectId, accounts: [account] }
+        }
+      );
       if (error) throw error;
 
-      toast({
-        title: 'Conta adicionada!',
-        description: `${account.name} foi vinculada ao projeto.`,
-      });
+      toast({ title: 'Conta adicionada', description: 'Conta salva com sucesso.' });
 
-      fetchSavedAccounts();
+      await fetchSavedAccounts();
       onAccountsChange?.();
+
     } catch (error: any) {
-      console.error('Error adding account:', error);
-      toast({
-        title: 'Erro ao adicionar conta',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
     } finally {
       setSyncing(false);
     }
   };
 
-  const handleDeleteClick = (account: MetaAdAccount) => {
-    setAccountToDelete(account);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!accountToDelete) return;
-
-    try {
-      // First remove from funnel associations
-      await supabase
-        .from('funnel_meta_accounts')
-        .delete()
-        .eq('meta_account_id', accountToDelete.id);
-
-      // Then delete the account
-      const { error } = await supabase
-        .from('meta_ad_accounts')
-        .delete()
-        .eq('id', accountToDelete.id);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Conta removida',
-        description: `${accountToDelete.account_name || accountToDelete.account_id} foi removida do projeto.`,
-      });
-
-      fetchSavedAccounts();
-      onAccountsChange?.();
-    } catch (error: any) {
-      console.error('Error deleting account:', error);
-      toast({
-        title: 'Erro ao remover conta',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setDeleteDialogOpen(false);
-      setAccountToDelete(null);
-    }
-  };
-
-  // Filter available accounts to show only those not yet added
   const newAccounts = availableAccounts.filter(
     a => !savedAccounts.some(s => s.account_id === a.id)
   );
 
-  // Filter by search query
-  const filteredNewAccounts = useMemo(() => {
-    if (!searchQuery.trim()) return newAccounts;
-    const query = searchQuery.toLowerCase();
-    return newAccounts.filter(
-      a => a.name?.toLowerCase().includes(query) || a.id.toLowerCase().includes(query)
-    );
-  }, [newAccounts, searchQuery]);
-
-  const activeCount = savedAccounts.filter(a => a.is_active).length;
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
-    );
-  }
+  if (loading) return <div>Carregando...</div>;
 
   return (
     <div className="space-y-4">
-      {/* Summary Card */}
+
+      <Button onClick={fetchAvailableAccounts} disabled={fetching}>
+        {fetching ? 'Buscando...' : 'Buscar contas'}
+      </Button>
+
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Contas de Anúncio do Projeto</CardTitle>
-              <CardDescription>
-                {savedAccounts.length} conta(s) vinculada(s) • {activeCount} ativa(s)
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchAvailableAccounts}
-              disabled={fetching}
-            >
-              {fetching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="ml-2">Buscar Novas</span>
-            </Button>
-          </div>
+        <CardHeader>
+          <CardTitle>Contas do Projeto</CardTitle>
         </CardHeader>
-
-        {savedAccounts.length > 0 && (
-          <CardContent className="pt-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Conta</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Moeda</TableHead>
-                  <TableHead className="text-center">Ativa</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {savedAccounts.map((account) => (
-                  <TableRow key={account.id}>
-                    <TableCell className="font-medium">
-                      {account.account_name || 'Sem nome'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm font-mono">
-                      {account.account_id}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{account.currency || '-'}</Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Switch
-                        checked={account.is_active ?? false}
-                        onCheckedChange={() => handleToggleActive(account)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteClick(account)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        )}
-
-        {savedAccounts.length === 0 && (
-          <CardContent className="pt-0">
-            <div className="text-center py-6 text-muted-foreground">
-              <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Nenhuma conta vinculada a este projeto</p>
-              <p className="text-sm">Clique em "Buscar Novas" para adicionar contas</p>
+        <CardContent>
+          {savedAccounts.length === 0 && <p>Nenhuma conta vinculada</p>}
+          {savedAccounts.map(acc => (
+            <div key={acc.id} className="flex justify-between p-2 border-b">
+              <span>{acc.account_name}</span>
+              <Badge>{acc.currency}</Badge>
             </div>
-          </CardContent>
-        )}
+          ))}
+        </CardContent>
       </Card>
 
-      {/* Available accounts to add */}
       {newAccounts.length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Contas Disponíveis para Adicionar</CardTitle>
-            <CardDescription>
-              {filteredNewAccounts.length} de {newAccounts.length} conta(s) encontrada(s) no Meta Business
-            </CardDescription>
+          <CardHeader>
+            <CardTitle>Contas disponíveis</CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 space-y-4">
-            {/* Search input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou ID da conta..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="space-y-2">
-              {filteredNewAccounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhuma conta encontrada para "{searchQuery}"
-                </p>
-              ) : filteredNewAccounts.map((account) => (
-                <div
-                  key={account.id}
-                  className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <p className="font-medium text-sm">{account.name || 'Sem nome'}</p>
-                      <p className="text-xs text-muted-foreground">{account.id}</p>
-                      {account.business_name && (
-                        <p className="text-xs text-muted-foreground">
-                          BM: {account.business_name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{account.currency}</Badge>
-                    <Button
-                      size="sm"
-                      onClick={() => handleAddAccount(account)}
-                      disabled={syncing}
-                    >
-                      {syncing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4" />
-                      )}
-                      <span className="ml-2">Adicionar</span>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <CardContent>
+            {newAccounts.map(acc => (
+              <div key={acc.id} className="flex justify-between p-2 border-b">
+                <span>{acc.name}</span>
+                <Button size="sm" onClick={() => handleAddAccount(acc)} disabled={syncing}>
+                  {syncing ? '...' : 'Adicionar'}
+                </Button>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover conta?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A conta "{accountToDelete?.account_name || accountToDelete?.account_id}" será removida do projeto.
-              Os dados históricos de insights serão mantidos, mas ela será desvinculada de todos os funis.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Remover
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

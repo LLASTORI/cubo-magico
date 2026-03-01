@@ -250,6 +250,8 @@ async function batchWriteSpendCoreEvents(
 const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
   'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
 ]
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
@@ -351,56 +353,58 @@ function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{s
 
 // Fetch with exponential backoff retry for rate limits
 async function fetchWithRetry(
-  url: string, 
+  url: string,
+  accessToken: string,
   context: string,
   retryCount = 0
 ): Promise<any> {
-  const response = await fetch(url)
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  })
+
   const data = await response.json()
 
-  // Check for rate limit error (code 4 - general rate limit)
-  if (data.error && data.error.code === 4) {
+  // General rate limit (code 4)
+  if (data?.error?.code === 4) {
     if (retryCount >= MAX_RETRIES) {
-      console.error(`${context}: Max retries (${MAX_RETRIES}) reached for rate limit`)
-      throw new Error(`Rate limit exceeded after ${MAX_RETRIES} retries. Tente novamente em alguns minutos.`)
+      throw new Error(`Rate limit after ${MAX_RETRIES} retries`)
     }
 
-    // Calculate exponential backoff delay
-    const delayMs = Math.min(INITIAL_DELAY_MS * Math.pow(2, retryCount), MAX_DELAY_MS)
-    console.warn(`${context}: Rate limited (code 4). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delayMs}ms`)
-    
+    const delayMs = Math.min(
+      INITIAL_DELAY_MS * Math.pow(2, retryCount),
+      MAX_DELAY_MS
+    )
+
     await delay(delayMs)
-    return fetchWithRetry(url, context, retryCount + 1)
+    return fetchWithRetry(url, accessToken, context, retryCount + 1)
   }
-  
-  // Check for ad-account level rate limit (code 80004) - "too many calls to this ad-account"
-  // This is more severe than code 4, requires longer wait
-  if (data.error && data.error.code === 80004) {
+
+  // Ad-account rate limit (code 80004)
+  if (data?.error?.code === 80004) {
     if (retryCount >= MAX_RETRIES) {
-      console.error(`${context}: Max retries (${MAX_RETRIES}) reached for ad-account rate limit (80004)`)
-      // Return empty data instead of throwing to allow sync to continue with partial data
-      console.warn(`${context}: Skipping due to rate limit - will be synced later`)
-      return { data: [], paging: {} }
+      console.warn(`${context}: skipping due to account rate limit`)
+      return { data: [] }
     }
 
-    // Use longer delay for ad-account level limits (they are more strict)
-    const delayMs = Math.min(INITIAL_DELAY_MS * 2 * Math.pow(2, retryCount), MAX_DELAY_MS)
-    console.warn(`${context}: Ad-account rate limited (code 80004). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delayMs}ms`)
-    
+    const delayMs = Math.min(
+      INITIAL_DELAY_MS * 2 * Math.pow(2, retryCount),
+      MAX_DELAY_MS
+    )
+
     await delay(delayMs)
-    return fetchWithRetry(url, context, retryCount + 1)
+    return fetchWithRetry(url, accessToken, context, retryCount + 1)
   }
-  
-  // Check for "reduce data" error (code 1) - this means we need smaller chunks
-  if (data.error && data.error.code === 1) {
-    console.warn(`${context}: Data volume too large (code 1). Need smaller date chunks.`)
-    // Return the error to be handled by the caller
+
+  // Reduce data error (code 1)
+  if (data?.error?.code === 1) {
     return data
   }
 
   return data
 }
-
 // SMART SYNC: Check which dates we already have COMPLETE data in the database
 // Adaptive: checks if project has ads, if not, considers campaign-level data as complete
 async function getExistingDatesInCache(
@@ -621,22 +625,37 @@ Deno.serve(async (req) => {
 
   try {
     // Get auth header for user context
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+const authHeader = req.headers.get('Authorization')
+if (!authHeader) {
+  return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+    status: 401,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } }
-    })
+// usa service role para acessar o banco
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY
+)
 
-    const body = await req.json()
-    const { action, projectId, dateStart, dateStop, accountIds, level, forceRefresh } = body
+// valida o usuário manualmente
+const token = authHeader.replace('Bearer ', '')
+const { data, error } = await supabase.auth.getUser(token)
 
-    console.log('Meta API request:', { action, projectId, dateStart, dateStop, forceRefresh })
+if (error || !data?.user) {
+  return new Response(JSON.stringify({ error: 'Usuário inválido' }), {
+    status: 401,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+const user = data.user
+
+const body = await req.json()
+const { action, projectId, dateStart, dateStop, accountIds, level, forceRefresh } = body
+
+console.log('Meta API request:', { action, projectId, dateStart, dateStop, forceRefresh })
 
     // Get Meta credentials for this project
     const { data: credentials, error: credError } = await supabase
@@ -783,7 +802,11 @@ async function getAdAccounts(accessToken: string) {
     pageCount++
     console.log(`Fetching ad accounts page ${pageCount}...`)
     
-    const json = await fetchWithRetry(nextUrl, `Ad accounts page ${pageCount}`)
+    const json = await fetchWithRetry(
+  nextUrl,
+  accessToken,
+  `Ad accounts page ${pageCount}`
+)
 
     if (json.error) {
       console.error('Ad accounts error:', json.error)
@@ -819,37 +842,30 @@ async function syncAdAccounts(
   )
 
   // Upsert selected accounts
-  for (const account of selectedAccounts) {
-    const { error } = await supabase
-      .from('meta_ad_accounts')
-      .upsert({
-        project_id: projectId,
-        account_id: account.id,
-        account_name: account.name,
-        currency: account.currency,
-        timezone_name: account.timezone_name,
-        is_active: true,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'project_id,account_id',
-      })
-
-    if (error) {
-      console.error('Error upserting account:', error)
-    }
-  }
-
-  // Deactivate non-selected accounts
-  const { error: deactivateError } = await supabase
+  /* 
+for (const account of selectedAccounts) {
+  const { error } = await supabase
     .from('meta_ad_accounts')
-    .update({ is_active: false })
-    .eq('project_id', projectId)
-    .not('account_id', 'in', `(${selectedAccountIds.join(',')})`)
+    .upsert({
+      project_id: projectId,
+      account_id: account.id,
+      account_name: account.name,
+      currency: account.currency,
+      timezone_name: account.timezone_name,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'project_id,account_id',
+    })
 
-  if (deactivateError) {
-    console.error('Error deactivating accounts:', deactivateError)
+  if (error) {
+    console.error('Error upserting account:', error)
   }
+}
+*/
 
+    // Read-only mode: não alteramos mais meta_ad_accounts aqui
+  // Persistência será feita por fluxo backend dedicado
   return { success: true, synced: selectedAccounts.length }
 }
 
@@ -870,7 +886,13 @@ async function getCampaignsForAccount(accessToken: string, accountId: string) {
 
   const url = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&access_token=${accessToken}`
   
-  const data = await fetchWithRetry(url, `Campaigns for ${accountId}`)
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  })
+
+  const data = await response.json()
 
   if (data.error) {
     console.error(`Campaigns error for ${accountId}:`, data.error)
@@ -931,7 +953,11 @@ async function getCampaignsForAccountWithPagination(accessToken: string, account
     pageCount++
     console.log(`Fetching campaigns page ${pageCount} for ${accountId}...`)
     
-    const data = await fetchWithRetry(nextUrl, `Campaigns page ${pageCount} for ${accountId}`)
+const data = await fetchWithRetry(
+  nextUrl,
+  accessToken,
+  `Campaigns page ${pageCount} for ${accountId}`
+)    
 
     if (data.error) {
       console.error(`Campaigns error for ${accountId}:`, data.error)
@@ -1071,7 +1097,11 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
     pageCount++
     console.log(`Fetching adsets page ${pageCount} for ${accountId}...`)
     
-    const data = await fetchWithRetry(nextUrl, `Adsets page ${pageCount} for ${accountId}`)
+    const data = await fetchWithRetry(
+  nextUrl,
+  accessToken,
+  `Adsets page ${pageCount} for ${accountId}`
+)
 
     if (data.error) {
       console.error(`Adsets error for ${accountId}:`, data.error)
@@ -1111,7 +1141,11 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
     pageCount++
     console.log(`Fetching ads page ${pageCount} for ${accountId}...`)
     
-    const data = await fetchWithRetry(nextUrl, `Ads page ${pageCount} for ${accountId}`)
+    const data = await fetchWithRetry(
+  nextUrl,
+  accessToken,
+  `Ads page ${pageCount} for ${accountId}`
+)
 
     if (data.error) {
       console.error(`Ads error for ${accountId}:`, data.error)
@@ -1321,7 +1355,11 @@ async function getInsightsForAccountOnce(
     pageCount++
     console.log(`Fetching insights page ${pageCount} for ${accountId}...`)
 
-    const data = await fetchWithRetry(url, `Insights page ${pageCount} for ${accountId}`)
+    const data = await fetchWithRetry(
+  url,
+  accessToken,
+  `Insights page ${pageCount} for ${accountId}`
+)
 
     if (data?.error) {
       console.error(`Insights error for ${accountId}:`, data.error)

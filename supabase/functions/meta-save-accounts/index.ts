@@ -1,0 +1,38 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+Deno.serve(async (req) => {
+  try {
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE)
+
+    const body = await req.json()
+    const { projectId, accounts } = body
+
+    if (!projectId || !accounts?.length) {
+      return new Response(JSON.stringify({ error: 'Dados inválidos' }), { status: 400 })
+    }
+
+    const rows = accounts.map((a: any) => ({
+      project_id: projectId,
+      account_id: a.id,
+      account_name: a.name,
+      currency: a.currency,
+      timezone: a.timezone_name,
+      is_active: true,
+      updated_at: new Date().toISOString()
+    }))
+
+    const { error } = await supabase
+      .from('meta_ad_accounts')
+      .upsert(rows, { onConflict: 'project_id,account_id' })
+
+    if (error) throw error
+
+    return new Response(JSON.stringify({ success: true }))
+  } catch (err) {
+    console.error(err)
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
+  }
+})

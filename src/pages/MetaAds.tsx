@@ -230,7 +230,7 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     queryFn: async () => {
       if (!adAccounts || adAccounts.length === 0) return [];
       
-      const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.account_id);
+      const activeAccountIds = adAccounts.filter(a => a.is_active).map(a => a.id);
       if (activeAccountIds.length === 0) return [];
       
       const { data, error } = await supabase

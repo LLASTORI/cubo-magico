@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { matchesCampaignPattern } from '@/lib/campaignPatternMatcher';
 
 // Brand colors
 const COLORS = {
@@ -129,9 +130,9 @@ const calculateFunnelData = (data: ReportData): FunnelData[] => {
     const offerCodes = new Set(funnelMappings.map(m => m.codigo_oferta).filter(Boolean));
 
     // Get campaigns matching this funnel pattern
-    const pattern = funnel.campaign_name_pattern?.toLowerCase() || funnel.name.toLowerCase();
+    const pattern = funnel.campaign_name_pattern || funnel.name;
     const matchingCampaigns = data.metaCampaigns.filter(c => 
-      c.campaign_name?.toLowerCase().includes(pattern)
+      matchesCampaignPattern(c.campaign_name, pattern)
     );
     const campaignIds = new Set(matchingCampaigns.map(c => c.campaign_id));
 

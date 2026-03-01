@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { expandMetaAccountIds } from "@/lib/metaAccountIds";
 import type {
   PaidMediaHierarchy,
   PaidMediaAccount,
@@ -35,7 +36,7 @@ export async function getHierarchy(
     ? accounts.filter(a => accountIds.includes(a.account_id))
     : accounts;
   
-  const activeAccountIds = filteredAccounts.map(a => a.account_id);
+  const activeAccountIds = expandMetaAccountIds(filteredAccounts.map(a => a.account_id));
   
   if (activeAccountIds.length === 0) {
     return {

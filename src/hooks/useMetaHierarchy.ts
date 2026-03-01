@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { expandMetaAccountIds } from "@/lib/metaAccountIds";
 
 interface MetaCampaign {
   id: string;
@@ -90,9 +91,9 @@ export const useMetaHierarchy = ({
 
   // Extract unique account IDs from insights if not provided
   const accountIdsFromInsights = useMemo(() => {
-    if (activeAccountIds.length > 0) return activeAccountIds;
+    if (activeAccountIds.length > 0) return expandMetaAccountIds(activeAccountIds);
     if (!insights || insights.length === 0) return [];
-    return [...new Set(insights.map(i => i.ad_account_id))];
+    return expandMetaAccountIds(insights.map(i => i.ad_account_id));
   }, [insights, activeAccountIds]);
 
   // Fetch campaigns - ONLY from active accounts (filtered by ad_account_id) with pagination

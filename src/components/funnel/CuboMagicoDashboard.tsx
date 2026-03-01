@@ -41,6 +41,8 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useMetaHierarchy } from '@/hooks/useMetaHierarchy';
+import { expandMetaAccountIds } from '@/lib/metaAccountIds';
+import { matchesCampaignPattern, normalizeCampaignMatchValue } from '@/lib/campaignPatternMatcher';
 import { ModuleLockedValue, ModuleLockedHeader } from '@/components/ModuleLockedValue';
 
 // Import analysis components
@@ -325,7 +327,7 @@ if (!props.projectId) {
   // Get active account IDs for consistent filtering
   const activeAccountIds = useMemo(() => {
     if (!metaAdAccounts || metaAdAccounts.length === 0) return [];
-    return metaAdAccounts.map(a => a.account_id).sort();
+    return expandMetaAccountIds(metaAdAccounts.map(a => a.account_id));
   }, [metaAdAccounts]);
 
   // Fetch Meta campaigns - ONLY from active accounts with pagination
@@ -431,26 +433,13 @@ if (!props.projectId) {
     }
 
     return funnels.map(funnel => {
-      // Normalize values to make campaign pattern matching more resilient
-      // (accents, extra spaces, casing differences).
-      const normalizeForMatch = (value: string | null | undefined) =>
-        (value || '')
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .replace(/\s+/g, ' ')
-          .trim();
-
       const rawPattern = funnel.campaign_name_pattern || '';
-      const pattern = normalizeForMatch(rawPattern);
+      const pattern = normalizeCampaignMatchValue(rawPattern);
       const roasTarget = funnel.roas_target || 2;
 
       // Find campaigns matching the pattern (Padrão do Nome da Campanha)
       let matchingCampaigns = pattern
-        ? campaigns.filter(c => {
-            const campaignName = normalizeForMatch(c.campaign_name);
-            return campaignName.includes(pattern);
-          })
+        ? campaigns.filter(c => matchesCampaignPattern(c.campaign_name, rawPattern))
         : [];
 
       // Canonical legacy rule: NO fallback for investment attribution.
@@ -753,9 +742,9 @@ if (!props.projectId) {
       return { campaigns: [], adsets: [], ads: [], insights: [] };
     }
     
-    const pattern = campaignPattern.toLowerCase();
+    const pattern = normalizeCampaignMatchValue(campaignPattern);
     const matchingCampaigns = campaignsData.filter(c => 
-      c.campaign_name?.toLowerCase().includes(pattern)
+      matchesCampaignPattern(c.campaign_name, campaignPattern)
     );
     // CRITICAL: Convert to strings to ensure consistent comparison
     const matchingCampaignIds = new Set(matchingCampaigns.map(c => String(c.campaign_id)));
@@ -834,22 +823,14 @@ if (!props.projectId) {
     let filteredInsights: typeof insightsData = [];
     let filteredCampaigns: typeof campaignsData = [];
     let hasConfig = false;
-    const normalizeForMatch = (value: string | null | undefined) =>
-      (value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .trim();
-
     // PRIORITY 1: Use campaign pattern (this is the proven approach that CuboMagico uses)
     if (campaignPattern) {
       hasConfig = true;
-      const pattern = normalizeForMatch(campaignPattern);
+      const pattern = normalizeCampaignMatchValue(campaignPattern);
       
       // Filter campaigns by pattern
       filteredCampaigns = campaignsData.filter(c => 
-        normalizeForMatch(c.campaign_name).includes(pattern)
+        matchesCampaignPattern(c.campaign_name, campaignPattern)
       );
       
       // Get campaign IDs as strings for consistent comparison

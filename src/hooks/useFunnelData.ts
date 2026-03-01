@@ -32,6 +32,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useMetaHierarchy } from "./useMetaHierarchy";
 import { PaidMediaDomain } from "@/domains/paid-media";
+import { expandMetaAccountIds } from "@/lib/metaAccountIds";
 
 interface UseFunnelDataProps {
   projectId: string | undefined;
@@ -233,7 +234,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         .eq('project_id', projectId!)
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []).map(a => a.account_id).sort();
+      return expandMetaAccountIds((data || []).map(a => a.account_id));
     },
     enabled,
     staleTime: 5 * 60 * 1000,

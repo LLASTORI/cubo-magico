@@ -321,7 +321,6 @@ function extractOrderItems(payload: any): Array<{
   quantity: number;
 }> {
   const data = payload?.data;
-  const product = data?.product;
   const purchase = data?.purchase;
   const items: Array<{
     provider_product_id: string;
@@ -332,18 +331,67 @@ function extractOrderItems(payload: any): Array<{
     base_price: number | null;
     quantity: number;
   }> = [];
-  
-  if (!product) return items;
-  
-  const itemType = resolveItemType(payload);
-  const basePrice = purchase?.price?.value || purchase?.full_price?.value || null;
+
+  // Regra canônica do Cubo:
+  // 1) Se payload tiver items[] → criar um item por item
+  // 2) Se NÃO tiver items[] → criar item sintético com purchase.product
+  const payloadItems = Array.isArray(data?.items) ? data.items : [];
+
+  if (payloadItems.length > 0) {
+    for (const rawItem of payloadItems) {
+      const rawProduct = rawItem?.product || rawItem;
+      const providerProductId =
+        rawProduct?.id?.toString() ||
+        rawProduct?.ucode ||
+        rawItem?.product_id?.toString() ||
+        rawItem?.ucode ||
+        'unknown';
+
+      const providerOfferId =
+        rawItem?.offer?.code ||
+        rawItem?.offer_code ||
+        purchase?.offer?.code ||
+        null;
+
+      const quantity = Number(rawItem?.quantity ?? rawItem?.qty ?? 1) || 1;
+      const basePrice =
+        Number(rawItem?.price?.value ?? rawItem?.base_price ?? rawItem?.price_value ?? purchase?.price?.value ?? purchase?.full_price?.value ?? 0) ||
+        0;
+
+      items.push({
+        provider_product_id: providerProductId,
+        provider_offer_id: providerOfferId,
+        product_name: rawProduct?.name || rawItem?.name || purchase?.product?.name || data?.product?.name || 'Unknown Product',
+        offer_name: rawItem?.offer?.name || rawItem?.offer_name || purchase?.offer?.name || null,
+        // NÃO inferir tipo final da venda no webhook.
+        // Só marcar main quando vier explícito no payload do item.
+        item_type:
+          rawItem?.item_type === 'main' ||
+          rawItem?.type === 'main' ||
+          rawItem?.is_main === true
+            ? 'main'
+            : 'unknown',
+        base_price: basePrice,
+        quantity,
+      });
+    }
+
+    return items;
+  }
+
+  const syntheticProduct = purchase?.product || data?.product;
+  if (!syntheticProduct) return items;
+
+  const basePrice = Number(purchase?.price?.value ?? purchase?.full_price?.value ?? 0) || 0;
   
   items.push({
-    provider_product_id: product.id?.toString() || product.ucode || 'unknown',
+    provider_product_id: syntheticProduct.id?.toString() || syntheticProduct.ucode || 'unknown',
     provider_offer_id: purchase?.offer?.code || null,
-    product_name: product.name || 'Unknown Product',
+    product_name: syntheticProduct.name || 'Unknown Product',
     offer_name: purchase?.offer?.name || null,
-    item_type: itemType,
+    // Item sintético do webhook NÃO representa composição final da venda.
+    // Não inferir principal/bump aqui para não interferir no reconciliador.
+    item_type: purchase?.is_main === true ? 'main' : 'unknown',
     base_price: basePrice,
     quantity: 1,
   });
@@ -352,6 +400,82 @@ function extractOrderItems(payload: any): Array<{
   // Hotmart currently sends one product per webhook for combos
   
   return items;
+}
+
+/**
+ * Create (or upsert) order_items from Hotmart webhook payload.
+ * Canonical dedupe key: (order_id, provider_product_id, provider_offer_id)
+ */
+async function createOrderItemsFromWebhook(
+  supabase: any,
+  payload: any,
+  order: { id: string; project_id: string }
+): Promise<{ items: Array<{
+  provider_product_id: string;
+  provider_offer_id: string | null;
+  product_name: string;
+  offer_name: string | null;
+  item_type: string;
+  base_price: number | null;
+  quantity: number;
+}>; upsertedCount: number }> {
+  const items = extractOrderItems(payload);
+  const webhookEventId = payload?.id ? String(payload.id) : null;
+
+  if (items.length === 0) {
+    console.log(`[OrdersShadow] No items extracted from webhook for order ${order.id}`);
+    return { items, upsertedCount: 0 };
+  }
+
+  // Idempotência extra por webhook_event_id (além do upsert por item).
+  // Se o mesmo evento já escreveu itens para este pedido, não reprocesse.
+  if (webhookEventId) {
+    const { data: sameWebhookItems, error: webhookCheckError } = await supabase
+      .from('order_items')
+      .select('id')
+      .eq('order_id', order.id)
+      .contains('metadata', { webhook_event_id: webhookEventId })
+      .limit(1);
+
+    if (webhookCheckError) {
+      throw new Error(`Order items webhook id check failed: ${webhookCheckError.message}`);
+    }
+
+    if ((sameWebhookItems || []).length > 0) {
+      console.log(`[OrdersShadow] Webhook event ${webhookEventId} already applied to order ${order.id}, skipping item write`);
+      return { items, upsertedCount: 0 };
+    }
+  }
+
+  const rows = items.map((item) => ({
+    order_id: order.id,
+    project_id: order.project_id,
+    product_name: item.product_name,
+    provider_product_id: item.provider_product_id,
+    provider_offer_id: item.provider_offer_id,
+    quantity: item.quantity || 1,
+    base_price: item.base_price ?? 0,
+    item_type: item.item_type || 'unknown',
+    src: 'hotmart_webhook',
+    offer_name: item.offer_name,
+    metadata: {
+      webhook_event_id: webhookEventId,
+      source: 'hotmart_webhook',
+    },
+  }));
+
+  const { error } = await supabase
+    .from('order_items')
+    .upsert(rows, {
+      onConflict: 'order_id,provider_product_id,provider_offer_id',
+      ignoreDuplicates: false,
+    });
+
+  if (error) {
+    throw new Error(`Order items upsert failed: ${error.message}`);
+  }
+
+  return { items, upsertedCount: rows.length };
 }
 
 /**
@@ -615,43 +739,37 @@ async function writeOrderShadow(
     result.orderId = orderId;
     
     // ============================================
-    // 2. CREATE ORDER ITEMS (STRUCTURAL - independent of financial processing)
-    // Order items represent the checkout composition, NOT financial values.
-    // They should ALWAYS be created when a valid order exists, regardless of
-    // whether financial values are being applied (avoids losing order bumps/items).
-    // Deduplication: order_id + provider_product_id ensures idempotency.
+    // 2. CREATE ORDER ITEMS (MANDATORY)
+    // Regra canônica:
+    // - payload.items[] => 1 row por item
+    // - sem items[] => item sintético via purchase.product
+    // Idempotência: upsert por (order_id, provider_product_id, provider_offer_id)
     // ============================================
-    for (const item of orderItems) {
-      // Check if item already exists (avoid duplicates - idempotent)
-      const { data: existingItem } = await supabase
-        .from('order_items')
-        .select('id')
-        .eq('order_id', orderId)
-        .eq('provider_product_id', item.provider_product_id)
-        .maybeSingle();
-      
-      if (!existingItem) {
-        const { error: itemError } = await supabase
-          .from('order_items')
-          .insert({
-            order_id: orderId,
-            provider_product_id: item.provider_product_id,
-            provider_offer_id: item.provider_offer_id,
-            product_name: item.product_name,
-            offer_name: item.offer_name,
-            item_type: item.item_type,
-            base_price: item.base_price,
-            quantity: item.quantity,
-          });
-        
-        if (!itemError) {
-          result.itemsCreated++;
-          console.log(`[OrdersShadow] Created item: ${item.product_name} (${item.item_type})`);
-        }
-      } else {
-        console.log(`[OrdersShadow] Item already exists: ${item.product_name}`);
-      }
-      
+    let orderItemsUpserted: Array<{
+      provider_product_id: string;
+      provider_offer_id: string | null;
+      product_name: string;
+      offer_name: string | null;
+      item_type: string;
+      base_price: number | null;
+      quantity: number;
+    }> = [];
+
+    try {
+      const { items, upsertedCount } = await createOrderItemsFromWebhook(supabase, payload, {
+        id: orderId,
+        project_id: projectId,
+      });
+      orderItemsUpserted = items;
+      result.itemsCreated = upsertedCount;
+      console.log(`[OrdersShadow] Upserted ${upsertedCount} order item(s) for order ${orderId}`);
+    } catch (itemsError) {
+      console.error('[OrdersShadow] Error creating order items:', itemsError);
+      result.errorMessage = itemsError instanceof Error ? itemsError.message : 'Order items creation failed';
+      return result;
+    }
+
+    for (const item of orderItemsUpserted) {
       // ============================================
       // OFFER MAPPINGS FALLBACK (CATÁLOGO SEMÂNTICO)
       // NÃO É FINANCEIRO - apenas cria mapeamento se não existir

@@ -54,6 +54,7 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
       .from('meta_ad_accounts')
       .select('*')
       .eq('project_id', projectId)
+      .eq('is_active', true)
       .order('account_name');
 
     setSavedAccounts(data || []);

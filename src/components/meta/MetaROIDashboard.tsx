@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, parseISO } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { 
@@ -59,6 +59,13 @@ interface DailyROIData {
   roi: number;
   cpa: number;
 }
+
+
+const parseDateSafely = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = parseISO(value);
+  return isValid(parsed) ? parsed : null;
+};
 
 const chartConfig = {
   spend: { label: "Investimento", color: "hsl(var(--destructive))" },
@@ -131,18 +138,22 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
 
   // Process and combine data
   const roiData = useMemo(() => {
-    if (!metaInsights || !hotmartSales) return { daily: [], totals: null };
+    const safeMetaInsights = Array.isArray(metaInsights) ? metaInsights : [];
+    const safeHotmartSales = Array.isArray(hotmartSales) ? hotmartSales : [];
+
+    if (safeMetaInsights.length === 0 && safeHotmartSales.length === 0) return { daily: [], totals: null };
 
     // Group Meta spend by date
     const spendByDate: Record<string, number> = {};
-    metaInsights.forEach(insight => {
+    safeMetaInsights.forEach(insight => {
       const date = insight.date_start;
+      if (!date) return;
       spendByDate[date] = (spendByDate[date] || 0) + (insight.spend || 0);
     });
 
     // Group Hotmart revenue by date
     const revenueByDate: Record<string, { revenue: number; sales: number }> = {};
-    hotmartSales.forEach(sale => {
+    safeHotmartSales.forEach(sale => {
       if (!sale.sale_date) return;
       const date = sale.sale_date.split('T')[0];
       if (!revenueByDate[date]) {
@@ -158,7 +169,8 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
     const sortedDates = Array.from(allDates).sort();
 
     // Build daily data
-    const daily: DailyROIData[] = sortedDates.map(date => {
+      const daily: DailyROIData[] = sortedDates.map(date => {
+      const parsedDate = parseDateSafely(date);
       const spend = spendByDate[date] || 0;
       const revenueData = revenueByDate[date] || { revenue: 0, sales: 0 };
       const revenue = revenueData.revenue;
@@ -170,7 +182,7 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
 
       return {
         date,
-        dateFormatted: format(parseISO(date), 'dd/MM', { locale: ptBR }),
+        dateFormatted: parsedDate ? format(parsedDate, 'dd/MM', { locale: ptBR }) : date,
         spend,
         revenue,
         sales,
@@ -217,10 +229,6 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
   const hasRevenueData = roiData.totals && roiData.totals.revenue > 0;
   const hasData = hasSpendData || hasRevenueData;
   const isProfitable = roiData.totals && roiData.totals.profit > 0;
-
-  // Convert string dates to Date objects for HotmartSyncManager
-  const startDateObj = parseISO(startDate);
-  const endDateObj = parseISO(endDate);
 
   return (
     <Card className="p-6">
@@ -520,7 +528,10 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
                     {roiData.daily.slice().reverse().map((day) => (
                       <TableRow key={day.date}>
                         <TableCell className="font-medium">
-                          {format(parseISO(day.date), 'dd/MM/yyyy', { locale: ptBR })}
+                          {(() => {
+                            const parsedDate = parseDateSafely(day.date);
+                            return parsedDate ? format(parsedDate, 'dd/MM/yyyy', { locale: ptBR }) : day.date;
+                          })()}
                         </TableCell>
                         <TableCell className="text-right text-destructive">
                           {formatCurrency(day.spend)}

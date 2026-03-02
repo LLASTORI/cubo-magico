@@ -101,17 +101,19 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
     a => !savedAccounts.some(s => s.account_id === a.id)
   );
 
+  const accounts = useMemo(() => (Array.isArray(savedAccounts) ? savedAccounts : []), [savedAccounts]);
+
   const filteredSavedAccounts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return savedAccounts;
+    if (!term) return accounts;
 
-    return savedAccounts.filter((account) => {
+    return accounts.filter((account) => {
       const accountName = account.account_name?.toLowerCase() || '';
       const accountId = account.account_id?.toLowerCase() || '';
 
       return accountName.includes(term) || accountId.includes(term);
     });
-  }, [savedAccounts, searchTerm]);
+  }, [accounts, searchTerm]);
 
   const handleDisconnectAccount = async (account: MetaAdAccount) => {
     setDisconnectingId(account.id);
@@ -165,8 +167,8 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
             />
           </div>
 
-          {savedAccounts.length === 0 && <p>Nenhuma conta vinculada</p>}
-          {savedAccounts.length > 0 && filteredSavedAccounts.length === 0 && (
+          {accounts.length === 0 && <p>Nenhuma conta vinculada</p>}
+          {accounts.length > 0 && filteredSavedAccounts.length === 0 && (
             <p className="text-sm text-muted-foreground">Nenhuma conta encontrada para a busca.</p>
           )}
 

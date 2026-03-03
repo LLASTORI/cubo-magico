@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, TrendingUp, DollarSign, Eye, MousePointer, Target, Calendar, Facebook, AlertCircle, CheckCircle, Loader2, Filter, Building2, BarChart3, Settings, Lock, Users, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { format, subDays } from 'date-fns';
+import { format, isValid, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +33,14 @@ import { getFunctionErrorMessage } from '@/lib/supabaseFunctionError';
 const META_APP_ID = '845927421602166';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
+
+const safeArray = <T,>(value: T[] | null | undefined): T[] => Array.isArray(value) ? value : [];
+
+const parseISODateString = (value: string | null | undefined): Date | null => {
+  if (!value || typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return isValid(parsed) ? parsed : null;
+};
 
 // Wrapper component to handle OAuth callback and project switching
 const MetaAds = () => {
@@ -534,8 +542,13 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
 
   // Helper to format dates in readable format
   const formatDateRange = () => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = parseISODateString(startDate);
+    const end = parseISODateString(endDate);
+
+    if (!start || !end) {
+      return 'Período inválido';
+    }
+
     const startStr = format(start, "dd MMM", { locale: ptBR });
     const endStr = format(end, "dd MMM", { locale: ptBR });
     return `${startStr} - ${endStr}`;
@@ -562,12 +575,17 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   };
 
   // Calculate totals from insights
-  const totals = insights?.reduce((acc, insight) => ({
+  const safeInsights = safeArray(insights);
+  const safeCampaigns = safeArray(campaigns);
+  const safeAdsets = safeArray(adsets);
+  const safeMetaAds = safeArray(metaAds);
+
+  const totals = safeInsights.reduce((acc, insight) => ({
     spend: acc.spend + (insight.spend || 0),
     impressions: acc.impressions + (insight.impressions || 0),
     clicks: acc.clicks + (insight.clicks || 0),
     reach: acc.reach + (insight.reach || 0),
-  }), { spend: 0, impressions: 0, clicks: 0, reach: 0 }) || { spend: 0, impressions: 0, clicks: 0, reach: 0 };
+  }), { spend: 0, impressions: 0, clicks: 0, reach: 0 });
 
   // Data integrity verification
   const dataIntegrity = useMemo(() => {
@@ -593,8 +611,13 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
   const avgCPM = totals.impressions > 0 ? (totals.spend / totals.impressions * 1000).toFixed(2) : '0.00';
 
   // Prepare chart data - daily spending
-  const dailySpendData = insights?.reduce((acc: any[], insight) => {
+  const dailySpendData = safeInsights.reduce((acc: any[], insight) => {
     const date = insight.date_start;
+    if (!date) return acc;
+
+    const parsedDate = parseISODateString(date);
+    if (!parsedDate) return acc;
+
     const existing = acc.find(d => d.date === date);
     if (existing) {
       existing.spend += insight.spend || 0;
@@ -603,14 +626,14 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     } else {
       acc.push({
         date,
-        dateFormatted: format(new Date(date), 'dd/MM', { locale: ptBR }),
+        dateFormatted: format(parsedDate, 'dd/MM', { locale: ptBR }),
         spend: insight.spend || 0,
         clicks: insight.clicks || 0,
         impressions: insight.impressions || 0,
       });
     }
     return acc;
-  }, []).sort((a, b) => a.date.localeCompare(b.date)) || [];
+  }, []).sort((a, b) => a.date.localeCompare(b.date));
 
   // Show loading while checking credentials or resetting project
   if (credentialsLoading) {
@@ -914,10 +937,10 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
 
                 {/* Hierarchy Analysis */}
                 <MetaHierarchyAnalysis
-                  insights={insights || []}
-                  campaigns={campaigns || []}
-                  adsets={adsets || []}
-                  ads={metaAds || []}
+                  insights={safeInsights}
+                  campaigns={safeCampaigns}
+                  adsets={safeAdsets}
+                  ads={safeMetaAds}
                   loading={insightsLoading || campaignsLoading || adsetsLoading || adsLoading}
                   onRefresh={handleSyncData}
                 />

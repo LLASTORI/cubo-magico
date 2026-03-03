@@ -67,7 +67,8 @@ async function fetchAccounts(projectId: string): Promise<PaidMediaAccount[]> {
   const { data: accountsData, error: accountsError } = await supabase
     .from('meta_ad_accounts')
     .select('account_id, account_name, is_active')
-    .eq('project_id', projectId);
+    .eq('project_id', projectId)
+    .eq('is_active', true);
 
   if (accountsError) {
     console.error('[MetaProvider.getHierarchy] Error fetching accounts:', accountsError);

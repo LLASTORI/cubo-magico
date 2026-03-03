@@ -77,14 +77,13 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
       const { data, error } = await supabase
         .from('meta_ad_accounts')
         .select('*')
-        .eq('project_id', projectId);
+        .eq('project_id', projectId)
+        .eq('is_active', true);
 
       if (error) throw error;
       setSavedAccounts(data || []);
       
-      // Pre-select active accounts
-      const activeIds = (data || []).filter(a => a.is_active).map(a => a.account_id);
-      setSelectedIds(activeIds);
+      setSelectedIds((data || []).map(a => a.account_id));
     } catch (error) {
       console.error('Error fetching saved accounts:', error);
     }

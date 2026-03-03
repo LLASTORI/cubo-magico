@@ -244,23 +244,23 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // ORDERS CORE: Fetch from funnel_orders_view (replaces finance_tracking_view)
   // Status filter applied at application layer (same logic as Busca Rápida)
   // ═══════════════════════════════════════════════════════════════════════════════
-  
+
   // CANONICAL STATUS FILTER: Same as Busca Rápida (useOrdersCore)
   // Includes 'partial_refund' to show orders with positive net value after partial refund
   const VALID_ORDER_STATUSES = ['approved', 'complete', 'partial_refund'];
-  
+
   const ordersQuery = useQuery({
     queryKey: ['funnel-orders', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       console.log(`[useFunnelData] Fetching orders from funnel_orders_view for ${startDateStr} to ${endDateStr}`);
-      
+
       // Fetch ALL orders with pagination to bypass 1000 limit
       // Status filter applied here (view no longer has hardcoded WHERE)
       const PAGE_SIZE = 1000;
       let allData: OrderRecord[] = [];
       let page = 0;
       let hasMore = true;
-      
+
       while (hasMore) {
         const { data, error } = await supabase
           .from('funnel_orders_view')
@@ -296,12 +296,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           .lte('economic_day', endDateStr)
           .order('order_id', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
+
         if (error) {
           console.error(`[useFunnelData] Error fetching orders page ${page}:`, error);
           throw error;
         }
-        
+
         if (data && data.length > 0) {
           allData = [...allData, ...data as OrderRecord[]];
           page++;
@@ -310,7 +310,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           hasMore = false;
         }
       }
-      
+
       const totalCustomerPaid = allData.reduce((s, o) => s + (o.customer_paid || 0), 0);
       const totalProducerNet = allData.reduce((s, o) => s + (o.producer_net || 0), 0);
       console.log(`[useFunnelData] Total orders from funnel_orders_view: ${allData.length}, customer_paid: R$${totalCustomerPaid.toFixed(2)}, producer_net: R$${totalProducerNet.toFixed(2)}`);
@@ -360,13 +360,13 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         console.log(`[useFunnelData] No active accounts, skipping paid media metrics fetch`);
         return { metrics: [], aggregated: { spend: 0, impressions: 0, clicks: 0, reach: 0 } };
       }
-      
+
       console.log(`[useFunnelData] Fetching paid media metrics via domain for project=${projectId}, dates=${startDateStr} to ${endDateStr}`);
-      
+
       try {
         const dateRange = { start: startDateStr, end: endDateStr };
         const dailyMetrics = await PaidMediaDomain.getAggregatedMetrics(projectId!, dateRange, activeAccountIds);
-        
+
         // Aggregate totals from daily metrics
         const aggregated = dailyMetrics.reduce((acc, day) => ({
           spend: acc.spend + day.spend,
@@ -374,9 +374,9 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           clicks: acc.clicks + day.clicks,
           reach: acc.reach + day.reach,
         }), { spend: 0, impressions: 0, clicks: 0, reach: 0 });
-        
+
         console.log(`[useFunnelData] Paid Media Domain: ${dailyMetrics.length} days, total spend: ${aggregated.spend.toFixed(2)}`);
-        
+
         return { metrics: dailyMetrics, aggregated };
       } catch (error) {
         console.error(`[useFunnelData] Error fetching paid media metrics from domain:`, error);
@@ -384,8 +384,10 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }
     },
     enabled: enabled && activeAccountIds.length > 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60_000,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -400,15 +402,15 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         console.log(`[useFunnelData] No active accounts, skipping insights fetch`);
         return [];
       }
-      
+
       console.log(`[useFunnelData] Fetching raw insights for hierarchy, project=${projectId}`);
-      
+
       // Fetch ALL ad-level insights with pagination to handle any time period
       const PAGE_SIZE = 1000;
       let allData: MetaInsight[] = [];
       let page = 0;
       let hasMore = true;
-      
+
       while (hasMore) {
         const { data, error } = await supabase
           .from('meta_insights')
@@ -420,12 +422,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           .lte('date_start', endDateStr)
           .order('id', { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        
+
         if (error) {
           console.error(`[useFunnelData] Error fetching insights:`, error);
           throw error;
         }
-        
+
         if (data && data.length > 0) {
           allData = [...allData, ...data];
           page++;
@@ -434,13 +436,15 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
           hasMore = false;
         }
       }
-      
+
       console.log(`[useFunnelData] Raw insights for hierarchy: ${allData.length} records`);
       return allData as MetaInsight[];
     },
     enabled: enabled && activeAccountIds.length > 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60_000,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
   });
 
   // Use unified hook for Meta hierarchy (campaigns, adsets, ads)
@@ -551,7 +555,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // Falls back to raw insights if domain fails
   // ═══════════════════════════════════════════════════════════════════════════════
   const paidMediaAggregated = paidMediaMetricsQuery.data?.aggregated;
-  
+
   // Total investment from Paid Media Domain (provider-agnostic)
   const totalMetaInvestment = useMemo(() => {
     // Primary: Use Paid Media Domain aggregated metrics
@@ -577,13 +581,13 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         cpc: clicks > 0 ? spend / clicks : 0,
       };
     }
-    
+
     // Fallback: Calculate from raw insights (legacy behavior)
     const spend = adLevelInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
     const impressions = adLevelInsights.reduce((sum, i) => sum + (i.impressions || 0), 0);
     const clicks = adLevelInsights.reduce((sum, i) => sum + (i.clicks || 0), 0);
     const reach = adLevelInsights.reduce((sum, i) => sum + (i.reach || 0), 0);
-    
+
     return {
       spend,
       impressions,
@@ -660,7 +664,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     const totalVendas = salesData.length;
     const totalReceita = salesData.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
     const totalProducerNet = salesData.reduce((sum, s) => sum + (s.net_amount || 0), 0);
-    
+
     // Front-end sales (orders with main offer in FRONT position)
     const frontOfferCodes = new Set(
       sortedMappings
@@ -670,22 +674,22 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     const vendasFront = salesData.filter(s =>
       frontOfferCodes.has(s.offer_code || '')
     ).length;
-    
+
     // Unique customers
     const uniqueCustomers = new Set(salesData.map(s => s.buyer_email).filter(Boolean)).size;
-    
+
     // Ticket médio = customer_paid / orders
     const baseVendas = vendasFront > 0 ? vendasFront : totalVendas;
     const ticketMedio = baseVendas > 0 ? totalReceita / baseVendas : 0;
-    
+
     // ROAS and CPA
-    const avgRoasTarget = funnels.length 
-      ? funnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / funnels.length 
+    const avgRoasTarget = funnels.length
+      ? funnels.reduce((sum, f) => sum + (f.roas_target || 2), 0) / funnels.length
       : 2;
     const cpaMaximo = ticketMedio / avgRoasTarget;
     const cpaReal = baseVendas > 0 ? totalMetaInvestment / baseVendas : 0;
     const roas = totalMetaInvestment > 0 ? totalReceita / totalMetaInvestment : 0;
-    
+
     // Order composition rates
     const bumpOfferCodes = new Set(
       sortedMappings
@@ -702,12 +706,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     const bumpRate = totalVendas > 0 ? (ordersWithBump / totalVendas) * 100 : 0;
     const upsellRate = totalVendas > 0 ? (ordersWithUpsell / totalVendas) * 100 : 0;
 
-    return { 
-      totalVendas, 
-      totalReceita, 
+    return {
+      totalVendas,
+      totalReceita,
       totalProducerNet,
-      ticketMedio, 
-      uniqueCustomers, 
+      ticketMedio,
+      uniqueCustomers,
       vendasFront,
       investimento: totalMetaInvestment,
       cpaMaximo,

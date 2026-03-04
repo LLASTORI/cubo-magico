@@ -1,0 +1,18 @@
+name: Cubo Meta Hierarchy Sync Cron
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync-meta-hierarchy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Supabase Edge Function
+        run: |
+          curl -X POST "https://mqaygpnfjuyslnxpvipa.functions.supabase.co/meta-hierarchy-cron" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{}'

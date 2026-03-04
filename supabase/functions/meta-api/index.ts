@@ -118,13 +118,13 @@ async function writeSpendCoreEvent(
   try {
     const spendAmount = parseFloat(insight.spend || 0)
     if (spendAmount === 0) return true // Skip zero spend
-    
+
     const occurredAt = insight.date_start // YYYY-MM-DD from Meta
     const economicDay = calculateEconomicDay(occurredAt, timezone)
-    
+
     // Create unique provider_event_id: campaign_ad_date combination
     const providerEventId = `${insight.campaign_id}_${insight.ad_id || 'no_ad'}_${occurredAt}`
-    
+
     // Check for existing record with same provider_event_id
     const { data: existing } = await supabase
       .from('spend_core_events')
@@ -134,7 +134,7 @@ async function writeSpendCoreEvent(
       .eq('provider_event_id', providerEventId)
       .eq('is_active', true)
       .maybeSingle()
-    
+
     if (existing) {
       // Check if spend changed
       const existingSpend = parseFloat(existing.spend_amount || 0)
@@ -142,13 +142,13 @@ async function writeSpendCoreEvent(
         // No change, skip
         return true
       }
-      
+
       // Spend changed - mark old as inactive and insert new version
       await supabase
         .from('spend_core_events')
         .update({ is_active: false })
         .eq('id', existing.id)
-      
+
       const { error } = await supabase
         .from('spend_core_events')
         .insert({
@@ -166,7 +166,7 @@ async function writeSpendCoreEvent(
           version: (existing.version || 1) + 1,
           is_active: true
         })
-      
+
       if (error) {
         console.error('Error updating spend_core_event:', error)
         return false
@@ -190,13 +190,13 @@ async function writeSpendCoreEvent(
           version: 1,
           is_active: true
         })
-      
+
       if (error) {
         console.error('Error inserting spend_core_event:', error)
         return false
       }
     }
-    
+
     return true
   } catch (err) {
     console.error('Error in writeSpendCoreEvent:', err)
@@ -213,20 +213,20 @@ async function batchWriteSpendCoreEvents(
 ): Promise<{ success: number, failed: number }> {
   let success = 0
   let failed = 0
-  
+
   // Filter out zero spend records
   const nonZeroInsights = insights.filter(i => parseFloat(i.spend || 0) > 0)
-  
+
   if (nonZeroInsights.length === 0) {
     return { success: 0, failed: 0 }
   }
-  
+
   // Process in smaller batches for versioning logic
   const SPEND_BATCH_SIZE = 50
-  
+
   for (let i = 0; i < nonZeroInsights.length; i += SPEND_BATCH_SIZE) {
     const batch = nonZeroInsights.slice(i, i + SPEND_BATCH_SIZE)
-    
+
     // For each insight, check and write with versioning
     for (const insight of batch) {
       const result = await writeSpendCoreEvent(supabase, projectId, insight, timezone)
@@ -237,7 +237,7 @@ async function batchWriteSpendCoreEvents(
       }
     }
   }
-  
+
   console.log(`Spend Core Events: ${success} written, ${failed} failed`)
   return { success, failed }
 }
@@ -313,40 +313,40 @@ const DELAY_BETWEEN_ACCOUNTS_MS = 400
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // Helper function to split date range into fixed-size chunks (MAX_DAYS_PER_CHUNK days each)
-function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{start: string, stop: string}> {
-  const chunks: Array<{start: string, stop: string}> = []
+function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{ start: string, stop: string }> {
+  const chunks: Array<{ start: string, stop: string }> = []
   const startDate = new Date(dateStart)
   const endDate = new Date(dateStop)
-  
+
   // Calculate total days
   const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-  
+
   // If period is short enough, return single chunk
   if (totalDays <= MAX_DAYS_PER_CHUNK) {
     return [{ start: dateStart, stop: dateStop }]
   }
-  
+
   console.log(`Splitting ${totalDays} days into ${MAX_DAYS_PER_CHUNK}-day chunks...`)
-  
+
   let currentStart = new Date(startDate)
-  
+
   while (currentStart <= endDate) {
     // Calculate chunk end (MAX_DAYS_PER_CHUNK days from start, or end date, whichever is earlier)
     const chunkEnd = new Date(currentStart)
     chunkEnd.setDate(chunkEnd.getDate() + MAX_DAYS_PER_CHUNK - 1)
-    
+
     const actualEnd = chunkEnd > endDate ? endDate : chunkEnd
-    
+
     chunks.push({
       start: currentStart.toISOString().split('T')[0],
       stop: actualEnd.toISOString().split('T')[0]
     })
-    
+
     // Move to next chunk start
     currentStart = new Date(actualEnd)
     currentStart.setDate(currentStart.getDate() + 1)
   }
-  
+
   console.log(`Created ${chunks.length} chunks of max ${MAX_DAYS_PER_CHUNK} days:`, chunks.map(c => `${c.start} to ${c.stop}`))
   return chunks
 }
@@ -415,18 +415,18 @@ async function getExistingDatesInCache(
   dateStop: string
 ): Promise<Set<string>> {
   console.log('Checking existing cache...')
-  
+
   const completeDates = new Set<string>()
-  
+
   // First check if this project has any ads synced
   const { count: adsCountNum } = await supabase
     .from('meta_ads')
     .select('*', { count: 'exact', head: true })
     .eq('project_id', projectId)
-  
+
   const hasAds = (adsCountNum || 0) > 0
   console.log(`Project has ads synced: ${hasAds} (${adsCountNum || 0} ads)`)
-  
+
   // If project has ads, require ad-level data for cache
   // If no ads, accept campaign-level data as valid cache
   let query = supabase
@@ -436,25 +436,25 @@ async function getExistingDatesInCache(
     .in('ad_account_id', accountIds)
     .gte('date_start', dateStart)
     .lte('date_start', dateStop)
-  
+
   if (hasAds) {
     query = query.not('ad_id', 'is', null) // Only count dates with ad-level data
   }
   // If no ads, accept any insights (campaign-level is fine)
-  
+
   const { data, error } = await query
-  
+
   if (error) {
     console.error('Error checking cache:', error)
     return completeDates
   }
-  
+
   if (data) {
     data.forEach((row: any) => {
       completeDates.add(row.date_start as string)
     })
   }
-  
+
   console.log(`Found ${completeDates.size} cached dates (${hasAds ? 'ad-level' : 'campaign-level'} data)`)
   return completeDates
 }
@@ -470,14 +470,14 @@ function determineDatesToFetch(
 ): { toFetch: string[], toSkip: string[], fromCache: string[] } {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
+
   const toFetch: string[] = []
   const toSkip: string[] = []
   const fromCache: string[] = []
-  
+
   const start = new Date(dateStart)
   const end = new Date(dateStop)
-  
+
   // Track reasons for logging
   const reasons = {
     immutableCached: 0,  // 8+ days old, in cache → skip
@@ -486,21 +486,21 @@ function determineDatesToFetch(
     notInCache: 0,       // not in cache → fetch
     forceRefreshed: 0,   // force refresh → fetch
   }
-  
+
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().split('T')[0]
     const daysAgo = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
-    
+
     // Skip future dates
     if (d > today) {
       toSkip.push(dateStr)
       continue
     }
-    
+
     const isInCache = cachedDates.has(dateStr)
     const isImmutable = daysAgo >= IMMUTABLE_DAYS_THRESHOLD // 8+ days old - data won't change (Meta's attribution window)
     const isVeryRecent = daysAgo < VERY_RECENT_DAYS_THRESHOLD // Within attribution window (0-6 days)
-    
+
     if (forceRefresh) {
       // Force refresh: always fetch
       toFetch.push(dateStr)
@@ -524,7 +524,7 @@ function determineDatesToFetch(
       reasons.notInCache++
     }
   }
-  
+
   console.log(`\n📊 SMART SYNC ANALYSIS (IMMUTABLE_DAYS=${IMMUTABLE_DAYS_THRESHOLD}, ATTRIBUTION_WINDOW=${VERY_RECENT_DAYS_THRESHOLD}):`)
   console.log(`   ✅ Using cache (8+ days, immutable): ${reasons.immutableCached} dates`)
   console.log(`   ✅ Using cache (7-8 days, stable): ${reasons.recentCached} dates`)
@@ -533,25 +533,25 @@ function determineDatesToFetch(
   console.log(`   ⚡ Force refreshed: ${reasons.forceRefreshed} dates`)
   console.log(`   ⏭️ Skipped (future): ${toSkip.length} dates`)
   console.log(`\n   TOTAL: ${toFetch.length} to fetch, ${fromCache.length} from cache\n`)
-  
+
   return { toFetch, toSkip, fromCache }
 }
 
 // Group consecutive dates into ranges for efficient API calls
-function groupConsecutiveDates(dates: string[]): Array<{start: string, stop: string}> {
+function groupConsecutiveDates(dates: string[]): Array<{ start: string, stop: string }> {
   if (dates.length === 0) return []
-  
+
   const sorted = [...dates].sort()
-  const ranges: Array<{start: string, stop: string}> = []
-  
+  const ranges: Array<{ start: string, stop: string }> = []
+
   let rangeStart = sorted[0]
   let rangeEnd = sorted[0]
-  
+
   for (let i = 1; i < sorted.length; i++) {
     const prevDate = new Date(sorted[i - 1])
     const currDate = new Date(sorted[i])
     const diffDays = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-    
+
     if (diffDays === 1) {
       // Consecutive - extend range
       rangeEnd = sorted[i]
@@ -562,10 +562,10 @@ function groupConsecutiveDates(dates: string[]): Array<{start: string, stop: str
       rangeEnd = sorted[i]
     }
   }
-  
+
   // Add final range
   ranges.push({ start: rangeStart, stop: rangeEnd })
-  
+
   return ranges
 }
 
@@ -579,31 +579,31 @@ async function batchUpsert(
 ): Promise<{ success: number, failed: number }> {
   let success = 0
   let failed = 0
-  
+
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize)
     const batchNum = Math.floor(i / batchSize) + 1
     const totalBatches = Math.ceil(records.length / batchSize)
-    
+
     console.log(`Upserting batch ${batchNum}/${totalBatches} (${batch.length} records)...`)
-    
+
     const { error } = await supabase
       .from(tableName)
       .upsert(batch, { onConflict: conflictColumns })
-    
+
     if (error) {
       console.error(`Batch ${batchNum} error:`, error)
       failed += batch.length
     } else {
       success += batch.length
     }
-    
+
     // Minimal delay between batches for max speed
     if (i + batchSize < records.length) {
       await delay(DELAY_BETWEEN_BATCHES_MS)
     }
   }
-  
+
   console.log(`Batch upsert complete: ${success} success, ${failed} failed`)
   return { success, failed }
 }
@@ -624,38 +624,40 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get auth header for user context
-const authHeader = req.headers.get('Authorization')
-if (!authHeader) {
-  return new Response(JSON.stringify({ error: 'Não autorizado' }), {
-    status: 401,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
+    // usa service role para acessar o banco
+    const supabase = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
+    )
 
-// usa service role para acessar o banco
-const supabase = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY
-)
+    if (req.headers.get('x-cron-trigger')) {
+      console.log('Internal cron request detected, skipping user auth')
+    } else {
+      // Get auth header for user context
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
 
-// valida o usuário manualmente
-const token = authHeader.replace('Bearer ', '')
-const { data, error } = await supabase.auth.getUser(token)
+      // valida o usuário manualmente
+      const token = authHeader.replace('Bearer ', '')
+      const { data, error } = await supabase.auth.getUser(token)
 
-if (error || !data?.user) {
-  return new Response(JSON.stringify({ error: 'Usuário inválido' }), {
-    status: 401,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
+      if (error || !data?.user) {
+        return new Response(JSON.stringify({ error: 'Usuário inválido' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
 
-const user = data.user
+    const body = await req.json()
+    const { action, projectId, dateStart, dateStop, accountIds, level, forceRefresh } = body
 
-const body = await req.json()
-const { action, projectId, dateStart, dateStop, accountIds, level, forceRefresh } = body
-
-console.log('Meta API request:', { action, projectId, dateStart, dateStop, forceRefresh })
+    console.log('Meta API request:', { action, projectId, dateStart, dateStop, forceRefresh })
 
     // Get Meta credentials for this project
     const { data: credentials, error: credError } = await supabase
@@ -666,9 +668,9 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
 
     if (credError || !credentials) {
       console.error('Credentials error:', credError)
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: 'Meta não conectado',
-        needsConnection: true 
+        needsConnection: true
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -679,9 +681,9 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
 
     // Check if token is expired
     if (credentials.expires_at && new Date(credentials.expires_at) < new Date()) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: 'Token expirado. Reconecte sua conta Meta.',
-        needsReconnection: true 
+        needsReconnection: true
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -716,12 +718,12 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
       case 'sync_insights':
         // Use service role for sync
         const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-        
+
         // Calculate period length for logging
         const startDate = new Date(dateStart)
         const endDate = new Date(dateStop)
         const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-        
+
         console.log(`Background sync started: {
   projectId: "${projectId}",
   accountIds: ${accountIds.length},
@@ -729,16 +731,16 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
   dateStop: "${dateStop}",
   forceRefresh: ${forceRefresh || false}
 }`)
-        
+
         // ALWAYS use background processing to avoid HTTP timeout
         const backgroundTask = async () => {
           try {
             await syncInsightsSmartOptimized(
-              serviceSupabase, 
-              projectId, 
-              accessToken, 
-              accountIds, 
-              dateStart, 
+              serviceSupabase,
+              projectId,
+              accessToken,
+              accountIds,
+              dateStart,
               dateStop,
               forceRefresh || false
             )
@@ -747,7 +749,7 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
             console.error('Background sync error:', err)
           }
         }
-        
+
         // Use EdgeRuntime.waitUntil to keep the function running after response
         // deno-lint-ignore no-explicit-any
         const runtime = (globalThis as any).EdgeRuntime
@@ -757,15 +759,48 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
           // Fallback: just start the task without waiting
           backgroundTask()
         }
-        
+
         // Calculate estimated time based on period length
         const estimatedMinutes = Math.max(1, Math.ceil(periodDays / 30))
-        
-        result = { 
-          success: true, 
+
+        result = {
+          success: true,
           message: `Sincronização inteligente iniciada para ${periodDays} dias. Dados antigos (>30 dias) serão usados do cache local.`,
           background: true,
           periodDays
+        }
+        break
+
+      case 'sync_hierarchy_full':
+        console.log('Running full Meta hierarchy sync in parallel (background)')
+
+        const backgroundHierarchyTask = async () => {
+          try {
+            await Promise.all([
+              syncCampaigns(supabase, projectId, accessToken, accountIds),
+              syncAdsets(supabase, projectId, accessToken, accountIds),
+              syncAds(supabase, projectId, accessToken, accountIds)
+            ])
+            console.log('Background hierarchy sync completed successfully!')
+          } catch (err) {
+            console.error('Background hierarchy sync error:', err)
+          }
+        }
+
+        // Use EdgeRuntime.waitUntil to keep the function running after response
+        // deno-lint-ignore no-explicit-any
+        const runtimeHierarchy = (globalThis as any).EdgeRuntime
+        if (runtimeHierarchy && typeof runtimeHierarchy.waitUntil === 'function') {
+          runtimeHierarchy.waitUntil(backgroundHierarchyTask())
+        } else {
+          // Fallback
+          backgroundHierarchyTask()
+        }
+
+        result = {
+          success: true,
+          message: 'Sincronização de hierarquia iniciada em background.',
+          background: true
         }
         break
 
@@ -792,21 +827,21 @@ console.log('Meta API request:', { action, projectId, dateStart, dateStop, force
 
 async function getAdAccounts(accessToken: string) {
   console.log('Fetching ad accounts with pagination...')
-  
+
   const allAccounts: any[] = []
   let nextUrl: string | null = `${GRAPH_API_BASE}/me/adaccounts?fields=id,name,currency,timezone_name,account_status&limit=100&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 20 // Safety limit
-  
+
   while (nextUrl && pageCount < maxPages) {
     pageCount++
     console.log(`Fetching ad accounts page ${pageCount}...`)
-    
+
     const json = await fetchWithRetry(
-  nextUrl,
-  accessToken,
-  `Ad accounts page ${pageCount}`
-)
+      nextUrl,
+      accessToken,
+      `Ad accounts page ${pageCount}`
+    )
 
     if (json.error) {
       console.error('Ad accounts error:', json.error)
@@ -827,17 +862,17 @@ async function getAdAccounts(accessToken: string) {
 }
 
 async function syncAdAccounts(
-  supabase: any, 
-  projectId: string, 
+  supabase: any,
+  projectId: string,
   accessToken: string,
   selectedAccountIds: string[]
 ) {
   console.log('Syncing ad accounts:', selectedAccountIds)
 
   const { accounts } = await getAdAccounts(accessToken)
-  
+
   // Filter to selected accounts
-  const selectedAccounts = accounts.filter((acc: any) => 
+  const selectedAccounts = accounts.filter((acc: any) =>
     selectedAccountIds.includes(acc.id)
   )
 
@@ -864,7 +899,7 @@ for (const account of selectedAccounts) {
 }
 */
 
-    // Read-only mode: não alteramos mais meta_ad_accounts aqui
+  // Read-only mode: não alteramos mais meta_ad_accounts aqui
   // Persistência será feita por fluxo backend dedicado
   return { success: true, synced: selectedAccounts.length }
 }
@@ -875,17 +910,10 @@ async function getCampaignsForAccount(accessToken: string, accountId: string) {
   // which breaks historical attribution in Funnel Analysis.
   // Campaign-level valid effective statuses.
   // Using ad/adset-only statuses may cause Graph API to return empty/error.
-  const effectiveStatus = encodeURIComponent(JSON.stringify([
-    'ACTIVE',
-    'PAUSED',
-    'DELETED',
-    'ARCHIVED',
-    'IN_PROCESS',
-    'WITH_ISSUES',
-  ]))
+  const effectiveStatus = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED"]')
 
-  const url = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&access_token=${accessToken}`
-  
+  const url = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&access_token=${accessToken}`
+
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`
@@ -907,14 +935,14 @@ async function getCampaignsForAccount(accessToken: string, accountId: string) {
 
 async function getCampaigns(accessToken: string, rawAccountIds: any[]) {
   // Normalize account IDs to handle both strings and objects
-  const accountIds = rawAccountIds.map((acc: any) => 
+  const accountIds = rawAccountIds.map((acc: any) =>
     typeof acc === 'string' ? acc : (acc?.account_id || acc)
   ).filter(Boolean)
-  
+
   console.log('Fetching campaigns for accounts:', accountIds)
-  
+
   const allCampaigns: any[] = []
-  
+
   // Process in parallel batches
   for (let i = 0; i < accountIds.length; i += BATCH_SIZE) {
     const batch = accountIds.slice(i, i + BATCH_SIZE)
@@ -922,7 +950,7 @@ async function getCampaigns(accessToken: string, rawAccountIds: any[]) {
       batch.map(accountId => getCampaignsForAccount(accessToken, accountId))
     )
     allCampaigns.push(...results.flat())
-    
+
     // Add small delay between batches to avoid rate limiting
     if (i + BATCH_SIZE < accountIds.length) {
       await delay(1000)
@@ -936,28 +964,21 @@ async function getCampaigns(accessToken: string, rawAccountIds: any[]) {
 // Sync campaigns to database with pagination
 async function getCampaignsForAccountWithPagination(accessToken: string, accountId: string) {
   const allCampaigns: any[] = []
-  const effectiveStatus = encodeURIComponent(JSON.stringify([
-    'ACTIVE',
-    'PAUSED',
-    'DELETED',
-    'ARCHIVED',
-    'IN_PROCESS',
-    'WITH_ISSUES',
-  ]))
+  const effectiveStatus = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED"]')
 
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,objective,status,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget,created_time,start_time,stop_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50 // Safety limit
-  
+
   while (nextUrl && pageCount < maxPages) {
     pageCount++
     console.log(`Fetching campaigns page ${pageCount} for ${accountId}...`)
-    
-const data = await fetchWithRetry(
-  nextUrl,
-  accessToken,
-  `Campaigns page ${pageCount} for ${accountId}`
-)    
+
+    const data = await fetchWithRetry(
+      nextUrl,
+      accessToken,
+      `Campaigns page ${pageCount} for ${accountId}`
+    )
 
     if (data.error) {
       console.error(`Campaigns error for ${accountId}:`, data.error)
@@ -975,7 +996,7 @@ const data = await fetchWithRetry(
 
     // Check for next page
     nextUrl = data.paging?.next || null
-    
+
     if (nextUrl) {
       await delay(500)
     }
@@ -992,16 +1013,16 @@ async function syncCampaigns(
   rawAccountIds: any[]
 ) {
   // Normalize account IDs to handle both strings and objects
-  const accountIds = rawAccountIds.map((acc: any) => 
+  const accountIds = rawAccountIds.map((acc: any) =>
     typeof acc === 'string' ? acc : (acc?.account_id || acc)
   ).filter(Boolean)
-  
+
   console.log('Syncing campaigns for accounts:', accountIds)
-  
+
   const allCampaigns: any[] = []
   let synced = 0
   let errors = 0
-  
+
   // Fetch campaigns with pagination for each account
   for (let i = 0; i < accountIds.length; i += BATCH_SIZE) {
     const batch = accountIds.slice(i, i + BATCH_SIZE)
@@ -1009,33 +1030,19 @@ async function syncCampaigns(
       batch.map(accountId => getCampaignsForAccountWithPagination(accessToken, accountId))
     )
     allCampaigns.push(...results.flat())
-    
+
     if (i + BATCH_SIZE < accountIds.length) {
       await delay(1000)
     }
   }
-  
+
   console.log(`Total campaigns fetched: ${allCampaigns.length}`)
-  
-  // First, delete existing campaigns for this project and these account IDs
-  // This ensures we have fresh data with correct status
-  // Use delete+insert pattern (same as adsets/ads) for reliable sync
-  console.log(`Deleting existing campaigns for project ${projectId} and accounts:`, accountIds)
-  
-  for (const accountId of accountIds) {
-    const { error: deleteError } = await supabase
-      .from('meta_campaigns')
-      .delete()
-      .eq('project_id', projectId)
-      .eq('ad_account_id', accountId)
-    
-    if (deleteError) {
-      console.error(`Error deleting campaigns for account ${accountId}:`, deleteError)
-    }
-  }
-  
-  console.log(`Deleted existing campaigns, now inserting ${allCampaigns.length} fresh records`)
-  
+
+  // The historical delete has been fully replaced by the optimized upsert logic.
+  // We no longer wipe existing campaigns mid-process explicitly to avoid zeroing out datasets
+  // or violating time thresholds for consolidated campaigns across cron runs and timeouts.
+  // (Deletion loop removed here)
+
   // Prepare campaign records for insert
   const campaignRecords = allCampaigns.map(campaign => ({
     project_id: projectId,
@@ -1051,57 +1058,58 @@ async function syncCampaigns(
     stop_time: campaign.stop_time || null,
     updated_at: new Date().toISOString(),
   }))
-  
-  // Batch insert campaigns (fresh insert, not upsert)
+
+  // Batch upsert campaigns (converted from empty insert to upsert)
   for (let i = 0; i < campaignRecords.length; i += DB_INSERT_BATCH_SIZE) {
     const batch = campaignRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
     const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
     const totalBatches = Math.ceil(campaignRecords.length / DB_INSERT_BATCH_SIZE)
-    
-    console.log(`Inserting campaigns batch ${batchNum}/${totalBatches}...`)
-    
+
+    console.log(`Upserting campaigns batch ${batchNum}/${totalBatches}...`)
+
     const { error } = await supabase
       .from('meta_campaigns')
-      .insert(batch)
-    
+      .upsert(batch, { onConflict: 'project_id,campaign_id' })
+
     if (error) {
       console.error(`Campaigns batch ${batchNum} error:`, error)
       errors += batch.length
     } else {
       synced += batch.length
     }
-    
+
     if (i + DB_INSERT_BATCH_SIZE < campaignRecords.length) {
       await delay(100)
     }
   }
-  
+
   console.log(`Campaigns sync complete: ${synced} synced, ${errors} errors`)
-  
-  return { 
-    success: true, 
-    synced, 
+
+  return {
+    success: true,
+    synced,
     errors,
-    total: allCampaigns.length 
+    total: allCampaigns.length
   }
 }
 
 // Fetch adsets directly from Meta API with pagination
 async function getAdsetsForAccountWithPagination(accessToken: string, accountId: string) {
   const allAdsets: any[] = []
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/adsets?fields=id,name,campaign_id,status,daily_budget,lifetime_budget,created_time,start_time,end_time,targeting&limit=500&access_token=${accessToken}`
+  const effectiveStatus = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED"]')
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/adsets?fields=id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,created_time,start_time,end_time,targeting&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
-  
+
   while (nextUrl && pageCount < maxPages) {
     pageCount++
     console.log(`Fetching adsets page ${pageCount} for ${accountId}...`)
-    
+
     const data = await fetchWithRetry(
-  nextUrl,
-  accessToken,
-  `Adsets page ${pageCount} for ${accountId}`
-)
+      nextUrl,
+      accessToken,
+      `Adsets page ${pageCount} for ${accountId}`
+    )
 
     if (data.error) {
       console.error(`Adsets error for ${accountId}:`, data.error)
@@ -1118,7 +1126,7 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
     }
 
     nextUrl = data.paging?.next || null
-    
+
     if (nextUrl) {
       await delay(500)
     }
@@ -1133,19 +1141,20 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
   const allAds: any[] = []
   // Request effective_object_story_id for public post link and thumbnail_url for preview image
   // effective_object_story_id format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,campaign_id,adset_id,status,creative{id,effective_object_story_id,thumbnail_url},created_time&limit=500&access_token=${accessToken}`
+  const effectiveStatus = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED"]')
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,adset_id,status,effective_status,campaign_id,creative{id,effective_object_story_id,thumbnail_url},created_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
-  
+
   while (nextUrl && pageCount < maxPages) {
     pageCount++
     console.log(`Fetching ads page ${pageCount} for ${accountId}...`)
-    
+
     const data = await fetchWithRetry(
-  nextUrl,
-  accessToken,
-  `Ads page ${pageCount} for ${accountId}`
-)
+      nextUrl,
+      accessToken,
+      `Ads page ${pageCount} for ${accountId}`
+    )
 
     if (data.error) {
       console.error(`Ads error for ${accountId}:`, data.error)
@@ -1163,10 +1172,10 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
           const [pageId, postId] = storyId.split('_')
           previewUrl = `https://www.facebook.com/${pageId}/posts/${postId}`
         }
-        
+
         // Get thumbnail URL for inline preview
         const thumbnailUrl = a.creative?.thumbnail_url || null
-        
+
         return {
           ...a,
           ad_account_id: accountId,
@@ -1179,7 +1188,7 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
     }
 
     nextUrl = data.paging?.next || null
-    
+
     if (nextUrl) {
       await delay(500)
     }
@@ -1197,27 +1206,27 @@ async function syncAdsets(
   rawAccountIds: any[]
 ) {
   // Normalize account IDs to handle both strings and objects
-  const accountIds = rawAccountIds.map((acc: any) => 
+  const accountIds = rawAccountIds.map((acc: any) =>
     typeof acc === 'string' ? acc : (acc?.account_id || acc)
   ).filter(Boolean)
-  
+
   console.log('Syncing adsets for accounts:', accountIds)
-  
+
   const allAdsets: any[] = []
   let synced = 0
   let errors = 0
-  
+
   for (const accountId of accountIds) {
     const adsets = await getAdsetsForAccountWithPagination(accessToken, accountId)
     allAdsets.push(...adsets)
     await delay(1000)
   }
-  
+
   console.log(`Total adsets fetched: ${allAdsets.length}`)
-  
+
   // Upsert handles duplicates - no need to delete first
   // This removes the race condition that was causing duplicate key errors
-  
+
   const adsetRecords = allAdsets.map(adset => ({
     project_id: projectId,
     ad_account_id: adset.ad_account_id,
@@ -1233,18 +1242,18 @@ async function syncAdsets(
     targeting: adset.targeting || null,
     updated_at: new Date().toISOString(),
   }))
-  
+
   // Use upsert to avoid duplicate key errors
   for (let i = 0; i < adsetRecords.length; i += DB_INSERT_BATCH_SIZE) {
     const batch = adsetRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
     const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
-    
+
     console.log(`Upserting adsets batch ${batchNum}...`)
-    
+
     const { error } = await supabase
       .from('meta_adsets')
       .upsert(batch, { onConflict: 'project_id,adset_id' })
-    
+
     if (error) {
       console.error(`Adsets batch ${batchNum} error:`, error)
       errors += batch.length
@@ -1252,7 +1261,7 @@ async function syncAdsets(
       synced += batch.length
     }
   }
-  
+
   console.log(`Adsets sync complete: ${synced} synced, ${errors} errors`)
   return { success: true, synced, errors, total: allAdsets.length }
 }
@@ -1265,27 +1274,27 @@ async function syncAds(
   rawAccountIds: any[]
 ) {
   // Normalize account IDs to handle both strings and objects
-  const accountIds = rawAccountIds.map((acc: any) => 
+  const accountIds = rawAccountIds.map((acc: any) =>
     typeof acc === 'string' ? acc : (acc?.account_id || acc)
   ).filter(Boolean)
-  
+
   console.log('Syncing ads for accounts:', accountIds)
-  
+
   const allAds: any[] = []
   let synced = 0
   let errors = 0
-  
+
   for (const accountId of accountIds) {
     const ads = await getAdsForAccountWithPagination(accessToken, accountId)
     allAds.push(...ads)
     await delay(1000)
   }
-  
+
   console.log(`Total ads fetched: ${allAds.length}`)
-  
+
   // Upsert handles duplicates - no need to delete first
   // This removes the race condition that was causing duplicate key errors
-  
+
   const adRecords = allAds.map(ad => ({
     project_id: projectId,
     ad_account_id: ad.ad_account_id,
@@ -1300,18 +1309,18 @@ async function syncAds(
     thumbnail_url: ad.thumbnail_url || null, // Thumbnail image for inline preview
     updated_at: new Date().toISOString(),
   }))
-  
+
   // Use upsert to avoid duplicate key errors
   for (let i = 0; i < adRecords.length; i += DB_INSERT_BATCH_SIZE) {
     const batch = adRecords.slice(i, i + DB_INSERT_BATCH_SIZE)
     const batchNum = Math.floor(i / DB_INSERT_BATCH_SIZE) + 1
-    
+
     console.log(`Upserting ads batch ${batchNum}...`)
-    
+
     const { error } = await supabase
       .from('meta_ads')
       .upsert(batch, { onConflict: 'project_id,ad_id' })
-    
+
     if (error) {
       console.error(`Ads batch ${batchNum} error:`, error)
       errors += batch.length
@@ -1319,7 +1328,7 @@ async function syncAds(
       synced += batch.length
     }
   }
-  
+
   console.log(`Ads sync complete: ${synced} synced, ${errors} errors`)
   return { success: true, synced, errors, total: allAds.length }
 }
@@ -1356,10 +1365,10 @@ async function getInsightsForAccountOnce(
     console.log(`Fetching insights page ${pageCount} for ${accountId}...`)
 
     const data = await fetchWithRetry(
-  url,
-  accessToken,
-  `Insights page ${pageCount} for ${accountId}`
-)
+      url,
+      accessToken,
+      `Insights page ${pageCount} for ${accountId}`
+    )
 
     if (data?.error) {
       console.error(`Insights error for ${accountId}:`, data.error)
@@ -1485,68 +1494,68 @@ async function processChunk(
   onChunkComplete?: (insights: any[]) => Promise<number>
 ): Promise<{ insights: any[], saved: number }> {
   console.log(`Processing chunk ${chunkIndex + 1}/${totalChunks}: ${chunk.start} to ${chunk.stop}`)
-  
+
   const chunkInsights: any[] = []
-  
+
   // Process accounts sequentially to avoid rate limiting per account
   for (let i = 0; i < accountIds.length; i++) {
     const accountId = accountIds[i]
     const insights = await getInsightsForAccountAdaptive(accessToken, accountId, chunk.start, chunk.stop, level)
     chunkInsights.push(...insights)
-    
+
     // Reduced delay between accounts
     if (i < accountIds.length - 1) {
       await delay(DELAY_BETWEEN_ACCOUNTS_MS)
     }
   }
-  
+
   // SAVE IMMEDIATELY after each chunk if callback provided
   let saved = 0
   if (onChunkComplete && chunkInsights.length > 0) {
     saved = await onChunkComplete(chunkInsights)
     console.log(`Chunk ${chunkIndex + 1} saved: ${saved} insights`)
   }
-  
+
   return { insights: chunkInsights, saved }
 }
 
 // INCREMENTAL getInsights with DYNAMIC PARALLEL chunk processing
 // Uses more parallelism for historical data, less for recent data
 async function getInsightsIncremental(
-  accessToken: string, 
-  accountIds: string[], 
-  dateStart: string, 
+  accessToken: string,
+  accountIds: string[],
+  dateStart: string,
   dateStop: string,
   level: string = 'campaign',
   onChunkComplete?: (insights: any[]) => Promise<number>
 ): Promise<{ insights: any[], totalSaved: number }> {
   // Split date range into chunks to avoid "reduce data" error
   const dateChunks = splitDateRangeIntoChunks(dateStart, dateStop)
-  
+
   // Determine if this is historical or recent data
   const today = new Date()
   const endDate = new Date(dateStop)
   const daysFromEnd = Math.floor((today.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24))
   const isHistorical = daysFromEnd >= HISTORICAL_DAYS_THRESHOLD
-  
+
   // Use dynamic parallelism based on data age
   const parallelChunks = isHistorical ? PARALLEL_CHUNKS_HISTORICAL : PARALLEL_CHUNKS_RECENT
   const delayBetweenChunks = isHistorical ? DELAY_BETWEEN_CHUNKS_HISTORICAL_MS : DELAY_BETWEEN_CHUNKS_RECENT_MS
-  
+
   console.log(`\n📊 DYNAMIC PARALLELISM: ${isHistorical ? 'HISTORICAL' : 'RECENT'} mode`)
   console.log(`   Data ends ${daysFromEnd} days ago (threshold: ${HISTORICAL_DAYS_THRESHOLD} days)`)
   console.log(`   Using ${parallelChunks} parallel chunks, ${delayBetweenChunks}ms delay`)
-  
-  console.log('Fetching insights with DYNAMIC PARALLEL processing:', { 
-    accountIds: accountIds.length, 
-    dateStart, 
-    dateStop, 
-    level, 
+
+  console.log('Fetching insights with DYNAMIC PARALLEL processing:', {
+    accountIds: accountIds.length,
+    dateStart,
+    dateStop,
+    level,
     chunks: dateChunks.length,
     parallelism: parallelChunks,
     mode: isHistorical ? 'historical' : 'recent'
   })
-  
+
   const allInsights: any[] = []
   let totalSaved = 0
 
@@ -1554,11 +1563,11 @@ async function getInsightsIncremental(
   for (let batchStart = 0; batchStart < dateChunks.length; batchStart += parallelChunks) {
     const batchEnd = Math.min(batchStart + parallelChunks, dateChunks.length)
     const batchChunks = dateChunks.slice(batchStart, batchEnd)
-    
+
     console.log(`\n🚀 Processing parallel batch ${Math.floor(batchStart / parallelChunks) + 1}/${Math.ceil(dateChunks.length / parallelChunks)} (chunks ${batchStart + 1}-${batchEnd}/${dateChunks.length})`)
-    
+
     // Process this batch of chunks in parallel
-    const chunkPromises = batchChunks.map((chunk, idx) => 
+    const chunkPromises = batchChunks.map((chunk, idx) =>
       processChunk(
         accessToken,
         accountIds,
@@ -1569,18 +1578,18 @@ async function getInsightsIncremental(
         onChunkComplete
       )
     )
-    
+
     // Wait for all chunks in this batch to complete
     const results = await Promise.all(chunkPromises)
-    
+
     // Aggregate results
     for (const result of results) {
       allInsights.push(...result.insights)
       totalSaved += result.saved
     }
-    
+
     console.log(`✅ Parallel batch complete: ${results.reduce((sum, r) => sum + r.saved, 0)} insights saved in this batch`)
-    
+
     // Dynamic delay between parallel batches
     if (batchEnd < dateChunks.length) {
       await delay(delayBetweenChunks)
@@ -1614,7 +1623,7 @@ async function syncInsightsSmartOptimized(
 ) {
   // NORMALIZE: Handle both string arrays and object arrays
   const accountIds = normalizeAccountIds(rawAccountIds)
-  
+
   console.log('=== SMART SYNC STARTED ===')
   console.log({ projectId, accountIds: accountIds.length, dateStart, dateStop, forceRefresh })
 
@@ -1622,25 +1631,25 @@ async function syncInsightsSmartOptimized(
     // STEP 0: Get project timezone for economic_day calculation
     const projectTimezone = await getProjectTimezone(supabase, projectId)
     console.log(`Project timezone: ${projectTimezone}`)
-    
+
     // STEP 1: Check what we already have in cache
     const cachedDates = await getExistingDatesInCache(supabase, projectId, accountIds, dateStart, dateStop)
-    
+
     // STEP 2: Determine which dates need to be fetched
     const { toFetch, fromCache } = determineDatesToFetch(dateStart, dateStop, cachedDates, forceRefresh)
-    
+
     if (toFetch.length === 0) {
       console.log('All data is already in cache! No need to fetch from Meta.')
       return
     }
-    
+
     // STEP 3: Group consecutive dates into ranges for efficient API calls
     const dateRanges = groupConsecutiveDates(toFetch)
     console.log(`Grouped into ${dateRanges.length} date ranges to fetch`)
-    
+
     // STEP 4: Delete ONLY the dates we're going to refetch (in batches for efficiency)
     console.log(`Cleaning ${toFetch.length} dates from cache before refetch...`)
-    
+
     // Delete in batches of 50 dates to avoid query issues
     const DELETE_BATCH_SIZE = 50
     for (let i = 0; i < toFetch.length; i += DELETE_BATCH_SIZE) {
@@ -1651,9 +1660,9 @@ async function syncInsightsSmartOptimized(
         .eq('project_id', projectId)
         .in('ad_account_id', accountIds)
         .in('date_start', batchDates)
-      
+
       if (deleteError) {
-        console.error(`Error deleting batch ${Math.floor(i/DELETE_BATCH_SIZE) + 1}:`, deleteError)
+        console.error(`Error deleting batch ${Math.floor(i / DELETE_BATCH_SIZE) + 1}:`, deleteError)
       }
     }
     console.log('Old insights for fetch dates cleaned')
@@ -1661,7 +1670,7 @@ async function syncInsightsSmartOptimized(
     // STEP 5: Sync campaigns (lightweight, always do)
     const { campaigns } = await getCampaigns(accessToken, accountIds)
     console.log(`Syncing ${campaigns.length} campaigns...`)
-    
+
     const campaignRecords = campaigns.map(campaign => ({
       project_id: projectId,
       ad_account_id: campaign.ad_account_id,
@@ -1681,12 +1690,12 @@ async function syncInsightsSmartOptimized(
       const { error: campaignError } = await supabase
         .from('meta_campaigns')
         .upsert(campaignRecords, { onConflict: 'project_id,campaign_id' })
-      
+
       if (campaignError) {
         console.error('Error syncing campaigns:', campaignError)
       }
     }
-    
+
     // STEP 5b: SKIP full adsets/ads sync during insights sync (too slow - 22k+ ads)
     // The hierarchy will be synced on-demand when user requests full sync
     // or periodically via a separate action
@@ -1696,13 +1705,13 @@ async function syncInsightsSmartOptimized(
     // IMPORTANT: Only fetch AD-LEVEL insights (most granular)
     // Save after EACH chunk to avoid losing data on timeout
     let totalInsightsInserted = 0
-    
+
     // Create callback to save insights immediately after each chunk
     const saveInsightsCallback = async (insights: any[]): Promise<number> => {
       // =====================================================
       // SPEND CORE INTEGRATION - Write to spend_core_events
       // =====================================================
-      
+
       // Log raw Meta events to provider_event_log (batch for efficiency)
       const uniqueDates = [...new Set(insights.map((i: any) => i.date_start))]
       for (const dateStr of uniqueDates) {
@@ -1714,7 +1723,7 @@ async function syncInsightsSmartOptimized(
           total_spend: dateInsights.reduce((sum: number, i: any) => sum + parseFloat(i.spend || 0), 0)
         }, 'processed')
       }
-      
+
       // Write canonical spend records to spend_core_events
       console.log('Writing to Spend Core Events...')
       const spendResult = await batchWriteSpendCoreEvents(supabase, projectId, insights, projectTimezone)
@@ -1740,11 +1749,11 @@ async function syncInsightsSmartOptimized(
           'error'
         )
       }
-      
+
       // =====================================================
       // END SPEND CORE INTEGRATION
       // =====================================================
-      
+
       // Original flow: Save to meta_insights (unchanged)
       const adInsightRecords = insights.map((insight: any) => ({
         project_id: projectId,
@@ -1766,33 +1775,33 @@ async function syncInsightsSmartOptimized(
         cost_per_action_type: insight.cost_per_action_type || null,
         updated_at: new Date().toISOString(),
       }))
-      
+
       const { success } = await batchUpsert(
-        supabase, 
-        'meta_insights', 
+        supabase,
+        'meta_insights',
         adInsightRecords,
         'project_id,ad_account_id,campaign_id,adset_id,ad_id,date_start,date_stop'
       )
       return success
     }
-    
+
     for (let rangeIdx = 0; rangeIdx < dateRanges.length; rangeIdx++) {
       const range = dateRanges[rangeIdx]
       console.log(`\n=== Processing range ${rangeIdx + 1}/${dateRanges.length}: ${range.start} to ${range.stop} ===`)
-      
+
       // Fetch and SAVE incrementally (after each API chunk)
       console.log('Fetching ad-level insights with incremental save...')
       const { totalSaved } = await getInsightsIncremental(
-        accessToken, 
-        accountIds, 
-        range.start, 
-        range.stop, 
+        accessToken,
+        accountIds,
+        range.start,
+        range.stop,
         'ad',
         saveInsightsCallback
       )
       totalInsightsInserted += totalSaved
       console.log(`Range ${rangeIdx + 1} complete: ${totalSaved} insights saved`)
-      
+
       // Dynamic delay between ranges based on data age
       if (rangeIdx < dateRanges.length - 1) {
         console.log('Brief pause before next range...')
@@ -1803,7 +1812,7 @@ async function syncInsightsSmartOptimized(
     console.log(`\n=== SMART SYNC COMPLETED ===`)
     console.log(`Total insights inserted: ${totalInsightsInserted}`)
     console.log(`Dates from cache (not refetched): ${fromCache.length}`)
-    
+
   } catch (error) {
     console.error('Smart sync error:', error)
     throw error

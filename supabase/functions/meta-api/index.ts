@@ -1229,7 +1229,6 @@ async function syncAdsets(
     adset_id: adset.id,
     adset_name: adset.name || null,
     status: adset.status || null,
-    targeting: adset.targeting || null,
     updated_at: new Date().toISOString(),
   }))
 

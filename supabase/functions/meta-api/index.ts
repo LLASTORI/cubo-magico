@@ -1053,7 +1053,6 @@ async function syncCampaigns(
     status: campaign.status || null,
     daily_budget: campaign.daily_budget ? parseFloat(campaign.daily_budget) / 100 : null,
     lifetime_budget: campaign.lifetime_budget ? parseFloat(campaign.lifetime_budget) / 100 : null,
-    created_time: campaign.created_time || null,
     start_time: campaign.start_time || null,
     stop_time: campaign.stop_time || null,
     updated_at: new Date().toISOString(),
@@ -1236,7 +1235,6 @@ async function syncAdsets(
     status: adset.status || null,
     daily_budget: adset.daily_budget ? parseFloat(adset.daily_budget) / 100 : null,
     lifetime_budget: adset.lifetime_budget ? parseFloat(adset.lifetime_budget) / 100 : null,
-    created_time: adset.created_time || null,
     start_time: adset.start_time || null,
     end_time: adset.end_time || null,
     targeting: adset.targeting || null,
@@ -1304,7 +1302,6 @@ async function syncAds(
     ad_name: ad.name || null,
     status: ad.status || null,
     creative_id: ad.creative?.id || null,
-    created_time: ad.created_time || null,
     preview_url: ad.preview_url || null, // Public Facebook post URL
     thumbnail_url: ad.thumbnail_url || null, // Thumbnail image for inline preview
     updated_at: new Date().toISOString(),

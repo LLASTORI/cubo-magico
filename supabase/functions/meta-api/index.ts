@@ -1374,6 +1374,14 @@ async function getInsightsForAccountOnce(
     }
 
     if (data?.data && data.data.length > 0) {
+      data.data.slice(0, 3).forEach((insight: any) => {
+        console.log('META RAW INSIGHT:', {
+          date_start: insight?.date_start,
+          date_stop: insight?.date_stop,
+          spend: insight?.spend,
+        })
+      })
+
       const pageInsights = data.data.map((i: any) => ({
         ...i,
         ad_account_id: accountId,

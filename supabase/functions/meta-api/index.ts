@@ -609,6 +609,13 @@ async function batchUpsert(
 }
 
 Deno.serve(async (req) => {
+  console.log("META-API DEBUG HEADERS", {
+    authorization: req.headers.get("Authorization"),
+    cronTrigger: req.headers.get("x-cron-trigger"),
+    origin: req.headers.get("origin"),
+    userAgent: req.headers.get("user-agent")
+  })
+
   const origin = req.headers.get('origin')
   const corsHeaders = getCorsHeaders(origin)
 

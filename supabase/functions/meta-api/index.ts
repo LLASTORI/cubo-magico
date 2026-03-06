@@ -1051,6 +1051,9 @@ async function syncCampaigns(
     campaign_name: campaign.name || null,
     objective: campaign.objective || null,
     status: campaign.status || null,
+    created_time: campaign.created_time || null,
+    start_time: campaign.start_time || null,
+    stop_time: campaign.stop_time || null,
     updated_at: new Date().toISOString(),
   }))
 
@@ -1229,6 +1232,9 @@ async function syncAdsets(
     adset_id: adset.id,
     adset_name: adset.name || null,
     status: adset.status || null,
+    start_time: adset.start_time || null,
+    end_time: adset.end_time || null,
+    daily_budget: adset.daily_budget ? parseFloat(adset.daily_budget) / 100 : null,
     updated_at: new Date().toISOString(),
   }))
 

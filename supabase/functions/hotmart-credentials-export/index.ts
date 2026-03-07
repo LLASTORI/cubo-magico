@@ -161,12 +161,33 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!hotmartCreds.client_id || !hotmartCreds.client_secret) {
+    // Check encrypted field presence directly from table (without returning values)
+    const { data: rawCred, error: rawCredError } = await supabase
+      .from('project_credentials')
+      .select('client_id, client_secret_encrypted, basic_auth_encrypted')
+      .eq('project_id', projectId)
+      .eq('provider', 'hotmart')
+      .maybeSingle();
+
+    if (rawCredError) {
+      console.error('[hotmart-credentials-export] Error checking encrypted field presence:', rawCredError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to validate credentials presence', details: rawCredError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const hasClientId = hotmartCreds.client_id || rawCred?.client_id;
+    const hasClientSecret = hotmartCreds.client_secret || rawCred?.client_secret_encrypted;
+    const hasBasicAuth = hotmartCreds.basic_auth || rawCred?.basic_auth_encrypted;
+
+    if (!hasClientId || !hasClientSecret || !hasBasicAuth) {
       return new Response(
         JSON.stringify({ 
           error: 'Hotmart credentials are incomplete',
-          has_client_id: !!hotmartCreds.client_id,
-          has_client_secret: !!hotmartCreds.client_secret
+          has_client_id: !!hasClientId,
+          has_client_secret: !!hasClientSecret,
+          has_basic_auth: !!hasBasicAuth
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -178,10 +199,11 @@ Deno.serve(async (req) => {
     // Return only client_id and client_secret
     return new Response(
       JSON.stringify({
-        client_id: hotmartCreds.client_id,
-        client_secret: hotmartCreds.client_secret,
-        // Basic auth is optional
-        basic_auth: hotmartCreds.basic_auth || null
+        client_id: hotmartCreds.client_id || rawCred?.client_id || null,
+        client_secret: hotmartCreds.client_secret || null,
+        basic_auth: hotmartCreds.basic_auth || null,
+        has_client_secret: !!hasClientSecret,
+        has_basic_auth: !!hasBasicAuth
       }),
       { 
         status: 200, 

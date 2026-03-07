@@ -202,19 +202,41 @@ async function getCredentials(supabase: any, projectId: string): Promise<Hotmart
 
   const hotmartCred = data?.find((c: any) => c.provider === 'hotmart')
 
-  // Validate ALL 3 required fields
-  if (!hotmartCred?.client_id) {
+  // Also check encrypted column presence directly from table
+  const { data: rawCred, error: rawCredError } = await supabase
+    .from('project_credentials')
+    .select('client_id, client_secret_encrypted, basic_auth_encrypted')
+    .eq('project_id', projectId)
+    .eq('provider', 'hotmart')
+    .maybeSingle()
+
+  if (rawCredError) {
+    console.error('[HOTMART-PRODUCTS] raw credential lookup error:', rawCredError)
+    throw new Error(`Erro ao verificar credenciais: ${rawCredError.message}`)
+  }
+
+  const hasClientId = hotmartCred?.client_id || rawCred?.client_id
+  const hasSecret = hotmartCred?.client_secret || rawCred?.client_secret_encrypted
+  const hasBasic = hotmartCred?.basic_auth || rawCred?.basic_auth_encrypted
+
+  // Validate ALL 3 required fields (accept legacy and encrypted columns)
+  if (!hasClientId) {
     throw new Error('Client ID não configurado. Acesse Configurações > Integrações > Hotmart.')
   }
-  if (!hotmartCred?.client_secret) {
+  if (!hasSecret) {
     throw new Error('Client Secret não configurado. Reinsira as credenciais em Configurações > Integrações > Hotmart.')
   }
-  if (!hotmartCred?.basic_auth) {
+  if (!hasBasic) {
     throw new Error('Basic Auth não configurado. Reinsira as credenciais em Configurações > Integrações > Hotmart.')
   }
 
+  // Runtime auth requires decrypted values
+  if (!hotmartCred?.client_secret || !hotmartCred?.basic_auth) {
+    throw new Error('Credenciais encontradas, mas não foi possível descriptografar para autenticar na Hotmart. Reinsira as credenciais.')
+  }
+
   return {
-    client_id: hotmartCred.client_id,
+    client_id: hotmartCred.client_id || rawCred?.client_id,
     client_secret: hotmartCred.client_secret,
     basic_auth: hotmartCred.basic_auth,
   }

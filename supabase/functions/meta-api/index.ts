@@ -637,11 +637,17 @@ Deno.serve(async (req) => {
       SUPABASE_SERVICE_ROLE_KEY
     )
 
-    if (req.headers.get('x-cron-trigger')) {
-      console.log('Internal cron request detected, skipping user auth')
+    const authHeader = req.headers.get('Authorization')
+    const isCronRequest = Boolean(req.headers.get('x-cron-trigger'))
+    const isServiceRoleRequest = authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+
+    if (isCronRequest || isServiceRoleRequest) {
+      console.log('Internal service request detected, skipping user auth', {
+        isCronRequest,
+        isServiceRoleRequest,
+      })
     } else {
       // Get auth header for user context
-      const authHeader = req.headers.get('Authorization')
       if (!authHeader) {
         return new Response(JSON.stringify({ error: 'Não autorizado' }), {
           status: 401,

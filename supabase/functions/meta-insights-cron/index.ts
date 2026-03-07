@@ -158,6 +158,7 @@ Deno.serve(async (req) => {
         console.log(`  📊 Found ${accountIds.length} active ad accounts`)
 
         // Call meta-api function to sync insights
+        console.log("CRON ACCOUNT IDS", accountIds)
         console.log(`  🔄 Calling meta-api for ${yesterday} to ${today}...`)
         
         const response = await fetch(`${SUPABASE_URL}/functions/v1/meta-api`, {

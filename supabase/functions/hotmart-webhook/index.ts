@@ -427,36 +427,14 @@ async function createOrderItemsFromWebhook(
     return { items, upsertedCount: 0 };
   }
 
-  // Idempotência extra por webhook_event_id (além do upsert por item).
-  // Se o mesmo evento já escreveu itens para este pedido, não reprocesse.
-  if (webhookEventId) {
-    const { data: sameWebhookItems, error: webhookCheckError } = await supabase
-      .from('order_items')
-      .select('id')
-      .eq('order_id', order.id)
-      .contains('metadata', { webhook_event_id: webhookEventId })
-      .limit(1);
-
-    if (webhookCheckError) {
-      throw new Error(`Order items webhook id check failed: ${webhookCheckError.message}`);
-    }
-
-    if ((sameWebhookItems || []).length > 0) {
-      console.log(`[OrdersShadow] Webhook event ${webhookEventId} already applied to order ${order.id}, skipping item write`);
-      return { items, upsertedCount: 0 };
-    }
-  }
-
   const rows = items.map((item) => ({
     order_id: order.id,
-    project_id: order.project_id,
     product_name: item.product_name,
     provider_product_id: item.provider_product_id,
     provider_offer_id: item.provider_offer_id,
     quantity: item.quantity || 1,
     base_price: item.base_price ?? 0,
     item_type: item.item_type || 'unknown',
-    src: 'hotmart_webhook',
     offer_name: item.offer_name,
     metadata: {
       webhook_event_id: webhookEventId,
@@ -467,7 +445,7 @@ async function createOrderItemsFromWebhook(
   const { error } = await supabase
     .from('order_items')
     .upsert(rows, {
-      onConflict: 'order_id,provider_product_id,provider_offer_id',
+      onConflict: 'order_id,provider_product_id',
       ignoreDuplicates: false,
     });
 

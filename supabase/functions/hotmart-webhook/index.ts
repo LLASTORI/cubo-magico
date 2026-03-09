@@ -1796,6 +1796,16 @@ projectId = projectIdFromUrl;
     console.log('Transaction:', payload.data?.purchase?.transaction);
     console.log('Hottok present:', !!hottok);
     console.log('Webhook version:', payload.version);
+
+    // Process only finalized sale events to avoid creating incomplete orders
+    const allowedEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETED'];
+    if (!allowedEvents.includes(payload.event)) {
+      console.log(`Ignoring non-finalized event: ${payload.event}`);
+      return new Response('Ignored event', {
+        status: 200,
+        headers: corsHeaders,
+      });
+    }
     
     
     // Validate project exists and has Hotmart configured

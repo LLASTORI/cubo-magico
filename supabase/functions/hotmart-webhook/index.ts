@@ -320,8 +320,17 @@ function extractOrderItems(payload: any): Array<{
   base_price: number | null;
   quantity: number;
 }> {
-  const data = payload?.data;
+  const data =
+    payload?.data ||
+    payload?.raw_payload?.data ||
+    payload?.payload?.data ||
+    null;
   const purchase = data?.purchase;
+  const product =
+    data?.product ||
+    purchase?.product ||
+    payload?.product ||
+    null;
   const items: Array<{
     provider_product_id: string;
     provider_offer_id: string | null;
@@ -340,18 +349,24 @@ function extractOrderItems(payload: any): Array<{
   if (payloadItems.length > 0) {
     for (const rawItem of payloadItems) {
       const rawProduct = rawItem?.product || rawItem;
-      const providerProductId =
-        rawProduct?.id?.toString() ||
-        rawProduct?.ucode ||
-        rawItem?.product_id?.toString() ||
-        rawItem?.ucode ||
-        'unknown';
-
       const providerOfferId =
         rawItem?.offer?.code ||
         rawItem?.offer_code ||
         purchase?.offer?.code ||
         null;
+
+      const providerProductId =
+        rawProduct?.id?.toString() ||
+        rawProduct?.ucode ||
+        rawItem?.product_id?.toString() ||
+        rawItem?.ucode ||
+        providerOfferId ||
+        null;
+
+      if (!providerProductId) {
+        console.log('[OrdersShadow] Skipping order item: missing provider_product_id in payload.items[]');
+        continue;
+      }
 
       const quantity = Number(rawItem?.quantity ?? rawItem?.qty ?? 1) || 1;
       const basePrice =
@@ -361,7 +376,7 @@ function extractOrderItems(payload: any): Array<{
       items.push({
         provider_product_id: providerProductId,
         provider_offer_id: providerOfferId,
-        product_name: rawProduct?.name || rawItem?.name || purchase?.product?.name || data?.product?.name || 'Unknown Product',
+        product_name: rawProduct?.name || rawItem?.name || purchase?.product?.name || product?.name || 'Unknown Product',
         offer_name: rawItem?.offer?.name || rawItem?.offer_name || purchase?.offer?.name || null,
         // NÃO inferir tipo final da venda no webhook.
         // Só marcar main quando vier explícito no payload do item.
@@ -379,13 +394,28 @@ function extractOrderItems(payload: any): Array<{
     return items;
   }
 
-  const syntheticProduct = purchase?.product || data?.product;
+  const syntheticProduct =
+    data?.product ||
+    purchase?.product ||
+    payload?.product ||
+    null;
   if (!syntheticProduct) return items;
+
+  const providerProductId =
+    syntheticProduct?.id?.toString() ||
+    syntheticProduct?.ucode ||
+    purchase?.offer?.code ||
+    null;
+
+  if (!providerProductId) {
+    console.log('[OrdersShadow] Skipping synthetic order item: missing provider_product_id');
+    return items;
+  }
 
   const basePrice = Number(purchase?.price?.value ?? purchase?.full_price?.value ?? 0) || 0;
   
   items.push({
-    provider_product_id: syntheticProduct.id?.toString() || syntheticProduct.ucode || 'unknown',
+    provider_product_id: providerProductId,
     provider_offer_id: purchase?.offer?.code || null,
     product_name: syntheticProduct.name || 'Unknown Product',
     offer_name: purchase?.offer?.name || null,

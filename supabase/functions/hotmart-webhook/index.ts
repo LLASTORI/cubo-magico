@@ -443,7 +443,7 @@ async function createOrderItemsFromWebhook(
   }));
 
   const { error } = await supabase
-    .from('order_items')
+    .from('public.order_items')
     .upsert(rows, {
       onConflict: 'order_id,provider_product_id',
       ignoreDuplicates: false,

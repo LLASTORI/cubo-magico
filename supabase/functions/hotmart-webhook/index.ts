@@ -515,8 +515,13 @@ async function createOrderItemsFromWebhook(
     return { items, upsertedCount: 0 };
   }
 
+  if (!order.project_id) {
+    throw new Error(`[OrdersShadow] Missing project_id for order ${order.id}`);
+  }
+
   const rows = items.map((item) => ({
     order_id: order.id,
+    project_id: order.project_id,
     product_name: item.product_name,
     provider_product_id: item.provider_product_id,
     provider_offer_id: item.provider_offer_id,
@@ -2302,7 +2307,15 @@ projectId = projectIdFromUrl;
       } else {
         console.error('Error upserting sale:', upsertError);
         console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
-        throw upsertError;
+        const details = [
+          upsertError.code ? `code=${upsertError.code}` : null,
+          upsertError.message ? `message=${upsertError.message}` : null,
+          upsertError.details ? `details=${upsertError.details}` : null,
+          upsertError.hint ? `hint=${upsertError.hint}` : null,
+        ]
+          .filter(Boolean)
+          .join(' | ');
+        throw new Error(`[hotmart_sales] upsert failed: ${details || 'unknown PostgREST error'}`);
       }
     }
     
@@ -2470,6 +2483,8 @@ projectId = projectIdFromUrl;
 
       if (ordersShadowResult.errorMessage) {
         ordersShadowPipelineStatus = 'failed';
+        providerEventStatus = 'error';
+        providerEventErrorMessage = providerEventErrorMessage || `[OrdersShadow] ${ordersShadowResult.errorMessage}`;
         console.error('[OrdersShadow] Non-blocking error:', ordersShadowResult.errorMessage);
       }
 
@@ -2490,6 +2505,8 @@ projectId = projectIdFromUrl;
       }
     } catch (ordersShadowError) {
       ordersShadowPipelineStatus = 'failed';
+      providerEventStatus = 'error';
+      providerEventErrorMessage = providerEventErrorMessage || `[OrdersShadow] ${ordersShadowError instanceof Error ? ordersShadowError.message : JSON.stringify(ordersShadowError)}`;
       console.error('[OrdersShadow] Non-blocking exception:', ordersShadowError);
     }
     console.log(`[HotmartWebhook] pipeline=orders_shadow status=${ordersShadowPipelineStatus}`);
@@ -3008,7 +3025,20 @@ if (!automationResponse.ok) {
     });
     
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const fallbackObjectError = (() => {
+      if (!error || typeof error !== 'object') return null;
+      const errObj = error as Record<string, unknown>;
+      const compact = {
+        code: errObj.code ?? null,
+        message: errObj.message ?? null,
+        details: errObj.details ?? null,
+        hint: errObj.hint ?? null,
+      };
+      return JSON.stringify(compact);
+    })();
+    const errorMessage = error instanceof Error
+      ? error.message
+      : (fallbackObjectError || String(error || 'Unknown error'));
     console.error('[HotmartWebhook] Unhandled error', {
       projectId,
       providerEventId,

@@ -411,16 +411,6 @@ function extractOrderItems(payload: any): Array<{
   if (!syntheticProduct.id && !syntheticProduct.name) return items;
 
   const providerProductId =
-    syntheticProduct.id ||
-    purchase?.offer?.code ||
-    null;
-
-  if (!providerProductId) {
-    console.log('[OrdersShadow] Skipping synthetic order item: missing provider_product_id');
-    return items;
-  }
-
-  const providerProductId =
     syntheticProduct?.id?.toString() ||
     syntheticProduct?.ucode ||
     purchase?.offer?.code ||
@@ -1848,8 +1838,9 @@ projectId = projectIdFromUrl;
     console.log('Hottok present:', !!hottok);
     console.log('Webhook version:', payload.version);
 
-    // Process only finalized sale events to avoid creating incomplete orders
-    const allowedEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE'];
+    // Process all sale lifecycle events (approved/complete + refund/cancel/chargeback/etc)
+    // to keep orders/ledger/status in sync with provider reality.
+    const allowedEvents = saleEvents;
     if (!allowedEvents.includes(payload.event)) {
       console.log(`Ignoring non-finalized event: ${payload.event}`);
       return new Response('Ignored event', {

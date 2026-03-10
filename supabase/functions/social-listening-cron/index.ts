@@ -25,6 +25,15 @@ interface SyncResult {
   error?: string
 }
 
+interface SyncOperationResult {
+  success: boolean
+  postsSynced?: number
+  commentsSynced?: number
+  errors?: string[]
+  partialFailure?: boolean
+  error?: string
+}
+
 // ============= KEYWORD CLASSIFICATION (NO AI) =============
 
 const COMMERCIAL_KEYWORDS = [
@@ -190,12 +199,22 @@ Deno.serve(async (req) => {
         }
 
         // Step 3: Sync posts
-        const postsResult = await syncPostsForProject(supabase, projectId, credentials.access_token)
+        const postsResult: SyncOperationResult = await syncPostsForProject(supabase, projectId, credentials.access_token)
         result.postsSynced = postsResult.postsSynced || 0
+        if (!postsResult.success || postsResult.partialFailure) {
+          result.success = false
+          const details = postsResult.errors?.length ? postsResult.errors.join(' | ') : postsResult.error
+          result.error = `[sync_posts] ${details || 'Falha sem detalhes'}`
+        }
 
         // Step 4: Sync comments
-        const commentsResult = await syncCommentsForProject(supabase, projectId, credentials.access_token)
+        const commentsResult: SyncOperationResult = await syncCommentsForProject(supabase, projectId, credentials.access_token)
         result.commentsSynced = commentsResult.commentsSynced || 0
+        if (!commentsResult.success || commentsResult.partialFailure) {
+          result.success = false
+          const details = commentsResult.errors?.length ? commentsResult.errors.join(' | ') : commentsResult.error
+          result.error = `${result.error ? `${result.error}; ` : ''}[sync_comments] ${details || 'Falha sem detalhes'}`
+        }
 
         // Step 5: Process pending comments with AI (max 50 per run)
         const aiResult = await processAIForProject(supabase, projectId, 50)
@@ -313,14 +332,14 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
       await delay(300)
     }
 
-    return { success: true, postsSynced: totalPosts, errors }
+    return { success: errors.length === 0, postsSynced: totalPosts, errors, partialFailure: errors.length > 0 }
   } catch (error: any) {
     return { success: false, postsSynced: totalPosts, error: error.message }
   }
 }
 
 async function upsertPost(supabase: any, projectId: string, platform: string, post: any, pageName: string, pageId: string) {
-  await supabase
+  const { error } = await supabase
     .from('social_posts')
     .upsert({
       project_id: projectId,
@@ -335,10 +354,14 @@ async function upsertPost(supabase: any, projectId: string, platform: string, po
       shares_count: post.shares?.count || 0,
       published_at: post.created_time,
     }, { onConflict: 'project_id,platform,post_id_meta' })
+
+  if (error) {
+    throw new Error(`[upsert_post] project=${projectId} platform=${platform} page=${pageId} post=${post?.id}: ${error.message}`)
+  }
 }
 
 async function upsertPostIG(supabase: any, projectId: string, post: any, pageName: string, pageId: string) {
-  await supabase
+  const { error } = await supabase
     .from('social_posts')
     .upsert({
       project_id: projectId,
@@ -354,6 +377,10 @@ async function upsertPostIG(supabase: any, projectId: string, post: any, pageNam
       comments_count: post.comments_count || 0,
       published_at: post.timestamp,
     }, { onConflict: 'project_id,platform,post_id_meta' })
+
+  if (error) {
+    throw new Error(`[upsert_post_ig] project=${projectId} page=${pageId} post=${post?.id}: ${error.message}`)
+  }
 }
 
 // ============= COMMENT SYNC =============
@@ -363,6 +390,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
   const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
   
   let totalComments = 0
+  const errors: string[] = []
 
   try {
     // Get connected pages to identify own account comments
@@ -397,7 +425,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
       .limit(20)
 
     if (!posts?.length) {
-      return { success: true, commentsSynced: 0 }
+      return { success: true, commentsSynced: 0, errors, partialFailure: false }
     }
 
     for (const post of posts) {
@@ -409,7 +437,14 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
           const response = await fetch(url)
           const data = await response.json()
 
-          if (!data.error && data.data) {
+          if (data.error) {
+            const message = `[SYNC_COMMENTS][GRAPH_ERROR] platform=facebook post_id=${post.id} post_meta=${post.post_id_meta} code=${data.error.code || 'n/a'} message=${data.error.message || 'unknown'}`
+            console.error(message)
+            errors.push(message)
+            continue
+          }
+
+          if (data.data) {
             for (const comment of data.data) {
               await upsertComment(supabase, projectId, post.id, 'facebook', comment, connectedPageIds)
               totalComments++
@@ -420,7 +455,14 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
           const response = await fetch(url)
           const data = await response.json()
 
-          if (!data.error && data.data) {
+          if (data.error) {
+            const message = `[SYNC_COMMENTS][GRAPH_ERROR] platform=instagram post_id=${post.id} post_meta=${post.post_id_meta} code=${data.error.code || 'n/a'} message=${data.error.message || 'unknown'}`
+            console.error(message)
+            errors.push(message)
+            continue
+          }
+
+          if (data.data) {
             for (const comment of data.data) {
               await upsertCommentIG(supabase, projectId, post.id, comment, connectedUsernames)
               totalComments++
@@ -428,15 +470,17 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
           }
         }
       } catch (postError: any) {
-        console.log(`[SYNC_COMMENTS] Error for post ${post.id}:`, postError.message)
+        const message = `[SYNC_COMMENTS][POST_ERROR] post_id=${post.id} post_meta=${post.post_id_meta} message=${postError.message}`
+        console.error(message)
+        errors.push(message)
       }
 
       await delay(200)
     }
 
-    return { success: true, commentsSynced: totalComments }
+    return { success: errors.length === 0, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
   } catch (error: any) {
-    return { success: false, commentsSynced: totalComments, error: error.message }
+    return { success: false, commentsSynced: totalComments, errors, error: error.message }
   }
 }
 
@@ -451,7 +495,7 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
     console.log(`[SYNC] Own account comment detected (FB): ${authorName} (${authorId})`)
   }
   
-  await supabase
+  const { error } = await supabase
     .from('social_comments')
     .upsert({
       project_id: projectId,
@@ -468,6 +512,10 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
       is_own_account: isOwnAccount,
       ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
     }, { onConflict: 'project_id,platform,comment_id_meta' })
+
+  if (error) {
+    throw new Error(`[upsert_comment] project=${projectId} post=${postId} platform=${platform} comment=${comment?.id}: ${error.message}`)
+  }
 }
 
 async function upsertCommentIG(supabase: any, projectId: string, postId: string, comment: any, connectedUsernames: string[]) {
@@ -481,7 +529,7 @@ async function upsertCommentIG(supabase: any, projectId: string, postId: string,
     console.log(`[SYNC] Own account comment detected (IG): @${authorUsername}`)
   }
   
-  await supabase
+  const { error } = await supabase
     .from('social_comments')
     .upsert({
       project_id: projectId,
@@ -497,6 +545,10 @@ async function upsertCommentIG(supabase: any, projectId: string, postId: string,
       is_own_account: isOwnAccount,
       ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
     }, { onConflict: 'project_id,platform,comment_id_meta' })
+
+  if (error) {
+    throw new Error(`[upsert_comment_ig] project=${projectId} post=${postId} comment=${comment?.id}: ${error.message}`)
+  }
 }
 
 // ============= AI PROCESSING WITH KEYWORDS + OPENAI =============

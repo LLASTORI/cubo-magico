@@ -54,6 +54,9 @@ verify_jwt = false
 [functions.social-comments-api]
 verify_jwt = false
 
+[functions.social-listening-cron]
+verify_jwt = false
+
 # =====================================
 # META API
 # =====================================

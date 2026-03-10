@@ -420,6 +420,17 @@ function extractOrderItems(payload: any): Array<{
     return items;
   }
 
+  const providerProductId =
+    syntheticProduct?.id?.toString() ||
+    syntheticProduct?.ucode ||
+    purchase?.offer?.code ||
+    null;
+
+  if (!providerProductId) {
+    console.log('[OrdersShadow] Skipping synthetic order item: missing provider_product_id');
+    return items;
+  }
+
   const basePrice = Number(purchase?.price?.value ?? purchase?.full_price?.value ?? 0) || 0;
   
   items.push({

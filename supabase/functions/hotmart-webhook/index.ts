@@ -195,6 +195,55 @@ function normalizePaymentMethod(rawPaymentType: string | null): string {
   }
 }
 
+interface WebhookDateContext {
+  pipeline: string;
+  projectId?: string | null;
+  payloadId?: string | number | null;
+  event?: string | null;
+  transactionId?: string | null;
+}
+
+function toValidDate(input: string | Date | null | undefined): Date | null {
+  if (!input) return null;
+  const parsed = input instanceof Date ? input : new Date(input);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveWebhookEventDate(
+  primary: string | Date | null | undefined,
+  fallback: string | Date | null | undefined,
+  context: WebhookDateContext,
+): Date {
+  const primaryDate = toValidDate(primary);
+  if (primaryDate) return primaryDate;
+
+  const fallbackDate = toValidDate(fallback);
+  if (fallbackDate) {
+    console.warn('[WebhookDate] Primary date invalid, using fallback', {
+      ...context,
+      primary,
+      fallback,
+    });
+    return fallbackDate;
+  }
+
+  const now = new Date();
+  console.warn('[WebhookDate] Both primary and fallback dates invalid, using now()', {
+    ...context,
+    primary,
+    fallback,
+  });
+  return now;
+}
+
+function resolveWebhookEventDateIso(
+  primary: string | Date | null | undefined,
+  fallback: string | Date | null | undefined,
+  context: WebhookDateContext,
+): string {
+  return resolveWebhookEventDate(primary, fallback, context).toISOString();
+}
+
 /**
  * Resolve Hotmart Order ID from payload
  * Must group order bumps, upsells and downsells under the same parent order.
@@ -561,13 +610,19 @@ async function writeOrderShadow(
     const thisEventProducerNetBrl = ownerNetRevenueBrl || 0; // BRL value for cash flow
     
     // Parse dates
-    const orderedAt = purchase?.order_date 
-      ? new Date(purchase.order_date).toISOString()
-      : new Date(payload.creation_date).toISOString();
-    
-    const approvedAt = purchase?.approved_date
-      ? new Date(purchase.approved_date).toISOString()
-      : null;
+    const orderedAt = resolveWebhookEventDateIso(
+      purchase?.order_date,
+      payload.creation_date,
+      {
+        pipeline: 'orders_shadow',
+        projectId,
+        payloadId: payload?.id ?? null,
+        event: hotmartEvent,
+        transactionId,
+      },
+    );
+
+    const approvedAt = toValidDate(purchase?.approved_date)?.toISOString() ?? null;
     
     // ============================================
     // FINANCIAL DEDUPLICATION CHECK
@@ -1922,11 +1977,18 @@ projectId = projectIdFromUrl;
       .eq('provider', 'hotmart')
       .eq('provider_event_id', providerEventId)
       .maybeSingle();
-    
+
     if (existingProviderEventError) {
-      throw new Error(`Provider event lookup failed: ${existingProviderEventError.message}`);
+      console.error('[Webhook] Provider event lookup failed, continuing with safe idempotent writes', {
+        projectId,
+        providerEventId,
+        transactionId,
+        event,
+        payloadId: payload?.id ?? null,
+        error: existingProviderEventError.message,
+      });
     }
-    
+
     if (existingProviderEvent?.status === 'processed') {
       console.log(`[Webhook] Provider event ${providerEventId} already processed, ignoring`);
       return new Response(JSON.stringify({ 
@@ -2027,13 +2089,19 @@ projectId = projectIdFromUrl;
     const metaAdIdExtracted = parsedUTMs.meta_ad_id;
     
     // Prepare sale data
-    const saleDate = purchase?.order_date 
-      ? new Date(purchase.order_date).toISOString()
-      : new Date(payload.creation_date).toISOString();
-    
-    const confirmationDate = purchase?.approved_date
-      ? new Date(purchase.approved_date).toISOString()
-      : null;
+    const saleDate = resolveWebhookEventDateIso(
+      purchase?.order_date,
+      payload.creation_date,
+      {
+        pipeline: 'hotmart_sales',
+        projectId,
+        payloadId: payload?.id ?? null,
+        event,
+        transactionId,
+      },
+    );
+
+    const confirmationDate = toValidDate(purchase?.approved_date)?.toISOString() ?? null;
     
     const affiliate = affiliates?.[0];
     const commissions = data?.commissions;
@@ -2260,9 +2328,17 @@ projectId = projectIdFromUrl;
     const attribution = extractAttribution(purchase, checkoutOrigin);
     
     // Parse occurred_at from Hotmart event
-    const occurredAt = purchase?.order_date 
-      ? new Date(purchase.order_date)
-      : new Date(payload.creation_date);
+    const occurredAt = resolveWebhookEventDate(
+      purchase?.order_date,
+      payload.creation_date,
+      {
+        pipeline: 'sales_core_events',
+        projectId,
+        payloadId: payload?.id ?? null,
+        event,
+        transactionId,
+      },
+    );
     
     // Write canonical event with financial breakdown
     const financialBreakdown: FinancialBreakdown = {
@@ -2312,9 +2388,17 @@ projectId = projectIdFromUrl;
     console.log('[FinanceLedger] Processing financial entries from webhook...');
     
     // Parse occurred_at from Hotmart event
-    const occurredAtLedger = purchase?.order_date 
-      ? new Date(purchase.order_date)
-      : new Date(payload.creation_date);
+    const occurredAtLedger = resolveWebhookEventDate(
+      purchase?.order_date,
+      payload.creation_date,
+      {
+        pipeline: 'finance_ledger',
+        projectId,
+        payloadId: payload?.id ?? null,
+        event,
+        transactionId,
+      },
+    );
     
     // PROMPT 6: Extract attribution for ledger entries
     const ledgerAttribution = extractAttribution(purchase, rawCheckoutOrigin);
@@ -2924,7 +3008,15 @@ if (!automationResponse.ok) {
     });
     
   } catch (error) {
-    console.error('Webhook error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[HotmartWebhook] Unhandled error', {
+      projectId,
+      providerEventId,
+      transactionId,
+      event: payload?.event ?? null,
+      payloadId: payload?.id ?? null,
+      error: errorMessage,
+    });
     try {
       if (payload && !providerEventId) {
         providerEventId = payload.id ? `hotmart_payload_${payload.id}` : null;
@@ -2936,7 +3028,7 @@ if (!automationResponse.ok) {
           providerEventId,
           payload,
           'error',
-          error instanceof Error ? error.message : 'Unknown error',
+          errorMessage,
           error instanceof Error ? error.stack ?? null : null
         );
       }
@@ -2946,7 +3038,10 @@ if (!automationResponse.ok) {
 
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error_code: 'HOTMART_WEBHOOK_UNHANDLED',
+      message: 'Internal error while processing Hotmart webhook',
+      error: errorMessage,
+      provider_event_id: providerEventId,
     }), {
       status: 500, // Force Hotmart retry on internal error
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

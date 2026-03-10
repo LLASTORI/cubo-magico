@@ -517,15 +517,14 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
     console.log(`[SYNC_POSTS] Found ${savedPages.length} saved pages to sync`)
 
     for (const savedPage of savedPages) {
-      const pageToken = savedPage.page_access_token
+      const pageToken = savedPage.access_token || accessToken
       const pageName = savedPage.page_name
       const rawPageId = savedPage.page_id
-      const instagramAccountId = savedPage.instagram_account_id
       const platform = savedPage.platform
 
       const originalPageId = rawPageId.replace(/_facebook$/, '').replace(/_instagram$/, '')
 
-      if (platform === 'facebook' || (!platform && !instagramAccountId)) {
+      if (platform === 'facebook') {
         try {
           const fbPosts = await fetchFacebookPosts(originalPageId, pageToken)
           for (const post of fbPosts) {
@@ -538,11 +537,11 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
         }
       }
 
-      if (platform === 'instagram' && instagramAccountId) {
+      if (platform === 'instagram') {
         try {
-          const igPosts = await fetchInstagramPosts(instagramAccountId, pageToken, accessToken)
+          const igPosts = await fetchInstagramPosts(originalPageId, pageToken, accessToken)
           for (const post of igPosts) {
-            await upsertPost(supabase, projectId, 'instagram', post, pageName, instagramAccountId)
+            await upsertPost(supabase, projectId, 'instagram', post, pageName, originalPageId)
             totalPosts++
           }
         } catch (e: any) {
@@ -550,12 +549,6 @@ async function syncPosts(supabase: any, projectId: string, accessToken: string) 
           errors.push(`IG ${pageName}: ${e.message}`)
         }
       }
-
-      await supabase
-        .from('social_listening_pages')
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq('id', savedPage.id)
-
       await delay(500)
     }
 
@@ -645,7 +638,6 @@ async function upsertPost(supabase: any, projectId: string, platform: string, po
     comments_count: post.comments_count || 0,
     shares_count: post.shares?.count || 0,
     published_at: platform === 'instagram' ? post.timestamp : post.created_time,
-    last_synced_at: new Date().toISOString(),
   }
 
   const { error } = await supabase
@@ -706,17 +698,19 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
   }
 
   // Get page tokens
-  const pageIds = [...new Set(posts.map(p => p.page_id).filter(Boolean))]
   const { data: savedPages } = await supabase
     .from('social_listening_pages')
-    .select('page_id, instagram_account_id, page_access_token')
+    .select('page_id, access_token')
     .eq('project_id', projectId)
-    .in('page_id', pageIds.length > 0 ? pageIds : ['none'])
+    .eq('is_active', true)
 
   const pageTokenMap = new Map<string, string>()
   for (const page of savedPages || []) {
-    if (page.page_id) pageTokenMap.set(page.page_id, page.page_access_token)
-    if (page.instagram_account_id) pageTokenMap.set(page.instagram_account_id, page.page_access_token)
+    if (!page.page_id || !page.access_token) continue
+    const normalizedPageId = String(page.page_id)
+    const basePageId = normalizedPageId.replace(/_facebook$/, '').replace(/_instagram$/, '')
+    pageTokenMap.set(normalizedPageId, page.access_token)
+    pageTokenMap.set(basePageId, page.access_token)
   }
 
   for (const post of posts) {
@@ -1432,25 +1426,41 @@ async function getAvailablePages(accessToken: string) {
 }
 
 async function saveSelectedPages(supabase: any, projectId: string, accessToken: string, pages: any[]) {
+  const errors: string[] = []
+  let savedCount = 0
+
   for (const page of pages) {
+    const basePageId = String(page.id || '').replace(/_facebook$/, '').replace(/_instagram$/, '')
+    const canonicalPageId = page.platform === 'instagram'
+      ? `${String(page.instagram_account_id || basePageId)}_instagram`
+      : `${basePageId}_facebook`
+
     const { error } = await supabase
       .from('social_listening_pages')
       .upsert({
         project_id: projectId,
-        page_id: page.id,
+        page_id: canonicalPageId,
         page_name: page.name,
         platform: page.platform,
-        page_access_token: page.access_token,
-        instagram_account_id: page.instagram_account_id || null,
+        access_token: page.access_token || accessToken,
+        instagram_username: page.instagram_username || null,
         is_active: true,
       }, { onConflict: 'project_id,page_id' })
 
     if (error) {
       console.error('Error saving page:', error)
+      errors.push(`${canonicalPageId}: ${error.message}`)
+      continue
     }
+
+    savedCount++
   }
 
-  return { success: true, savedCount: pages.length }
+  return {
+    success: errors.length === 0,
+    savedCount,
+    errors,
+  }
 }
 
 async function getSavedPages(supabase: any, projectId: string) {
@@ -1541,8 +1551,6 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
                   post_id_meta: storyId,
                   post_type: 'ad',
                   message: ad.name,
-                  ad_id: ad.id,
-                  last_synced_at: new Date().toISOString(),
                 })
                 .select('id')
                 .single()

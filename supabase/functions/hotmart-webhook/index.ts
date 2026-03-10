@@ -308,6 +308,23 @@ function resolveItemType(payload: any): string {
   return 'main';
 }
 
+
+/**
+ * Resolve product from Hotmart payload using canonical precedence.
+ */
+function resolveProduct(payload: any): { id: string | null; name: string | null } {
+  const rawProduct =
+    payload?.data?.product ||
+    payload?.data?.purchase?.product ||
+    payload?.product ||
+    null;
+
+  return {
+    id: rawProduct?.id?.toString() || rawProduct?.ucode || null,
+    name: rawProduct?.name || null,
+  };
+}
+
 /**
  * Extract all products from payload (main + combo items)
  */
@@ -326,11 +343,7 @@ function extractOrderItems(payload: any): Array<{
     payload?.payload?.data ||
     null;
   const purchase = data?.purchase;
-  const product =
-    data?.product ||
-    purchase?.product ||
-    payload?.product ||
-    null;
+  const product = resolveProduct(payload);
   const items: Array<{
     provider_product_id: string;
     provider_offer_id: string | null;
@@ -394,12 +407,18 @@ function extractOrderItems(payload: any): Array<{
     return items;
   }
 
-  const syntheticProduct =
-    data?.product ||
-    purchase?.product ||
-    payload?.product ||
+  const syntheticProduct = resolveProduct(payload);
+  if (!syntheticProduct.id && !syntheticProduct.name) return items;
+
+  const providerProductId =
+    syntheticProduct.id ||
+    purchase?.offer?.code ||
     null;
-  if (!syntheticProduct) return items;
+
+  if (!providerProductId) {
+    console.log('[OrdersShadow] Skipping synthetic order item: missing provider_product_id');
+    return items;
+  }
 
   const providerProductId =
     syntheticProduct?.id?.toString() ||
@@ -476,7 +495,7 @@ async function createOrderItemsFromWebhook(
     .schema('public')
     .from('order_items')
     .upsert(rows, {
-      onConflict: 'order_id,provider_product_id',
+      onConflict: 'order_id,provider_product_id,provider_offer_id',
       ignoreDuplicates: false,
     });
 
@@ -781,54 +800,43 @@ async function writeOrderShadow(
     for (const item of orderItemsUpserted) {
       // ============================================
       // OFFER MAPPINGS FALLBACK (CATÁLOGO SEMÂNTICO)
-      // NÃO É FINANCEIRO - apenas cria mapeamento se não existir
-      // REGRA: Se a oferta não existe em offer_mappings, criar entrada mínima
+      // NÃO É FINANCEIRO - apenas garante mapeamento mínimo de forma atômica
       // ============================================
       if (item.provider_offer_id) {
-        const { data: existingMapping } = await supabase
-          .from('offer_mappings')
-          .select('id')
+        // Fetch default "A Definir" funnel for this project
+        const { data: defaultFunnel } = await supabase
+          .from('funnels')
+          .select('id, project_id')
           .eq('project_id', projectId)
-          .eq('provider', 'hotmart')
-          .eq('codigo_oferta', item.provider_offer_id)
+          .eq('name', 'A Definir')
           .maybeSingle();
-        
-        if (!existingMapping) {
-          // Fetch default "A Definir" funnel for this project
-          const { data: defaultFunnel } = await supabase
-            .from('funnels')
-            .select('id, project_id')
-            .eq('project_id', projectId)
-            .eq('name', 'A Definir')
-            .maybeSingle();
 
-          const defaultFunnelId = defaultFunnel?.project_id === projectId ? defaultFunnel.id : null;
-          
-          const { error: mappingError } = await supabase
-            .from('offer_mappings')
-            .insert({
-              project_id: projectId,
-              provider: 'hotmart',
-              codigo_oferta: item.provider_offer_id,
-              id_produto: item.provider_product_id,
-              nome_produto: item.product_name || 'Produto (via venda)',
-              nome_oferta: item.offer_name || 'Oferta (via venda)',
-              valor: null, // Não usar valor financeiro - apenas catálogo
-              moeda: 'BRL',
-              status: 'Ativo',
-              funnel_id: defaultFunnelId,
-              id_funil: 'A Definir',
-              origem: 'sale_fallback',
-            });
-          
-          if (mappingError) {
-            // Ignore duplicate key errors (race condition safe)
-            if (mappingError.code !== '23505') {
-              console.error(`[OfferMappingsFallback] Error creating mapping for ${item.provider_offer_id}:`, mappingError.message);
-            }
-          } else {
-            console.log(`[OfferMappingsFallback] Created mapping for offer ${item.provider_offer_id} (${item.offer_name || 'Unknown'})`);
-          }
+        const defaultFunnelId = defaultFunnel?.project_id === projectId ? defaultFunnel.id : null;
+
+        const { error: mappingError } = await supabase
+          .from('offer_mappings')
+          .upsert({
+            project_id: projectId,
+            provider: 'hotmart',
+            codigo_oferta: item.provider_offer_id,
+            id_produto: item.provider_product_id,
+            nome_produto: item.product_name || 'Produto (via venda)',
+            nome_oferta: item.offer_name || 'Oferta (via venda)',
+            valor: null, // Não usar valor financeiro - apenas catálogo
+            moeda: 'BRL',
+            status: 'Ativo',
+            funnel_id: defaultFunnelId,
+            id_funil: 'A Definir',
+            origem: 'sale_fallback',
+          }, {
+            onConflict: 'project_id,provider,codigo_oferta',
+            ignoreDuplicates: true,
+          });
+
+        if (mappingError) {
+          console.error(`[OfferMappingsFallback] Error upserting mapping for ${item.provider_offer_id}:`, mappingError.message);
+        } else {
+          console.log(`[OfferMappingsFallback] Ensured mapping for offer ${item.provider_offer_id} (${item.offer_name || 'Unknown'})`);
         }
       }
     }
@@ -1309,7 +1317,7 @@ async function logProviderEvent(
   projectId: string,
   providerEventId: string,
   rawPayload: any,
-  status: 'processed' | 'ignored' | 'error',
+  status: 'received' | 'processed' | 'ignored' | 'error',
   errorMessage?: string | null,
   errorStack?: string | null
 ): Promise<void> {
@@ -1578,6 +1586,19 @@ async function writeSalesCoreEvent(
     .single();
   
   if (error) {
+    if (error.code === '23505') {
+      console.log(`[SalesCore] Duplicate canonical event detected for ${providerEventId} - treating as success`);
+      const { data: duplicated } = await supabase
+        .from('sales_core_events')
+        .select('id, version')
+        .eq('project_id', projectId)
+        .eq('provider_event_id', providerEventId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      return duplicated || { id: existing?.id || providerEventId, version: existing?.version || version };
+    }
+
     console.error('[SalesCore] Error inserting canonical event:', error);
     throw new Error(`Sales core insert failed: ${error.message}`);
   }
@@ -1828,7 +1849,7 @@ projectId = projectIdFromUrl;
     console.log('Webhook version:', payload.version);
 
     // Process only finalized sale events to avoid creating incomplete orders
-    const allowedEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETED'];
+    const allowedEvents = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE'];
     if (!allowedEvents.includes(payload.event)) {
       console.log(`Ignoring non-finalized event: ${payload.event}`);
       return new Response('Ignored event', {
@@ -1871,7 +1892,7 @@ projectId = projectIdFromUrl;
     const { data, event } = payload;
     const buyer = data?.buyer;
     const purchase = data?.purchase;
-    const product = data?.product;
+    const product = resolveProduct(payload);
     const affiliates = data?.affiliates;
     const subscription = data?.subscription;
     
@@ -1925,6 +1946,9 @@ projectId = projectIdFromUrl;
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Step 1: mark webhook as received before main persistence pipeline
+    await logProviderEvent(supabase, projectId, providerEventId, payload, 'received');
     
     // Parse phone data from webhook
     let buyerPhone: string | null = null;
@@ -2128,8 +2152,8 @@ projectId = projectIdFromUrl;
     const saleData = {
       project_id: projectId,
       transaction_id: transactionId,
-      product_code: product?.id?.toString() || null,
-      product_name: product?.name || 'Unknown Product',
+      product_code: product?.id || null,
+      product_name: product.name || 'Unknown Product',
       offer_code: purchase?.offer?.code || null,
       product_price: purchase?.original_offer_price?.value || null,
       offer_price: purchase?.price?.value || null,
@@ -2203,69 +2227,23 @@ projectId = projectIdFromUrl;
     console.log('Status:', status);
     console.log('Email:', buyer?.email);
     
-    // First check if the sale already exists
-    const { data: existingSale, error: checkError } = await supabase
+    // Atomic write (upsert) to prevent SELECT->INSERT race conditions
+    const { data: upsertResult, error: upsertError } = await supabase
       .from('hotmart_sales')
+      .upsert(saleData, {
+        onConflict: 'project_id,transaction_id',
+        ignoreDuplicates: false,
+      })
       .select('id')
-      .eq('project_id', projectId)
-      .eq('transaction_id', transactionId)
-      .maybeSingle();
-    
-    if (checkError) {
-      console.error('Error checking existing sale:', checkError);
-      throw checkError;
-    }
-    
-    let upsertResult: { id: string } | null = null;
-    
-    if (existingSale) {
-      // Update existing sale
-      console.log('Updating existing sale:', existingSale.id);
-      const { data: updateData, error: updateError } = await supabase
-        .from('hotmart_sales')
-        .update(saleData)
-        .eq('id', existingSale.id)
-        .select('id')
-        .single();
-      
-      if (updateError) {
-        console.error('Error updating sale:', updateError);
-        console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
-        throw updateError;
-      }
-      upsertResult = updateData;
-    } else {
-      // Insert new sale
-      console.log('Inserting new sale');
-      const { data: insertData, error: insertError } = await supabase
-        .from('hotmart_sales')
-        .insert(saleData)
-        .select('id')
-        .single();
-      
-      if (insertError) {
-        // Handle unique constraint violation gracefully (concurrent request)
-        if (insertError.code === '23505') {
-          console.log(`Duplicate sale insert for transaction ${transactionId}, continuing`);
-          const { data: existingAfterInsert } = await supabase
-            .from('hotmart_sales')
-            .select('id')
-            .eq('project_id', projectId)
-            .eq('transaction_id', transactionId)
-            .maybeSingle();
-          
-          if (!existingAfterInsert) {
-            throw new Error(`Duplicate sale insert without existing record for ${transactionId}`);
-          }
-          
-          upsertResult = existingAfterInsert;
-        } else {
-          console.error('Error inserting sale:', insertError);
-          console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
-          throw insertError;
-        }
+      .single();
+
+    if (upsertError) {
+      if (upsertError.code === '23505') {
+        console.log(`[hotmart_sales] Duplicate sale detected for transaction ${transactionId} - treating as success`);
       } else {
-        upsertResult = insertData;
+        console.error('Error upserting sale:', upsertError);
+        console.error('Sale data that failed:', JSON.stringify(saleData, null, 2));
+        throw upsertError;
       }
     }
     
@@ -2274,6 +2252,7 @@ projectId = projectIdFromUrl;
     
     const operation = upsertResult ? 'upserted' : 'processed';
     console.log(`${operation} sale ${transactionId}`);
+    console.log('[HotmartWebhook] pipeline=hotmart_sales status=ok');
 
     let providerEventStatus: 'processed' | 'ignored' | 'error' = 'processed';
     let providerEventErrorMessage: string | null = null;
@@ -2301,6 +2280,7 @@ projectId = projectIdFromUrl;
       coproducer_cost: coproducerAmount,
     };
     
+    let salesCorePipelineStatus: 'ok' | 'failed' = 'ok';
     try {
       const coreEventResult = await writeSalesCoreEvent(
         supabase,
@@ -2321,10 +2301,12 @@ projectId = projectIdFromUrl;
         console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
       }
     } catch (salesCoreError) {
+      salesCorePipelineStatus = 'failed';
       providerEventStatus = 'error';
       providerEventErrorMessage = `[SalesCore] ${salesCoreError instanceof Error ? salesCoreError.message : 'Unknown error'}`;
       console.error('[SalesCore] Error writing canonical event:', salesCoreError);
     }
+    console.log(`[HotmartWebhook] pipeline=sales_core_events status=${salesCorePipelineStatus}`);
     
     // =====================================================
     // FINANCE LEDGER - Primary Financial Source (IMMUTABLE)
@@ -2380,72 +2362,62 @@ projectId = projectIdFromUrl;
     } else {
       console.log(`[FinanceLedger] Event ${event} is not a financial event, skipping ledger`);
     }
+    console.log('[HotmartWebhook] pipeline=finance_ledger status=ok');
     
     // =====================================================
     // ORDERS CORE SHADOW MODE (PROMPT 2)
     // Duplicate data to new canonical structure
-    // This runs in parallel, doesn't affect existing system
+    // OPTIONAL/NON-BLOCKING: must never fail the main ingestion flow
     // =====================================================
     let ordersShadowResult = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false };
-    
-    console.log('[OrdersShadow] Writing to Orders Core (shadow mode)...');
-    
-    // Find contact for binding
-    contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
-    
-    ordersShadowResult = await writeOrderShadow(
-      supabase,
-      projectId,
-      event,
-      payload,
-      totalPriceBrl,
-      ownerNetRevenue,
-      ownerNetRevenueBrl, // NEW: Pass BRL converted value
-      contactId
-    );
-    
-    if (ordersShadowResult.orderId) {
-      console.log(`[OrdersShadow] Success: order=${ordersShadowResult.orderId}, items=${ordersShadowResult.itemsCreated}, events=${ordersShadowResult.eventsCreated}`);
-    }
-    
-    if (ordersShadowResult.errorMessage) {
-      providerEventStatus = 'error';
-      providerEventErrorMessage = `[OrdersShadow] ${ordersShadowResult.errorMessage}`;
-      console.error('[OrdersShadow] Non-blocking error:', ordersShadowResult.errorMessage);
-    }
-    
-    if (ordersShadowResult.ignoredReason === 'debit_without_sale') {
-      const ignoreMessage = 'Debit event without prior sale - ignored.';
-      await logProviderEvent(supabase, projectId, providerEventId, payload, 'ignored', ignoreMessage);
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: ignoreMessage,
-        transaction: transactionId,
+    let ordersShadowPipelineStatus: 'ok' | 'failed' = 'ok';
+
+    try {
+      console.log('[OrdersShadow] Writing to Orders Core (shadow mode)...');
+
+      // Find contact for binding
+      contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
+
+      ordersShadowResult = await writeOrderShadow(
+        supabase,
+        projectId,
         event,
-        status,
-        ignored: true
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+        payload,
+        totalPriceBrl,
+        ownerNetRevenue,
+        ownerNetRevenueBrl, // NEW: Pass BRL converted value
+        contactId
+      );
+
+      if (ordersShadowResult.orderId) {
+        console.log(`[OrdersShadow] Success: order=${ordersShadowResult.orderId}, items=${ordersShadowResult.itemsCreated}, events=${ordersShadowResult.eventsCreated}`);
+      }
+
+      if (ordersShadowResult.errorMessage) {
+        ordersShadowPipelineStatus = 'failed';
+        console.error('[OrdersShadow] Non-blocking error:', ordersShadowResult.errorMessage);
+      }
+
+      if (ordersShadowResult.ignoredReason === 'debit_without_sale') {
+        console.warn('[OrdersShadow] Debit event without prior sale - ignored (non-blocking).');
+      }
+
+      if (!ordersShadowResult.orderId) {
+        console.warn('[OrdersShadow] No order ID returned (non-blocking).');
+      }
+
+      if (!ordersShadowResult.ledgerProcessed) {
+        console.warn('[OrdersShadow] Ledger not confirmed (non-blocking).');
+      }
+
+      if (!ordersShadowResult.brlUpdated) {
+        console.warn('[OrdersShadow] BRL fields not updated (non-blocking).');
+      }
+    } catch (ordersShadowError) {
+      ordersShadowPipelineStatus = 'failed';
+      console.error('[OrdersShadow] Non-blocking exception:', ordersShadowError);
     }
-    
-    if (!ordersShadowResult.orderId) {
-      providerEventStatus = 'error';
-      providerEventErrorMessage = providerEventErrorMessage || '[OrdersShadow] No order ID returned.';
-      console.error('[OrdersShadow] No order ID returned.');
-    }
-    
-    if (!ordersShadowResult.ledgerProcessed) {
-      providerEventStatus = 'error';
-      providerEventErrorMessage = providerEventErrorMessage || '[OrdersShadow] Ledger not confirmed.';
-      console.error('[OrdersShadow] Ledger not confirmed.');
-    }
-    
-    if (!ordersShadowResult.brlUpdated) {
-      providerEventStatus = 'error';
-      providerEventErrorMessage = providerEventErrorMessage || '[OrdersShadow] BRL fields not updated.';
-      console.error('[OrdersShadow] BRL fields not updated.');
-    }
+    console.log(`[HotmartWebhook] pipeline=orders_shadow status=${ordersShadowPipelineStatus}`);
     
     // =====================================================
     // SUBSCRIPTION MANAGEMENT - Check if product is mapped to a plan

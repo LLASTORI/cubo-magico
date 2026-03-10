@@ -202,13 +202,6 @@ Deno.serve(async (req) => {
         result.keywordClassified = aiResult.keywordClassified || 0
         result.aiProcessed = aiResult.aiProcessed || 0
 
-        // Update last sync timestamp
-        await supabase
-          .from('social_listening_pages')
-          .update({ last_synced_at: new Date().toISOString() })
-          .eq('project_id', projectId)
-          .eq('is_active', true)
-
         console.log(`[SOCIAL-LISTENING-CRON] Project ${projectName} completed:`, {
           posts: result.postsSynced,
           comments: result.commentsSynced,
@@ -284,11 +277,11 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
     }
 
     for (const page of savedPages) {
-      const pageToken = page.page_access_token
+      const pageToken = page.access_token || accessToken
       const originalPageId = page.page_id.replace(/_facebook$/, '').replace(/_instagram$/, '')
 
       try {
-        if (page.platform === 'facebook' || (!page.platform && !page.instagram_account_id)) {
+        if (page.platform === 'facebook') {
           const url = `${GRAPH_API_BASE}/${originalPageId}/posts?fields=id,message,created_time,permalink_url,status_type,full_picture&limit=20&access_token=${pageToken}`
           const response = await fetch(url)
           const data = await response.json()
@@ -301,15 +294,15 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
           }
         }
 
-        if (page.platform === 'instagram' && page.instagram_account_id) {
-          const url = `${GRAPH_API_BASE}/${page.instagram_account_id}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=20&access_token=${pageToken}`
+        if (page.platform === 'instagram') {
+          const url = `${GRAPH_API_BASE}/${originalPageId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=20&access_token=${pageToken}`
           const response = await fetch(url)
           const data = await response.json()
 
           if (data.error) throw new Error(data.error.message)
 
           for (const post of (data.data || [])) {
-            await upsertPostIG(supabase, projectId, post, page.page_name, page.instagram_account_id)
+            await upsertPostIG(supabase, projectId, post, page.page_name, originalPageId)
             totalPosts++
           }
         }
@@ -341,7 +334,6 @@ async function upsertPost(supabase: any, projectId: string, platform: string, po
       permalink: post.permalink_url,
       shares_count: post.shares?.count || 0,
       published_at: post.created_time,
-      last_synced_at: new Date().toISOString(),
     }, { onConflict: 'project_id,platform,post_id_meta' })
 }
 
@@ -361,7 +353,6 @@ async function upsertPostIG(supabase: any, projectId: string, post: any, pageNam
       likes_count: post.like_count || 0,
       comments_count: post.comments_count || 0,
       published_at: post.timestamp,
-      last_synced_at: new Date().toISOString(),
     }, { onConflict: 'project_id,platform,post_id_meta' })
 }
 
@@ -377,7 +368,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
     // Get connected pages to identify own account comments
     const { data: pages } = await supabase
       .from('social_listening_pages')
-      .select('page_id, instagram_username, page_name')
+      .select('page_id, instagram_username, page_name, access_token')
       .eq('project_id', projectId)
       .eq('is_active', true)
     
@@ -389,9 +380,18 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
     
     console.log(`[SYNC_COMMENTS] Connected pages: ${connectedPageIds.length}, IG usernames: ${connectedUsernames.join(', ')}`)
 
+    const pageTokenMap = new Map<string, string>()
+    for (const page of pages || []) {
+      if (!page.page_id || !page.access_token) continue
+      const normalizedPageId = String(page.page_id)
+      const basePageId = normalizedPageId.replace(/_facebook$/, '').replace(/_instagram$/, '')
+      pageTokenMap.set(normalizedPageId, page.access_token)
+      pageTokenMap.set(basePageId, page.access_token)
+    }
+
     const { data: posts } = await supabase
       .from('social_posts')
-      .select('*, social_listening_pages!inner(page_access_token)')
+      .select('*')
       .eq('project_id', projectId)
       .order('published_at', { ascending: false })
       .limit(20)
@@ -401,7 +401,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
     }
 
     for (const post of posts) {
-      const pageToken = post.social_listening_pages?.page_access_token || accessToken
+      const pageToken = pageTokenMap.get(post.page_id) || accessToken
 
       try {
         if (post.platform === 'facebook') {

@@ -1530,7 +1530,12 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
             const commentsResponse = await fetch(commentsUrl)
             const commentsData = await commentsResponse.json()
 
-            if (commentsData.error) continue
+            if (commentsData.error) {
+              const errorMessage = `[SYNC_AD_COMMENTS][GRAPH_ERROR] account=${account.account_id} ad=${ad.id} story=${storyId} code=${commentsData.error.code || 'n/a'} message=${commentsData.error.message || 'unknown'}`
+              console.error(errorMessage)
+              errors.push(errorMessage)
+              continue
+            }
 
             let postId: string | null = null
             const { data: existingPost } = await supabase

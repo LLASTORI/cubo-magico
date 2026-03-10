@@ -123,3 +123,16 @@ finance_ledger
    ↓
 orders_shadow (safe)
 ```
+
+---
+
+
+## 7) Same transaction_id in different projects
+
+### Input (resumo)
+- Dois projetos distintos recebem eventos com o mesmo `purchase.transaction` (valor idêntico).
+
+### Expected behavior
+- **hotmart_sales**: deve persistir uma venda por projeto usando chave lógica `(project_id, transaction_id)`.
+- **sales_core_events / finance_ledger / orders**: cada projeto processa seus próprios dados sem colisão ou reaproveitamento indevido.
+- **Segurança multi-tenant**: não pode haver bloqueio, sobrescrita ou mistura de dados entre projetos.

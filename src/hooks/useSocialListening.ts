@@ -233,11 +233,29 @@ export function useSocialListening(projectId: string | undefined) {
       return data;
     },
     onSuccess: (data) => {
+      const errors = Array.isArray(data?.errors) ? data.errors : [];
+      const hasErrors = errors.length > 0;
+      const firstError = hasErrors ? String(errors[0]) : null;
       const deletedText = data.deletedComments ? ` ${data.deletedComments} removidos detectados.` : '';
-      toast({
-        title: 'Comentários sincronizados!',
-        description: `${data.commentsSynced} comentários encontrados.${deletedText}`,
-      });
+
+      if (hasErrors && (data.commentsSynced || 0) === 0) {
+        toast({
+          title: 'Falha ao sincronizar comentários',
+          description: `${errors.length} fonte(s) falharam.${firstError ? ` Exemplo: ${firstError}` : ''} Verifique permissões/tokens do Meta e tente novamente.`,
+          variant: 'destructive',
+        });
+      } else if (hasErrors) {
+        toast({
+          title: 'Sincronização parcial de comentários',
+          description: `${data.commentsSynced} comentários encontrados, mas ${errors.length} fonte(s) falharam.${deletedText}${firstError ? ` Exemplo: ${firstError}` : ''}`,
+        });
+      } else {
+        toast({
+          title: 'Comentários sincronizados!',
+          description: `${data.commentsSynced} comentários encontrados.${deletedText}`,
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
       queryClient.invalidateQueries({ queryKey: ['social_stats', projectId] });
     },
@@ -355,11 +373,29 @@ export function useSocialListening(projectId: string | undefined) {
       return data;
     },
     onSuccess: (data) => {
+      const errors = Array.isArray(data?.errors) ? data.errors : [];
+      const hasErrors = errors.length > 0;
+      const firstError = hasErrors ? String(errors[0]) : null;
       const deletedText = data.deletedComments ? ` ${data.deletedComments} removidos detectados.` : '';
-      toast({
-        title: 'Comentários de Ads sincronizados!',
-        description: `${data.adsSynced || 0} ads e ${data.commentsSynced || 0} comentários encontrados.${deletedText}`,
-      });
+
+      if (hasErrors && (data.commentsSynced || 0) === 0) {
+        toast({
+          title: 'Falha ao sincronizar comentários de Ads',
+          description: `${errors.length} conta(s)/fonte(s) falharam.${firstError ? ` Exemplo: ${firstError}` : ''} Verifique permissões da conta de anúncios no Meta.`,
+          variant: 'destructive',
+        });
+      } else if (hasErrors) {
+        toast({
+          title: 'Sincronização parcial de Ads',
+          description: `${data.adsSynced || 0} ads e ${data.commentsSynced || 0} comentários encontrados, mas ${errors.length} fonte(s) falharam.${deletedText}${firstError ? ` Exemplo: ${firstError}` : ''}`,
+        });
+      } else {
+        toast({
+          title: 'Comentários de Ads sincronizados!',
+          description: `${data.adsSynced || 0} ads e ${data.commentsSynced || 0} comentários encontrados.${deletedText}`,
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ['social_posts', projectId] });
       queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
       queryClient.invalidateQueries({ queryKey: ['social_stats', projectId] });

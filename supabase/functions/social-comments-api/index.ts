@@ -738,7 +738,7 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     await delay(300)
   }
 
-  return { success: true, commentsSynced: totalComments, errors }
+  return { success: true, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
 }
 
 async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken: string): Promise<any[]> {
@@ -1306,10 +1306,10 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
 async function getStats(supabase: any, projectId: string) {
   const [totalRes, pendingRes, sentimentRes, classificationRes] = await Promise.all([
-    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
-    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('ai_processing_status', 'pending'),
-    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('ai_processing_status', 'completed'),
-    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('ai_processing_status', 'pending'),
+    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('is_deleted', false).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('is_deleted', false).eq('ai_processing_status', 'completed'),
   ])
 
   const sentimentCounts: Record<string, number> = {}
@@ -1577,7 +1577,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       await delay(500)
     }
 
-    return { success: true, commentsSynced: totalComments, errors }
+    return { success: true, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
   } catch (error: any) {
     return { success: false, error: error.message, errors }
   }

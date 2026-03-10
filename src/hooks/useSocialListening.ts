@@ -115,7 +115,7 @@ export function useSocialListening(projectId: string | undefined) {
     enabled: !!projectId,
   });
 
-  // Fetch comments with filters - auto-refresh every 10 seconds
+  // Fetch comments with filters
   const useComments = (filters?: {
     sentiment?: string;
     classification?: string;
@@ -131,7 +131,7 @@ export function useSocialListening(projectId: string | undefined) {
 
         let query = supabase
           .from('social_comments')
-          .select('*, social_posts!inner(id, is_ad, post_type, permalink, thumbnail_url, campaign_name, adset_name, ad_name, post_id_meta), crm_contacts(id, name, email)')
+          .select('*, social_posts(id, is_ad, post_type, permalink, thumbnail_url, campaign_name, adset_name, ad_name, post_id_meta), crm_contacts(id, name, email)')
           .eq('project_id', projectId)
           .eq('is_deleted', false)
           .order('comment_timestamp', { ascending: false });
@@ -165,7 +165,8 @@ export function useSocialListening(projectId: string | undefined) {
         return (data || []) as SocialComment[];
       },
       enabled: !!projectId,
-      refetchInterval: 10000, // Auto-refresh every 10 seconds
+      refetchInterval: 30000,
+      refetchOnWindowFocus: false,
     });
   };
 

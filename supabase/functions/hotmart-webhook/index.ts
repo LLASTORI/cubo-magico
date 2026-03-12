@@ -2217,8 +2217,15 @@ projectId = projectIdFromUrl;
       project_id: projectId,
       transaction_id: transactionId,
       product_code: product?.id || null,
-      product_name: product.name || 'Unknown Product',
-      offer_code: purchase?.offer?.code || null,
+      product_name: product?.name || 'Unknown Product',
+    
+      // Resolve offer code safely from multiple possible payload locations
+      offer_code:
+        purchase?.offer?.code ??
+        payload?.purchase?.offer?.code ??
+        payload?.offer?.code ??
+        null,
+    
       product_price: purchase?.original_offer_price?.value || null,
       offer_price: purchase?.price?.value || null,
       offer_currency: currencyCode,
@@ -2226,6 +2233,7 @@ projectId = projectIdFromUrl;
       total_price_brl: totalPriceBrl,
       exchange_rate_used: exchangeRateUsed,
       net_revenue: ownerNetRevenue, // CORRECT: PRODUCER commission = "Você recebeu"
+
       // ============================================
       // FINANCIAL BREAKDOWN - persisted at ingestion
       // ============================================

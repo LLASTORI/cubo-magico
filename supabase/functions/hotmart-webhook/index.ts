@@ -440,14 +440,7 @@ function extractOrderItems(payload: any): Array<{
         provider_offer_id: providerOfferId,
         product_name: rawProduct?.name || rawItem?.name || purchase?.product?.name || product?.name || 'Unknown Product',
         offer_name: rawItem?.offer?.name || rawItem?.offer_name || purchase?.offer?.name || null,
-        // NÃO inferir tipo final da venda no webhook.
-        // Só marcar main quando vier explícito no payload do item.
-        item_type:
-          rawItem?.item_type === 'main' ||
-          rawItem?.type === 'main' ||
-          rawItem?.is_main === true
-            ? 'main'
-            : 'unknown',
+        item_type: resolveItemType(payload),
         base_price: basePrice,
         quantity,
       });
@@ -477,9 +470,7 @@ function extractOrderItems(payload: any): Array<{
     provider_offer_id: purchase?.offer?.code || null,
     product_name: syntheticProduct.name || 'Unknown Product',
     offer_name: purchase?.offer?.name || null,
-    // Item sintético do webhook NÃO representa composição final da venda.
-    // Não inferir principal/bump aqui para não interferir no reconciliador.
-    item_type: purchase?.is_main === true ? 'main' : 'unknown',
+    item_type: resolveItemType(payload),
     base_price: basePrice,
     quantity: 1,
   });

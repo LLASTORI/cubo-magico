@@ -163,7 +163,7 @@ serve(async (req) => {
     // Step 2: Pre-load ALL provider_order_map for this project (batch query)
     const { data: allMappings, error: mappingsErr } = await supabase
       .from('provider_order_map')
-      .select('order_id, provider_transaction_id')
+      .select('order_id, provider_order_id')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart');
 
@@ -171,8 +171,8 @@ serve(async (req) => {
 
     const ordersByTransactionId = new Map<string, string>();
     for (const mapping of allMappings || []) {
-      if (mapping.provider_transaction_id) {
-        ordersByTransactionId.set(mapping.provider_transaction_id, mapping.order_id);
+      if (mapping.provider_order_id) {
+        ordersByTransactionId.set(mapping.provider_order_id, mapping.order_id);
       }
     }
 

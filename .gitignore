@@ -24,3 +24,16 @@ dist-ssr
 *.sw?
 .env
 supabase/.temp/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Claude Code local config
+.claude/settings.local.json
+
+# Debug logs
+DEBUG_LOG.md

@@ -78,7 +78,7 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     refetchOnMount: 'always',
   });
 
-  // Fetch sales_core_events for category analysis (legacy sales still needed for category)
+  // Fetch sales for category analysis from sales_core_view (ledger-first)
   const { data: salesEvents, isLoading: salesLoading } = useQuery({
     queryKey: ['project-overview-sales-events', projectId, startDate, endDate],
     queryFn: async () => {
@@ -91,11 +91,11 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('sales_core_events')
-          .select('id, economic_day, net_amount, gross_amount, event_type, attribution, funnel_id')
+          .from('sales_core_view')
+          .select('id, economic_day, net_amount, gross_amount, event_type, funnel_id, utm_source')
           .eq('project_id', projectId)
           .eq('is_active', true)
-          .in('event_type', ['purchase', 'subscription', 'upgrade'])
+          .eq('event_type', 'purchase')
           .gte('economic_day', startDate)
           .lte('economic_day', endDate)
           .range(offset, offset + pageSize - 1);
@@ -167,15 +167,13 @@ export const useProjectOverview = ({ projectId, startDate, endDate }: UseProject
     let totalRevenue = 0;
 
     salesEvents.forEach(sale => {
-      // Determine category from attribution
-      const attribution = sale.attribution as any;
       let category = 'unidentified_origin';
-      
-      if (sale.funnel_id && (attribution?.utm_source || attribution?.hotmart_checkout_source)) {
+
+      if (sale.funnel_id && sale.utm_source) {
         category = 'funnel_ads';
       } else if (sale.funnel_id) {
         category = 'funnel_no_ads';
-      } else if (attribution?.utm_source) {
+      } else if (sale.utm_source) {
         category = 'other_origin';
       }
       

@@ -207,13 +207,13 @@ export const useFinancialCore = ({ projectId, startDate, endDate, financialCoreS
 };
 
 /**
- * Hook to fetch raw sales core events for detailed analysis
+ * Hook to fetch raw sales events for detailed analysis (ledger-first via sales_core_view)
  */
-export const useSalesCoreEvents = ({ 
-  projectId, 
-  startDate, 
+export const useSalesCoreEvents = ({
+  projectId,
+  startDate,
   endDate,
-  eventTypes = ['purchase', 'subscription', 'upgrade']
+  eventTypes = ['purchase']
 }: UseFinancialCoreProps & { eventTypes?: string[] }) => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['sales-core-events', projectId, startDate, endDate, eventTypes],
@@ -227,7 +227,7 @@ export const useSalesCoreEvents = ({
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('sales_core_events')
+          .from('sales_core_view')
           .select('*')
           .eq('project_id', projectId)
           .eq('is_active', true)
@@ -314,7 +314,7 @@ export const useSpendCoreEvents = ({ projectId, startDate, endDate }: UseFinanci
  * Hook for validation - compares legacy Hotmart/Meta data with Core data
  */
 export const useFinancialCoreValidation = ({ projectId, startDate, endDate }: UseFinancialCoreProps) => {
-  // Fetch from sales_core_events
+  // Fetch from sales_daily (ledger-first view)
   const { data: coreRevenue } = useQuery({
     queryKey: ['validation-core-revenue', projectId, startDate, endDate],
     queryFn: async () => {

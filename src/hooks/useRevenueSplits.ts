@@ -272,22 +272,21 @@ export function useProductsForSplits() {
   return useQuery({
     queryKey: ['products-for-splits', currentProject?.id],
     queryFn: async () => {
-      // Get unique products from sales_core_events raw_payload
+      // Get unique products from order_items (ledger-first)
       const { data, error } = await supabase
-        .from('sales_core_events')
-        .select('raw_payload')
+        .from('order_items')
+        .select('provider_product_id, product_name')
         .eq('project_id', currentProject!.id)
-        .eq('is_active', true)
+        .not('provider_product_id', 'is', null)
         .limit(500);
 
       if (error) throw error;
 
-      // Extract unique products from raw_payload
       const productMap = new Map<string, string>();
-      
+
       (data || []).forEach((row: any) => {
-        const productId = row.raw_payload?.data?.product?.id?.toString();
-        const productName = row.raw_payload?.data?.product?.name;
+        const productId = row.provider_product_id?.toString();
+        const productName = row.product_name;
         if (productId && !productMap.has(productId)) {
           productMap.set(productId, productName || `Produto ${productId}`);
         }

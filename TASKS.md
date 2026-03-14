@@ -1,7 +1,7 @@
 # Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas.
-> Última atualização: 14/03/2026
+> Última atualização: 14/03/2026 (revisão pós-auditoria API Hotmart)
 
 ---
 
@@ -41,6 +41,58 @@
 
 ---
 
+## 🟡 Importante — Mas não urgente (continuação)
+
+- [ ] **Segurança: criptografar `basic_auth` e `client_id` em `project_credentials`**
+  - Hoje só `client_secret` é criptografado; `basic_auth` = Base64(client_id:client_secret) em texto puro
+  - Quem tiver acesso ao banco consegue decodificar o secret completo via basic_auth
+  - Aplicar o mesmo tratamento de criptografia que já existe para `client_secret`
+
+- [ ] **Sync automático de ofertas Hotmart (cron semanal)**
+  - Hoje a sincronização é 100% manual (botão "Sincronizar Ofertas")
+  - Se o produtor criar oferta nova na Hotmart, não aparece no cubo até admin clicar
+  - Criar cron no Supabase que chame `hotmart-products` (action=sync-offers) semanalmente
+  - Exibir data do último sync na UI do Hotmart
+
+---
+
+## 🔵 Próximo projeto — Migração de Analytics para ledger-first
+
+> **Contexto:** O sistema tem dois modelos paralelos ativos:
+> - **Novo (ledger-first):** `orders` + `order_items` + `ledger_events` — usado pelo webhook e CSV import
+> - **Legado:** `sales_core_events` — ainda usado por Funis, Busca Rápida, Análise Mensal e Insights
+>
+> O webhook escreve nas duas ao mesmo tempo. O CSV import escreve **só no novo**.
+> Consequência: vendas importadas via CSV não aparecem nos Funis e Insights.
+> O backfill de API preenche `sales_core_events` mas com `net_amount = 0` (dados financeiros vazios).
+>
+> **Objetivo:** migrar toda leitura de analytics para `orders + ledger_events`, eliminando a dependência de `sales_core_events` e unificando a fonte de verdade.
+
+- [ ] **Mapear todos os hooks que leem `sales_core_events`**
+  - `useSalesCore.ts`, `useFinancialCore.ts`, `useFinanceLedger.ts`
+  - `useRevenueSplits.ts`, `useMonthlyAnalysis.ts`, `useFunnelFinancials.ts`
+  - `useFunnelData.ts`, `useFinanceTracking.ts`, `useProjectOverview.ts`
+  - Entender quais campos cada hook precisa e se existem equivalentes em `ledger_events`
+
+- [ ] **Criar views/queries equivalentes sobre `orders + ledger_events`**
+  - Substituir `financial_daily`, `sales_daily`, `refunds_daily` por queries sobre ledger
+  - Garantir que os filtros de `project_id`, período e `is_active` funcionem
+
+- [ ] **Migrar hooks um a um (começar pelos mais simples)**
+  - Ordem sugerida: `useSalesCore` → `useMonthlyAnalysis` → `useProjectOverview` → `useFunnelFinancials` → `useFunnelData` → `useFinancialCore`
+  - Manter flag de feature ou período de transição para validar antes de remover legado
+
+- [ ] **Remover escrita em `sales_core_events` do webhook após validação**
+  - Função `writeSalesCoreEvent()` em `hotmart-webhook/index.ts` (~linha 1539)
+  - Só remover após todos os hooks migrarem e validação em produção
+
+- [ ] **Decommission final de `sales_core_events`**
+  - Migration de drop da tabela
+  - Remover edge functions `hotmart-backfill` e `hotmart-ledger-brl-backfill` (já sem UI)
+  - Remover `HotmartBackfillSection.tsx` completamente
+
+---
+
 ## 🟢 Backlog futuro
 
 - [ ] Mover parsing do CSV para Web Worker (elimina freeze da UI em arquivos grandes)
@@ -49,6 +101,7 @@
 - [ ] Instalar MCP do Sentry para monitoramento de erros em produção
 - [ ] Revisar e otimizar Edge Functions após estabilização
 - [ ] Decommission da edge function `csv-ledger-v21-import` (antiga, substituída por `provider-csv-import`)
+- [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete` (cron ou trigger)
 
 ---
 

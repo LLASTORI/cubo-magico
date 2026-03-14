@@ -117,4 +117,13 @@ feat: adiciona validação de email
 fix: corrige erro no login
 refactor: extrai hook useOrdersCore
 ```
-**DEBUG** Sempre atualizar o aquivo debug_log.md quando houver alterações no sistema
+**DEBUG** 
+```
+Sempre atualizar o aquivo debug_log.md quando houver alterações no sistema
+```
+
+**Tasks.md** 
+```
+Sempre atualizar o aquivo Tasks.md quando houver alterações no sistema
+```
+

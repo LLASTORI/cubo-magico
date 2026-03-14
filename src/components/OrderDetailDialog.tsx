@@ -361,10 +361,19 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                               {getItemTypeLabel(item.item_type)}
                             </Badge>
                           </div>
-                          {item.offer_name && (
-                            <p className="text-sm text-muted-foreground truncate">
-                              {item.offer_name}
-                            </p>
+                          {(item.offer_name || item.provider_offer_id) && (
+                            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                              {item.offer_name && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  <span className="opacity-60">Oferta:</span> {item.offer_name}
+                                </p>
+                              )}
+                              {item.provider_offer_id && (
+                                <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
+                                  {item.provider_offer_id}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                         <div className="flex flex-col items-end ml-4 shrink-0">

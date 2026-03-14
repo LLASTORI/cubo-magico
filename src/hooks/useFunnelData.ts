@@ -247,7 +247,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
 
   // CANONICAL STATUS FILTER: Same as Busca Rápida (useOrdersCore)
   // Includes 'partial_refund' to show orders with positive net value after partial refund
-  const VALID_ORDER_STATUSES = ['approved', 'complete', 'partial_refund'];
+  const VALID_ORDER_STATUSES = ['approved', 'completed', 'partial_refund'];
 
   const ordersQuery = useQuery({
     queryKey: ['funnel-orders', projectId, startDateStr, endDateStr],

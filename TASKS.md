@@ -1,26 +1,13 @@
 # Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas.
-> Última atualização: 14/03/2026 (revisão pós-auditoria API Hotmart)
+> Última atualização: 14/03/2026
 
 ---
 
 ## 🔴 Prioridade Alta
 
-- [ ] **Grupo B — 168 vendas sem ledger (Jan/16–Fev/07)**
-  - CSV safety implementado e testado — pronto para importar
-  - Exportar CSV Hotmart do período 16/01 a 07/02/2026
-  - Importar via Settings → Integrações → Hotmart → Importar Histórico
-  - Verificar no dashboard se as vendas aparecem (R$ 8.178,18 esperado)
-
-- [ ] **Migration oficial para o trigger `trigger_derive_order_status`**
-  - Trigger foi recriado manualmente em 13/03, sem migration no git
-  - Criar `supabase/migrations/YYYYMMDD_derive_order_status_trigger.sql`
-  - Garantir que não seja perdido em futuros resets/branches
-
-- [ ] **Commitar migration `20260311223407_add_order_items_order_product_offer_unique.sql`**
-  - Arquivo existe no banco mas está untracked no git
-  - Crítico: sem isso um reset de branch perde a constraint UNIQUE de order_items
+> Todas as tarefas críticas anteriores foram concluídas. ✅
 
 ---
 
@@ -137,6 +124,12 @@
     - Componente `CsvImportHistory` com botão "Desfazer" (owner/manager)
 - [x] CLAUDE.md reescrito com arquitetura completa
 - [x] DEBUG_LOG.md mantido atualizado em tempo real
+- [x] Fix parseBrNumber: detecta formato decimal automaticamente (vírgula=BR, ponto=US)
+- [x] Fix useProviderCSVImport: invalidateQueries ao finalizar (botão "Desfazer" aparece automaticamente)
+- [x] Fix batch único (≤200 grupos) que ficava em status 'importing'
+- [x] Grupo B (168 vendas Jan/16–Fev/07): importado via CSV ✅
+- [x] Migration `20260311223407_add_order_items_order_product_offer_unique.sql` commitada no git
+- [x] Migration `20260313000000_derive_order_status_trigger.sql` criada e commitada
 
 ### Infraestrutura
 - [x] Instalar MCP do Supabase

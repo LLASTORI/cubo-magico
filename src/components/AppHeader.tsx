@@ -19,8 +19,7 @@ import {
   Kanban,
   Lightbulb,
   ClipboardList,
-  FileQuestion,
-  History
+  FileQuestion
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CuboBrand } from "@/components/CuboLogo";
@@ -90,7 +89,7 @@ export const AppHeader = ({
   const currentPath = location.pathname;
   
   // Check if current page is in various dropdowns (accounting for new URL structure)
-  const isInBuscaRapida = currentPath.includes('/busca-rapida') || currentPath.includes('/meta-ads') || currentPath.includes('/vendas/historico');
+  const isInBuscaRapida = currentPath.includes('/busca-rapida') || currentPath.includes('/meta-ads');
   const isInAnalytics = currentPath.includes('/funnel-analysis') || currentPath.includes('/analise-mensal') || currentPath.includes('/launch-dashboard') || currentPath.includes('/undefined-offers');
   const isInCRM = currentPath.includes('/crm') || currentPath.includes('/automations') || currentPath.includes('/whatsapp');
   const isInInsights = currentPath.includes('/insights') || currentPath.includes('/quizzes');
@@ -177,13 +176,6 @@ export const AppHeader = ({
                     >
                       <Search className="w-4 h-4" />
                       Pedidos
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => navigateToProject('/vendas/historico')} 
-                      className={`gap-2 cursor-pointer ${currentPath.includes('/vendas/historico') ? 'bg-muted' : ''}`}
-                    >
-                      <History className="w-4 h-4" />
-                      Histórico
                     </DropdownMenuItem>
                     <TooltipProvider>
                       <Tooltip>

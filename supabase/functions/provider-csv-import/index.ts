@@ -3,7 +3,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import type { NormalizedOrderGroup, ImportResult } from './types.ts';
 import { validateGroup } from './providers/hotmart.ts';
-import { checkOrderState } from './core/dedup-checker.ts';
+import { batchCheckOrderStates } from './core/dedup-checker.ts';
 import { writeContact } from './core/contact-writer.ts';
 import { writeOrder, writeOrderItems } from './core/order-writer.ts';
 import { writeLedgerEvents } from './core/ledger-writer.ts';
@@ -108,6 +108,13 @@ Deno.serve(async (req) => {
       total_revenue_brl: 0,
     };
 
+    // Pré-carregar estado de todos os orders do chunk em 2 queries (batch dedup)
+    const orderStates = await batchCheckOrderStates(
+      supabase,
+      project_id,
+      groups.map((g) => g.provider_order_id),
+    );
+
     for (const group of groups) {
       const validationError = validateGroup(group);
       if (validationError) {
@@ -121,9 +128,8 @@ Deno.serve(async (req) => {
         else if (contactResult.action === 'updated') result.contacts_updated++;
         else if (contactResult.action === 'skipped_no_email') result.no_email++;
 
-        const { state, orderId: existingId } = await checkOrderState(
-          supabase, project_id, group.provider_order_id,
-        );
+        const { state, orderId: existingId } = orderStates.get(group.provider_order_id)
+          ?? { state: 'not_found' as const, orderId: null };
 
         if (state === 'exists_webhook_ledger' || state === 'exists_csv_ledger') {
           result.skipped++;

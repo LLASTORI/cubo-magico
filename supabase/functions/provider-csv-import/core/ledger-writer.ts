@@ -1,7 +1,6 @@
 // supabase/functions/provider-csv-import/core/ledger-writer.ts
 
 import type { NormalizedOrderGroup, NormalizedOrderItem } from '../types.ts';
-import { ledgerEventExists } from './dedup-checker.ts';
 
 interface LedgerEventRow {
   order_id: string;
@@ -24,19 +23,25 @@ interface LedgerEventRow {
   raw_payload: Record<string, unknown>;
 }
 
-async function insertIfNotExists(
+/**
+ * Insere o evento usando ON CONFLICT DO NOTHING (constraint UNIQUE em provider_event_id).
+ * Elimina o SELECT prévio — metade das queries do caminho anterior.
+ * Retorna true se inseriu, false se já existia (conflito silencioso).
+ */
+async function insertEvent(
   supabase: any,
   event: LedgerEventRow,
 ): Promise<boolean> {
-  const exists = await ledgerEventExists(supabase, event.provider_event_id);
-  if (exists) return false;
+  const { error, data } = await supabase
+    .from('ledger_events')
+    .upsert(event, { onConflict: 'provider_event_id', ignoreDuplicates: true })
+    .select('id');
 
-  const { error } = await supabase.from('ledger_events').insert(event);
   if (error) {
     console.error('[LedgerWriter] Error inserting event:', event.provider_event_id, error.message);
     return false;
   }
-  return true;
+  return Array.isArray(data) && data.length > 0;
 }
 
 function buildCreditEvents(
@@ -64,7 +69,6 @@ function buildCreditEvents(
   const events: LedgerEventRow[] = [];
   const tx = item.own_transaction_id;
 
-  // Sale (producer)
   events.push({
     ...base,
     event_type: 'sale',
@@ -76,7 +80,6 @@ function buildCreditEvents(
     provider_event_id: `csv_sale_${tx}`,
   });
 
-  // Platform fee
   if (item.platform_fee_brl > 0) {
     events.push({
       ...base,
@@ -90,7 +93,6 @@ function buildCreditEvents(
     });
   }
 
-  // Affiliate
   if (item.affiliate_brl > 0) {
     events.push({
       ...base,
@@ -104,7 +106,6 @@ function buildCreditEvents(
     });
   }
 
-  // Coproducer
   if (item.coproducer_brl > 0) {
     events.push({
       ...base,
@@ -192,26 +193,21 @@ export async function writeLedgerEvents(
   group: NormalizedOrderGroup,
   batchId: string,
 ): Promise<number> {
-  // Somente status financeiramente efetivos geram ledger
   if (group.status === 'pending' || group.status === 'skip') return 0;
 
   let created = 0;
   const occurredAt = group.approved_at ?? group.ordered_at;
 
   for (const item of group.items) {
-    // Crédito sempre (venda original)
     const creditEvents = buildCreditEvents(orderId, projectId, item, occurredAt, batchId);
     for (const event of creditEvents) {
-      const inserted = await insertIfNotExists(supabase, event);
-      if (inserted) created++;
+      if (await insertEvent(supabase, event)) created++;
     }
 
-    // Débito apenas para cancelados/reembolsados
     if (item.is_debit) {
       const debitEvents = buildDebitEvents(orderId, projectId, item, occurredAt, batchId);
       for (const event of debitEvents) {
-        const inserted = await insertIfNotExists(supabase, event);
-        if (inserted) created++;
+        if (await insertEvent(supabase, event)) created++;
       }
     }
   }

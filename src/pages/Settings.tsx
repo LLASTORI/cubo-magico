@@ -25,7 +25,6 @@ import { MemberRoleManager } from '@/components/settings/MemberRoleManager';
 import { MediaLibraryManager } from '@/components/settings/MediaLibraryManager';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { TrackingSettingsManager } from '@/components/settings/TrackingSettingsManager';
-import { ProviderCSVImport } from '@/components/settings/ProviderCSVImport';
 import { getFunctionErrorMessage } from '@/lib/supabaseFunctionError';
 
 
@@ -411,8 +410,8 @@ const Settings = () => {
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className={`grid w-full max-w-4xl ${
-            isSuperAdmin ? 'grid-cols-9' :
-            canAccessTeamSettings ? 'grid-cols-8' : 'grid-cols-3'
+            isSuperAdmin ? 'grid-cols-8' :
+            canAccessTeamSettings ? 'grid-cols-7' : 'grid-cols-3'
           }`}>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
@@ -444,12 +443,6 @@ const Settings = () => {
               <TabsTrigger value="tracking" className="flex items-center gap-2">
                 <Activity className="h-4 w-4" />
                 <span className="hidden sm:inline">Tracking</span>
-              </TabsTrigger>
-            )}
-            {canAccessTeamSettings && (
-              <TabsTrigger value="importar-historico" className="flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                <span className="hidden sm:inline">Importar Histórico</span>
               </TabsTrigger>
             )}
             <TabsTrigger value="security" className="flex items-center gap-2">
@@ -683,13 +676,6 @@ const Settings = () => {
           <TabsContent value="tracking">
             <TrackingSettingsManager />
           </TabsContent>
-
-          {/* Importar Histórico Tab */}
-          {canAccessTeamSettings && currentProject?.id && (
-            <TabsContent value="importar-historico">
-              <ProviderCSVImport projectId={currentProject.id} />
-            </TabsContent>
-          )}
 
           {/* Security Tab */}
           <TabsContent value="security">

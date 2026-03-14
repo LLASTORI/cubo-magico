@@ -75,10 +75,33 @@ Domínios principais:
 | Domínio | Funções |
 |---|---|
 | Vendas | `hotmart-webhook`, `hotmart-backfill`, `hotmart-ledger-*` |
+| CSV Import | `provider-csv-import` (v2), `provider-csv-import-revert` (v1) |
 | Meta Ads | `meta-insights-cron`, `meta-oauth-*`, `meta-hierarchy-cron` |
 | Quiz/Survey | `quiz-public-*`, `quiz-copilot`, `survey-public` |
 | Automações | `automation-engine`, `whatsapp-webhook`, `evolution-api` |
 | Exports | `export-csv-utf8`, `export-orders-sql`, `export-contacts-sql` |
+
+## Sistema de CSV Import (Hotmart)
+
+**Caminho no app:** Settings → Integrações → Hotmart → "Importar Histórico de Vendas"
+
+**Arquivos principais:**
+- `src/types/csv-import.ts` — tipos compartilhados
+- `src/lib/csv-parsers/hotmart.ts` — parser browser-side (síncrono, detecta formato, agrupa bumps)
+- `src/hooks/useProviderCSVImport.ts` — hook (chunks de 200, validação cruzada, batch_id)
+- `src/components/settings/ProviderCSVImport.tsx` — UI (upload, preview, dialog, progresso, resultado)
+- `src/components/settings/CsvImportHistory.tsx` — histórico de imports com botão "Desfazer"
+- `supabase/functions/provider-csv-import/` — edge function principal
+- `supabase/functions/provider-csv-import-revert/` — edge function de revert
+
+**Regras do CSV import:**
+- Webhook sempre vence: `exists_webhook_ledger` → skip total, nunca sobrescrever
+- `batch_id` gravado em `ledger_events.raw_payload` (jsonb) — zero schema change em `ledger_events`
+- Batch criado no **primeiro chunk** pela edge function; fechado no último com `is_last_chunk=true`
+- Revert usa `ledger_events WHERE source_origin != 'csv'` para decidir se order tem vínculo com webhook
+- `provider_event_log` NÃO tem coluna `order_id` — não usar para decisões de revert
+- Contatos CRM **não** são revertidos (podem ter sido alterados por outras fontes)
+- Roles para revert: apenas `owner` e `manager` (verificado na edge function via `project_members.role`)
 
 ## Padrões de Código
 

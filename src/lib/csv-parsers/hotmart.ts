@@ -15,10 +15,18 @@ const REQUIRED_HEADERS = [
 // Normalização de tipos primitivos
 // ─────────────────────────────────────────────
 
-/** Converte número no formato BR (1.234,56) para float */
+/** Converte número financeiro para float.
+ * Detecta o formato automaticamente:
+ * - Com vírgula → formato BR (1.234,56): remove pontos, troca vírgula por ponto
+ * - Sem vírgula → formato US/decimal (29.90): parseFloat direto
+ */
 function parseBrNumber(raw: string | undefined): number {
   if (!raw || raw.trim() === '' || raw.trim() === '(none)') return 0;
-  return parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0;
+  const s = raw.trim();
+  if (s.includes(',')) {
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  return parseFloat(s) || 0;
 }
 
 /** Converte data no formato DD/MM/YYYY HH:MM:SS para ISO 8601 */

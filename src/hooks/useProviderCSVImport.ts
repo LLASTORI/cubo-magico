@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseHotmartCSV } from '@/lib/csv-parsers/hotmart';
 import type { CSVPreview, ImportResult, NormalizedOrderGroup } from '@/types/csv-import';
@@ -13,6 +14,7 @@ export interface ProductMatchResult {
 }
 
 export function useProviderCSVImport(projectId: string) {
+  const queryClient = useQueryClient();
   const [preview, setPreview] = useState<CSVPreview | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [productMatch, setProductMatch] = useState<ProductMatchResult | null>(null);
@@ -111,7 +113,8 @@ export function useProviderCSVImport(projectId: string) {
       }
 
       // Último chunk: fechar batch (só se não houve erro de rede antes e já temos batch_id)
-      if (isLast && !hasNetworkError && batchId) {
+      // Exceção: chunk único — batch_id só existe após a resposta; fechamento via chamada separada abaixo
+      if (isLast && !hasNetworkError && batchId && chunks.length > 1) {
         body.is_last_chunk = true;
         body.accumulated_totals = {
           created: accumulated.created,
@@ -145,8 +148,29 @@ export function useProviderCSVImport(projectId: string) {
       setProgress(Math.round(((i + 1) / chunks.length) * 100));
     }
 
+    // Chunk único: batch_id só disponível após a resposta — fechar batch agora
+    if (chunks.length === 1 && batchId && !hasNetworkError) {
+      await supabase.functions.invoke('provider-csv-import', {
+        body: {
+          provider: 'hotmart',
+          project_id: projectId,
+          groups: [],
+          batch_id: batchId,
+          is_last_chunk: true,
+          accumulated_totals: {
+            created: accumulated.created,
+            complemented: accumulated.complemented,
+            skipped: accumulated.skipped,
+            errors: accumulated.errors.length,
+            total_revenue_brl: accumulated.total_revenue_brl,
+          },
+        },
+      });
+    }
+
     setResult(accumulated);
     setImporting(false);
+    queryClient.invalidateQueries({ queryKey: ['csv-import-batches', projectId] });
   }
 
   return { preview, fileName, productMatch, importing, progress, result, handleFile, runImport };

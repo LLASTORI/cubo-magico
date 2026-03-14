@@ -1,12 +1,23 @@
 // src/components/settings/ProviderCSVImport.tsx
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { useProject } from '@/contexts/ProjectContext';
 import { useProviderCSVImport } from '@/hooks/useProviderCSVImport';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Upload, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { formatMoney } from '@/utils/formatMoney';
 
@@ -16,8 +27,23 @@ interface Props {
 
 export function ProviderCSVImport({ projectId }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const { preview, importing, progress, result, handleFile, runImport } =
+  const { currentProject } = useProject();
+  const { preview, productMatch, importing, progress, result, handleFile, runImport } =
     useProviderCSVImport(projectId);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const projectName = currentProject?.name ?? 'este projeto';
+  const showZeroMatchWarning =
+    productMatch && productMatch.ratio === 0 && productMatch.projectHasHistory;
+
+  function handleImportClick() {
+    setConfirmOpen(true);
+  }
+
+  async function handleConfirm() {
+    setConfirmOpen(false);
+    await runImport();
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -65,11 +91,43 @@ export function ProviderCSVImport({ projectId }: Props) {
         </Alert>
       )}
 
+      {/* Aviso de projeto errado */}
+      {showZeroMatchWarning && (
+        <Alert className="border-orange-500/50 bg-orange-500/5">
+          <AlertTriangle className="h-4 w-4 text-orange-500" />
+          <AlertDescription className="text-orange-700 dark:text-orange-400">
+            <strong>Nenhum produto do CSV foi encontrado no histórico deste projeto.</strong>{' '}
+            Verifique se está no projeto correto antes de importar.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Preview */}
       {preview && preview.total_groups > 0 && !result && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Preview</CardTitle>
+            <CardTitle className="text-base flex items-center justify-between">
+              Preview
+              {/* Badge de validação cruzada */}
+              {productMatch && (
+                <Badge
+                  variant="outline"
+                  className={
+                    productMatch.ratio >= 0.5
+                      ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                      : productMatch.ratio > 0
+                      ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                      : productMatch.projectHasHistory
+                      ? 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+                      : 'bg-muted/50 text-muted-foreground'
+                  }
+                >
+                  {productMatch.projectHasHistory
+                    ? `${productMatch.matched} de ${productMatch.total} produtos reconhecidos`
+                    : 'Projeto novo — sem histórico para comparar'}
+                </Badge>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -101,13 +159,55 @@ export function ProviderCSVImport({ projectId }: Props) {
                 <p className="text-xs text-muted-foreground text-center">{progress}% processado</p>
               </div>
             ) : (
-              <Button onClick={runImport} className="w-full">
+              <Button
+                onClick={handleImportClick}
+                className="w-full"
+                variant={showZeroMatchWarning ? 'outline' : 'default'}
+              >
                 Importar {preview.total_groups} pedidos
               </Button>
             )}
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog de confirmação */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar importação</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Você está prestes a importar dados no projeto:
+                </p>
+                <p className="text-xl font-bold text-foreground">{projectName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {preview?.total_groups} pedidos · {preview?.total_items} itens ·{' '}
+                  {formatMoney(preview?.total_revenue_brl ?? 0, 'BRL')} receita líquida
+                </p>
+                {showZeroMatchWarning && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Nenhum produto do CSV foi reconhecido neste projeto. Confirme que está no projeto correto.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  A importação pode ser desfeita posteriormente em "Histórico de importações".
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirm}>
+              Confirmar importação em {projectName}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Resultado */}
       {result && (
@@ -139,7 +239,7 @@ export function ProviderCSVImport({ projectId }: Props) {
               {result.no_email > 0 && (
                 <div className="flex items-center gap-2 col-span-2">
                   <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">{result.no_email} sem email</Badge>
-                  <span className="text-muted-foreground">sem vínculo CRM (email ausente)</span>
+                  <span className="text-muted-foreground">sem vínculo CRM</span>
                 </div>
               )}
             </div>

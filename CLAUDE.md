@@ -117,13 +117,38 @@ feat: adiciona validação de email
 fix: corrige erro no login
 refactor: extrai hook useOrdersCore
 ```
-**DEBUG** 
+
+## Regras de Migrations — OBRIGATÓRIO
+
+Toda alteração de schema executada no banco **deve ter o arquivo de migration correspondente commitado no git** antes de encerrar a sessão. Migrations não commitadas são risco crítico — um reset de branch as apaga silenciosamente.
+
+**Checklist após qualquer migration:**
+1. Arquivo existe em `supabase/migrations/YYYYMMDDHHMMSS_descricao.sql`?
+2. `git status` mostra o arquivo?
+3. Commit realizado?
+
+Se a migration foi aplicada diretamente no SQL Editor (sem CLI), criar o arquivo manualmente e commitar imediatamente.
+
+## Manutenção dos Arquivos de Contexto
+
+Estes três arquivos devem ser mantidos atualizados em tempo real durante qualquer sessão:
+
+### debug_log.md
+Atualizar **a cada passo significativo**: query executada, hipótese confirmada/descartada, bug encontrado, correção aplicada, deploy realizado.
+
+Formato de entrada:
 ```
-Sempre atualizar o aquivo debug_log.md quando houver alterações no sistema
+### [YYYY-MM-DD] Título curto — status (✅ OK | ⚠️ Parcial | ❌ Falhou)
+Descrição do que foi feito, resultado obtido e observações relevantes.
 ```
 
-**Tasks.md** 
-```
-Sempre atualizar o aquivo Tasks.md quando houver alterações no sistema
-```
+Mover itens resolvidos da seção "Pendências Abertas" para "Correções Aplicadas" assim que concluídos.
 
+### TASKS.md
+Atualizar sempre que:
+- Uma tarefa for concluída → mover para ✅ Concluído com data
+- Uma tarefa nova surgir → adicionar na categoria correta (🚨 Emergência / 🔴 Alta / 🟡 Média / 🟢 Backlog)
+- A prioridade de uma tarefa mudar → mover entre categorias
+
+### CLAUDE.md (este arquivo)
+Atualizar quando houver mudança arquitetural, nova regra de negócio, novo módulo relevante ou nova edge function importante.

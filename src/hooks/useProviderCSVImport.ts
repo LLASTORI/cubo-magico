@@ -1,5 +1,3 @@
-// src/hooks/useProviderCSVImport.ts
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { parseHotmartCSV } from '@/lib/csv-parsers/hotmart';
@@ -7,21 +5,71 @@ import type { CSVPreview, ImportResult, NormalizedOrderGroup } from '@/types/csv
 
 const CHUNK_SIZE = 200;
 
+export interface ProductMatchResult {
+  matched: number;
+  total: number;
+  ratio: number;           // 0-1
+  projectHasHistory: boolean;
+}
+
 export function useProviderCSVImport(projectId: string) {
   const [preview, setPreview] = useState<CSVPreview | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [productMatch, setProductMatch] = useState<ProductMatchResult | null>(null);
   const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState(0); // 0-100
+  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ImportResult | null>(null);
 
   function handleFile(file: File) {
+    setFileName(file.name);
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       const parsed = parseHotmartCSV(text);
       setPreview(parsed);
       setResult(null);
+      setProductMatch(null);
+
+      if (parsed.total_groups > 0) {
+        await validateProductMatch(parsed);
+      }
     };
     reader.readAsText(file, 'UTF-8');
+  }
+
+  async function validateProductMatch(parsed: CSVPreview) {
+    // 1. Verificar se projeto tem histórico
+    const { count: orderCount } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId);
+
+    const projectHasHistory = (orderCount ?? 0) > 0;
+
+    // 2. Extrair product IDs únicos do CSV
+    const csvProductIds = [
+      ...new Set(
+        parsed.groups.flatMap((g) => g.items.map((i) => i.provider_product_id))
+      ),
+    ];
+
+    if (csvProductIds.length === 0) {
+      setProductMatch({ matched: 0, total: 0, ratio: 0, projectHasHistory });
+      return;
+    }
+
+    // 3. Verificar quais existem no projeto
+    const { data: knownItems } = await supabase
+      .from('order_items')
+      .select('provider_product_id')
+      .eq('project_id', projectId)
+      .in('provider_product_id', csvProductIds);
+
+    const knownIds = new Set((knownItems ?? []).map((i) => i.provider_product_id));
+    const matched = csvProductIds.filter((id) => knownIds.has(id)).length;
+    const ratio = csvProductIds.length > 0 ? matched / csvProductIds.length : 0;
+
+    setProductMatch({ matched, total: csvProductIds.length, ratio, projectHasHistory });
   }
 
   async function runImport() {
@@ -43,14 +91,47 @@ export function useProviderCSVImport(projectId: string) {
       period_end: preview.period_end,
     };
 
+    let batchId: string | null = null;
+    let hasNetworkError = false;
+
     for (let i = 0; i < chunks.length; i++) {
-      const { data, error } = await supabase.functions.invoke('provider-csv-import', {
-        body: { provider: 'hotmart', project_id: projectId, groups: chunks[i] },
-      });
+      const isLast = i === chunks.length - 1;
+
+      const body: Record<string, unknown> = {
+        provider: 'hotmart',
+        project_id: projectId,
+        groups: chunks[i],
+      };
+
+      // Primeiro chunk: sem batch_id; enviar file_name
+      if (i === 0) {
+        if (fileName) body.file_name = fileName;
+      } else {
+        body.batch_id = batchId;
+      }
+
+      // Último chunk: fechar batch (só se não houve erro de rede antes e já temos batch_id)
+      if (isLast && !hasNetworkError && batchId) {
+        body.is_last_chunk = true;
+        body.accumulated_totals = {
+          created: accumulated.created,
+          complemented: accumulated.complemented,
+          skipped: accumulated.skipped,
+          errors: accumulated.errors.length,
+          total_revenue_brl: accumulated.total_revenue_brl,
+        };
+      }
+
+      const { data, error } = await supabase.functions.invoke('provider-csv-import', { body });
 
       if (error) {
         accumulated.errors.push(`Lote ${i + 1}: ${error.message}`);
+        hasNetworkError = true;
       } else if (data) {
+        // Capturar batch_id da resposta do primeiro chunk
+        if (i === 0 && data.batch_id) {
+          batchId = data.batch_id;
+        }
         accumulated.created += data.created ?? 0;
         accumulated.complemented += data.complemented ?? 0;
         accumulated.skipped += data.skipped ?? 0;
@@ -68,5 +149,5 @@ export function useProviderCSVImport(projectId: string) {
     setImporting(false);
   }
 
-  return { preview, importing, progress, result, handleFile, runImport };
+  return { preview, fileName, productMatch, importing, progress, result, handleFile, runImport };
 }

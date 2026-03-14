@@ -583,6 +583,12 @@ export function OrderDetailDialog({ orderId, open, onOpenChange }: OrderDetailDi
                   return null;
                 }
 
+                // Para pedidos em moeda estrangeira, customer_paid está em moeda local
+                // mas os campos *_brl estão em BRL — cálculo seria inválido (mistura moedas)
+                if (order.currency !== 'BRL') {
+                  return null;
+                }
+
                 const declaredTotal =
                   (order.platform_fee_brl ?? 0) +
                   (order.affiliate_brl ?? 0) +

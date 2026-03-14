@@ -11,6 +11,7 @@ import { HotmartWebhookSection } from './HotmartWebhookSection';
 import { HotmartAPISection } from './HotmartAPISection';
 import { HotmartBackfillSection } from './HotmartBackfillSection';
 import { ProviderCSVImport } from '../ProviderCSVImport';
+import { CsvImportHistory } from '../CsvImportHistory';
 
 interface HotmartProviderSettingsProps {
   onBack: () => void;
@@ -101,6 +102,19 @@ export function HotmartProviderSettings({ onBack }: HotmartProviderSettingsProps
 
               {/* Backfill Section */}
               <HotmartBackfillSection projectId={projectId} />
+            </CardContent>
+          </Card>
+
+          {/* Histórico de Importações CSV */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base text-muted-foreground">Histórico de Importações</CardTitle>
+              <CardDescription>
+                Importações de CSV realizadas neste projeto. Owners e managers podem desfazer.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CsvImportHistory projectId={projectId} />
             </CardContent>
           </Card>
 

@@ -44,6 +44,7 @@ function buildCreditEvents(
   projectId: string,
   item: NormalizedOrderItem,
   occurredAt: string,
+  batchId: string,
 ): LedgerEventRow[] {
   const base = {
     order_id: orderId,
@@ -54,7 +55,7 @@ function buildCreditEvents(
     source_origin: 'csv',
     confidence_level: 'accounting',
     occurred_at: occurredAt,
-    raw_payload: { csv_transaction_id: item.own_transaction_id },
+    raw_payload: { csv_transaction_id: item.own_transaction_id, batch_id: batchId },
     amount_accounting: 0,
     currency_accounting: 'BRL',
     conversion_rate: item.conversion_rate,
@@ -125,6 +126,7 @@ function buildDebitEvents(
   projectId: string,
   item: NormalizedOrderItem,
   occurredAt: string,
+  batchId: string,
 ): LedgerEventRow[] {
   const tx = item.own_transaction_id;
   const base = {
@@ -136,7 +138,7 @@ function buildDebitEvents(
     source_origin: 'csv',
     confidence_level: 'accounting',
     occurred_at: occurredAt,
-    raw_payload: { csv_transaction_id: tx },
+    raw_payload: { csv_transaction_id: tx, batch_id: batchId },
     currency_accounting: 'BRL',
     conversion_rate: item.conversion_rate,
   };
@@ -188,6 +190,7 @@ export async function writeLedgerEvents(
   orderId: string,
   projectId: string,
   group: NormalizedOrderGroup,
+  batchId: string,
 ): Promise<number> {
   // Somente status financeiramente efetivos geram ledger
   if (group.status === 'pending' || group.status === 'skip') return 0;
@@ -197,7 +200,7 @@ export async function writeLedgerEvents(
 
   for (const item of group.items) {
     // Crédito sempre (venda original)
-    const creditEvents = buildCreditEvents(orderId, projectId, item, occurredAt);
+    const creditEvents = buildCreditEvents(orderId, projectId, item, occurredAt, batchId);
     for (const event of creditEvents) {
       const inserted = await insertIfNotExists(supabase, event);
       if (inserted) created++;
@@ -205,7 +208,7 @@ export async function writeLedgerEvents(
 
     // Débito apenas para cancelados/reembolsados
     if (item.is_debit) {
-      const debitEvents = buildDebitEvents(orderId, projectId, item, occurredAt);
+      const debitEvents = buildDebitEvents(orderId, projectId, item, occurredAt, batchId);
       for (const event of debitEvents) {
         const inserted = await insertIfNotExists(supabase, event);
         if (inserted) created++;

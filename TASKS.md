@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 14/03/2026 — fim do dia
+> Última atualização: 14/03/2026 — sessão 2
 
 ---
 
@@ -10,41 +10,40 @@
 
 ---
 
-## 🔵 Próximo projeto — Migração Analytics para ledger-first
+## 🔵 Em andamento — Migração Analytics + Validação de Módulos
 
-> **Por que é importante:** vendas importadas via CSV não aparecem nos Funis, Análise Mensal e Insights enquanto esses módulos ainda lerem `sales_core_events`. A fonte de verdade precisa ser unificada.
+> **Status:** Views DB migradas ✅ | Hooks TS migrados ✅ | Funis mostrando faturamento ✅
+> **Próximo:** Validar todos os módulos e fechar o decommission de `sales_core_events`
 
-- [ ] **Mapear todos os hooks que leem `sales_core_events`**
-  - `useSalesCore`, `useFinancialCore`, `useFinanceLedger`, `useRevenueSplits`
-  - `useMonthlyAnalysis`, `useFunnelFinancials`, `useFunnelData`, `useFinanceTracking`, `useProjectOverview`
+### Validação de módulos no front
+- [ ] **Dashboard** — verificar KPIs, gráficos de receita e spend
+- [ ] **Análise de Funil** — posições de oferta, bump/upsell rate, ROAS, CPA (faturamento já aparece ✅)
+- [ ] **Busca Rápida** (`useSalesCore` → `sales_core_view`) — pesquisa e paginação funcionando
+- [ ] **Análise Mensal** (`useMonthlyAnalysis` → `finance_tracking_view`) — valores corretos
+- [ ] **Insights** (`useFinanceLedger`) — verificar se lê views migradas ou ainda legado
+- [ ] **Visão Geral do Projeto** (`useProjectOverview`) — métricas e categorias
 
-- [ ] **Criar views/queries equivalentes sobre `orders + ledger_events`**
-  - Substituir `financial_daily`, `sales_daily`, `refunds_daily`
-  - Garantir filtros de `project_id`, período e `is_active`
-
-- [ ] **Migrar hooks um a um** (ordem sugerida)
-  - `useSalesCore` → `useMonthlyAnalysis` → `useProjectOverview` → `useFunnelFinancials` → `useFunnelData` → `useFinancialCore`
-
-- [ ] **Remover escrita em `sales_core_events` do webhook após validação**
-  - Função `writeSalesCoreEvent()` em `hotmart-webhook/index.ts` (~linha 1539)
-  - Só remover após todos os hooks migrarem
-
+### Fechar decommission de `sales_core_events`
+- [ ] **Remover `writeSalesCoreEvent()`** do webhook
+  - Função em `hotmart-webhook/index.ts` (~linha 1539)
+  - Só remover após validação de todos os módulos acima
 - [ ] **Decommission final de `sales_core_events`**
   - Migration de drop da tabela
   - Remover edge functions `hotmart-backfill` e `hotmart-ledger-brl-backfill`
   - Remover `HotmartBackfillSection.tsx`
+  - Remover edge function `csv-ledger-v21-import` (antiga)
 
 ---
 
 ## 🟡 Importante — Mas não urgente
 
-- [ ] **Correção estrutural: desacoplar `order_items` de `ledger_events` no webhook**
-  - Falha em `order_items` não deve mais abortar criação do ledger
-  - Refatorar `hotmart-webhook/index.ts` ~linha 844
-
 - [ ] **Segurança: criptografar `basic_auth` e `client_id` em `project_credentials`**
   - Hoje só `client_secret` é criptografado
   - `basic_auth` = Base64(client_id:client_secret) em texto puro — risco real
+
+- [ ] **Correção estrutural: desacoplar `order_items` de `ledger_events` no webhook**
+  - Falha em `order_items` não deve mais abortar criação do ledger
+  - Refatorar `hotmart-webhook/index.ts` ~linha 844
 
 - [ ] **Sync automático de ofertas Hotmart (cron semanal)**
   - Hoje sincronização é 100% manual
@@ -55,8 +54,7 @@
   - Cron SQL simples ou trigger no Supabase
   - Detectar divergência antes que vire problema novamente
 
-- [ ] **Validar todos os módulos após reconstrução**
-  - CRM, automações, mídia paga, quizzes
+- [ ] **Validar CRM, automações, mídia paga, quizzes**
   - Confirmar que nenhum foi afetado pelas migrations recentes
 
 ---
@@ -68,7 +66,6 @@
 - [ ] Aumentar chunk size do CSV import de 200 para 500
 - [ ] Instalar MCP do Vercel para gestão de deploys
 - [ ] Instalar MCP do Sentry para monitoramento de erros em produção
-- [ ] Decommission da edge function `csv-ledger-v21-import` (antiga, substituída)
 - [ ] Revisar e otimizar Edge Functions após estabilização
 
 ---
@@ -94,6 +91,22 @@
 - [x] Edge function `provider-csv-import-revert` v1 ACTIVE
 - [x] `CsvImportHistory` com botão "Desfazer" (owner/manager)
 - [x] Menu Vendas → Histórico removido
+
+### 📊 Migração Analytics → Ledger-First (14/03/2026 — sessão 2)
+- [x] `funnel_revenue` migrada para `orders + order_items + offer_mappings`
+- [x] `sales_daily` migrada para `orders`
+- [x] `refunds_daily` migrada para `orders`
+- [x] `revenue_daily` migrada para `orders`
+- [x] `finance_tracking_view` migrada para `orders + order_items + funnels`
+- [x] `sales_core_view` migrada para `orders + order_items + offer_mappings`
+- [x] `funnel_orders_view` corrigida: `customer_paid`, `funnel_id`, `main_offer_code`, timezone
+- [x] Fix `COALESCE(customer_paid_brl, customer_paid)` em todas as views
+- [x] `useProjectOverview` → `sales_core_view`
+- [x] `useRevenueSplits.useProductsForSplits` → `order_items`
+- [x] `useFinancialCore.useSalesCoreEvents` → `sales_core_view`
+- [x] `useFunnelData`: status `'complete'` → `'completed'`
+- [x] Zero queries em `sales_core_events` no frontend ✅
+- [x] Análise de Funil exibindo faturamento ✅
 
 ### 🛠️ Infraestrutura
 - [x] MCP Supabase instalado no Cursor

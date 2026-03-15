@@ -153,3 +153,12 @@ Atualizar sempre que:
 
 ### CLAUDE.md (este arquivo)
 Atualizar quando houver mudança arquitetural, nova regra de negócio, novo módulo relevante ou nova edge function importante.
+
+## Sistema de Design
+
+Skills de design instaladas em `.claude/skills/`:
+- `cubo-design` — identidade visual do projeto (cores, componentes, animações)
+- `frontend-design` — skill oficial Anthropic para UI de qualidade
+
+Ao criar ou refatorar qualquer componente visual, consultar a skill `cubo-design`
+para paleta de cores, padrões de componente e regras de animação.

@@ -37,9 +37,9 @@ interface KanbanContact {
   total_revenue: number | null;
   total_purchases: number | null;
   last_activity_at: string;
+  last_purchase_at?: string | null;
   updated_at: string;
   tags: string[] | null;
-  last_transaction_date?: string | null;
 }
 
 export default function CRMKanban() {
@@ -101,21 +101,14 @@ export default function CRMKanban() {
       // Fetch contacts com limit de 200 (Quick Win #2)
       const { data: contactsData, error: contactsError } = await supabase
         .from('crm_contacts')
-        .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, updated_at, tags')
+        .select('id, name, email, phone, pipeline_stage_id, total_revenue, total_purchases, last_activity_at, last_purchase_at, updated_at, tags')
         .eq('project_id', currentProject.id)
         .order('updated_at', { ascending: false })
         .limit(200); // PROMPT 24: Limit para performance
 
       if (contactsError) throw contactsError;
       
-      // PROMPT 24: Query de transactions REMOVIDA
-      // O campo last_transaction_date não é usado no visual do Kanban
-      // Se necessário no futuro, usar view materializada
-
-      return contactsData.map(c => ({
-        ...c,
-        last_transaction_date: null, // Campo mantido para compatibilidade, mas não é carregado
-      })) as KanbanContact[];
+      return contactsData as KanbanContact[];
     },
     enabled: !!currentProject?.id && crmEnabled,
     staleTime: 5 * 60 * 1000, // 5 minutos

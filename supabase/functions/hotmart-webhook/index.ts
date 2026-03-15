@@ -1107,19 +1107,29 @@ async function writeOrderShadow(
       }
 
       // SAFETY FALLBACK: If no ledger events could be built (empty commissions payload)
-      // for a PURCHASE_APPROVED event, the trigger will never fire and orders.status stays
-      // 'pending' forever. Explicitly approve the order in this case.
+      // for a credit event, the trigger will never fire and orders.status stays 'pending'.
+      // Only fires when: credit event + no commissions + order has NO existing ledger events at all.
       if (ledgerEventsToCreate.length === 0 && !isDebit) {
-        console.warn(`[OrdersShadow] No ledger events built for ${hotmartEvent} (commissions empty or all blocked). Explicitly setting orders.status = 'approved' as fallback.`);
-        const { error: statusFallbackError } = await supabase
-          .from('orders')
-          .update({ status: 'approved', approved_at: approvedAt || new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq('id', orderId)
-          .neq('status', 'approved'); // Only update if not already approved
-        if (statusFallbackError) {
-          console.error(`[OrdersShadow] Status fallback update failed:`, statusFallbackError);
+        // Check if this order already has ANY ledger events (from prior webhook calls)
+        const { count: existingLedgerCount } = await supabase
+          .from('ledger_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('order_id', orderId);
+
+        if ((existingLedgerCount ?? 0) === 0) {
+          console.warn(`[OrdersShadow] No ledger events built for ${hotmartEvent} (commissions empty or all blocked) and order has no prior ledger. Setting orders.status = 'approved' as fallback.`);
+          const { error: statusFallbackError } = await supabase
+            .from('orders')
+            .update({ status: 'approved', approved_at: approvedAt || new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', orderId)
+            .eq('status', 'pending'); // Only update genuinely stuck pending orders
+          if (statusFallbackError) {
+            console.error(`[OrdersShadow] Status fallback update failed:`, statusFallbackError);
+          } else {
+            console.log(`[OrdersShadow] Status fallback: order ${orderId} set to approved`);
+          }
         } else {
-          console.log(`[OrdersShadow] Status fallback: order ${orderId} set to approved`);
+          console.log(`[OrdersShadow] No new ledger events for ${hotmartEvent} but order ${orderId} already has ${existingLedgerCount} ledger event(s) — trigger handles status`);
         }
       }
 

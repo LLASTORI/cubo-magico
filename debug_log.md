@@ -10,6 +10,13 @@
 
 ---
 
+### [2026-03-15] Sync automático de ofertas Hotmart — ✅ CONCLUÍDO (sessão 7)
+- **Edge function:** `hotmart-offers-cron` v1 ACTIVE — itera projetos is_validated=true, chama hotmart-products sync-offers para cada
+- **Cron:** `hotmart-offers-sync-weekly` toda segunda-feira 07:00 UTC (pg_cron job ID=2)
+- **DB:** `project_credentials.offers_synced_at` gravado após cada sync bem-sucedido
+- **UI:** OfferMappings.tsx mostra "Último sync: DD/MM HH:mm" abaixo do botão
+- **Teste manual:** 6/6 projetos OK — 4 novas ofertas, 659 atualizadas
+
 ### [2026-03-15] Alerta automático orders sem ledger — ✅ CONCLUÍDO (sessão 7)
 - **Edge function:** `orders-health-check` (v3 ACTIVE) — detecta orders approved >2h sem ledger_events
 - **Log:** insere em `system_health_log` com severity=ok/warning/critical e detalhes por projeto

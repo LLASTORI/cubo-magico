@@ -45,9 +45,11 @@
   - `client_id`: backfill 6 rows → client_id_encrypted, trigger atualizado, RPC atualizado
   - 0 campos sensíveis em plaintext em project_credentials ✅
 
-- [ ] **Sync automático de ofertas Hotmart (cron semanal)**
-  - Criar cron no Supabase → `hotmart-products` (action=sync-offers)
-  - Exibir data do último sync na UI
+- [x] **Sync automático de ofertas Hotmart (cron semanal)** (15/03/2026)
+  - Edge function `hotmart-offers-cron` ACTIVE — itera 6 projetos, chama sync-offers para cada
+  - Cron `hotmart-offers-sync-weekly` — segunda-feira 07:00 UTC
+  - `offers_synced_at` em `project_credentials` + exibido em OfferMappings.tsx
+  - Teste: 6/6 OK (4 novas, 659 atualizadas) ✅
 
 - [x] **Criar alerta automático para orders sem ledger** (15/03/2026)
   - Edge function `orders-health-check` + cron diário 08:00 UTC

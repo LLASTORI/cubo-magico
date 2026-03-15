@@ -52,6 +52,7 @@
 
 - [ ] **Criar alerta automático para orders sem ledger**
   - Cron SQL simples ou trigger no Supabase
+  - Backfill massivo já executado (15/03): zero orders stuck no momento
 
 ---
 
@@ -81,7 +82,19 @@
 
 ## ✅ Concluído
 
-### 🐛 Race condition coprodução + CRM fixes (15/03/2026 — sessão 6)
+### 💰 Backfill massivo ledger_events (15/03/2026 — sessão 6)
+- [x] 674 orders approved sem ledger em 6 projetos → ~R$130.000 recuperados nos relatórios
+- [x] ~1.302 ledger_events criados (BRL nativo, USD convertido, CO_PRODUCER, pré-sistema)
+- [x] Zero orders stuck após backfill
+- [x] Migration `20260315230000_backfill_ledger_events_approved_orders.sql`
+
+### 🔧 Fixes de pipeline (15/03/2026 — sessão 6)
+- [x] Desacoplar order_items de ledger_events no webhook (non-fatal)
+- [x] Race condition coprodução: UNIQUE(provider_event_id) global → UNIQUE(order_id, provider_event_id)
+- [x] Webhook: dedup check escopo ao order_id
+- [x] Webhook: fallback status approved quando ledger vazio + credit event
+
+### 🐛 CRM fixes (15/03/2026 — sessão 6)
 - [x] `UNIQUE(provider_event_id)` global → `UNIQUE(order_id, provider_event_id)` — fix para produtos com coprodução
 - [x] Webhook: dedup check escopo ao `order_id` (evita falso positivo cross-project)
 - [x] Webhook: fallback de status `approved` quando ledger vazio + credit event

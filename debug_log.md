@@ -10,6 +10,14 @@
 
 ---
 
+### [2026-03-15] Backfill massivo ledger_events — ✅ CONCLUÍDO (sessão 6)
+- **Descoberta:** 674 orders approved em 6 projetos sem ledger_events → ~R$130.000 invisíveis nos relatórios
+- **Causas:** race condition coprodução + order_items abortava ledger + webhook legado (pré-sistema) + CO_PRODUCER (underscore) não tratado + USD sem currency_conversion
+- **Resultado:** ~1.302 ledger_events criados, ledger_status='complete' em todas as orders afetadas
+- **Zero stuck orders** após backfill (query confirma: total_ainda_stuck=0)
+- 5 fases: BRL nativo, PRODUCER USD convertido, COPRODUCER USD convertido, CO_PRODUCER BRL, pré-sistema (producer_net)
+- Migration: `20260315230000_backfill_ledger_events_approved_orders.sql`
+
 ### [2026-03-15] Desacoplamento order_items / ledger_events — ✅ CORRIGIDO (sessão 6)
 - **Problema:** falha em `order_items` (constraint, timeout) abortava o webhook antes de criar ledger_events → pedido aprovado sumia dos relatórios silenciosamente.
 - **Fix:** erro em `createOrderItemsFromWebhook` agora é non-fatal: logado em `result.itemsError` + warn no caller, execução continua para criação de ledger_events.

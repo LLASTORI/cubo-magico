@@ -2,23 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ============================================
-// SALES CORE PROVIDER - Hotmart Revenue Ingestion
 // FINANCE LEDGER - Primary Financial Source (Webhook Only)
-// ORDERS CORE SHADOW MODE - Duplicate to new canonical structure
+// ORDERS CORE - Canonical structure
 // ============================================
-
-// Map Hotmart events to canonical event types
-const hotmartToCanonicalEventType: Record<string, string> = {
-  'PURCHASE_APPROVED': 'purchase',
-  'PURCHASE_COMPLETE': 'purchase',
-  'PURCHASE_BILLET_PRINTED': 'attempt',
-  'PURCHASE_CANCELED': 'refund',
-  'PURCHASE_REFUNDED': 'refund',
-  'PURCHASE_CHARGEBACK': 'chargeback',
-  'SUBSCRIPTION_STARTED': 'subscription',
-  'PURCHASE_RECURRENCE_CANCELLATION': 'refund',
-  'SWITCH_PLAN': 'upgrade',
-};
 
 // Map Hotmart events to canonical order status
 const hotmartToOrderStatus: Record<string, string> = {
@@ -1324,7 +1310,7 @@ function parseSCKtoUTMs(checkoutOrigin: string | null): ParsedUTMs {
 // Alias for backwards compatibility
 const parseCheckoutOriginToUTMs = parseSCKtoUTMs;
 
-// Extract attribution data from tracking/UTM (for sales_core_events and finance_ledger)
+// Extract attribution data from tracking/UTM (for finance_ledger and orders)
 function extractAttribution(purchase: any, checkoutOrigin: string | null): Record<string, any> {
   const tracking = purchase?.origin || {};
   const sck = tracking?.sck || checkoutOrigin || '';
@@ -1529,124 +1515,6 @@ async function writeFinanceLedgerEntries(
   return { written, skipped };
 }
 
-// Financial breakdown for sales_core_events
-interface FinancialBreakdown {
-  platform_fee: number | null;
-  affiliate_cost: number | null;
-  coproducer_cost: number | null;
-}
-
-// Write canonical sale event to sales_core_events
-async function writeSalesCoreEvent(
-  supabase: any,
-  projectId: string,
-  hotmartEvent: string,
-  transactionId: string,
-  grossAmount: number | null,
-  netAmount: number | null,
-  currency: string,
-  occurredAt: Date,
-  attribution: Record<string, any>,
-  contactId: string | null,
-  rawPayload: any,
-  financialBreakdown?: FinancialBreakdown
-): Promise<{ id: string; version: number } | null> {
-  const canonicalEventType = hotmartToCanonicalEventType[hotmartEvent];
-  
-  if (!canonicalEventType) {
-    console.log(`[SalesCore] Event ${hotmartEvent} not mapped to canonical type, skipping`);
-    return null;
-  }
-  
-  const providerEventId = `hotmart_${transactionId}_${hotmartEvent}`;
-  const economicDay = calculateEconomicDay(occurredAt);
-  const receivedAt = new Date().toISOString();
-  
-  // Check if event already exists (for versioning)
-  const { data: existing } = await supabase
-    .from('sales_core_events')
-    .select('id, version, gross_amount, net_amount, is_active')
-    .eq('project_id', projectId)
-    .eq('provider_event_id', providerEventId)
-    .eq('is_active', true)
-    .maybeSingle();
-  
-  let version = 1;
-  
-  if (existing) {
-    // Check if values changed - if so, create new version
-    const hasChanges = 
-      existing.gross_amount !== grossAmount ||
-      existing.net_amount !== netAmount;
-    
-    if (hasChanges) {
-      // Mark old version as inactive
-      const { error: deactivateError } = await supabase
-        .from('sales_core_events')
-        .update({ is_active: false })
-        .eq('id', existing.id);
-      
-      if (deactivateError) {
-        throw new Error(`Sales core deactivate failed: ${deactivateError.message}`);
-      }
-      
-      version = existing.version + 1;
-      console.log(`[SalesCore] Creating version ${version} for ${providerEventId}`);
-    } else {
-      // No changes, skip insert
-      console.log(`[SalesCore] Event ${providerEventId} unchanged, skipping`);
-      return { id: existing.id, version: existing.version };
-    }
-  }
-  
-  // Insert new canonical event with financial breakdown
-  const { data, error } = await supabase
-    .from('sales_core_events')
-    .insert({
-      project_id: projectId,
-      provider: 'hotmart',
-      provider_event_id: providerEventId,
-      event_type: canonicalEventType,
-      gross_amount: grossAmount,
-      net_amount: netAmount,
-      // NEW: Financial breakdown columns
-      platform_fee: financialBreakdown?.platform_fee ?? 0,
-      affiliate_cost: financialBreakdown?.affiliate_cost ?? 0,
-      coproducer_cost: financialBreakdown?.coproducer_cost ?? 0,
-      currency,
-      occurred_at: occurredAt.toISOString(),
-      received_at: receivedAt,
-      economic_day: economicDay,
-      attribution,
-      contact_id: contactId,
-      raw_payload: rawPayload,
-      version,
-      is_active: true,
-    })
-    .select('id, version')
-    .single();
-  
-  if (error) {
-    if (error.code === '23505') {
-      console.log(`[SalesCore] Duplicate canonical event detected for ${providerEventId} - treating as success`);
-      const { data: duplicated } = await supabase
-        .from('sales_core_events')
-        .select('id, version')
-        .eq('project_id', projectId)
-        .eq('provider_event_id', providerEventId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      return duplicated || { id: existing?.id || providerEventId, version: existing?.version || version };
-    }
-
-    console.error('[SalesCore] Error inserting canonical event:', error);
-    throw new Error(`Sales core insert failed: ${error.message}`);
-  }
-  
-  console.log(`[SalesCore] Created canonical event: ${canonicalEventType} v${version} for ${transactionId} (platform_fee=${financialBreakdown?.platform_fee}, affiliate=${financialBreakdown?.affiliate_cost}, coproducer=${financialBreakdown?.coproducer_cost})`);
-  return data;
-}
 
 // Find or lookup CRM contact by email/phone
 async function findContactId(
@@ -2327,65 +2195,6 @@ projectId = projectIdFromUrl;
 
     let providerEventStatus: 'processed' | 'ignored' | 'error' = 'processed';
     let providerEventErrorMessage: string | null = null;
-    
-    // =====================================================
-    // SALES CORE - Write canonical revenue event
-    // =====================================================
-    console.log('[SalesCore] Writing canonical revenue event...');
-    
-    // Find contact for binding
-    contactId = await findContactId(supabase, projectId, buyer?.email || null, buyerPhone);
-    
-    // Extract attribution from purchase origin
-    const attribution = extractAttribution(purchase, checkoutOrigin);
-    
-    // Parse occurred_at from Hotmart event
-    const occurredAt = resolveWebhookEventDate(
-      purchase?.order_date,
-      payload.creation_date,
-      {
-        pipeline: 'sales_core_events',
-        projectId,
-        payloadId: payload?.id ?? null,
-        event,
-        transactionId,
-      },
-    );
-    
-    // Write canonical event with financial breakdown
-    const financialBreakdown: FinancialBreakdown = {
-      platform_fee: platformFee,
-      affiliate_cost: affiliateAmount,
-      coproducer_cost: coproducerAmount,
-    };
-    
-    let salesCorePipelineStatus: 'ok' | 'failed' = 'ok';
-    try {
-      const coreEventResult = await writeSalesCoreEvent(
-        supabase,
-        projectId,
-        event,
-        transactionId,
-        totalPriceBrl, // gross_amount (valor pago pelo comprador, converted to BRL)
-        ownerNetRevenue, // CORRECT: net_amount = PRODUCER commission ("Você recebeu")
-        'BRL', // Always store in BRL
-        occurredAt,
-        attribution,
-        contactId,
-        payload,
-        financialBreakdown // NEW: Pass financial breakdown for fee columns
-      );
-      
-      if (coreEventResult) {
-        console.log(`[SalesCore] Canonical event created: id=${coreEventResult.id} version=${coreEventResult.version}`);
-      }
-    } catch (salesCoreError) {
-      salesCorePipelineStatus = 'failed';
-      providerEventStatus = 'error';
-      providerEventErrorMessage = `[SalesCore] ${salesCoreError instanceof Error ? salesCoreError.message : 'Unknown error'}`;
-      console.error('[SalesCore] Error writing canonical event:', salesCoreError);
-    }
-    console.log(`[HotmartWebhook] pipeline=sales_core_events status=${salesCorePipelineStatus}`);
     
     // =====================================================
     // FINANCE LEDGER - Primary Financial Source (IMMUTABLE)

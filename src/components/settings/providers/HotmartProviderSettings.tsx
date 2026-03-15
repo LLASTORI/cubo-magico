@@ -9,7 +9,6 @@ import { ShoppingCart, Lock, ArrowLeft } from 'lucide-react';
 import { HotmartWebhookStatus } from './HotmartWebhookStatus';
 import { HotmartWebhookSection } from './HotmartWebhookSection';
 import { HotmartAPISection } from './HotmartAPISection';
-import { HotmartBackfillSection } from './HotmartBackfillSection';
 import { ProviderCSVImport } from '../ProviderCSVImport';
 import { CsvImportHistory } from '../CsvImportHistory';
 
@@ -98,10 +97,6 @@ export function HotmartProviderSettings({ onBack }: HotmartProviderSettingsProps
               {/* API Section with integrated OAuth */}
               <HotmartAPISection projectId={projectId} />
 
-              <Separator />
-
-              {/* Backfill Section */}
-              <HotmartBackfillSection projectId={projectId} />
             </CardContent>
           </Card>
 

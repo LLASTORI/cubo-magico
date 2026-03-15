@@ -2,17 +2,19 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * CUBO MÁGICO DASHBOARD - CANONICAL FINANCIAL LAYER
  * ═══════════════════════════════════════════════════════════════════════════════
- * 
- * Sales data comes EXCLUSIVELY from finance_tracking_view (via parent or local query).
- * Investment data comes from meta_insights (ad-level, deduplicated).
- * 
+ *
+ * Sales data comes EXCLUSIVELY from funnel_orders_view (Orders Core) via parent props.
+ * Data is fetched by useFunnelData in FunnelAnalysis and passed down as salesData prop.
+ * Investment data comes from Paid Media Domain (provider-agnostic).
+ *
  * FILTER RULES:
  * - Date: economic_day (DATE type, São Paulo timezone)
- * - Status: hotmart_status IN ('APPROVED', 'COMPLETE')
- * - Revenue: gross_amount (CANONICAL)
- * 
+ * - Status: approved, completed, partial_refund (handled by useFunnelData)
+ * - Revenue: gross_amount / customer_paid (CANONICAL)
+ *
  * FORBIDDEN:
- * ❌ hotmart_sales for direct revenue queries
+ * ❌ hotmart_sales
+ * ❌ finance_tracking_view
  * ❌ sales_core_events
  * ❌ total_price_brl
  * ═══════════════════════════════════════════════════════════════════════════════

@@ -67,15 +67,18 @@ export function MonthlyRevenueDetailDialog({
       const pageSize = 1000;
       let hasMore = true;
 
+      const startStr = format(dateRange.start, 'yyyy-MM-dd');
+      const endStr = format(dateRange.end, 'yyyy-MM-dd');
+
       while (hasMore) {
         const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('*')
+          .from('finance_tracking_view')
+          .select('id, project_id, transaction_id, product_name, offer_code, buyer_name, buyer_email, payment_method, gross_amount, hotmart_status, purchase_date, economic_day')
           .eq('project_id', projectId)
-          .gte('sale_date', dateRange.start.toISOString())
-          .lte('sale_date', dateRange.end.toISOString())
-          .in('status', ['APPROVED', 'COMPLETE'])
-          .order('sale_date', { ascending: false })
+          .gte('economic_day', startStr)
+          .lte('economic_day', endStr)
+          .in('hotmart_status', ['APPROVED', 'COMPLETE'])
+          .order('economic_day', { ascending: false })
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) throw error;
@@ -105,7 +108,7 @@ export function MonthlyRevenueDetailDialog({
         };
       }
       acc[key].count++;
-      acc[key].revenue += sale.total_price_brl || sale.total_price || 0;
+      acc[key].revenue += sale.gross_amount || 0;
       return acc;
     }, {} as Record<string, any>);
 
@@ -118,7 +121,7 @@ export function MonthlyRevenueDetailDialog({
   }, [salesData]);
 
   const totalRevenue = useMemo(() => {
-    return salesData?.reduce((sum, sale) => sum + (sale.total_price_brl || sale.total_price || 0), 0) || 0;
+    return salesData?.reduce((sum, sale) => sum + (sale.gross_amount || 0), 0) || 0;
   }, [salesData]);
 
   const totalSales = salesData?.length || 0;
@@ -234,9 +237,9 @@ export function MonthlyRevenueDetailDialog({
                     {salesData.map((sale) => (
                       <TableRow key={sale.id} className="hover:bg-muted/30">
                         <TableCell className="text-sm">
-                          {sale.sale_date
-                            ? format(parseISO(sale.sale_date), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                            : '-'}
+                          {sale.purchase_date
+                            ? format(parseISO(sale.purchase_date), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                            : sale.economic_day || '-'}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
@@ -259,7 +262,7 @@ export function MonthlyRevenueDetailDialog({
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-medium text-orange-400">
-                          {formatCurrency(sale.total_price_brl || sale.total_price || 0)}
+                          {formatCurrency(sale.gross_amount || 0)}
                         </TableCell>
                       </TableRow>
                     ))}

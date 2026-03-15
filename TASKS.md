@@ -25,15 +25,13 @@
 
 ---
 
-## 🔵 Próximo projeto — Migrar componentes com `hotmart_sales`
+## 🔵 Migração `hotmart_sales` — concluído (15/03/2026)
 
-> Ainda leem `hotmart_sales` (tabela legada, 840 de 6.180 pedidos)
-
-- [ ] **`src/components/FullDataSync.tsx`**
-- [ ] **`src/components/launch/LaunchProductsSalesBreakdown.tsx`**
-- [ ] **`src/components/meta/MetaROIDashboard.tsx`**
-- [ ] **`src/components/settings/HotmartCSVImport.tsx`**
-- [ ] **`src/components/analise/AnaliseMensal.tsx`** — verificar se usa `useMonthlyAnalysis` corretamente
+- [x] **`src/components/FullDataSync.tsx`** → `orders` (count + date range via ordered_at)
+- [x] **`src/components/launch/LaunchProductsSalesBreakdown.tsx`** → `finance_tracking_view`
+- [x] **`src/components/meta/MetaROIDashboard.tsx`** → `finance_tracking_view` (paid traffic: meta_campaign_id IS NOT NULL)
+- [x] **`src/components/settings/HotmartCSVImport.tsx`** — mantido em hotmart_sales (atualiza campos de contato, não query financeira; tabela não será dropada)
+- [x] **`src/pages/AnaliseMensal.tsx`** — já OK (usa useMonthlyAnalysis que não toca hotmart_sales)
 
 ---
 

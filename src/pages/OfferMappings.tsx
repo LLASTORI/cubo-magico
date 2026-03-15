@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -120,6 +120,7 @@ export default function OfferMappingsAuto() {
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { navigateTo, navigate } = useProjectNavigation();
   const { currentProject } = useProject();
 
@@ -131,7 +132,7 @@ export default function OfferMappingsAuto() {
       if (!currentProject?.id) return null;
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('is_configured, is_validated')
+        .select('is_configured, is_validated, offers_synced_at')
         .eq('project_id', currentProject.id)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -455,8 +456,16 @@ export default function OfferMappingsAuto() {
         title: 'Sincronização concluída!',
         description: syncResult.message || `${syncResult.synced} novas ofertas, ${syncResult.updated} atualizadas`,
       });
-      
+
+      // Grava offers_synced_at para exibir na UI
+      await supabase
+        .from('project_credentials')
+        .update({ offers_synced_at: new Date().toISOString() })
+        .eq('project_id', currentProject.id)
+        .eq('provider', 'hotmart');
+
       fetchMappings();
+      queryClient.invalidateQueries({ queryKey: ['project_credentials_hotmart', currentProject.id] });
       
     } catch (error: any) {
       console.error('Error syncing offers:', error);
@@ -579,19 +588,26 @@ export default function OfferMappingsAuto() {
                     >
                       Criar Oferta
                     </Button>
-                    <Button 
-                      onClick={syncOffersWithHotmart}
-                      disabled={syncingOffers || mappings.length === 0 || !isHotmartAPIConfigured}
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      {syncingOffers ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RotateCw className="h-4 w-4" />
+                    <div className="flex flex-col items-end gap-1">
+                      <Button
+                        onClick={syncOffersWithHotmart}
+                        disabled={syncingOffers || mappings.length === 0 || !isHotmartAPIConfigured}
+                        variant="outline"
+                        className="gap-2"
+                      >
+                        {syncingOffers ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RotateCw className="h-4 w-4" />
+                        )}
+                        Sincronizar com Hotmart
+                      </Button>
+                      {hotmartCredentials?.offers_synced_at && (
+                        <span className="text-xs text-muted-foreground">
+                          Último sync: {new Date(hotmartCredentials.offers_synced_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       )}
-                      Sincronizar com Hotmart
-                    </Button>
+                    </div>
                   </div>
                 </div>
                 

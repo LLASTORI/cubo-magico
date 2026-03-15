@@ -50,6 +50,9 @@ verify_jwt = false
 [functions.orders-health-check]
 verify_jwt = false
 
+[functions.hotmart-offers-cron]
+verify_jwt = false
+
 # =====================================
 # SOCIAL LISTENING
 # =====================================

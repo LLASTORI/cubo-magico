@@ -1105,7 +1105,24 @@ async function writeOrderShadow(
         ledgerCreatedSuccessfully = true;
         console.log(`[OrdersShadow] Ledger already existed for ${existingIds.size} events - marking as processed`);
       }
-      
+
+      // SAFETY FALLBACK: If no ledger events could be built (empty commissions payload)
+      // for a PURCHASE_APPROVED event, the trigger will never fire and orders.status stays
+      // 'pending' forever. Explicitly approve the order in this case.
+      if (ledgerEventsToCreate.length === 0 && !isDebit) {
+        console.warn(`[OrdersShadow] No ledger events built for ${hotmartEvent} (commissions empty or all blocked). Explicitly setting orders.status = 'approved' as fallback.`);
+        const { error: statusFallbackError } = await supabase
+          .from('orders')
+          .update({ status: 'approved', approved_at: approvedAt || new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', orderId)
+          .neq('status', 'approved'); // Only update if not already approved
+        if (statusFallbackError) {
+          console.error(`[OrdersShadow] Status fallback update failed:`, statusFallbackError);
+        } else {
+          console.log(`[OrdersShadow] Status fallback: order ${orderId} set to approved`);
+        }
+      }
+
       result.ledgerProcessed = ledgerCreatedSuccessfully;
       
       // ============================================

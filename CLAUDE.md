@@ -55,8 +55,10 @@ Hotmart webhook → orders → order_items → ledger_events
 Tabelas:
 - `orders` — pedidos; constraint UNIQUE em `(project_id, provider, provider_order_id)` — chave de idempotência
 - `order_items` — itens por pedido; constraint UNIQUE em `(order_id, provider_product_id, provider_offer_id)`
-- `ledger_events` — decomposição financeira em BRL; rastreia conversão para moedas estrangeiras
+- `ledger_events` — decomposição financeira em BRL; rastreia conversão para moedas estrangeiras; UNIQUE `(order_id, provider_event_id)` (escopo por order, não global)
 - `crm_transactions` — log de eventos CRM (TODOS os status: ABANDONED, DELAYED, CANCELLED, EXPIRED...); ≠ orders que só tem approved. Trigger `detect_auto_recovery` depende dela. **Não dropar.**
+- `system_health_log` — alertas de monitoramento automático (check_type, severity ok/warning/critical, affected_count, details jsonb)
+- `project_credentials` — credenciais Hotmart encriptadas: `client_id_encrypted`, `client_secret_encrypted`, `basic_auth_encrypted`. Nunca ler `client_id`/`client_secret`/`basic_auth` diretamente (são NULL). Usar RPC `get_project_credentials_internal(project_id)` para obter valores descriptografados. Checar presença via `is_configured`/`is_validated`.
 
 **Regras invioláveis:**
 - Nunca fabricar valores financeiros
@@ -75,12 +77,13 @@ Ficam em `supabase/functions/<nome>/index.ts` (Deno). Padrões:
 Domínios principais:
 | Domínio | Funções |
 |---|---|
-| Vendas | `hotmart-webhook`, `hotmart-backfill`, `hotmart-ledger-*` |
+| Vendas | `hotmart-webhook`, `hotmart-products`, `hotmart-offers-cron` |
 | CSV Import | `provider-csv-import` (v2), `provider-csv-import-revert` (v1) |
 | Meta Ads | `meta-insights-cron`, `meta-oauth-*`, `meta-hierarchy-cron` |
 | Quiz/Survey | `quiz-public-*`, `quiz-copilot`, `survey-public` |
 | Automações | `automation-engine`, `whatsapp-webhook`, `evolution-api` |
 | Exports | `export-csv-utf8`, `export-orders-sql`, `export-contacts-sql` |
+| Monitoramento | `orders-health-check` (cron diário 08h UTC), `hotmart-offers-cron` (cron segunda 07h UTC) |
 
 ## Sistema de CSV Import (Hotmart)
 

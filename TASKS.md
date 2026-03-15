@@ -31,16 +31,18 @@
 
 ---
 
-## 🟠 Próxima sessão — CRM (sessão dedicada)
+## 🟠 CRM — concluído (15/03/2026)
 
-> `crm_transactions` tem apenas 840 de 6.180 pedidos. Todos os módulos CRM mostram dados incompletos.
+- [x] **Migrar `useCRMJourneyData` internals para Orders Core** (15/03/2026)
+  - Substituiu queries em `crm_transactions` (840 rows) por `crm_journey_orders_view` (8.455 pedidos)
+  - Interface de saída idêntica — `CustomerJourneyAnalysis.tsx` sem alterações
+  - Funnel resolution agora usa `funnel_id` direto de `order_items`
 
-- [ ] **Migrar `CustomerJourneyAnalysis.tsx` de `useCRMJourneyData` para `useCRMJourneyOrders`**
-  - `useCRMJourneyData` está `@deprecated` — lê `crm_transactions` (legado, 840 rows)
-  - `useCRMJourneyOrders` é o substituto canônico (Orders Core)
-- [ ] **Auditar e limpar tabela `crm_transactions`**
-  - Entender se ainda é populada por algum webhook/processo
-  - Decidir se mantém ou dropa
+- [x] **Auditoria `crm_transactions`** (15/03/2026) — **MANTER, NÃO DROPAR**
+  - Ainda ativa: webhook escreve eventos de TODOS os status (ABANDONED, DELAYED, CANCELLED...)
+  - Trigger `detect_auto_recovery` depende dela para detectar recuperação de clientes
+  - `canonical_sale_events` view usa crm_transactions para plataformas não-Hotmart
+  - Propósito: log de eventos CRM (todos os status) vs orders = registro financeiro (approved only)
 
 ---
 
@@ -100,6 +102,11 @@
 ---
 
 ## ✅ Concluído
+
+### 🗂️ CRM Journey Migration (15/03/2026 — sessão 5)
+- [x] Deploy bloco completo: git push (7 commits), hotmart-webhook redeploy, 4 edge functions órfãs deletadas
+- [x] `useCRMJourneyData` internals migrados de `crm_transactions` → `crm_journey_orders_view` (Orders Core)
+- [x] Auditoria `crm_transactions` — decisão: MANTER (log CRM + trigger detect_auto_recovery)
 
 ### 🔬 Fixes de Funis — FUNNEL_FIXES_SPEC.md (14/03/2026 — sessão 4)
 - [x] Fix 1: `MonthlyRevenueDetailDialog.tsx` — migrado `hotmart_sales` → `finance_tracking_view` (6.255 pedidos)

@@ -40,9 +40,10 @@
 - [x] **Correção estrutural: desacoplar `order_items` de `ledger_events` no webhook** (15/03/2026)
   - Erro em `createOrderItemsFromWebhook` agora é non-fatal (result.itemsError + warn, sem return)
 
-- [ ] **Segurança: criptografar `basic_auth` e `client_id` em `project_credentials`**
-  - Hoje só `client_secret` é criptografado
-  - `basic_auth` = Base64(client_id:client_secret) em texto puro — risco real
+- [x] **Segurança: criptografar `basic_auth` e `client_id` em `project_credentials`** (15/03/2026)
+  - `basic_auth` já estava encriptado (migration anterior)
+  - `client_id`: backfill 6 rows → client_id_encrypted, trigger atualizado, RPC atualizado
+  - 0 campos sensíveis em plaintext em project_credentials ✅
 
 - [ ] **Sync automático de ofertas Hotmart (cron semanal)**
   - Criar cron no Supabase → `hotmart-products` (action=sync-offers)

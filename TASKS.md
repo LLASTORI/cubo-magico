@@ -1,33 +1,12 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 14/03/2026 — sessão 4
+> Última atualização: 15/03/2026 — sessão 6
 
 ---
 
 ## 🚨 Emergência
-> Nenhuma. Pipeline de vendas 100% restaurado. ✅
-
----
-
-## 🔴 Deploy pendente — Próxima sessão começa aqui
-
-> Código commitado mas **não deployado**. O front está desatualizado.
-
-- [ ] **`git push origin main`** — 6 commits aguardando push
-  - Vercel fará auto-deploy ao receber o push
-  - Inclui: decommission `sales_core_events`, fix `MonthlyRevenueDetailDialog`, fix `CuboMagicoDashboard`
-
-- [ ] **Redeploy `hotmart-webhook`** via CLI ou Cursor
-  - `supabase functions deploy hotmart-webhook`
-  - Hoje roda v31 (código antigo com `writeSalesCoreEvent` em try/catch)
-  - Webhook está funcional (200s), mas tem código morto que tenta escrever em tabela dropada
-  - **Não urgente** — não quebra vendas, só gera log de erro interno
-
-- [ ] **Remover edge functions órfãs do Supabase** (deletadas localmente, ainda ACTIVE na plataforma)
-  - `hotmart-backfill`, `hotmart-ledger-brl-backfill`, `hotmart-backfill-14d`, `csv-ledger-v21-import`
-  - Via dashboard Supabase → Edge Functions → Delete
-  - Não causam problema, são apenas lixo
+> Nenhuma. Pipeline de vendas 100% restaurado. Race condition de coprodução corrigida. ✅
 
 ---
 
@@ -102,6 +81,14 @@
 ---
 
 ## ✅ Concluído
+
+### 🐛 Race condition coprodução + CRM fixes (15/03/2026 — sessão 6)
+- [x] `UNIQUE(provider_event_id)` global → `UNIQUE(order_id, provider_event_id)` — fix para produtos com coprodução
+- [x] Webhook: dedup check escopo ao `order_id` (evita falso positivo cross-project)
+- [x] Webhook: fallback de status `approved` quando ledger vazio + credit event
+- [x] Backfill HP3453704060 — 2 ledger_events + ledger_status=complete
+- [x] CRM aba Transações — `crm_orders_view` currency fix + NOTIFY pgrst schema reload
+- [x] CRM pipeline filters — `last_transaction_date` → `last_purchase_at` (campo real do DB)
 
 ### 🗂️ CRM Journey Migration (15/03/2026 — sessão 5)
 - [x] Deploy bloco completo: git push (7 commits), hotmart-webhook redeploy, 4 edge functions órfãs deletadas

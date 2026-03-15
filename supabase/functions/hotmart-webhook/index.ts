@@ -1062,6 +1062,7 @@ async function writeOrderShadow(
         const { data: existingEvents, error: checkError } = await supabase
           .from('ledger_events')
           .select('provider_event_id')
+          .eq('order_id', orderId)  // Scoped to this order — prevents cross-project false positives (coprodução)
           .in('provider_event_id', allProviderEventIds);
         
         if (checkError) {

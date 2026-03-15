@@ -10,6 +10,11 @@
 
 ---
 
+### [2026-03-15] Desacoplamento order_items / ledger_events — ✅ CORRIGIDO (sessão 6)
+- **Problema:** falha em `order_items` (constraint, timeout) abortava o webhook antes de criar ledger_events → pedido aprovado sumia dos relatórios silenciosamente.
+- **Fix:** erro em `createOrderItemsFromWebhook` agora é non-fatal: logado em `result.itemsError` + warn no caller, execução continua para criação de ledger_events.
+- Sem migration necessária — mudança apenas no código do webhook.
+
 ### [2026-03-15] Race condition coprodução em ledger_events — ✅ CORRIGIDO (sessão 6)
 - **Causa raiz:** `UNIQUE(provider_event_id)` global em `ledger_events`. Produtos com coprodução disparam webhooks para 2 projetos (produtor + coprodutor) simultaneamente. Ambos geram `{txId}_platform_fee_platform`. O segundo a inserir recebia 23505 e abortava sem criar `sale_producer` → order sem ledger → invisível nos relatórios financeiros.
 - **Fix 1 — Schema:** Migration `20260315220001` troca `UNIQUE(provider_event_id)` → `UNIQUE(order_id, provider_event_id)`. Cada projeto tem seu order_id, pode ter seus próprios eventos.

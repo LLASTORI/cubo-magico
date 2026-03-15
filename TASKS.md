@@ -39,9 +39,8 @@
 
 ## 🟡 Importante — Mas não urgente
 
-- [ ] **Correção estrutural: desacoplar `order_items` de `ledger_events` no webhook**
-  - Falha em `order_items` não deve abortar criação do ledger
-  - Refatorar `hotmart-webhook/index.ts` ~linha 844
+- [x] **Correção estrutural: desacoplar `order_items` de `ledger_events` no webhook** (15/03/2026)
+  - Erro em `createOrderItemsFromWebhook` agora é non-fatal (result.itemsError + warn, sem return)
 
 - [ ] **Segurança: criptografar `basic_auth` e `client_id` em `project_credentials`**
   - Hoje só `client_secret` é criptografado

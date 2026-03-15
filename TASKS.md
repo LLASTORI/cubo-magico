@@ -50,9 +50,10 @@
   - Criar cron no Supabase → `hotmart-products` (action=sync-offers)
   - Exibir data do último sync na UI
 
-- [ ] **Criar alerta automático para orders sem ledger**
-  - Cron SQL simples ou trigger no Supabase
-  - Backfill massivo já executado (15/03): zero orders stuck no momento
+- [x] **Criar alerta automático para orders sem ledger** (15/03/2026)
+  - Edge function `orders-health-check` + cron diário 08:00 UTC
+  - Registra em `system_health_log` com severity ok/warning/critical
+  - Teste: severity=ok, affected_count=0 ✅
 
 ---
 
@@ -81,6 +82,12 @@
 ---
 
 ## ✅ Concluído
+
+### 🔔 Alerta automático orders sem ledger (15/03/2026 — sessão 7)
+- [x] Edge function `orders-health-check` ACTIVE (v3)
+- [x] `system_health_log` table + `v_orders_without_ledger` view
+- [x] Cron `orders-health-check-daily` — 08:00 UTC via pg_cron + pg_net
+- [x] Teste: severity=ok, affected_count=0
 
 ### 💰 Backfill massivo ledger_events (15/03/2026 — sessão 6)
 - [x] 674 orders approved sem ledger em 6 projetos → ~R$130.000 recuperados nos relatórios

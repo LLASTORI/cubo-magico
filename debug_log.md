@@ -5,10 +5,18 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-15 (sessão 6)
-- **Status geral:** Race condition de coprodução corrigida ✅, CRM Transações fix ✅, pipeline filters fix ✅
+- **Data:** 2026-03-15 (sessão 7)
+- **Status geral:** Race condition de coprodução corrigida ✅, CRM Transações fix ✅, pipeline filters fix ✅, alerta automático orders sem ledger ✅
 
 ---
+
+### [2026-03-15] Alerta automático orders sem ledger — ✅ CONCLUÍDO (sessão 7)
+- **Edge function:** `orders-health-check` (v3 ACTIVE) — detecta orders approved >2h sem ledger_events
+- **Log:** insere em `system_health_log` com severity=ok/warning/critical e detalhes por projeto
+- **Cron:** pg_cron `orders-health-check-daily` — todo dia às 08:00 UTC via `net.http_post`
+- **Teste:** `severity=ok, affected_count=0` ✅ — pipeline limpo
+- **Migration:** `20260315240000_system_health_log_and_view.sql`
+- **Observação:** view no DB foi criada na sessão anterior com colunas diferentes (customer_paid/hours_since_approval) — migration atualizada para refletir schema real
 
 ### [2026-03-15] Backfill massivo ledger_events — ✅ CONCLUÍDO (sessão 6)
 - **Descoberta:** 674 orders approved em 6 projetos sem ledger_events → ~R$130.000 invisíveis nos relatórios

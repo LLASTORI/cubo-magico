@@ -47,6 +47,9 @@ verify_jwt = false
 [functions.meta-insights-cron]
 verify_jwt = false
 
+[functions.orders-health-check]
+verify_jwt = false
+
 # =====================================
 # SOCIAL LISTENING
 # =====================================

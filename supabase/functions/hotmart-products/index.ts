@@ -202,10 +202,10 @@ async function getCredentials(supabase: any, projectId: string): Promise<Hotmart
 
   const hotmartCred = data?.find((c: any) => c.provider === 'hotmart')
 
-  // Also check encrypted column presence directly from table
+  // Also check encrypted column presence directly from table (fallback)
   const { data: rawCred, error: rawCredError } = await supabase
     .from('project_credentials')
-    .select('client_id, client_secret_encrypted, basic_auth_encrypted')
+    .select('client_id_encrypted, client_secret_encrypted, basic_auth_encrypted')
     .eq('project_id', projectId)
     .eq('provider', 'hotmart')
     .maybeSingle()
@@ -215,7 +215,7 @@ async function getCredentials(supabase: any, projectId: string): Promise<Hotmart
     throw new Error(`Erro ao verificar credenciais: ${rawCredError.message}`)
   }
 
-  const hasClientId = hotmartCred?.client_id || rawCred?.client_id
+  const hasClientId = hotmartCred?.client_id || rawCred?.client_id_encrypted
   const hasSecret = hotmartCred?.client_secret || rawCred?.client_secret_encrypted
   const hasBasic = hotmartCred?.basic_auth || rawCred?.basic_auth_encrypted
 

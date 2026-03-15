@@ -62,7 +62,7 @@ export function QuickSyncButton({
       if (!projectId) return null;
       const { data } = await supabase
         .from('project_credentials')
-        .select('client_id, client_secret')
+        .select('is_configured, is_validated')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -88,7 +88,7 @@ export function QuickSyncButton({
   });
 
   const hasMetaConnection = !!metaCredentials?.access_token && (metaAccounts?.length || 0) > 0;
-  const hasHotmartConnection = !!(hotmartCredentials?.client_id && hotmartCredentials?.client_secret);
+  const hasHotmartConnection = !!(hotmartCredentials?.is_configured || hotmartCredentials?.is_validated);
   const hasAnyConnection = hasMetaConnection || hasHotmartConnection;
 
   const handleSync = async (forceRefresh: boolean = false, days: number = 90) => {

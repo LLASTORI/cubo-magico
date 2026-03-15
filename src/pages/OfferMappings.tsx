@@ -131,7 +131,7 @@ export default function OfferMappingsAuto() {
       if (!currentProject?.id) return null;
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('client_id')
+        .select('is_configured, is_validated')
         .eq('project_id', currentProject.id)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -141,8 +141,8 @@ export default function OfferMappingsAuto() {
     enabled: !!currentProject?.id,
   });
 
-  // API is available if client_id is configured (NO OAuth required for products API)
-  const isHotmartAPIConfigured = !!hotmartCredentials?.client_id;
+  // API is available if credentials are configured (NO OAuth required for products API)
+  const isHotmartAPIConfigured = !!(hotmartCredentials?.is_configured || hotmartCredentials?.is_validated);
 
   useEffect(() => {
     if (!currentProject) {

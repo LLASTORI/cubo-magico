@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
     // Check encrypted field presence directly from table (without returning values)
     const { data: rawCred, error: rawCredError } = await supabase
       .from('project_credentials')
-      .select('client_id, client_secret_encrypted, basic_auth_encrypted')
+      .select('client_id_encrypted, client_secret_encrypted, basic_auth_encrypted')
       .eq('project_id', projectId)
       .eq('provider', 'hotmart')
       .maybeSingle();
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const hasClientId = hotmartCreds.client_id || rawCred?.client_id;
+    const hasClientId = hotmartCreds.client_id || rawCred?.client_id_encrypted;
     const hasClientSecret = hotmartCreds.client_secret || rawCred?.client_secret_encrypted;
     const hasBasicAuth = hotmartCreds.basic_auth || rawCred?.basic_auth_encrypted;
 

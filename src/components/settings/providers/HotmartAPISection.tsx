@@ -55,7 +55,7 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('project_credentials')
-        .select('client_id, is_configured, is_validated, validated_at, updated_at')
+        .select('is_configured, is_validated, validated_at, updated_at')
         .eq('project_id', projectId)
         .eq('provider', 'hotmart')
         .maybeSingle();
@@ -67,22 +67,15 @@ export function HotmartAPISection({ projectId }: HotmartAPISectionProps) {
 
   // Only sync credentials from backend on INITIAL load
   useEffect(() => {
-    if (hotmartCredentials && !hasInitialized) {
-      setCredentials({
-        client_id: hotmartCredentials.client_id || '',
-        client_secret: '', // NEVER populate secret from DB - security
-        basic_auth: ''
-      });
-      setHasInitialized(true);
-    } else if (!hotmartCredentials && !hasInitialized) {
+    if (!hasInitialized) {
       setCredentials({ client_id: '', client_secret: '', basic_auth: '' });
       setHasInitialized(true);
     }
   }, [hotmartCredentials, hasInitialized]);
 
-  const isConfigured = !!hotmartCredentials?.client_id;
+  const isConfigured = !!hotmartCredentials?.is_configured;
   const isValidated = hotmartCredentials?.is_validated;
-  const hasCredentialsInDB = !!hotmartCredentials?.client_id;
+  const hasCredentialsInDB = !!hotmartCredentials?.is_configured;
 
   // Save credentials - All 3 fields are required for first setup
   const handleSave = async () => {

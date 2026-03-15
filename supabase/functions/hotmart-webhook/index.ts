@@ -540,8 +540,8 @@ async function writeOrderShadow(
   ownerNetRevenue: number | null,
   ownerNetRevenueBrl: number | null, // NEW: BRL converted value for producer
   contactId: string | null
-): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number; ledgerProcessed: boolean; brlUpdated: boolean; errorMessage?: string | null; ignoredReason?: string | null }> {
-  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false, errorMessage: null as string | null, ignoredReason: null as string | null };
+): Promise<{ orderId: string | null; itemsCreated: number; eventsCreated: number; ledgerProcessed: boolean; brlUpdated: boolean; errorMessage?: string | null; itemsError?: string | null; ignoredReason?: string | null }> {
+  const result = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false, errorMessage: null as string | null, itemsError: null as string | null, ignoredReason: null as string | null };
   
   try {
     const data = payload?.data;
@@ -819,9 +819,12 @@ async function writeOrderShadow(
       result.itemsCreated = upsertedCount;
       console.log(`[OrdersShadow] Upserted ${upsertedCount} order item(s) for order ${orderId}`);
     } catch (itemsError) {
-      console.error('[OrdersShadow] Error creating order items:', itemsError);
-      result.errorMessage = itemsError instanceof Error ? itemsError.message : 'Order items creation failed';
-      return result;
+      // NON-FATAL: order_items failure must NOT abort ledger creation.
+      // Ledger events are the financial source of truth — they must be created
+      // independently of order_items. A failed item upsert is recoverable;
+      // a missing ledger event causes the order to disappear from all reports.
+      console.error('[OrdersShadow] Error creating order items (non-fatal, continuing to ledger):', itemsError);
+      result.itemsError = itemsError instanceof Error ? itemsError.message : 'Order items creation failed';
     }
 
     for (const item of orderItemsUpserted) {
@@ -2293,7 +2296,7 @@ projectId = projectIdFromUrl;
     // Duplicate data to new canonical structure
     // OPTIONAL/NON-BLOCKING: must never fail the main ingestion flow
     // =====================================================
-    let ordersShadowResult = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false };
+    let ordersShadowResult = { orderId: null as string | null, itemsCreated: 0, eventsCreated: 0, ledgerProcessed: false, brlUpdated: false, itemsError: null as string | null };
     let ordersShadowPipelineStatus: 'ok' | 'failed' = 'ok';
 
     try {
@@ -2322,6 +2325,11 @@ projectId = projectIdFromUrl;
         providerEventStatus = 'error';
         providerEventErrorMessage = providerEventErrorMessage || `[OrdersShadow] ${ordersShadowResult.errorMessage}`;
         console.error('[OrdersShadow] Non-blocking error:', ordersShadowResult.errorMessage);
+      }
+
+      if (ordersShadowResult.itemsError) {
+        // order_items failed but ledger proceeded — log for visibility, not a pipeline failure
+        console.warn('[OrdersShadow] order_items error (non-fatal, ledger continued):', ordersShadowResult.itemsError);
       }
 
       if (ordersShadowResult.ignoredReason === 'debit_without_sale') {

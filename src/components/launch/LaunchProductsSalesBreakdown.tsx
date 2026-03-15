@@ -75,13 +75,13 @@ export const LaunchProductsSalesBreakdown = ({
       if (offerCodes.length === 0) return [];
 
       const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('*')
+        .from('finance_tracking_view')
+        .select('offer_code, purchase_date, gross_amount, hotmart_status')
         .eq('project_id', projectId)
         .in('offer_code', offerCodes)
-        .gte('sale_date', startInBrazil.toISOString())
-        .lte('sale_date', endInBrazil.toISOString())
-        .in('status', ['APPROVED', 'COMPLETE']);
+        .gte('purchase_date', startInBrazil.toISOString())
+        .lte('purchase_date', endInBrazil.toISOString())
+        .in('hotmart_status', ['APPROVED', 'COMPLETE']);
 
       if (error) throw error;
       return data || [];
@@ -93,7 +93,7 @@ export const LaunchProductsSalesBreakdown = ({
   const productBreakdown = useMemo(() => {
     if (launchProducts.length === 0) return [];
 
-    const totalRevenue = salesData.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const totalRevenue = salesData.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
     const totalSales = salesData.length;
 
     // Group by lot_name first, then by product_type
@@ -124,7 +124,7 @@ export const LaunchProductsSalesBreakdown = ({
 
       const offerCode = offerMapping.codigo_oferta;
       const productSales = salesData.filter(s => s.offer_code === offerCode);
-      const revenue = productSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+      const revenue = productSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
       const salesCount = productSales.length;
 
       if (!lotGroups[lotName]) {

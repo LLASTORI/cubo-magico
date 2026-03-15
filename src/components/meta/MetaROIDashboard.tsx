@@ -118,16 +118,16 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
       const endTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
       
       let query = supabase
-        .from('hotmart_sales')
-        .select('sale_date, total_price, total_price_brl, net_revenue, status, sale_attribution_type')
+        .from('finance_tracking_view')
+        .select('purchase_date, gross_amount, net_amount, hotmart_status, meta_campaign_id')
         .eq('project_id', projectId)
-        .gte('sale_date', startTimestamp)
-        .lte('sale_date', endTimestamp)
-        .in('status', ['COMPLETE', 'APPROVED']);
-      
-      // Filter by paid traffic if enabled
+        .gte('purchase_date', startTimestamp)
+        .lte('purchase_date', endTimestamp)
+        .in('hotmart_status', ['COMPLETE', 'APPROVED']);
+
+      // Filter by paid traffic: orders with Meta campaign attribution
       if (paidTrafficOnly) {
-        query = query.in('sale_attribution_type', ['paid_tracked', 'paid_untracked']);
+        query = query.not('meta_campaign_id', 'is', null);
       }
       
       const { data, error } = await query;
@@ -154,13 +154,12 @@ export const MetaROIDashboard = ({ projectId, activeAccountIds, startDate, endDa
     // Group Hotmart revenue by date
     const revenueByDate: Record<string, { revenue: number; sales: number }> = {};
     safeHotmartSales.forEach(sale => {
-      if (!sale.sale_date) return;
-      const date = sale.sale_date.split('T')[0];
+      if (!sale.purchase_date) return;
+      const date = sale.purchase_date.split('T')[0];
       if (!revenueByDate[date]) {
         revenueByDate[date] = { revenue: 0, sales: 0 };
       }
-      // Use total_price_brl (converted) or fallback to total_price
-      revenueByDate[date].revenue += sale.total_price_brl || sale.total_price || sale.net_revenue || 0;
+      revenueByDate[date].revenue += sale.gross_amount || sale.net_amount || 0;
       revenueByDate[date].sales += 1;
     });
 

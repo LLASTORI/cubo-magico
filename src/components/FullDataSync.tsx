@@ -129,25 +129,28 @@ export function FullDataSync() {
         .order('date_start', { ascending: false })
         .limit(1);
 
-      // Count Hotmart sales
+      // Count orders (Orders Core)
       const { count: hotmartCount } = await supabase
-        .from('hotmart_sales')
+        .from('orders')
         .select('*', { count: 'exact', head: true })
-        .eq('project_id', projectId);
-
-      // Get Hotmart date range
-      const { data: hotmartDates } = await supabase
-        .from('hotmart_sales')
-        .select('sale_date')
         .eq('project_id', projectId)
-        .order('sale_date', { ascending: true })
+        .in('status', ['approved', 'complete']);
+
+      // Get orders date range
+      const { data: hotmartDates } = await supabase
+        .from('orders')
+        .select('ordered_at')
+        .eq('project_id', projectId)
+        .in('status', ['approved', 'complete'])
+        .order('ordered_at', { ascending: true })
         .limit(1);
 
       const { data: hotmartDatesMax } = await supabase
-        .from('hotmart_sales')
-        .select('sale_date')
+        .from('orders')
+        .select('ordered_at')
         .eq('project_id', projectId)
-        .order('sale_date', { ascending: false })
+        .in('status', ['approved', 'complete'])
+        .order('ordered_at', { ascending: false })
         .limit(1);
 
       return {
@@ -155,8 +158,8 @@ export function FullDataSync() {
         metaMinDate: metaDates?.[0]?.date_start,
         metaMaxDate: metaDatesMax?.[0]?.date_start,
         hotmartCount: hotmartCount || 0,
-        hotmartMinDate: hotmartDates?.[0]?.sale_date,
-        hotmartMaxDate: hotmartDatesMax?.[0]?.sale_date,
+        hotmartMinDate: hotmartDates?.[0]?.ordered_at,
+        hotmartMaxDate: hotmartDatesMax?.[0]?.ordered_at,
       };
     },
     enabled: !!projectId,

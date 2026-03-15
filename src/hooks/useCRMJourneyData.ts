@@ -239,71 +239,41 @@ export function useCRMJourneyData(filters: CRMFilters) {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch all transactions for the project
-  const { data: transactionsData, isLoading: loadingTransactions } = useQuery({
-    queryKey: ['crm-transactions', projectId, statusFilter],
+  // Fetch all orders for the project via Orders Core (replaces crm_transactions)
+  interface OrdersViewRow {
+    order_id: string;
+    contact_id: string | null;
+    provider: string;
+    provider_order_id: string;
+    main_product_name: string | null;
+    main_funnel_id: string | null;
+    customer_paid: number;
+    status: string;
+    ordered_at: string;
+  }
+
+  const { data: ordersViewData, isLoading: loadingOrders } = useQuery({
+    queryKey: ['crm-journey-orders-view', projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      
-      const allTransactions: CRMTransaction[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
 
-      while (hasMore) {
-        let query = supabase
-          .from('crm_transactions')
-          .select('id, contact_id, platform, external_id, product_name, offer_code, total_price_brl, status, transaction_date, funnel_id')
-          .eq('project_id', projectId);
-        
-        if (statusFilter.length > 0) {
-          const statusValuesForQuery = statusFilter.flatMap((s) => [s, s.toLowerCase()]);
-          query = query.in('status', statusValuesForQuery);
-        }
-        
-        const { data, error } = await query
-          .order('transaction_date', { ascending: true })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allTransactions.push(...(data as CRMTransaction[]));
-          hasMore = data.length === pageSize;
-          page++;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      return allTransactions;
-    },
-    enabled: !!projectId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Fetch all transactions for breakdown (no status filter)
-  const { data: allTransactionsForBreakdown, isLoading: loadingBreakdown } = useQuery({
-    queryKey: ['crm-all-transactions-breakdown', projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      
-      const allTransactions: { status: string; contact_id: string; product_name: string; offer_code: string | null; platform: string }[] = [];
+      const allOrders: OrdersViewRow[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('crm_transactions')
-          .select('status, contact_id, product_name, offer_code, platform')
+          .from('crm_journey_orders_view')
+          .select('order_id, contact_id, provider, provider_order_id, main_product_name, main_funnel_id, customer_paid, status, ordered_at')
           .eq('project_id', projectId)
+          .order('ordered_at', { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) throw error;
-        
+
         if (data && data.length > 0) {
-          allTransactions.push(...data);
+          allOrders.push(...(data as OrdersViewRow[]));
           hasMore = data.length === pageSize;
           page++;
         } else {
@@ -311,11 +281,46 @@ export function useCRMJourneyData(filters: CRMFilters) {
         }
       }
 
-      return allTransactions;
+      return allOrders;
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Map orders view to CRMTransaction shape (applies status filter)
+  const transactionsData = useMemo((): CRMTransaction[] => {
+    if (!ordersViewData) return [];
+    const filtered = statusFilter.length > 0
+      ? ordersViewData.filter(o =>
+          statusFilter.some(s => s.toLowerCase() === (o.status || '').toLowerCase())
+        )
+      : ordersViewData;
+    return filtered.map(o => ({
+      id: o.order_id,
+      contact_id: o.contact_id ?? '',
+      platform: o.provider,
+      external_id: o.provider_order_id,
+      product_name: o.main_product_name ?? 'Unknown',
+      offer_code: null,
+      total_price_brl: Number(o.customer_paid) || 0,
+      status: (o.status || 'approved').toUpperCase(),
+      transaction_date: o.ordered_at,
+      funnel_id: o.main_funnel_id ?? null,
+    }));
+  }, [ordersViewData, statusFilter]);
+
+  // Derive unfiltered breakdown data from orders (replaces crm-all-transactions-breakdown query)
+  const allTransactionsForBreakdown = useMemo(() => {
+    if (!ordersViewData) return [];
+    return ordersViewData.map(o => ({
+      status: (o.status || 'approved').toUpperCase(),
+      contact_id: o.contact_id ?? '',
+      product_name: o.main_product_name ?? 'Unknown',
+      offer_code: null as string | null,
+      platform: o.provider,
+      funnel_id: o.main_funnel_id ?? null,
+    }));
+  }, [ordersViewData]);
 
   // Fetch all contacts for breakdown (contact-level stats)
   const { data: allContactsForBreakdown, isLoading: loadingContactsBreakdown } = useQuery({
@@ -595,9 +600,9 @@ export function useCRMJourneyData(filters: CRMFilters) {
       (key) => key
     );
 
-    // Funnel breakdown
+    // Funnel breakdown (uses funnel_id from order_items, falls back to offer_mappings)
     const funnelBreakdown = createBreakdown(
-      (t) => t.offer_code ? offerToFunnel.get(t.offer_code) || null : null,
+      (t) => (t as any).funnel_id || (t.offer_code ? offerToFunnel.get(t.offer_code) || null : null),
       (key) => funnelNames.get(key) || key
     );
 
@@ -711,7 +716,8 @@ export function useCRMJourneyData(filters: CRMFilters) {
       });
 
       const firstTransaction = sortedTransactions[0];
-      const entryFunnelId = firstTransaction?.offer_code ? offerToFunnel.get(firstTransaction.offer_code) || null : null;
+      const entryFunnelId = firstTransaction?.funnel_id
+        || (firstTransaction?.offer_code ? offerToFunnel.get(firstTransaction.offer_code) || null : null);
       const entryFunnelName = entryFunnelId ? funnelNames.get(entryFunnelId) || null : null;
 
       // Apply date filter on first purchase date
@@ -769,10 +775,11 @@ export function useCRMJourneyData(filters: CRMFilters) {
         transactionId: t.external_id || t.id,
         productName: t.product_name,
         offerCode: t.offer_code || '',
-        funnelId: t.offer_code ? offerToFunnel.get(t.offer_code) || null : null,
-        funnelName: t.offer_code && offerToFunnel.get(t.offer_code) 
-          ? funnelNames.get(offerToFunnel.get(t.offer_code)!) || null 
-          : null,
+        funnelId: t.funnel_id || (t.offer_code ? offerToFunnel.get(t.offer_code) || null : null),
+        funnelName: (t.funnel_id && funnelNames.get(t.funnel_id))
+          || (t.offer_code && offerToFunnel.get(t.offer_code)
+            ? funnelNames.get(offerToFunnel.get(t.offer_code)!) || null
+            : null),
         saleDate: new Date(t.transaction_date || 0),
         totalPrice: t.total_price_brl || 0,
         status: t.status,
@@ -958,7 +965,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
     contactStatusBreakdown: breakdowns.contactStatusBreakdown,
     platformBreakdown: breakdowns.platformBreakdown,
     pageBreakdown: breakdowns.pageBreakdown,
-    isLoading: loadingContacts || loadingTransactions || loadingMappings || loadingFunnels,
-    isLoadingBreakdown: loadingBreakdown || loadingContactsBreakdown,
+    isLoading: loadingContacts || loadingOrders || loadingMappings || loadingFunnels,
+    isLoadingBreakdown: loadingContactsBreakdown,
   };
 }

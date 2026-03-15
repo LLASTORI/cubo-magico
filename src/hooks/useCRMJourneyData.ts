@@ -751,7 +751,7 @@ export function useCRMJourneyData(filters: CRMFilters) {
       if (targetFilter) {
         for (let i = 0; i < sortedTransactions.length; i++) {
           const t = sortedTransactions[i];
-          const tFunnelId = t.offer_code ? offerToFunnel.get(t.offer_code) || null : null;
+          const tFunnelId = t.funnel_id || (t.offer_code ? offerToFunnel.get(t.offer_code) || null : null);
           
           if (targetFilter.type === 'product' && targetFilter.values.includes(t.product_name)) {
             hasTargetProduct = true;

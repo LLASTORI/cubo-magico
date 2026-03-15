@@ -56,6 +56,7 @@ Tabelas:
 - `orders` — pedidos; constraint UNIQUE em `(project_id, provider, provider_order_id)` — chave de idempotência
 - `order_items` — itens por pedido; constraint UNIQUE em `(order_id, provider_product_id, provider_offer_id)`
 - `ledger_events` — decomposição financeira em BRL; rastreia conversão para moedas estrangeiras
+- `crm_transactions` — log de eventos CRM (TODOS os status: ABANDONED, DELAYED, CANCELLED, EXPIRED...); ≠ orders que só tem approved. Trigger `detect_auto_recovery` depende dela. **Não dropar.**
 
 **Regras invioláveis:**
 - Nunca fabricar valores financeiros

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 14/03/2026 — sessão 3
+> Última atualização: 14/03/2026 — sessão 4
 
 ---
 
@@ -10,48 +10,49 @@
 
 ---
 
-## 🔴 Prioridade Alta — Correções de Funis (próxima sessão)
+## 🔴 Deploy pendente — Próxima sessão começa aqui
 
-> Ver spec completo em `docs/FUNNEL_FIXES_SPEC.md`
+> Código commitado mas **não deployado**. O front está desatualizado.
 
-- [x] **Fix `CuboMagicoDashboard.tsx` — migrar de `finance_tracking_view` para `funnel_orders_view`** ✅
-  - Dashboard já usava `funnel_orders_view` via `useFunnelData` — dados corretos
-  - `offer_code` em `UnifiedSale` é populado de `main_offer_code` (= `provider_offer_id`) — join funciona
-  - Fix: comentário do header corrigido (removida referência a `finance_tracking_view`)
+- [ ] **`git push origin main`** — 6 commits aguardando push
+  - Vercel fará auto-deploy ao receber o push
+  - Inclui: decommission `sales_core_events`, fix `MonthlyRevenueDetailDialog`, fix `CuboMagicoDashboard`
 
-- [x] **Fix `MonthlyRevenueDetailDialog.tsx` — remover query em `hotmart_sales`** ✅
-  - Migrado para `finance_tracking_view` com paginação — agora mostra todos os 6.255 registros
+- [ ] **Redeploy `hotmart-webhook`** via CLI ou Cursor
+  - `supabase functions deploy hotmart-webhook`
+  - Hoje roda v31 (código antigo com `writeSalesCoreEvent` em try/catch)
+  - Webhook está funcional (200s), mas tem código morto que tenta escrever em tabela dropada
+  - **Não urgente** — não quebra vendas, só gera log de erro interno
 
-- [ ] **Fix `useCRMJourneyData.ts` — migrar CRM para ledger-first** ⚠️ Adiado — problema maior
-  - `crm_transactions` tem apenas 840 de 6.180 pedidos (legado = hotmart_sales)
-  - Hook já tem @deprecated; substituto é `useCRMJourneyOrders` (Orders Core)
-  - `CustomerJourneyAnalysis.tsx` precisa migrar para `useCRMJourneyOrders`
-  - Tratar em sessão dedicada ao CRM — tem muito mais para limpar lá
-
-- [x] **Fix `useMonthlyAnalysis.ts` — já migrado** ✅
-  - Hook já usava `finance_tracking_view` com `economic_day` + `gross_amount` corretos
-  - Spec baseada em análise desatualizada — nenhuma ação necessária
+- [ ] **Remover edge functions órfãs do Supabase** (deletadas localmente, ainda ACTIVE na plataforma)
+  - `hotmart-backfill`, `hotmart-ledger-brl-backfill`, `hotmart-backfill-14d`, `csv-ledger-v21-import`
+  - Via dashboard Supabase → Edge Functions → Delete
+  - Não causam problema, são apenas lixo
 
 ---
 
-## 🔵 Próximo projeto — Migração Analytics para ledger-first
+## 🟠 Próxima sessão — CRM (sessão dedicada)
 
-> **Por que é importante:** vendas importadas via CSV não aparecem nos Funis, Análise Mensal e Insights enquanto esses módulos ainda lerem `sales_core_events` ou tabelas legadas.
+> `crm_transactions` tem apenas 840 de 6.180 pedidos. Todos os módulos CRM mostram dados incompletos.
 
-- [ ] **Migrar `AnaliseMensal.tsx` para novos dados**
-  - Depende do fix de `useMonthlyAnalysis.ts` acima
+- [ ] **Migrar `CustomerJourneyAnalysis.tsx` de `useCRMJourneyData` para `useCRMJourneyOrders`**
+  - `useCRMJourneyData` está `@deprecated` — lê `crm_transactions` (legado, 840 rows)
+  - `useCRMJourneyOrders` é o substituto canônico (Orders Core)
+- [ ] **Auditar e limpar tabela `crm_transactions`**
+  - Entender se ainda é populada por algum webhook/processo
+  - Decidir se mantém ou dropa
 
-- [ ] **Migrar demais componentes com queries em `hotmart_sales`**
-  - `src/components/FullDataSync.tsx`
-  - `src/components/launch/LaunchProductsSalesBreakdown.tsx`
-  - `src/components/meta/MetaROIDashboard.tsx`
-  - `src/components/settings/HotmartCSVImport.tsx`
+---
 
-- [x] **Remover `writeSalesCoreEvent()` do webhook** ✅
-- [x] **Decommission final de `sales_core_events`** ✅
-  - Tabela dropada via migration
-  - Edge functions `hotmart-backfill`, `hotmart-ledger-brl-backfill`, `hotmart-backfill-14d`, `csv-ledger-v21-import` removidas
-  - `HotmartBackfillSection.tsx` removido
+## 🔵 Próximo projeto — Migrar componentes com `hotmart_sales`
+
+> Ainda leem `hotmart_sales` (tabela legada, 840 de 6.180 pedidos)
+
+- [ ] **`src/components/FullDataSync.tsx`**
+- [ ] **`src/components/launch/LaunchProductsSalesBreakdown.tsx`**
+- [ ] **`src/components/meta/MetaROIDashboard.tsx`**
+- [ ] **`src/components/settings/HotmartCSVImport.tsx`**
+- [ ] **`src/components/analise/AnaliseMensal.tsx`** — verificar se usa `useMonthlyAnalysis` corretamente
 
 ---
 
@@ -66,15 +67,11 @@
   - `basic_auth` = Base64(client_id:client_secret) em texto puro — risco real
 
 - [ ] **Sync automático de ofertas Hotmart (cron semanal)**
-  - Hoje sincronização é 100% manual
   - Criar cron no Supabase → `hotmart-products` (action=sync-offers)
   - Exibir data do último sync na UI
 
 - [ ] **Criar alerta automático para orders sem ledger**
   - Cron SQL simples ou trigger no Supabase
-
-- [ ] **Validar todos os módulos após reconstrução**
-  - CRM, automações, mídia paga, quizzes
 
 ---
 
@@ -84,16 +81,11 @@
 
 - [ ] **Adicionar campo `funnel_model` na tabela `funnels`**
   - Valores: `perpetuo`, `lancamento`, `lancamento_pago`, `isca_oferta`, `quiz_oferta`, `formulario_oferta`
-  - Base para wizard de criação guiado e análise por modelo
 
 - [ ] **Wizard de criação de funil guiado**
-  - Perguntas sobre a jornada do lead → Cubo monta a estrutura automaticamente
-  - Cada modelo pré-define: fases, métricas alvo, tipos de campanha
 
 - [ ] **IA Analista por modelo de funil**
-  - Cada modelo tem benchmarks diferentes
-  - "Seu CPL está 40% acima da média para lançamentos desse ticket"
-  - Integra Meta Ads (antes da venda) + Hotmart (depois da venda)
+  - Benchmarks por modelo + integração Meta Ads + Hotmart
 
 ---
 
@@ -104,32 +96,41 @@
 - [ ] Aumentar chunk size do CSV import de 200 para 500
 - [ ] Instalar MCP do Vercel para gestão de deploys
 - [ ] Instalar MCP do Sentry para monitoramento de erros em produção
-- [ ] Decommission da edge function `csv-ledger-v21-import`
 
 ---
 
 ## ✅ Concluído
 
+### 🔬 Fixes de Funis — FUNNEL_FIXES_SPEC.md (14/03/2026 — sessão 4)
+- [x] Fix 1: `MonthlyRevenueDetailDialog.tsx` — migrado `hotmart_sales` → `finance_tracking_view` (6.255 pedidos)
+- [x] Fix 2: `useCRMJourneyData.ts` — **adiado** (problema maior, sessão dedicada ao CRM)
+- [x] Fix 3: `useMonthlyAnalysis.ts` — já estava correto (spec desatualizada)
+- [x] Fix 4: `CuboMagicoDashboard.tsx` — já usava `funnel_orders_view` via props (fix só no header comment)
+
+### 📊 Migração Analytics → Ledger-First (14/03/2026 — sessões 2-3)
+- [x] Migration `finance_ledger_summary` → ledger-first (693 → 6.255 rows APPROVED/COMPLETE)
+- [x] `finance_tracking_view`, `sales_core_view`, `funnel_revenue`, `funnel_orders_view` — todas corretas
+- [x] Validação: Dashboard, Funil, Busca Rápida, Análise Mensal, Insights, Visão Geral — todos com dados completos
+- [x] `FUNNEL_ARCHITECTURE.md` criado — mapa completo da arquitetura de funis
+
+### 🗑️ Decommission de `sales_core_events` (14/03/2026 — sessão 3)
+- [x] `writeSalesCoreEvent()` removida do `hotmart-webhook/index.ts`
+- [x] `DROP TABLE IF EXISTS sales_core_events CASCADE` — migration aplicada
+- [x] Edge functions removidas do repo: `hotmart-backfill`, `hotmart-ledger-brl-backfill`, `hotmart-backfill-14d`, `csv-ledger-v21-import`
+- [x] `HotmartBackfillSection.tsx` removido
+
 ### 🔥 Pipeline de vendas restaurado (13-14/03/2026)
 - [x] Causa raiz identificada e corrigida: constraint UNIQUE em `order_items`
-- [x] Migrations commitadas: `20260311223407` + `20260313000000`
-- [x] Backfill Grupo A: 13 vendas recuperadas via webhook
+- [x] Backfill Grupo A: 13 vendas recuperadas
 - [x] Backfill Grupo B: 168 vendas recuperadas via CSV import
 - [x] Trigger `trigger_derive_order_status` recriado + 741 orders corrigidas
-- [x] Fix `item_type`: 88 itens atualizados, zero `unknown`
-- [x] Fix visual modal de pedido
 - [x] **Receita recuperada: R$ 8.178,18** 🎉
 
 ### 📦 Sistema CSV Import (14/03/2026)
-- [x] Edge function `provider-csv-import` v2 ACTIVE
+- [x] Edge function `provider-csv-import` v4 ACTIVE
 - [x] CSV Import Safety: validação + dialog + revert atômico
 - [x] Edge function `provider-csv-import-revert` v1 ACTIVE
-- [x] Menu Vendas → Histórico removido
-
-### 🗺️ Arquitetura mapeada (14/03/2026)
-- [x] `FUNNEL_ARCHITECTURE.md` criado — mapa completo de tabelas, views, hooks, componentes e problemas
-- [x] CLAUDE.md reescrito com arquitetura completa e regras de migrations
 
 ### 🛠️ Infraestrutura
 - [x] MCP Supabase, Playwright e Context7 instalados no Cursor
-- [x] DEBUG_LOG.md e TASKS.md criados e mantidos em sincronia
+- [x] CLAUDE.md reescrito com arquitetura completa

@@ -331,6 +331,20 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Read-only project-scoped actions: use service role, no auth header required
+    if (action === 'get_available_tags' || action === 'get_estimated_size') {
+      const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      let result: any
+      if (action === 'get_available_tags') {
+        result = await getAvailableTags(serviceSupabase, body.projectId)
+      } else {
+        result = await getEstimatedSize(serviceSupabase, body.projectId, body.segmentConfig)
+      }
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // For other actions, require auth
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -343,7 +357,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } }
     })
-    
+
     const serviceSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     let result: any
@@ -367,14 +381,6 @@ Deno.serve(async (req) => {
 
       case 'create_lookalike':
         result = await createLookalike(supabase, serviceSupabase, body)
-        break
-
-      case 'get_estimated_size':
-        result = await getEstimatedSize(supabase, body.projectId, body.segmentConfig)
-        break
-
-      case 'get_available_tags':
-        result = await getAvailableTags(supabase, body.projectId)
         break
 
       default:

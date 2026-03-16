@@ -60,6 +60,25 @@ Tabelas:
 - `system_health_log` — alertas de monitoramento automático (check_type, severity ok/warning/critical, affected_count, details jsonb)
 - `project_credentials` — credenciais Hotmart encriptadas: `client_id_encrypted`, `client_secret_encrypted`, `basic_auth_encrypted`. Nunca ler `client_id`/`client_secret`/`basic_auth` diretamente (são NULL). Usar RPC `get_project_credentials_internal(project_id)` para obter valores descriptografados. Checar presença via `is_configured`/`is_validated`.
 
+**Campos UTM em `orders`** (populados pelo webhook a partir dos parâmetros do comprador):
+- `meta_campaign_id`, `meta_adset_id`, `meta_ad_id` — IDs do Meta Ads (vindos de `{{campaign.id}}` no UTM)
+- `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_adset`, `utm_placement`
+- `raw_sck` — parâmetro `sck` do Hotmart (origin do checkout)
+- ~77% dos pedidos têm `utm_source`, ~50% têm `meta_campaign_id`; resto são vendas orgânicas — correto
+- Join key para Meta Ads: `orders.meta_campaign_id = meta_insights.campaign_id`
+
+**`order_items.item_type`** — classificação do item no funil:
+- `'main'` — oferta principal (FRONT/FE)
+- `'bump'` — order bump (OB)
+- `'upsell'` — upsell (US)
+- `'downsell'` — downsell (DS)
+- `'unknown'` — webhook não conseguiu classificar (falta `tipo_posicao` no `offer_mappings`)
+- `funnel_orders_view` usa COALESCE: `main_offer_code` = item com `item_type='main'` OU oferta com `tipo_posicao IN ('FRONT','FE')` no fallback
+
+**`funnel_orders_view`** — view canônica para análise de funil:
+- Expõe todos os campos UTM de `orders` + `main_offer_code` com fallback COALESCE
+- Hook canônico: `useFunnelData.ts` — `SaleRecord` é a interface de saída; UTMAnalysis usa `gross_amount` como receita canônica
+
 **Regras invioláveis:**
 - Nunca fabricar valores financeiros
 - Nunca inferir comissões de coprodutores

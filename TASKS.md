@@ -90,6 +90,12 @@
 - [x] `UTMAnalysis.tsx` — revenue usa `gross_amount` (canônico); cruzamento investimento × faturamento funciona
 - [x] Arquitetura provider-agnostic: futuros providers escrevem UTMs em `orders` → view/frontend não mudam
 
+### 🐛 Fix `item_type='unknown'` + `main_offer_code=NULL` (15/03/2026 — sessão 8)
+- [x] Root cause: pedidos com `item_type='unknown'` → `main_offer_code=NULL` na view → excluídos do UTM revenue
+- [x] Backfill `order_items`: `item_type='unknown'` → classifica por `offer_mappings.tipo_posicao` (FRONT→main, OB→bump, US→upsell, DS→downsell)
+- [x] `funnel_orders_view` recriada com COALESCE fallback: `main_offer_code` usa `tipo_posicao IN ('FRONT','FE')` quando `item_type='main'` não existe
+- [x] Migrations commitadas: `20260315280000_backfill_order_items_type_and_main_offer_fallback.sql`
+
 ### 📊 Métricas de saúde do funil (15/03/2026 — sessão 8)
 - [x] `useFunnelHealthMetrics.ts` — todas 3 queries migradas de `hotmart_sales` → `crm_transactions`
 - [x] `buyer_email` via FK join `contacts(email)` — sem view adicional necessária

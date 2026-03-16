@@ -22,6 +22,16 @@
 
 ---
 
+### [2026-03-15] Fix item_type='unknown' + main_offer_code=NULL na aba UTM — ✅ CONCLUÍDO (sessão 8)
+- **Sintoma:** funil "Face | Maquiagem 35+" na aba UTM mostrava faturamento zerado mesmo após o fix de UTMs
+- **Root cause:** 6 pedidos de março/2026 (~R$1.254) com `item_type='unknown'` em `order_items` → `FILTER (WHERE item_type='main')` retornava NULL → `main_offer_code=NULL` na view → `UTMAnalysis` agrupa por `offer_code` → pedidos sem code eram excluídos da receita
+- **Por que `item_type='unknown'`?** Webhook classifica tipo via `offer_mappings.tipo_posicao`. Pedidos sem mapeamento ativo (ou com `tipo_posicao=NULL`) ficam como 'unknown'.
+- **Fix 1 — backfill:** `UPDATE order_items SET item_type=... FROM (subquery com join offer_mappings)`. SQL UPDATE com alias na tabela alvo falhou ("invalid reference FROM-clause entry for table oi") → corrigido com subquery.
+- **Fix 2 — view fallback:** `funnel_orders_view` recriada com `COALESCE(FILTER item_type='main', FILTER tipo_posicao IN ('FRONT','FE'))` para `main_offer_code` — cobre casos onde `item_type` permanece 'unknown' por falta de mapeamento.
+- **Migration:** `20260315280000_backfill_order_items_type_and_main_offer_fallback.sql` ✅ commitada
+
+---
+
 ### [2026-03-15] useFunnelHealthMetrics migrado para crm_transactions — ✅ CONCLUÍDO (sessão 8)
 - **Problema:** hook lia `hotmart_sales` para 3 queries (abandonados, reembolsos/chargebacks/cancelamentos, aprovados)
 - `hotmart_sales` tem apenas ~840 dos 6.180+ pedidos → métricas de saúde do funil completamente erradas

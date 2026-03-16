@@ -6,7 +6,19 @@
 
 ## 📅 Última atualização
 - **Data:** 2026-03-15 (sessão 8)
-- **Status geral:** Race condition de coprodução corrigida ✅, CRM Transações fix ✅, pipeline filters fix ✅, alerta automático orders sem ledger ✅, useFunnelHealthMetrics migrado para crm_transactions ✅
+- **Status geral:** Race condition de coprodução corrigida ✅, CRM Transações fix ✅, pipeline filters fix ✅, alerta automático orders sem ledger ✅, useFunnelHealthMetrics migrado para crm_transactions ✅, UTM attribution corrigida ✅
+
+---
+
+### [2026-03-15] UTM Attribution — cruzamento investimento Meta Ads × faturamento Hotmart — ✅ CONCLUÍDO (sessão 8)
+- **Diagnóstico:** `funnel_orders_view` não expunha UTMs. `useFunnelData` adapter colocava todos como `null`. `UTMAnalysis.tsx` usava `total_price_brl` (não existia em SaleRecord) → receita zero na aba UTM.
+- **Descoberta chave:** `orders` já tem `meta_campaign_id`, `meta_adset_id`, `meta_ad_id`, `utm_*`, `raw_sck` populados pelo webhook. 77% dos pedidos têm `utm_source`, 50.6% têm `meta_campaign_id` (resto = orgânico — correto).
+- **Join key confirmado:** `orders.meta_campaign_id = meta_insights.campaign_id` — cruzamento direto por ID, sem parsing frágil por nome.
+- **Fix 1:** `funnel_orders_view` recriada com UTMs via `CREATE OR REPLACE VIEW` (migration `add_utm_fields_to_funnel_orders_view`)
+- **Fix 2:** `useFunnelData.ts` — `OrderRecord` + `SaleRecord` interfaces atualizadas; adapter passa UTMs reais
+- **Fix 3:** `UTMAnalysis.tsx` — `SaleData` aceita `gross_amount` (canônico) com fallback `total_price_brl`; revenue calculations corrigidas
+- **Validação DB:** view retorna `meta_campaign_id`, `utm_campaign` (nome_id), `checkout_origin` (pipe-separated) — parseCheckoutOrigin funciona normalmente
+- **Arquitetura provider-agnostic:** Google Ads/TikTok futuros → webhook escreve UTMs nos mesmos campos de `orders` → view não muda → frontend não muda
 
 ---
 

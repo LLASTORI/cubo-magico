@@ -84,6 +84,12 @@
 
 ## ✅ Concluído
 
+### 📊 UTM Attribution — cruzamento Meta Ads × Hotmart (15/03/2026 — sessão 8)
+- [x] `funnel_orders_view` recriada com campos UTM (`meta_campaign_id`, `meta_adset_id`, `meta_ad_id`, `utm_*`, `checkout_origin`)
+- [x] `useFunnelData.ts` — adapter passa UTMs reais em vez de null; `SaleRecord` atualizado
+- [x] `UTMAnalysis.tsx` — revenue usa `gross_amount` (canônico); cruzamento investimento × faturamento funciona
+- [x] Arquitetura provider-agnostic: futuros providers escrevem UTMs em `orders` → view/frontend não mudam
+
 ### 📊 Métricas de saúde do funil (15/03/2026 — sessão 8)
 - [x] `useFunnelHealthMetrics.ts` — todas 3 queries migradas de `hotmart_sales` → `crm_transactions`
 - [x] `buyer_email` via FK join `contacts(email)` — sem view adicional necessária

@@ -52,6 +52,17 @@ import {
 
 type FunnelType = 'perpetuo' | 'lancamento' | 'indefinido';
 
+type FunnelModel =
+  | 'perpetuo'
+  | 'meteorico'
+  | 'lancamento'
+  | 'lancamento_pago'
+  | 'lancamento_interno'
+  | 'webinar'
+  | 'assinatura'
+  | 'high_ticket'
+  | 'custom';
+
 interface Funnel {
   id: string;
   name: string;
@@ -64,6 +75,7 @@ interface Funnel {
   launch_start_date?: string | null;
   launch_end_date?: string | null;
   has_fixed_dates?: boolean;
+  funnel_model?: FunnelModel | null;
 }
 
 const FUNNEL_TYPE_LABELS: Record<FunnelType, string> = {
@@ -72,10 +84,34 @@ const FUNNEL_TYPE_LABELS: Record<FunnelType, string> = {
   indefinido: 'A Definir',
 };
 
+const FUNNEL_MODEL_LABELS: Record<FunnelModel, string> = {
+  perpetuo: 'Perpétuo Clássico',
+  meteorico: 'Meteórico',
+  lancamento: 'Lançamento',
+  lancamento_pago: 'Lançamento Pago',
+  lancamento_interno: 'Lançamento Interno',
+  webinar: 'Webinar',
+  assinatura: 'Assinatura',
+  high_ticket: 'High Ticket',
+  custom: 'Personalizado',
+};
+
 const FUNNEL_TYPE_COLORS: Record<FunnelType, string> = {
   perpetuo: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
   lancamento: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30',
   indefinido: 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30',
+};
+
+const FUNNEL_MODEL_COLORS: Record<FunnelModel, string> = {
+  perpetuo: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  meteorico: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+  lancamento: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  lancamento_pago: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+  lancamento_interno: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+  webinar: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+  assinatura: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
+  high_ticket: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+  custom: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
 };
 
 const SECTION_STYLES: Record<FunnelType, { bg: string; border: string; dot: string; text: string }> = {
@@ -144,6 +180,8 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editingType, setEditingType] = useState<FunnelType>('perpetuo');
+  const [newFunnelModel, setNewFunnelModel] = useState<FunnelModel | null>(null);
+  const [editingModel, setEditingModel] = useState<FunnelModel | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [funnelToDelete, setFunnelToDelete] = useState<Funnel | null>(null);
   const [offersByFunnel, setOffersByFunnel] = useState<Record<string, OfferMapping[]>>({});
@@ -353,6 +391,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
           name: newFunnelName.trim(),
           project_id: projectId,
           funnel_type: newFunnelType,
+          funnel_model: newFunnelModel,
         });
 
       if (error) {
@@ -374,6 +413,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
 
       setNewFunnelName('');
       setNewFunnelType('perpetuo');
+      setNewFunnelModel(null);
       fetchFunnels();
       onFunnelChange?.();
     } catch (error: any) {
@@ -390,6 +430,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     setEditingId(funnel.id);
     setEditingName(funnel.name);
     setEditingType(funnel.funnel_type);
+    setEditingModel(funnel.funnel_model ?? null);
   };
 
   const handleSaveEdit = async (oldName: string) => {
@@ -398,9 +439,10 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     try {
       const { error } = await supabase
         .from('funnels')
-        .update({ 
+        .update({
           name: editingName.trim(),
           funnel_type: editingType,
+          funnel_model: editingModel,
         })
         .eq('id', editingId);
 
@@ -434,6 +476,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
       setEditingId(null);
       setEditingName('');
       setEditingType('perpetuo');
+      setEditingModel(null);
       setOffersByFunnel({});
       setExpandedFunnels(new Set());
       fetchFunnels();
@@ -452,6 +495,7 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
     setEditingId(null);
     setEditingName('');
     setEditingType('perpetuo');
+    setEditingModel(null);
   };
 
   const handleDeleteClick = (funnel: Funnel) => {
@@ -649,6 +693,26 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                     <SelectItem value="indefinido">A Definir</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select
+                  value={editingModel ?? 'none'}
+                  onValueChange={(v) => setEditingModel(v === 'none' ? null : v as FunnelModel)}
+                >
+                  <SelectTrigger className="h-8 w-[160px]">
+                    <SelectValue placeholder="Modelo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem modelo</SelectItem>
+                    <SelectItem value="perpetuo">Perpétuo Clássico</SelectItem>
+                    <SelectItem value="meteorico">Meteórico</SelectItem>
+                    <SelectItem value="lancamento">Lançamento</SelectItem>
+                    <SelectItem value="lancamento_pago">Lançamento Pago</SelectItem>
+                    <SelectItem value="lancamento_interno">Lançamento Interno</SelectItem>
+                    <SelectItem value="webinar">Webinar</SelectItem>
+                    <SelectItem value="assinatura">Assinatura</SelectItem>
+                    <SelectItem value="high_ticket">High Ticket</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button size="icon" variant="ghost" onClick={() => handleSaveEdit(funnel.name)} className="h-8 w-8">
                   <Check className="h-4 w-4 text-green-600" />
                 </Button>
@@ -666,6 +730,11 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
                 <Badge variant="outline" className={`text-xs ${FUNNEL_TYPE_COLORS[funnel.funnel_type]}`}>
                   {FUNNEL_TYPE_LABELS[funnel.funnel_type]}
                 </Badge>
+                {funnel.funnel_model && (
+                  <Badge variant="outline" className={`text-xs ${FUNNEL_MODEL_COLORS[funnel.funnel_model]}`}>
+                    {FUNNEL_MODEL_LABELS[funnel.funnel_model]}
+                  </Badge>
+                )}
               </div>
             )}
           </div>
@@ -1019,6 +1088,26 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
               <SelectItem value="perpetuo">Perpétuo</SelectItem>
               <SelectItem value="lancamento">Lançamento</SelectItem>
               <SelectItem value="indefinido">A Definir</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={newFunnelModel ?? 'none'}
+            onValueChange={(v) => setNewFunnelModel(v === 'none' ? null : v as FunnelModel)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Modelo (opcional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sem modelo</SelectItem>
+              <SelectItem value="perpetuo">Perpétuo Clássico</SelectItem>
+              <SelectItem value="meteorico">Meteórico</SelectItem>
+              <SelectItem value="lancamento">Lançamento</SelectItem>
+              <SelectItem value="lancamento_pago">Lançamento Pago</SelectItem>
+              <SelectItem value="lancamento_interno">Lançamento Interno</SelectItem>
+              <SelectItem value="webinar">Webinar</SelectItem>
+              <SelectItem value="assinatura">Assinatura</SelectItem>
+              <SelectItem value="high_ticket">High Ticket</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={handleCreate} disabled={!newFunnelName.trim()}>

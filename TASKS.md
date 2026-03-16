@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 16/03/2026 (sessão 9 — Onda 1 publicada, Onda 2 next)
+> Última atualização: 16/03/2026 (sessão 9 — Tags fix concluído, Onda 2 next)
 
 ---
 
@@ -53,6 +53,12 @@
 ---
 
 ## ✅ Concluído
+
+### 🏷️ Sistema de Tags — Fix lançamento (16/03/2026)
+- [x] **Auditoria** — `docs/TAGS_AUDIT.md` com 3 gaps identificados
+- [x] **survey-webhook** — propaga `launch_tag` do funil para `crm_contact_interactions` (commit c30da12)
+- [x] **hotmart-webhook** — aplica tag `lançamento:NOME|LAUNCH_TAG` em `crm_contacts.tags` no PURCHASE_APPROVED (commit 330fb2a)
+- [x] Ambas edge functions deployadas em produção
 
 ### 🧩 Onda 1: campo funnel_model (16/03/2026)
 - [x] **Migration SQL** — `ADD COLUMN funnel_model text` nullable em `funnels` com CHECK constraint (9 valores)

@@ -6,7 +6,15 @@
 
 ## 📅 Última atualização
 - **Data:** 2026-03-16 (sessão 9)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Auditoria de tags concluída ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+
+---
+
+### [2026-03-16] Fix sistema de tags — lançamento:NOME|LAUNCH_TAG — ✅ CONCLUÍDO (sessão 9)
+- **Gap 1 (hotmart-webhook):** bloco não-bloqueante inserido após automation engine (commit 330fb2a). Ao receber `PURCHASE_APPROVED`, busca `offer_mappings → funnels`. Se `funnel_type='lancamento'` e `launch_tag IS NOT NULL`, aplica tag `lançamento:NOME|LAUNCH_TAG` em `crm_contacts.tags` (merge idempotente, sem duplicatas).
+- **Gap 2 (survey-webhook):** variável `funnelLaunchTag` adicionada; select do funil inclui `launch_tag`; interações inseridas em `crm_contact_interactions` passam a ter `launch_tag` populado (commit c30da12).
+- Zero breaking change: lógica não-bloqueante, não altera perpétuos, não remove tags existentes.
+- Deploy: ambas edge functions deployadas em `mqaygpnfjuyslnxpvipa`.
 
 ---
 

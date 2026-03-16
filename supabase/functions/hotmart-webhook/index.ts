@@ -2827,7 +2827,59 @@ if (!automationResponse.ok) {
       // Don't fail the webhook if automation fails
       console.error('[Hotmart Webhook] Error triggering automation:', automationError);
     }
-    
+
+    // =====================================================
+    // LAUNCH TAG — Apply lançamento tag to CRM contact
+    // Non-blocking: failure must never abort the webhook
+    // =====================================================
+    try {
+      if (contactId && event === 'PURCHASE_APPROVED') {
+        const offerCode = purchase?.offer?.code;
+        if (offerCode) {
+          const { data: offerMapping } = await supabase
+            .from('offer_mappings')
+            .select('funnel_id')
+            .eq('project_id', projectId)
+            .eq('provider', 'hotmart')
+            .eq('codigo_oferta', offerCode)
+            .maybeSingle();
+
+          if (offerMapping?.funnel_id) {
+            const { data: funnel } = await supabase
+              .from('funnels')
+              .select('name, funnel_type, launch_tag')
+              .eq('id', offerMapping.funnel_id)
+              .single();
+
+            if (funnel?.funnel_type === 'lancamento' && funnel?.launch_tag) {
+              const launchTag = `lançamento:${funnel.name}|${funnel.launch_tag}`;
+
+              const { data: contact } = await supabase
+                .from('crm_contacts')
+                .select('tags')
+                .eq('id', contactId)
+                .single();
+
+              const existingTags: string[] = contact?.tags || [];
+              if (!existingTags.includes(launchTag)) {
+                const mergedTags = [...existingTags, launchTag];
+                await supabase
+                  .from('crm_contacts')
+                  .update({ tags: mergedTags, updated_at: new Date().toISOString() })
+                  .eq('id', contactId);
+                console.log(`[LaunchTag] Applied tag "${launchTag}" to contact ${contactId}`);
+              } else {
+                console.log(`[LaunchTag] Tag "${launchTag}" already present on contact ${contactId}`);
+              }
+            }
+          }
+        }
+      }
+    } catch (launchTagError) {
+      // Don't fail the webhook if launch tag logic fails
+      console.error('[Hotmart Webhook] Error applying launch tag:', launchTagError);
+    }
+
     console.log('=== WEBHOOK PROCESSED SUCCESSFULLY ===');
     console.log('Project:', project.name);
     console.log('Event:', event);

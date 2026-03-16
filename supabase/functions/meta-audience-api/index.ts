@@ -512,6 +512,19 @@ async function createAudience(
 
   const accessToken = credentials.access_token
 
+  // Resolve Meta string account_id from UUID (adAccountId is the internal UUID FK)
+  const { data: adAccountRow, error: adAccountError } = await serviceSupabase
+    .from('meta_ad_accounts')
+    .select('account_id')
+    .eq('id', adAccountId)
+    .single()
+
+  if (adAccountError || !adAccountRow) {
+    throw new Error('Conta de anúncios não encontrada')
+  }
+
+  const metaAccountId = adAccountRow.account_id
+
   // Prevent duplicates BEFORE calling Meta API
   // (there is a unique constraint on project_id + ad_account_id + name)
   const { data: existingAudience, error: existingError } = await serviceSupabase
@@ -532,8 +545,8 @@ async function createAudience(
   }
 
   // Create Custom Audience on Meta
-  // Ensure adAccountId doesn't have duplicate 'act_' prefix
-  const cleanAdAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
+  // Ensure metaAccountId doesn't have duplicate 'act_' prefix
+  const cleanAdAccountId = metaAccountId.startsWith('act_') ? metaAccountId : `act_${metaAccountId}`
   const createUrl = `${GRAPH_API_BASE}/${cleanAdAccountId}/customaudiences`
 
   // IMPORTANT: Meta costuma falhar silenciosamente (ex: #2654) quando enviamos descrições gigantes.

@@ -150,7 +150,7 @@ export function MetaAudienceDialog({
               </SelectTrigger>
               <SelectContent>
                 {adAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.account_id}>
+                  <SelectItem key={account.id} value={account.id}>
                     {account.account_name || `act_${account.account_id}`}
                   </SelectItem>
                 ))}

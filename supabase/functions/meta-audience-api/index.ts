@@ -828,7 +828,7 @@ async function syncAudienceInternal(
       .from('meta_audience_contacts')
       .select('contact_id, email_hash, phone_hash')
       .eq('audience_id', audienceId)
-      .is('removed_at', null)
+      .neq('status', 'removed')
     
     const syncedContactIds = new Set((syncedContacts || []).map((c: any) => c.contact_id))
     const currentContactIds = new Set((contacts || []).map((c: any) => c.id))
@@ -857,10 +857,9 @@ async function syncAudienceInternal(
     let addedCount = 0
     let removedCount = 0
     
-    // Hash and send new contacts to Meta
-    // IMPORTANTE: para evitar estouro de CPU em listas grandes, usamos um schema mínimo (EMAIL + PHONE).
+    // Hash and send new contacts to Meta — full schema for maximum match rate
     if (contactsToAdd.length > 0) {
-      const schema = ['EMAIL', 'PHONE']
+      const schema = ['EMAIL', 'PHONE', 'FN', 'LN', 'CT', 'ST', 'ZIP', 'COUNTRY', 'EXTERN_ID']
       const hashedData: string[][] = []
       const contactRecords: any[] = []
 
@@ -873,13 +872,37 @@ async function syncAudienceInternal(
         // Skip if no email or phone (minimum required for matching)
         if (!emailHash && !phoneHash) continue
 
-        hashedData.push([emailHash || '', phoneHash || ''])
+        // Name: prefer dedicated fields, fallback to splitting full name
+        const firstName = contact.first_name || getFirstName(contact.name || '')
+        const lastName = contact.last_name || getLastName(contact.name || '')
+
+        const fnHash = firstName ? await sha256(normalizeName(firstName)) : ''
+        const lnHash = lastName ? await sha256(normalizeName(lastName)) : ''
+        const ctHash = contact.city ? await sha256(normalizeCity(contact.city)) : ''
+        const stHash = contact.state ? await sha256(normalizeState(contact.state)) : ''
+        const zipHash = contact.cep ? await sha256(normalizeZip(contact.cep)) : ''
+        const countryHash = await sha256(normalizeCountry(contact.country || ''))
+        // EXTERN_ID: internal contact UUID — must be SHA-256 hashed per Meta spec
+        const externIdHash = await sha256(contact.id)
+
+        hashedData.push([
+          emailHash,
+          phoneHash,
+          fnHash,
+          lnHash,
+          ctHash,
+          stHash,
+          zipHash,
+          countryHash,
+          externIdHash,
+        ])
 
         contactRecords.push({
           audience_id: audienceId,
           contact_id: contact.id,
           email_hash: emailHash || null,
           phone_hash: phoneHash || null,
+          status: 'active',
         })
       }
 
@@ -891,7 +914,7 @@ async function syncAudienceInternal(
         const batchRecords = contactRecords.slice(i, i + META_BATCH_SIZE)
 
         console.log(
-          `Sending batch ${Math.floor(i / META_BATCH_SIZE) + 1} with ${batch.length} users (schema EMAIL/PHONE)`
+          `Sending batch ${Math.floor(i / META_BATCH_SIZE) + 1} with ${batch.length} users (schema: 9 fields)`
         )
 
         const addResponse = await fetch(`${GRAPH_API_BASE}/${audience.meta_audience_id}/users`, {
@@ -934,7 +957,7 @@ async function syncAudienceInternal(
       // Get hashes for contacts to remove
       const { data: contactsToRemoveData } = await serviceSupabase
         .from('meta_audience_contacts')
-        .select('contact_id, email_hash, phone_hash, first_name_hash, last_name_hash')
+        .select('contact_id, email_hash, phone_hash')
         .eq('audience_id', audienceId)
         .in('contact_id', contactsToRemove)
       
@@ -976,7 +999,7 @@ async function syncAudienceInternal(
             // Mark contacts as removed in database
             await serviceSupabase
               .from('meta_audience_contacts')
-              .update({ removed_at: new Date().toISOString() })
+              .update({ status: 'removed' })
               .eq('audience_id', audienceId)
               .in('contact_id', batchIds)
           }

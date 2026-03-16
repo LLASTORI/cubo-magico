@@ -881,7 +881,7 @@ async function syncAudienceInternal(
         const ctHash = contact.city ? await sha256(normalizeCity(contact.city)) : ''
         const stHash = contact.state ? await sha256(normalizeState(contact.state)) : ''
         const zipHash = contact.cep ? await sha256(normalizeZip(contact.cep)) : ''
-        const countryHash = await sha256(normalizeCountry(contact.country || ''))
+        const countryHash = contact.country ? await sha256(normalizeCountry(contact.country)) : ''
         // EXTERN_ID: internal contact UUID — must be SHA-256 hashed per Meta spec
         const externIdHash = await sha256(contact.id)
 
@@ -971,7 +971,7 @@ async function syncAudienceInternal(
         
         for (let i = 0; i < removeData.length; i += META_BATCH_SIZE) {
           const batch = removeData.slice(i, i + META_BATCH_SIZE)
-          const batchIds = contactsToRemove.slice(i, i + META_BATCH_SIZE)
+          const batchIds = contactsToRemoveData.slice(i, i + META_BATCH_SIZE).map((c: any) => c.contact_id)
           
           const removeResponse = await fetch(
             `${GRAPH_API_BASE}/${audience.meta_audience_id}/users`,

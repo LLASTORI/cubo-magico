@@ -5,8 +5,26 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-15 (sessão 7)
-- **Status geral:** Race condition de coprodução corrigida ✅, CRM Transações fix ✅, pipeline filters fix ✅, alerta automático orders sem ledger ✅
+- **Data:** 2026-03-15 (sessão 8)
+- **Status geral:** Race condition de coprodução corrigida ✅, CRM Transações fix ✅, pipeline filters fix ✅, alerta automático orders sem ledger ✅, useFunnelHealthMetrics migrado para crm_transactions ✅
+
+---
+
+### [2026-03-15] useFunnelHealthMetrics migrado para crm_transactions — ✅ CONCLUÍDO (sessão 8)
+- **Problema:** hook lia `hotmart_sales` para 3 queries (abandonados, reembolsos/chargebacks/cancelamentos, aprovados)
+- `hotmart_sales` tem apenas ~840 dos 6.180+ pedidos → métricas de saúde do funil completamente erradas
+- `offer_code` em hotmart_sales frequentemente NULL → atribuição por funil quebrada
+- **Fix:** todas 3 queries migradas para `crm_transactions` (tem todos os status via webhook)
+  - `buyer_email` obtido via FK join `contacts(email)` no Supabase JS client
+  - `transaction_date` substitui `sale_date` nos filtros de data
+  - Interfaces `AbandonedSale` e `RefundChargebackSale` mantidas; mapeamento feito no queryFn
+- **TypeScript:** `npx tsc --noEmit` limpo ✅
+- **Contexto:** `CuboMagicoDashboard.tsx` usa `useFunnelHealthMetrics` na tela de análise de funil
+- **Outros `hotmart_sales` restantes (não migrados, intencionais ou fora do escopo):**
+  - `useFinancialCore.ts:351` — query de validação/comparação, intencional
+  - `CRMRecovery.tsx` — tela de recuperação de carrinhos (escopo separado, pode migrar depois)
+  - `useLaunchData.ts` — tela de lançamento (escopo separado)
+  - `HotmartCSVImport.tsx` — atualiza contatos, não query financeira (per CLAUDE.md: manter)
 
 ---
 

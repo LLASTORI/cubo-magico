@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 15/03/2026 — sessão 7
+> Última atualização: 15/03/2026 — sessão 8
 
 ---
 
@@ -83,6 +83,11 @@
 ---
 
 ## ✅ Concluído
+
+### 📊 Métricas de saúde do funil (15/03/2026 — sessão 8)
+- [x] `useFunnelHealthMetrics.ts` — todas 3 queries migradas de `hotmart_sales` → `crm_transactions`
+- [x] `buyer_email` via FK join `contacts(email)` — sem view adicional necessária
+- [x] Taxas de abandono, reembolso, chargeback e cancelamento agora com dados completos (6.180+ pedidos)
 
 ### 🔔 Alerta automático orders sem ledger (15/03/2026 — sessão 7)
 - [x] Edge function `orders-health-check` ACTIVE (v3)

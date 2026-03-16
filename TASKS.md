@@ -1,167 +1,94 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 15/03/2026 — sessão 8
+> Última atualização: 16/03/2026
 
 ---
 
 ## 🚨 Emergência
-> Nenhuma. Pipeline de vendas 100% restaurado. Race condition de coprodução corrigida. ✅
+> Nenhuma. Pipeline 100% restaurado. ✅
 
 ---
 
-## 🟠 CRM — concluído (15/03/2026)
+---
 
-- [x] **Migrar `useCRMJourneyData` internals para Orders Core** (15/03/2026)
-  - Substituiu queries em `crm_transactions` (840 rows) por `crm_journey_orders_view` (8.455 pedidos)
-  - Interface de saída idêntica — `CustomerJourneyAnalysis.tsx` sem alterações
-  - Funnel resolution agora usa `funnel_id` direto de `order_items`
+## 🔵 Onda 2 — Métricas específicas de lançamento pago (planejamento futuro)
 
-- [x] **Auditoria `crm_transactions`** (15/03/2026) — **MANTER, NÃO DROPAR**
-  - Ainda ativa: webhook escreve eventos de TODOS os status (ABANDONED, DELAYED, CANCELLED...)
-  - Trigger `detect_auto_recovery` depende dela para detectar recuperação de clientes
-  - `canonical_sale_events` view usa crm_transactions para plataformas não-Hotmart
-  - Propósito: log de eventos CRM (todos os status) vs orders = registro financeiro (approved only)
+> Não implementar antes da Onda 1 estar completa e validada
+
+- [ ] Passing diário (ritmo de vendas de ingresso vs meta)
+- [ ] Comparecimento (show rate: ingressos vendidos vs presentes no evento)
+- [ ] Conversão por ticket do produto principal (benchmarks por faixa de preço)
+- [ ] NPS e métricas do evento ao vivo
+- [ ] ROAS calculado sobre receita total (ingresso + produto principal + OBs)
 
 ---
 
-## 🔵 Migração `hotmart_sales` — concluído (15/03/2026)
+## 🟣 Onda 3 — Evolução de Funis (futuro)
 
-- [x] **`src/components/FullDataSync.tsx`** → `orders` (count + date range via ordered_at)
-- [x] **`src/components/launch/LaunchProductsSalesBreakdown.tsx`** → `finance_tracking_view`
-- [x] **`src/components/meta/MetaROIDashboard.tsx`** → `finance_tracking_view` (paid traffic: meta_campaign_id IS NOT NULL)
-- [x] **`src/components/settings/HotmartCSVImport.tsx`** — mantido em hotmart_sales (atualiza campos de contato, não query financeira; tabela não será dropada)
-- [x] **`src/pages/AnaliseMensal.tsx`** — já OK (usa useMonthlyAnalysis que não toca hotmart_sales)
+- [ ] Wizard de criação de funil guiado por modelo
+- [ ] IA Analista por modelo (benchmarks específicos por `funnel_model`)
+- [ ] Métricas do lançamento meteórico via Evolution API (engajamento de grupo WhatsApp)
+- [ ] Dashboard de assinatura/recorrência (MRR, Churn, LTV)
 
 ---
 
 ## 🟡 Importante — Mas não urgente
 
-- [x] **Correção estrutural: desacoplar `order_items` de `ledger_events` no webhook** (15/03/2026)
-  - Erro em `createOrderItemsFromWebhook` agora é non-fatal (result.itemsError + warn, sem return)
-
-- [x] **Segurança: criptografar `basic_auth` e `client_id` em `project_credentials`** (15/03/2026)
-  - `basic_auth` já estava encriptado (migration anterior)
-  - `client_id`: backfill 6 rows → client_id_encrypted, trigger atualizado, RPC atualizado
-  - 0 campos sensíveis em plaintext em project_credentials ✅
-
-- [x] **Sync automático de ofertas Hotmart (cron semanal)** (15/03/2026)
-  - Edge function `hotmart-offers-cron` ACTIVE — itera 6 projetos, chama sync-offers para cada
-  - Cron `hotmart-offers-sync-weekly` — segunda-feira 07:00 UTC
-  - `offers_synced_at` em `project_credentials` + exibido em OfferMappings.tsx
-  - Teste: 6/6 OK (4 novas, 659 atualizadas) ✅
-
-- [x] **Criar alerta automático para orders sem ledger** (15/03/2026)
-  - Edge function `orders-health-check` + cron diário 08:00 UTC
-  - Registra em `system_health_log` com severity ok/warning/critical
-  - Teste: severity=ok, affected_count=0 ✅
-
----
-
-## 🟣 Evolução — Funis (planejamento futuro)
-
-> Não implementar antes de terminar a limpeza do legado
-
-- [ ] **Adicionar campo `funnel_model` na tabela `funnels`**
-  - Valores: `perpetuo`, `lancamento`, `lancamento_pago`, `isca_oferta`, `quiz_oferta`, `formulario_oferta`
-
-- [ ] **Wizard de criação de funil guiado**
-
-- [ ] **IA Analista por modelo de funil**
-  - Benchmarks por modelo + integração Meta Ads + Hotmart
+- [ ] `useLaunchData.ts` ainda referencia `hotmart_sales` — migrar (escopo separado)
+- [ ] `CRMRecovery.tsx` ainda referencia `hotmart_sales` — migrar (escopo separado)
+- [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete`
+- [ ] Validar todos os módulos após reconstrução (CRM, automações, mídia paga, quizzes)
 
 ---
 
 ## 🟢 Backlog futuro
 
-- [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete`
 - [ ] Mover parsing do CSV para Web Worker
 - [ ] Aumentar chunk size do CSV import de 200 para 500
 - [ ] Instalar MCP do Vercel para gestão de deploys
 - [ ] Instalar MCP do Sentry para monitoramento de erros em produção
+- [ ] Decommission `useFinancialCore.ts:351` query em `hotmart_sales` (validação/comparação intencional — avaliar)
 
 ---
 
 ## ✅ Concluído
 
-### 📊 UTM Attribution — cruzamento Meta Ads × Hotmart (15/03/2026 — sessão 8)
-- [x] `funnel_orders_view` recriada com campos UTM (`meta_campaign_id`, `meta_adset_id`, `meta_ad_id`, `utm_*`, `checkout_origin`)
-- [x] `useFunnelData.ts` — adapter passa UTMs reais em vez de null; `SaleRecord` atualizado
-- [x] `UTMAnalysis.tsx` — revenue usa `gross_amount` (canônico); cruzamento investimento × faturamento funciona
-- [x] Arquitetura provider-agnostic: futuros providers escrevem UTMs em `orders` → view/frontend não mudam
+### 🧩 Onda 1: campo funnel_model (16/03/2026)
+- [x] **Migration SQL** — `ADD COLUMN funnel_model text` nullable em `funnels` com CHECK constraint (9 valores)
+- [x] **Tipos TypeScript** em `src/components/FunnelManager.tsx` — `FunnelModel` type, `FUNNEL_MODEL_LABELS`, `FUNNEL_MODEL_COLORS`, interface `Funnel` atualizada
+- [x] **UI — FunnelManager.tsx** — Select de modelo no form de criação e edição; badge na listagem
+- [x] **Regenerar tipos Supabase** — `funnel_model` aparece em funnels Row/Insert/Update
+- [x] **Validar e commitar** — 31 funis existentes com `funnel_model=NULL`; migration commitada
 
-### 🐛 Fix `item_type='unknown'` + `main_offer_code=NULL` (15/03/2026 — sessão 8)
-- [x] Root cause: pedidos com `item_type='unknown'` → `main_offer_code=NULL` na view → excluídos do UTM revenue
-- [x] Backfill `order_items`: `item_type='unknown'` → classifica por `offer_mappings.tipo_posicao` (FRONT→main, OB→bump, US→upsell, DS→downsell)
-- [x] `funnel_orders_view` recriada com COALESCE fallback: `main_offer_code` usa `tipo_posicao IN ('FRONT','FE')` quando `item_type='main'` não existe
-- [x] Migrations commitadas: `20260315280000_backfill_order_items_type_and_main_offer_fallback.sql`
+### 🗺️ Planejamento de Funis (16/03/2026)
+- [x] `FUNNEL_TYPE_AUDIT.md` — auditoria completa do sistema de tipos atual
+- [x] `FUNNEL_MODELS.md` — documentação de todos os modelos de funil com métricas, benchmarks e jornadas
+- [x] Decisão arquitetural: `funnel_model` como campo complementar (não substitui `funnel_type`)
 
-### 📊 Métricas de saúde do funil (15/03/2026 — sessão 8)
-- [x] `useFunnelHealthMetrics.ts` — todas 3 queries migradas de `hotmart_sales` → `crm_transactions`
-- [x] `buyer_email` via FK join `contacts(email)` — sem view adicional necessária
-- [x] Taxas de abandono, reembolso, chargeback e cancelamento agora com dados completos (6.180+ pedidos)
+### 📊 Analytics e Funis (15/03/2026)
+- [x] UTM attribution corrigida — cruzamento Meta Ads × Hotmart funcionando
+- [x] `useFunnelHealthMetrics` migrado para `crm_transactions`
+- [x] Fix `item_type='unknown'` + fallback na `funnel_orders_view`
+- [x] `client_id` criptografado em `project_credentials`
+- [x] Sync automático de ofertas Hotmart (cron semanal)
+- [x] Alerta automático orders sem ledger (cron diário)
+- [x] Race condition coprodução corrigida
+- [x] Backfill 674 orders → ~R$130.000 recuperados
 
-### 🔔 Alerta automático orders sem ledger (15/03/2026 — sessão 7)
-- [x] Edge function `orders-health-check` ACTIVE (v3)
-- [x] `system_health_log` table + `v_orders_without_ledger` view
-- [x] Cron `orders-health-check-daily` — 08:00 UTC via pg_cron + pg_net
-- [x] Teste: severity=ok, affected_count=0
+### 📦 CSV Import + Analytics (14/03/2026)
+- [x] CSV Import Safety completo (validação + dialog + revert atômico)
+- [x] `finance_ledger_summary` migrada: 693 → 6.255 pedidos
+- [x] `sales_core_events` dropada + legado removido
+- [x] Grupo B: 168 vendas (R$8.178,18) recuperadas
 
-### 💰 Backfill massivo ledger_events (15/03/2026 — sessão 6)
-- [x] 674 orders approved sem ledger em 6 projetos → ~R$130.000 recuperados nos relatórios
-- [x] ~1.302 ledger_events criados (BRL nativo, USD convertido, CO_PRODUCER, pré-sistema)
-- [x] Zero orders stuck após backfill
-- [x] Migration `20260315230000_backfill_ledger_events_approved_orders.sql`
-
-### 🔧 Fixes de pipeline (15/03/2026 — sessão 6)
-- [x] Desacoplar order_items de ledger_events no webhook (non-fatal)
-- [x] Race condition coprodução: UNIQUE(provider_event_id) global → UNIQUE(order_id, provider_event_id)
-- [x] Webhook: dedup check escopo ao order_id
-- [x] Webhook: fallback status approved quando ledger vazio + credit event
-
-### 🐛 CRM fixes (15/03/2026 — sessão 6)
-- [x] `UNIQUE(provider_event_id)` global → `UNIQUE(order_id, provider_event_id)` — fix para produtos com coprodução
-- [x] Webhook: dedup check escopo ao `order_id` (evita falso positivo cross-project)
-- [x] Webhook: fallback de status `approved` quando ledger vazio + credit event
-- [x] Backfill HP3453704060 — 2 ledger_events + ledger_status=complete
-- [x] CRM aba Transações — `crm_orders_view` currency fix + NOTIFY pgrst schema reload
-- [x] CRM pipeline filters — `last_transaction_date` → `last_purchase_at` (campo real do DB)
-
-### 🗂️ CRM Journey Migration (15/03/2026 — sessão 5)
-- [x] Deploy bloco completo: git push (7 commits), hotmart-webhook redeploy, 4 edge functions órfãs deletadas
-- [x] `useCRMJourneyData` internals migrados de `crm_transactions` → `crm_journey_orders_view` (Orders Core)
-- [x] Auditoria `crm_transactions` — decisão: MANTER (log CRM + trigger detect_auto_recovery)
-
-### 🔬 Fixes de Funis — FUNNEL_FIXES_SPEC.md (14/03/2026 — sessão 4)
-- [x] Fix 1: `MonthlyRevenueDetailDialog.tsx` — migrado `hotmart_sales` → `finance_tracking_view` (6.255 pedidos)
-- [x] Fix 2: `useCRMJourneyData.ts` — **adiado** (problema maior, sessão dedicada ao CRM)
-- [x] Fix 3: `useMonthlyAnalysis.ts` — já estava correto (spec desatualizada)
-- [x] Fix 4: `CuboMagicoDashboard.tsx` — já usava `funnel_orders_view` via props (fix só no header comment)
-
-### 📊 Migração Analytics → Ledger-First (14/03/2026 — sessões 2-3)
-- [x] Migration `finance_ledger_summary` → ledger-first (693 → 6.255 rows APPROVED/COMPLETE)
-- [x] `finance_tracking_view`, `sales_core_view`, `funnel_revenue`, `funnel_orders_view` — todas corretas
-- [x] Validação: Dashboard, Funil, Busca Rápida, Análise Mensal, Insights, Visão Geral — todos com dados completos
-- [x] `FUNNEL_ARCHITECTURE.md` criado — mapa completo da arquitetura de funis
-
-### 🗑️ Decommission de `sales_core_events` (14/03/2026 — sessão 3)
-- [x] `writeSalesCoreEvent()` removida do `hotmart-webhook/index.ts`
-- [x] `DROP TABLE IF EXISTS sales_core_events CASCADE` — migration aplicada
-- [x] Edge functions removidas do repo: `hotmart-backfill`, `hotmart-ledger-brl-backfill`, `hotmart-backfill-14d`, `csv-ledger-v21-import`
-- [x] `HotmartBackfillSection.tsx` removido
-
-### 🔥 Pipeline de vendas restaurado (13-14/03/2026)
-- [x] Causa raiz identificada e corrigida: constraint UNIQUE em `order_items`
-- [x] Backfill Grupo A: 13 vendas recuperadas
-- [x] Backfill Grupo B: 168 vendas recuperadas via CSV import
-- [x] Trigger `trigger_derive_order_status` recriado + 741 orders corrigidas
-- [x] **Receita recuperada: R$ 8.178,18** 🎉
-
-### 📦 Sistema CSV Import (14/03/2026)
-- [x] Edge function `provider-csv-import` v4 ACTIVE
-- [x] CSV Import Safety: validação + dialog + revert atômico
-- [x] Edge function `provider-csv-import-revert` v1 ACTIVE
+### 🔥 Pipeline restaurado (13/03/2026)
+- [x] Constraint UNIQUE em `order_items` adicionada e commitada
+- [x] Trigger `trigger_derive_order_status` recriado e commitada
+- [x] Grupo A: 13 vendas recuperadas
+- [x] **Receita total recuperada: R$ 8.178,18** 🎉
 
 ### 🛠️ Infraestrutura
 - [x] MCP Supabase, Playwright e Context7 instalados no Cursor
-- [x] CLAUDE.md reescrito com arquitetura completa
+- [x] CLAUDE.md reescrito com arquitetura completa e regras de migrations
+- [x] DEBUG_LOG.md, TASKS.md e FUNNEL_MODELS.md criados e mantidos em sincronia

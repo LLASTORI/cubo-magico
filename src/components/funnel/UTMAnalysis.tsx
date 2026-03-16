@@ -17,7 +17,8 @@ import { PieChart, Pie, Cell } from "recharts";
 
 interface SaleData {
   offer_code?: string | null;
-  total_price_brl?: number | null;
+  gross_amount?: number | null;     // fonte canônica (funnel_orders_view)
+  total_price_brl?: number | null;  // legado — mantido para retrocompat
   checkout_origin?: string | null;
 }
 
@@ -347,7 +348,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
   // Now includes Meta items WITHOUT sales but WITH spend
   const analyzeUTM = useMemo(() => {
     const totalSales = filteredSales.length;
-    const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.gross_amount ?? s.total_price_brl ?? 0), 0);
     const totalSpend = metaInsights.reduce((sum, i) => sum + (i.spend || 0), 0);
 
     // Group sales by Meta ID (for campaign, adset, creative) to avoid duplicates from UTM variations
@@ -358,7 +359,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
       const groups: Record<string, { sales: number; revenue: number; displayName: string }> = {};
       
       filteredSales.forEach(sale => {
-        const valueInBRL = sale.total_price_brl || 0;
+        const valueInBRL = sale.gross_amount ?? sale.total_price_brl ?? 0;
         
         // Get the grouping key and display name
         let groupKey: string;
@@ -493,7 +494,7 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
       filteredSales.forEach(sale => {
         const value = getFieldValue(sale.parsedUTM, field);
         const displayName = getDisplayName(value);
-        const valueInBRL = sale.total_price_brl || 0;
+        const valueInBRL = sale.gross_amount ?? sale.total_price_brl ?? 0;
         
         if (!groups[displayName]) {
           groups[displayName] = { sales: 0, revenue: 0, salesData: [] };
@@ -562,14 +563,14 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     }
 
     const totalSales = filtered.length;
-    const totalRevenue = filtered.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const totalRevenue = filtered.reduce((sum, s) => sum + (s.gross_amount ?? s.total_price_brl ?? 0), 0);
     const processedKeys = new Set<string>();
 
     // Group by Meta ID (for campaign, adset, creative) to avoid duplicates
     const groups: Record<string, { sales: number; revenue: number; displayName: string }> = {};
     
     filtered.forEach(sale => {
-      const valueInBRL = sale.total_price_brl || 0;
+      const valueInBRL = sale.gross_amount ?? sale.total_price_brl ?? 0;
       
       let groupKey: string;
       let displayName: string;

@@ -92,6 +92,17 @@ interface OrderRecord {
   main_revenue: number;
   bump_revenue: number;
   upsell_revenue: number;
+  // UTM / attribution fields (populated by webhook from tracking params)
+  meta_campaign_id: string | null;
+  meta_adset_id: string | null;
+  meta_ad_id: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_adset: string | null;
+  utm_placement: string | null;
+  checkout_origin: string | null;
 }
 
 // Legacy interface for backward compatibility
@@ -111,10 +122,13 @@ interface SaleRecord {
   meta_adset_id: string | null;
   meta_ad_id: string | null;
   utm_source: string | null;
+  utm_medium: string | null;
   utm_campaign: string | null;
+  utm_content: string | null;
   utm_adset: string | null;
-  utm_creative: string | null;
   utm_placement: string | null;
+  utm_creative: string | null;
+  checkout_origin: string | null;
   payment_method: string | null;
   recurrence: number | null;
 }
@@ -288,7 +302,17 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
             all_offer_codes,
             main_revenue,
             bump_revenue,
-            upsell_revenue
+            upsell_revenue,
+            meta_campaign_id,
+            meta_adset_id,
+            meta_ad_id,
+            utm_source,
+            utm_medium,
+            utm_campaign,
+            utm_content,
+            utm_adset,
+            utm_placement,
+            checkout_origin
           `)
           .eq('project_id', projectId!)
           .in('status', VALID_ORDER_STATUSES)
@@ -509,17 +533,19 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       hotmart_status: order.status?.toUpperCase() || 'APPROVED',
       funnel_id: order.funnel_id,
       funnel_name: order.funnel_name,
-      // UTMs not available in orders yet - will be added later
-      meta_campaign_id: null,
-      meta_adset_id: null,
-      meta_ad_id: null,
-      utm_source: null,
-      utm_campaign: null,
-      utm_adset: null,
-      utm_creative: null,
-      utm_placement: null,
+      meta_campaign_id: order.meta_campaign_id,
+      meta_adset_id: order.meta_adset_id,
+      meta_ad_id: order.meta_ad_id,
+      utm_source: order.utm_source,
+      utm_medium: order.utm_medium,
+      utm_campaign: order.utm_campaign,
+      utm_content: order.utm_content,
+      utm_adset: order.utm_adset,
+      utm_placement: order.utm_placement,
+      utm_creative: null, // não existe em orders; preservado para compat
+      checkout_origin: order.checkout_origin,
       payment_method: null,
-      recurrence: 1, // Orders are always unique (no parcelas duplicated)
+      recurrence: 1,
     }));
   }, [ordersData, canonicalSalesData, hasUsableOrderFunnelSignals]);
 

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 16/03/2026
+> Última atualização: 16/03/2026 (sessão 9 — Onda 1 publicada, Onda 2 next)
 
 ---
 
@@ -12,9 +12,9 @@
 
 ---
 
-## 🔵 Onda 2 — Métricas específicas de lançamento pago (planejamento futuro)
+## 🔴 Próxima sessão — Onda 2: métricas de lançamento pago
 
-> Não implementar antes da Onda 1 estar completa e validada
+> Onda 1 concluída e publicada ✅ — Onda 2 liberada para planejamento
 
 - [ ] Passing diário (ritmo de vendas de ingresso vs meta)
 - [ ] Comparecimento (show rate: ingressos vendidos vs presentes no evento)

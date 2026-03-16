@@ -6,7 +6,7 @@
 
 ## 📅 Última atualização
 - **Data:** 2026-03-16 (sessão 9)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` concluída ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Próximo passo: Onda 2 métricas de lançamento pago
 
 ---
 

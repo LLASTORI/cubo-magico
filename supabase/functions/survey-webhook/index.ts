@@ -131,15 +131,17 @@ async function processWebhook(
   // Get funnel name for tag if configured
   let funnelTag: string | null = null;
   let funnelName: string | null = null;
+  let funnelLaunchTag: string | null = null;
   if (survey.default_funnel_id) {
     const { data: funnel } = await supabase
       .from('funnels')
-      .select('name')
+      .select('name, launch_tag')
       .eq('id', survey.default_funnel_id)
       .single();
     if (funnel) {
       funnelName = funnel.name;
       funnelTag = `funil:${funnel.name}`;
+      funnelLaunchTag = funnel.launch_tag || null;
     }
   }
 
@@ -208,6 +210,7 @@ async function processWebhook(
         funnel_id: survey.default_funnel_id,
         interaction_type: 'survey_response',
         page_name: survey.name,
+        launch_tag: funnelLaunchTag,
         metadata: {
           survey_id: survey.id,
           survey_name: survey.name,

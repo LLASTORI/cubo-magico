@@ -42,6 +42,20 @@
 
 ---
 
+## 🟢 Backlog futuro — Meta Ads / CAPI
+
+- [ ] **FBP/FBC — Conversions API (CAPI) server-side**
+  - Coletar `fbp` e `fbc` nas páginas de captura/checkout (via pixel Meta ou parâmetro `fbclid` na URL)
+  - Passar esses valores pelo survey-webhook/quiz até o banco (`crm_contacts.fbp`, `crm_contacts.fbc`)
+  - Implementar envio de evento `Purchase` via CAPI quando `PURCHASE_APPROVED` chega no hotmart-webhook
+  - **Por que importa:** fecha o ciclo de atribuição server-side, especialmente pós-iOS 14. É o recurso que mais melhora atribuição no Meta hoje.
+  - **Pré-requisito:** definir como coletar FBP/FBC nas landing pages (pixel JS ou parâmetro de URL)
+
+- [ ] **Enriquecer localização dos contatos via dados do Hotmart**
+  - ~10% dos contatos têm cidade/estado; pedidos Hotmart têm endereço do comprador
+  - Cruzar `orders` com `crm_contacts` para popular `city`, `state`, `country`, `cep` onde estão nulos
+  - Pode ser feito via backfill SQL + hotmart-webhook ao receber novos pedidos
+
 ## 🟢 Backlog futuro
 
 - [ ] Mover parsing do CSV para Web Worker

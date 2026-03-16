@@ -165,17 +165,19 @@ function buildContactQuery(
   let query = supabase
     .from('crm_contacts')
     .select(`
-      id, 
-      email, 
-      phone, 
-      phone_country_code, 
-      name, 
-      first_name, 
+      id,
+      email,
+      phone,
+      phone_country_code,
+      name,
+      first_name,
       last_name,
       city,
       state,
       country,
       cep,
+      gender,
+      birth_date,
       custom_fields
     `)
     .eq('project_id', projectId)
@@ -859,7 +861,7 @@ async function syncAudienceInternal(
     
     // Hash and send new contacts to Meta — full schema for maximum match rate
     if (contactsToAdd.length > 0) {
-      const schema = ['EMAIL', 'PHONE', 'FN', 'LN', 'CT', 'ST', 'ZIP', 'COUNTRY', 'EXTERN_ID']
+      const schema = ['EMAIL', 'PHONE', 'FN', 'LN', 'CT', 'ST', 'ZIP', 'COUNTRY', 'GEN', 'DOBY', 'DOBM', 'DOBD', 'EXTERN_ID']
       const hashedData: string[][] = []
       const contactRecords: any[] = []
 
@@ -882,6 +884,12 @@ async function syncAudienceInternal(
         const stHash = contact.state ? await sha256(normalizeState(contact.state)) : ''
         const zipHash = contact.cep ? await sha256(normalizeZip(contact.cep)) : ''
         const countryHash = contact.country ? await sha256(normalizeCountry(contact.country)) : ''
+        const genHash = contact.gender ? await sha256(normalizeGender(contact.gender)) : ''
+        // Birth date split into DOBY/DOBM/DOBD per Meta spec
+        const dob = contact.birth_date ? parseBirthDate(contact.birth_date) : null
+        const dobyHash = dob ? await sha256(dob.year) : ''
+        const dobmHash = dob ? await sha256(dob.month) : ''
+        const dobdHash = dob ? await sha256(dob.day) : ''
         // EXTERN_ID: internal contact UUID — must be SHA-256 hashed per Meta spec
         const externIdHash = await sha256(contact.id)
 
@@ -894,6 +902,10 @@ async function syncAudienceInternal(
           stHash,
           zipHash,
           countryHash,
+          genHash,
+          dobyHash,
+          dobmHash,
+          dobdHash,
           externIdHash,
         ])
 
@@ -914,7 +926,7 @@ async function syncAudienceInternal(
         const batchRecords = contactRecords.slice(i, i + META_BATCH_SIZE)
 
         console.log(
-          `Sending batch ${Math.floor(i / META_BATCH_SIZE) + 1} with ${batch.length} users (schema: 9 fields)`
+          `Sending batch ${Math.floor(i / META_BATCH_SIZE) + 1} with ${batch.length} users (schema: 13 fields)`
         )
 
         const addResponse = await fetch(`${GRAPH_API_BASE}/${audience.meta_audience_id}/users`, {

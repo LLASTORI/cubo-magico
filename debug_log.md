@@ -6,7 +6,18 @@
 
 ## 📅 Última atualização
 - **Data:** 2026-03-16 (sessão 9)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Auditoria de tags concluída ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+
+---
+
+### [2026-03-16] Auditoria sistema de tags — ✅ CONCLUÍDO (sessão 9)
+- `crm_contacts.tags` (`text[]` + GIN index) funciona bem — populado por surveys, crm-webhook e automações
+- `launch_tag` é campo órfão: definido em `funnels` e `crm_contact_interactions`, mas nunca preenchido automaticamente pelo hotmart-webhook
+- **Gap 1:** Hotmart webhook não aplica `launch_tag` ao contato quando uma venda ocorre em lançamento
+- **Gap 2:** survey-webhook não propaga `launch_tag` do funil para `crm_contact_interactions`
+- **Gap 3:** Meta Audience API só lê `crm_contacts.tags`, não enxerga `crm_contact_interactions.launch_tag`
+- **Correção de menor risco:** survey-webhook (~5 linhas). Maior impacto: hotmart-webhook aplicar tag com prefixo `lancamento:` no array `tags` resolve gaps 1 e 3 juntos
+- Artefato: `docs/TAGS_AUDIT.md`
 
 ---
 

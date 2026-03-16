@@ -112,14 +112,22 @@ export const useFunnelHealthMetrics = ({ projectId, startDate, endDate }: UseFun
     queryKey: ['abandoned-sales', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('transaction_id, product_code, product_name, offer_code, total_price_brl, buyer_email, sale_date')
+        .from('crm_transactions')
+        .select('external_id, product_code, product_name, offer_code, total_price_brl, transaction_date, contacts(email)')
         .eq('project_id', projectId!)
         .eq('status', 'ABANDONED')
-        .gte('sale_date', startTimestamp)
-        .lte('sale_date', adjustedEndTimestamp);
+        .gte('transaction_date', startTimestamp)
+        .lte('transaction_date', adjustedEndTimestamp);
       if (error) throw error;
-      return (data as AbandonedSale[]) || [];
+      return (data || []).map(d => ({
+        transaction_id: d.external_id,
+        product_code: d.product_code,
+        product_name: d.product_name,
+        offer_code: d.offer_code,
+        total_price_brl: d.total_price_brl,
+        buyer_email: (d.contacts as { email?: string } | null)?.email ?? null,
+        sale_date: d.transaction_date,
+      } as AbandonedSale));
     },
     enabled,
     staleTime: 30 * 1000,
@@ -130,14 +138,21 @@ export const useFunnelHealthMetrics = ({ projectId, startDate, endDate }: UseFun
     queryKey: ['problem-sales', projectId, startDateStr, endDateStr],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('hotmart_sales')
-        .select('transaction_id, offer_code, total_price_brl, buyer_email, sale_date, status')
+        .from('crm_transactions')
+        .select('external_id, offer_code, total_price_brl, transaction_date, status, contacts(email)')
         .eq('project_id', projectId!)
         .in('status', ['REFUNDED', 'CHARGEBACK', 'CANCELLED'])
-        .gte('sale_date', startTimestamp)
-        .lte('sale_date', adjustedEndTimestamp);
+        .gte('transaction_date', startTimestamp)
+        .lte('transaction_date', adjustedEndTimestamp);
       if (error) throw error;
-      return (data as RefundChargebackSale[]) || [];
+      return (data || []).map(d => ({
+        transaction_id: d.external_id,
+        offer_code: d.offer_code,
+        total_price_brl: d.total_price_brl,
+        buyer_email: (d.contacts as { email?: string } | null)?.email ?? null,
+        sale_date: d.transaction_date,
+        status: d.status,
+      } as RefundChargebackSale));
     },
     enabled,
     staleTime: 30 * 1000,
@@ -154,18 +169,22 @@ export const useFunnelHealthMetrics = ({ projectId, startDate, endDate }: UseFun
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('offer_code, buyer_email, product_code')
+          .from('crm_transactions')
+          .select('offer_code, product_code, contacts(email)')
           .eq('project_id', projectId!)
           .in('status', ['APPROVED', 'COMPLETE'])
-          .gte('sale_date', startTimestamp)
-          .lte('sale_date', adjustedEndTimestamp)
+          .gte('transaction_date', startTimestamp)
+          .lte('transaction_date', adjustedEndTimestamp)
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          allData = [...allData, ...data];
+          allData = [...allData, ...data.map(d => ({
+            offer_code: d.offer_code,
+            product_code: d.product_code,
+            buyer_email: (d.contacts as { email?: string } | null)?.email ?? null,
+          }))];
           page++;
           hasMore = data.length === PAGE_SIZE;
         } else {

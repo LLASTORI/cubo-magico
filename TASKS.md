@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 17/03/2026 (sessão 11 — Criação e exclusão de projetos corrigidas, Onda 2 next)
+> Última atualização: 17/03/2026 (sessão 11 — Projetos + MetaAccountsManager corrigidos, Onda 2 next)
 
 ---
 
@@ -67,6 +67,10 @@
 ---
 
 ## ✅ Concluído
+
+### 🔍 MetaAccountsManager — act_ID + Filtro (17/03/2026)
+- [x] act_ID exibido em `font-mono` na seção "Contas disponíveis"
+- [x] Filtro de busca por nome ou act_ID adicionado (accent-insensitive)
 
 ### 🏗️ Pipelines de Projeto — Criação e Exclusão (17/03/2026)
 - [x] Fix exclusão: 25+ tabelas faltantes adicionadas em ordem topológica correta (`orders` antes de `crm_contacts`, `meta_audience_contacts` via handler especial, etc.)

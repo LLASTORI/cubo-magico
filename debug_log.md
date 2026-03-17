@@ -6,7 +6,16 @@
 
 ## 📅 Última atualização
 - **Data:** 2026-03-17 (sessão 11)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Criação e exclusão de projetos corrigidas ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Criação e exclusão de projetos corrigidas ✅ | MetaAccountsManager melhorado ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+
+---
+
+### [2026-03-17] MetaAccountsManager — act_ID visível + filtro em Contas disponíveis — ✅ CONCLUÍDO (sessão 11)
+- **Problema 1:** Seção "Contas disponíveis" mostrava só o nome (`acc.name`), sem o `act_ID`.
+- **Problema 2:** Filtro de busca inexistente nessa seção (havia filtro só nas contas salvas).
+- **Diagnóstico:** Componente correto era `MetaAccountsManager.tsx`, não `MetaAccountSelector.tsx` (que é um dialog diferente).
+- **Fix:** `act_ID` exibido em `font-mono` abaixo do nome; filtro `availableSearch` adicionado com normalização NFD (accent-insensitive); `newAccounts` migrado para `useMemo`.
+- **Commits:** 91293e5, 780804d
 
 ---
 

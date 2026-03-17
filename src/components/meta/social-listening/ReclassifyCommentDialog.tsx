@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Edit3, 
@@ -55,6 +55,14 @@ export function ReclassifyCommentDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Initialize state from comment when dialog opens
+  useEffect(() => {
+    if (open && comment) {
+      setSentiment(comment.sentiment || '');
+      setClassification(comment.classification || '');
+    }
+  }, [open, comment]);
+
   // Update classification mutation
   const updateClassification = useMutation({
     mutationFn: async ({ newSentiment, newClassification }: { newSentiment: string; newClassification: string }) => {
@@ -101,19 +109,10 @@ export function ReclassifyCommentDialog({
     updateClassification.mutate({ newSentiment: sentiment, newClassification: classification });
   };
 
-  // Reset state when dialog opens
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && comment) {
-      setSentiment(comment.sentiment || '');
-      setClassification(comment.classification || '');
-    }
-    onOpenChange(newOpen);
-  };
-
   if (!comment) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

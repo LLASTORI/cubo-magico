@@ -33,13 +33,16 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
-  // Filter accounts based on search query
+  // Filter accounts based on search query (accent-insensitive)
   const filteredAccounts = useMemo(() => {
-    if (!searchQuery.trim()) return availableAccounts;
-    const query = searchQuery.toLowerCase();
-    return availableAccounts.filter(account => 
-      account.name?.toLowerCase().includes(query) || 
-      account.id?.toLowerCase().includes(query)
+    const term = searchQuery.trim();
+    if (!term) return availableAccounts;
+    const normalize = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const query = normalize(term);
+    return availableAccounts.filter(account =>
+      normalize(account.name ?? '').includes(query) ||
+      normalize(account.id ?? '').includes(query)
     );
   }, [availableAccounts, searchQuery]);
 
@@ -183,7 +186,7 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar conta por nome ou ID..."
+                placeholder="Buscar por nome ou act_ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -218,13 +221,13 @@ export function MetaAccountSelector({ projectId, onAccountsSelected, children }:
                       onClick={() => handleToggle(account.id)}
                     >
                       <div className="flex items-center gap-3">
-                        <Checkbox 
+                        <Checkbox
                           checked={selectedIds.includes(account.id)}
                           onCheckedChange={() => handleToggle(account.id)}
                         />
                         <div>
                           <p className="font-medium text-sm">{account.name || 'Sem nome'}</p>
-                          <p className="text-xs text-muted-foreground">{account.id}</p>
+                          <p className="text-xs font-mono text-foreground/70 mt-0.5">{account.id}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

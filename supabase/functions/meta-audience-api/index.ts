@@ -513,8 +513,8 @@ async function createAudience(
   const accessToken = credentials.access_token
 
   // adAccountId comes as Meta string (e.g. "act_312092411354147" or "312092411354147")
-  // Normalize: strip leading "act_" to get the bare numeric ID
-  const metaAccountId = adAccountId.startsWith('act_') ? adAccountId.slice(4) : adAccountId
+  // Normalize to "act_XXX" format — that's how account_id is stored in meta_ad_accounts
+  const metaAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
 
   // Resolve internal UUID for the FK insert
   const { data: adAccountRow, error: adAccountError } = await serviceSupabase
@@ -548,8 +548,8 @@ async function createAudience(
     return { error: 'Já existe um público com esse nome nessa conta. Escolha outro nome (ex: "teste publico 2").' }
   }
 
-  // Create Custom Audience on Meta — use bare Meta account ID with act_ prefix
-  const cleanAdAccountId = `act_${metaAccountId}`
+  // Create Custom Audience on Meta — metaAccountId already has act_ prefix
+  const cleanAdAccountId = metaAccountId
   const createUrl = `${GRAPH_API_BASE}/${cleanAdAccountId}/customaudiences`
 
   // IMPORTANT: Meta costuma falhar silenciosamente (ex: #2654) quando enviamos descrições gigantes.

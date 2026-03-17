@@ -5,8 +5,33 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-17 (sessão 13)
-- **Status geral:** Pipeline restaurado ✅ | Social Listening desbloqueado e analisado ✅ | CSV Import cards financeiros corrigidos ✅ | Próximo passo: melhorias priorizadas no Social Listening (ver TASKS.md)
+- **Data:** 2026-03-17 (sessão 14)
+- **Status geral:** Pipeline restaurado ✅ | Social Listening desbloqueado e analisado ✅ | 7 melhorias Social Listening implementadas e deployadas ✅ | Próximo: Item 7 (auto-reply Meta API) em planejamento separado
+
+---
+
+### [2026-03-17] Social Listening — 7 melhorias implementadas — ✅ CONCLUÍDO (sessão 14)
+
+**Melhorias aplicadas em `supabase/functions/social-comments-api/index.ts`:**
+
+1. **Custom categories no prompt** — `buildClassificationPrompt` e `buildBatchPrompt` agora usam `knowledgeBase.custom_categories` dinamicamente. Fallback para 9 categorias hardcoded quando não configurado.
+
+2. **FAQs no prompt** — bloco `faqsContext` injetado em `buildClassificationPrompt`, `buildBatchPrompt` e `generateReply`. FAQs formatadas como `P:/R:` numeradas.
+
+3. **Praise keywords limit: 25 → 60 chars** — comentários até 60 chars são classificados por keyword (não IA). Evita gasto desnecessário de quota em elogios óbvios.
+
+4. **`last_synced_at` gravado após sync** — ao final do batch-upsert em `syncComments()`, atualiza `social_listening_pages.last_synced_at` para todos os `page_id` dos posts sincronizados.
+
+5. **`manually_classified=true` bloqueia re-classificação** — `.neq('manually_classified', true)` adicionado à query de pendentes em `processCommentsWithAI`.
+
+6. **CRM linking para Facebook** — `linkExistingCommentsToCRM` reescrita para processar ambas plataformas. Instagram: match por `instagram` handle. Facebook: match por `from.name` (author_username) vs `crm_contacts.name` normalizado.
+
+7. **CRM linking contínuo no sync** — `syncComments` agora:
+   - Busca contatos com `id, instagram, name` (sem filtro `instagram IS NOT NULL`)
+   - Constrói `contactNameMap` (nome→id) além do `crmContactMap` (instagram→id)
+   - Passa `contactNameMap` para `buildCommentRow` — Facebook comments vinculados no momento do upsert, sem precisar do botão manual
+
+**Deploy:** `social-comments-api` deployada via `supabase functions deploy` ✅
 
 ---
 

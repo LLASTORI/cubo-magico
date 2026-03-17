@@ -15,14 +15,14 @@
 > Sistema desbloqueado (sessão 13). Análise completa concluída. 15+ problemas mapeados.
 
 ### Quick wins (alta ROI, baixo esforço)
-- [ ] **Conectar custom categories ao prompt da IA** — campo `ai_knowledge_base.custom_categories` existe mas nunca vai no prompt (`buildClassificationPrompt` usa hardcoded 9 categorias)
-- [ ] **Conectar FAQs ao prompt da IA** — `ai_knowledge_base.faqs` carregado mas ignorado nos prompts de classificação e geração de resposta
-- [ ] **Corrigir praise keywords para comentários >25 chars** — limite hardcoded impede classificação keyword de comments maiores que têm praise óbvio, enviando desnecessariamente para IA
-- [ ] **Atualizar `last_synced_at` após sync** — campo existe em `social_listening_pages` mas nunca é gravado após sync de comentários
+- [x] **Conectar custom categories ao prompt da IA** — campo `ai_knowledge_base.custom_categories` existe mas nunca vai no prompt (`buildClassificationPrompt` usa hardcoded 9 categorias)
+- [x] **Conectar FAQs ao prompt da IA** — `ai_knowledge_base.faqs` carregado mas ignorado nos prompts de classificação e geração de resposta
+- [x] **Corrigir praise keywords para comentários >25 chars** — limite hardcoded impede classificação keyword de comments maiores que têm praise óbvio, enviando desnecessariamente para IA
+- [x] **Atualizar `last_synced_at` após sync** — campo existe em `social_listening_pages` mas nunca é gravado após sync de comentários
 
 ### Médio prazo
-- [ ] **Linking CRM para Facebook** — `linkExistingCommentsToCRM` só processa Instagram (linha 854). Facebook comments têm `from.name` e `from.id` — cruzar com `crm_contacts.name` ou `buyer_name` em `orders`
-- [ ] **Linking CRM contínuo** — rodar linking automático no batch-upsert de comentários (já temos o `crmContactMap` pré-carregado — só expandir para Facebook)
+- [x] **Linking CRM para Facebook** — `linkExistingCommentsToCRM` agora processa Instagram + Facebook (match por `from.name` vs `crm_contacts.name` normalizado)
+- [x] **Linking CRM contínuo** — `syncComments` agora pré-carrega `contactNameMap` (nome→id) e passa para `buildCommentRow`; Facebook comments vinculados automaticamente no sync
 - [ ] **Envio de resposta via Meta Graph API** — endpoint `POST /{commentId}/replies` com `message` body — elimina copy-paste manual. Requer `manage_pages` permission. Preencher `reply_sent_at` e `replied_by` após envio.
 
 ### Backlog técnico
@@ -30,7 +30,7 @@
 - [ ] **Soft-delete ao invés de orphans** — comentários removidos no Meta devem ser marcados `is_deleted=true` não ignorados
 - [ ] **Limite de posts configurável** — 100 posts/plataforma hardcoded; expor como configuração por projeto
 - [ ] **OpenAI como provider padrão** — batch de 15 comentários/request é 15x mais eficiente que Lovable (1/request); sugerir preferência OpenAI quando key disponível
-- [ ] **`manually_classified=true` impede re-classificação automática** — hoje o campo existe mas não é verificado no `processCommentsWithAI`; adicionar filtro `.eq('manually_classified', false)` na query de pendentes
+- [x] **`manually_classified=true` impede re-classificação automática** — filtro `.neq('manually_classified', true)` adicionado à query de pendentes em `processCommentsWithAI`
 
 ---
 
@@ -89,6 +89,16 @@
 ---
 
 ## ✅ Concluído
+
+### 📡 Social Listening — Melhorias Quick Wins + CRM (17/03/2026)
+- [x] `buildClassificationPrompt` agora injeta `custom_categories` do knowledge base dinamicamente (9 categorias hardcoded como fallback)
+- [x] FAQs do knowledge base injetadas nos prompts de classificação (`buildBatchPrompt`) e geração de resposta (`generateReply`)
+- [x] Praise keyword limit: 25 → 60 chars (comentários maiores com elogios óbvios classificados por keyword, não IA)
+- [x] `last_synced_at` gravado em `social_listening_pages` após cada sync de comentários
+- [x] `manually_classified=true` bloqueia re-classificação automática em `processCommentsWithAI`
+- [x] CRM linking para Facebook: `linkExistingCommentsToCRM` agora processa ambas plataformas (Instagram por username, Facebook por nome normalizado)
+- [x] CRM linking contínuo no sync: `contactNameMap` pré-carregada em `syncComments`, `buildCommentRow` usa para Facebook
+- [x] Deploy: `social-comments-api` (sessão 14)
 
 ### 🎯 Meta Audiences — Edição de Tags (17/03/2026)
 - [x] `MetaAudienceEditDialog` reescrito com edição completa de tags (add/remove via checkbox list)

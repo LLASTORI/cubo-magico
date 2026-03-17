@@ -115,9 +115,9 @@ function classifyByKeywords(text: string, customKeywords?: CustomKeywords): Keyw
     }
   }
 
-  // PRIORITY 3: Check praise keywords (only if comment is short - 25 chars or less)
-  // Longer praise comments go to AI to detect other signals (like "amei essa cor, onde compro")
-  if (normalizedText.length <= 25) {
+  // PRIORITY 3: Check praise keywords (only if comment is short - 60 chars or less)
+  // Longer comments go to AI to detect mixed signals (like "amei essa cor, onde compro?")
+  if (normalizedText.length <= 60) {
     for (const keyword of praiseKeywords) {
       if (normalizedText.includes(keyword.toLowerCase()) || normalizedText === keyword.toLowerCase()) {
         return { 
@@ -139,6 +139,10 @@ function classifyByKeywords(text: string, customKeywords?: CustomKeywords): Keyw
 // ============= AI PROMPT BUILDERS =============
 
 function buildClassificationPrompt(knowledgeBase?: any) {
+  const faqsContext = knowledgeBase?.faqs?.length
+    ? `\nPERGUNTAS FREQUENTES DO NEGÓCIO (use para contextualizar dúvidas):\n${(knowledgeBase.faqs as Array<{question: string, answer: string}>).map((f, i) => `${i + 1}. P: ${f.question}\n   R: ${f.answer}`).join('\n')}\n`
+    : ''
+
   const businessContext = knowledgeBase ? `
 CONTEXTO DO NEGÓCIO:
 - Nome: ${knowledgeBase.business_name || 'Não informado'}
@@ -147,7 +151,7 @@ CONTEXTO DO NEGÓCIO:
 - Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
 ${knowledgeBase.commercial_keywords?.length ? `- Palavras comerciais: ${knowledgeBase.commercial_keywords.join(', ')}` : ''}
 ${knowledgeBase.spam_keywords?.length ? `- Palavras de spam: ${knowledgeBase.spam_keywords.join(', ')}` : ''}
-` : ''
+${faqsContext}` : ''
 
   const defaultCategories = {
     product_question: 'Dúvida de Produto - perguntas sobre características, uso, benefícios',
@@ -186,24 +190,45 @@ Responda APENAS em JSON válido no formato:
 
 // Build batch prompt for OpenAI (more cost-effective)
 function buildBatchPrompt(comments: Array<{id: string, text: string, postContext: string}>, knowledgeBase?: any) {
+  const defaultCategories = {
+    product_question: 'Dúvida de Produto - perguntas sobre características, uso, benefícios',
+    purchase_question: 'Dúvida de Compra/Preço - perguntas sobre preço, pagamento, entrega',
+    commercial_interest: 'Interesse Comercial - demonstra vontade de comprar',
+    praise: 'Elogio - feedback positivo, agradecimento',
+    complaint: 'Crítica/Reclamação - insatisfação, problema',
+    contact_request: 'Pedido de Contato - quer falar por DM, WhatsApp, etc',
+    friend_tag: 'Marcação de Amigo - apenas marcou alguém sem contexto relevante',
+    spam: 'Spam - conteúdo irrelevante, propaganda, bots',
+    other: 'Outro - não se encaixa nas categorias acima',
+  }
+  const categories = knowledgeBase?.custom_categories || defaultCategories
+  const categoryKeys = Object.keys(categories).map(k => `"${k}"`).join(', ')
+  const categoryList = Object.entries(categories)
+    .map(([key, desc]) => `   - "${key}" - ${desc}`)
+    .join('\n')
+
+  const faqsContext = knowledgeBase?.faqs?.length
+    ? `\nPERGUNTAS FREQUENTES DO NEGÓCIO (use para contextualizar dúvidas):\n${(knowledgeBase.faqs as Array<{question: string, answer: string}>).map((f, i) => `${i + 1}. P: ${f.question}\n   R: ${f.answer}`).join('\n')}\n`
+    : ''
+
   const businessContext = knowledgeBase ? `
 CONTEXTO DO NEGÓCIO:
 - Nome: ${knowledgeBase.business_name || 'Não informado'}
 - Descrição: ${knowledgeBase.business_description || 'Não informado'}
 - Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
-` : ''
+${faqsContext}` : ''
 
-  const commentsText = comments.map((c, i) => 
+  const commentsText = comments.map((c, i) =>
     `[${i+1}] ID: ${c.id}
 Contexto do post: ${c.postContext || 'N/A'}
 Comentário: "${c.text}"`
   ).join('\n\n')
 
   return `${businessContext}
-
 Analise os ${comments.length} comentários abaixo de redes sociais. Para cada um, forneça:
 - sentiment: "positive", "neutral" ou "negative"
-- classification: "product_question", "purchase_question", "commercial_interest", "praise", "complaint", "contact_request", "friend_tag", "spam" ou "other"
+- classification: uma das opções: ${categoryKeys}
+${categoryList}
 - intent_score: 0-100 (intenção comercial)
 - summary: resumo de 1 linha (máx 80 caracteres)
 
@@ -706,9 +731,8 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
       .eq('is_active', true),
     supabase
       .from('crm_contacts')
-      .select('id, instagram')
-      .eq('project_id', projectId)
-      .not('instagram', 'is', null),
+      .select('id, instagram, name')
+      .eq('project_id', projectId),
   ])
 
   const savedPages = pagesRes.data || []
@@ -728,9 +752,13 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
   }
 
   const crmContactMap = new Map<string, string>()
+  const contactNameMap = new Map<string, string>()
   for (const contact of contactsRes.data || []) {
     if (contact.instagram) {
       crmContactMap.set(contact.instagram.toLowerCase().replace(/^@/, ''), contact.id)
+    }
+    if (contact.name) {
+      contactNameMap.set(contact.name.toLowerCase().trim(), contact.id)
     }
   }
 
@@ -744,12 +772,12 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
       const apiComments = await fetchCommentsForPost(post, pageToken, accessToken)
 
       for (const comment of apiComments) {
-        commentRows.push(buildCommentRow(projectId, post.id, post.platform, comment, null, ownAccountUsernames, crmContactMap))
+        commentRows.push(buildCommentRow(projectId, post.id, post.platform, comment, null, ownAccountUsernames, crmContactMap, contactNameMap))
         totalComments++
 
         if (comment.replies?.data) {
           for (const reply of comment.replies.data) {
-            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountUsernames, crmContactMap))
+            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountUsernames, crmContactMap, contactNameMap))
             totalComments++
           }
         }
@@ -775,6 +803,16 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     }
   }
 
+  // Update last_synced_at for all pages that had posts synced
+  const syncedPageIds = [...new Set(posts.map((p: any) => p.page_id).filter(Boolean))]
+  if (syncedPageIds.length > 0) {
+    await supabase
+      .from('social_listening_pages')
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .in('page_id', syncedPageIds)
+  }
+
   return { success: true, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
 }
 
@@ -786,11 +824,20 @@ function buildCommentRow(
   parentId: string | null,
   ownAccountUsernames: Set<string>,
   crmContactMap: Map<string, string>,
+  contactNameMap?: Map<string, string>,
 ): any {
   const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
-  const normalizedAuthor = authorUsername ? authorUsername.toLowerCase().replace(/^@/, '') : null
+  const normalizedAuthor = authorUsername ? authorUsername.toLowerCase().replace(/^@/, '').trim() : null
   const isOwnAccount = normalizedAuthor ? ownAccountUsernames.has(normalizedAuthor) : false
-  const crmContactId = (normalizedAuthor && platform === 'instagram') ? (crmContactMap.get(normalizedAuthor) ?? null) : null
+
+  let crmContactId: string | null = null
+  if (normalizedAuthor) {
+    if (platform === 'instagram') {
+      crmContactId = crmContactMap.get(normalizedAuthor) ?? null
+    } else if (platform === 'facebook' && contactNameMap) {
+      crmContactId = contactNameMap.get(normalizedAuthor) ?? null
+    }
+  }
 
   return {
     project_id: projectId,
@@ -843,55 +890,65 @@ async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken:
 
 async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
   console.log('Linking existing comments to CRM contacts for project:', projectId)
-  
+
   let linked = 0
   let notFound = 0
-  
+
+  // Fetch unlinked comments from both Instagram and Facebook
   const { data: comments, error } = await supabase
     .from('social_comments')
     .select('id, author_username, platform')
     .eq('project_id', projectId)
-    .eq('platform', 'instagram')
     .is('crm_contact_id', null)
     .not('author_username', 'is', null)
     .limit(500)
-  
+
   if (error || !comments?.length) {
     return { success: true, linked: 0, message: 'Nenhum comentário pendente para vincular' }
   }
-  
+
+  // Fetch all contacts with instagram handle or name
   const { data: contacts } = await supabase
     .from('crm_contacts')
-    .select('id, instagram')
+    .select('id, instagram, name')
     .eq('project_id', projectId)
-    .not('instagram', 'is', null)
-  
-  const contactMap = new Map<string, string>()
+
+  const contactByInstagram = new Map<string, string>()
+  const contactByName = new Map<string, string>()
   for (const contact of contacts || []) {
     if (contact.instagram) {
-      const normalizedIG = contact.instagram.toLowerCase().replace(/^@/, '')
-      contactMap.set(normalizedIG, contact.id)
+      contactByInstagram.set(contact.instagram.toLowerCase().replace(/^@/, ''), contact.id)
+    }
+    if (contact.name) {
+      contactByName.set(contact.name.toLowerCase().trim(), contact.id)
     }
   }
-  
+
   for (const comment of comments) {
     if (!comment.author_username) continue
-    
-    const normalizedUsername = comment.author_username.toLowerCase().replace(/^@/, '')
-    const contactId = contactMap.get(normalizedUsername)
-    
+
+    const normalizedUsername = comment.author_username.toLowerCase().replace(/^@/, '').trim()
+    let contactId: string | undefined
+
+    if (comment.platform === 'instagram') {
+      contactId = contactByInstagram.get(normalizedUsername)
+    } else if (comment.platform === 'facebook') {
+      // Facebook comments have from.name as author_username — match against contact name
+      contactId = contactByName.get(normalizedUsername)
+    }
+
     if (contactId) {
       const { error: updateError } = await supabase
         .from('social_comments')
         .update({ crm_contact_id: contactId, contact_id: contactId })
         .eq('id', comment.id)
-      
+
       if (!updateError) linked++
     } else {
       notFound++
     }
   }
-  
+
   return { success: true, linked, notFound, totalProcessed: comments.length }
 }
 
@@ -929,6 +986,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
     .eq('project_id', projectId)
     .eq('ai_processing_status', 'pending')
     .eq('is_own_account', false)
+    .neq('manually_classified', true)
     .limit(batchSize)
 
   if (error || !comments?.length) {
@@ -1617,12 +1675,16 @@ async function generateReply(supabase: any, projectId: string, commentId: string
     .eq('project_id', projectId)
     .maybeSingle()
 
+  const faqsContext = knowledgeBase?.faqs?.length
+    ? `\nPERGUNTAS FREQUENTES (use para formular respostas precisas):\n${(knowledgeBase.faqs as Array<{question: string, answer: string}>).map((f, i) => `${i + 1}. P: ${f.question}\n   R: ${f.answer}`).join('\n')}\n`
+    : ''
+
   const businessContext = knowledgeBase ? `
 CONTEXTO DO NEGÓCIO:
 - Nome: ${knowledgeBase.business_name || 'Não informado'}
 - Tom de voz: ${knowledgeBase.tone_of_voice || 'Profissional e amigável'}
 - Produtos/Serviços: ${knowledgeBase.products_services || 'Não informado'}
-` : ''
+${faqsContext}` : ''
 
   const prompt = `${businessContext}
 

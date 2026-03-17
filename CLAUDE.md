@@ -154,7 +154,7 @@ Se a migration foi aplicada diretamente no SQL Editor (sem CLI), criar o arquivo
 
 ## Manutenção dos Arquivos de Contexto
 
-Estes três arquivos devem ser mantidos atualizados em tempo real durante qualquer sessão:
+Estes arquivos devem ser mantidos atualizados em tempo real durante qualquer sessão:
 
 ### debug_log.md
 Atualizar **a cada passo significativo**: query executada, hipótese confirmada/descartada, bug encontrado, correção aplicada, deploy realizado.
@@ -175,6 +175,14 @@ Atualizar sempre que:
 
 ### CLAUDE.md (este arquivo)
 Atualizar quando houver mudança arquitetural, nova regra de negócio, novo módulo relevante ou nova edge function importante.
+
+### VISION.md
+Visão estratégica do produto. **Ler quando for:**
+- Tomar decisões arquiteturais
+- Criar novas features ou módulos
+- Avaliar se uma implementação está alinhada com o norte do produto
+
+**Não precisa ler para:** fixes de bug, migrations simples, ajustes de UI pontuais.
 
 ## Sistema de Design
 

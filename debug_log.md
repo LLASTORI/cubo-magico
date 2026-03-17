@@ -5,8 +5,17 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-17 (sessão 11)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Criação e exclusão de projetos corrigidas ✅ | MetaAccountsManager melhorado ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Data:** 2026-03-17 (sessão 12)
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Criação e exclusão de projetos corrigidas ✅ | MetaAccountsManager melhorado ✅ | Edição de tags em públicos Meta ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+
+---
+
+### [2026-03-17] Meta Audiences — edição de tags em públicos existentes — ✅ CONCLUÍDO (sessão 12)
+- **Problema:** Dialog de edição só permitia alterar nome e frequência. Para mudar tags, precisava excluir e recriar o público.
+- **Fix:** `MetaAudienceEditDialog` reescrito com UI completa de tags: checkbox list com busca, badges de tags selecionadas (clique para remover), botões "Adicionar Todas"/"Remover Todas", operador AND/OR condicional, tamanho estimado em tempo real (debounced 300ms).
+- **Fluxo ao salvar:** `updateAudience` atualiza `segment_config` + `estimated_size` no banco → se tags mudaram, dispara `syncAudience` imediatamente → Meta Ads recebe lista atualizada (adições e remoções).
+- **Backend:** edge function `meta-audience-api` action `update_audience` já suportava `segmentConfig` — nenhuma mudança necessária na edge function.
+- **Commit:** 9d5d57e
 
 ---
 

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 17/03/2026 (sessão 11 — Projetos + MetaAccountsManager corrigidos, Onda 2 next)
+> Última atualização: 17/03/2026 (sessão 12 — Edição de tags em públicos Meta, Onda 2 next)
 
 ---
 
@@ -67,6 +67,12 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Meta Audiences — Edição de Tags (17/03/2026)
+- [x] `MetaAudienceEditDialog` reescrito com edição completa de tags (add/remove via checkbox list)
+- [x] Busca de tags, botões "Adicionar Todas" / "Remover Todas", operador AND/OR, estimated size em tempo real
+- [x] Ao salvar: atualiza `segment_config` + dispara sync automático no Meta Ads
+- [x] `MetaAudiencesTab` passa `availableTags`, `tagsLoading`, `refetchTags` para o dialog de edição
 
 ### 🔍 MetaAccountsManager — act_ID + Filtro (17/03/2026)
 - [x] act_ID exibido em `font-mono` na seção "Contas disponíveis"

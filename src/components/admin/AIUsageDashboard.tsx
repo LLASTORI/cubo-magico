@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CubeLoader } from '@/components/CubeLoader';
-import { Brain, TrendingUp, DollarSign, Activity, RefreshCw, AlertTriangle, CheckCircle2, Settings, RotateCcw, Infinity, Key } from 'lucide-react';
+import { Brain, TrendingUp, DollarSign, Activity, RefreshCw, AlertTriangle, CheckCircle2, Settings, RotateCcw, Infinity, Key, Eye, EyeOff, Wifi, WifiOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -30,9 +30,81 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
     monthly_limit: 3000,
     is_unlimited: false,
   });
-  
+  const [openAIKeyInput, setOpenAIKeyInput] = useState('');
+  const [showKey, setShowKey] = useState(false);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch OpenAI key status (is_configured only, never returns the key value)
+  const { data: openAIStatus, refetch: refetchOpenAIStatus } = useQuery({
+    queryKey: ['platform-openai-status'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('is_configured, is_validated, validated_at, updated_at')
+        .eq('setting_key', 'openai_api_key')
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || { is_configured: false, is_validated: false, validated_at: null, updated_at: null };
+    },
+  });
+
+  // Save OpenAI key mutation
+  const saveOpenAIKeyMutation = useMutation({
+    mutationFn: async (key: string) => {
+      const { data: existing } = await supabase
+        .from('platform_settings')
+        .select('id')
+        .eq('setting_key', 'openai_api_key')
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('platform_settings')
+          .update({ setting_value: key, is_configured: true, is_validated: false, updated_at: new Date().toISOString() })
+          .eq('setting_key', 'openai_api_key');
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('platform_settings')
+          .insert({ setting_key: 'openai_api_key', setting_value: key, is_configured: true });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      setOpenAIKeyInput('');
+      setShowKey(false);
+      toast({ title: 'API Key salva!', description: 'OpenAI configurada com sucesso.' });
+      queryClient.invalidateQueries({ queryKey: ['platform-openai-status'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Test OpenAI connection mutation
+  const testOpenAIMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('social-comments-api', {
+        body: { action: 'test_openai_connection', projectId: 'platform' },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Conexão falhou');
+      return data;
+    },
+    onSuccess: async () => {
+      await supabase
+        .from('platform_settings')
+        .update({ is_validated: true, validated_at: new Date().toISOString() })
+        .eq('setting_key', 'openai_api_key');
+      toast({ title: 'Conexão bem-sucedida!', description: 'gpt-4o-mini disponível e funcionando.' });
+      queryClient.invalidateQueries({ queryKey: ['platform-openai-status'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Falha na conexão', description: error.message, variant: 'destructive' });
+    },
+  });
 
   // Fetch projects for dropdown
   const { data: projects } = useQuery({
@@ -296,6 +368,92 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
 
   return (
     <div className="space-y-6">
+      {/* OpenAI Platform Configuration */}
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Key className="h-4 w-4 text-green-500" />
+            Conexão OpenAI — Plataforma
+          </CardTitle>
+          <CardDescription>
+            API Key única usada por todos os projetos do Cubo Mágico. Gerenciada aqui pelo super admin.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Status */}
+          <div className="flex items-center gap-3">
+            {openAIStatus?.is_validated ? (
+              <Badge className="bg-green-500 gap-1">
+                <Wifi className="h-3 w-3" />
+                Conectado — gpt-4o-mini
+              </Badge>
+            ) : openAIStatus?.is_configured ? (
+              <Badge variant="outline" className="text-yellow-600 border-yellow-600 gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Configurado (não testado)
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-red-600 border-red-600 gap-1">
+                <WifiOff className="h-3 w-3" />
+                Não configurado
+              </Badge>
+            )}
+            {openAIStatus?.validated_at && (
+              <span className="text-xs text-muted-foreground">
+                Testado em {format(new Date(openAIStatus.validated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+            )}
+          </div>
+
+          {/* Input + actions */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                type={showKey ? 'text' : 'password'}
+                placeholder={openAIStatus?.is_configured ? 'sk-•••••••••• (deixe vazio para manter atual)' : 'sk-proj-...'}
+                value={openAIKeyInput}
+                onChange={(e) => setOpenAIKeyInput(e.target.value)}
+                className="pr-10 font-mono text-sm"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowKey(!showKey)}
+              >
+                {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <Button
+              onClick={() => openAIKeyInput.trim() && saveOpenAIKeyMutation.mutate(openAIKeyInput.trim())}
+              disabled={!openAIKeyInput.trim() || saveOpenAIKeyMutation.isPending}
+            >
+              {saveOpenAIKeyMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => testOpenAIMutation.mutate()}
+              disabled={!openAIStatus?.is_configured || testOpenAIMutation.isPending}
+            >
+              {testOpenAIMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Wifi className="h-4 w-4" />
+              )}
+              <span className="ml-1">Testar</span>
+            </Button>
+          </div>
+
+          {!openAIStatus?.is_configured && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Sem API Key configurada o processamento de IA (classificação de comentários e geração de respostas) fica inativo para todos os projetos.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Project Selector (if not passed as prop) */}
       {!projectId && (
         <div className="flex items-center gap-4">

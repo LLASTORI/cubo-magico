@@ -8,7 +8,16 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
+const OPENAI_API_KEY_ENV = Deno.env.get('OPENAI_API_KEY')
+
+// Resolve OpenAI key: DB platform_settings takes precedence over env var
+async function getOpenAIKey(supabase: any): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_platform_setting_internal', { p_key: 'openai_api_key' })
+    if (!error && data) return data as string
+  } catch (_) { /* ignore, fall through to env var */ }
+  return OPENAI_API_KEY_ENV || null
+}
 
 const GRAPH_API_VERSION = 'v19.0'
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -240,8 +249,9 @@ Responda em JSON array válido no formato:
 // ============= AI CLASSIFICATION FUNCTIONS =============
 
 // Classify using OpenAI gpt-4o-mini (cheaper)
-async function classifyWithOpenAI(comments: Array<{id: string, text: string, postContext: string}>, knowledgeBase?: any) {
-  if (!OPENAI_API_KEY) {
+async function classifyWithOpenAI(comments: Array<{id: string, text: string, postContext: string}>, knowledgeBase?: any, apiKey?: string) {
+  const key = apiKey || OPENAI_API_KEY_ENV
+  if (!key) {
     throw new Error('OPENAI_API_KEY not configured')
   }
 
@@ -250,7 +260,7 @@ async function classifyWithOpenAI(comments: Array<{id: string, text: string, pos
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -434,6 +444,10 @@ Deno.serve(async (req) => {
       case 'generate_reply':
         const { commentId } = body
         result = await generateReply(serviceSupabase, projectId, commentId)
+        break
+
+      case 'test_openai_connection':
+        result = await testOpenAIConnection(serviceSupabase)
         break
 
       case 'get_ai_usage':
@@ -1024,7 +1038,8 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
       .in('id', commentsForAI.map(c => c.id))
 
     // Use OpenAI for all AI classification
-    if (!OPENAI_API_KEY) {
+    const openAIKey = await getOpenAIKey(supabase)
+    if (!openAIKey) {
       // Reset comments back to pending so they can be tried again later
       await supabase
         .from('social_comments')
@@ -1033,7 +1048,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
       return {
         success: false,
-        error: 'API Key OpenAI não configurada. Configure a chave OPENAI_API_KEY nas configurações do projeto para classificar comentários.',
+        error: 'API Key OpenAI não configurada. Configure a chave em Admin → Uso de IA para classificar comentários.',
         processed: keywordClassified,
         remaining: commentsForAI.length,
       }
@@ -1047,7 +1062,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
       for (let i = 0; i < commentsForAI.length; i += openAIBatchSize) {
         const batch = commentsForAI.slice(i, i + openAIBatchSize)
 
-        const { results, inputTokens, outputTokens, cost } = await classifyWithOpenAI(batch, knowledgeBase)
+        const { results, inputTokens, outputTokens, cost } = await classifyWithOpenAI(batch, knowledgeBase, openAIKey)
 
         await trackAIUsage(supabase, projectId, {
           feature: 'social_listening',
@@ -1453,34 +1468,44 @@ Comentário: "${comment.text}"
 
 Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja empático e útil.`
 
-  if (!OPENAI_API_KEY) {
-    throw new Error('API Key OpenAI não configurada. Configure a chave OPENAI_API_KEY nas configurações do projeto para gerar respostas.')
+  const openAIKey = await getOpenAIKey(supabase)
+  if (!openAIKey) {
+    return {
+      success: false,
+      error: 'API Key OpenAI não configurada. Configure a chave em Admin → Uso de IA para gerar respostas.',
+    }
   }
 
   let reply: string = ''
 
   console.log('[GENERATE_REPLY] Using OpenAI')
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 200,
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('[GENERATE_REPLY] OpenAI API error:', response.status, errorText)
-    throw new Error(`Erro ao gerar resposta com IA: ${response.status}`)
+  let openaiResponse: Response
+  try {
+    openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 200,
+      }),
+    })
+  } catch (fetchError: any) {
+    console.error('[GENERATE_REPLY] OpenAI fetch error:', fetchError.message)
+    return { success: false, error: `Falha na conexão com OpenAI: ${fetchError.message}` }
   }
 
-  const data = await response.json()
+  if (!openaiResponse.ok) {
+    const errorText = await openaiResponse.text()
+    console.error('[GENERATE_REPLY] OpenAI API error:', openaiResponse.status, errorText)
+    return { success: false, error: `Erro OpenAI ${openaiResponse.status}: ${errorText.substring(0, 200)}` }
+  }
+
+  const data = await openaiResponse.json()
   reply = data.choices?.[0]?.message?.content || ''
   console.log('[GENERATE_REPLY] OpenAI reply generated, length:', reply.length)
 
@@ -1512,4 +1537,30 @@ Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja emp�
   }
 
   return { success: true, reply, provider: 'openai' }
+}
+
+// ============= OPENAI CONNECTION TEST =============
+
+async function testOpenAIConnection(supabase: any) {
+  const key = await getOpenAIKey(supabase)
+  if (!key) {
+    return { success: false, configured: false, error: 'API Key não configurada.' }
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` },
+    })
+
+    if (response.status === 401) {
+      return { success: false, configured: true, error: 'API Key inválida ou expirada.' }
+    }
+    if (!response.ok) {
+      return { success: false, configured: true, error: `Erro OpenAI: ${response.status}` }
+    }
+
+    return { success: true, configured: true, model: 'gpt-4o-mini' }
+  } catch (err: any) {
+    return { success: false, configured: true, error: `Falha de conexão: ${err.message}` }
+  }
 }

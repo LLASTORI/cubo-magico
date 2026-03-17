@@ -5,8 +5,18 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-16 (sessão 9)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Data:** 2026-03-17 (sessão 10)
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+
+---
+
+### [2026-03-17] Meta Audiences — end-to-end funcionando — ✅ CONCLUÍDO (sessão 10)
+- **Root cause 1 (500 na criação):** `meta_ad_audiences.ad_account_id` é UUID (FK), frontend enviava string Meta `act_XXX`. Fix: edge function normaliza `act_XXX` → lookup em `meta_ad_accounts` por `account_id` → resolve UUID para insert.
+- **Root cause 2 (sync sem gravar contatos):** `meta_audience_contacts` não tinha UNIQUE constraint em `(audience_id, contact_id)`. O upsert com `onConflict` era rejeitado silenciosamente pelo PostgREST. Fix: migration `20260317001500` adicionou o constraint.
+- **Schema expandido para 13 campos PII:** EMAIL, PHONE, FN, LN, CT, ST, ZIP, COUNTRY, GEN, DOBY, DOBM, DOBD, EXTERN_ID — máximo match rate no Meta.
+- **Campos adicionados ao CRM:** `gender` e `birth_date` em `crm_contacts` (migrations 20260316210000 e 20260316220000).
+- **Resultado verificado:** público "COMPRADORES CM | CUBO MÁGICO" criado com `meta_audience_id` real. Sync: 4.353 contatos gravados em `meta_audience_contacts` (100% com email_hash, 86% com phone_hash).
+- **Commits:** e00edd1, 1b87b54, 2340025, 75a4252
 
 ---
 

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 16/03/2026 (sessão 9 — Tags fix concluído, Onda 2 next)
+> Última atualização: 17/03/2026 (sessão 10 — Meta Audiences end-to-end concluído, Onda 2 next)
 
 ---
 
@@ -67,6 +67,13 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Meta Audiences — End-to-end (17/03/2026)
+- [x] Fix 500 na criação de público (UUID vs string Meta mismatch no ad_account_id)
+- [x] Schema expandido para 13 campos PII (EMAIL, PHONE, FN, LN, CT, ST, ZIP, COUNTRY, GEN, DOBY, DOBM, DOBD, EXTERN_ID)
+- [x] `gender` e `birth_date` adicionados a `crm_contacts`
+- [x] UNIQUE constraint `(audience_id, contact_id)` em `meta_audience_contacts` — fix do sync silencioso
+- [x] Sync verificado: 4.353 contatos gravados (100% email, 86% phone)
 
 ### 🏷️ Sistema de Tags — Fix lançamento (16/03/2026)
 - [x] **Auditoria** — `docs/TAGS_AUDIT.md` com 3 gaps identificados

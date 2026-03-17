@@ -24,13 +24,20 @@
 - [x] **Linking CRM para Facebook** — `linkExistingCommentsToCRM` agora processa Instagram + Facebook (match por `from.name` vs `crm_contacts.name` normalizado)
 - [x] **Linking CRM contínuo** — `syncComments` agora pré-carrega `contactNameMap` (nome→id) e passa para `buildCommentRow`; Facebook comments vinculados automaticamente no sync
 - [ ] **Envio de resposta via Meta Graph API** — endpoint `POST /{commentId}/replies` com `message` body — elimina copy-paste manual. Requer `manage_pages` permission. Preencher `reply_sent_at` e `replied_by` após envio.
+- [ ] **Ações em lote** — selecionar múltiplos comentários e classificar todos de uma vez, ou marcar como lidos/respondidos em bloco
+- [ ] **Filtro por data** — "últimas 24h", "esta semana", período customizado; útil para acompanhar lançamentos em tempo real
+- [ ] **Indicador de não lido** — campo `is_read boolean` em `social_comments`; badge com contagem de novos na aba; destacar visualmente comentários novos desde última visita
+- [ ] **Dashboard de sentimento no tempo** — gráfico de linha com evolução de sentimento (positive/neutral/negative) dia a dia; detectar picos de reclamações ou interesse durante lançamento
+- [ ] **Notificação de pico de comentários** — alertar quando volume num post crescer X% em 1h; útil para viralizações ou crises de reputação
 
 ### Backlog técnico
 - [ ] **Detectar e marcar comentários deletados no Meta** — no sync, checar se IDs existentes no DB ainda retornam da API; se não, setar `is_deleted=true`
 - [ ] **Soft-delete ao invés de orphans** — comentários removidos no Meta devem ser marcados `is_deleted=true` não ignorados
 - [ ] **Limite de posts configurável** — 100 posts/plataforma hardcoded; expor como configuração por projeto
-- [ ] **OpenAI como provider padrão** — batch de 15 comentários/request é 15x mais eficiente que Lovable (1/request); sugerir preferência OpenAI quando key disponível
 - [x] **`manually_classified=true` impede re-classificação automática** — filtro `.neq('manually_classified', true)` adicionado à query de pendentes em `processCommentsWithAI`
+
+### Backlog estratégico
+- [ ] **Auto-resposta configurável** — modo "gerar + aguardar aprovação" vs "postar automaticamente" por projeto; controle de horário (não responder à noite), cooldown entre respostas, template de resposta por categoria de comentário. Requer planejamento dedicado (risco de banimento Meta, custo IA, responsabilidade de marca)
 
 ---
 

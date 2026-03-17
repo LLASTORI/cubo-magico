@@ -745,10 +745,11 @@ export function useOrdersCore(): UseOrdersCoreResult {
           const isProjectProducer = (row: any): boolean => {
             try {
               const commissions = row.raw_payload?.data?.commissions;
-              if (!Array.isArray(commissions)) return false;
+              // Sem dados de commission (ex: pedidos CSV) → assume producer
+              if (!Array.isArray(commissions)) return true;
               return commissions.some((c: any) => c.source === 'PRODUCER');
             } catch {
-              return false;
+              return true;
             }
           };
 

@@ -697,21 +697,45 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     return { success: true, commentsSynced: 0, message: 'Nenhum post para sincronizar' }
   }
 
-  // Get page tokens
-  const { data: savedPages } = await supabase
-    .from('social_listening_pages')
-    .select('page_id, access_token')
-    .eq('project_id', projectId)
-    .eq('is_active', true)
+  // Pre-load pages + CRM contacts ONCE (avoids N+1 queries per comment)
+  const [pagesRes, contactsRes] = await Promise.all([
+    supabase
+      .from('social_listening_pages')
+      .select('page_id, access_token, instagram_username, page_name')
+      .eq('project_id', projectId)
+      .eq('is_active', true),
+    supabase
+      .from('crm_contacts')
+      .select('id, instagram')
+      .eq('project_id', projectId)
+      .not('instagram', 'is', null),
+  ])
+
+  const savedPages = pagesRes.data || []
 
   const pageTokenMap = new Map<string, string>()
-  for (const page of savedPages || []) {
+  const ownAccountUsernames = new Set<string>()
+
+  for (const page of savedPages) {
     if (!page.page_id || !page.access_token) continue
     const normalizedPageId = String(page.page_id)
     const basePageId = normalizedPageId.replace(/_facebook$/, '').replace(/_instagram$/, '')
     pageTokenMap.set(normalizedPageId, page.access_token)
     pageTokenMap.set(basePageId, page.access_token)
+
+    const username = (page.instagram_username || page.page_name || '').toLowerCase().replace(/^@/, '')
+    if (username) ownAccountUsernames.add(username)
   }
+
+  const crmContactMap = new Map<string, string>()
+  for (const contact of contactsRes.data || []) {
+    if (contact.instagram) {
+      crmContactMap.set(contact.instagram.toLowerCase().replace(/^@/, ''), contact.id)
+    }
+  }
+
+  // Collect all comments to batch-upsert
+  const commentRows: any[] = []
 
   for (const post of posts) {
     const pageToken = pageTokenMap.get(post.page_id) || accessToken
@@ -720,12 +744,12 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
       const apiComments = await fetchCommentsForPost(post, pageToken, accessToken)
 
       for (const comment of apiComments) {
-        await upsertComment(supabase, projectId, post.id, post.platform, comment, null)
+        commentRows.push(buildCommentRow(projectId, post.id, post.platform, comment, null, ownAccountUsernames, crmContactMap))
         totalComments++
 
         if (comment.replies?.data) {
           for (const reply of comment.replies.data) {
-            await upsertComment(supabase, projectId, post.id, post.platform, reply, comment.id)
+            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountUsernames, crmContactMap))
             totalComments++
           }
         }
@@ -738,7 +762,53 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     await delay(300)
   }
 
+  // Batch upsert in chunks of 200
+  const CHUNK = 200
+  for (let i = 0; i < commentRows.length; i += CHUNK) {
+    const chunk = commentRows.slice(i, i + CHUNK)
+    const { error } = await supabase
+      .from('social_comments')
+      .upsert(chunk, { onConflict: 'project_id,platform,comment_id_meta' })
+    if (error) {
+      console.error('Error batch upserting comments:', error)
+      errors.push(`Batch upsert erro: ${error.message}`)
+    }
+  }
+
   return { success: true, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
+}
+
+function buildCommentRow(
+  projectId: string,
+  postId: string,
+  platform: string,
+  comment: any,
+  parentId: string | null,
+  ownAccountUsernames: Set<string>,
+  crmContactMap: Map<string, string>,
+): any {
+  const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
+  const normalizedAuthor = authorUsername ? authorUsername.toLowerCase().replace(/^@/, '') : null
+  const isOwnAccount = normalizedAuthor ? ownAccountUsernames.has(normalizedAuthor) : false
+  const crmContactId = (normalizedAuthor && platform === 'instagram') ? (crmContactMap.get(normalizedAuthor) ?? null) : null
+
+  return {
+    project_id: projectId,
+    post_id: postId,
+    platform,
+    comment_id_meta: comment.id,
+    parent_comment_id: parentId || null,
+    text: platform === 'instagram' ? comment.text : comment.message,
+    author_username: authorUsername,
+    author_id: platform === 'instagram' ? null : comment.from?.id,
+    like_count: comment.like_count || 0,
+    reply_count: comment.comment_count || comment.replies?.data?.length || 0,
+    comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
+    ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
+    crm_contact_id: crmContactId,
+    is_deleted: false,
+    is_own_account: isOwnAccount,
+  }
 }
 
 async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken: string): Promise<any[]> {
@@ -769,80 +839,6 @@ async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken:
   return data.data || []
 }
 
-async function upsertComment(supabase: any, projectId: string, postId: string, platform: string, comment: any, parentId: string | null) {
-  const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
-  
-  let crmContactId: string | null = null
-  if (authorUsername && platform === 'instagram') {
-    crmContactId = await findCRMContactByInstagram(supabase, projectId, authorUsername)
-  }
-
-  // Check if this comment is from the connected account (own account)
-  let isOwnAccount = false
-  if (authorUsername) {
-    const { data: pages } = await supabase
-      .from('social_listening_pages')
-      .select('instagram_username, page_name')
-      .eq('project_id', projectId)
-    
-    const normalizedAuthor = authorUsername.toLowerCase().replace(/^@/, '')
-    isOwnAccount = pages?.some((p: any) => {
-      const pageUsername = (p.instagram_username || p.page_name || '').toLowerCase().replace(/^@/, '')
-      return pageUsername && pageUsername === normalizedAuthor
-    }) || false
-    
-    if (isOwnAccount) {
-      console.log(`[SYNC] Own account comment detected: @${authorUsername}`)
-    }
-  }
-  
-  const commentData: any = {
-    project_id: projectId,
-    post_id: postId,
-    platform,
-    comment_id_meta: comment.id,
-    parent_comment_id: parentId || null,
-    text: platform === 'instagram' ? comment.text : comment.message,
-    author_username: authorUsername,
-    author_id: platform === 'instagram' ? null : comment.from?.id,
-    like_count: comment.like_count || 0,
-    reply_count: comment.comment_count || comment.replies?.data?.length || 0,
-    comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
-    ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
-    crm_contact_id: crmContactId,
-    is_deleted: false,
-    is_own_account: isOwnAccount,
-  }
-
-  const { error } = await supabase
-    .from('social_comments')
-    .upsert(commentData, { onConflict: 'project_id,platform,comment_id_meta' })
-
-  if (error) {
-    console.error('Error upserting comment:', error)
-  }
-}
-
-async function findCRMContactByInstagram(supabase: any, projectId: string, instagramUsername: string): Promise<string | null> {
-  if (!instagramUsername) return null
-  
-  const normalizedUsername = instagramUsername.replace(/^@/, '').toLowerCase()
-  
-  const { data, error } = await supabase
-    .from('crm_contacts')
-    .select('id')
-    .eq('project_id', projectId)
-    .or(`instagram.ilike.${normalizedUsername},instagram.ilike.@${normalizedUsername}`)
-    .limit(1)
-    .maybeSingle()
-  
-  if (error) {
-    console.error('Error finding CRM contact by Instagram:', error)
-    return null
-  }
-  
-  return data?.id || null
-}
 
 async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
   console.log('Linking existing comments to CRM contacts for project:', projectId)

@@ -8,7 +8,6 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const GRAPH_API_VERSION = 'v19.0'
@@ -289,53 +288,6 @@ async function classifyWithOpenAI(comments: Array<{id: string, text: string, pos
   const cost = (inputTokens * 0.00000015) + (outputTokens * 0.0000006) // gpt-4o-mini pricing
 
   return { results, inputTokens, outputTokens, cost }
-}
-
-// Classify using Lovable AI (fallback)
-async function classifyWithLovableAI(commentText: string, postContext: string, classificationPrompt: string) {
-  const prompt = classificationPrompt
-    .replace('{post_context}', postContext)
-    .replace('{comment_text}', commentText)
-
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      max_tokens: 500,
-    }),
-  })
-
-  // Handle credit exhaustion and rate limit errors
-  if (response.status === 402) {
-    console.error('[LOVABLE_AI] Credits exhausted (402 Payment Required)')
-    throw new Error('LOVABLE_CREDITS_EXHAUSTED')
-  }
-  
-  if (response.status === 429) {
-    console.error('[LOVABLE_AI] Rate limit exceeded (429)')
-    throw new Error('LOVABLE_RATE_LIMITED')
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Lovable AI error: ${response.status} - ${errorText}`)
-  }
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || ''
-  const jsonMatch = content.match(/\{[\s\S]*\}/)
-
-  if (!jsonMatch) {
-    throw new Error('Invalid AI response format')
-  }
-
-  return JSON.parse(jsonMatch[0])
 }
 
 // ============= QUOTA AND TRACKING FUNCTIONS =============
@@ -1047,11 +999,11 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
   console.log(`[AI_PROCESS] Keyword classified: ${keywordClassified}, Needs AI: ${commentsForAI.length}`)
 
-  // ============= PHASE 2: AI CLASSIFICATION (OpenAI or Lovable) =============
+  // ============= PHASE 2: AI CLASSIFICATION (OpenAI) =============
   if (commentsForAI.length > 0) {
     // Check quota
     const quotaResult = await checkAndUseQuota(supabase, projectId, commentsForAI.length)
-    
+
     if (!quotaResult.allowed) {
       console.log(`[AI_PROCESS] Quota exceeded:`, quotaResult.reason)
       return {
@@ -1062,20 +1014,6 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
         failed: 0,
         quotaExceeded: true,
         quotaInfo: quotaResult,
-        lovableRemaining: quotaResult.lovable_remaining || 0
-      }
-    }
-
-    // Check if we need to use fallback provider (Lovable credits exhausted)
-    let useFallbackProvider = quotaResult.use_fallback_provider || null
-    if (useFallbackProvider === 'openai' && !OPENAI_API_KEY) {
-      console.log('[AI_PROCESS] Lovable credits exhausted and no OpenAI key configured')
-      return {
-        success: false,
-        error: 'Créditos de IA esgotados. Configure uma API Key OpenAI para continuar processando.',
-        quotaExceeded: true,
-        lovableRemaining: 0,
-        noFallbackAvailable: true
       }
     }
 
@@ -1085,262 +1023,89 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
       .update({ ai_processing_status: 'processing' })
       .in('id', commentsForAI.map(c => c.id))
 
-    // Get provider preference from quota result or ai_project_quotas
-    const providerPreference = quotaResult.provider_preference || 'lovable'
-    
-    // Determine which provider to use based on preference, availability, and fallback
-    const useOpenAI = useFallbackProvider === 'openai' || (providerPreference === 'openai' && !!OPENAI_API_KEY)
-    const useLovableFirst = !useOpenAI && (providerPreference === 'lovable' || !OPENAI_API_KEY)
-    
-    console.log(`[AI_PROCESS] Provider preference: ${providerPreference}, Fallback: ${useFallbackProvider}, Using OpenAI: ${useOpenAI}, Using Lovable First: ${useLovableFirst}`)
+    // Use OpenAI for all AI classification
+    if (!OPENAI_API_KEY) {
+      // Reset comments back to pending so they can be tried again later
+      await supabase
+        .from('social_comments')
+        .update({ ai_processing_status: 'pending' })
+        .in('id', commentsForAI.map((c: any) => c.id))
 
-    if (useLovableFirst) {
-      // Use Lovable AI as primary
-      const classificationPrompt = buildClassificationPrompt(knowledgeBase)
-      
-      for (const comment of commentsForAI) {
-        try {
-          const result = await classifyWithLovableAI(comment.text, comment.postContext, classificationPrompt)
-          
-          // Track Lovable AI usage
-          await trackAIUsage(supabase, projectId, {
-            feature: 'social_listening',
-            action: 'classify',
-            provider: 'lovable',
-            model: 'google/gemini-2.5-flash',
-            inputTokens: 0,
-            outputTokens: 0,
-            itemsProcessed: 1,
-            costEstimate: 0, // Lovable AI is free
-            success: true
-          })
-
-          // Update lovable_credits_used
-          await supabase.rpc('increment_lovable_credits', { p_project_id: projectId, p_count: 1 })
-          
-          await supabase
-            .from('social_comments')
-            .update({
-              sentiment: result.sentiment,
-              classification: result.classification,
-              classification_key: result.classification,
-              intent_score: result.intent_score,
-              ai_summary: result.summary,
-              ai_processing_status: 'completed',
-              ai_processed_at: new Date().toISOString(),
-            })
-            .eq('id', comment.id)
-
-          aiProcessed++
-        } catch (lovableError: any) {
-          console.error(`[AI_PROCESS] Lovable AI error for ${comment.id}:`, lovableError.message)
-          
-          // Check if credits exhausted or rate limited - mark in database
-          if (lovableError.message === 'LOVABLE_CREDITS_EXHAUSTED' || lovableError.message === 'LOVABLE_RATE_LIMITED') {
-            console.log('[AI_PROCESS] Lovable credits exhausted/rate limited, marking and switching to fallback')
-            
-            // Update quota to mark Lovable as exhausted
-            await supabase
-              .from('ai_project_quotas')
-              .update({ 
-                lovable_credits_used: supabase.raw('lovable_credits_limit'),
-                updated_at: new Date().toISOString() 
-              })
-              .eq('project_id', projectId)
-          }
-          
-          // Try OpenAI as fallback if available
-          if (OPENAI_API_KEY) {
-            try {
-              console.log('[AI_PROCESS] Falling back to OpenAI for single comment')
-              const { results, inputTokens, outputTokens, cost } = await classifyWithOpenAI([comment], knowledgeBase)
-              
-              await trackAIUsage(supabase, projectId, {
-                feature: 'social_listening',
-                action: 'classify_fallback',
-                provider: 'openai',
-                model: 'gpt-4o-mini',
-                inputTokens,
-                outputTokens,
-                itemsProcessed: 1,
-                costEstimate: cost,
-                success: true
-              })
-              
-              if (results?.[0]) {
-                await supabase
-                  .from('social_comments')
-                  .update({
-                    sentiment: results[0].sentiment,
-                    classification: results[0].classification,
-                    classification_key: results[0].classification,
-                    intent_score: results[0].intent_score,
-                    ai_summary: results[0].summary,
-                    ai_processing_status: 'completed',
-                    ai_processed_at: new Date().toISOString(),
-                  })
-                  .eq('id', comment.id)
-                
-                aiProcessed++
-                continue
-              }
-            } catch (openaiError: any) {
-              console.error('[AI_PROCESS] OpenAI fallback also failed:', openaiError.message)
-            }
-          }
-          
-          await supabase
-            .from('social_comments')
-            .update({
-              ai_processing_status: 'failed',
-              ai_error: lovableError.message
-            })
-            .eq('id', comment.id)
-
-          failed++
-        }
-
-        await delay(200)
+      return {
+        success: false,
+        error: 'API Key OpenAI não configurada. Configure a chave OPENAI_API_KEY nas configurações do projeto para classificar comentários.',
+        processed: keywordClassified,
+        remaining: commentsForAI.length,
       }
-    } else if (useOpenAI) {
-      // Use OpenAI as primary (user's preference)
-      try {
-        // Process in batches of 15 for OpenAI
-        const openAIBatchSize = 15
-        for (let i = 0; i < commentsForAI.length; i += openAIBatchSize) {
-          const batch = commentsForAI.slice(i, i + openAIBatchSize)
-          
-          const { results, inputTokens, outputTokens, cost } = await classifyWithOpenAI(batch, knowledgeBase)
+    }
 
-          // Track usage
-          await trackAIUsage(supabase, projectId, {
-            feature: 'social_listening',
-            action: 'batch_classify',
-            provider: 'openai',
-            model: 'gpt-4o-mini',
-            inputTokens,
-            outputTokens,
-            itemsProcessed: batch.length,
-            costEstimate: cost,
-            success: true
-          })
+    console.log(`[AI_PROCESS] Using OpenAI for ${commentsForAI.length} comments`)
 
-          // Update openai_credits_used
-          await supabase.rpc('increment_openai_credits', { p_project_id: projectId, p_count: batch.length })
+    try {
+      // Process in batches of 15 for efficiency
+      const openAIBatchSize = 15
+      for (let i = 0; i < commentsForAI.length; i += openAIBatchSize) {
+        const batch = commentsForAI.slice(i, i + openAIBatchSize)
 
-          // Update comments with results
-          for (const result of results) {
-            await supabase
-              .from('social_comments')
-              .update({
-                sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
-                classification: result.classification || 'other',
-                classification_key: result.classification || 'other',
-                intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
-                ai_summary: (result.summary || '').substring(0, 100),
-                ai_processing_status: 'completed',
-                ai_processed_at: new Date().toISOString(),
-              })
-              .eq('id', result.id)
+        const { results, inputTokens, outputTokens, cost } = await classifyWithOpenAI(batch, knowledgeBase)
 
-            aiProcessed++
-          }
-
-          if (i + openAIBatchSize < commentsForAI.length) {
-            await delay(500) // Rate limiting between batches
-          }
-        }
-      } catch (openaiError: any) {
-        console.error('[AI_PROCESS] OpenAI error, falling back to Lovable AI:', openaiError.message)
-        
-        // Track failed usage
         await trackAIUsage(supabase, projectId, {
           feature: 'social_listening',
           action: 'batch_classify',
           provider: 'openai',
           model: 'gpt-4o-mini',
-          inputTokens: 0,
-          outputTokens: 0,
-          itemsProcessed: commentsForAI.length,
-          costEstimate: 0,
-          success: false,
-          errorMessage: openaiError.message
+          inputTokens,
+          outputTokens,
+          itemsProcessed: batch.length,
+          costEstimate: cost,
+          success: true,
         })
 
-        // Fallback to Lovable AI (individual processing)
-        const classificationPrompt = buildClassificationPrompt(knowledgeBase)
-        
-        for (const comment of commentsForAI) {
-          try {
-            const result = await classifyWithLovableAI(comment.text, comment.postContext, classificationPrompt)
-            
-            await supabase
-              .from('social_comments')
-              .update({
-                sentiment: result.sentiment,
-                classification: result.classification,
-                classification_key: result.classification,
-                intent_score: result.intent_score,
-                ai_summary: result.summary,
-                ai_processing_status: 'completed',
-                ai_processed_at: new Date().toISOString(),
-              })
-              .eq('id', comment.id)
+        await supabase.rpc('increment_openai_credits', { p_project_id: projectId, p_count: batch.length })
 
-            aiProcessed++
-          } catch (lovableError: any) {
-            console.error(`[AI_PROCESS] Lovable AI error for ${comment.id}:`, lovableError.message)
-            
-            await supabase
-              .from('social_comments')
-              .update({
-                ai_processing_status: 'failed',
-                ai_error: lovableError.message
-              })
-              .eq('id', comment.id)
-
-            failed++
-          }
-
-          await delay(200)
-        }
-      }
-    } else {
-      // No OpenAI key, use Lovable AI directly
-      const classificationPrompt = buildClassificationPrompt(knowledgeBase)
-      
-      for (const comment of commentsForAI) {
-        try {
-          const result = await classifyWithLovableAI(comment.text, comment.postContext, classificationPrompt)
-          
+        for (const result of results) {
           await supabase
             .from('social_comments')
             .update({
-              sentiment: result.sentiment,
-              classification: result.classification,
-              classification_key: result.classification,
-              intent_score: result.intent_score,
-              ai_summary: result.summary,
+              sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
+              classification: result.classification || 'other',
+              classification_key: result.classification || 'other',
+              intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
+              ai_summary: (result.summary || '').substring(0, 100),
               ai_processing_status: 'completed',
               ai_processed_at: new Date().toISOString(),
             })
-            .eq('id', comment.id)
+            .eq('id', result.id)
 
           aiProcessed++
-        } catch (e: any) {
-          await supabase
-            .from('social_comments')
-            .update({
-              ai_processing_status: 'failed',
-              ai_error: e.message
-            })
-            .eq('id', comment.id)
-
-          failed++
         }
 
-        await delay(200)
+        if (i + openAIBatchSize < commentsForAI.length) {
+          await delay(500)
+        }
       }
+    } catch (openaiError: any) {
+      console.error('[AI_PROCESS] OpenAI error:', openaiError.message)
+
+      await trackAIUsage(supabase, projectId, {
+        feature: 'social_listening',
+        action: 'batch_classify',
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        inputTokens: 0,
+        outputTokens: 0,
+        itemsProcessed: commentsForAI.length,
+        costEstimate: 0,
+        success: false,
+        errorMessage: openaiError.message,
+      })
+
+      await supabase
+        .from('social_comments')
+        .update({ ai_processing_status: 'failed', ai_error: openaiError.message })
+        .in('id', commentsForAI.map((c: any) => c.id))
+
+      failed += commentsForAI.length
     }
   }
 
@@ -1659,16 +1424,6 @@ async function generateReply(supabase: any, projectId: string, commentId: string
     throw new Error('Comentário não encontrado')
   }
 
-  // Get provider preference from project quotas
-  const { data: quotaData } = await supabase
-    .from('ai_project_quotas')
-    .select('provider_preference')
-    .eq('project_id', projectId)
-    .maybeSingle()
-  
-  const providerPreference = quotaData?.provider_preference || 'lovable'
-  console.log('[GENERATE_REPLY] Provider preference:', providerPreference)
-
   const { data: knowledgeBase } = await supabase
     .from('ai_knowledge_base')
     .select('*')
@@ -1698,64 +1453,53 @@ Comentário: "${comment.text}"
 
 Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja empático e útil.`
 
-  let reply: string = ''
-  let usedProvider: string = 'lovable'
-
-  // Respect provider preference
-  if (providerPreference === 'openai' && OPENAI_API_KEY) {
-    console.log('[GENERATE_REPLY] Using OpenAI as preferred provider')
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 200,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[GENERATE_REPLY] OpenAI API error:', response.status, errorText)
-        throw new Error(`OpenAI error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      reply = data.choices?.[0]?.message?.content || ''
-      usedProvider = 'openai'
-      console.log('[GENERATE_REPLY] OpenAI reply generated, length:', reply.length)
-
-      // Track usage
-      const inputTokens = data.usage?.prompt_tokens || 0
-      const outputTokens = data.usage?.completion_tokens || 0
-      await trackAIUsage(supabase, projectId, {
-        feature: 'social_listening',
-        action: 'generate_reply',
-        provider: 'openai',
-        model: 'gpt-4o-mini',
-        inputTokens,
-        outputTokens,
-        itemsProcessed: 1,
-        costEstimate: (inputTokens * 0.00000015) + (outputTokens * 0.0000006),
-        success: true
-      })
-    } catch (openaiError) {
-      console.error('[GENERATE_REPLY] OpenAI error, falling back to Lovable AI:', openaiError)
-      reply = await generateReplyWithLovableAI(prompt, supabase, projectId)
-      usedProvider = 'lovable'
-    }
-  } else {
-    console.log('[GENERATE_REPLY] Using Lovable AI as preferred provider')
-    reply = await generateReplyWithLovableAI(prompt, supabase, projectId)
-    usedProvider = 'lovable'
+  if (!OPENAI_API_KEY) {
+    throw new Error('API Key OpenAI não configurada. Configure a chave OPENAI_API_KEY nas configurações do projeto para gerar respostas.')
   }
 
-  console.log('[GENERATE_REPLY] Final reply length:', reply.length, 'provider:', usedProvider)
+  let reply: string = ''
+
+  console.log('[GENERATE_REPLY] Using OpenAI')
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 200,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[GENERATE_REPLY] OpenAI API error:', response.status, errorText)
+    throw new Error(`Erro ao gerar resposta com IA: ${response.status}`)
+  }
+
+  const data = await response.json()
+  reply = data.choices?.[0]?.message?.content || ''
+  console.log('[GENERATE_REPLY] OpenAI reply generated, length:', reply.length)
+
+  // Track usage
+  const inputTokens = data.usage?.prompt_tokens || 0
+  const outputTokens = data.usage?.completion_tokens || 0
+  await trackAIUsage(supabase, projectId, {
+    feature: 'social_listening',
+    action: 'generate_reply',
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    inputTokens,
+    outputTokens,
+    itemsProcessed: 1,
+    costEstimate: (inputTokens * 0.00000015) + (outputTokens * 0.0000006),
+    success: true
+  })
+
+  console.log('[GENERATE_REPLY] Final reply length:', reply.length)
 
   // Save to ai_suggested_reply field (not suggested_reply)
   const { error: updateError } = await supabase
@@ -1767,60 +1511,5 @@ Gere uma resposta de no máximo 2 linhas, adequada para redes sociais. Seja emp�
     console.error('[GENERATE_REPLY] Error saving reply:', updateError)
   }
 
-  return { success: true, reply, provider: usedProvider }
-}
-
-async function generateReplyWithLovableAI(prompt: string, supabase?: any, projectId?: string): Promise<string> {
-  console.log('[LOVABLE_AI] Generating reply...')
-  
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 200,
-    }),
-  })
-
-  if (response.status === 402) {
-    console.error('[LOVABLE_AI] Credits exhausted (402)')
-    throw new Error('Créditos de IA esgotados. Adicione créditos para continuar.')
-  }
-  
-  if (response.status === 429) {
-    console.error('[LOVABLE_AI] Rate limit exceeded (429)')
-    throw new Error('Limite de requisições excedido. Aguarde alguns segundos.')
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('[LOVABLE_AI] Error:', response.status, errorText)
-    throw new Error('Falha ao gerar resposta com IA')
-  }
-
-  const data = await response.json()
-  const reply = data.choices?.[0]?.message?.content || ''
-  console.log('[LOVABLE_AI] Reply generated, length:', reply.length)
-
-  // Track usage if supabase and projectId provided
-  if (supabase && projectId) {
-    await trackAIUsage(supabase, projectId, {
-      feature: 'social_listening',
-      action: 'generate_reply',
-      provider: 'lovable',
-      model: 'google/gemini-2.5-flash',
-      inputTokens: 0,
-      outputTokens: 0,
-      itemsProcessed: 1,
-      costEstimate: 0,
-      success: true
-    })
-  }
-
-  return reply
+  return { success: true, reply, provider: 'openai' }
 }

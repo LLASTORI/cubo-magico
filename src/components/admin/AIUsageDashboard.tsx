@@ -12,11 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CubeLoader } from '@/components/CubeLoader';
-import { Brain, TrendingUp, DollarSign, Activity, RefreshCw, AlertTriangle, CheckCircle2, Settings, RotateCcw, Infinity, Sparkles, Key, Zap } from 'lucide-react';
+import { Brain, TrendingUp, DollarSign, Activity, RefreshCw, AlertTriangle, CheckCircle2, Settings, RotateCcw, Infinity, Key } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AIUsageDashboardProps {
@@ -126,9 +125,6 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
         current_daily_usage: 0,
         current_monthly_usage: 0,
         is_unlimited: false,
-        provider_preference: 'lovable',
-        lovable_credits_limit: 1000,
-        lovable_credits_used: 0,
         openai_credits_used: 0,
       };
     },
@@ -238,60 +234,6 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
     },
   });
 
-  // Update provider preference mutation
-  const updateProviderMutation = useMutation({
-    mutationFn: async (provider: string) => {
-      if (!selectedProjectId) throw new Error('Projeto não selecionado');
-
-      const { data: existing } = await supabase
-        .from('ai_project_quotas')
-        .select('id')
-        .eq('project_id', selectedProjectId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from('ai_project_quotas')
-          .update({ provider_preference: provider, updated_at: new Date().toISOString() })
-          .eq('project_id', selectedProjectId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('ai_project_quotas')
-          .insert({ project_id: selectedProjectId, provider_preference: provider });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      toast({ title: 'Provider atualizado com sucesso!' });
-      queryClient.invalidateQueries({ queryKey: ['ai-quota', selectedProjectId] });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar provider', description: error.message, variant: 'destructive' });
-    },
-  });
-
-  // Reset Lovable credits mutation
-  const resetLovableCreditsMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedProjectId) throw new Error('Projeto não selecionado');
-      
-      const { error } = await supabase
-        .from('ai_project_quotas')
-        .update({ lovable_credits_used: 0, updated_at: new Date().toISOString() })
-        .eq('project_id', selectedProjectId);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({ title: 'Créditos Lovable AI resetados!' });
-      queryClient.invalidateQueries({ queryKey: ['ai-quota', selectedProjectId] });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Erro ao resetar', description: error.message, variant: 'destructive' });
-    },
-  });
-
   // Reset OpenAI credits mutation
   const resetOpenAICreditsMutation = useMutation({
     mutationFn: async () => {
@@ -336,10 +278,6 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
 
   const monthlyProgress = quotaData && !quotaData.is_unlimited
     ? Math.min(100, (quotaData.current_monthly_usage / quotaData.monthly_limit) * 100)
-    : 0;
-
-  const lovableCreditsProgress = quotaData?.lovable_credits_limit
-    ? Math.min(100, ((quotaData.lovable_credits_used || 0) / quotaData.lovable_credits_limit) * 100)
     : 0;
 
   const getFeatureLabel = (feature: string) => {
@@ -459,178 +397,54 @@ export function AIUsageDashboard({ projectId }: AIUsageDashboardProps) {
             </CardContent>
           </Card>
 
-          {/* AI Provider Configuration Card */}
+          {/* OpenAI Provider Card */}
           <Card className="border-primary/20">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Configuração de Provider de IA
+                <Key className="h-4 w-4 text-green-500" />
+                Provider de IA — OpenAI
               </CardTitle>
               <CardDescription>
-                Escolha o provider preferencial e gerencie os créditos de IA
+                Todas as classificações e respostas são processadas via OpenAI gpt-4o-mini
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Provider Selection */}
-              <div className="space-y-4">
-                <Label className="text-sm font-medium">Provider Preferencial</Label>
-                <RadioGroup
-                  value={quotaData?.provider_preference || 'lovable'}
-                  onValueChange={(value) => updateProviderMutation.mutate(value)}
-                  className="grid grid-cols-2 gap-4"
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="text-2xl font-bold">{quotaData?.openai_credits_used || 0}</div>
+                  <p className="text-sm text-muted-foreground">classificações OpenAI este mês</p>
+                  {hasOpenAIKey ? (
+                    <Badge variant="outline" className="text-green-600 border-green-600">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      API Key configurada
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-red-600 border-red-600">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      API Key não configurada
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => resetOpenAICreditsMutation.mutate()}
+                  disabled={resetOpenAICreditsMutation.isPending}
                 >
-                  <div className="flex items-start space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                    <RadioGroupItem value="lovable" id="lovable" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="lovable" className="font-medium cursor-pointer flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-purple-500" />
-                        Lovable AI (Gratuito)
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Usa os créditos inclusos no seu plano. Limite mensal de {quotaData?.lovable_credits_limit || 1000} classificações.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                    <RadioGroupItem value="openai" id="openai" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="openai" className="font-medium cursor-pointer flex items-center gap-2">
-                        <Key className="h-4 w-4 text-green-500" />
-                        OpenAI (Pago)
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Usa sua própria API Key do OpenAI. Sem limite de uso, você paga diretamente à OpenAI.
-                      </p>
-                      {!hasOpenAIKey && (
-                        <Badge variant="outline" className="mt-2 text-yellow-600 border-yellow-600">
-                          API Key não configurada
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </RadioGroup>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Resetar Contador
+                </Button>
               </div>
 
-              {/* Credits Overview */}
-              <div className="grid gap-4 md:grid-cols-2">
-                {/* Lovable AI Credits */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-purple-500" />
-                      Créditos Lovable AI
-                      {(() => {
-                        const remaining = (quotaData?.lovable_credits_limit || 1000) - (quotaData?.lovable_credits_used || 0);
-                        const percentRemaining = (remaining / (quotaData?.lovable_credits_limit || 1000)) * 100;
-                        if (remaining <= 0) return <Badge variant="destructive" className="ml-auto">Esgotado</Badge>;
-                        if (percentRemaining <= 20) return <Badge className="ml-auto bg-orange-500">Crítico</Badge>;
-                        if (percentRemaining <= 50) return <Badge className="ml-auto bg-yellow-500">Atenção</Badge>;
-                        return <Badge variant="outline" className="ml-auto text-green-600 border-green-600">Normal</Badge>;
-                      })()}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {/* Used / Remaining / Limit */}
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <div className="text-xl font-bold text-muted-foreground">{quotaData?.lovable_credits_used || 0}</div>
-                          <div className="text-xs text-muted-foreground">Usados</div>
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold text-primary">
-                            {Math.max(0, (quotaData?.lovable_credits_limit || 1000) - (quotaData?.lovable_credits_used || 0))}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Restantes</div>
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold">{quotaData?.lovable_credits_limit || 1000}</div>
-                          <div className="text-xs text-muted-foreground">Limite</div>
-                        </div>
-                      </div>
-                      <Progress value={lovableCreditsProgress} className="h-2" />
-                      {lovableCreditsProgress >= 80 && lovableCreditsProgress < 100 && (
-                        <p className="text-xs text-yellow-600 text-center">
-                          ⚠️ Quase no limite! Considere usar OpenAI como fallback.
-                        </p>
-                      )}
-                      {lovableCreditsProgress >= 100 && (
-                        <p className="text-xs text-red-600 text-center font-medium">
-                          ❌ Créditos esgotados! {hasOpenAIKey ? 'Sistema usando OpenAI automaticamente.' : 'Configure uma API Key OpenAI.'}
-                        </p>
-                      )}
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-3 w-full"
-                      onClick={() => resetLovableCreditsMutation.mutate()}
-                      disabled={resetLovableCreditsMutation.isPending}
-                    >
-                      <RotateCcw className="h-4 w-4 mr-1" />
-                      Resetar Créditos
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* OpenAI Credits */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <Key className="h-4 w-4 text-green-500" />
-                      Uso OpenAI
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="text-2xl font-bold">{quotaData?.openai_credits_used || 0}</div>
-                      <p className="text-sm text-muted-foreground">classificações este mês</p>
-                      {hasOpenAIKey ? (
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          API Key configurada
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          API Key não configurada
-                        </Badge>
-                      )}
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-3 w-full"
-                      onClick={() => resetOpenAICreditsMutation.mutate()}
-                      disabled={resetOpenAICreditsMutation.isPending}
-                    >
-                      <RotateCcw className="h-4 w-4 mr-1" />
-                      Resetar Contador
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Critical Alert when both providers unavailable */}
-              {lovableCreditsProgress >= 100 && !hasOpenAIKey && (
+              {!hasOpenAIKey && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>Processamento de IA pausado!</strong> Os créditos Lovable AI estão esgotados e não há API Key OpenAI configurada como fallback. 
-                    Configure uma API Key OpenAI ou aguarde o próximo mês para que os créditos sejam resetados automaticamente.
+                    <strong>Processamento de IA inativo!</strong> Configure a variável de ambiente{' '}
+                    <code className="font-mono text-xs">OPENAI_API_KEY</code> nas secrets do Supabase para ativar classificação e geração de respostas.
                   </AlertDescription>
                 </Alert>
               )}
-
-              {/* Info Card */}
-              <Alert>
-                <Brain className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Como funciona o fallback:</strong> Se o provider preferencial estiver indisponível ou 
-                  os créditos Lovable AI acabarem, o sistema tentará usar automaticamente o outro provider 
-                  (desde que a API Key OpenAI esteja configurada).
-                </AlertDescription>
-              </Alert>
             </CardContent>
           </Card>
 

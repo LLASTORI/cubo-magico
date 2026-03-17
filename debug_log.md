@@ -5,8 +5,44 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-17 (sessão 12)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Criação e exclusão de projetos corrigidas ✅ | MetaAccountsManager melhorado ✅ | Edição de tags em públicos Meta ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Data:** 2026-03-17 (sessão 13)
+- **Status geral:** Pipeline restaurado ✅ | Social Listening desbloqueado e analisado ✅ | CSV Import cards financeiros corrigidos ✅ | Próximo passo: melhorias priorizadas no Social Listening (ver TASKS.md)
+
+---
+
+### [2026-03-17] Social Listening — desbloqueio completo e análise aprofundada — ✅ CONCLUÍDO (sessão 13)
+
+**Bugs corrigidos (commits fc576e9, 7b88e9c):**
+
+1. **CSV Import — cards financeiros zerados (Busca Rápida)**
+   - Root cause 1: `isProjectProducer()` em `useOrdersCore.ts` retornava `false` quando `raw_payload` era null (pedidos CSV). Fix: fallback para `true` quando sem dados de commission.
+   - Root cause 2: `order-writer.ts` não persistia `platform_fee_brl`, `affiliate_brl`, `coproducer_brl` no insert. Fix: adicionados 3 campos ao INSERT com `reduce()` sobre `group.items`.
+   - Migrations aplicadas: `fix_csv_orders_financial_fields` (recalculou de `ledger_events` WHERE `source_origin='csv'`) + `fix_all_orders_financial_fields_from_ledger` (corrigiu todos os orders com NULL via ledger_events).
+
+2. **Social Listening — schema mismatch (colunas ausentes)**
+   - Root cause: migration `20260310103000` foi registrada como aplicada mas as colunas (`post_id_meta`, `last_synced_at`, `is_ad`, `comment_id_meta`, `ai_processing_status`, etc.) NÃO existiam nas tabelas.
+   - Fix: migration `reapply_social_listening_compat_columns` aplicada — adicionou todas as colunas faltantes.
+
+3. **Social Listening — FK ambiguity PostgREST (lista vazia)**
+   - Root cause 1: Duas FKs de `social_comments` para `crm_contacts` (`contact_id_fkey` + `crm_contact_id_fkey`) → PostgREST retornava 400 FK ambiguity → React Query falhou 3x e parou (error state silencioso).
+   - Fix: `fix_social_comments_crm_fk_ambiguity` — dropou `social_comments_crm_contact_id_fkey`.
+   - Fix adicional: `useSocialListening.ts` passou a usar hint explícito `crm_contacts!contact_id(...)`.
+
+4. **Social Listening — timeout 546 no sync de comentários (N+1 queries)**
+   - Root cause: `upsertComment()` fazia 3 queries sequenciais por comentário (CRM lookup, pages lookup, upsert). 752 comentários × 3 = 2.256 queries → 150s timeout.
+   - Fix: `syncComments()` refatorado — pré-carrega pages + CRM contacts uma vez (2 queries paralelas), constrói rows em memória com `buildCommentRow()`, batch-upsert em chunks de 200.
+   - Fix adicional: `buildCommentRow()` + `linkExistingCommentsToCRM()` agora salvam `contact_id` (coluna com FK) além de `crm_contact_id` → CRM join via PostgREST passa a funcionar.
+
+5. **Schema reload PostgREST**
+   - `NOTIFY pgrst, 'reload schema'` executado para forçar recarregamento do cache após drops de FK.
+
+**Análise completa do sistema Social Listening:**
+- 1.764 linhas na edge function `social-comments-api`
+- Sync: posts orgânicos (50/plataforma) + comentários (25 posts mais recentes) + ads
+- Classificação: keyword grátis (~40%) → Lovable AI/OpenAI (~60%)
+- Modelos: Gemini 2.5 Flash (via Lovable gateway) e gpt-4o-mini
+- Quotas: 100/dia, 3000/mês, 1000 Lovable credits por projeto
+- 15+ problemas mapeados — ver TASKS.md para backlog priorizado
 
 ---
 

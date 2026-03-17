@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 17/03/2026 (sessão 12 — Edição de tags em públicos Meta, Onda 2 next)
+> Última atualização: 17/03/2026 (sessão 13 — Social Listening desbloqueado e analisado, melhorias priorizadas)
 
 ---
 
@@ -10,11 +10,33 @@
 
 ---
 
+## 🔴 Social Listening — Melhorias Priorizadas (próxima sessão)
+
+> Sistema desbloqueado (sessão 13). Análise completa concluída. 15+ problemas mapeados.
+
+### Quick wins (alta ROI, baixo esforço)
+- [ ] **Conectar custom categories ao prompt da IA** — campo `ai_knowledge_base.custom_categories` existe mas nunca vai no prompt (`buildClassificationPrompt` usa hardcoded 9 categorias)
+- [ ] **Conectar FAQs ao prompt da IA** — `ai_knowledge_base.faqs` carregado mas ignorado nos prompts de classificação e geração de resposta
+- [ ] **Corrigir praise keywords para comentários >25 chars** — limite hardcoded impede classificação keyword de comments maiores que têm praise óbvio, enviando desnecessariamente para IA
+- [ ] **Atualizar `last_synced_at` após sync** — campo existe em `social_listening_pages` mas nunca é gravado após sync de comentários
+
+### Médio prazo
+- [ ] **Linking CRM para Facebook** — `linkExistingCommentsToCRM` só processa Instagram (linha 854). Facebook comments têm `from.name` e `from.id` — cruzar com `crm_contacts.name` ou `buyer_name` em `orders`
+- [ ] **Linking CRM contínuo** — rodar linking automático no batch-upsert de comentários (já temos o `crmContactMap` pré-carregado — só expandir para Facebook)
+- [ ] **Envio de resposta via Meta Graph API** — endpoint `POST /{commentId}/replies` com `message` body — elimina copy-paste manual. Requer `manage_pages` permission. Preencher `reply_sent_at` e `replied_by` após envio.
+
+### Backlog técnico
+- [ ] **Detectar e marcar comentários deletados no Meta** — no sync, checar se IDs existentes no DB ainda retornam da API; se não, setar `is_deleted=true`
+- [ ] **Soft-delete ao invés de orphans** — comentários removidos no Meta devem ser marcados `is_deleted=true` não ignorados
+- [ ] **Limite de posts configurável** — 100 posts/plataforma hardcoded; expor como configuração por projeto
+- [ ] **OpenAI como provider padrão** — batch de 15 comentários/request é 15x mais eficiente que Lovable (1/request); sugerir preferência OpenAI quando key disponível
+- [ ] **`manually_classified=true` impede re-classificação automática** — hoje o campo existe mas não é verificado no `processCommentsWithAI`; adicionar filtro `.eq('manually_classified', false)` na query de pendentes
+
 ---
 
-## 🔴 Próxima sessão — Onda 2: métricas de lançamento pago
+## 🔴 Próxima sessão alternativa — Onda 2: métricas de lançamento pago
 
-> Onda 1 concluída e publicada ✅ — Onda 2 liberada para planejamento
+> Onda 1 concluída e publicada ✅ — Onda 2 aguardando priorização
 
 - [ ] Passing diário (ritmo de vendas de ingresso vs meta)
 - [ ] Comparecimento (show rate: ingressos vendidos vs presentes no evento)

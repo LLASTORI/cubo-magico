@@ -235,20 +235,25 @@ export function OrdersTable({ orders, utmFilterActive, ordersWithoutUtmCount }: 
                     </TableCell>
                     <TableCell className="max-w-[200px]">
                       <div className="flex flex-col gap-0.5">
-                        {order.products.slice(0, 2).map((product, idx) => (
-                          <span 
-                            key={idx} 
-                            className="text-xs text-muted-foreground truncate"
-                            title={product.product_name || ''}
-                          >
-                            {product.product_name || 'Sem nome'}
-                          </span>
-                        ))}
-                        {order.products.length > 2 && (
-                          <span className="text-xs text-primary">
-                            +{order.products.length - 2} mais
-                          </span>
-                        )}
+                        {(() => {
+                          const mainProduct = order.products.find(p => p.item_type === 'main') || order.products[0];
+                          const extras = order.products.filter(p => p !== mainProduct);
+                          return (
+                            <>
+                              <span
+                                className="text-xs text-muted-foreground truncate"
+                                title={mainProduct?.product_name || ''}
+                              >
+                                {mainProduct?.product_name || 'Sem nome'}
+                              </span>
+                              {extras.length > 0 && (
+                                <span className="text-xs text-primary">
+                                  +{extras.length} extra{extras.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-primary">

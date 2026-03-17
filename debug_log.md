@@ -5,8 +5,23 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-17 (sessão 10)
-- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+- **Data:** 2026-03-17 (sessão 11)
+- **Status geral:** Pipeline restaurado ✅ | Analytics ledger-first ✅ | Onda 1 `funnel_model` publicada ✅ | Tags fix concluído ✅ | Meta Audiences end-to-end funcionando ✅ | Criação e exclusão de projetos corrigidas ✅ | Próximo passo: Onda 2 métricas de lançamento pago
+
+---
+
+### [2026-03-17] Criação e exclusão de projetos — pipelines corrigidos — ✅ CONCLUÍDO (sessão 11)
+
+**Exclusão (delete-project edge function):**
+- **Root cause:** `orders.contact_id → crm_contacts NO ACTION` — `orders` não estava na lista de deleção, então ao deletar `crm_contacts` o PostgreSQL bloqueava com constraint violation → HTTP 500.
+- **Root cause 2:** `meta_audience_contacts` (sem `project_id`) não estava na lista → bloqueava deleção de `meta_ad_audiences`.
+- **Fix:** Adicionadas ~25 tabelas faltantes na ordem correta. `meta_audience_contacts` recebeu handler especial (lookup por `audience_id` em vez de `project_id`). Edge function deployada (v17).
+- **Tabelas críticas adicionadas:** `orders`, `order_items`, `ledger_events`, `provider_order_map`, `meta_audience_contacts` (especial), `meta_audience_sync_logs`, `meta_lookalike_audiences`, `quiz_*`, `path_events`, `personalization_*`, `recommendation_logs`, `agent_decisions_log`, `notifications`, `subscriptions`, `project_settings`, `project_tracking_settings`, `integration_*`, `ai_agents`, `whatsapp_contact_notes/messages/quick_replies`, `hotmart_backfill_runs`, `hotmart_product_plans`, `ledger_import_batches`, `ledger_official`, `finance_ledger`, `finance_sync_runs`, e outros.
+
+**Criação (trigger duplicado em projects):**
+- **Root cause:** Dois triggers AFTER INSERT idênticos na tabela `projects` — `on_project_created` e `trg_handle_new_project` — ambos chamavam `handle_new_project()`. O segundo INSERT em `project_members(project_id, user_id, 'owner')` violava a UNIQUE constraint `(project_id, user_id)`, fazendo rollback da criação inteira.
+- **Root cause 2:** Dois triggers BEFORE INSERT idênticos — `trigger_generate_project_public_code` e `trg_generate_public_code` — benignos (segundo é no-op por `IF NULL`), mas indicam histórico de migrations sobrepostas.
+- **Fix:** Migration `20260317010000` dropa `on_project_created` e `trigger_generate_project_public_code`. `handle_new_project()` atualizado com `ON CONFLICT (project_id, user_id) DO NOTHING` como guard defensivo.
 
 ---
 

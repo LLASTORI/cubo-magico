@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 17/03/2026 (sessão 10 — Meta Audiences end-to-end concluído, Onda 2 next)
+> Última atualização: 17/03/2026 (sessão 11 — Criação e exclusão de projetos corrigidas, Onda 2 next)
 
 ---
 
@@ -67,6 +67,14 @@
 ---
 
 ## ✅ Concluído
+
+### 🏗️ Pipelines de Projeto — Criação e Exclusão (17/03/2026)
+- [x] Fix exclusão: 25+ tabelas faltantes adicionadas em ordem topológica correta (`orders` antes de `crm_contacts`, `meta_audience_contacts` via handler especial, etc.)
+- [x] Fix exclusão: `meta_audience_contacts` (sem `project_id`) — handler dedicado via lookup por `audience_id`
+- [x] Fix criação: trigger duplicado `on_project_created` removido — causava UNIQUE violation em `project_members` no segundo AFTER INSERT
+- [x] `handle_new_project()` atualizado com `ON CONFLICT DO NOTHING` como guard defensivo
+- [x] Migration `20260317010000_fix_duplicate_project_triggers.sql` commitada
+- [x] Edge function `delete-project` deployada (v17)
 
 ### 🎯 Meta Audiences — End-to-end (17/03/2026)
 - [x] Fix 500 na criação de público (UUID vs string Meta mismatch no ad_account_id)

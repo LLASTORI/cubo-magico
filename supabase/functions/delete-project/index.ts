@@ -129,17 +129,99 @@ serve(async (req) => {
       return { tableName, deleted: totalDeleted };
     };
 
-    // Tables that directly reference projects via project_id FK
-    // (Deleting by project_id guarantees we only remove this project's data.)
+    // Special handler for meta_audience_contacts — no project_id column,
+    // must be deleted via audience_id FK chain before meta_ad_audiences and crm_contacts.
+    const deleteMetaAudienceContacts = async () => {
+      const tableName = "meta_audience_contacts";
+
+      // Resolve all audience UUIDs belonging to this project
+      const { data: audiences, error: audienceError } = await supabase
+        .from("meta_ad_audiences")
+        .select("id")
+        .eq("project_id", projectId);
+
+      if (audienceError) {
+        console.error(`[delete-project] ${tableName}: audience lookup error:`, audienceError.message);
+        return { tableName, deleted: 0, error: audienceError.message };
+      }
+
+      const audienceIds = (audiences || []).map((a: any) => a.id).filter(Boolean);
+      if (audienceIds.length === 0) {
+        return { tableName, deleted: 0 };
+      }
+
+      let totalDeleted = 0;
+
+      for (let i = 0; i < MAX_BATCH_LOOPS; i++) {
+        const { data: rows, error: selectError } = await supabase
+          .from(tableName)
+          .select("id")
+          .in("audience_id", audienceIds)
+          .order("id", { ascending: true })
+          .limit(BATCH_SIZE);
+
+        if (selectError) {
+          console.error(`[delete-project] ${tableName}: select error:`, selectError.message);
+          return { tableName, deleted: totalDeleted, error: selectError.message };
+        }
+
+        const ids = (rows || []).map((r: any) => r.id).filter(Boolean);
+        if (ids.length === 0) break;
+
+        const { error: deleteError } = await supabase
+          .from(tableName)
+          .delete()
+          .in("id", ids);
+
+        if (deleteError) {
+          console.error(`[delete-project] ${tableName}: delete error:`, deleteError.message);
+          return { tableName, deleted: totalDeleted, error: deleteError.message };
+        }
+
+        totalDeleted += ids.length;
+      }
+
+      return { tableName, deleted: totalDeleted };
+    };
+
+    // Deletion order — leaf tables (children) before parent tables.
+    //
+    // Critical ordering constraints:
+    //   orders.contact_id        → crm_contacts   NO ACTION  → orders before crm_contacts
+    //   meta_audience_contacts.audience_id → meta_ad_audiences NO ACTION → handled separately (no project_id)
+    //   meta_audience_contacts.contact_id  → crm_contacts   NO ACTION  → handled separately
+    //   provider_order_map.order_id        → orders         NO ACTION  → before orders
+    //   quiz_results/sessions.contact_id   → crm_contacts   NO ACTION  → before crm_contacts
+    //   path_events/personalization.contact_id → crm_contacts NO ACTION → before crm_contacts
+    //   whatsapp_conversations.contact_id  → crm_contacts   NO ACTION  → before crm_contacts
+    //   social_comments.contact_id         → crm_contacts   NO ACTION  → before crm_contacts
+    //   crm_recovery_activities.contact_id → crm_contacts   NO ACTION  → before crm_contacts
+    //   funnel_changes/etc.funnel_id       → funnels        NO ACTION  → before funnels
+    //   meta_audience_sync_logs/lookalike.audience_id → meta_ad_audiences NO ACTION → before meta_ad_audiences
     const tablesInSafeOrder: string[] = [
       // Must be deleted before projects (NO ACTION)
       "user_activity_logs",
 
-      // High volume
+      // High volume legacy
       "hotmart_sales",
       "meta_insights",
 
-      // CRM children first
+      // Quiz — contact_id NO ACTION → crm_contacts; must be before crm_contacts
+      "quiz_events",
+      "quiz_results",
+      "quiz_sessions",
+      "quizzes",
+
+      // Agent AI — contact_id NO ACTION → crm_contacts
+      "agent_decisions_log",
+
+      // Recommendation & personalization — contact_id NO ACTION → crm_contacts
+      "recommendation_logs",
+      "personalization_contexts",
+      "personalization_logs",
+      "path_events",
+
+      // CRM children (CASCADE from crm_contacts, but explicit for safety)
       "crm_activities",
       "crm_activities_tasks",
       "crm_contact_interactions",
@@ -147,11 +229,22 @@ serve(async (req) => {
       "contact_identity_events",
       "crm_transactions",
 
-      // Social + surveys
+      // Social — social_comments.contact_id NO ACTION → crm_contacts
       "social_comments",
       "social_listening_sync_logs",
       "social_posts",
       "social_listening_pages",
+
+      // WhatsApp — whatsapp_conversations.contact_id NO ACTION → crm_contacts
+      "whatsapp_conversations",
+      "whatsapp_agents",
+      "whatsapp_departments",
+      "whatsapp_numbers",
+      "whatsapp_contact_notes",
+      "whatsapp_messages",
+      "whatsapp_quick_replies",
+
+      // Surveys
       "survey_response_analysis",
       "survey_insights_daily",
       "survey_responses",
@@ -159,12 +252,16 @@ serve(async (req) => {
       "survey_webhook_keys",
       "surveys",
 
-      // Funnels
+      // Funnel children (before funnels)
       "funnel_changes",
+      "funnel_experiments",
       "funnel_meta_accounts",
       "funnel_score_history",
       "funnel_thresholds",
       "offer_mappings",
+      "launch_products",
+      "phase_campaigns",
+      "launch_phases",
       "funnels",
 
       // Automations
@@ -172,6 +269,11 @@ serve(async (req) => {
       "automation_media",
       "automation_flows",
       "automation_folders",
+
+      // Meta audience children (before meta_ad_audiences)
+      // meta_audience_contacts is handled separately below (no project_id column)
+      "meta_audience_sync_logs",
+      "meta_lookalike_audiences",
 
       // Meta entities
       "meta_ads",
@@ -181,10 +283,34 @@ serve(async (req) => {
       "meta_ad_accounts",
       "meta_credentials",
 
-      // Launch
-      "phase_campaigns",
-      "launch_phases",
-      "launch_products",
+      // Finance — provider_order_map before orders; order children before orders
+      "provider_order_map",
+      "ledger_events",
+      "order_items",
+      "orders",                  // MUST be before crm_contacts (orders.contact_id NO ACTION)
+      "csv_import_batches",
+      "ledger_import_batches",
+      "ledger_official",
+      "finance_ledger",
+      "finance_sync_runs",
+      "product_revenue_splits",
+      "spend_core_events",
+      "sales_history_orders",
+      "hotmart_backfill_runs",
+      "hotmart_product_plans",
+
+      // Misc project tables
+      "notifications",
+      "subscriptions",
+      "economic_days",
+      "event_dispatch_rules",
+      "experience_templates",
+      "experience_themes",
+
+      // Integrations
+      "integration_sync_logs",
+      "integration_oauth_tokens",
+      "integration_connections",
 
       // CRM setup
       "crm_cadences",
@@ -199,26 +325,30 @@ serve(async (req) => {
       "project_members",
       "project_modules",
       "project_credentials",
+      "project_settings",
+      "project_tracking_settings",
       "role_templates",
 
       // AI
       "ai_usage_tracking",
       "ai_knowledge_base",
       "ai_project_quotas",
+      "ai_agents",
 
-      // WhatsApp config
-      "whatsapp_conversations",
-      "whatsapp_agents",
-      "whatsapp_departments",
-      "whatsapp_numbers",
+      // CRM contacts — MUST be after orders, meta_audience_contacts (handled separately),
+      // quiz_*, path_events, personalization_*, whatsapp_conversations, social_comments, etc.
+      "crm_contacts",
 
       // Misc
       "comment_metrics_daily",
-      "crm_contacts",
       "webhook_metrics",
     ];
 
     const deletionReport: Array<{ tableName: string; deleted: number; error?: string }> = [];
+
+    // Delete meta_audience_contacts first (special handler — no project_id column)
+    const macResult = await deleteMetaAudienceContacts();
+    deletionReport.push(macResult);
 
     for (const tableName of tablesInSafeOrder) {
       const result = await deleteTableByProjectId(tableName);

@@ -42,6 +42,7 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
   const [savedAccounts, setSavedAccounts] = useState<MetaAdAccount[]>([]);
   const [availableAccounts, setAvailableAccounts] = useState<AvailableAccount[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [availableSearch, setAvailableSearch] = useState('');
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [accountToDisconnect, setAccountToDisconnect] = useState<MetaAdAccount | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,9 +98,19 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
     }
   };
 
-  const newAccounts = availableAccounts.filter(
-    a => !savedAccounts.some(s => s.account_id === a.id)
-  );
+  const newAccounts = useMemo(() => {
+    const unsaved = availableAccounts.filter(
+      a => !savedAccounts.some(s => s.account_id === a.id)
+    );
+    const term = availableSearch.trim();
+    if (!term) return unsaved;
+    const normalize = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const q = normalize(term);
+    return unsaved.filter(
+      a => normalize(a.name ?? '').includes(q) || normalize(a.id ?? '').includes(q)
+    );
+  }, [availableAccounts, savedAccounts, availableSearch]);
 
   const accounts = useMemo(() => (Array.isArray(savedAccounts) ? savedAccounts : []), [savedAccounts]);
 
@@ -203,15 +214,30 @@ export function MetaAccountsManager({ projectId, onAccountsChange }: Props) {
         </CardContent>
       </Card>
 
-      {newAccounts.length > 0 && (
+      {availableAccounts.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Contas disponíveis</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-3">
+              <Input
+                value={availableSearch}
+                onChange={(e) => setAvailableSearch(e.target.value)}
+                placeholder="Buscar por nome ou act_ID..."
+              />
+            </div>
+            {newAccounts.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {availableSearch ? 'Nenhuma conta encontrada para a busca.' : 'Todas as contas já estão vinculadas.'}
+              </p>
+            )}
             {newAccounts.map(acc => (
-              <div key={acc.id} className="flex justify-between p-2 border-b">
-                <span>{acc.name}</span>
+              <div key={acc.id} className="flex justify-between items-center p-2 border-b">
+                <div>
+                  <span className="text-sm font-medium">{acc.name}</span>
+                  <p className="text-xs font-mono text-foreground/70 mt-0.5">{acc.id}</p>
+                </div>
                 <Button size="sm" onClick={() => handleAddAccount(acc)} disabled={syncing}>
                   {syncing ? '...' : 'Adicionar'}
                 </Button>

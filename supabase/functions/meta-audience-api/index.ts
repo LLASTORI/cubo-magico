@@ -512,18 +512,22 @@ async function createAudience(
 
   const accessToken = credentials.access_token
 
-  // Resolve Meta string account_id from UUID (adAccountId is the internal UUID FK)
+  // adAccountId comes as Meta string (e.g. "act_312092411354147" or "312092411354147")
+  // Normalize: strip leading "act_" to get the bare numeric ID
+  const metaAccountId = adAccountId.startsWith('act_') ? adAccountId.slice(4) : adAccountId
+
+  // Resolve internal UUID for the FK insert
   const { data: adAccountRow, error: adAccountError } = await serviceSupabase
     .from('meta_ad_accounts')
-    .select('account_id')
-    .eq('id', adAccountId)
+    .select('id')
+    .eq('account_id', metaAccountId)
     .single()
 
   if (adAccountError || !adAccountRow) {
     throw new Error('Conta de anúncios não encontrada')
   }
 
-  const metaAccountId = adAccountRow.account_id
+  const adAccountUUID = adAccountRow.id
 
   // Prevent duplicates BEFORE calling Meta API
   // (there is a unique constraint on project_id + ad_account_id + name)
@@ -531,7 +535,7 @@ async function createAudience(
     .from('meta_ad_audiences')
     .select('id')
     .eq('project_id', projectId)
-    .eq('ad_account_id', adAccountId)
+    .eq('ad_account_id', adAccountUUID)
     .eq('name', safeName)
     .maybeSingle()
 
@@ -544,9 +548,8 @@ async function createAudience(
     return { error: 'Já existe um público com esse nome nessa conta. Escolha outro nome (ex: "teste publico 2").' }
   }
 
-  // Create Custom Audience on Meta
-  // Ensure metaAccountId doesn't have duplicate 'act_' prefix
-  const cleanAdAccountId = metaAccountId.startsWith('act_') ? metaAccountId : `act_${metaAccountId}`
+  // Create Custom Audience on Meta — use bare Meta account ID with act_ prefix
+  const cleanAdAccountId = `act_${metaAccountId}`
   const createUrl = `${GRAPH_API_BASE}/${cleanAdAccountId}/customaudiences`
 
   // IMPORTANT: Meta costuma falhar silenciosamente (ex: #2654) quando enviamos descrições gigantes.
@@ -636,7 +639,7 @@ async function createAudience(
     .from('meta_ad_audiences')
     .insert({
       project_id: projectId,
-      ad_account_id: adAccountId,
+      ad_account_id: adAccountUUID,
       name: safeName,
       meta_audience_id: metaResult.id,
       segment_type: 'tag',

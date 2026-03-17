@@ -400,6 +400,9 @@ export function MetaAudiencesTab({ projectId, adAccounts }: MetaAudiencesTabProp
           onOpenChange={() => setEditAudience(null)}
           audience={editAudience}
           projectId={projectId}
+          availableTags={availableTags || []}
+          tagsLoading={tagsLoading}
+          onRefreshTags={refetchTags}
         />
       )}
 

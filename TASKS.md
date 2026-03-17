@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 17/03/2026 (sessão 13 — Social Listening desbloqueado e analisado, melhorias priorizadas)
+> Última atualização: 17/03/2026 (sessão 16 — fix Gerar Resposta: generate_reply movido para antes do check Meta credentials)
 
 ---
 
@@ -89,6 +89,15 @@
 ---
 
 ## ✅ Concluído
+
+### 🤖 Social Listening — OpenAI + fix Gerar Resposta (17/03/2026)
+- [x] `social-comments-api`: `classifyWithLovableAI` e `generateReplyWithLovableAI` removidos
+- [x] `generateReply`: usa OpenAI diretamente; erro claro se `OPENAI_API_KEY` ausente
+- [x] `processCommentsWithAI`: ramificação Lovable removida, OpenAI como único path
+- [x] `AIUsageDashboard`: card Lovable removido, simplificado para OpenAI + UI de configuração da chave
+- [x] `platform_settings`: tabela criada, RPC service_role, UI no Admin → Uso de IA para salvar/testar chave
+- [x] Bug 500 → 400 em "Gerar Resposta": `generate_reply` movido para antes do check de Meta credentials (não requer Meta conectado)
+- [x] Deploy: `social-comments-api` v27 | commit pendente
 
 ### 📡 Social Listening — Melhorias Quick Wins + CRM (17/03/2026)
 - [x] `buildClassificationPrompt` agora injeta `custom_categories` do knowledge base dinamicamente (9 categorias hardcoded como fallback)

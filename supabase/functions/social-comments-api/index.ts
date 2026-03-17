@@ -377,6 +377,24 @@ Deno.serve(async (req) => {
 
     console.log('Social Comments API request:', { action, projectId })
 
+    // Actions that don't require Meta credentials
+    if (action === 'test_openai_connection') {
+      const serviceSupabase2 = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const result = await testOpenAIConnection(serviceSupabase2)
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'generate_reply') {
+      const { commentId } = body
+      const serviceSupabase2 = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const result = await generateReply(serviceSupabase2, projectId, commentId)
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Get Meta credentials
     const { data: credentials, error: credError } = await supabase
       .from('meta_credentials')

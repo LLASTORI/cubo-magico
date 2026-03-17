@@ -806,6 +806,7 @@ function buildCommentRow(
     comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
     ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
     crm_contact_id: crmContactId,
+    contact_id: crmContactId,
     is_deleted: false,
     is_own_account: isOwnAccount,
   }
@@ -882,7 +883,7 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
     if (contactId) {
       const { error: updateError } = await supabase
         .from('social_comments')
-        .update({ crm_contact_id: contactId })
+        .update({ crm_contact_id: contactId, contact_id: contactId })
         .eq('id', comment.id)
       
       if (!updateError) linked++

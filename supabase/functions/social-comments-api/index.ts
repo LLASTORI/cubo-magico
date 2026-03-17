@@ -939,7 +939,7 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
 // ============= AI PROCESSING (WITH KEYWORDS + OPENAI) =============
 
 async function processCommentsWithAI(supabase: any, projectId: string, limit: number) {
-  const batchSize = Math.min(limit, 100)
+  const batchSize = Math.min(limit, 30)
   console.log(`[AI_PROCESS] Processing up to ${batchSize} comments for project:`, projectId)
 
   // Reset stuck comments
@@ -999,23 +999,27 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
     spam: customKeywords?.spam?.length || 0
   })
 
+  const keywordUpdatePromises: Promise<any>[] = []
+
   for (const comment of comments) {
     const keywordResult = classifyByKeywords(comment.text || '', customKeywords)
 
     if (keywordResult.classified) {
-      // Classify by keyword (no AI needed)
-      await supabase
-        .from('social_comments')
-        .update({
-          sentiment: keywordResult.sentiment,
-          classification: keywordResult.classification,
-          classification_key: keywordResult.classification,
-          intent_score: keywordResult.intent_score,
-          ai_summary: keywordResult.summary,
-          ai_processing_status: 'completed',
-          ai_processed_at: new Date().toISOString(),
-        })
-        .eq('id', comment.id)
+      // Classify by keyword (no AI needed) — fire updates in parallel
+      keywordUpdatePromises.push(
+        supabase
+          .from('social_comments')
+          .update({
+            sentiment: keywordResult.sentiment,
+            classification: keywordResult.classification,
+            classification_key: keywordResult.classification,
+            intent_score: keywordResult.intent_score,
+            ai_summary: keywordResult.summary,
+            ai_processing_status: 'completed',
+            ai_processed_at: new Date().toISOString(),
+          })
+          .eq('id', comment.id)
+      )
 
       keywordClassified++
       console.log(`[AI_PROCESS] Keyword classified: "${(comment.text || '').substring(0, 30)}..." -> ${keywordResult.classification} (${keywordResult.classificationMethod})`)
@@ -1027,6 +1031,11 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
         postContext: comment.social_posts?.message || ''
       })
     }
+  }
+
+  // Await all keyword updates in parallel
+  if (keywordUpdatePromises.length > 0) {
+    await Promise.all(keywordUpdatePromises)
   }
 
   console.log(`[AI_PROCESS] Keyword classified: ${keywordClassified}, Needs AI: ${commentsForAI.length}`)
@@ -1400,6 +1409,8 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
 
             if (existingPost) {
               postId = existingPost.id
+              // Ensure is_ad is set on existing post
+              await supabase.from('social_posts').update({ is_ad: true, post_type: 'ad' }).eq('id', existingPost.id)
             } else {
               const { data: newPost } = await supabase
                 .from('social_posts')
@@ -1408,6 +1419,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
                   platform: 'facebook',
                   post_id_meta: storyId,
                   post_type: 'ad',
+                  is_ad: true,
                   message: ad.name,
                 })
                 .select('id')
@@ -1417,9 +1429,30 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
             }
 
             if (postId) {
-              for (const comment of commentsData.data || []) {
-                await upsertComment(supabase, projectId, postId, 'facebook', comment, null)
-                totalComments++
+              const commentRows = (commentsData.data || []).map((comment: any) => ({
+                project_id: projectId,
+                post_id: postId,
+                platform: 'facebook',
+                comment_id_meta: comment.id,
+                text: comment.message,
+                author_username: comment.from?.name || null,
+                author_id: comment.from?.id || null,
+                like_count: comment.like_count || 0,
+                reply_count: comment.comment_count || 0,
+                comment_timestamp: comment.created_time,
+                ai_processing_status: 'pending',
+                is_deleted: false,
+                is_own_account: false,
+              }))
+              if (commentRows.length > 0) {
+                const { error: upsertError } = await supabase
+                  .from('social_comments')
+                  .upsert(commentRows, { onConflict: 'project_id,platform,comment_id_meta' })
+                if (upsertError) {
+                  console.error(`[SYNC_AD_COMMENTS] Upsert error for ad ${ad.id}:`, upsertError.message)
+                } else {
+                  totalComments += commentRows.length
+                }
               }
             }
           } catch (commentError: any) {

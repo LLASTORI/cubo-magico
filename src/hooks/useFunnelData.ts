@@ -126,6 +126,7 @@ interface SaleRecord {
   offer_code: string | null;
   gross_amount: number | null;
   net_amount: number | null;
+  main_revenue: number | null;
   buyer_email: string | null;
   economic_day: string | null;
   purchase_date: string | null;
@@ -381,12 +382,20 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }
 
       // Aggregate by offer_code (view is daily, we want totals for the period)
-      const byOffer: Record<string, number> = {};
+      const totalRevenue: Record<string, number> = {};
+      const totalCount: Record<string, number> = {};
       (data || []).forEach(row => {
         const code = row.offer_code as string;
-        byOffer[code] = (byOffer[code] || 0) + (Number(row.revenue) || 0);
+        totalRevenue[code] = (totalRevenue[code] || 0) + (Number(row.revenue) || 0);
+        totalCount[code] = (totalCount[code] || 0) + (Number(row.sales_count) || 0);
       });
-      return byOffer;
+      // Return average price per offer code (revenue / sales_count)
+      // Used as avg_price × funnel-scoped count to get funnel-accurate OB revenue
+      const avgPrice: Record<string, number> = {};
+      Object.keys(totalRevenue).forEach(code => {
+        avgPrice[code] = totalCount[code] > 0 ? totalRevenue[code] / totalCount[code] : 0;
+      });
+      return avgPrice;
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -550,6 +559,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
         offer_code: sale.offer_code,
         gross_amount: sale.gross_value_brl,
         net_amount: sale.net_value_brl,
+        main_revenue: sale.gross_value_brl,
         buyer_email: sale.contact_email,
         economic_day: sale.event_timestamp ? sale.event_timestamp.slice(0, 10) : null,
         purchase_date: sale.event_timestamp,
@@ -575,6 +585,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       offer_code: order.main_offer_code,
       gross_amount: order.customer_paid,
       net_amount: order.producer_net,
+      main_revenue: order.main_revenue,
       buyer_email: order.buyer_email,
       economic_day: order.economic_day,
       purchase_date: order.ordered_at,
@@ -676,7 +687,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: New metrics calculation using order-level data
   // ═══════════════════════════════════════════════════════════════════════════════
-  const itemRevenueByOfferCode: Record<string, number> = itemRevenueQuery.data || {};
+  const itemAvgPriceByOfferCode: Record<string, number> = itemRevenueQuery.data || {};
 
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
     if (!ordersData.length) return [];
@@ -690,11 +701,12 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       const allCodes = (order.all_offer_codes || []).filter(Boolean) as string[];
       const mainCode = order.main_offer_code;
 
-      // Credit main revenue to main offer
+      // Credit main item revenue to main offer (order.main_revenue = FRONT base_price)
       if (mainCode) {
         if (!salesByOffer[mainCode]) salesByOffer[mainCode] = { count: 0, revenue: 0 };
         salesByOffer[mainCode].count += 1;
-        salesByOffer[mainCode].revenue += order.main_revenue || 0;
+        // main_revenue = item-level front price (not total customer_paid)
+        salesByOffer[mainCode].revenue += order.main_revenue || order.customer_paid || 0;
       }
 
       // Count non-main offer codes (bumps, upsells) — revenue approximated below
@@ -706,16 +718,14 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       });
     });
 
-    // For non-main positions: use exact item-level revenue from order_items.base_price.
-    // Falls back to mapping.valor × count if item revenue data not yet loaded.
+    // For non-main positions: avg item price × funnel-scoped count.
+    // Falls back to mapping.valor if avg price not yet loaded.
     sortedMappings.forEach(m => {
       const code = m.codigo_oferta || '';
       const isMain = m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE';
       if (!isMain && salesByOffer[code]) {
-        const exactRevenue = itemRevenueByOfferCode[code];
-        salesByOffer[code].revenue = exactRevenue !== undefined
-          ? exactRevenue
-          : (m.valor || 0) * salesByOffer[code].count;
+        const avgPrice = itemAvgPriceByOfferCode[code] ?? (m.valor || 0);
+        salesByOffer[code].revenue = avgPrice * salesByOffer[code].count;
       }
     });
 
@@ -760,7 +770,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }));
 
     return [...mappedMetrics, ...unmappedOffers];
-  }, [sortedMappings, ordersData, itemRevenueByOfferCode]);
+  }, [sortedMappings, ordersData, itemAvgPriceByOfferCode]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: Summary metrics using order-level aggregations
@@ -851,7 +861,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     offerCodes,
     salesData, // Backward compatible - uses adapter from ordersData
     ordersData, // New: Raw orders from Orders Core
-    itemRevenueByOfferCode, // Exact per-offer revenue from order_items.base_price
+    itemAvgPriceByOfferCode, // Exact per-offer revenue from order_items.base_price
     metaInsights: adLevelInsights,
     rawInsights, // Keep raw for debugging
     metaStructure: { campaigns, adsets, ads },

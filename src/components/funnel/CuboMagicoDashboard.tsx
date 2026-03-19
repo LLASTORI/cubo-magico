@@ -65,6 +65,7 @@ interface UnifiedSale {
   all_offer_codes: string[] | null;
   gross_amount: number | null;
   net_amount: number | null;
+  main_revenue: number | null;
   buyer_email: string | null;
   economic_day: string | null;
   purchase_date: string | null;
@@ -113,8 +114,8 @@ interface CuboMagicoDashboardProps {
   insightsData?: MetaInsightData[];
   // Label shown next to faturamento values: 'Bruto' | 'Líquido'
   revenueLabel?: string;
-  // Exact per-offer revenue from order_items.base_price (for OB/US/DS positions)
-  itemRevenueByOfferCode?: Record<string, number>;
+  // Average item price per offer code (OB/US/DS) — project-wide avg, used × funnel count
+  itemAvgPriceByOfferCode?: Record<string, number>;
 }
 
 interface FunnelWithConfig {
@@ -178,7 +179,7 @@ if (!props.projectId) {
     salesData: externalSalesData,
     insightsData: externalInsightsData,
     revenueLabel = 'Bruto',
-    itemRevenueByOfferCode,
+    itemAvgPriceByOfferCode,
   } = props;
 
   const { isModuleEnabled } = useProjectModules();
@@ -549,11 +550,12 @@ if (!props.projectId) {
           ? funnelSales.filter(s => s.offer_code === offer.codigo_oferta)
           : funnelSales.filter(s => (s.all_offer_codes || []).includes(offer.codigo_oferta || ''));
         const salesCount = offerSales.length;
-        // For FRONT/FE: use gross_amount (= full order value, correct for main offer)
-        // For OB/US/DS: use exact item-level revenue from order_items.base_price
+        // FRONT/FE: sum of main_revenue (item-level front price, not total order value)
+        // OB/US/DS: avg item price (project-wide) × funnel-scoped sale count
+        const offerCode = offer.codigo_oferta || '';
         const salesRevenue = isMain
-          ? offerSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0)
-          : (itemRevenueByOfferCode?.[offer.codigo_oferta || ''] || 0);
+          ? offerSales.reduce((sum, s) => sum + (s.main_revenue || s.gross_amount || 0), 0)
+          : (itemAvgPriceByOfferCode?.[offerCode] || 0) * salesCount;
         
         productsByPosition[pos] = (productsByPosition[pos] || 0) + salesCount;
         

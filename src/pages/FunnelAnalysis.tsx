@@ -199,7 +199,7 @@ const FunnelAnalysis = () => {
     mappings,
     offerCodes,
     salesData,
-    itemRevenueByOfferCode,
+    itemAvgPriceByOfferCode,
     metaInsights,
     metaStructure,
     activeAccountIds,
@@ -628,7 +628,7 @@ const FunnelAnalysis = () => {
                   salesData={displaySalesData}
                   insightsData={metaInsights}
                   revenueLabel={revenueMode === 'bruto' ? 'Bruto' : 'Líquido'}
-                  itemRevenueByOfferCode={itemRevenueByOfferCode}
+                  itemAvgPriceByOfferCode={itemAvgPriceByOfferCode}
                 />
                 
                 <Card className="p-4 bg-muted/30 border-dashed">

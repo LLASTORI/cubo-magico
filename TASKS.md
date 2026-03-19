@@ -62,6 +62,28 @@
 
 ---
 
+## 🟡 Análise de Funil — Melhorias (tela FunnelAnalysis / CuboMagicoDashboard)
+
+> Prioridades identificadas na sessão 17. Drill-down por funil já funciona com dados corretos.
+
+### Alta prioridade
+- [ ] **Bruto vs Líquido** — toggle ou label explícito no header do faturamento (`customer_paid` = bruto, `producer_net_brl` = líquido); evita confusão ao comparar com plataformas de anúncio
+- [ ] **Funil visual por etapa** — FRONT → OB1 → OB2 → US com taxa de take rate por posição estilo funil/barras empilhadas; muito mais legível que tabela para decisão de oferta
+- [ ] **Take rate de OB em destaque** — card "OB1: 34% dos compradores adicionaram" com trend; hoje enterrado em tabela
+
+### Médio prazo
+- [ ] **Seletor de funil nas abas do topo** — `FunnelAnalysis.tsx` Evolução/Pagamentos/LTV/Comparação mostram todos os funis juntos; adicionar select para filtrar por funil específico (complementar ao drill-down existente no CuboMagicoDashboard)
+- [ ] **Gráfico de evolução empilhado** — `TemporalChart` com áreas FRONT / OBs / Upsells separadas; permite ver se bump cresceu proporcionalmente
+- [ ] **Receita por OB em detalhes** — hoje aproximada por `mapping.valor × count`; query direta em `order_items` daria valor exato por oferta de bump/upsell
+- [ ] **Comparação automática período anterior** — delta `+12% vs últimos 30d` nos cards do header sem precisar abrir aba de Comparação
+
+### Backlog
+- [ ] **Cohort LTV** — agrupar clientes por mês de primeira compra e mostrar curva de acúmulo de LTV; indica saúde de longo prazo do produto
+- [ ] **Exportar PDF da análise** — `ExecutiveReport.tsx` (jsPDF) já existe mas só acessível via CuboMagicoDashboard; botão "Exportar" no header da página sem custo de código novo
+- [ ] **Alerta de ROAS abaixo do alvo** — notificação automática quando ROAS cair abaixo do `roas_target` configurado no funil
+
+---
+
 ## 🟡 Importante — Mas não urgente
 
 - [ ] `useLaunchData.ts` ainda referencia `hotmart_sales` — migrar (escopo separado)

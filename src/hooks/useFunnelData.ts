@@ -369,10 +369,16 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   const itemRevenueQuery = useQuery({
     queryKey: ['item-revenue', projectId, startDateStr, endDateStr],
     queryFn: async () => {
+      // Filter to bump/upsell/downsell only — exclude 'main' and 'unknown'.
+      // Some offer codes appear as both main (high price) and bump (low price) in
+      // different orders. Including 'main' rows inflates the average price used for
+      // OB/US/DS positions. 'unknown' items are excluded because they could be
+      // either front or bump — including them would also skew the average.
       const { data, error } = await supabase
         .from('offer_item_revenue_view')
         .select('offer_code, revenue, sales_count')
         .eq('project_id', projectId!)
+        .in('item_type', ['bump', 'upsell', 'downsell'])
         .gte('economic_day', startDateStr)
         .lte('economic_day', endDateStr);
 

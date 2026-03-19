@@ -5,8 +5,35 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-17 (sessão 14)
-- **Status geral:** Pipeline restaurado ✅ | Social Listening desbloqueado e analisado ✅ | 7 melhorias Social Listening implementadas e deployadas ✅ | Próximo: Item 7 (auto-reply Meta API) em planejamento separado
+- **Data:** 2026-03-19 (sessão 18)
+- **Status geral:** Análise de funil com dados confiáveis ✅ | Bruto/Líquido transparente ✅ | Receita por posição baseada em `order_items.base_price` ✅ | Arquitetura documentada em CLAUDE.md
+
+---
+
+### [2026-03-19] Análise de Funil — Transparência bruto/líquido + receita exata por posição — ✅ CONCLUÍDO (sessão 18)
+
+**Problema identificado pelo usuário:** faturamento top (R$2.731) ≠ FRONT (R$2.606) + OBs (valores inflados). OB2 mostrava R$4.267 para um período de 7 dias, maior que o faturamento total.
+
+**Root cause (3 camadas):**
+1. FRONT usava `gross_amount` (= `customer_paid`, total do pedido incluindo bumps) → inflava o FRONT
+2. OBs usavam `itemRevenueByOfferCode` — soma global do projeto, não filtrada por funil → inflava OBs de funis com ofertas compartilhadas
+3. `order_items.base_price` não existia na view; receita OB era aproximada como `mapping.valor × count`
+
+**Solução implementada:**
+- `offer_item_revenue_view` (migration `20260319120000`): agrega `base_price` por `(project_id, offer_code, economic_day)`
+- `itemAvgPriceByOfferCode` = `total_revenue / sales_count` por oferta no período → avg price independente de funil
+- FRONT = `main_revenue` (= `order_items.base_price` do item principal, sem bumps)
+- OBs = `avg_price × vendas_no_funil` → escalonado pela contagem funil-específica
+- Total top = `customer_paid` (correto, é a soma de todos os itens do pedido)
+- Resultado: FRONT + OBs ≈ Total top (dentro de variação de câmbio e taxas)
+
+**Transparência adicionada:**
+- Modo Líquido: aviso "receita por posição sempre bruta" + badge `(B)` nos cards
+- Tooltips com fonte exata (`order_items.base_price`, `funnel_orders_view`)
+- Indicador de confiança por funil: N pedidos + partial_refunds
+- `CLAUDE.md` atualizado com tabela de fontes e regras multi-provider
+
+**Arquitetura multi-provider documentada:** novos providers (Kiwify, Eduzz) devem popular `order_items` com `base_price` + `provider_offer_id` + `item_type` para que `offer_item_revenue_view` funcione automaticamente.
 
 ---
 

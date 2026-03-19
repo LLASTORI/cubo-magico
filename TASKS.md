@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 19/03/2026 (sessão 17 — fix análise de funil: dedup view, payment_method, gráficos de receita)
+> Última atualização: 19/03/2026 (sessão 18 — análise de funil: receita exata por posição, bruto/líquido transparente)
 
 ---
 
@@ -64,23 +64,28 @@
 
 ## 🟡 Análise de Funil — Melhorias (tela FunnelAnalysis / CuboMagicoDashboard)
 
-> Prioridades identificadas na sessão 17. Drill-down por funil já funciona com dados corretos.
+> Sessão 18: receita por posição corrigida, bruto/líquido transparente, indicadores de confiança adicionados.
 
 ### Alta prioridade
-- [ ] **Bruto vs Líquido** — toggle ou label explícito no header do faturamento (`customer_paid` = bruto, `producer_net_brl` = líquido); evita confusão ao comparar com plataformas de anúncio
+- [x] **Bruto vs Líquido** — toggle no header + badge `(B)` nos cards de posição em modo Líquido + aviso explícito "receita por posição sempre bruta" (sessão 18)
+- [x] **Receita exata por OB/US/DS** — `offer_item_revenue_view` criada; FRONT usa `main_revenue`, OBs usam `avg_price × count` de `order_items.base_price` (sessão 18)
+- [x] **Indicador de confiança por funil** — contador de pedidos + partial refunds na seção de fluxo do funil (sessão 18)
+- [x] **Tooltips de fonte dos dados** — faturamento total e cada posição exibem fonte (`order_items.base_price`, `funnel_orders_view`) no tooltip (sessão 18)
 - [ ] **Funil visual por etapa** — FRONT → OB1 → OB2 → US com taxa de take rate por posição estilo funil/barras empilhadas; muito mais legível que tabela para decisão de oferta
 - [ ] **Take rate de OB em destaque** — card "OB1: 34% dos compradores adicionaram" com trend; hoje enterrado em tabela
 
 ### Médio prazo
-- [ ] **Seletor de funil nas abas do topo** — `FunnelAnalysis.tsx` Evolução/Pagamentos/LTV/Comparação mostram todos os funis juntos; adicionar select para filtrar por funil específico (complementar ao drill-down existente no CuboMagicoDashboard)
+- [ ] **Seletor de funil nas abas do topo** — `FunnelAnalysis.tsx` Evolução/Pagamentos/LTV/Comparação mostram todos os funis juntos; adicionar select para filtrar por funil específico
 - [ ] **Gráfico de evolução empilhado** — `TemporalChart` com áreas FRONT / OBs / Upsells separadas; permite ver se bump cresceu proporcionalmente
-- [ ] **Receita por OB em detalhes** — hoje aproximada por `mapping.valor × count`; query direta em `order_items` daria valor exato por oferta de bump/upsell
 - [ ] **Comparação automática período anterior** — delta `+12% vs últimos 30d` nos cards do header sem precisar abrir aba de Comparação
+- [ ] **Detectar `item_type='unknown'`** — exibir alerta quando % de itens sem posição classificada exceder 5%; indica mapeamento incompleto de `offer_mappings`
 
-### Backlog
-- [ ] **Cohort LTV** — agrupar clientes por mês de primeira compra e mostrar curva de acúmulo de LTV; indica saúde de longo prazo do produto
-- [ ] **Exportar PDF da análise** — `ExecutiveReport.tsx` (jsPDF) já existe mas só acessível via CuboMagicoDashboard; botão "Exportar" no header da página sem custo de código novo
-- [ ] **Alerta de ROAS abaixo do alvo** — notificação automática quando ROAS cair abaixo do `roas_target` configurado no funil
+### Backlog — dados e confiabilidade
+- [ ] **Líquido real por item** — requer `net_price` em `order_items` (não existe hoje); seria populado pelo webhook quando Hotmart fornecer decomposição por item. Até lá, o total líquido (`producer_net`) é a única fonte confiável
+- [ ] **Cobertura de moeda** — exibir quantos pedidos vieram em USD/EUR convertidos para BRL; flag de atenção se > 10% do total
+- [ ] **Cohort LTV** — agrupar clientes por mês de primeira compra e mostrar curva de acúmulo de LTV
+- [ ] **Exportar PDF da análise** — `ExecutiveReport.tsx` (jsPDF) já existe; botão "Exportar" no header
+- [ ] **Alerta de ROAS abaixo do alvo** — notificação automática quando ROAS cair abaixo do `roas_target`
 
 ---
 
@@ -118,6 +123,18 @@
 ---
 
 ## ✅ Concluído
+
+### 📊 Análise de Funil — Transparência bruto/líquido + receita exata por posição (19/03/2026)
+- [x] `offer_item_revenue_view` criada (migration `20260319120000`): agrega `order_items.base_price` por `(project_id, offer_code, item_type, economic_day)`
+- [x] `useFunnelData`: `itemAvgPriceByOfferCode` exposto — preço médio por oferta para o período; OBs usam `avg_price × count` funil-específico
+- [x] `SaleRecord.main_revenue` adicionado — item-level front revenue; FRONT usa `main_revenue` em vez de `customer_paid` (que incluía bumps)
+- [x] `CuboMagicoDashboard`: aviso explícito quando em modo Líquido: "receita por posição sempre bruta"
+- [x] `CuboMagicoDashboard`: badge `(B)` nos cards de posição quando em modo Líquido
+- [x] Tooltips de fonte em faturamento (card topo + cabeçalho tabela): distingue bruto/líquido e cita `funnel_orders_view`
+- [x] Tooltip de posição: "Receita (Bruto) · Fonte: order_items.base_price · preço médio × N vendas"
+- [x] Indicador de confiança: contador de pedidos + partial refunds por funil na seção de fluxo
+- [x] `FunnelMetrics`: `ordersCount` + `partialRefunds` adicionados ao retorno de `funnelMetrics`
+- [x] `CLAUDE.md`: seção "Arquitetura Bruto vs Líquido" documentada com tabela de fontes e regras multi-provider
 
 ### 📊 Análise de Funil — Fix faturamento + payment_method + gráficos (19/03/2026)
 - [x] `funnel_orders_view` reescrita com CTE: GROUP BY apenas por `o.id` → zero duplicatas (era 74 duplicatas = R$11.671 inflado)

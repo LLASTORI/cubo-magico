@@ -155,6 +155,9 @@ interface FunnelMetrics {
   landingPageViews: number;
   initiateCheckouts: number;
   purchases: number;
+  // Data confidence
+  ordersCount: number; // total orders in period for this funnel
+  partialRefunds: number; // orders with partial_refund status
 }
 
 const PERPETUO_TYPE_VARIANTS = ['perpetuo', 'perpétuo', 'PERPETUO', 'PERPÉTUO', 'Perpetuo', 'Perpétuo'];
@@ -656,6 +659,9 @@ if (!props.projectId) {
         landingPageViews,
         initiateCheckouts,
         purchases,
+        // Data confidence
+        ordersCount: funnelSales.length,
+        partialRefunds: funnelSales.filter(s => s.hotmart_status === 'PARTIAL_REFUND').length,
       };
     });
   }, [funnels, offerMappings, salesData, campaigns, insightsData]);
@@ -1181,11 +1187,14 @@ if (!props.projectId) {
               </div>
             </Card>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent className="max-w-xs">
             {isHotmartEnabled ? (
               <>
-                <p><strong>Faturamento:</strong> Receita das vendas mapeadas aos funis</p>
-                <p className="text-xs text-muted-foreground">Status: approved, complete, completed</p>
+                <p><strong>Faturamento ({revenueLabel}):</strong> {revenueLabel === 'Bruto' ? 'Valor pago pelo cliente (orders.customer_paid)' : 'Valor creditado ao produtor após taxas Hotmart (orders.producer_net)'}</p>
+                <p className="text-xs text-muted-foreground mt-1">Fonte: funnel_orders_view · Status: approved, completed, partial_refund</p>
+                {revenueLabel === 'Líquido' && (
+                  <p className="text-xs text-yellow-500 mt-1">⚠ Receita por posição (FRONT/OB/US) não disponível em modo Líquido — exibe valor bruto</p>
+                )}
               </>
             ) : (
               <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
@@ -1419,7 +1428,7 @@ if (!props.projectId) {
                 <ModuleLockedHeader
                   isLocked={!isHotmartEnabled}
                   label={`Faturamento (${revenueLabel})`}
-                  unlockedTooltip={`Receita total de vendas aprovadas do funil — ${revenueLabel === 'Bruto' ? 'valor pago pelo cliente' : 'valor creditado ao produtor'}`}
+                  unlockedTooltip={`${revenueLabel === 'Bruto' ? 'Bruto: valor pago pelo cliente (customer_paid). Fonte: funnel_orders_view' : 'Líquido: valor creditado ao produtor (producer_net). Fonte: funnel_orders_view. Atenção: receita por posição sempre exibe valor bruto'}`}
                 />
               </TableHead>
               <TableHead className="text-right">
@@ -1846,7 +1855,22 @@ if (!props.projectId) {
                                 })()}
                                 
                                 <div>
-                                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Fluxo do Funil — <span className="text-foreground">{metrics.funnel.name}</span></h4>
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h4 className="text-sm font-semibold text-muted-foreground">Fluxo do Funil — <span className="text-foreground">{metrics.funnel.name}</span></h4>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <span>{metrics.ordersCount} pedido{metrics.ordersCount !== 1 ? 's' : ''}</span>
+                                      {metrics.partialRefunds > 0 && (
+                                        <span className="text-yellow-500">{metrics.partialRefunds} reembolso{metrics.partialRefunds !== 1 ? 's' : ''} parcial</span>
+                                      )}
+                                      <span className="text-muted-foreground/50">· Hotmart</span>
+                                    </div>
+                                  </div>
+                                  {revenueLabel !== 'Bruto' && (
+                                    <div className="mb-3 flex items-start gap-2 rounded-md bg-yellow-500/10 border border-yellow-500/20 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400">
+                                      <span className="mt-0.5">⚠</span>
+                                      <span>Receita por posição não disponível em modo Líquido — os valores abaixo são <strong>sempre brutos</strong> (order_items.base_price). Use o total acima para análise líquida.</span>
+                                    </div>
+                                  )}
                                   <div className="flex flex-wrap items-stretch gap-2">
                                     {metrics.positionBreakdown.map((pos, index) => {
                                       const gradient = gradients[pos.tipo] || 'from-gray-500 to-gray-400';
@@ -1969,6 +1993,7 @@ if (!props.projectId) {
                                                   </div>
                                                   <span className="text-[10px] mt-1 opacity-70">
                                                     {formatCurrency(pos.receita)}
+                                                    {revenueLabel !== 'Bruto' && <span className="ml-0.5 opacity-60">(B)</span>}
                                                   </span>
                                                 </div>
                                               </div>
@@ -2030,9 +2055,19 @@ if (!props.projectId) {
                                                   )}>{pos.taxaConversao.toFixed(1)}%</span>
                                                 </div>
                                                 <div className="flex justify-between text-xs">
-                                                  <span>Receita:</span>
+                                                  <span>Receita (Bruto):</span>
                                                   <span className="font-medium">{formatCurrency(pos.receita)}</span>
                                                 </div>
+                                                {(pos.tipo !== 'FRONT' && pos.tipo !== 'FE') && (
+                                                  <div className="text-[10px] text-muted-foreground">
+                                                    Fonte: order_items.base_price · preço médio × {pos.vendas} venda{pos.vendas !== 1 ? 's' : ''}
+                                                  </div>
+                                                )}
+                                                {(pos.tipo === 'FRONT' || pos.tipo === 'FE') && (
+                                                  <div className="text-[10px] text-muted-foreground">
+                                                    Fonte: order_items.base_price (item principal)
+                                                  </div>
+                                                )}
                                               </div>
                                               <p className={cn(
                                                 "mt-2 pt-2 border-t border-border/50 text-xs italic",

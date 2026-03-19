@@ -79,6 +79,30 @@ Tabelas:
 - Expõe todos os campos UTM de `orders` + `main_offer_code` com fallback COALESCE
 - Hook canônico: `useFunnelData.ts` — `SaleRecord` é a interface de saída; UTMAnalysis usa `gross_amount` como receita canônica
 
+**`offer_item_revenue_view`** — receita exata por oferta (migration `20260319120000`):
+- Agrega `order_items.base_price` por `(project_id, offer_code, item_type, economic_day)`
+- Fonte para receita de OB/US/DS por posição no funil (substitui aproximação `mapping.valor × count`)
+- Usado via `useFunnelData.itemAvgPriceByOfferCode` — retorna preço médio por oferta no período
+
+## Arquitetura Bruto vs Líquido — Análise de Funil
+
+**Regra crítica:** receita por posição (FRONT/OB/US/DS) é SEMPRE baseada em valores brutos de `order_items.base_price`. Nunca existe um `net_price` por item — o líquido só existe no nível do pedido (`orders.producer_net`).
+
+| Nível | Bruto | Líquido | Fonte |
+|---|---|---|---|
+| Total do funil | `orders.customer_paid` | `orders.producer_net` | `funnel_orders_view` |
+| FRONT (item) | `order_items.base_price` (via `main_revenue`) | ❌ não disponível | `offer_item_revenue_view` |
+| OB/US/DS (item) | `avg_price × count` (avg de `order_items.base_price`) | ❌ não disponível | `offer_item_revenue_view` |
+
+**Implicações para o código:**
+- `revenueMode` em `FunnelAnalysis.tsx` remapeia `gross_amount → net_amount` via `displaySalesData`
+- Esse remap afeta o **total** de faturamento corretamente
+- Mas `main_revenue` e `itemAvgPriceByOfferCode` **não são remapeados** — sempre bruto
+- Por isso: em modo Líquido, os cards de posição mostram `(B)` e um aviso é exibido na seção de fluxo
+- Para futura implementação de líquido por item: precisaria de `net_price` em `order_items` (não existe hoje em nenhum provider)
+
+**Multi-provider:** quando novos providers chegarem (Kiwify, Eduzz etc.), devem popular `order_items` com a mesma estrutura (`base_price`, `provider_offer_id`, `item_type`) para que `offer_item_revenue_view` e toda a análise de funil funcionem automaticamente. O `funnel_orders_view` já é agnóstico de provider.
+
 **Regras invioláveis:**
 - Nunca fabricar valores financeiros
 - Nunca inferir comissões de coprodutores

@@ -62,6 +62,7 @@ interface UnifiedSale {
   transaction_id: string;
   product_name: string | null;
   offer_code: string | null;
+  all_offer_codes: string[] | null;
   gross_amount: number | null;
   net_amount: number | null;
   buyer_email: string | null;
@@ -535,7 +536,12 @@ if (!props.projectId) {
         const pos = offer.tipo_posicao || 'OTHER';
         const ordem = offer.ordem_posicao || 0;
         const posKey = `${pos}${ordem || ''}`;
-        const offerSales = funnelSales.filter(s => s.offer_code === offer.codigo_oferta);
+        // For FRONT/FE: match by main offer_code
+        // For OB/US/DS: check all_offer_codes (bumps don't appear as offer_code)
+        const isMain = offer.tipo_posicao === 'FRONT' || offer.tipo_posicao === 'FE';
+        const offerSales = isMain
+          ? funnelSales.filter(s => s.offer_code === offer.codigo_oferta)
+          : funnelSales.filter(s => (s.all_offer_codes || []).includes(offer.codigo_oferta || ''));
         const salesCount = offerSales.length;
         const salesRevenue = offerSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
         

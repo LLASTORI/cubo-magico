@@ -145,6 +145,7 @@ interface SaleRecord {
   checkout_origin: string | null;
   payment_method: string | null;
   recurrence: number | null;
+  all_offer_codes: string[] | null;
 }
 
 interface CanonicalSaleEvent {
@@ -561,6 +562,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       checkout_origin: order.checkout_origin,
       payment_method: normalizePaymentMethod(order.payment_method),
       recurrence: 1,
+      all_offer_codes: order.all_offer_codes,
     }));
   }, [ordersData, canonicalSalesData, hasUsableOrderFunnelSignals]);
 
@@ -643,16 +645,40 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // ORDERS CORE: New metrics calculation using order-level data
   // ═══════════════════════════════════════════════════════════════════════════════
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
-    if (!salesData.length) return [];
+    if (!ordersData.length) return [];
 
-    // Build offer code revenue map from sales records
+    // Build offer code map using all_offer_codes so bumps/upsells are counted correctly.
+    // For each order: main offer gets main_revenue; non-main offer codes get counted
+    // but revenue is approximated via mapping.valor × count (item-level split not in view).
     const salesByOffer: Record<string, { count: number; revenue: number }> = {};
 
-    salesData.forEach((sale) => {
-      const code = sale.offer_code || 'SEM_CODIGO';
-      if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
-      salesByOffer[code].count += 1;
-      salesByOffer[code].revenue += sale.gross_amount || 0;
+    ordersData.forEach((order) => {
+      const allCodes = (order.all_offer_codes || []).filter(Boolean) as string[];
+      const mainCode = order.main_offer_code;
+
+      // Credit main revenue to main offer
+      if (mainCode) {
+        if (!salesByOffer[mainCode]) salesByOffer[mainCode] = { count: 0, revenue: 0 };
+        salesByOffer[mainCode].count += 1;
+        salesByOffer[mainCode].revenue += order.main_revenue || 0;
+      }
+
+      // Count non-main offer codes (bumps, upsells) — revenue approximated below
+      allCodes.forEach(code => {
+        if (code && code !== mainCode) {
+          if (!salesByOffer[code]) salesByOffer[code] = { count: 0, revenue: 0 };
+          salesByOffer[code].count += 1;
+        }
+      });
+    });
+
+    // For non-main positions: fill revenue from mapping price × count
+    sortedMappings.forEach(m => {
+      const code = m.codigo_oferta || '';
+      const isMain = m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE';
+      if (!isMain && salesByOffer[code]) {
+        salesByOffer[code].revenue = (m.valor || 0) * salesByOffer[code].count;
+      }
     });
 
     const mappedOffers = new Set(sortedMappings.map(m => m.codigo_oferta));
@@ -681,7 +707,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     });
 
     const unmappedOffers = Object.entries(salesByOffer)
-      .filter(([code]) => !mappedOffers.has(code) && code !== 'SEM_CODIGO')
+      .filter(([code]) => !mappedOffers.has(code))
       .map(([code, data]) => ({
         tipo_posicao: 'NC',
         nome_posicao: 'Não Categorizado',
@@ -696,7 +722,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }));
 
     return [...mappedMetrics, ...unmappedOffers];
-  }, [sortedMappings, salesData]);
+  }, [sortedMappings, ordersData]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: Summary metrics using order-level aggregations

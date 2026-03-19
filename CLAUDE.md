@@ -94,6 +94,13 @@ Tabelas:
 | FRONT (item) | `order_items.base_price` (via `main_revenue`) | ❌ não disponível | `offer_item_revenue_view` |
 | OB/US/DS (item) | `avg_price × count` (avg de `order_items.base_price`) | ❌ não disponível | `offer_item_revenue_view` |
 
+**Diferença esperada entre total e soma das posições:**
+`orders.customer_paid` (topo) ≠ soma de `order_items.base_price` (posições). Isso é correto e esperado — causas:
+- Conversão de moeda: `base_price` usa taxa do cadastro da oferta; `customer_paid` usa taxa real do dia
+- Taxas de parcelamento adicionadas pelo Hotmart sobre o valor do item
+- Cupons/descontos que reduzem o `customer_paid` abaixo do preço listado
+Diferença típica: < 1% do faturamento. Não é bug — `customer_paid` é a fonte canônica de receita real.
+
 **Implicações para o código:**
 - `revenueMode` em `FunnelAnalysis.tsx` remapeia `gross_amount → net_amount` via `displaySalesData`
 - Esse remap afeta o **total** de faturamento corretamente

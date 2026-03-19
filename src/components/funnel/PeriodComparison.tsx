@@ -11,9 +11,10 @@ import { cn } from "@/lib/utils";
 
 interface SaleData {
   offer_code?: string | null;
-  total_price_brl?: number | null;
+  gross_amount?: number | null;
   buyer_email?: string | null;
-  sale_date?: string | null;
+  economic_day?: string | null;
+  purchase_date?: string | null;
 }
 
 interface PeriodComparisonProps {
@@ -50,23 +51,25 @@ const PeriodComparison = ({ salesData, funnelOfferCodes, startDate, endDate }: P
   // Split sales into periods
   const periodASales = useMemo(() => {
     return filteredSales.filter(sale => {
-      if (!sale.sale_date) return false;
-      const saleDate = new Date(sale.sale_date);
+      const saleDateStr = sale.economic_day || sale.purchase_date;
+      if (!saleDateStr) return false;
+      const saleDate = new Date(saleDateStr);
       return saleDate >= periodAStart && saleDate <= periodAEnd;
     });
   }, [filteredSales, periodAStart, periodAEnd]);
 
   const periodBSales = useMemo(() => {
     return filteredSales.filter(sale => {
-      if (!sale.sale_date) return false;
-      const saleDate = new Date(sale.sale_date);
+      const saleDateStr = sale.economic_day || sale.purchase_date;
+      if (!saleDateStr) return false;
+      const saleDate = new Date(saleDateStr);
       return saleDate >= periodBStart && saleDate <= periodBEnd;
     });
   }, [filteredSales, periodBStart, periodBEnd]);
 
   const calculateMetrics = (sales: SaleData[]): PeriodMetrics => {
     const totalSales = sales.length;
-    const totalRevenue = sales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const totalRevenue = sales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
     const uniqueCustomers = new Set(sales.map(s => s.buyer_email).filter(Boolean)).size;
     const avgTicket = uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0;
 

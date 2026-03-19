@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 17/03/2026 (sessão 16 — fix Gerar Resposta: generate_reply movido para antes do check Meta credentials)
+> Última atualização: 19/03/2026 (sessão 17 — fix análise de funil: dedup view, payment_method, gráficos de receita)
 
 ---
 
@@ -96,6 +96,22 @@
 ---
 
 ## ✅ Concluído
+
+### 📊 Análise de Funil — Fix faturamento + payment_method + gráficos (19/03/2026)
+- [x] `funnel_orders_view` reescrita com CTE: GROUP BY apenas por `o.id` → zero duplicatas (era 74 duplicatas = R$11.671 inflado)
+- [x] `funnel_orders_view` agora expõe `payment_method` (campo já existia em `orders`)
+- [x] `useFunnelData.ts`: `payment_method` adicionado a `OrderRecord`, SELECT e adapter; `normalizePaymentMethod()` normaliza valores lowercase → enum (PIX, CREDIT_CARD, BILLET…)
+- [x] `TemporalChart.tsx`: usa `gross_amount` (era `total_price_brl`=null) e `economic_day||purchase_date` (era `sale_date`=null) → gráfico de receita agora mostra valores reais
+- [x] `PaymentMethodAnalysis.tsx`: usa `gross_amount` → receita por método de pagamento agora correta
+- [x] `PeriodComparison.tsx`: usa `gross_amount` e `economic_day||purchase_date`
+- [x] Migration `20260317220000_fix_funnel_orders_view_dedup_payment.sql` commitada
+
+### 🐛 Social Listening — Fixes sessão 17 (19/03/2026)
+- [x] `generate_reply`: movido para antes do check Meta credentials → funciona sem Meta conectado (v27)
+- [x] `syncAdComments`: fix `upsertComment` inexistente → batch upsert inline; `is_ad: true` adicionado aos posts
+- [x] `processCommentsWithAI`: cap 100→30 + `Promise.all` em keyword updates → timeout resolvido
+- [x] `ReclassifyCommentDialog`: `useEffect` em `[open, comment]` → salvar habilitado (Radix Dialog não dispara onOpenChange ao abrir por prop)
+- [x] `OrdersTable`: prioriza `item_type='main'` → nome do front sempre aparece na listagem de pedidos
 
 ### 🤖 Social Listening — OpenAI + fix Gerar Resposta (17/03/2026)
 - [x] `social-comments-api`: `classifyWithLovableAI` e `generateReplyWithLovableAI` removidos

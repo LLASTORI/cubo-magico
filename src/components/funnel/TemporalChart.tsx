@@ -13,9 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SaleData {
   offer_code?: string | null;
-  total_price_brl?: number | null;
+  gross_amount?: number | null;
   buyer_email?: string | null;
-  sale_date?: string | null;
+  economic_day?: string | null;
+  purchase_date?: string | null;
 }
 
 interface TemporalChartProps {
@@ -80,14 +81,14 @@ const TemporalChart = ({ salesData, funnelOfferCodes, startDate, endDate }: Temp
     const customersByDate: Record<string, Set<string>> = {};
     
     filteredSales.forEach(sale => {
-      if (!sale.sale_date) return;
-      
-      const date = new Date(sale.sale_date);
-      const dateKey = format(date, 'yyyy-MM-dd');
-      
+      const saleDateStr = sale.economic_day || sale.purchase_date;
+      if (!saleDateStr) return;
+
+      const dateKey = saleDateStr.substring(0, 10);
+
       if (dataMap[dateKey]) {
         dataMap[dateKey].sales += 1;
-        dataMap[dateKey].revenue += sale.total_price_brl || 0;
+        dataMap[dateKey].revenue += sale.gross_amount || 0;
         
         if (!customersByDate[dateKey]) {
           customersByDate[dateKey] = new Set();

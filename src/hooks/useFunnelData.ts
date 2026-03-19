@@ -61,6 +61,19 @@ interface FunnelConfig {
   roas_target: number | null;
 }
 
+// Normalize payment_method from orders table (lowercase) to component enum (uppercase)
+const normalizePaymentMethod = (method: string | null): string | null => {
+  if (!method) return null;
+  const m = method.toLowerCase();
+  if (m === 'credit_card' || m === 'cartão de crédito' || m === 'cartao de credito') return 'CREDIT_CARD';
+  if (m === 'pix') return 'PIX';
+  if (m === 'billet' || m === 'boleto' || m === 'boleto bancário') return 'BILLET';
+  if (m === 'paypal') return 'PAYPAL';
+  if (m === 'apple_pay') return 'OTHER';
+  if (m === 'wallet') return 'OTHER';
+  return 'OTHER';
+};
+
 const PERPETUO_TYPE_VARIANTS = ['perpetuo', 'perpétuo', 'PERPETUO', 'PERPÉTUO', 'Perpetuo', 'Perpétuo'];
 const ACTIVE_MAPPING_STATUS_VARIANTS = ['Ativo', 'ativo', 'ATIVO', 'active', 'ACTIVE'];
 
@@ -103,6 +116,7 @@ interface OrderRecord {
   utm_adset: string | null;
   utm_placement: string | null;
   checkout_origin: string | null;
+  payment_method: string | null;
 }
 
 // Legacy interface for backward compatibility
@@ -312,7 +326,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
             utm_content,
             utm_adset,
             utm_placement,
-            checkout_origin
+            checkout_origin,
+            payment_method
           `)
           .eq('project_id', projectId!)
           .in('status', VALID_ORDER_STATUSES)
@@ -544,7 +559,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       utm_placement: order.utm_placement,
       utm_creative: null, // não existe em orders; preservado para compat
       checkout_origin: order.checkout_origin,
-      payment_method: null,
+      payment_method: normalizePaymentMethod(order.payment_method),
       recurrence: 1,
     }));
   }, [ordersData, canonicalSalesData, hasUsableOrderFunnelSignals]);

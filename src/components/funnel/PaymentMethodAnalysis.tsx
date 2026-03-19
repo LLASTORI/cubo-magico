@@ -13,7 +13,7 @@ import MetricCard from "@/components/MetricCard";
 
 interface SaleData {
   offer_code?: string | null;
-  total_price_brl?: number | null;
+  gross_amount?: number | null;
   buyer_email?: string | null;
   payment_method?: string | null;
   installment_number?: number | null;
@@ -81,7 +81,7 @@ const PaymentMethodAnalysis = ({ salesData, funnelOfferCodes }: PaymentMethodAna
     }
 
     const totalSales = filteredSales.length;
-    const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+    const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
     
     // Calculate unique customers
     const uniqueEmails = new Set(filteredSales.map(sale => sale.buyer_email).filter(Boolean));
@@ -99,7 +99,7 @@ const PaymentMethodAnalysis = ({ salesData, funnelOfferCodes }: PaymentMethodAna
       const method = sale.payment_method || 'OTHER';
       const installments = sale.installment_number || 1;
       const email = sale.buyer_email || '';
-      const valueInBRL = sale.total_price_brl || 0;
+      const valueInBRL = sale.gross_amount || 0;
       
       if (!groups[method]) {
         groups[method] = { sales: 0, revenue: 0, customers: new Set(), installments: {} };

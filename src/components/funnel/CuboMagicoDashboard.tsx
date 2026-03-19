@@ -111,6 +111,8 @@ interface CuboMagicoDashboardProps {
   salesData?: UnifiedSale[];
   // Accept pre-fetched insights data from parent to ensure consistency
   insightsData?: MetaInsightData[];
+  // Label shown next to faturamento values: 'Bruto' | 'Líquido'
+  revenueLabel?: string;
 }
 
 interface FunnelWithConfig {
@@ -172,7 +174,8 @@ if (!props.projectId) {
     embedded = false,
     onFunnelSelect,
     salesData: externalSalesData,
-    insightsData: externalInsightsData
+    insightsData: externalInsightsData,
+    revenueLabel = 'Bruto',
   } = props;
 
   const { isModuleEnabled } = useProjectModules();
@@ -1157,6 +1160,7 @@ if (!props.projectId) {
                 <div>
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                     Faturamento
+                    <span className="text-xs font-medium px-1 py-0.5 rounded bg-muted text-muted-foreground">{revenueLabel}</span>
                     {!isHotmartEnabled && <Lock className="w-3 h-3" />}
                   </p>
                   {isHotmartEnabled ? (
@@ -1405,8 +1409,8 @@ if (!props.projectId) {
               <TableHead className="text-right">
                 <ModuleLockedHeader
                   isLocked={!isHotmartEnabled}
-                  label="Faturamento"
-                  unlockedTooltip="Receita total de vendas aprovadas do funil"
+                  label={`Faturamento (${revenueLabel})`}
+                  unlockedTooltip={`Receita total de vendas aprovadas do funil — ${revenueLabel === 'Bruto' ? 'valor pago pelo cliente' : 'valor creditado ao produtor'}`}
                 />
               </TableHead>
               <TableHead className="text-right">

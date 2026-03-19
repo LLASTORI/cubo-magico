@@ -16,8 +16,8 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { 
-  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Brain
+import {
+  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Brain, TrendingUp, TrendingDown
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -191,6 +191,7 @@ const FunnelAnalysis = () => {
   const [endDatePopoverOpen, setEndDatePopoverOpen] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [revenueMode, setRevenueMode] = useState<'bruto' | 'liquido'>('bruto');
 
   // Use centralized hook for ALL data (via Paid Media Domain)
   const {
@@ -211,6 +212,13 @@ const FunnelAnalysis = () => {
     startDate: appliedStartDate,
     endDate: appliedEndDate,
   });
+
+  // Bruto = customer_paid (gross_amount), Líquido = producer_net (net_amount)
+  // Remapping gross_amount → net_amount propagates to all sub-components transparently
+  const displaySalesData = useMemo(() => {
+    if (revenueMode === 'bruto') return salesData;
+    return salesData.map(s => ({ ...s, gross_amount: s.net_amount }));
+  }, [salesData, revenueMode]);
 
   // Simple search - apply filters and refetch
   const handleSearch = useCallback(() => {
@@ -441,6 +449,46 @@ const FunnelAnalysis = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Bruto / Líquido toggle */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex rounded-md border border-border overflow-hidden">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRevenueMode('bruto')}
+                        className={cn(
+                          "rounded-none px-3 h-8 text-xs gap-1.5 border-r border-border",
+                          revenueMode === 'bruto'
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                            : "hover:bg-muted"
+                        )}
+                      >
+                        <TrendingUp className="w-3 h-3" />
+                        Bruto
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRevenueMode('liquido')}
+                        className={cn(
+                          "rounded-none px-3 h-8 text-xs gap-1.5",
+                          revenueMode === 'liquido'
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                            : "hover:bg-muted"
+                        )}
+                      >
+                        <TrendingDown className="w-3 h-3" />
+                        Líquido
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p><strong>Bruto:</strong> valor pago pelo cliente (customer_paid)</p>
+                    <p><strong>Líquido:</strong> valor creditado ao produtor (producer_net)</p>
+                  </TooltipContent>
+                </Tooltip>
+
                 {/* Status Badge */}
                 <Badge 
                   variant="outline" 
@@ -576,8 +624,9 @@ const FunnelAnalysis = () => {
                   externalStartDate={appliedStartDate}
                   externalEndDate={appliedEndDate}
                   embedded={true}
-                  salesData={salesData}
+                  salesData={displaySalesData}
                   insightsData={metaInsights}
+                  revenueLabel={revenueMode === 'bruto' ? 'Bruto' : 'Líquido'}
                 />
                 
                 <Card className="p-4 bg-muted/30 border-dashed">
@@ -589,7 +638,7 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="temporal">
                 <TemporalChart
-                  salesData={salesData}
+                  salesData={displaySalesData}
                   funnelOfferCodes={offerCodes}
                   startDate={appliedStartDate}
                   endDate={appliedEndDate}
@@ -598,7 +647,7 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="comparison">
                 <PeriodComparison
-                  salesData={salesData}
+                  salesData={displaySalesData}
                   funnelOfferCodes={offerCodes}
                   startDate={appliedStartDate}
                   endDate={appliedEndDate}
@@ -612,7 +661,7 @@ const FunnelAnalysis = () => {
                   lockedMessage="Análise UTM detalhada disponível nos planos pagos"
                 >
                   <UTMAnalysis
-                    salesData={salesData}
+                    salesData={displaySalesData}
                     funnelOfferCodes={offerCodes}
                     metaInsights={metaInsights}
                     metaCampaigns={metaStructure.campaigns}
@@ -624,7 +673,7 @@ const FunnelAnalysis = () => {
 
               <TabsContent value="payment">
                 <PaymentMethodAnalysis
-                  salesData={salesData}
+                  salesData={displaySalesData}
                   funnelOfferCodes={offerCodes}
                 />
               </TabsContent>
@@ -636,7 +685,7 @@ const FunnelAnalysis = () => {
                   lockedMessage="Análise LTV disponível nos planos pagos"
                 >
                   <LTVAnalysis
-                    salesData={salesData.map(s => ({
+                    salesData={displaySalesData.map(s => ({
                       transaction: s.transaction_id,
                       product: s.product_name || '',
                       buyer: s.buyer_email || '',

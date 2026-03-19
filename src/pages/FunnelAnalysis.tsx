@@ -199,6 +199,7 @@ const FunnelAnalysis = () => {
     mappings,
     offerCodes,
     salesData,
+    itemRevenueByOfferCode,
     metaInsights,
     metaStructure,
     activeAccountIds,
@@ -619,7 +620,7 @@ const FunnelAnalysis = () => {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
-                <CuboMagicoDashboard 
+                <CuboMagicoDashboard
                   projectId={currentProject.id}
                   externalStartDate={appliedStartDate}
                   externalEndDate={appliedEndDate}
@@ -627,6 +628,7 @@ const FunnelAnalysis = () => {
                   salesData={displaySalesData}
                   insightsData={metaInsights}
                   revenueLabel={revenueMode === 'bruto' ? 'Bruto' : 'Líquido'}
+                  itemRevenueByOfferCode={itemRevenueByOfferCode}
                 />
                 
                 <Card className="p-4 bg-muted/30 border-dashed">

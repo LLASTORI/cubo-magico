@@ -361,6 +361,38 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     gcTime: 10 * 60 * 1000,
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ITEM REVENUE: Exact per-offer revenue from order_items.base_price
+  // Fixes OB/US/DS revenue that was approximated via mapping.valor × count
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const itemRevenueQuery = useQuery({
+    queryKey: ['item-revenue', projectId, startDateStr, endDateStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('offer_item_revenue_view')
+        .select('offer_code, revenue, sales_count')
+        .eq('project_id', projectId!)
+        .gte('economic_day', startDateStr)
+        .lte('economic_day', endDateStr);
+
+      if (error) {
+        console.error('[useFunnelData] Error fetching item revenue:', error);
+        throw error;
+      }
+
+      // Aggregate by offer_code (view is daily, we want totals for the period)
+      const byOffer: Record<string, number> = {};
+      (data || []).forEach(row => {
+        const code = row.offer_code as string;
+        byOffer[code] = (byOffer[code] || 0) + (Number(row.revenue) || 0);
+      });
+      return byOffer;
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
   const canonicalSalesQuery = useQuery({
     queryKey: ['canonical-sales-fallback', projectId, startDateStr, endDateStr],
     queryFn: async () => {
@@ -644,6 +676,8 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: New metrics calculation using order-level data
   // ═══════════════════════════════════════════════════════════════════════════════
+  const itemRevenueByOfferCode: Record<string, number> = itemRevenueQuery.data || {};
+
   const aggregatedMetrics = useMemo((): PositionMetrics[] => {
     if (!ordersData.length) return [];
 
@@ -672,12 +706,16 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       });
     });
 
-    // For non-main positions: fill revenue from mapping price × count
+    // For non-main positions: use exact item-level revenue from order_items.base_price.
+    // Falls back to mapping.valor × count if item revenue data not yet loaded.
     sortedMappings.forEach(m => {
       const code = m.codigo_oferta || '';
       const isMain = m.tipo_posicao === 'FRONT' || m.tipo_posicao === 'FE';
       if (!isMain && salesByOffer[code]) {
-        salesByOffer[code].revenue = (m.valor || 0) * salesByOffer[code].count;
+        const exactRevenue = itemRevenueByOfferCode[code];
+        salesByOffer[code].revenue = exactRevenue !== undefined
+          ? exactRevenue
+          : (m.valor || 0) * salesByOffer[code].count;
       }
     });
 
@@ -722,7 +760,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       }));
 
     return [...mappedMetrics, ...unmappedOffers];
-  }, [sortedMappings, ordersData]);
+  }, [sortedMappings, ordersData, itemRevenueByOfferCode]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // ORDERS CORE: Summary metrics using order-level aggregations
@@ -801,6 +839,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
       canonicalSalesQuery.refetch(),
       insightsQuery.refetch(),
       paidMediaMetricsQuery.refetch(),
+      itemRevenueQuery.refetch(),
     ]);
     console.log(`[useFunnelData] Refetch complete. Orders: ${results[0].data?.length || 0}, CanonicalSales: ${results[1].data?.length || 0}, Insights: ${results[2].data?.length || 0}`);
   };
@@ -812,6 +851,7 @@ export const useFunnelData = ({ projectId, startDate, endDate }: UseFunnelDataPr
     offerCodes,
     salesData, // Backward compatible - uses adapter from ordersData
     ordersData, // New: Raw orders from Orders Core
+    itemRevenueByOfferCode, // Exact per-offer revenue from order_items.base_price
     metaInsights: adLevelInsights,
     rawInsights, // Keep raw for debugging
     metaStructure: { campaigns, adsets, ads },

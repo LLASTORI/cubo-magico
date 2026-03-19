@@ -113,6 +113,8 @@ interface CuboMagicoDashboardProps {
   insightsData?: MetaInsightData[];
   // Label shown next to faturamento values: 'Bruto' | 'Líquido'
   revenueLabel?: string;
+  // Exact per-offer revenue from order_items.base_price (for OB/US/DS positions)
+  itemRevenueByOfferCode?: Record<string, number>;
 }
 
 interface FunnelWithConfig {
@@ -176,6 +178,7 @@ if (!props.projectId) {
     salesData: externalSalesData,
     insightsData: externalInsightsData,
     revenueLabel = 'Bruto',
+    itemRevenueByOfferCode,
   } = props;
 
   const { isModuleEnabled } = useProjectModules();
@@ -546,7 +549,11 @@ if (!props.projectId) {
           ? funnelSales.filter(s => s.offer_code === offer.codigo_oferta)
           : funnelSales.filter(s => (s.all_offer_codes || []).includes(offer.codigo_oferta || ''));
         const salesCount = offerSales.length;
-        const salesRevenue = offerSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
+        // For FRONT/FE: use gross_amount (= full order value, correct for main offer)
+        // For OB/US/DS: use exact item-level revenue from order_items.base_price
+        const salesRevenue = isMain
+          ? offerSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0)
+          : (itemRevenueByOfferCode?.[offer.codigo_oferta || ''] || 0);
         
         productsByPosition[pos] = (productsByPosition[pos] || 0) + salesCount;
         

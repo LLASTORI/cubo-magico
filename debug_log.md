@@ -5,8 +5,8 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-20 (sessão 20)
-- **Status geral:** UTM source/placement/page com status+investimento corrigidos ✅ | Funil Monaliza Krepe restaurado ✅ | Social Listening cron registrado ✅ | Comentários de ads — investigação pendente amanhã
+- **Data:** 2026-03-20 (sessão 20) — histórico completo até sessão 20
+- **Status geral:** UTM source/placement/page com status+investimento corrigidos ✅ | Funil Monaliza Krepe restaurado ✅ | Social Listening cron registrado ✅ | Comentários de ads — investigação pendente
 
 ---
 
@@ -81,6 +81,58 @@ SELECT cron.schedule(
 **Status atual:** cron ativo, próxima execução em até 30 minutos. A partir daí, posts e comentários sincronizam automaticamente a cada 30 minutos para todos os projetos com páginas ativas.
 
 **Pendência para amanhã:** verificar se comentários orgânicos aparecem após o cron rodar. Se sim, investigar comentários de anúncios (ads) separadamente — podem requerer permissões Meta Graph API adicionais. Ver TASKS.md → backlog técnico Social Listening.
+
+---
+
+### [2026-03-19] Análise de Funil — Primeiros fixes: dedup view + payment_method + contagem bumps — ✅ CONCLUÍDO (sessão 17)
+
+**Problema relatado:** faturamento inflado na tela de funil (gráficos mostravam valores maiores que o real), gráficos de método de pagamento e comparação de período em branco.
+
+**Root cause 1 — Duplicatas na view:**
+`funnel_orders_view` sem CTE → GROUP BY multi-coluna gerava 74 linhas duplicadas = R$11.671 inflados no faturamento. Fix: view reescrita com CTE (`GROUP BY o.id` apenas), sem duplicatas.
+Migration: `20260319220000_fix_funnel_orders_view_dedup_payment.sql`
+
+**Root cause 2 — Campos nulos nos gráficos:**
+- `TemporalChart`, `PaymentMethodAnalysis`, `PeriodComparison` usavam `total_price_brl` (nunca populado pelo webhook) e `sale_date` (nulo). Fix: migrado para `gross_amount` e `economic_day`.
+- `payment_method` adicionado à view e ao adapter `useFunnelData` com `normalizePaymentMethod()` (converte lowercase do banco para enum do frontend).
+
+**Root cause 3 — OB/US/DS com 0 vendas:**
+Contagem filtrava por `offer_code = main` para todas as posições → bumps e upsells sempre zero. Fix: `SaleRecord` ganhou campo `all_offer_codes`; posições OB/US/DS filtram por `all_offer_codes`, apenas FRONT usa `offer_code` exato.
+
+---
+
+### [2026-03-17] Social Listening — fixes adicionais de IA e sync — ✅ CONCLUÍDO (sessão 15)
+
+**Contexto:** Continuação da sessão 14 (7 melhorias). Bugs encontrados ao testar em produção.
+
+**Fixes aplicados (commits 448e75c → 1641114):**
+
+1. **Remove Lovable AI — OpenAI como único provider** (`fix: remove Lovable AI`)
+   - Lovable AI removido completamente da `social-comments-api`: gateway instável, respostas inconsistentes
+   - OpenAI (`gpt-4o-mini`) é agora o único provider de classificação e geração de resposta
+   - Fallback para keyword classification quando sem OpenAI key
+
+2. **Configuração OpenAI no Admin** (`feat: configuração OpenAI no Admin — platform_settings`)
+   - Tabela `platform_settings` criada (migration `20260317200000`) — chave-valor global por super-admin
+   - `AIUsageDashboard.tsx` ganhou campo de input para `openai_api_key`
+   - `social-comments-api`: RPC `get_platform_setting_internal('openai_api_key')` tem precedência sobre env var `OPENAI_API_KEY`
+
+3. **Fix `generate_reply` antes do check de credentials** (`fix: generate_reply movido`)
+   - `generate_reply` era bloqueado por verificação de Meta credentials (desnecessária para IA)
+   - Movido para antes do bloco de verificação de token Meta
+
+4. **Fix `syncAdComments` — ReferenceError silencioso** (`fix: syncAdComments e timeout`)
+   - `syncAdComments` chamava `upsertComment()` (função inexistente na versão nova) → ReferenceError silencioso → comentários de ads nunca salvos
+   - Fix: substituído por batch upsert inline; `is_ad=true` marcado nos posts de anúncio
+   - `processCommentsWithAI`: limit 100 → 30 por chamada; updates de keyword paralelizados com `Promise.all` (evitava timeout de 75s)
+
+5. **Fix reclassificação manual** (`fix: reclassificação manual não salvava`)
+   - `useEffect` não inicializava o estado do dropdown ao abrir o dialog → classificação selecionada não era salva
+   - Fix: `useEffect` inicializa `selectedClassification` e `selectedSentiment` a partir dos valores atuais do comentário
+
+6. **Fix listagem de pedidos — produto de front sempre primeiro** (`fix: listagem de pedidos`)
+   - `OrdersTable.tsx`: sort garante que item com `item_type='main'` aparece no topo da lista de itens por pedido
+   - Antes: ordem aleatória dependia do banco → OB aparecia como produto principal na UI
 
 ---
 

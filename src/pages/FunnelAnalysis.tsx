@@ -17,7 +17,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import {
-  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Brain, TrendingUp, TrendingDown
+  RefreshCw, CalendarIcon, Megaphone, AlertTriangle, Search, CheckCircle2, Lock, Clock, Brain, TrendingUp, TrendingDown, Info
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -429,9 +429,9 @@ const FunnelAnalysis = () => {
                   
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button 
-                        variant={datesChanged ? "default" : "outline"} 
-                        size="sm" 
+                      <Button
+                        variant={datesChanged ? "default" : "outline"}
+                        size="sm"
                         onClick={handleSearch}
                         className={cn(
                           "gap-2 transition-all",
@@ -444,6 +444,18 @@ const FunnelAnalysis = () => {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Busca os dados do banco para o período selecionado</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-4 h-4 text-muted-foreground cursor-help shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p className="font-medium mb-1">Data de aprovação do pagamento</p>
+                      <p className="text-xs text-muted-foreground">
+                        As datas filtram pelo dia em que o pagamento foi <strong>aprovado</strong> (quando o dinheiro chegou), não pela data de criação do pedido. Isso pode gerar diferença de ±1 dia em relação ao relatório da Hotmart em pagamentos PIX realizados próximos à meia-noite.
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 </div>

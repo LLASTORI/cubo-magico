@@ -265,9 +265,10 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
 
   // Get spend for a UTM value based on the field type
   const getSpendForUTM = (field: HierarchyLevel, utmValue: string, salesWithUTM: typeof filteredSales): number => {
-    // For campaign, adset, creative - we can extract IDs and look up spend
+    // For campaign, adset, creative - extract IDs and look up spend directly
+    // For source, placement, page - aggregate campaign spend from associated sales
     const ids = new Set<string>();
-    
+
     salesWithUTM.forEach(sale => {
       const parsedUTM = sale.parsedUTM;
       if (field === 'campaign' && parsedUTM.campaignId) {
@@ -276,9 +277,12 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         ids.add(parsedUTM.adsetId);
       } else if (field === 'creative' && parsedUTM.adId) {
         ids.add(parsedUTM.adId);
+      } else if (field === 'source' || field === 'placement' || field === 'page') {
+        // Aggregate by campaign IDs from the sales in this group
+        if (parsedUTM.campaignId) ids.add(parsedUTM.campaignId);
       }
     });
-    
+
     let totalSpend = 0;
     ids.forEach(id => {
       if (field === 'campaign') {
@@ -287,16 +291,19 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         totalSpend += spendMaps.byAdset.get(id) || 0;
       } else if (field === 'creative') {
         totalSpend += spendMaps.byAd.get(id) || 0;
+      } else {
+        // source, placement, page: roll up campaign spend
+        totalSpend += spendMaps.byCampaign.get(id) || 0;
       }
     });
-    
+
     return totalSpend;
   };
 
   // Get status for a UTM value based on the field type - uses hierarchy tables
   const getStatusForUTM = (field: HierarchyLevel, salesWithUTM: typeof filteredSales): 'ACTIVE' | 'PAUSED' | 'MIXED' | 'UNKNOWN' | null => {
     const ids = new Set<string>();
-    
+
     salesWithUTM.forEach(sale => {
       const parsedUTM = sale.parsedUTM;
       if (field === 'campaign' && parsedUTM.campaignId) {
@@ -305,11 +312,14 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         ids.add(parsedUTM.adsetId);
       } else if (field === 'creative' && parsedUTM.adId) {
         ids.add(parsedUTM.adId);
+      } else if (field === 'source' || field === 'placement' || field === 'page') {
+        // Roll up campaign statuses for non-ID fields
+        if (parsedUTM.campaignId) ids.add(parsedUTM.campaignId);
       }
     });
-    
+
     if (ids.size === 0) return null;
-    
+
     const statuses = new Set<string>();
     ids.forEach(id => {
       let status: string | undefined;
@@ -319,12 +329,15 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         status = statusMaps.byAdset.get(id);
       } else if (field === 'creative') {
         status = statusMaps.byAd.get(id);
+      } else {
+        // source, placement, page: use campaign status
+        status = statusMaps.byCampaign.get(id);
       }
       if (status) statuses.add(status);
     });
-    
-    if (statuses.size === 0) return 'UNKNOWN'; // ID not found in hierarchy tables
-    if (statuses.has('UNKNOWN')) return 'UNKNOWN'; // Hierarchy has unknown status
+
+    if (statuses.size === 0) return 'UNKNOWN';
+    if (statuses.has('UNKNOWN')) return 'UNKNOWN';
     if (statuses.size > 1) return 'MIXED';
     return statuses.has('ACTIVE') ? 'ACTIVE' : 'PAUSED';
   };
@@ -567,14 +580,15 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
     const processedKeys = new Set<string>();
 
     // Group by Meta ID (for campaign, adset, creative) to avoid duplicates
-    const groups: Record<string, { sales: number; revenue: number; displayName: string }> = {};
-    
+    // Also store salesData per group so spend/status can be aggregated for source/placement/page
+    const groups: Record<string, { sales: number; revenue: number; displayName: string; salesData: typeof filtered }> = {};
+
     filtered.forEach(sale => {
       const valueInBRL = sale.gross_amount ?? sale.total_price_brl ?? 0;
-      
+
       let groupKey: string;
       let displayName: string;
-      
+
       if (currentField === 'campaign') {
         const metaId = sale.parsedUTM.campaignId;
         if (metaId) {
@@ -607,21 +621,22 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         groupKey = value || '(não definido)';
         displayName = groupKey;
       }
-      
+
       if (!groups[groupKey]) {
-        groups[groupKey] = { sales: 0, revenue: 0, displayName };
+        groups[groupKey] = { sales: 0, revenue: 0, displayName, salesData: [] };
       }
       groups[groupKey].sales += 1;
       groups[groupKey].revenue += valueInBRL;
+      groups[groupKey].salesData.push(sale);
     });
 
     const metrics: UTMMetrics[] = Object.entries(groups)
       .map(([key, data]) => {
         processedKeys.add(key);
-        
+
         let spend = 0;
         let status: 'ACTIVE' | 'PAUSED' | 'MIXED' | 'UNKNOWN' | null = null;
-        
+
         if (currentField === 'campaign') {
           spend = spendMaps.byCampaign.get(key) || 0;
           status = getStatusForMetaId(currentField, key);
@@ -631,11 +646,15 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
         } else if (currentField === 'creative') {
           spend = spendMaps.byAd.get(key) || 0;
           status = getStatusForMetaId(currentField, key);
+        } else {
+          // source, placement, page: aggregate campaign spend/status from the sales in this group
+          spend = getSpendForUTM(currentField, key, data.salesData);
+          status = getStatusForUTM(currentField, data.salesData);
         }
-        
+
         const roas = spend > 0 ? data.revenue / spend : (data.sales > 0 ? null : 0);
         const hasSalesWithoutSpend = data.sales > 0 && spend === 0;
-        
+
         return {
           name: data.displayName,
           metaId: (currentField === 'campaign' || currentField === 'adset' || currentField === 'creative') ? key : null,

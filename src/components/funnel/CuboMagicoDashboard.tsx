@@ -533,6 +533,7 @@ if (!props.projectId) {
 
       // Calculate sales metrics
       const funnelSales = salesData.filter(s => offerCodes.has(s.offer_code));
+      const faturamento = funnelSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
 
       // Count unique customers
       const uniqueCustomers = new Set(funnelSales.map(s => s.buyer_email)).size;
@@ -578,13 +579,6 @@ if (!props.projectId) {
       // FRONT sales count
       const vendasFront = productsByPosition['FRONT'] || productsByPosition['FE'] || 0;
       const totalProdutos = Object.values(productsByPosition).reduce((sum, v) => sum + v, 0);
-
-      // Faturamento = sum of all position revenues (FRONT + OB + US + DS).
-      // Computed from item-level prices (main_revenue + itemAvgPrice × count) to be
-      // consistent with the position breakdown cards. Using customer_paid would cause
-      // discrepancies when Hotmart reports customer_paid = FRONT price only
-      // (without OB) in some webhook events.
-      const faturamento = Object.values(positionDetails).reduce((sum, p) => sum + p.receita, 0);
 
       // Calculate ticket médio = Faturamento Total / Vendas FRONT
       const ticketMedio = vendasFront > 0 ? faturamento / vendasFront : 0;

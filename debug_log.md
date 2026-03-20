@@ -5,8 +5,82 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-19 (sessão 18)
-- **Status geral:** Análise de funil com dados confiáveis ✅ | Bruto/Líquido transparente ✅ | Receita por posição baseada em `order_items.base_price` ✅ | Arquitetura documentada em CLAUDE.md
+- **Data:** 2026-03-20 (sessão 20)
+- **Status geral:** UTM source/placement/page com status+investimento corrigidos ✅ | Funil Monaliza Krepe restaurado ✅ | Social Listening cron registrado ✅ | Comentários de ads — investigação pendente amanhã
+
+---
+
+### [2026-03-20] UTM Analysis — status e investimento zerados em nível Origem/Placement/Page — ✅ CONCLUÍDO (sessão 20)
+
+**Problema:** Coluna "Status" e "Investimento" apareciam vazias ao expandir o nível Origem (e também Placement, Page) no detalhamento UTM.
+
+**Root cause:** `getSpendForUTM` e `getStatusForUTM` em `UTMAnalysis.tsx` só tinham branches para `campaign`, `adset` e `creative`. Para `source`, `placement` e `page`, retornavam `0` e `null`.
+
+**Fix em `src/components/funnel/UTMAnalysis.tsx`:**
+- `getSpendForUTM`: adicionado branch `source || placement || page` que coleta `campaignId`s das vendas do grupo e soma `spendMaps.byCampaign` para esses IDs
+- `getStatusForUTM`: mesmo padrão — agrega status via campaign IDs das vendas
+- `drilldownData`: grupos passaram a carregar `salesData: typeof filtered` (array raw de vendas) para que as funções possam receber o subconjunto correto de vendas no nível expandido
+
+**Pendência registrada no TASKS.md:** redesign visual da tabela UTM (colunas densas, nomes truncados).
+
+---
+
+### [2026-03-20] Funil Monaliza Krepe — análise zerada — ✅ CORRIGIDO (sessão 20)
+
+**Problema:** Projeto recém-criado `32d3439f-f7ca-41bd-ae3f-d968cba5c829` (Monaliza Krepe, infoprodutos) com 68 pedidos reais no webhook, mas Análise de Funil mostrava tudo zerado.
+
+**Sintoma adicional:** alerta "1 funis encontrados / Funis: A Definir" na tela de funis.
+
+**Root cause:** `offer_mappings` tinha o `codigo_oferta` errado mapeado como FRONT do funil `LANPG_MAR26`:
+- Mapping registrado como FRONT: `codigo_oferta = '1kp0017c'` → não aparecia em nenhum pedido real
+- Todos os 68 pedidos tinham `main_offer_code = '953gfecc'`
+- `CuboMagicoDashboard.tsx` filtra `salesData.filter(s => offerCodes.has(s.offer_code))` → se o código não bate, retorna 0 vendas
+
+**Fix via SQL (não foi possível UPDATE direto por constraint unique):**
+```sql
+-- Inativou o mapping incorreto
+UPDATE offer_mappings SET status = 'Inativo'
+WHERE id = '3f7da1a5-15fc-442e-be04-89a2b4e31f79';  -- codigo_oferta = '1kp0017c'
+
+-- Promoveu o mapping correto para FRONT do funil
+UPDATE offer_mappings SET
+  id_funil = 'LANPG_MAR26',
+  funnel_id = '0f9db42d-d81f-43e5-8bd1-6b56d7704abc',
+  tipo_posicao = 'FRONT',
+  ordem_posicao = 1
+WHERE id = 'bba305cb-c568-4e3f-8ef5-1ba25eb97b0a';  -- codigo_oferta = '953gfecc'
+```
+
+**Resultado:** 68 pedidos visíveis, faturamento R$1.742,50 restaurado.
+
+**Side-finding (não corrigido):** oferta `qv8fq3lv` (10 pedidos, Monaliza Krepe) sem mapeamento de funil. Usuário deve decidir se entra em LANPG_MAR26 como OB.
+
+---
+
+### [2026-03-20] Social Listening — comentários não aparecendo — ✅ CAUSA RAIZ CORRIGIDA (sessão 20)
+
+**Problema:** Projeto Monaliza Krepe (e possivelmente todos) sem comentários no Social Listening. 157 posts existentes no banco (100 FB + 57 IG), `social_comments` com 0 linhas.
+
+**Investigação:**
+- `meta_credentials` existe e tem `access_token` ✅
+- `social_listening_pages`: 2 páginas ativas com tokens (`109023034163413_facebook`, `17841436333732627_instagram`) ✅
+- Logs de edge functions: apenas `social-comments-api` (read API) aparecendo — **zero invocações de `social-listening-cron`**
+- `cron.job` table: apenas 2 jobs registrados (`hotmart-offers-sync-weekly`, `orders-health-check-daily`) — `social-listening-cron` **nunca foi registrado**
+
+**Root cause:** A edge function `social-listening-cron` foi criada mas nunca agendada no pg_cron. Os posts existentes no banco foram sincronizados manualmente durante a configuração inicial do Social Listening.
+
+**Fix:** Migration `20260320120000_social_listening_cron_schedule.sql` — registra cron job:
+```sql
+SELECT cron.schedule(
+  'social-listening-sync-30min',
+  '*/30 * * * *',
+  $$ SELECT net.http_post(url := '.../social-listening-cron', ...) $$
+);
+```
+
+**Status atual:** cron ativo, próxima execução em até 30 minutos. A partir daí, posts e comentários sincronizam automaticamente a cada 30 minutos para todos os projetos com páginas ativas.
+
+**Pendência para amanhã:** verificar se comentários orgânicos aparecem após o cron rodar. Se sim, investigar comentários de anúncios (ads) separadamente — podem requerer permissões Meta Graph API adicionais. Ver TASKS.md → backlog técnico Social Listening.
 
 ---
 

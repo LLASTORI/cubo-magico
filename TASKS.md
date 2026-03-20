@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 19/03/2026 (sessão 18 — análise de funil: receita exata por posição, bruto/líquido transparente)
+> Última atualização: 20/03/2026 (sessão 20 — UTM fix status/investimento, funil Monaliza Krepe restaurado, social-listening-cron registrado)
 
 ---
 
@@ -31,6 +31,7 @@
 - [ ] **Notificação de pico de comentários** — alertar quando volume num post crescer X% em 1h; útil para viralizações ou crises de reputação
 
 ### Backlog técnico
+- [ ] **Investigar comentários de anúncios (ads) no Social Listening** — após fix do cron (sessão 20), comentários orgânicos devem aparecer. Se comentários de posts de anúncios não aparecerem, investigar: permissões Meta Graph API necessárias (`ads_management`), como os posts de ads são salvos em `social_posts` (`post_type='ad'`?) e se o endpoint `/comments` funciona para post IDs de anúncios. Confirmar primeiro se orgânicos aparecem, depois revisar ads.
 - [ ] **Detectar e marcar comentários deletados no Meta** — no sync, checar se IDs existentes no DB ainda retornam da API; se não, setar `is_deleted=true`
 - [ ] **Soft-delete ao invés de orphans** — comentários removidos no Meta devem ser marcados `is_deleted=true` não ignorados
 - [ ] **Limite de posts configurável** — 100 posts/plataforma hardcoded; expor como configuração por projeto

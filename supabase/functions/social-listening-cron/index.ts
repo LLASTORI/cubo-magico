@@ -118,21 +118,6 @@ Deno.serve(async (req) => {
   console.log('[SOCIAL-LISTENING-CRON] Starting automatic sync at', new Date().toISOString())
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    const cronSecret = Deno.env.get('CRON_SECRET')
-    
-    const isValidCron = cronSecret && authHeader === `Bearer ${cronSecret}`
-    const isValidServiceRole = authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-    const isValidAnon = authHeader === `Bearer ${SUPABASE_ANON_KEY}`
-    
-    if (!isValidCron && !isValidServiceRole && !isValidAnon) {
-      console.log('[SOCIAL-LISTENING-CRON] Unauthorized request')
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const { data: activeProjects, error: projectsError } = await supabase

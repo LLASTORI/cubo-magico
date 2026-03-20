@@ -75,6 +75,8 @@
 - [ ] **Take rate de OB em destaque** — card "OB1: 34% dos compradores adicionaram" com trend; hoje enterrado em tabela
 
 ### Médio prazo
+- [ ] **Design da tabela UTM** — tabela de detalhamento (Origem, Campanha, Conjunto...) está funcional mas pouco amigável: colunas densas, nomes longos truncados, sem hierarquia visual clara. Redesign para melhorar legibilidade e facilitar decisão.
+- [ ] **Aba LTV — ação e navegação** *(depende de revisão do CRM)* — hoje mostra dados mas não permite decisão nem ação: sem link para o cartão do contato, sem segmentação de Vip/Premium com ação direta, sem caminho para o CRM. Redesign completo após revisão do CRM.
 - [ ] **Seletor de funil nas abas do topo** — `FunnelAnalysis.tsx` Evolução/Pagamentos/LTV/Comparação mostram todos os funis juntos; adicionar select para filtrar por funil específico
 - [ ] **Gráfico de evolução empilhado** — `TemporalChart` com áreas FRONT / OBs / Upsells separadas; permite ver se bump cresceu proporcionalmente
 - [ ] **Comparação automática período anterior** — delta `+12% vs últimos 30d` nos cards do header sem precisar abrir aba de Comparação

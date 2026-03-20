@@ -533,8 +533,7 @@ if (!props.projectId) {
 
       // Calculate sales metrics
       const funnelSales = salesData.filter(s => offerCodes.has(s.offer_code));
-      const faturamento = funnelSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
-      
+
       // Count unique customers
       const uniqueCustomers = new Set(funnelSales.map(s => s.buyer_email)).size;
       
@@ -579,6 +578,13 @@ if (!props.projectId) {
       // FRONT sales count
       const vendasFront = productsByPosition['FRONT'] || productsByPosition['FE'] || 0;
       const totalProdutos = Object.values(productsByPosition).reduce((sum, v) => sum + v, 0);
+
+      // Faturamento = sum of all position revenues (FRONT + OB + US + DS).
+      // Computed from item-level prices (main_revenue + itemAvgPrice × count) to be
+      // consistent with the position breakdown cards. Using customer_paid would cause
+      // discrepancies when Hotmart reports customer_paid = FRONT price only
+      // (without OB) in some webhook events.
+      const faturamento = Object.values(positionDetails).reduce((sum, p) => sum + p.receita, 0);
 
       // Calculate ticket médio = Faturamento Total / Vendas FRONT
       const ticketMedio = vendasFront > 0 ? faturamento / vendasFront : 0;
@@ -1123,7 +1129,7 @@ if (!props.projectId) {
       )}
 
       {/* Summary Cards - Shows only funnel-attributed data */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Tooltip>
           <TooltipTrigger asChild>
             <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
@@ -1190,8 +1196,8 @@ if (!props.projectId) {
           <TooltipContent className="max-w-xs">
             {isHotmartEnabled ? (
               <>
-                <p><strong>Faturamento ({revenueLabel}):</strong> {revenueLabel === 'Bruto' ? 'Valor pago pelo cliente (orders.customer_paid)' : 'Valor creditado ao produtor após taxas Hotmart (orders.producer_net)'}</p>
-                <p className="text-xs text-muted-foreground mt-1">Fonte: funnel_orders_view · Status: approved, completed, partial_refund</p>
+                <p><strong>Faturamento ({revenueLabel}):</strong> Soma da receita por posição (FRONT + OB + US + DS) usando preços reais de cada item.</p>
+                <p className="text-xs text-muted-foreground mt-1">Fonte: order_items.base_price agregado por posição · Consistente com o detalhamento por posição abaixo</p>
                 {revenueLabel === 'Líquido' && (
                   <p className="text-xs text-yellow-500 mt-1">⚠ Receita por posição (FRONT/OB/US) não disponível em modo Líquido — exibe valor bruto</p>
                 )}
@@ -1280,6 +1286,67 @@ if (!props.projectId) {
               <>
                 <p><strong>ROAS:</strong> Return on Ad Spend (Retorno sobre Investimento)</p>
                 <p className="text-xs text-muted-foreground">Faturamento dos Funis ÷ Investimento dos Funis</p>
+              </>
+            ) : (
+              <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Card className={cn("p-4 cursor-help", !isMetaAdsEnabled && "opacity-60")}>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  !isMetaAdsEnabled
+                    ? "bg-muted"
+                    : totals.vendasFront > 0 && totals.investimento > 0 && (totals.investimento / totals.vendasFront) <= (totals.faturamento / totals.vendasFront / 2)
+                      ? 'bg-green-500/10'
+                      : 'bg-orange-500/10'
+                )}>
+                  {isMetaAdsEnabled ? (
+                    <Users className={cn(
+                      "w-5 h-5",
+                      totals.vendasFront > 0 && totals.investimento > 0 && (totals.investimento / totals.vendasFront) <= (totals.faturamento / totals.vendasFront / 2)
+                        ? 'text-green-500'
+                        : 'text-orange-500'
+                    )} />
+                  ) : (
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    CAC
+                    {!isMetaAdsEnabled && <Lock className="w-3 h-3" />}
+                  </p>
+                  {isMetaAdsEnabled ? (
+                    <p className={cn(
+                      "text-xl font-bold",
+                      totals.vendasFront > 0 && totals.investimento > 0 && (totals.investimento / totals.vendasFront) <= (totals.faturamento / totals.vendasFront / 2)
+                        ? 'text-green-500'
+                        : 'text-foreground'
+                    )}>
+                      {totals.vendasFront > 0 ? formatCurrency(totals.investimento / totals.vendasFront) : '-'}
+                    </p>
+                  ) : (
+                    <p className="text-xl font-bold text-muted-foreground">-</p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            {isMetaAdsEnabled ? (
+              <>
+                <p><strong>CAC (Custo de Aquisição de Cliente):</strong> Investimento total ÷ Vendas FRONT</p>
+                <p className="text-xs text-muted-foreground mt-1">Quanto custa adquirir cada novo cliente via mídia paga. Verde quando CAC ≤ Ticket Médio ÷ 2</p>
+                {totals.vendasFront > 0 && (
+                  <p className="text-xs mt-1">
+                    {formatCurrency(totals.investimento)} ÷ {totals.vendasFront} vendas = {formatCurrency(totals.investimento / totals.vendasFront)}
+                  </p>
+                )}
               </>
             ) : (
               <p>Módulo bloqueado. Entre em contato com o suporte para ativar.</p>
@@ -1428,7 +1495,7 @@ if (!props.projectId) {
                 <ModuleLockedHeader
                   isLocked={!isHotmartEnabled}
                   label={`Faturamento (${revenueLabel})`}
-                  unlockedTooltip={`${revenueLabel === 'Bruto' ? 'Bruto: valor pago pelo cliente (customer_paid). Fonte: funnel_orders_view' : 'Líquido: valor creditado ao produtor (producer_net). Fonte: funnel_orders_view. Atenção: receita por posição sempre exibe valor bruto'}`}
+                  unlockedTooltip="Soma da receita por posição (FRONT + OB + US + DS) — consistente com o detalhamento por posição. Usa preços reais de cada item (order_items.base_price)."
                 />
               </TableHead>
               <TableHead className="text-right">
@@ -1441,15 +1508,15 @@ if (!props.projectId) {
               <TableHead className="text-right">
                 <ModuleLockedHeader
                   isLocked={!isHotmartEnabled}
-                  label="Ticket Médio"
-                  unlockedTooltip="Faturamento ÷ Vendas FRONT"
+                  label="Ticket Médio do Pedido"
+                  unlockedTooltip={`Faturamento total (FRONT + OBs + Upsells) ÷ Vendas FRONT — valor médio que cada cliente pagou no pedido completo. ${revenueLabel === 'Líquido' ? 'Em modo Líquido: usa producer_net.' : 'Em modo Bruto: usa customer_paid.'}`}
                 />
               </TableHead>
               <TableHead className="text-right">
                 <ModuleLockedHeader
                   isLocked={!isHotmartEnabled}
                   label="CPA Máximo"
-                  unlockedTooltip="Ticket Médio ÷ ROAS Alvo. Quanto pode pagar por aquisição"
+                  unlockedTooltip="Ticket Médio do Pedido ÷ ROAS Alvo. Custo máximo aceitável por aquisição"
                 />
               </TableHead>
               <TableHead className="text-right">
@@ -1858,9 +1925,12 @@ if (!props.projectId) {
                                   <div className="flex items-center justify-between mb-4">
                                     <h4 className="text-sm font-semibold text-muted-foreground">Fluxo do Funil — <span className="text-foreground">{metrics.funnel.name}</span></h4>
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                      <span>{metrics.ordersCount} pedido{metrics.ordersCount !== 1 ? 's' : ''}</span>
+                                      <span><strong className="text-foreground">{metrics.vendasFront}</strong> vendas FRONT</span>
+                                      {metrics.ordersCount !== metrics.vendasFront && (
+                                        <span className="text-muted-foreground/60">· {metrics.ordersCount} no funil</span>
+                                      )}
                                       {metrics.partialRefunds > 0 && (
-                                        <span className="text-yellow-500">{metrics.partialRefunds} reembolso{metrics.partialRefunds !== 1 ? 's' : ''} parcial</span>
+                                        <span className="text-yellow-500">· {metrics.partialRefunds} reembolso{metrics.partialRefunds !== 1 ? 's' : ''} parcial</span>
                                       )}
                                       <span className="text-muted-foreground/50">· Hotmart</span>
                                     </div>
@@ -2754,7 +2824,7 @@ if (!props.projectId) {
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-3">
-          <strong>Fórmula:</strong> CPA Máximo = Ticket Médio ÷ ROAS Alvo | CPA Real = Investimento ÷ Vendas FRONT
+          <strong>Fórmula:</strong> CPA Máximo = Ticket Médio do Pedido ÷ ROAS Alvo | CPA Real = Investimento ÷ Vendas FRONT
         </p>
       </Card>
     </div>

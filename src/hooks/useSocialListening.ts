@@ -131,7 +131,7 @@ export function useSocialListening(projectId: string | undefined) {
 
         let query = supabase
           .from('social_comments')
-          .select('*, social_posts(id, is_ad, post_type, permalink, thumbnail_url, campaign_name, adset_name, ad_name, post_id_meta), crm_contacts!contact_id(id, name, email)')
+          .select('*, social_posts(id, is_ad, post_type, permalink, thumbnail_url, campaign_name, adset_name, ad_name, post_id_meta), crm_contacts!social_comments_contact_id_fkey(id, name, email)')
           .eq('project_id', projectId)
           .eq('is_deleted', false)
           .order('comment_timestamp', { ascending: false });
@@ -161,7 +161,10 @@ export function useSocialListening(projectId: string | undefined) {
         }
 
         const { data, error } = await query.limit(1000);
-        if (error) throw error;
+        if (error) {
+          console.error('[SOCIAL_LISTENING][useComments] query error:', error);
+          throw error;
+        }
         return (data || []) as SocialComment[];
       },
       enabled: !!projectId,

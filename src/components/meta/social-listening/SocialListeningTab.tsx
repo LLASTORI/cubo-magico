@@ -152,7 +152,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     useComments 
   } = useSocialListening(projectId);
 
-  const { data: comments, isLoading: commentsLoading, refetch: refetchComments } = useComments({
+  const { data: comments, isLoading: commentsLoading, isError: commentsError, error: commentsQueryError, refetch: refetchComments } = useComments({
     sentiment: filters.sentiment,
     classification: filters.classification,
     platform: filters.platform,
@@ -502,9 +502,15 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
             <div className="text-center py-12">
               <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">Nenhum comentário encontrado</h3>
-              <p className="text-muted-foreground mb-4">
-                Clique em "Sincronizar" para buscar comentários das suas páginas.
-              </p>
+              {commentsError ? (
+                <p className="text-red-500 text-sm mb-4 font-mono px-4">
+                  Erro: {commentsQueryError instanceof Error ? commentsQueryError.message : String(commentsQueryError)}
+                </p>
+              ) : (
+                <p className="text-muted-foreground mb-4">
+                  Clique em "Sincronizar" para buscar comentários das suas páginas.
+                </p>
+              )}
               <Button onClick={handleSync} disabled={isSyncing}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
                 Sincronizar Agora

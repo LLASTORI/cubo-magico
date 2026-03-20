@@ -215,6 +215,17 @@ Visão estratégica do produto. **Ler quando for:**
 
 **Não precisa ler para:** fixes de bug, migrations simples, ajustes de UI pontuais.
 
+### TRACKING.md
+Arquitetura de tracking independente, atribuição e Decision Engine.
+**⚠️ NADA disso foi implementado ainda — é planejamento de médio/longo prazo.**
+Ler apenas quando for trabalhar em features relacionadas a:
+- Rastreamento de sessão (cubo_session_id, SCK v2)
+- Atribuição de conversões
+- Reverse CAPI (envio de eventos para Meta/Google)
+- Decision Engine (automação de campanhas)
+
+**Não ler para** tarefas do dia a dia — o sistema atual usa `orders.utm_*` e `raw_sck` do webhook.
+
 ## Sistema de Design
 
 Skills de design instaladas em `.claude/skills/`:

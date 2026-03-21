@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 21/03/2026 (sessão 23)
+> Última atualização: 21/03/2026 (sessão 25)
 
 ---
 
@@ -60,11 +60,12 @@
 
 ## 🟢 Backlog técnico — Social Listening
 
+- [ ] **Publicação real do reply na Meta API** (Graph API POST `/{comment_id}/replies`)
+  - Delicado — requer confirmação antes de postar. Planejar com cuidado.
+
 - [ ] Cruzar `ad_id`/`adset_id` dos comentários com Meta Ads
   - Análise: "qual criativo gera mais intenção de compra nos comentários?"
   - Requer planejamento antes de executar
-
-- [ ] Contexto do comentário pai nos replies (médio esforço)
 
 - [ ] Rate limit graceful da Meta API (429) — baixa prioridade
 
@@ -81,6 +82,14 @@
 ---
 
 ## ✅ Concluído
+
+### 🔗 CRM ↔ Social Listening — integração completa (21/03/2026 — sessão 25)
+- [x] Fix `last_synced_at` em `social_listening_pages` — coluna nunca existia, cron funcionava mas não atualizava ("Última sincronização: Nunca")
+- [x] `linkExistingCommentsToCRM` reescrito: auto-cria lead no CRM para comentaristas não encontrados (`source=social_listening`, `tags=['social:instagram'|'social:facebook']`)
+- [x] `syncComments` chama `linkExistingCommentsToCRM` automaticamente ao final — sem botão manual necessário
+- [x] Backfill: 988 de 1.701 comentários vinculados (274 Facebook anônimos sem username)
+- [x] Link CRM no Social Listening corrigido: `getProjectUrl` em vez de path absoluto
+- [x] `CRMContact.email` e `KanbanContact.email` corrigidos para `string | null`
 
 ### 💬 Social Listening — contexto do comentário pai nos replies (21/03/2026 — sessão 24)
 - [x] Migration: `parent_text` + `parent_author` em `social_comments` com backfill

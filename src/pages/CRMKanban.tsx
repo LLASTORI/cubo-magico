@@ -31,7 +31,7 @@ import { CreateContactDialog } from '@/components/crm/CreateContactDialog';
 interface KanbanContact {
   id: string;
   name: string | null;
-  email: string;
+  email: string | null;
   phone: string | null;
   pipeline_stage_id: string | null;
   total_revenue: number | null;

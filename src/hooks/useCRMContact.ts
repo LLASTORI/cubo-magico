@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 export interface CRMContact {
   id: string;
   project_id: string;
-  email: string;
+  email: string | null;
   name: string | null;
   first_name: string | null;
   last_name: string | null;

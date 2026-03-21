@@ -2,25 +2,35 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add an "ignore keywords" field to the Social Listening AI Base settings so that comments matching automation trigger words (e.g. ManyChat) are silently skipped by the AI — no classification, no stats impact.
+**Goal:** Add an "ignore keywords" field to the Social Listening AI Base settings so that comments matching automation trigger words (e.g. ManyChat) are silently skipped by the AI — no classification, no stats impact — and hidden from the comments list by default with a toggle to reveal them.
 
-**Architecture:** New column in `ai_knowledge_base`, checked in `process_ai` before any OpenAI call. Matching is starts-with + case-insensitive, applied only to this field. Existing keyword fields (commercial, praise, spam) are unchanged.
+**Architecture:** New column `ignore_keywords` in `ai_knowledge_base` + new column `is_automation` in `social_comments`. At `process_ai` time, matching comments are marked `ai_processing_status='skipped'` AND `is_automation=true`. The comments list hides `is_automation=true` by default, with a toggle "Ver respostas de automações" mirroring the existing "Ver respostas próprias" toggle. Existing keyword fields (commercial, praise, spam) are unchanged.
 
 ---
 
 ## 1. Database
 
-Add column to `ai_knowledge_base`:
-```sql
-ALTER TABLE public.ai_knowledge_base
-  ADD COLUMN IF NOT EXISTS ignore_keywords text[] DEFAULT '{}'::text[];
-```
-
-Migration file: `supabase/migrations/20260321210000_add_ignore_keywords.sql`
+Two columns in one migration file: `supabase/migrations/20260321210000_add_ignore_keywords.sql`
 
 **Note:** Verify no existing migration uses timestamp `20260321210000` before applying.
 
-Also update TypeScript generated types (`src/integrations/supabase/types.ts`) to include `ignore_keywords: string[] | null`.
+```sql
+-- Knowledge base: store ignore keywords
+ALTER TABLE public.ai_knowledge_base
+  ADD COLUMN IF NOT EXISTS ignore_keywords text[] DEFAULT '{}'::text[];
+
+-- Comments: flag automation-triggered comments for filtering
+ALTER TABLE public.social_comments
+  ADD COLUMN IF NOT EXISTS is_automation boolean NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_social_comments_automation
+  ON public.social_comments(project_id, is_automation)
+  WHERE is_automation = true;
+```
+
+Update TypeScript generated types (`src/integrations/supabase/types.ts`):
+- `ai_knowledge_base`: add `ignore_keywords: string[] | null`
+- `social_comments`: add `is_automation: boolean`
 
 ---
 
@@ -56,9 +66,9 @@ if (knowledgeBase?.ignore_keywords?.length &&
     matchesIgnoreKeywords(comment.text, knowledgeBase.ignore_keywords)) {
   await supabase
     .from('social_comments')
-    .update({ ai_processing_status: 'skipped' })
+    .update({ ai_processing_status: 'skipped', is_automation: true })
     .eq('id', comment.id);
-  skippedCount++;  // track separately for response
+  skippedCount++;
   continue;
 }
 ```
@@ -108,7 +118,32 @@ Default value: `[]` (empty array).
 
 ---
 
-## 5. Stats — Fix Required in `getStats`
+## 5. Frontend: `useSocialListening.ts` + `SocialListeningTab.tsx`
+
+### `useSocialListening.ts` — `useComments` filter
+
+Add `showAutomation?: boolean` to the filters interface. Default behavior (when absent or `false`): add `.eq('is_automation', false)` to the query, mirroring the existing `showOwnAccount` pattern:
+
+```typescript
+if (!filters?.showAutomation) {
+  query = query.eq('is_automation', false);
+}
+```
+
+Also add `is_automation` to the `SocialComment` interface:
+```typescript
+is_automation: boolean;
+```
+
+### `SocialListeningTab.tsx` — toggle
+
+Add a `showAutomation` state (default `false`) alongside the existing `showOwnAccount` state. Render a toggle "Ver respostas de automações" with the same UX as the existing "Ver respostas próprias" toggle. Pass `showAutomation` to `useComments`.
+
+The two toggles are independent.
+
+---
+
+## 6. Stats — Fix Required in `getStats`
 
 The current formula is `processed = total - pending`. The `total` query has no filter on `ai_processing_status`, so `skipped` comments count in `total` but not in `pending` — causing them to silently inflate `processed`.
 
@@ -121,14 +156,19 @@ supabase.from('social_comments')
   .eq('project_id', projectId)
   .eq('is_deleted', false)
   .eq('is_own_account', false)
-  .neq('ai_processing_status', 'skipped')  // ADD THIS
+  .eq('is_automation', false)       // ADD THIS (excludes automation comments entirely from stats)
+  .neq('ai_processing_status', 'skipped')  // ADD THIS (safety net for other skipped cases)
 ```
+
+Also add `.eq('is_automation', false)` to `pendingRes`, `sentimentRes`, and `classificationRes` queries for full consistency.
 
 ---
 
-## 6. TypeScript Types
+## 7. TypeScript Types
 
-Update `src/integrations/supabase/types.ts` — add `ignore_keywords: string[] | null` to `ai_knowledge_base` Row, Insert, and Update types.
+Update `src/integrations/supabase/types.ts`:
+- `ai_knowledge_base` Row/Insert/Update: add `ignore_keywords: string[] | null`
+- `social_comments` Row/Insert/Update: add `is_automation: boolean`
 
 ---
 

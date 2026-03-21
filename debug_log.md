@@ -5,8 +5,23 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-21 (sessão 23) — Social Listening: ads fix completo + is_own_account + UX melhorias
-- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | is_own_account detectando corretamente ✅
+- **Data:** 2026-03-21 (sessão 24) — contexto do pai nos replies + redesign tabela UTM
+- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Contexto do pai nos replies ✅
+
+---
+
+### [2026-03-21] Social Listening — contexto do comentário pai nos replies — ✅ CONCLUÍDO (sessão 24)
+
+**Problema:** Replies apareciam isolados na lista sem mostrar ao que respondiam.
+Root cause: `parent_comment_id` (UUID) era null por design desde v29. `parent_meta_id` (string Meta) existia mas o lookup em memória falhava quando o pai estava filtrado, fora do batch de 2000, ou deletado da Meta.
+
+**Solução:** Snapshot denormalizado.
+- Migration `20260321130000`: colunas `parent_text` + `parent_author` em `social_comments`
+- Backfill via self-join `parent_meta_id = comment_id_meta` (mesmo project_id + platform)
+- `buildCommentRow`: parâmetro `parentComment` opcional — copia texto e author no momento do sync
+- Loops de replies atualizados: orgânico (linha 770) + Instagram ads (linha 1549)
+- Frontend: `parentPreview` IIFE — snapshot primeiro, fallback para `commentsByMetaId`
+- Deploy: `social-comments-api` na versão com snapshot
 
 ---
 

@@ -12,14 +12,8 @@
 
 ## 🔴 Próxima sessão — Verificações pendentes
 
-- [ ] **Contexto do comentário pai nos replies**
-  - Replies aparecem isolados na lista sem mostrar ao que estão respondendo
-  - Médio esforço — requer segunda passagem para resolver `parent_comment_id` ou exibição inline
 
 
-- [ ] **Oferta `qv8fq3lv` (Monaliza Krepe) sem funil**
-  - 10 pedidos sem mapeamento de funil
-  - Usuário deve decidir se entra em LANPG_MAR26 como OB
 
 ---
 
@@ -87,6 +81,15 @@
 ---
 
 ## ✅ Concluído
+
+### 💬 Social Listening — contexto do comentário pai nos replies (21/03/2026 — sessão 24)
+- [x] Migration: `parent_text` + `parent_author` em `social_comments` com backfill
+- [x] Edge function: snapshot salvo no sync de replies (Facebook + Instagram)
+- [x] Frontend: snapshot como fonte primária, fallback para lookup em memória
+- [x] Deploy: `social-comments-api` atualizada
+
+### ✅ Oferta qv8fq3lv (Monaliza Krepe) encaixada no funil (21/03/2026 — sessão 24)
+- [x] 10 pedidos mapeados — usuário resolveu manualmente
 
 ### 🎨 UTM Analysis — redesign visual da tabela (21/03/2026 — sessão 24)
 - [x] Nome truncado com tooltip nativo (max-w-[220px])

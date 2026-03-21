@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 21/03/2026 (sessão 26 — Onda 1 lançamento pago concluída)
+> Última atualização: 21/03/2026 (sessão 26 — Onda 1 concluída + decisão arquitetural pendente)
 
 ---
 
@@ -10,17 +10,30 @@
 
 ---
 
-## 🔴 Próxima sessão — Onda 2: Métricas de lançamento pago
+## 🔴 Próxima sessão — Decisão arquitetural: Edições
 
-> Onda 1 concluída ✅. Próximo passo: implementar métricas específicas do lançamento pago.
+> ⚠️ Onda 2 BLOQUEADA até decisão sobre conceito de Edições.
+> Ver `FUNNEL_MODELS.md` seção 3.1 — Conceito de Edições.
+> Esta decisão muda a arquitetura do `phase_id` em `offer_mappings`.
+
+**Decidir aqui no Claude.ai antes de passar pro Cursor:**
+- [ ] Escolher abordagem de edições no lançamento pago recorrente:
+  - Opção A: nova tabela `launch_editions` — correto, mais esforço
+  - Opção B: campo `edition_label` em `launch_phases` — simples e rápido
+  - Opção C: date range das fases para agrupar — sem schema change
+
+---
+
+## 🔵 Onda 2 — Métricas de lançamento pago (aguardando decisão acima)
+
 > Planejamento feito com Claude.ai — ver `docs/lancamento_pago_mapa.html` para referência visual.
 
 - [ ] Passing diário — ritmo de vendas de ingresso vs meta por lote
 - [ ] Show rate — ingressos vendidos vs presentes no evento
 - [ ] Conversão por fase — TX ingresso→produto principal por canal de origem
 - [ ] NPS e métricas do evento ao vivo
-- [ ] ROAS total — (ingressos + produto principal + OBs + downsell) / investimento Meta
-- [ ] `phase_id` em `offer_mappings` — receita real por fase
+- [ ] ROAS total por edição — (ingressos + produto + OBs + downsell) / investimento Meta
+- [ ] `phase_id` em `offer_mappings` vinculado à edição correta
 - [ ] Vincular `registered_at` no CSV import de leads
 
 ---
@@ -35,6 +48,9 @@
 - [ ] Métricas do lançamento meteórico via Evolution API
 - [ ] Dashboard de assinatura/recorrência (MRR, Churn, LTV)
 - [ ] Cronograma reverso automático para lançamento pago
+- [ ] Cubo Guia — documento "Como fazer" gerado automaticamente por modelo
+- [ ] Comparativo entre edições do lançamento pago (ROAS, show rate, aceite de preço)
+- [ ] Documentar bairros restantes: Lançamento Clássico, Perpétuo, Meteórico
 
 ---
 
@@ -79,6 +95,13 @@
 ---
 
 ## ✅ Concluído
+
+### 🔗 CRM ↔ Social Listening — merge automático por Instagram (21/03/2026 — sessão 27)
+- [x] RPC `merge_instagram_shadow(project_id, instagram, target_id)` — funde shadow profiles com contato rico
+- [x] Índice `idx_crm_contacts_instagram` recriado para busca eficiente
+- [x] `survey-webhook` — merge disparado ao capturar instagram via `identity_field`
+- [x] `quiz-public-complete` — merge disparado ao salvar contato com instagram
+- [x] Cobertura bidirecional: shadow→rico (compra/survey/quiz) e rico→shadow (já coberto por `linkExistingCommentsToCRM`)
 
 ### ✅ Onda 1: Lançamento Pago — Desbloqueador (21/03/2026 — sessão 26)
 - [x] Migration `launch_phases` — 5 colunas adicionadas. Criação de fase pelo UI desbloqueada.

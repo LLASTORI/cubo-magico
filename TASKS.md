@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 20/03/2026 (sessão 22)
+> Última atualização: 21/03/2026 (sessão 23)
 
 ---
 
@@ -12,14 +12,9 @@
 
 ## 🔴 Próxima sessão — Verificações pendentes
 
-- [ ] **Verificar se comentários orgânicos aparecem no Social Listening**
-  - Cron `social-listening-sync-30min` funcionando (401 corrigido na sessão 22)
-  - Confirmar que posts e comentários estão sendo sincronizados no app
-  - Se OK → investigar comentários de anúncios (ads) separadamente
-
-- [ ] **Comentários de ads — Meta Graph API**
-  - Podem requerer permissões adicionais na Meta Graph API
-  - Investigar se `social-listening-cron` tem permissão para ler comentários de anúncios
+- [ ] **Contexto do comentário pai nos replies**
+  - Replies aparecem isolados na lista sem mostrar ao que estão respondendo
+  - Médio esforço — requer segunda passagem para resolver `parent_comment_id` ou exibição inline
 
 - [ ] **Redesign visual da tabela UTM**
   - Colunas densas, nomes truncados — dificulta leitura
@@ -74,9 +69,13 @@
 
 ## 🟢 Backlog técnico — Social Listening
 
-- [ ] Comentários de ads (permissões Meta Graph API)
-  - Investigar `ad_id` e `adset_id` dos comentários para cruzar com Meta Ads
-  - Pode abrir análise: "qual criativo gera mais intenção de compra nos comentários?"
+- [ ] Cruzar `ad_id`/`adset_id` dos comentários com Meta Ads
+  - Análise: "qual criativo gera mais intenção de compra nos comentários?"
+  - Requer planejamento antes de executar
+
+- [ ] Contexto do comentário pai nos replies (médio esforço)
+
+- [ ] Rate limit graceful da Meta API (429) — baixa prioridade
 
 - [ ] Redesign visual tabela UTM (colunas densas)
 
@@ -91,6 +90,34 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Social Listening — stats + limite frontend (21/03/2026 — sessão 23)
+- [x] `getStats` filtra `is_own_account=false` — total e pendentes IA não contam mais respostas próprias
+- [x] Query frontend: limite 1.000 → 2.000 comentários
+- [x] `is_own_account` fix root cause: `instagram_username` nunca era populado ao salvar páginas
+- [x] `getAvailablePages` agora retorna `instagram_username` corretamente
+- [x] Fallback: extrai handle do `page_name` quando `instagram_username` é null (regex `@([\w.]+)`)
+- [x] DB: `instagram_username` populado nas 4 contas Instagram existentes
+- [x] 439 comentários retroativamente marcados `is_own_account=true, ai_processing_status=skipped`
+- [x] v36 deployada
+
+### 🎯 Social Listening — paginação + UX (21/03/2026 — sessão 23)
+- [x] Paginação de comentários além de 100 (até 500/post) em orgânicos e ads — segue `paging.next`
+- [x] Limite de posts orgânicos: 25 → 50 por plataforma
+- [x] Toggle "Ver respostas próprias" no frontend (independente do filtro Limpar)
+- [x] Botões de sync agrupados em "Sincronização" e "Ações" com descrições contextuais
+
+### 🎯 Social Listening — is_own_account + placeholder fix (21/03/2026 — sessão 23)
+- [x] `buildCommentRow` refatorado: Facebook compara `comment.from.id` vs page ID numérico; Instagram compara `comment.username` vs `instagram_username` limpo — elimina falsos negativos causados por sufixo `"(Facebook)"/"(Instagram)"` no `page_name`
+- [x] Query de listagem no frontend filtrada com `.eq('is_own_account', false)` — respostas da própria conta não aparecem mais
+- [x] Placeholder "Ex: Alice Salazar Maquiagem" → "Ex: Minha Empresa Digital" na aba Base IA
+- [x] `social-comments-api` v34 deployada
+
+### 📡 Social Listening — ads fix completo (21/03/2026 — sessão 23)
+- [x] v30: `is_selected` → `is_active` em `meta_ad_accounts`
+- [x] v31: page token map para Facebook ad stories (corrige error 190)
+- [x] v32: rewrite completo de `syncAdComments` com suporte a Facebook + Instagram
+- [x] v33: deduplicação de creatives compartilhadas (corrige ON CONFLICT upsert)
 
 ### 📡 Social Listening — cron 401 corrigido (20/03/2026 — sessão 22)
 - [x] `social-listening-cron` v17 deployada com `verify_jwt: false` — auth check removido do handler

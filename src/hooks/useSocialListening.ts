@@ -123,6 +123,7 @@ export function useSocialListening(projectId: string | undefined) {
     postId?: string;
     search?: string;
     postType?: string; // 'organic' | 'ad' | 'all'
+    showOwnAccount?: boolean;
   }) => {
     return useQuery({
       queryKey: ['social_comments', projectId, filters],
@@ -135,6 +136,10 @@ export function useSocialListening(projectId: string | undefined) {
           .eq('project_id', projectId)
           .eq('is_deleted', false)
           .order('comment_timestamp', { ascending: false });
+
+        if (!filters?.showOwnAccount) {
+          query = query.eq('is_own_account', false);
+        }
 
         if (filters?.sentiment && filters.sentiment !== 'all') {
           query = query.eq('sentiment', filters.sentiment as any);
@@ -160,7 +165,7 @@ export function useSocialListening(projectId: string | undefined) {
           query = query.eq('social_posts.is_ad', false);
         }
 
-        const { data, error } = await query.limit(1000);
+        const { data, error } = await query.limit(2000);
         if (error) {
           console.error('[SOCIAL_LISTENING][useComments] query error:', error);
           throw error;

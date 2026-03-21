@@ -5,8 +5,45 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-20 (sessão 20) — histórico completo até sessão 20
-- **Status geral:** UTM source/placement/page com status+investimento corrigidos ✅ | Funil Monaliza Krepe restaurado ✅ | Social Listening cron registrado ✅ | Comentários de ads — investigação pendente
+- **Data:** 2026-03-21 (sessão 23) — Social Listening: ads fix completo + is_own_account + UX melhorias
+- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | is_own_account detectando corretamente ✅
+
+---
+
+### [2026-03-21] Social Listening — is_own_account + ads fix completo + UX — ✅ CONCLUÍDO (sessões 22-23)
+
+**Contexto:** Migração e reconstrução do Social Listening. Múltiplos bugs corrigidos ao longo de duas sessões.
+
+**Problema 1 — Comentários orgânicos não apareciam (sessão 22):**
+- Root cause: `parent_comment_id` era UUID do banco, mas Meta retorna string. Tipo incompatível causava falha silenciosa.
+- Fix v29: `parent_comment_id: null` (resolução de parent requer segunda passagem).
+
+**Problema 2 — syncAdComments retornava erro 190 (sessão 23):**
+- Root cause: `syncAdComments` usava `meta_credentials.access_token` (user token) para buscar comentários de posts de página Facebook. Posts de página exigem page token.
+- Fix v31: construído `pageTokenMap` de `social_listening_pages` e usado por story ID.
+- Fix adicional v30: coluna `is_selected` não existe em `meta_ad_accounts` → corrigido para `is_active`.
+
+**Problema 3 — ON CONFLICT upsert (sessão 23):**
+- Root cause: mesmo criativo Facebook compartilhado por múltiplos ads → mesmo `comment_id_meta` aparecia múltiplas vezes no batch.
+- Fix v33: `processedFbStories`/`processedIgMedias` Sets + deduplicação final por `platform:comment_id_meta`.
+
+**Problema 4 — is_own_account sempre false (sessão 23):**
+- Root cause 1: `ownAccountUsernames` construído de `page_name` com sufixo `"(Facebook)"/"(Instagram)"` → nunca batia com `from.name`/`username` do comentário.
+- Root cause 2: `instagram_username` nunca populado em `social_listening_pages` — `getAvailablePages` não incluía o campo no objeto retornado.
+- Fix v34/v36: Facebook compara `comment.from.id` vs page ID numérico; Instagram compara `comment.username` vs `instagram_username` com fallback regex de `page_name` (`@([\w.]+)`).
+- Fix DB: `instagram_username` populado em 4 contas Instagram existentes via UPDATE.
+- Fix retroativo: 439 comentários marcados `is_own_account=true, ai_processing_status=skipped`.
+
+**Melhorias UX (sessão 23):**
+- Toggle "Ver respostas próprias" no frontend (independente do botão Limpar)
+- Botões sync agrupados em "Sincronização" (Orgânicos + Anúncios) e "Ações" com descrições
+- Placeholder "Ex: Alice Salazar Maquiagem" → "Ex: Minha Empresa Digital"
+- Paginação de comentários: 100 → até 500/post (segue `paging.next`)
+- Posts orgânicos: 25 → 50 por plataforma
+- `getStats` filtrado por `is_own_account=false` — total e pendentes IA não contam respostas próprias
+- Query frontend: limite 1.000 → 2.000 comentários
+
+**Versões deployadas:** v29 → v37 (`social-comments-api`)
 
 ---
 

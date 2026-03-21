@@ -215,6 +215,15 @@ Visão estratégica do produto. **Ler quando for:**
 
 **Não precisa ler para:** fixes de bug, migrations simples, ajustes de UI pontuais.
 
+### FUNNEL_MODELS.md
+Documentação completa de todos os modelos de funil com jornadas, métricas, benchmarks reais e fases.
+**Ler quando for:**
+- Implementar features relacionadas a lançamento pago, meteórico, assinatura ou high ticket
+- Trabalhar na Onda 2 (métricas específicas de lançamento pago)
+- Criar wizard de criação de funil ou IA analista por modelo
+
+**Não precisa ler para** fixes de bug ou ajustes em perpétuo/lançamento clássico que já funcionam.
+
 ### TRACKING.md
 Arquitetura de tracking independente, atribuição e Decision Engine.
 **⚠️ NADA disso foi implementado ainda — é planejamento de médio/longo prazo.**

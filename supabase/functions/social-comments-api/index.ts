@@ -689,14 +689,14 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
         .eq('project_id', projectId)
         .eq('platform', 'facebook')
         .order('published_at', { ascending: false })
-        .limit(25),
+        .limit(50),
       supabase
         .from('social_posts')
         .select('*')
         .eq('project_id', projectId)
         .eq('platform', 'instagram')
         .order('published_at', { ascending: false })
-        .limit(25),
+        .limit(50),
     ])
 
     posts = [...(fbRes.data || []), ...(igRes.data || [])]
@@ -710,7 +710,7 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
   const [pagesRes, contactsRes] = await Promise.all([
     supabase
       .from('social_listening_pages')
-      .select('page_id, access_token, instagram_username, page_name')
+      .select('page_id, platform, access_token, instagram_username, page_name')
       .eq('project_id', projectId)
       .eq('is_active', true),
     supabase
@@ -722,7 +722,8 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
   const savedPages = pagesRes.data || []
 
   const pageTokenMap = new Map<string, string>()
-  const ownAccountUsernames = new Set<string>()
+  const ownAccountFbPageIds = new Set<string>()
+  const ownAccountIgUsernames = new Set<string>()
 
   for (const page of savedPages) {
     if (!page.page_id || !page.access_token) continue
@@ -731,8 +732,13 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     pageTokenMap.set(normalizedPageId, page.access_token)
     pageTokenMap.set(basePageId, page.access_token)
 
-    const username = (page.instagram_username || page.page_name || '').toLowerCase().replace(/^@/, '')
-    if (username) ownAccountUsernames.add(username)
+    if (page.platform === 'facebook') {
+      ownAccountFbPageIds.add(basePageId)
+    } else if (page.platform === 'instagram') {
+      // instagram_username takes precedence; fall back to extracting from page_name (@handle (Instagram))
+      const igHandle = page.instagram_username || page.page_name?.match(/@([\w.]+)/)?.[1] || null
+      if (igHandle) ownAccountIgUsernames.add(igHandle.toLowerCase().replace(/^@/, '').trim())
+    }
   }
 
   const crmContactMap = new Map<string, string>()
@@ -756,12 +762,12 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
       const apiComments = await fetchCommentsForPost(post, pageToken, accessToken)
 
       for (const comment of apiComments) {
-        commentRows.push(buildCommentRow(projectId, post.id, post.platform, comment, null, ownAccountUsernames, crmContactMap, contactNameMap))
+        commentRows.push(buildCommentRow(projectId, post.id, post.platform, comment, null, ownAccountFbPageIds, ownAccountIgUsernames, crmContactMap, contactNameMap))
         totalComments++
 
         if (comment.replies?.data) {
           for (const reply of comment.replies.data) {
-            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountUsernames, crmContactMap, contactNameMap))
+            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountFbPageIds, ownAccountIgUsernames, crmContactMap, contactNameMap))
             totalComments++
           }
         }
@@ -806,13 +812,23 @@ function buildCommentRow(
   platform: string,
   comment: any,
   parentId: string | null,
-  ownAccountUsernames: Set<string>,
+  ownAccountFbPageIds: Set<string>,
+  ownAccountIgUsernames: Set<string>,
   crmContactMap: Map<string, string>,
   contactNameMap?: Map<string, string>,
 ): any {
   const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
   const normalizedAuthor = authorUsername ? authorUsername.toLowerCase().replace(/^@/, '').trim() : null
-  const isOwnAccount = normalizedAuthor ? ownAccountUsernames.has(normalizedAuthor) : false
+
+  let isOwnAccount = false
+  if (platform === 'instagram') {
+    const igUsername = comment.username?.toLowerCase().replace(/^@/, '').trim()
+    isOwnAccount = igUsername ? ownAccountIgUsernames.has(igUsername) : false
+  } else {
+    // Facebook: compare by page ID (numeric string) — reliable, no string ambiguity
+    const fromId = comment.from?.id
+    isOwnAccount = fromId ? ownAccountFbPageIds.has(String(fromId)) : false
+  }
 
   let crmContactId: string | null = null
   if (normalizedAuthor) {
@@ -846,29 +862,37 @@ function buildCommentRow(
 async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken: string): Promise<any[]> {
   const platform = post.platform
   const postIdMeta = post.post_id_meta
+  const MAX_COMMENTS = 500
 
-  let url: string
-  if (platform === 'instagram') {
-    url = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}&limit=100&access_token=${pageToken}`
-  } else {
-    url = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=id,message,created_time,from,like_count,comment_count,comments{id,message,created_time,from,like_count}&limit=100&access_token=${pageToken}`
-  }
+  const fields = platform === 'instagram'
+    ? 'id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}'
+    : 'id,message,created_time,from,like_count,comment_count,comments{id,message,created_time,from,like_count}'
 
-  const response = await fetch(url)
-  const data = await response.json()
+  const firstUrl = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=${fields}&limit=100&access_token=${pageToken}`
 
-  if (data.error) {
-    if (data.error.code === 190 || data.error.code === 10) {
-      const retryUrl = url.replace(pageToken, fallbackToken)
-      const retryResponse = await fetch(retryUrl)
-      const retryData = await retryResponse.json()
-      if (retryData.error) throw new Error(retryData.error.message)
-      return retryData.data || []
+  const allComments: any[] = []
+  let nextUrl: string | null = firstUrl
+  let useFallback = false
+
+  while (nextUrl && allComments.length < MAX_COMMENTS) {
+    const url = useFallback ? nextUrl.replace(pageToken, fallbackToken) : nextUrl
+    const response = await fetch(url)
+    const data = await response.json()
+
+    if (data.error) {
+      if (!useFallback && (data.error.code === 190 || data.error.code === 10)) {
+        useFallback = true
+        continue // retry same page with fallback token
+      }
+      throw new Error(data.error.message)
     }
-    throw new Error(data.error.message)
+
+    allComments.push(...(data.data || []))
+    nextUrl = data.paging?.next || null
+    if (nextUrl) await delay(200)
   }
 
-  return data.data || []
+  return allComments
 }
 
 
@@ -1168,10 +1192,10 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
 async function getStats(supabase: any, projectId: string) {
   const [totalRes, pendingRes, sentimentRes, classificationRes] = await Promise.all([
-    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false),
-    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('ai_processing_status', 'pending'),
-    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('is_deleted', false).eq('ai_processing_status', 'completed'),
-    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('is_deleted', false).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('ai_processing_status', 'pending'),
+    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('ai_processing_status', 'completed'),
   ])
 
   const sentimentCounts: Record<string, number> = {}
@@ -1272,14 +1296,16 @@ async function getAvailablePages(accessToken: string) {
     })
 
     if (page.instagram_business_account) {
+      const igUsername = page.instagram_business_account.username || null
       pages.push({
         id: `${page.id}_instagram`,
         page_id: page.id,
         instagram_account_id: page.instagram_business_account.id,
-        name: `@${page.instagram_business_account.username || page.name} (Instagram)`,
+        name: `@${igUsername || page.name} (Instagram)`,
         platform: 'instagram',
         access_token: page.access_token,
         profile_picture: page.instagram_business_account.profile_picture_url,
+        instagram_username: igUsername,
       })
     }
   }
@@ -1355,10 +1381,59 @@ async function removePage(supabase: any, projectId: string, pageId: string) {
 
 // ============= AD COMMENTS SYNC =============
 
+// Upsert a social_post record for an ad story; returns the post UUID
+async function upsertAdPost(supabase: any, projectId: string, platform: string, postIdMeta: string, adName: string): Promise<string | null> {
+  const { data: existingPost } = await supabase
+    .from('social_posts')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('post_id_meta', postIdMeta)
+    .maybeSingle()
+
+  if (existingPost) {
+    await supabase.from('social_posts').update({ is_ad: true, post_type: 'ad' }).eq('id', existingPost.id)
+    return existingPost.id
+  }
+
+  const { data: newPost } = await supabase
+    .from('social_posts')
+    .insert({ project_id: projectId, platform, post_id_meta: postIdMeta, post_type: 'ad', is_ad: true, message: adName })
+    .select('id')
+    .single()
+
+  return newPost?.id || null
+}
+
+// Fetch comments from Meta Graph API for an ad post (Facebook or Instagram), with pagination
+async function fetchAdPostComments(postIdMeta: string, platform: string, token: string): Promise<any[]> {
+  const MAX_COMMENTS = 500
+
+  const fields = platform === 'instagram'
+    ? 'id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}'
+    : 'id,message,created_time,from,like_count,comment_count'
+
+  const allComments: any[] = []
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=${fields}&limit=100&access_token=${token}`
+
+  while (nextUrl && allComments.length < MAX_COMMENTS) {
+    const response = await fetch(nextUrl)
+    const data = await response.json()
+    if (data.error) {
+      throw new Error(`code=${data.error.code || 'n/a'} message=${data.error.message}`)
+    }
+    allComments.push(...(data.data || []))
+    nextUrl = data.paging?.next || null
+    if (nextUrl) await delay(200)
+  }
+
+  return allComments
+}
+
 async function syncAdComments(supabase: any, projectId: string, accessToken: string) {
   console.log('Syncing ad comments for project:', projectId)
 
   let totalComments = 0
+  let totalAdPosts = 0
   const errors: string[] = []
 
   try {
@@ -1366,15 +1441,44 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       .from('meta_ad_accounts')
       .select('account_id')
       .eq('project_id', projectId)
-      .eq('is_selected', true)
+      .eq('is_active', true)
 
     if (!adAccounts?.length) {
-      return { success: true, commentsSynced: 0, message: 'Nenhuma conta de anúncio configurada' }
+      return { success: true, adsSynced: 0, commentsSynced: 0, message: 'Nenhuma conta de anúncio configurada' }
     }
+
+    // Load page tokens for ALL platforms (Facebook + Instagram)
+    const { data: savedPages } = await supabase
+      .from('social_listening_pages')
+      .select('page_id, platform, access_token, instagram_username, page_name')
+      .eq('project_id', projectId)
+
+    // Facebook: pageId → token (story IDs start with the Facebook page ID)
+    const fbPageTokenMap: Record<string, string> = {}
+    // Instagram: single token for the IG account
+    let igPageToken: string | null = null
+    const ownAccountFbPageIds = new Set<string>()
+    const ownAccountIgUsernames = new Set<string>()
+
+    for (const page of savedPages || []) {
+      if (!page.access_token) continue
+      const rawId = page.page_id.replace(/_facebook$/, '').replace(/_instagram$/, '')
+      if (page.platform === 'facebook') {
+        fbPageTokenMap[rawId] = page.access_token
+        ownAccountFbPageIds.add(rawId)
+      } else if (page.platform === 'instagram') {
+        igPageToken = page.access_token
+        const igHandle = page.instagram_username || page.page_name?.match(/@([\w.]+)/)?.[1] || null
+        if (igHandle) ownAccountIgUsernames.add(igHandle.toLowerCase().replace(/^@/, '').trim())
+      }
+    }
+
+    const allCommentRows: any[] = []
 
     for (const account of adAccounts) {
       try {
-        const adsUrl = `${GRAPH_API_BASE}/${account.account_id}/ads?fields=id,name,effective_status,creative{effective_object_story_id}&limit=50&access_token=${accessToken}`
+        // Request both Facebook story ID and Instagram media ID from each ad creative
+        const adsUrl = `${GRAPH_API_BASE}/${account.account_id}/ads?fields=id,name,effective_status,creative{effective_object_story_id,effective_instagram_story_id}&limit=50&access_token=${accessToken}`
         const adsResponse = await fetch(adsUrl)
         const adsData = await adsResponse.json()
 
@@ -1383,80 +1487,65 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
           continue
         }
 
+        const processedFbStories = new Set<string>()
+        const processedIgMedias = new Set<string>()
+
         for (const ad of adsData.data || []) {
-          const storyId = ad.creative?.effective_object_story_id
-          if (!storyId) continue
+          const fbStoryId: string | null = ad.creative?.effective_object_story_id || null
+          const igMediaId: string | null = ad.creative?.effective_instagram_story_id || null
 
-          try {
-            const commentsUrl = `${GRAPH_API_BASE}/${storyId}/comments?fields=id,message,created_time,from,like_count,comment_count&limit=100&access_token=${accessToken}`
-            const commentsResponse = await fetch(commentsUrl)
-            const commentsData = await commentsResponse.json()
+          if (!fbStoryId && !igMediaId) continue
 
-            if (commentsData.error) {
-              const errorMessage = `[SYNC_AD_COMMENTS][GRAPH_ERROR] account=${account.account_id} ad=${ad.id} story=${storyId} code=${commentsData.error.code || 'n/a'} message=${commentsData.error.message || 'unknown'}`
-              console.error(errorMessage)
-              errors.push(errorMessage)
-              continue
-            }
-
-            let postId: string | null = null
-            const { data: existingPost } = await supabase
-              .from('social_posts')
-              .select('id')
-              .eq('project_id', projectId)
-              .eq('post_id_meta', storyId)
-              .maybeSingle()
-
-            if (existingPost) {
-              postId = existingPost.id
-              // Ensure is_ad is set on existing post
-              await supabase.from('social_posts').update({ is_ad: true, post_type: 'ad' }).eq('id', existingPost.id)
-            } else {
-              const { data: newPost } = await supabase
-                .from('social_posts')
-                .insert({
-                  project_id: projectId,
-                  platform: 'facebook',
-                  post_id_meta: storyId,
-                  post_type: 'ad',
-                  is_ad: true,
-                  message: ad.name,
-                })
-                .select('id')
-                .single()
-
-              postId = newPost?.id
-            }
-
-            if (postId) {
-              const commentRows = (commentsData.data || []).map((comment: any) => ({
-                project_id: projectId,
-                post_id: postId,
-                platform: 'facebook',
-                comment_id_meta: comment.id,
-                text: comment.message,
-                author_username: comment.from?.name || null,
-                author_id: comment.from?.id || null,
-                like_count: comment.like_count || 0,
-                reply_count: comment.comment_count || 0,
-                comment_timestamp: comment.created_time,
-                ai_processing_status: 'pending',
-                is_deleted: false,
-                is_own_account: false,
-              }))
-              if (commentRows.length > 0) {
-                const { error: upsertError } = await supabase
-                  .from('social_comments')
-                  .upsert(commentRows, { onConflict: 'project_id,platform,comment_id_meta' })
-                if (upsertError) {
-                  console.error(`[SYNC_AD_COMMENTS] Upsert error for ad ${ad.id}:`, upsertError.message)
-                } else {
-                  totalComments += commentRows.length
+          // --- Facebook Feed comments ---
+          if (fbStoryId && !processedFbStories.has(fbStoryId)) {
+            processedFbStories.add(fbStoryId)
+            try {
+              const storyPageId = fbStoryId.split('_')[0]
+              const fbToken = fbPageTokenMap[storyPageId] || accessToken
+              const postId = await upsertAdPost(supabase, projectId, 'facebook', fbStoryId, ad.name)
+              if (postId) {
+                totalAdPosts++
+                const comments = await fetchAdPostComments(fbStoryId, 'facebook', fbToken)
+                for (const c of comments) {
+                  allCommentRows.push(buildCommentRow(projectId, postId, 'facebook', c, null, ownAccountFbPageIds, ownAccountIgUsernames, new Map(), new Map()))
+                  totalComments++
                 }
               }
+            } catch (e: any) {
+              const msg = `[AD_FB] account=${account.account_id} ad=${ad.id} story=${fbStoryId}: ${e.message}`
+              console.error(msg)
+              errors.push(msg)
             }
-          } catch (commentError: any) {
-            console.error(`Error syncing comments for ad ${ad.id}:`, commentError.message)
+          }
+
+          // --- Instagram Feed/Reels comments ---
+          if (igMediaId && !processedIgMedias.has(igMediaId)) {
+            processedIgMedias.add(igMediaId)
+            try {
+              const igToken = igPageToken || accessToken
+              const postId = await upsertAdPost(supabase, projectId, 'instagram', igMediaId, ad.name)
+              if (postId) {
+                totalAdPosts++
+                const comments = await fetchAdPostComments(igMediaId, 'instagram', igToken)
+                for (const c of comments) {
+                  allCommentRows.push(buildCommentRow(projectId, postId, 'instagram', c, null, ownAccountFbPageIds, ownAccountIgUsernames, new Map(), new Map()))
+                  totalComments++
+                }
+                // Also collect replies
+                for (const c of comments) {
+                  if (c.replies?.data) {
+                    for (const reply of c.replies.data) {
+                      allCommentRows.push(buildCommentRow(projectId, postId, 'instagram', reply, c.id, ownAccountFbPageIds, ownAccountIgUsernames, new Map(), new Map()))
+                      totalComments++
+                    }
+                  }
+                }
+              }
+            } catch (e: any) {
+              const msg = `[AD_IG] account=${account.account_id} ad=${ad.id} media=${igMediaId}: ${e.message}`
+              console.error(msg)
+              errors.push(msg)
+            }
           }
 
           await delay(200)
@@ -1468,9 +1557,31 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       await delay(500)
     }
 
-    return { success: true, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
+    // Deduplicate by (platform, comment_id_meta) before upsert
+    const seenCommentKeys = new Set<string>()
+    const dedupedRows = allCommentRows.filter(row => {
+      const key = `${row.platform}:${row.comment_id_meta}`
+      if (seenCommentKeys.has(key)) return false
+      seenCommentKeys.add(key)
+      return true
+    })
+
+    // Batch upsert all comment rows
+    const CHUNK = 200
+    for (let i = 0; i < dedupedRows.length; i += CHUNK) {
+      const chunk = dedupedRows.slice(i, i + CHUNK)
+      const { error } = await supabase
+        .from('social_comments')
+        .upsert(chunk, { onConflict: 'project_id,platform,comment_id_meta' })
+      if (error) {
+        console.error('[SYNC_AD_COMMENTS] Batch upsert error:', error.message)
+        errors.push(`Batch upsert: ${error.message}`)
+      }
+    }
+
+    return { success: true, adsSynced: totalAdPosts, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
   } catch (error: any) {
-    return { success: false, error: error.message, errors }
+    return { success: false, adsSynced: 0, commentsSynced: 0, error: error.message, errors }
   }
 }
 

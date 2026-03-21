@@ -280,7 +280,7 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
                 <Label htmlFor="business_name">Nome do Negócio</Label>
                 <Input
                   id="business_name"
-                  placeholder="Ex: Alice Salazar Maquiagem"
+                  placeholder="Ex: Minha Empresa Digital"
                   value={formData.business_name || ''}
                   onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
                 />

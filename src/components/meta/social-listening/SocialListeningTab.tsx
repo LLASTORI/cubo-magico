@@ -36,6 +36,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -89,6 +91,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     search: '',
     postId: '',
   });
+  const [showOwnAccount, setShowOwnAccount] = useState(false);
   const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
   const [reclassifyDialogOpen, setReclassifyDialogOpen] = useState(false);
@@ -159,6 +162,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     postType: filters.postType,
     postId: filters.postId || undefined,
     search: filters.search,
+    showOwnAccount,
   });
 
   const handleSync = async () => {
@@ -447,12 +451,23 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
               </SelectContent>
             </Select>
 
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => setFilters({ sentiment: 'all', classification: 'all', platform: 'all', postType: 'all', search: '', postId: '' })}
             >
               Limpar
             </Button>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Switch
+                id="show-own-account"
+                checked={showOwnAccount}
+                onCheckedChange={setShowOwnAccount}
+              />
+              <Label htmlFor="show-own-account" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver respostas próprias
+              </Label>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -521,39 +536,58 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
       </Card>
 
       {/* Sync Buttons */}
-      <div className="flex justify-end gap-2">
-        <Button 
-          variant="outline" 
-          onClick={handleSync}
-          disabled={isSyncing}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Sincronizando...' : 'Sincronizar Orgânicos'}
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={handleSyncAds}
-          disabled={isSyncingAds}
-        >
-          <Megaphone className={`h-4 w-4 mr-2 ${isSyncingAds ? 'animate-pulse' : ''}`} />
-          {isSyncingAds ? 'Buscando Ads...' : 'Sincronizar Ads'}
-        </Button>
-        <Button 
-          variant="outline"
-          onClick={handleLinkCRM}
-          disabled={isLinking}
-        >
-          <Users className={`h-4 w-4 mr-2 ${isLinking ? 'animate-pulse' : ''}`} />
-          {isLinking ? 'Vinculando...' : 'Vincular ao CRM'}
-        </Button>
-        <FeatureLockedButton
-          featureKey="ai_analysis.social_listening"
-          onClick={handleProcessAI}
-          disabled={isProcessing || (stats?.pendingAI === 0)}
-        >
-          <Brain className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-pulse' : ''}`} />
-          {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
-        </FeatureLockedButton>
+      <div className="flex flex-wrap gap-3 justify-end">
+        {/* Sincronização */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide px-1">Sincronização</span>
+          <div className="flex gap-2">
+            <div className="flex flex-col items-center gap-0.5">
+              <Button
+                variant="outline"
+                onClick={handleSync}
+                disabled={isSyncing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Sincronizando...' : 'Orgânicos'}
+              </Button>
+              <span className="text-[10px] text-muted-foreground">Posts e comentários das páginas</span>
+            </div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Button
+                variant="outline"
+                onClick={handleSyncAds}
+                disabled={isSyncingAds}
+              >
+                <Megaphone className={`h-4 w-4 mr-2 ${isSyncingAds ? 'animate-pulse' : ''}`} />
+                {isSyncingAds ? 'Buscando...' : 'Anúncios'}
+              </Button>
+              <span className="text-[10px] text-muted-foreground">Comentários dos ads ativos</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Ações */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide px-1">Ações</span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleLinkCRM}
+              disabled={isLinking}
+            >
+              <Users className={`h-4 w-4 mr-2 ${isLinking ? 'animate-pulse' : ''}`} />
+              {isLinking ? 'Vinculando...' : 'Vincular ao CRM'}
+            </Button>
+            <FeatureLockedButton
+              featureKey="ai_analysis.social_listening"
+              onClick={handleProcessAI}
+              disabled={isProcessing || (stats?.pendingAI === 0)}
+            >
+              <Brain className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-pulse' : ''}`} />
+              {isProcessing ? 'Processando...' : `Classificar IA (${stats?.pendingAI || 0})`}
+            </FeatureLockedButton>
+          </div>
+        </div>
       </div>
         </TabsContent>
 

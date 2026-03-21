@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Brain, 
-  Save, 
-  Plus, 
-  Trash2, 
+  Brain,
+  Save,
+  Plus,
+  Trash2,
   GripVertical,
   Building2,
   Users,
@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Sparkles,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  BotOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,8 +54,9 @@ interface KnowledgeBase {
   custom_categories: CustomCategory[];
   faqs: FAQ[];
   commercial_keywords: string[];
-  praise_keywords?: string[];
+  praise_keywords: string[];
   spam_keywords: string[];
+  ignore_keywords: string[];
   auto_classify_new_comments: boolean;
   min_intent_score_for_crm: number;
 }
@@ -84,6 +86,7 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
     commercial_keywords: ['preço', 'valor', 'quanto custa', 'comprar', 'quero', 'onde compro', 'link', 'tem disponível'],
     praise_keywords: ['parabéns', 'excelente', 'incrível', 'maravilhoso', 'amei', 'adorei', 'perfeito', 'sensacional'],
     spam_keywords: ['ganhe dinheiro', 'clique aqui', 'sorteio', 'promoção fake'],
+    ignore_keywords: [],
     auto_classify_new_comments: false,
     min_intent_score_for_crm: 50,
   });
@@ -91,6 +94,7 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
   const [newKeyword, setNewKeyword] = useState('');
   const [newPraiseKeyword, setNewPraiseKeyword] = useState('');
   const [newSpamKeyword, setNewSpamKeyword] = useState('');
+  const [newIgnoreKeyword, setNewIgnoreKeyword] = useState('');
   const [newFaq, setNewFaq] = useState<FAQ>({ question: '', answer: '' });
 
   // Fetch existing knowledge base
@@ -123,8 +127,9 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
         custom_categories: knowledgeBase.custom_categories || defaultCategories,
         faqs: knowledgeBase.faqs || [],
         commercial_keywords: knowledgeBase.commercial_keywords || [],
-        praise_keywords: (knowledgeBase as any).praise_keywords || [],
+        praise_keywords: knowledgeBase.praise_keywords || [],
         spam_keywords: knowledgeBase.spam_keywords || [],
+        ignore_keywords: knowledgeBase.ignore_keywords || [],
       });
     }
   }, [knowledgeBase]);
@@ -144,6 +149,7 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
         commercial_keywords: formData.commercial_keywords,
         praise_keywords: formData.praise_keywords,
         spam_keywords: formData.spam_keywords,
+        ignore_keywords: formData.ignore_keywords ?? [],
         auto_classify_new_comments: formData.auto_classify_new_comments,
         min_intent_score_for_crm: formData.min_intent_score_for_crm,
       };
@@ -212,6 +218,25 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
     setFormData({
       ...formData,
       spam_keywords: formData.spam_keywords?.filter(k => k !== keyword),
+    });
+  };
+
+  const addIgnoreKeyword = () => {
+    const trimmed = newIgnoreKeyword.trim();
+    if (trimmed.length < 2) return;
+    if (!formData.ignore_keywords?.includes(trimmed)) {
+      setFormData({
+        ...formData,
+        ignore_keywords: [...(formData.ignore_keywords || []), trimmed],
+      });
+    }
+    setNewIgnoreKeyword('');
+  };
+
+  const removeIgnoreKeyword = (keyword: string) => {
+    setFormData({
+      ...formData,
+      ignore_keywords: formData.ignore_keywords?.filter(k => k !== keyword),
     });
   };
 
@@ -489,6 +514,46 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Ignore Keywords — Automation triggers */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-muted-foreground">
+                <BotOff className="h-4 w-4" />
+                Palavras em Automações
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Comentários que <strong>começam</strong> com essas palavras são ignorados pela IA e ficam ocultos da lista. Use para gatilhos de automação como ManyChat (ex: INFO, QUERO, TESTE).
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {formData.ignore_keywords?.map((keyword) => (
+                  <Badge key={keyword} variant="outline" className="gap-1 text-muted-foreground border-muted-foreground/40">
+                    {keyword}
+                    <button onClick={() => removeIgnoreKeyword(keyword)}>
+                      <Trash2 className="h-3 w-3 hover:text-destructive" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2 items-center">
+                <Input
+                  placeholder="Ex: INFO, QUERO, TESTE..."
+                  value={newIgnoreKeyword}
+                  onChange={(e) => setNewIgnoreKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addIgnoreKeyword()}
+                  className="max-w-xs"
+                />
+                <Button variant="outline" size="sm" onClick={addIgnoreKeyword}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {newIgnoreKeyword.trim().length === 1 && (
+                <p className="text-xs text-amber-500">
+                  Palavras com 1 caractere podem ocultar comentários válidos. Use pelo menos 2 letras.
+                </p>
+              )}
             </div>
           </AccordionContent>
         </AccordionItem>

@@ -18,6 +18,8 @@ ALTER TABLE public.ai_knowledge_base
 
 Migration file: `supabase/migrations/20260321210000_add_ignore_keywords.sql`
 
+**Note:** Verify no existing migration uses timestamp `20260321210000` before applying.
+
 Also update TypeScript generated types (`src/integrations/supabase/types.ts`) to include `ignore_keywords: string[] | null`.
 
 ---
@@ -31,28 +33,15 @@ function matchesIgnoreKeywords(text: string, keywords: string[]): boolean {
   const normalized = text.toLowerCase().trim();
   return keywords.some(kw => {
     const k = kw.toLowerCase().trim();
-    return k.length > 0 && (normalized === k || normalized.startsWith(k + ' '));
+    return k.length > 0 && normalized.startsWith(k);
   });
 }
 ```
 
 Rules:
-- Always case-insensitive
-- Match: comment equals keyword exactly OR comment starts with keyword followed by a space
-- Example: keyword `"info"` matches `"INFO"`, `"info"`, `"info quero saber"`, `"Info!"` → wait, "Info!" starts with "info" but not "info " — handle via `normalized.startsWith(k)` without requiring space suffix, since punctuation variants are valid
-- Revised: `normalized === k || normalized.startsWith(k)` — simpler and covers "INFO!", "INFO quero", "info"
-
-**Revised function:**
-```typescript
-function matchesIgnoreKeywords(text: string, keywords: string[]): boolean {
-  if (!keywords.length) return false;
-  const normalized = text.toLowerCase().trim();
-  return keywords.some(kw => {
-    const k = kw.toLowerCase().trim();
-    return k.length > 0 && normalized.startsWith(k);
-  });
-}
-```
+- Always case-insensitive (both text and keyword normalized via `toLowerCase`)
+- Match: comment starts with the keyword (bare prefix — covers "INFO", "INFO quero saber", "INFO!")
+- Note: very short keywords (< 2 chars) will produce false positives — enforced via UI warning
 
 ---
 
@@ -74,7 +63,15 @@ if (knowledgeBase?.ignore_keywords?.length &&
 }
 ```
 
-**Response:** Include `skipped` count in the `process_ai` response alongside `processed` and `remaining`. Frontend toast already handles the response gracefully — no UI change needed for this.
+**Response:** Add `skipped` field to the existing return object. Current shape:
+```typescript
+{ success, processed, keywordClassified, aiProcessed, failed, total }
+```
+Updated shape:
+```typescript
+{ success, processed, keywordClassified, aiProcessed, skipped, failed, total }
+```
+Frontend toast reads `data.processed` — not affected. No UI change needed.
 
 **No changes to sync functions** — skip check happens at process time, not sync time. This avoids fetching the KB during every sync.
 
@@ -92,6 +89,13 @@ New section added after the existing "Spam / Irrelevante" keywords section (line
 
 **Behavior:** Same add/remove chip UX as the other keyword fields. Saved to `ignore_keywords` column.
 
+**UX note:** Add a subtle warning if the user adds a keyword shorter than 2 characters (e.g., "e", "a") — very short keywords will match almost every comment starting with that letter.
+
+**Implementation notes for this component:**
+- Add `ignore_keywords: string[]` to the `KnowledgeBase` interface (also fix the existing `praise_keywords?: string[]` to `praise_keywords: string[]` removing the cast)
+- The `useEffect` that rehydrates `formData` from fetched KB must include `ignore_keywords: knowledgeBase.ignore_keywords ?? []`
+- The `dataToSave` object inside `saveMutation.mutationFn` must explicitly include `ignore_keywords: formData.ignore_keywords ?? []`
+
 **Interface update in component:**
 ```typescript
 interface KnowledgeBase {
@@ -104,9 +108,21 @@ Default value: `[]` (empty array).
 
 ---
 
-## 5. Stats — No Change Needed
+## 5. Stats — Fix Required in `getStats`
 
-`getStats` counts `ai_processing_status = 'pending'` for the pending count. Comments marked `skipped` are already excluded. No changes needed to the stats query.
+The current formula is `processed = total - pending`. The `total` query has no filter on `ai_processing_status`, so `skipped` comments count in `total` but not in `pending` — causing them to silently inflate `processed`.
+
+**Fix:** Add `.neq('ai_processing_status', 'skipped')` to the `totalRes` query in `getStats` so that `total` reflects only comments in the active pipeline (pending + processing + completed + failed). The `processed = total - pending` formula then remains correct.
+
+```typescript
+// getStats — totalRes query (line ~1266)
+supabase.from('social_comments')
+  .select('id', { count: 'exact', head: true })
+  .eq('project_id', projectId)
+  .eq('is_deleted', false)
+  .eq('is_own_account', false)
+  .neq('ai_processing_status', 'skipped')  // ADD THIS
+```
 
 ---
 

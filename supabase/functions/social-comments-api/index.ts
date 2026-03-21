@@ -803,6 +803,10 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
       .in('page_id', syncedPageIds)
   }
 
+  // Auto-link new comments to CRM (match existing contacts or create lead)
+  const crmResult = await linkExistingCommentsToCRM(supabase, projectId)
+  console.log('[SYNC_COMMENTS] CRM link result:', crmResult)
+
   return { success: true, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
 }
 
@@ -911,22 +915,24 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
   console.log('Linking existing comments to CRM contacts for project:', projectId)
 
   let linked = 0
-  let notFound = 0
+  let created = 0
+  let skipped = 0
 
-  // Fetch unlinked comments from both Instagram and Facebook
+  // Fetch unlinked comments — skip own account replies
   const { data: comments, error } = await supabase
     .from('social_comments')
-    .select('id, author_username, platform')
+    .select('id, author_username, platform, is_own_account')
     .eq('project_id', projectId)
     .is('crm_contact_id', null)
     .not('author_username', 'is', null)
+    .eq('is_own_account', false)
     .limit(500)
 
   if (error || !comments?.length) {
-    return { success: true, linked: 0, message: 'Nenhum comentário pendente para vincular' }
+    return { success: true, linked: 0, created: 0, message: 'Nenhum comentário pendente para vincular' }
   }
 
-  // Fetch all contacts with instagram handle or name
+  // Pre-load existing contacts
   const { data: contacts } = await supabase
     .from('crm_contacts')
     .select('id, instagram, name')
@@ -943,32 +949,77 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
     }
   }
 
+  // Group comments by (platform, author) to batch-link and avoid creating duplicate contacts
+  const commentsByAuthor = new Map<string, { comments: any[]; platform: string }>()
   for (const comment of comments) {
     if (!comment.author_username) continue
-
-    const normalizedUsername = comment.author_username.toLowerCase().replace(/^@/, '').trim()
-    let contactId: string | undefined
-
-    if (comment.platform === 'instagram') {
-      contactId = contactByInstagram.get(normalizedUsername)
-    } else if (comment.platform === 'facebook') {
-      // Facebook comments have from.name as author_username — match against contact name
-      contactId = contactByName.get(normalizedUsername)
+    const key = `${comment.platform}:${comment.author_username.toLowerCase().trim()}`
+    if (!commentsByAuthor.has(key)) {
+      commentsByAuthor.set(key, { comments: [], platform: comment.platform })
     }
-
-    if (contactId) {
-      const { error: updateError } = await supabase
-        .from('social_comments')
-        .update({ crm_contact_id: contactId, contact_id: contactId })
-        .eq('id', comment.id)
-
-      if (!updateError) linked++
-    } else {
-      notFound++
-    }
+    commentsByAuthor.get(key)!.comments.push(comment)
   }
 
-  return { success: true, linked, notFound, totalProcessed: comments.length }
+  for (const [, { comments: authorComments, platform }] of commentsByAuthor) {
+    const authorUsername = authorComments[0].author_username
+    const normalized = authorUsername.toLowerCase().replace(/^@/, '').trim()
+
+    // Try to match existing contact
+    let contactId: string | undefined
+    if (platform === 'instagram') {
+      contactId = contactByInstagram.get(normalized)
+    } else if (platform === 'facebook') {
+      contactId = contactByName.get(normalized)
+    }
+
+    // No match — create new CRM contact so this person enters the funnel
+    if (!contactId) {
+      const newContact: any = {
+        project_id: projectId,
+        name: authorUsername,
+        source: 'social_listening',
+        tags: [platform === 'instagram' ? 'social:instagram' : 'social:facebook'],
+      }
+      if (platform === 'instagram') {
+        newContact.instagram = authorUsername
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('crm_contacts')
+        .insert(newContact)
+        .select('id')
+        .single()
+
+      if (insertError || !inserted) {
+        console.error('Error creating CRM contact for', authorUsername, insertError?.message)
+        skipped += authorComments.length
+        continue
+      }
+
+      contactId = inserted.id
+      created++
+
+      // Update local maps so same author in this batch doesn't create a second contact
+      if (platform === 'instagram') {
+        contactByInstagram.set(normalized, contactId)
+      } else {
+        contactByName.set(normalized, contactId)
+      }
+    }
+
+    // Link all comments from this author to the contact in one update
+    const commentIds = authorComments.map((c: any) => c.id)
+    const { error: updateError } = await supabase
+      .from('social_comments')
+      .update({ crm_contact_id: contactId, contact_id: contactId })
+      .in('id', commentIds)
+
+    if (!updateError) linked += commentIds.length
+    else skipped += commentIds.length
+  }
+
+  console.log(`[LINK_CRM] linked=${linked} created=${created} skipped=${skipped}`)
+  return { success: true, linked, created, skipped, totalProcessed: comments.length }
 }
 
 // ============= AI PROCESSING (WITH KEYWORDS + OPENAI) =============

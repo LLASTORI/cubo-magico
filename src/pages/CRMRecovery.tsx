@@ -125,28 +125,27 @@ export default function CRMRecovery() {
       // Map to store contact data with tags
       const contactMap = new Map<string, { tags: Set<RecoveryTag>; lastTxAt: string | null; abandonedValue?: number }>();
       
-      // 1) Buscar transações de recuperação NO PERÍODO SELECIONADO (exceto ABANDONED que vem de hotmart_sales)
-      const crmRecoveryStatuses = recoveryStatuses.filter(s => s !== 'ABANDONED');
-      
-      if (crmRecoveryStatuses.length > 0) {
-        let allTransactions: any[] = [];
+      // 1) Buscar todas as transações de recuperação do período via crm_transactions
+      // Inclui ABANDONED — crm_transactions registra todos os status do webhook Hotmart
+      let allTransactions: any[] = [];
+      {
         let page = 0;
         const pageSize = 1000;
         let hasMore = true;
-        
+
         while (hasMore) {
           const { data: transactions, error: txError } = await supabase
             .from('crm_transactions')
-            .select('contact_id, status, transaction_date')
+            .select('contact_id, status, transaction_date, offer_price, total_price, product_code')
             .eq('project_id', currentProject.id)
-            .in('status', crmRecoveryStatuses)
+            .in('status', recoveryStatuses)
             .gte('transaction_date', startDateTime)
             .lte('transaction_date', endDateTime)
             .order('transaction_date', { ascending: false })
             .range(page * pageSize, (page + 1) * pageSize - 1);
-          
+
           if (txError) throw txError;
-          
+
           if (transactions && transactions.length > 0) {
             allTransactions = [...allTransactions, ...transactions];
             hasMore = transactions.length === pageSize;
@@ -155,165 +154,85 @@ export default function CRMRecovery() {
             hasMore = false;
           }
         }
-        
-        for (const tx of allTransactions) {
-          const tagLabel = RECOVERY_STATUS_MAP[tx.status as keyof typeof RECOVERY_STATUS_MAP];
-          if (!tagLabel) continue;
-          
-          const entry = contactMap.get(tx.contact_id) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
-          entry.tags.add(tagLabel as RecoveryTag);
-          if (!entry.lastTxAt || (tx.transaction_date && tx.transaction_date > entry.lastTxAt)) {
-            entry.lastTxAt = tx.transaction_date;
+      }
+
+      // Agrupar por contact_id: coletar tags e valor abandonado
+      // Para ABANDONED: verificar se houve compra aprovada do mesmo produto depois
+      const abandonedContactIds: string[] = [];
+      const abandonedByContact = new Map<string, { totalValue: number; productCodes: string[]; lastDate: string }>();
+
+      for (const tx of allTransactions) {
+        const tagLabel = RECOVERY_STATUS_MAP[tx.status as keyof typeof RECOVERY_STATUS_MAP];
+        if (!tagLabel) continue;
+
+        const entry = contactMap.get(tx.contact_id) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
+        entry.tags.add(tagLabel as RecoveryTag);
+        if (!entry.lastTxAt || (tx.transaction_date && tx.transaction_date > entry.lastTxAt)) {
+          entry.lastTxAt = tx.transaction_date;
+        }
+        contactMap.set(tx.contact_id, entry);
+
+        if (tx.status === 'ABANDONED') {
+          if (!abandonedByContact.has(tx.contact_id)) {
+            abandonedContactIds.push(tx.contact_id);
+            abandonedByContact.set(tx.contact_id, { totalValue: 0, productCodes: [], lastDate: '' });
           }
-          contactMap.set(tx.contact_id, entry);
+          const ab = abandonedByContact.get(tx.contact_id)!;
+          ab.totalValue += tx.total_price || tx.offer_price || 0;
+          if (tx.product_code) ab.productCodes.push(tx.product_code);
+          if (!ab.lastDate || tx.transaction_date > ab.lastDate) ab.lastDate = tx.transaction_date;
         }
       }
-      
-      // 2) Buscar carrinhos abandonados de hotmart_sales
-      let allAbandonedSales: any[] = [];
-      let abandonedPage = 0;
-      let hasMoreAbandoned = true;
-      
-      while (hasMoreAbandoned) {
-        const { data: abandonedSales, error: abandonedError } = await supabase
-          .from('hotmart_sales')
-          .select('buyer_email, buyer_name, buyer_phone, sale_date, total_price, offer_price, offer_code, product_code')
-          .eq('project_id', currentProject.id)
-          .eq('status', 'ABANDONED')
-          .gte('sale_date', startDateTime)
-          .lte('sale_date', endDateTime)
-          .order('sale_date', { ascending: false })
-          .range(abandonedPage * 1000, (abandonedPage + 1) * 1000 - 1);
-        
-        if (abandonedError) throw abandonedError;
-        
-        if (abandonedSales && abandonedSales.length > 0) {
-          allAbandonedSales = [...allAbandonedSales, ...abandonedSales];
-          hasMoreAbandoned = abandonedSales.length === 1000;
-          abandonedPage++;
-        } else {
-          hasMoreAbandoned = false;
-        }
-      }
-      
-      // 3) Para carrinhos abandonados, buscar ou criar contato pelo email
-      const abandonedEmails = [...new Set(allAbandonedSales.map(s => s.buyer_email?.toLowerCase()).filter(Boolean))];
-      
-      if (abandonedEmails.length > 0) {
-        // Buscar contatos existentes por email
-        let existingContacts: any[] = [];
-        const emailBatchSize = 100;
-        
-        for (let i = 0; i < abandonedEmails.length; i += emailBatchSize) {
-          const batchEmails = abandonedEmails.slice(i, i + emailBatchSize);
-          const { data: contacts, error: contactsError } = await supabase
-            .from('crm_contacts')
-            .select('id, email')
+
+      // 2) Para carrinhos abandonados: verificar conversão via crm_transactions APPROVED
+      if (abandonedContactIds.length > 0) {
+        const batchSize = 100;
+        // Map: contact_id -> Map: product_code -> approvedDate
+        const approvedByContactAndProduct = new Map<string, Map<string, string>>();
+
+        for (let i = 0; i < abandonedContactIds.length; i += batchSize) {
+          const batch = abandonedContactIds.slice(i, i + batchSize);
+          const { data: approvedTx, error: approvedError } = await supabase
+            .from('crm_transactions')
+            .select('contact_id, transaction_date, product_code')
             .eq('project_id', currentProject.id)
-            .in('email', batchEmails);
-          
-          if (contactsError) throw contactsError;
-          if (contacts) {
-            existingContacts = [...existingContacts, ...contacts];
-          }
-        }
-        
-        const emailToContactId = new Map(existingContacts.map(c => [c.email.toLowerCase(), c.id]));
-        
-        // 3.1) Buscar compras APROVADAS dos mesmos emails para verificar conversão por PRODUTO
-        // Status de compra confirmada
-        const approvedStatuses = ['APPROVED', 'COMPLETE'];
-        // Map: email -> Map: product_code -> lastApprovedDate
-        let approvedSalesByEmailAndProduct = new Map<string, Map<string, string>>();
-        
-        for (let i = 0; i < abandonedEmails.length; i += emailBatchSize) {
-          const batchEmails = abandonedEmails.slice(i, i + emailBatchSize);
-          const { data: approvedSales, error: approvedError } = await supabase
-            .from('hotmart_sales')
-            .select('buyer_email, sale_date, confirmation_date, product_code')
-            .eq('project_id', currentProject.id)
-            .in('status', approvedStatuses)
-            .in('buyer_email', batchEmails)
-            .order('sale_date', { ascending: false });
-          
+            .in('status', ['APPROVED', 'COMPLETE'])
+            .in('contact_id', batch)
+            .order('transaction_date', { ascending: false });
+
           if (approvedError) throw approvedError;
-          
-          if (approvedSales) {
-            for (const sale of approvedSales) {
-              const email = sale.buyer_email?.toLowerCase();
-              const productCode = sale.product_code;
-              if (!email || !productCode) continue;
-              
-              const saleDate = sale.confirmation_date || sale.sale_date;
-              if (!approvedSalesByEmailAndProduct.has(email)) {
-                approvedSalesByEmailAndProduct.set(email, new Map());
-              }
-              const productMap = approvedSalesByEmailAndProduct.get(email)!;
-              const existing = productMap.get(productCode);
-              if (!existing || (saleDate && saleDate > existing)) {
-                productMap.set(productCode, saleDate);
-              }
+
+          for (const tx of approvedTx || []) {
+            if (!tx.product_code) continue;
+            if (!approvedByContactAndProduct.has(tx.contact_id)) {
+              approvedByContactAndProduct.set(tx.contact_id, new Map());
+            }
+            const productMap = approvedByContactAndProduct.get(tx.contact_id)!;
+            const existing = productMap.get(tx.product_code);
+            if (!existing || tx.transaction_date > existing) {
+              productMap.set(tx.product_code, tx.transaction_date);
             }
           }
         }
-        
-        // Agrupar abandonos por email para calcular valor total abandonado
-        // e verificar se houve conversão posterior do MESMO PRODUTO
-        const abandonedByEmail = new Map<string, { 
-          lastDate: string; 
-          totalValue: number;
-          wasConverted: boolean;
-        }>();
-        
-        for (const sale of allAbandonedSales) {
-          const email = sale.buyer_email?.toLowerCase();
-          const productCode = sale.product_code;
-          if (!email) continue;
-          
-          const existing = abandonedByEmail.get(email) || { 
-            lastDate: '', 
-            totalValue: 0,
-            wasConverted: false 
-          };
-          const saleValue = sale.total_price || sale.offer_price || 0;
-          
-          if (!existing.lastDate || sale.sale_date > existing.lastDate) {
-            existing.lastDate = sale.sale_date;
+
+        // Atualizar contactMap com valor abandonado e verificar conversão
+        for (const [contactId, ab] of abandonedByContact) {
+          const entry = contactMap.get(contactId);
+          if (!entry) continue;
+
+          const productMap = approvedByContactAndProduct.get(contactId);
+          const wasConverted = ab.productCodes.some(code => {
+            const approvedDate = productMap?.get(code);
+            return approvedDate && approvedDate > ab.lastDate;
+          });
+
+          if (wasConverted) {
+            entry.tags.delete('Carrinho Abandonado');
+            entry.tags.add('Recuperado (auto)' as RecoveryTag);
+          } else {
+            entry.abandonedValue = ab.totalValue;
           }
-          existing.totalValue += saleValue;
-          
-          // Verificar se houve compra aprovada do MESMO PRODUTO após o abandono
-          if (productCode) {
-            const productMap = approvedSalesByEmailAndProduct.get(email);
-            const approvedDate = productMap?.get(productCode);
-            if (approvedDate && approvedDate > sale.sale_date) {
-              existing.wasConverted = true;
-            }
-          }
-          
-          abandonedByEmail.set(email, existing);
-        }
-        
-        // Adicionar tags apropriadas para contatos existentes
-        for (const [email, data] of abandonedByEmail) {
-          const contactId = emailToContactId.get(email);
-          if (contactId) {
-            const entry = contactMap.get(contactId) || { tags: new Set<RecoveryTag>(), lastTxAt: null };
-            
-            if (data.wasConverted) {
-              // Carrinho foi convertido em compra do mesmo produto - marcar como recuperado
-              entry.tags.add('Recuperado (auto)' as RecoveryTag);
-            } else {
-              // Carrinho ainda não foi convertido - manter como abandonado
-              entry.tags.add('Carrinho Abandonado');
-              entry.abandonedValue = data.totalValue;
-            }
-            
-            if (!entry.lastTxAt || data.lastDate > entry.lastTxAt) {
-              entry.lastTxAt = data.lastDate;
-            }
-            contactMap.set(contactId, entry);
-          }
+          contactMap.set(contactId, entry);
         }
       }
       

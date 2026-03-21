@@ -6,7 +6,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * Investment data now comes from Paid Media Domain (provider-agnostic).
- * Sales data still uses hotmart_sales (to be migrated to Orders Core in future).
+ * Sales data uses Orders Core (orders + order_items) via funnel_orders_view architecture.
  * 
  * ARCHITECTURE:
  * - Paid Media metrics fetched via src/domains/paid-media
@@ -18,7 +18,6 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
 import { PaidMediaDomain } from "@/domains/paid-media";
 
 interface UseLaunchDataProps {
@@ -111,46 +110,49 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
     [metaAccounts]
   );
 
-  // Fetch sales data with pagination
+  // Fetch sales data via orders + order_items (canonical source, replaces hotmart_sales)
   const { data: salesData = [], isLoading: loadingSales, refetch: refetchSales } = useQuery({
-    queryKey: ['hotmart-sales-lancamento', projectId, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
+    queryKey: ['orders-lancamento', projectId, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
     queryFn: async () => {
       if (!projectId) return [];
-      
-      const brazilTz = 'America/Sao_Paulo';
-      const startInBrazil = toZonedTime(startDate, brazilTz);
-      startInBrazil.setHours(0, 0, 0, 0);
-      const endInBrazil = toZonedTime(endDate, brazilTz);
-      endInBrazil.setHours(23, 59, 59, 999);
-      
-      const startISO = startInBrazil.toISOString();
-      const endISO = endInBrazil.toISOString();
-      
-      let allSales: any[] = [];
+
+      const dateStart = format(startDate, 'yyyy-MM-dd');
+      const dateEnd = format(endDate, 'yyyy-MM-dd');
+
+      // Paginate over orders, embed order_items for per-item offer breakdown.
+      // Flatten into {offer_code, total_price_brl} to match consumer shape.
+      let allSales: { offer_code: string | null; total_price_brl: number }[] = [];
       let offset = 0;
       const pageSize = 1000;
       let hasMore = true;
-      
+
       while (hasMore) {
         const { data, error } = await supabase
-          .from('hotmart_sales')
-          .select('*')
+          .from('orders')
+          .select('id, order_items(provider_offer_id, base_price)')
           .eq('project_id', projectId)
-          .gte('sale_date', startISO)
-          .lte('sale_date', endISO)
-          .in('status', ['APPROVED', 'COMPLETE'])
+          .eq('status', 'approved')
+          .gte('economic_day', dateStart)
+          .lte('economic_day', dateEnd)
           .range(offset, offset + pageSize - 1);
-        
+
         if (error) throw error;
         if (data && data.length > 0) {
-          allSales = allSales.concat(data);
+          for (const order of data) {
+            for (const item of (order.order_items || [])) {
+              allSales.push({
+                offer_code: item.provider_offer_id,
+                total_price_brl: item.base_price ?? 0,
+              });
+            }
+          }
           offset += pageSize;
           hasMore = data.length === pageSize;
         } else {
           hasMore = false;
         }
       }
-      
+
       return allSales;
     },
     enabled: !!projectId,

@@ -5,8 +5,22 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-21 (sessão 25) — CRM ↔ Social Listening + auditoria launch phases
-- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: schema quebrado ⚠️
+- **Data:** 2026-03-21 (sessão 25) — Onda 1 Lançamento Pago executada
+- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅
+
+---
+
+### [2026-03-21] Onda 1: Lançamento Pago — ✅ CONCLUÍDO (sessão 25)
+
+**Tarefa 1 — launch_phases schema:** Migration `20260321160000` adicionou 5 colunas ausentes (`primary_metric`, `is_active`, `phase_order`, `notes`, `campaign_name_pattern`). Criação de fases pelo UI desbloqueada.
+
+**Tarefa 2 — launch_products schema:** Migration `20260321170000` adicionou `offer_mapping_id` (FK → offer_mappings), `product_type`, `lot_name`. Colunas antigas mantidas.
+
+**Tarefa 3 — useLaunchData.ts:** Substituída query `hotmart_sales` por `orders + order_items`. Usa `economic_day` para filtro de data (sem timezone gymnastics). Shape de saída preservado (`offer_code`, `total_price_brl`). Import `toZonedTime` removido.
+
+**Tarefa 3b — CRMRecovery.tsx:** Removidos dois blocos `hotmart_sales` (~150 linhas). ABANDONED agora incluído no `crm_transactions` query junto com CANCELLED/CHARGEBACK/REFUNDED. Conversão verificada via `crm_transactions` APPROVED por contact_id + product_code (antes era por email). Build: ✅
+
+**Tarefa 4 — registered_at:** Migration `20260321180000` adicionou `registered_at timestamptz` em `crm_contacts` com COMMENT. NULL por padrão, sem backfill.
 
 ---
 

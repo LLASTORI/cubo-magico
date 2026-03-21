@@ -40,17 +40,11 @@
 ---
 
 ## 🟡 Importante — Mas não urgente
-
-- [ ] `useLaunchData.ts` ainda referencia `hotmart_sales` — migrar para `funnel_orders_view`
-- [ ] `CRMRecovery.tsx` ainda referencia `hotmart_sales` — migrar
 - [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete`
 - [ ] Validar todos os módulos após reconstrução (CRM, automações, mídia paga, quizzes)
 
-### 🚧 Launch Phases — schema quebrado (auditoria 21/03/2026)
-> Descoberto na auditoria. Não executar sem planejamento. Ver `docs/LAUNCH_PHASES_AUDIT.md`.
+### 🚧 Launch Phases — receita por fase (pendente)
 
-- [ ] Migration: adicionar colunas ausentes em `launch_phases` (`primary_metric`, `is_active`, `phase_order`, `notes`, `campaign_name_pattern`) — **desbloqueia criação de fases**
-- [ ] Decidir e corrigir `launch_products`: alinhar TypeScript ao DB ou adicionar colunas `offer_mapping_id, product_type, lot_name`
 - [ ] Receita por fase: adicionar `phase_id` em `offer_mappings` ou usar date range para filtrar `orders`
 
 ---
@@ -89,6 +83,13 @@
 ---
 
 ## ✅ Concluído
+
+### 🏗️ Onda 1: Lançamento Pago — desbloqueador (21/03/2026 — sessão 25)
+- [x] Migration `20260321160000`: 5 colunas adicionadas em `launch_phases` — criação de fase pelo UI desbloqueada
+- [x] Migration `20260321170000`: `offer_mapping_id`, `product_type`, `lot_name` adicionados em `launch_products`
+- [x] Migration `20260321180000`: `registered_at` adicionado em `crm_contacts`
+- [x] `useLaunchData.ts` migrado de `hotmart_sales` → `orders + order_items`
+- [x] `CRMRecovery.tsx` migrado de `hotmart_sales` → `crm_transactions` (ABANDONED incluso)
 
 ### 🔍 Auditoria: Launch Phases (21/03/2026 — sessão 25)
 - [x] Auditoria completa do sistema de fases de lançamento — read-only

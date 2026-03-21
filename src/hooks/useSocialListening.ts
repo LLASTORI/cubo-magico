@@ -32,6 +32,7 @@ export interface SocialComment {
   platform: 'instagram' | 'facebook';
   comment_id_meta: string;
   parent_comment_id: string | null;
+  parent_meta_id: string | null;
   text: string;
   author_username: string | null;
   author_name: string | null;

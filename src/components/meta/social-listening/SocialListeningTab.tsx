@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   MessageCircle, 
@@ -164,6 +164,11 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     search: filters.search,
     showOwnAccount,
   });
+
+  const commentsByMetaId = useMemo(
+    () => new Map((comments ?? []).map((c) => [c.comment_id_meta, c])),
+    [comments]
+  );
 
   const handleSync = async () => {
     await syncPosts.mutateAsync();
@@ -508,7 +513,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
                 </TableHeader>
                 <TableBody>
                   {comments.map((comment) => (
-                    <CommentRow key={comment.id} comment={comment} onOpenReply={handleOpenReply} onOpenReclassify={handleOpenReclassify} onOpenSurvey={handleOpenSurvey} />
+                    <CommentRow key={comment.id} comment={comment} commentsByMetaId={commentsByMetaId} onOpenReply={handleOpenReply} onOpenReclassify={handleOpenReclassify} onOpenSurvey={handleOpenSurvey} />
                   ))}
                 </TableBody>
               </Table>
@@ -660,14 +665,16 @@ const replyStatusConfig: Record<string, { label: string; color: string }> = {
   sent: { label: 'Enviada', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 };
 
-function CommentRow({ comment, onOpenReply, onOpenReclassify, onOpenSurvey }: { 
-  comment: SocialComment; 
+function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, onOpenSurvey }: {
+  comment: SocialComment;
+  commentsByMetaId: Map<string, SocialComment>;
   onOpenReply: (comment: SocialComment) => void;
   onOpenReclassify: (comment: SocialComment) => void;
   onOpenSurvey: (contact: { id: string; name: string | null; email: string }) => void;
 }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
+  const parentComment = comment.parent_meta_id ? (commentsByMetaId.get(comment.parent_meta_id) ?? null) : null;
   const crmContact = comment.crm_contacts;
   const postData = comment.social_posts;
   const postPermalink = postData?.permalink;
@@ -777,6 +784,16 @@ function CommentRow({ comment, onOpenReply, onOpenReclassify, onOpenSurvey }: {
       </TableCell>
       <TableCell>
         <div className="max-w-md">
+          {parentComment && (
+            <div className="flex items-start gap-1 mb-1.5 pl-2 border-l-2 border-muted">
+              <Reply className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground line-clamp-1">
+                <span className="font-medium">@{parentComment.author_username || 'Anônimo'}</span>
+                {': '}
+                {parentComment.text}
+              </p>
+            </div>
+          )}
           <p className="text-sm line-clamp-2">{comment.text}</p>
           {comment.ai_summary && (
             <p className="text-xs text-muted-foreground mt-1 italic">

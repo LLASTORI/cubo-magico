@@ -844,7 +844,8 @@ function buildCommentRow(
     post_id: postId,
     platform,
     comment_id_meta: comment.id,
-    parent_comment_id: null, // Meta IDs are not UUIDs; parent resolution requires a second pass
+    parent_comment_id: null,
+    parent_meta_id: parentId || null,
     text: platform === 'instagram' ? comment.text : comment.message,
     author_username: authorUsername,
     author_id: platform === 'instagram' ? null : comment.from?.id,

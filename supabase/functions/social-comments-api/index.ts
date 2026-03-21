@@ -767,7 +767,7 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
 
         if (comment.replies?.data) {
           for (const reply of comment.replies.data) {
-            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountFbPageIds, ownAccountIgUsernames, crmContactMap, contactNameMap))
+            commentRows.push(buildCommentRow(projectId, post.id, post.platform, reply, comment.id, ownAccountFbPageIds, ownAccountIgUsernames, crmContactMap, contactNameMap, comment))
             totalComments++
           }
         }
@@ -816,6 +816,7 @@ function buildCommentRow(
   ownAccountIgUsernames: Set<string>,
   crmContactMap: Map<string, string>,
   contactNameMap?: Map<string, string>,
+  parentComment?: any | null,
 ): any {
   const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
   const normalizedAuthor = authorUsername ? authorUsername.toLowerCase().replace(/^@/, '').trim() : null
@@ -839,6 +840,13 @@ function buildCommentRow(
     }
   }
 
+  const parentText = parentComment
+    ? (platform === 'instagram' ? parentComment.text : parentComment.message) ?? null
+    : null
+  const parentAuthor = parentComment
+    ? (platform === 'instagram' ? parentComment.username : parentComment.from?.name) ?? null
+    : null
+
   return {
     project_id: projectId,
     post_id: postId,
@@ -846,6 +854,8 @@ function buildCommentRow(
     comment_id_meta: comment.id,
     parent_comment_id: null,
     parent_meta_id: parentId || null,
+    parent_text: parentText,
+    parent_author: parentAuthor,
     text: platform === 'instagram' ? comment.text : comment.message,
     author_username: authorUsername,
     author_id: platform === 'instagram' ? null : comment.from?.id,
@@ -1536,7 +1546,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
                 for (const c of comments) {
                   if (c.replies?.data) {
                     for (const reply of c.replies.data) {
-                      allCommentRows.push(buildCommentRow(projectId, postId, 'instagram', reply, c.id, ownAccountFbPageIds, ownAccountIgUsernames, new Map(), new Map()))
+                      allCommentRows.push(buildCommentRow(projectId, postId, 'instagram', reply, c.id, ownAccountFbPageIds, ownAccountIgUsernames, new Map(), new Map(), c))
                       totalComments++
                     }
                   }

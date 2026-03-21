@@ -5,8 +5,43 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-21 (sessão 25) — Onda 1 Lançamento Pago executada
+- **Data:** 2026-03-21 (sessão 27) — Social Listening: merge Instagram + 3 bugs corrigidos
 - **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅
+
+---
+
+### [2026-03-21] Social Listening — merge Instagram shadow profiles ✅ (sessão 27)
+
+**RPC `merge_instagram_shadow`** — migration `20260321200000`. Encontra todos os shadow profiles (`source='social_listing'`) com instagram matching, transfere `social_comments`, mescla tags, deleta shadows. Index `idx_crm_contacts_instagram` criado para lookup eficiente.
+
+**survey-webhook v18** — chama `merge_instagram_shadow` ao salvar `contactUpdates.instagram`. Cobertura: quando lead preenche survey e informa Instagram que já tinha comentado.
+
+**quiz-public-complete v17** — chama `merge_instagram_shadow` após upsert do contato quando `contact_data.instagram` está presente. Mesma cobertura via quiz.
+
+**Cobertura bidirecional:**
+- shadow→rico: survey/quiz captura instagram → merge automático ✅
+- rico→shadow: `linkExistingCommentsToCRM` (já existia) cobre quando rico comenta ✅
+
+---
+
+### [2026-03-21] Social Listening — last_synced_at corrigido ✅ (sessão 27)
+
+**3 camadas com bug:**
+1. `social-comments-api` v41: UPDATE usava base IDs mas `social_listening_pages` usa IDs com sufixo `_facebook/_instagram` → zero matches. Corrigido com lógica de strip de sufixo.
+2. `social-listening-cron`: NUNCA tinha bloco de UPDATE para `last_synced_at`. Adicionado.
+3. Posts de Monaliza Krepe (20 mais recentes) tinham `page_id=null` → `postBasePageIds` vazio. Simplificado para atualizar TODAS as páginas ativas do projeto.
+
+**Resultado:** 8/8 páginas com `last_synced_at` preenchido. Tela não mostra mais "Nunca".
+
+---
+
+### [2026-03-21] Social Listening — bug link duplo + filtro Ads ✅ (sessão 27)
+
+**Bug 1 — dupla abertura de aba:** `<a href target="_blank">` + `onClick { e.preventDefault(); window.open() }` disparavam os dois em alguns browsers. Substituído por `<button onClick>` sem href em `SocialListeningTab.tsx`.
+
+**Bug 2 — filtro Ads:** `.eq('social_posts.is_ad', true)` em PostgREST embedded to-one apenas nulifica o objeto aninhado, não exclui a linha pai. Removido do DB query; filtro aplicado client-side em `useSocialListening.ts`.
+
+**Deploy:** Frontend `d844431` pusheado. Edge functions todas ativas (social-comments-api v42, social-listening-cron v19).
 
 ---
 

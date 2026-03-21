@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 21/03/2026 (sessão 26 — Onda 1 concluída + decisão arquitetural pendente)
+> Última atualização: 21/03/2026 (sessão 27 — Social Listening: merge Instagram + 3 bugs corrigidos)
 
 ---
 
@@ -99,9 +99,14 @@
 ### 🔗 CRM ↔ Social Listening — merge automático por Instagram (21/03/2026 — sessão 27)
 - [x] RPC `merge_instagram_shadow(project_id, instagram, target_id)` — funde shadow profiles com contato rico
 - [x] Índice `idx_crm_contacts_instagram` recriado para busca eficiente
-- [x] `survey-webhook` — merge disparado ao capturar instagram via `identity_field`
-- [x] `quiz-public-complete` — merge disparado ao salvar contato com instagram
+- [x] `survey-webhook` v18 — merge disparado ao capturar instagram via `identity_field`
+- [x] `quiz-public-complete` v17 — merge disparado ao salvar contato com instagram
 - [x] Cobertura bidirecional: shadow→rico (compra/survey/quiz) e rico→shadow (já coberto por `linkExistingCommentsToCRM`)
+
+### 🐛 Social Listening — 3 bugs corrigidos (21/03/2026 — sessão 27)
+- [x] `last_synced_at` "Última sincronização: Nunca" — 3 camadas corrigidas: ID com sufixo, cron sem UPDATE, posts com page_id=null
+- [x] Link do post abre 2 abas — `<a href + onClick>` → `<button onClick>` em `SocialListeningTab.tsx`
+- [x] Filtro "Ads" mostrava posts orgânicos — PostgREST embedded filter → client-side em `useSocialListening.ts`
 
 ### ✅ Onda 1: Lançamento Pago — Desbloqueador (21/03/2026 — sessão 26)
 - [x] Migration `launch_phases` — 5 colunas adicionadas. Criação de fase pelo UI desbloqueada.

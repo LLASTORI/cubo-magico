@@ -16,9 +16,6 @@
   - Replies aparecem isolados na lista sem mostrar ao que estão respondendo
   - Médio esforço — requer segunda passagem para resolver `parent_comment_id` ou exibição inline
 
-- [ ] **Redesign visual da tabela UTM**
-  - Colunas densas, nomes truncados — dificulta leitura
-  - Melhoria de UX identificada na sessão 20
 
 - [ ] **Oferta `qv8fq3lv` (Monaliza Krepe) sem funil**
   - 10 pedidos sem mapeamento de funil
@@ -90,6 +87,12 @@
 ---
 
 ## ✅ Concluído
+
+### 🎨 UTM Analysis — redesign visual da tabela (21/03/2026 — sessão 24)
+- [x] Nome truncado com tooltip nativo (max-w-[220px])
+- [x] Status: dot colorido + texto inline sem badge box (Ativo/Inativo/Misto/Desc.)
+- [x] Barra de participação full-width (flex-1 h-1.5) com percentual tabular-nums
+- [x] Fix a11y: aria-hidden no dot decorativo de status
 
 ### 🎯 Social Listening — stats + limite frontend (21/03/2026 — sessão 23)
 - [x] `getStats` filtra `is_own_account=false` — total e pendentes IA não contam mais respostas próprias

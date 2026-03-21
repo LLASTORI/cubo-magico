@@ -49,6 +49,8 @@ export interface SocialComment {
   comment_timestamp: string;
   created_at: string;
   crm_contact_id: string | null;
+  parent_text: string | null;
+  parent_author: string | null;
   // New reply fields
   ai_suggested_reply: string | null;
   reply_status: 'pending' | 'approved' | 'rejected' | 'sent' | null;

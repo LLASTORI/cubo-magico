@@ -674,7 +674,19 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
 }) {
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
-  const parentComment = comment.parent_meta_id ? (commentsByMetaId.get(comment.parent_meta_id) ?? null) : null;
+  // Usa snapshot denormalizado (sempre disponível, mesmo pai filtrado/fora do batch).
+  // Fallback para lookup em memória para comentários antigos sem snapshot.
+  const parentPreview: { text: string; author: string | null } | null = (() => {
+    if (!comment.parent_meta_id) return null;
+    if (comment.parent_text) {
+      return { text: comment.parent_text, author: comment.parent_author };
+    }
+    const parentFromMap = commentsByMetaId.get(comment.parent_meta_id);
+    if (parentFromMap) {
+      return { text: parentFromMap.text, author: parentFromMap.author_username ?? null };
+    }
+    return null;
+  })();
   const crmContact = comment.crm_contacts;
   const postData = comment.social_posts;
   const postPermalink = postData?.permalink;
@@ -784,13 +796,13 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
       </TableCell>
       <TableCell>
         <div className="max-w-md">
-          {parentComment && (
-            <div className="flex items-start gap-1 mb-1.5 pl-2 border-l-2 border-muted">
-              <Reply className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground line-clamp-1">
-                <span className="font-medium">@{parentComment.author_username || 'Anônimo'}</span>
+          {parentPreview && (
+            <div className="flex items-center gap-1.5 mb-1.5 px-2 py-1 bg-muted/30 border-l-2 border-primary/30 rounded-r-sm">
+              <Reply className="h-3 w-3 text-muted-foreground shrink-0" />
+              <p className="text-xs text-muted-foreground truncate">
+                <span className="font-medium text-foreground/70">@{parentPreview.author || 'Anônimo'}</span>
                 {': '}
-                {parentComment.text}
+                {parentPreview.text}
               </p>
             </div>
           )}

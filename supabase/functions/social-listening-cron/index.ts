@@ -463,6 +463,16 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
       await delay(200)
     }
 
+    // Update last_synced_at for all active pages of this project.
+    // The sync ran — stamp the timestamp regardless of which posts had which page_ids.
+    if (pages?.length) {
+      await supabase
+        .from('social_listening_pages')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('project_id', projectId)
+        .eq('is_active', true)
+    }
+
     return { success: errors.length === 0, commentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
   } catch (error: any) {
     return { success: false, commentsSynced: totalComments, errors, error: error.message }

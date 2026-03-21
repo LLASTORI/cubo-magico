@@ -793,8 +793,17 @@ async function syncComments(supabase: any, projectId: string, accessToken: strin
     }
   }
 
-  // Update last_synced_at for all pages that had posts synced
-  const syncedPageIds = [...new Set(posts.map((p: any) => p.page_id).filter(Boolean))]
+  // Update last_synced_at for all pages that had posts synced.
+  // social_posts.page_id stores the base ID (without suffix), but
+  // social_listening_pages.page_id stores suffixed IDs (_facebook/_instagram).
+  // Match using savedPages (already loaded) which has the correct suffixed IDs.
+  const postBasePageIds = new Set(posts.map((p: any) => p.page_id).filter(Boolean))
+  const syncedPageIds = savedPages
+    .filter(p => {
+      const base = String(p.page_id).replace(/_facebook$/, '').replace(/_instagram$/, '')
+      return postBasePageIds.has(base) || postBasePageIds.has(p.page_id)
+    })
+    .map(p => p.page_id)
   if (syncedPageIds.length > 0) {
     await supabase
       .from('social_listening_pages')

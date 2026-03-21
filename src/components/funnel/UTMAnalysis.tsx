@@ -824,32 +824,33 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
   };
 
   const renderMetricsTable = (metrics: UTMMetrics[], showDrilldown = false) => (
+    <div className="overflow-x-auto">
     <Table>
       <TableHeader>
-        <TableRow>
-          <TableHead>Nome</TableHead>
-          <TableHead className="text-right">Status</TableHead>
-          <TableHead className="text-right">Invest.</TableHead>
-          <TableHead className="text-right">Receita</TableHead>
-          <TableHead className="text-right">ROAS</TableHead>
-          <TableHead className="text-right">Prod.</TableHead>
-          <TableHead className="text-right">%</TableHead>
+        <TableRow className="border-b border-border">
+          <TableHead className="text-xs uppercase tracking-wider text-muted-foreground min-w-[240px]">Nome</TableHead>
+          <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground w-32">Status</TableHead>
+          <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground w-32">Investimento</TableHead>
+          <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground w-32">Receita</TableHead>
+          <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground w-20">ROAS</TableHead>
+          <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground w-20">Vendas</TableHead>
+          <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground w-32">Participação</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {metrics.slice(0, 15).map((metric, idx) => (
-          <TableRow 
-            key={`${metric.name}-${idx}`} 
-            className={`${showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/50" : ""} ${metric.sales === 0 && metric.spend > 0 ? "bg-red-500/5" : ""} ${metric.hasSalesWithoutSpend ? "bg-amber-500/5" : ""}`}
+          <TableRow
+            key={`${metric.name}-${idx}`}
+            className={`border-b border-border/50 ${showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' ? "cursor-pointer hover:bg-muted/30" : ""} ${metric.sales === 0 && metric.spend > 0 ? "bg-red-500/5" : ""} ${metric.hasSalesWithoutSpend ? "bg-amber-500/5" : ""}`}
             onClick={() => showDrilldown && currentLevel < HIERARCHY.length && metric.name !== '(não definido)' && handleDrilldown(metric)}
           >
-            <TableCell>
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-3 h-3 rounded-full flex-shrink-0" 
+            <TableCell className="py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: metric.sales === 0 && metric.spend > 0 ? 'hsl(var(--destructive))' : COLORS[idx % COLORS.length] }}
                 />
-                <span className="truncate max-w-[180px]" title={metric.name}>{metric.name}</span>
+                <span className="truncate max-w-[220px]" title={metric.name}>{metric.name}</span>
                 {metric.hasSalesWithoutSpend && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -871,31 +872,37 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
             </TableCell>
             <TableCell className="text-right">
               {metric.status ? (
-                <Badge 
-                  variant={metric.status === 'ACTIVE' ? "default" : metric.status === 'MIXED' ? "secondary" : metric.status === 'UNKNOWN' ? "outline" : "outline"}
-                  className={
-                    metric.status === 'ACTIVE' ? "bg-green-500/20 text-green-600 border-green-500/30" : 
-                    metric.status === 'PAUSED' ? "bg-yellow-500/20 text-yellow-600 border-yellow-500/30" : 
-                    metric.status === 'UNKNOWN' ? "bg-gray-500/20 text-gray-500 border-gray-500/30" : ""
-                  }
-                >
-                  {metric.status === 'ACTIVE' ? 'Ativo' : 
-                   metric.status === 'PAUSED' ? 'Inativo' : 
-                   metric.status === 'UNKNOWN' ? (
-                     <Tooltip>
-                       <TooltipTrigger asChild>
-                         <span className="flex items-center gap-1">
-                           Desconhecido
-                           <HelpCircle className="w-3 h-3" />
-                         </span>
-                       </TooltipTrigger>
-                       <TooltipContent>
-                         <p className="text-sm">Item não encontrado na hierarquia Meta. Sincronize os dados.</p>
-                       </TooltipContent>
-                     </Tooltip>
-                   ) : 'Misto'}
-                </Badge>
-              ) : '-'}
+                <div className="flex items-center justify-end gap-1.5">
+                  <div aria-hidden="true" className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    metric.status === 'ACTIVE' ? 'bg-green-500' :
+                    metric.status === 'PAUSED' ? 'bg-yellow-500' :
+                    metric.status === 'MIXED' ? 'bg-blue-400' :
+                    'bg-gray-500'
+                  }`} />
+                  {metric.status === 'UNKNOWN' ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs text-muted-foreground cursor-help flex items-center gap-1">
+                          Desc. <HelpCircle className="w-3 h-3" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-sm">Item não encontrado na hierarquia Meta. Sincronize os dados.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className={`text-xs ${
+                      metric.status === 'ACTIVE' ? 'text-green-500' :
+                      metric.status === 'PAUSED' ? 'text-yellow-500' :
+                      metric.status === 'MIXED' ? 'text-blue-400' :
+                      'text-muted-foreground'
+                    }`}>
+                      {metric.status === 'ACTIVE' ? 'Ativo' :
+                       metric.status === 'PAUSED' ? 'Inativo' : 'Misto'}
+                    </span>
+                  )}
+                </div>
+              ) : <span className="text-xs text-muted-foreground">—</span>}
             </TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-1">
@@ -942,16 +949,19 @@ const UTMAnalysis = ({ salesData, funnelOfferCodes, metaInsights = [], metaCampa
                 {metric.sales}
               </span>
             </TableCell>
-            <TableCell className="text-right">
-              <div className="flex items-center justify-end gap-2">
-                <span>{metric.percentage.toFixed(1)}%</span>
-                <Progress value={metric.percentage} className="w-12 h-2" />
+            <TableCell>
+              <div className="flex items-center gap-2">
+                <Progress value={metric.percentage} className="flex-1 h-1.5" />
+                <span className="text-xs text-muted-foreground w-9 text-right tabular-nums">
+                  {metric.percentage.toFixed(1)}%
+                </span>
               </div>
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+    </div>
   );
 
   const renderPieChart = (metrics: UTMMetrics[]) => (

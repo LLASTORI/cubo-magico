@@ -697,6 +697,35 @@ serve(async (req) => {
         }
       }
 
+      // --- INSTAGRAM MERGE ---
+      // Se o quiz capturou instagram e temos o contactId, mesclar shadow profiles
+      if (contactId && contact_data.instagram) {
+        try {
+          const igHandle = String(contact_data.instagram)
+            .toLowerCase()
+            .trim()
+            .replace(/^@+/, '');
+
+          if (igHandle) {
+            const { data: mergeResult, error: mergeError } = await supabase.rpc(
+              'merge_instagram_shadow',
+              {
+                p_project_id: session.project_id,
+                p_instagram:  igHandle,
+                p_target_id:  contactId,
+              }
+            );
+            if (mergeError) {
+              console.error('[QuizComplete] merge_instagram_shadow error:', mergeError.message);
+            } else {
+              console.log('[QuizComplete] merge_instagram_shadow result:', JSON.stringify(mergeResult));
+            }
+          }
+        } catch (e: any) {
+          console.error('[QuizComplete] merge_instagram_shadow exception:', e.message);
+        }
+      }
+
       if (contactId && contactId !== session.contact_id) {
         await supabase
           .from('quiz_sessions')

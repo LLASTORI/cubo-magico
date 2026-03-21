@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 21/03/2026 (sessão 25)
+> Última atualização: 21/03/2026 (sessão 25 — auditoria launch phases)
 
 ---
 
@@ -41,10 +41,17 @@
 
 ## 🟡 Importante — Mas não urgente
 
-- [ ] `useLaunchData.ts` ainda referencia `hotmart_sales` — migrar
+- [ ] `useLaunchData.ts` ainda referencia `hotmart_sales` — migrar para `funnel_orders_view`
 - [ ] `CRMRecovery.tsx` ainda referencia `hotmart_sales` — migrar
 - [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete`
 - [ ] Validar todos os módulos após reconstrução (CRM, automações, mídia paga, quizzes)
+
+### 🚧 Launch Phases — schema quebrado (auditoria 21/03/2026)
+> Descoberto na auditoria. Não executar sem planejamento. Ver `docs/LAUNCH_PHASES_AUDIT.md`.
+
+- [ ] Migration: adicionar colunas ausentes em `launch_phases` (`primary_metric`, `is_active`, `phase_order`, `notes`, `campaign_name_pattern`) — **desbloqueia criação de fases**
+- [ ] Decidir e corrigir `launch_products`: alinhar TypeScript ao DB ou adicionar colunas `offer_mapping_id, product_type, lot_name`
+- [ ] Receita por fase: adicionar `phase_id` em `offer_mappings` ou usar date range para filtrar `orders`
 
 ---
 
@@ -82,6 +89,14 @@
 ---
 
 ## ✅ Concluído
+
+### 🔍 Auditoria: Launch Phases (21/03/2026 — sessão 25)
+- [x] Auditoria completa do sistema de fases de lançamento — read-only
+- [x] Diagnóstico: `launch_phases` com 5 colunas ausentes no DB (schema vs TypeScript desalinhado)
+- [x] Diagnóstico: `launch_products` estruturas totalmente diferentes (TypeScript vs DB)
+- [x] Diagnóstico: `useLaunchData.ts` usa `hotmart_sales` depreciado
+- [x] Diagnóstico: `useLaunchPhaseMetrics` está correto e funcional — aguarda dados no banco
+- [x] Relatório salvo em `docs/LAUNCH_PHASES_AUDIT.md`
 
 ### 🔗 CRM ↔ Social Listening — integração completa (21/03/2026 — sessão 25)
 - [x] Fix `last_synced_at` em `social_listening_pages` — coluna nunca existia, cron funcionava mas não atualizava ("Última sincronização: Nunca")

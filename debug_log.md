@@ -5,8 +5,27 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-21 (sessão 24) — contexto do pai nos replies + redesign tabela UTM
-- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Contexto do pai nos replies ✅
+- **Data:** 2026-03-21 (sessão 25) — CRM ↔ Social Listening + auditoria launch phases
+- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: schema quebrado ⚠️
+
+---
+
+### [2026-03-21] Auditoria: Launch Phases — ⚠️ Schema quebrado (sessão 25)
+
+**Objetivo:** Auditoria read-only do sistema de fases de lançamento. Resultado salvo em `docs/LAUNCH_PHASES_AUDIT.md`.
+
+**Diagnóstico principal:** `launch_phases` está com ~5 colunas faltando no banco vs TypeScript.
+Colunas ausentes no DB: `primary_metric`, `is_active`, `phase_order`, `notes`, `campaign_name_pattern`.
+Resultado: toda tentativa de criar fase via UI falha com erro 400 (PostgREST recusa colunas inexistentes).
+O banco tem **0 registros** em `launch_phases`, `phase_campaigns`, `launch_products`.
+
+**`launch_products` também desalinhado:** TypeScript usa `offer_mapping_id, product_type, lot_name` — DB tem `product_name, product_code, price, position_type`. Estruturas completamente diferentes.
+
+**O que funciona:** `useLaunchPhaseMetrics` tem lógica Meta correta (spend/CPL/CPA por fase via `phase_campaigns` + `meta_insights`). Aguarda apenas dados no banco.
+
+**O que não existe:** Receita por fase — não há join com `order_items`. `useLaunchData.ts` ainda usa `hotmart_sales` depreciado.
+
+**Próximo passo:** Migration para adicionar colunas ausentes em `launch_phases` (bloqueador 1 de 4). Ver `docs/LAUNCH_PHASES_AUDIT.md` para lista completa.
 
 ---
 

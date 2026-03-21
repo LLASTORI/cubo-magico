@@ -287,6 +287,7 @@ export type Database = {
           products_services: string | null
           project_id: string
           spam_keywords: string[] | null
+          ignore_keywords: string[] | null
           target_audience: string | null
           tone_of_voice: string | null
           updated_at: string
@@ -305,6 +306,7 @@ export type Database = {
           products_services?: string | null
           project_id: string
           spam_keywords?: string[] | null
+          ignore_keywords?: string[] | null
           target_audience?: string | null
           tone_of_voice?: string | null
           updated_at?: string
@@ -323,6 +325,7 @@ export type Database = {
           products_services?: string | null
           project_id?: string
           spam_keywords?: string[] | null
+          ignore_keywords?: string[] | null
           target_audience?: string | null
           tone_of_voice?: string | null
           updated_at?: string
@@ -7473,6 +7476,7 @@ export type Database = {
           crm_contact_id: string | null
           id: string
           intent_score: number | null
+          is_automation: boolean
           is_deleted: boolean | null
           is_hidden: boolean | null
           is_replied: boolean | null
@@ -7501,6 +7505,7 @@ export type Database = {
           crm_contact_id?: string | null
           id?: string
           intent_score?: number | null
+          is_automation?: boolean
           is_deleted?: boolean | null
           is_hidden?: boolean | null
           is_replied?: boolean | null
@@ -7529,6 +7534,7 @@ export type Database = {
           crm_contact_id?: string | null
           id?: string
           intent_score?: number | null
+          is_automation?: boolean
           is_deleted?: boolean | null
           is_hidden?: boolean | null
           is_replied?: boolean | null

@@ -93,6 +93,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     postId: '',
   });
   const [showOwnAccount, setShowOwnAccount] = useState(false);
+  const [showAutomation, setShowAutomation] = useState(false);
   const [selectedComment, setSelectedComment] = useState<SocialComment | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
   const [reclassifyDialogOpen, setReclassifyDialogOpen] = useState(false);
@@ -164,6 +165,7 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
     postId: filters.postId || undefined,
     search: filters.search,
     showOwnAccount,
+    showAutomation,
   });
 
   const commentsByMetaId = useMemo(
@@ -472,6 +474,17 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
               />
               <Label htmlFor="show-own-account" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
                 Ver respostas próprias
+              </Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                id="show-automation"
+                checked={showAutomation}
+                onCheckedChange={setShowAutomation}
+              />
+              <Label htmlFor="show-automation" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver automações
               </Label>
             </div>
           </div>

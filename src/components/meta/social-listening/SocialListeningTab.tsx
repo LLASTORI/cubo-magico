@@ -83,7 +83,6 @@ const classificationConfig: Record<string, { label: string; icon: any; color: st
 };
 
 export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
-  const { getProjectUrl } = useProjectNavigation();
   const [activeSubTab, setActiveSubTab] = useState('dashboard');
   const [filters, setFilters] = useState({
     sentiment: 'all',
@@ -674,6 +673,7 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
   onOpenReclassify: (comment: SocialComment) => void;
   onOpenSurvey: (contact: { id: string; name: string | null; email: string }) => void;
 }) {
+  const { getProjectUrl } = useProjectNavigation();
   const sentiment = comment.sentiment ? sentimentConfig[comment.sentiment] : null;
   const classification = comment.classification ? classificationConfig[comment.classification] : null;
   // Usa snapshot denormalizado (sempre disponível, mesmo pai filtrado/fora do batch).

@@ -45,6 +45,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { supabase } from '@/integrations/supabase/client';
 import { useSocialListening, SocialComment } from '@/hooks/useSocialListening';
 import { useToast } from '@/hooks/use-toast';
+import { useProjectNavigation } from '@/hooks/useProjectNavigation';
 import { AIKnowledgeBaseSettings } from './AIKnowledgeBaseSettings';
 import { PostAnalysisDashboard } from './PostAnalysisDashboard';
 import { SocialListeningPagesManager } from './SocialListeningPagesManager';
@@ -82,6 +83,7 @@ const classificationConfig: Record<string, { label: string; icon: any; color: st
 };
 
 export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
+  const { getProjectUrl } = useProjectNavigation();
   const [activeSubTab, setActiveSubTab] = useState('dashboard');
   const [filters, setFilters] = useState({
     sentiment: 'all',
@@ -820,8 +822,8 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
             @{comment.author_username || 'Anônimo'}
           </span>
           {crmContact && (
-            <Link 
-              to={`/crm/contact/${crmContact.id}`}
+            <Link
+              to={getProjectUrl(`/crm/contact/${crmContact.id}`)}
               className="flex items-center gap-1 text-xs text-primary hover:underline"
             >
               <Users className="h-3 w-3" />

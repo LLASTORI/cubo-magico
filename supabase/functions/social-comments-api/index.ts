@@ -71,6 +71,15 @@ interface CustomKeywords {
   spam: string[]
 }
 
+function matchesIgnoreKeywords(text: string, keywords: string[]): boolean {
+  if (!keywords.length) return false;
+  const normalized = text.toLowerCase().trim();
+  return keywords.some(kw => {
+    const k = kw.toLowerCase().trim();
+    return k.length > 0 && normalized.startsWith(k);
+  });
+}
+
 function classifyByKeywords(text: string, customKeywords?: CustomKeywords): KeywordClassificationResult {
   if (!text || text.trim().length === 0) {
     return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio', classificationMethod: 'keyword_empty' }
@@ -1076,6 +1085,7 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
   let keywordClassified = 0
   let aiProcessed = 0
+  let skippedCount = 0
   let failed = 0
 
   // ============= PHASE 1: KEYWORD CLASSIFICATION =============
@@ -1091,12 +1101,24 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
   console.log(`[AI_PROCESS] Custom keywords loaded:`, {
     commercial: customKeywords?.commercial?.length || 0,
     praise: customKeywords?.praise?.length || 0,
-    spam: customKeywords?.spam?.length || 0
+    spam: customKeywords?.spam?.length || 0,
+    ignore: knowledgeBase?.ignore_keywords?.length || 0,
   })
 
   const keywordUpdatePromises: Promise<any>[] = []
 
   for (const comment of comments) {
+    // Check ignore keywords first — skip automation triggers (ManyChat etc.)
+    if (knowledgeBase?.ignore_keywords?.length &&
+        matchesIgnoreKeywords(comment.text || '', knowledgeBase.ignore_keywords)) {
+      await supabase
+        .from('social_comments')
+        .update({ ai_processing_status: 'skipped', is_automation: true })
+        .eq('id', comment.id)
+      skippedCount++
+      console.log(`[AI_PROCESS] Automation skip: "${(comment.text || '').substring(0, 30)}..."`)
+      continue
+    }
     const keywordResult = classifyByKeywords(comment.text || '', customKeywords)
 
     if (keywordResult.classified) {
@@ -1247,13 +1269,14 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
   }
 
   const totalProcessed = keywordClassified + aiProcessed
-  console.log(`[AI_PROCESS] Completed: ${totalProcessed} total (${keywordClassified} keyword, ${aiProcessed} AI), ${failed} failed`)
+  console.log(`[AI_PROCESS] Completed: ${totalProcessed} total (${keywordClassified} keyword, ${aiProcessed} AI, ${skippedCount} ignored), ${failed} failed`)
 
-  return { 
-    success: true, 
+  return {
+    success: true,
     processed: totalProcessed,
     keywordClassified,
     aiProcessed,
+    skipped: skippedCount,
     failed,
     total: comments.length
   }
@@ -1263,10 +1286,10 @@ async function processCommentsWithAI(supabase: any, projectId: string, limit: nu
 
 async function getStats(supabase: any, projectId: string) {
   const [totalRes, pendingRes, sentimentRes, classificationRes] = await Promise.all([
-    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false),
-    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('ai_processing_status', 'pending'),
-    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('ai_processing_status', 'completed'),
-    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('is_automation', false).neq('ai_processing_status', 'skipped'),
+    supabase.from('social_comments').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('is_automation', false).eq('ai_processing_status', 'pending'),
+    supabase.from('social_comments').select('sentiment').eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('is_automation', false).eq('ai_processing_status', 'completed'),
+    supabase.from('social_comments').select('classification').eq('project_id', projectId).eq('is_deleted', false).eq('is_own_account', false).eq('is_automation', false).eq('ai_processing_status', 'completed'),
   ])
 
   const sentimentCounts: Record<string, number> = {}

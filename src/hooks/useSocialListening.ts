@@ -45,6 +45,7 @@ export interface SocialComment {
   ai_summary: string | null;
   ai_processing_status: 'pending' | 'processing' | 'completed' | 'failed';
   is_hidden: boolean;
+  is_automation: boolean;
   is_replied: boolean;
   comment_timestamp: string;
   created_at: string;
@@ -127,6 +128,7 @@ export function useSocialListening(projectId: string | undefined) {
     search?: string;
     postType?: string; // 'organic' | 'ad' | 'all'
     showOwnAccount?: boolean;
+    showAutomation?: boolean;
   }) => {
     return useQuery({
       queryKey: ['social_comments', projectId, filters],
@@ -142,6 +144,10 @@ export function useSocialListening(projectId: string | undefined) {
 
         if (!filters?.showOwnAccount) {
           query = query.eq('is_own_account', false);
+        }
+
+        if (!filters?.showAutomation) {
+          query = query.eq('is_automation', false);
         }
 
         if (filters?.sentiment && filters.sentiment !== 'all') {

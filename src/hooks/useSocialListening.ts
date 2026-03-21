@@ -161,19 +161,21 @@ export function useSocialListening(projectId: string | undefined) {
           const searchTerm = filters.search.replace(/^@/, '');
           query = query.or(`text.ilike.%${searchTerm}%,author_username.ilike.%${searchTerm}%`);
         }
-        // Filter by post type (organic vs ad)
-        if (filters?.postType === 'ad') {
-          query = query.eq('social_posts.is_ad', true);
-        } else if (filters?.postType === 'organic') {
-          query = query.eq('social_posts.is_ad', false);
-        }
-
         const { data, error } = await query.limit(2000);
         if (error) {
           console.error('[SOCIAL_LISTENING][useComments] query error:', error);
           throw error;
         }
-        return (data || []) as SocialComment[];
+
+        // Filter by post type client-side: PostgREST embedded filters on to-one
+        // relationships only null-out the embedded object — they don't exclude parent rows.
+        let result = (data || []) as SocialComment[];
+        if (filters?.postType === 'ad') {
+          result = result.filter(c => c.social_posts?.is_ad === true);
+        } else if (filters?.postType === 'organic') {
+          result = result.filter(c => c.social_posts?.is_ad === false);
+        }
+        return result;
       },
       enabled: !!projectId,
       refetchInterval: 30000,

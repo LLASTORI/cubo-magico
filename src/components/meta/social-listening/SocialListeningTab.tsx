@@ -762,19 +762,14 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
       </TableCell>
       <TableCell>
         {postUrl ? (
-          <a
-            href={postUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
-              e.preventDefault();
-              void openExternal(postUrl);
-            }}
+          <button
+            type="button"
+            onClick={() => void openExternal(postUrl)}
             className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent hover:text-accent-foreground"
             title="Abrir post (para responder)"
           >
             <ExternalLink className="h-4 w-4" />
-          </a>
+          </button>
         ) : (
           <span className="text-muted-foreground text-xs">-</span>
         )}

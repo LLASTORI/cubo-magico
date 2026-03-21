@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 21/03/2026 (sessão 25 — auditoria launch phases)
+> Última atualização: 21/03/2026 (sessão 26 — Onda 1 lançamento pago concluída)
 
 ---
 
@@ -10,42 +10,40 @@
 
 ---
 
-## 🔴 Próxima sessão — Verificações pendentes
+## 🔴 Próxima sessão — Onda 2: Métricas de lançamento pago
 
+> Onda 1 concluída ✅. Próximo passo: implementar métricas específicas do lançamento pago.
+> Planejamento feito com Claude.ai — ver `docs/lancamento_pago_mapa.html` para referência visual.
 
-
-
----
-
-## 🔵 Onda 2 — Métricas de lançamento pago
-
-> Aguardando planejamento com Claude.ai antes de implementar
-
-- [ ] Passing diário (ritmo de vendas de ingresso vs meta)
-- [ ] Comparecimento (show rate: ingressos vendidos vs presentes)
-- [ ] Conversão por ticket do produto principal
+- [ ] Passing diário — ritmo de vendas de ingresso vs meta por lote
+- [ ] Show rate — ingressos vendidos vs presentes no evento
+- [ ] Conversão por fase — TX ingresso→produto principal por canal de origem
 - [ ] NPS e métricas do evento ao vivo
-- [ ] ROAS calculado sobre receita total
+- [ ] ROAS total — (ingressos + produto principal + OBs + downsell) / investimento Meta
+- [ ] `phase_id` em `offer_mappings` — receita real por fase
+- [ ] Vincular `registered_at` no CSV import de leads
 
 ---
 
 ## 🟣 Onda 3 — Evolução de Funis (futuro)
 
-- [ ] Wizard de criação de funil guiado por modelo
+- [ ] Wizard de criação de funil — modelo base + módulos opcionais (arquitetura Lego)
+- [ ] Refatorar seletor de funil — único seletor com todos os modelos agrupados por família
 - [ ] IA Analista por modelo (benchmarks por `funnel_model`)
-- [ ] Métricas do corredor polonês (C1/C2/C3) via Meta Ads
+- [ ] Dashboard de distribuição de conteúdo paga (C1/C2/C3) via Meta Ads
+- [ ] Categorização de campanhas por fase C1/C2/C3 no Meta Ads
 - [ ] Métricas do lançamento meteórico via Evolution API
 - [ ] Dashboard de assinatura/recorrência (MRR, Churn, LTV)
+- [ ] Cronograma reverso automático para lançamento pago
 
 ---
 
 ## 🟡 Importante — Mas não urgente
+
 - [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete`
 - [ ] Validar todos os módulos após reconstrução (CRM, automações, mídia paga, quizzes)
 
-### 🚧 Launch Phases — receita por fase (pendente)
 
-- [ ] Receita por fase: adicionar `phase_id` em `offer_mappings` ou usar date range para filtrar `orders`
 
 ---
 
@@ -70,8 +68,6 @@
 
 - [ ] Rate limit graceful da Meta API (429) — baixa prioridade
 
-- [ ] Redesign visual tabela UTM (colunas densas)
-
 ## 🟢 Backlog futuro
 
 - [ ] Mover parsing do CSV para Web Worker
@@ -84,12 +80,13 @@
 
 ## ✅ Concluído
 
-### 🏗️ Onda 1: Lançamento Pago — desbloqueador (21/03/2026 — sessão 25)
-- [x] Migration `20260321160000`: 5 colunas adicionadas em `launch_phases` — criação de fase pelo UI desbloqueada
-- [x] Migration `20260321170000`: `offer_mapping_id`, `product_type`, `lot_name` adicionados em `launch_products`
-- [x] Migration `20260321180000`: `registered_at` adicionado em `crm_contacts`
-- [x] `useLaunchData.ts` migrado de `hotmart_sales` → `orders + order_items`
-- [x] `CRMRecovery.tsx` migrado de `hotmart_sales` → `crm_transactions` (ABANDONED incluso)
+### ✅ Onda 1: Lançamento Pago — Desbloqueador (21/03/2026 — sessão 26)
+- [x] Migration `launch_phases` — 5 colunas adicionadas. Criação de fase pelo UI desbloqueada.
+- [x] Migration `launch_products` — `offer_mapping_id`, `product_type`, `lot_name` adicionados
+- [x] Migration `crm_contacts` — `registered_at` adicionado com documentação no banco
+- [x] `useLaunchData.ts` — `hotmart_sales` removido, migrado para `orders + order_items`
+- [x] `CRMRecovery.tsx` — `hotmart_sales` removido, ~150 linhas simplificadas
+- [x] Build: zero erros ✅
 
 ### 🔍 Auditoria: Launch Phases (21/03/2026 — sessão 25)
 - [x] Auditoria completa do sistema de fases de lançamento — read-only

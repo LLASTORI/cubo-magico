@@ -56,7 +56,8 @@ Tabelas:
 - `orders` — pedidos; constraint UNIQUE em `(project_id, provider, provider_order_id)` — chave de idempotência
 - `order_items` — itens por pedido; constraint UNIQUE em `(order_id, provider_product_id, provider_offer_id)`
 - `ledger_events` — decomposição financeira em BRL; rastreia conversão para moedas estrangeiras; UNIQUE `(order_id, provider_event_id)` (escopo por order, não global)
-- `crm_transactions` — log de eventos CRM (TODOS os status: ABANDONED, DELAYED, CANCELLED, EXPIRED...); ≠ orders que só tem approved. Trigger `detect_auto_recovery` depende dela. **Não dropar.**
+- `crm_transactions` — log de eventos CRM (TODOS os status: ABANDONED, DELAYED, CANCELLED, EXPIRED...); ≠ orders que só tem approved. Trigger `detect_auto_recovery` depende dela. **Não dropar.** Fonte canônica para `CRMRecovery.tsx` (abandoned carts + conversão).
+- `crm_contacts.registered_at` — data real de cadastro do lead na landing page. Diferente de `created_at` (entrada no Cubo). NULL = desconhecida. Preenchida por webhook de captura, CSV import ou manualmente. **Não confundir com `created_at`** ao calcular tempo entre cadastro e compra.
 - `system_health_log` — alertas de monitoramento automático (check_type, severity ok/warning/critical, affected_count, details jsonb)
 - `project_credentials` — credenciais Hotmart encriptadas: `client_id_encrypted`, `client_secret_encrypted`, `basic_auth_encrypted`. Nunca ler `client_id`/`client_secret`/`basic_auth` diretamente (são NULL). Usar RPC `get_project_credentials_internal(project_id)` para obter valores descriptografados. Checar presença via `is_configured`/`is_validated`.
 
@@ -78,6 +79,7 @@ Tabelas:
 **`funnel_orders_view`** — view canônica para análise de funil:
 - Expõe todos os campos UTM de `orders` + `main_offer_code` com fallback COALESCE
 - Hook canônico: `useFunnelData.ts` — `SaleRecord` é a interface de saída; UTMAnalysis usa `gross_amount` como receita canônica
+- `useLaunchData.ts` usa `orders + order_items` diretamente (não `funnel_orders_view`) para breakdown por posição via `provider_offer_id`/`base_price`
 
 **`offer_item_revenue_view`** — receita exata por oferta (migration `20260319120000`):
 - Agrega `order_items.base_price` por `(project_id, offer_code, item_type, economic_day)`

@@ -372,6 +372,29 @@ async function processWebhook(
       .eq('id', contact.id);
   }
 
+  // --- INSTAGRAM MERGE ---
+  // Se instagram foi atualizado, mesclar shadow profiles (social_listing)
+  // que tenham o mesmo handle neste projeto.
+  if (contactUpdates.instagram) {
+    try {
+      const { data: mergeResult, error: mergeError } = await supabase.rpc(
+        'merge_instagram_shadow',
+        {
+          p_project_id: projectId,
+          p_instagram:  contactUpdates.instagram,
+          p_target_id:  contact.id,
+        }
+      );
+      if (mergeError) {
+        console.error('[SurveyWebhook] merge_instagram_shadow error:', mergeError.message);
+      } else {
+        console.log('[SurveyWebhook] merge_instagram_shadow result:', JSON.stringify(mergeResult));
+      }
+    } catch (e: any) {
+      console.error('[SurveyWebhook] merge_instagram_shadow exception:', e.message);
+    }
+  }
+
   // Create identity events
   if (identityEvents.length > 0) {
     await supabase

@@ -4,7 +4,7 @@
 > Os benchmarks aqui são **referências observadas em lançamentos reais** — não regras absolutas.
 > O "jeito do Cubo" será construído gradualmente com mais dados ao longo do tempo.
 > Referência principal: metodologia Willian Baldan (@willianbaldan) + debriefings reais
-> Última atualização: 20/03/2026
+> Última atualização: 21/03/2026
 
 ---
 
@@ -67,22 +67,22 @@ Anúncio → Captura (lead gratuito) → Aquecimento → Abertura → Vendas →
 
 ### 3. Lançamento Pago (`lancamento_pago`) ⭐ PRIORIDADE 1
 
-**Referência:** Metodologia Willian Baldan + debriefing real "Posicionamento Lucrativo" (março/2026)
+**Referência:** Metodologia Willian Baldan + debriefings reais observados
 
 **O que é:** O lead **paga** para participar de um evento (ingresso baixo ticket) e durante o evento recebe pitch para comprar o produto principal (alto ticket). O ingresso não é a receita — é uma **qualificação paga**.
 
 > *"Ingressos não são para pagar o tráfego. O objetivo é: cliente é melhor que lead + reduz exposição de caixa na captação."*
 
-**Funil completo observado em lançamento real:**
+**Funil completo — exemplo de referência (valores hipotéticos):**
 ```
-Base própria (5.035)
+Base própria (~5.000)
         ↓
-Tickets vendidos (782) — 9,9% da base
-        ↓ OB Gravação (32) — 4,1% dos tickets — filtro de intenção
-Converteram para PL (77) — 9,9% dos tickets
-        ↓ + PL direto sem ticket (12)
-Total vendas PL (89) — ticket médio R$1.343
-Faturamento total: R$135.824 | Investimento: R$37.775 | ROAS: 3,6x
+Tickets vendidos (~800) — ~10% da base
+        ↓ OB (~35) — ~4% dos tickets — filtro de intenção
+Converteram para produto principal (~80) — ~10% dos tickets
+        ↓ + compra direta sem ticket (~10)
+Total vendas produto (~90) — ticket médio ~R$1.300
+Faturamento total hipotético | ROAS referência: ~3-4x
 ```
 
 **As 4 fases reais:**
@@ -199,6 +199,84 @@ ROAS = Receita TOTAL (ingressos + PL + OBs + downsell) / Investimento Meta
 
 ---
 
+### 3.1 Lançamento Pago Recorrente — Conceito de Edições
+
+> Descoberto em sessão 26 (21/03/2026). **Decisão arquitetural pendente antes da Onda 2.**
+
+#### O que é uma Edição
+
+Na prática, o lançamento pago raramente acontece uma única vez.
+O produtor repete o ciclo — mesma estrutura, mesmas campanhas, mesma página —
+ajustando datas, preços e pequenos detalhes a cada repetição.
+
+Cada repetição do ciclo é uma **Edição** (também chamada de "Turma").
+
+```
+Funil: "Meu Lançamento Pago"
+  └── Edição 1 (jan/2026) — evento 15/01 · início 02/01
+  └── [intervalo variável — dias ou semanas]
+  └── Edição 2 (fev/2026) — evento 15/02 · início 03/02
+  └── [intervalo variável]
+  └── Edição 3 (mar/2026) — evento 15/03 · início 24/02
+```
+
+#### Regras importantes
+
+**Preço não continua da edição anterior.**
+Cada edição começa com o preço que teve melhor aceite na edição anterior —
+que pode ser menor, igual ou maior. É uma decisão estratégica, não continuidade automática.
+
+**Intervalo entre edições é variável e intencional.**
+Pode ser 2 dias, pode ser 3 semanas. Depende dos resultados da edição anterior
+e da estratégia do produtor. O Cubo não pode inferir edições por continuidade
+de vendas — precisa de datas explícitas cadastradas pelo usuário.
+
+**Mesma oferta, preços e datas diferentes por edição.**
+O `provider_offer_id` do ingresso é o mesmo em todas as edições.
+Sem o conceito de edição, o banco mistura todas as vendas num único bloco indistinguível.
+
+#### Análise por edição
+
+**Fase de ingressos = análise de perpétuo com data de fim.**
+Dentro de cada edição, a análise da fase de ingressos é idêntica ao funil perpétuo:
+- TX clique → página → checkout → compra (diária)
+- TX de cada Order Bump (diária)
+- Passing diário vs meta
+- Ajuste de preço e copy baseado em dados em tempo real
+
+**O que é exclusivo de cada edição:**
+- ROAS total (ingressos + produto principal + OBs + downsell)
+- Show rate (% de compradores que compareceram ao evento)
+- TX ingresso → produto principal
+- Preço inicial escolhido e estrutura de lotes
+
+**Comparativo entre edições:**
+- Qual edição teve melhor ROAS?
+- Qual preço inicial teve mais aceite?
+- Show rate melhorou ou piorou?
+- TX ingresso→produto evoluiu?
+
+#### Nomenclatura no produto
+
+Usar linguagem natural do mercado de infoprodutos:
+- ✅ "Edição" ou "Turma" — naturais e reconhecíveis
+- ✅ "Ciclo" — alternativa neutra
+- ❌ "Instância", "iteration", "run" — termos técnicos, evitar
+
+#### Implicação arquitetural — DECISÃO PENDENTE
+
+O conceito de edição muda como `phase_id` deve funcionar na Onda 2.
+Não basta ligar `offer_mappings.phase_id → launch_phases.id` —
+precisa de uma camada que identifique a edição.
+
+**Opções em análise:**
+- **Opção A:** nova tabela `launch_editions` com `funnel_id`, `edition_start`, `edition_end`, `event_date` — mais correto, mais esforço
+- **Opção B:** campo `edition_label` (text) em `launch_phases` — ex: "Jan/2026" — mais simples, rápido
+- **Opção C:** date range das fases para agrupar edições — sem schema change, menos confiável
+
+⚠️ **Não executar Onda 2 antes de definir esta abordagem.**
+
+
 ### 4. Lançamento Meteórico (`lancamento_meteorico`)
 
 **Criado por:** Talles Quinderé
@@ -241,7 +319,32 @@ Anúncio/Orgânico → Formulário de aplicação → Análise → Call de venda
 
 ---
 
-## Modelos Auxiliares
+## Modelos Auxiliares e Arquitetura Lego
+
+### Filosofia: Modelo Base + Módulos Opcionais
+
+Os modelos não são engessados — cada um tem **módulos opcionais** que podem ser
+ativados sem mudar a natureza do funil. Módulos que mudam a natureza viram um novo modelo.
+
+**Perpétuo — módulos opcionais:**
+```
+[Isca digital] → Página de vendas → [Formulário pré-checkout] → Checkout → Compra
+    opcional                               opcional
+```
+- Isca: lead recebe material gratuito antes de ver a oferta
+- Formulário pré-checkout: qualifica o lead antes do preço (combina com CRM + automações)
+
+**Lançamento Pago — módulos opcionais:**
+```
+Ingressos → [Single Shot] → Comparecimento → Evento → Vendas
+                opcional
+```
+- Single Shot: oferta relâmpago no penúltimo lote, direto ao checkout
+- Cada OB do ingresso é opcional (até 3)
+- Cashback é opcional na fase de vendas
+
+> Módulos têm **posição definida** — o formulário sempre vai antes do checkout,
+> nunca depois. O wizard do Cubo não oferece qualquer peça em qualquer lugar.
 
 ### Perpétuo com Isca Digital (`perpetuo_isca`)
 Lead pega isca gratuita antes de ver a oferta.
@@ -251,6 +354,7 @@ Quiz qualifica e direciona para oferta adequada.
 
 ### Perpétuo com Formulário Pré-Checkout (`perpetuo_formulario`)
 Formulário como barreira de qualificação antes do preço.
+Combinado com CRM e automações WhatsApp, vira máquina de qualificação.
 
 ### Lançamento Interno (`lancamento_interno`)
 Para a própria base, sem captação nova. Começa no aquecimento.
@@ -287,8 +391,11 @@ Cada modelo destaca suas métricas mais relevantes:
 
 ## Próximos passos
 
-- [ ] Validar benchmarks com mais lançamentos reais
-- [ ] Implementar métricas específicas de lançamento pago (Onda 2)
+- [ ] **Decisão arquitetural:** definir abordagem de Edições (seção 3.1) antes da Onda 2
+- [ ] Implementar métricas específicas de lançamento pago (Onda 2) — bloqueado até decisão acima
+- [ ] Validar benchmarks com mais lançamentos reais (substituir hipotéticos por dados reais)
 - [ ] Explorar integração Evolution API para métricas do meteórico
-- [ ] Construir wizard de criação guiado
+- [ ] Construir wizard de criação guiado (modelo base + módulos opcionais)
+- [ ] Refatorar seletor de funil — único seletor agrupado por família
 - [ ] Configurar benchmarks por modelo para a IA analista
+- [ ] Documentar bairros restantes: Lançamento Clássico, Meteórico, Perpétuo

@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
       .from('social_listening_pages')
       .select('project_id, projects!inner(id, name)')
       .eq('is_active', true)
+      .order('project_id')
     
     if (projectsError) {
       console.error('[SOCIAL-LISTENING-CRON] Error fetching active projects:', projectsError)
@@ -370,6 +371,41 @@ async function upsertPostIG(supabase: any, projectId: string, post: any, pageNam
 
 // ============= COMMENT SYNC =============
 
+// Fetches comments with fallback token on auth errors (code 190 / 10).
+// Also follows pagination up to maxComments.
+async function fetchCommentsWithFallback(
+  url: string,
+  pageToken: string,
+  fallbackToken: string,
+  maxComments = 200,
+): Promise<any[]> {
+  const allComments: any[] = []
+  let nextUrl: string | null = url
+  let useFallback = false
+
+  while (nextUrl && allComments.length < maxComments) {
+    const currentUrl = useFallback ? nextUrl.replace(pageToken, fallbackToken) : nextUrl
+    const response = await fetch(currentUrl)
+    const data = await response.json()
+
+    if (data.error) {
+      if (!useFallback && (data.error.code === 190 || data.error.code === 10)) {
+        console.log(`[SYNC_COMMENTS] Token error ${data.error.code}, retrying with user token`)
+        useFallback = true
+        // Reset to original URL with fallback token so pagination restarts correctly
+        nextUrl = url.replace(pageToken, fallbackToken)
+        continue
+      }
+      throw new Error(`Graph API error ${data.error.code || 'n/a'}: ${data.error.message}`)
+    }
+
+    allComments.push(...(data.data || []))
+    nextUrl = data.paging?.next || null
+  }
+
+  return allComments
+}
+
 async function syncCommentsForProject(supabase: any, projectId: string, accessToken: string) {
   const GRAPH_API_VERSION = 'v19.0'
   const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -419,39 +455,17 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
       try {
         if (post.platform === 'facebook') {
           const url = `${GRAPH_API_BASE}/${post.post_id_meta}/comments?fields=id,message,created_time,from,like_count,comment_count&limit=50&access_token=${pageToken}`
-          const response = await fetch(url)
-          const data = await response.json()
-
-          if (data.error) {
-            const message = `[SYNC_COMMENTS][GRAPH_ERROR] platform=facebook post_id=${post.id} post_meta=${post.post_id_meta} code=${data.error.code || 'n/a'} message=${data.error.message || 'unknown'}`
-            console.error(message)
-            errors.push(message)
-            continue
-          }
-
-          if (data.data) {
-            for (const comment of data.data) {
-              await upsertComment(supabase, projectId, post.id, 'facebook', comment, connectedPageIds)
-              totalComments++
-            }
+          const comments = await fetchCommentsWithFallback(url, pageToken, accessToken)
+          for (const comment of comments) {
+            await upsertComment(supabase, projectId, post.id, 'facebook', comment, connectedPageIds)
+            totalComments++
           }
         } else if (post.platform === 'instagram') {
           const url = `${GRAPH_API_BASE}/${post.post_id_meta}/comments?fields=id,text,timestamp,username,like_count,replies&limit=50&access_token=${pageToken}`
-          const response = await fetch(url)
-          const data = await response.json()
-
-          if (data.error) {
-            const message = `[SYNC_COMMENTS][GRAPH_ERROR] platform=instagram post_id=${post.id} post_meta=${post.post_id_meta} code=${data.error.code || 'n/a'} message=${data.error.message || 'unknown'}`
-            console.error(message)
-            errors.push(message)
-            continue
-          }
-
-          if (data.data) {
-            for (const comment of data.data) {
-              await upsertCommentIG(supabase, projectId, post.id, comment, connectedUsernames)
-              totalComments++
-            }
+          const comments = await fetchCommentsWithFallback(url, pageToken, accessToken)
+          for (const comment of comments) {
+            await upsertCommentIG(supabase, projectId, post.id, comment, connectedUsernames)
+            totalComments++
           }
         }
       } catch (postError: any) {

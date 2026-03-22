@@ -5,8 +5,27 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-22 (sessão 28) — Meta Ads histórico + Palavras de Automação fixes
-- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅ | Meta Ads histórico: desbloqueado ✅
+- **Data:** 2026-03-22 (sessão 29) — Social Listening cron 2 bugs corrigidos
+- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅ | Meta Ads histórico: desbloqueado ✅
+
+---
+
+### [2026-03-22] Social Listening — cron não sincronizava comentários (sessão 29) ✅
+
+**Sintoma:** Sync manual funcionava, cron marcava `last_synced_at` mas comentários não apareciam para o projeto Camila Leal.
+
+**Bug 1 — Ordem não-determinística de projetos:**
+Query `social_listening_pages` sem `ORDER BY` retornava projetos em ordem aleatória.
+Quando Natalia Canezin (3636 comentários, adicionada no mesmo dia) ficava no começo, consumia todo o tempo da função (~150s) e Camila Leal ficava sem processar.
+`last_synced_at` é atualizado ao final de cada projeto — Camila não chegava a ser atualizada pelo cron.
+Fix: adicionado `.order('project_id')` → ordem determinística, mesma a cada execução.
+
+**Bug 2 — Sem fallback token no fetch de comentários da cron:**
+`syncCommentsForProject` buscava comentários com `pageToken`. Se o pageToken retornasse erro 190/10 (token insuficiente/expirado), registrava o erro no array e **pulava o post silenciosamente**.
+`social-comments-api` (sync manual) tinha o fallback correto — por isso manual funcionava e cron não.
+Fix: extraída função `fetchCommentsWithFallback(url, pageToken, fallbackToken, maxComments)` que, ao receber erro 190/10, retenta com `accessToken` (user-level de `meta_credentials`). Também adicionado suporte a paginação de comentários.
+
+**Deploy:** `social-listening-cron` re-deployada. Commit `2f63fff`.
 
 ---
 

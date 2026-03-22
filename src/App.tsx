@@ -41,6 +41,7 @@ import NotificationsHistory from "./pages/NotificationsHistory";
 import MetaAds from "./pages/MetaAds";
 import UndefinedOffers from "./pages/UndefinedOffers";
 import LaunchDashboard from "./pages/LaunchDashboard";
+import LaunchEditionAnalysis from "./pages/LaunchEditionAnalysis";
 import AnaliseMensal from "./pages/AnaliseMensal";
 import SalesHistory from "./pages/SalesHistory";
 import CRM from "./pages/CRM";
@@ -186,6 +187,7 @@ const App = () => {
                       <Route path="funnel-analysis" element={<FunnelAnalysis />} />
                       <Route path="analise-mensal" element={<AnaliseMensal />} />
                       <Route path="launch-dashboard" element={<LaunchDashboard />} />
+                      <Route path="lancamentos/:funnelId/edicoes/:editionId" element={<LaunchEditionAnalysis />} />
                       <Route path="undefined-offers" element={<UndefinedOffers />} />
                       <Route path="offer-mappings" element={<OfferMappings />} />
                       

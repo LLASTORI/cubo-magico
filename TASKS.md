@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 22/03/2026 (sessão 28 — Meta Ads histórico + fixes Social Listening)
+> Última atualização: 22/03/2026 (sessão 29 — Onda 2 launch_editions + social listening cron fixes)
 
 ---
 
@@ -10,23 +10,20 @@
 
 ---
 
-## 🔴 Próxima sessão — Decisão arquitetural: Edições
+## ✅ Onda 2 — Pré-requisito: tabela `launch_editions` (sessão 29)
 
-> ⚠️ Onda 2 BLOQUEADA até decisão sobre conceito de Edições.
-> Ver `FUNNEL_MODELS.md` seção 3.1 — Conceito de Edições.
-> Esta decisão muda a arquitetura do `phase_id` em `offer_mappings`.
-
-**Decidir aqui no Claude.ai antes de passar pro Cursor:**
-- [ ] Escolher abordagem de edições no lançamento pago recorrente:
-  - Opção A: nova tabela `launch_editions` — correto, mais esforço
-  - Opção B: campo `edition_label` em `launch_phases` — simples e rápido
-  - Opção C: date range das fases para agrupar — sem schema change
+- [x] Migration `launch_editions` — tabela com RLS, trigger updated_at ✅
+- [x] Migration `launch_phases.edition_id` — coluna nullable, sem quebrar fases existentes ✅
+- [x] Tipos TypeScript `src/types/launch-editions.ts` ✅
+- [x] Hook `useLaunchEditions` — CRUD + auto edition_number + cópia de fases ✅
+- [x] UI mínima — aba "Edições" no `LaunchConfigDialog` com lista, create/edit/delete ✅
+- [x] Build: zero erros ✅
 
 ---
 
-## 🔵 Onda 2 — Métricas de lançamento pago (aguardando decisão acima)
+## 🔵 Onda 2 — Métricas de lançamento pago (próximas etapas)
 
-> Planejamento feito com Claude.ai — ver `docs/lancamento_pago_mapa.html` para referência visual.
+> Pré-requisito `launch_editions` concluído. Onda 2 desbloqueada.
 
 - [ ] Passing diário — ritmo de vendas de ingresso vs meta por lote
 - [ ] Show rate — ingressos vendidos vs presentes no evento

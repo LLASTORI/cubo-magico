@@ -10,6 +10,17 @@
 
 ---
 
+### [2026-03-22] Onda 2 — launch_editions criado (sessão 29) ✅
+
+Pré-requisito para métricas de lançamento pago recorrente.
+- Migrations: `launch_editions` (tabela completa com RLS) + `launch_phases.edition_id` (nullable, sem breaking change)
+- Tipos: `src/types/launch-editions.ts` — `LaunchEdition`, `LaunchEditionInsert`, `LaunchEditionWithPhases`
+- Hook `useLaunchEditions`: CRUD completo, auto `edition_number` (MAX+1), cópia de fases da edição anterior ao criar nova
+- UI: aba "Edições" no `LaunchConfigDialog` — lista com badge de status, dialogs de create/edit/delete, aviso de fases copiadas
+- Build: zero erros
+
+---
+
 ### [2026-03-22] Social Listening — cron não sincronizava comentários (sessão 29) ✅
 
 **Sintoma:** Sync manual funcionava, cron marcava `last_synced_at` mas comentários não apareciam para o projeto Camila Leal.

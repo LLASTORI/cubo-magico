@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import {
   RefreshCw, CalendarIcon, Rocket, TrendingUp, DollarSign,
   ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings, Layers, Calendar as CalendarIconFilled,
-  ChevronRight
+  ChevronRight, BarChart2
 } from "lucide-react";
+import { EditionsComparativoTable } from "@/components/launch/EditionsComparativoTable";
 import { toast } from "sonner";
 import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
@@ -585,38 +586,72 @@ function EditionStatusBadge({ status }: { status: string }) {
 }
 
 function LaunchPagoEditionsRow({ funnelId, projectId }: { funnelId: string; projectId: string }) {
+  const [showComparativo, setShowComparativo] = useState(false);
   const { editions } = useEditions(projectId, funnelId);
   const { navigateTo } = useTenantNavigation();
 
-  if (!editions.length) {
-    return (
-      <div className="py-4 text-center text-sm text-muted-foreground">
-        Nenhuma edição cadastrada. Configure em{' '}
-        <span className="font-medium">Configurar → Edições</span>.
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-2 py-2">
-      {editions.map((edition) => (
+    <div className="space-y-3">
+      {/* Toggle Edições / Comparativo */}
+      <div className="flex items-center gap-1">
         <button
-          key={edition.id}
-          onClick={() => navigateTo(`/lancamentos/${funnelId}/edicoes/${edition.id}`)}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+          onClick={() => setShowComparativo(false)}
+          className={cn(
+            'text-sm px-3 py-1 rounded-md transition-colors',
+            !showComparativo
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-muted',
+          )}
         >
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">{edition.name}</span>
-            <EditionStatusBadge status={edition.status} />
-          </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            {edition.event_date && (
-              <span>Evento: {format(new Date(edition.event_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
-            )}
-            <ChevronRight className="w-4 h-4" />
-          </div>
+          Edições
         </button>
-      ))}
+        <button
+          onClick={() => setShowComparativo(true)}
+          className={cn(
+            'flex items-center gap-1.5 text-sm px-3 py-1 rounded-md transition-colors',
+            showComparativo
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-muted',
+          )}
+        >
+          <BarChart2 className="w-3.5 h-3.5" />
+          Comparativo
+        </button>
+      </div>
+
+      {showComparativo ? (
+        <EditionsComparativoTable projectId={projectId} funnelId={funnelId} />
+      ) : (
+        <>
+          {!editions.length ? (
+            <div className="py-4 text-center text-sm text-muted-foreground">
+              Nenhuma edição cadastrada. Configure em{' '}
+              <span className="font-medium">Configurar → Edições</span>.
+            </div>
+          ) : (
+            <div className="space-y-2 py-2">
+              {editions.map((edition) => (
+                <button
+                  key={edition.id}
+                  onClick={() => navigateTo(`/lancamentos/${funnelId}/edicoes/${edition.id}`)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">{edition.name}</span>
+                    <EditionStatusBadge status={edition.status} />
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    {edition.event_date && (
+                      <span>Evento: {format(new Date(edition.event_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                    )}
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

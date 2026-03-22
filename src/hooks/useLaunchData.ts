@@ -20,6 +20,13 @@ import { useMemo } from "react";
 import { format } from "date-fns";
 import { PaidMediaDomain } from "@/domains/paid-media";
 
+interface PagoEdition {
+  id: string;
+  funnel_id: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
 interface UseLaunchDataProps {
   projectId: string | undefined;
   startDate: Date;
@@ -29,6 +36,7 @@ interface UseLaunchDataProps {
 export interface LaunchMetrics {
   funnelId: string;
   funnelName: string;
+  funnelModel: string | null;
   campaignPattern: string | null;
   roasTarget: number;
   launchStartDate: string | null;
@@ -86,6 +94,144 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
     },
     enabled: !!projectId && funnels.length > 0,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // LANCAMENTO PAGO: Fetch edition-scoped metrics (ignores dashboard date range)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const pagoFunnelIds = useMemo(
+    () => funnels.filter(f => (f as any).funnel_model === 'lancamento_pago').map(f => f.id),
+    [funnels],
+  );
+
+  const { data: pagoEditions = [] } = useQuery<PagoEdition[]>({
+    queryKey: ['pago-funnel-editions', projectId, pagoFunnelIds.join(',')],
+    queryFn: async () => {
+      if (!projectId || pagoFunnelIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('launch_editions')
+        .select('id, funnel_id, start_date, end_date')
+        .in('funnel_id', pagoFunnelIds);
+      if (error) throw error;
+      return (data || []) as PagoEdition[];
+    },
+    enabled: !!projectId && pagoFunnelIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Min/max date range per pago funnel derived from its editions
+  const pagoFunnelDateRanges = useMemo(() => {
+    const ranges: Record<string, { start: string; end: string }> = {};
+    for (const e of pagoEditions) {
+      if (!e.start_date || !e.end_date) continue;
+      const existing = ranges[e.funnel_id];
+      if (!existing) {
+        ranges[e.funnel_id] = { start: e.start_date, end: e.end_date };
+      } else {
+        if (e.start_date < existing.start) existing.start = e.start_date;
+        if (e.end_date > existing.end) existing.end = e.end_date;
+      }
+    }
+    return ranges;
+  }, [pagoEditions]);
+
+  const pagoGlobalRange = useMemo(() => {
+    const values = Object.values(pagoFunnelDateRanges);
+    if (values.length === 0) return null;
+    const starts = values.map(r => r.start).sort();
+    const ends = values.map(r => r.end).sort();
+    return { start: starts[0], end: ends[ends.length - 1] };
+  }, [pagoFunnelDateRanges]);
+
+  // Revenue for pago funnels from funnel_orders_view (edition-scoped, not dashboard range)
+  const { data: pagoOrdersData = [] } = useQuery<{ funnel_id: string; customer_paid: number; economic_day: string }[]>({
+    queryKey: ['pago-orders', projectId, pagoFunnelIds.join(','), pagoGlobalRange?.start, pagoGlobalRange?.end],
+    queryFn: async () => {
+      if (!projectId || pagoFunnelIds.length === 0 || !pagoGlobalRange) return [];
+      const { data, error } = await supabase
+        .from('funnel_orders_view')
+        .select('funnel_id, customer_paid, economic_day')
+        .eq('project_id', projectId)
+        .in('funnel_id', pagoFunnelIds)
+        .gte('economic_day', pagoGlobalRange.start)
+        .lte('economic_day', pagoGlobalRange.end);
+      if (error) throw error;
+      return (data || []) as { funnel_id: string; customer_paid: number; economic_day: string }[];
+    },
+    enabled: !!projectId && pagoFunnelIds.length > 0 && !!pagoGlobalRange,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // Revenue per pago funnel (respects each funnel's actual edition date range)
+  const pagoRevenueByFunnel = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const [funnelId, range] of Object.entries(pagoFunnelDateRanges)) {
+      const orders = pagoOrdersData.filter(
+        o => o.funnel_id === funnelId &&
+             o.economic_day >= range.start &&
+             o.economic_day <= range.end,
+      );
+      result[funnelId] = orders.reduce((sum, o) => sum + (Number(o.customer_paid) || 0), 0);
+    }
+    return result;
+  }, [pagoOrdersData, pagoFunnelDateRanges]);
+
+  // Sales count per pago funnel
+  const pagoSalesCountByFunnel = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const [funnelId, range] of Object.entries(pagoFunnelDateRanges)) {
+      result[funnelId] = pagoOrdersData.filter(
+        o => o.funnel_id === funnelId &&
+             o.economic_day >= range.start &&
+             o.economic_day <= range.end,
+      ).length;
+    }
+    return result;
+  }, [pagoOrdersData, pagoFunnelDateRanges]);
+
+  // Meta insights for pago funnels using funnel-level dates (launch_start_date → launch_end_date)
+  const pagoInsightRange = useMemo(() => {
+    const pagoFunnelsWithDates = funnels.filter(
+      f => (f as any).funnel_model === 'lancamento_pago' && f.launch_start_date,
+    );
+    if (pagoFunnelsWithDates.length === 0) return null;
+    const starts = pagoFunnelsWithDates.map(f => f.launch_start_date!).sort();
+    const ends = pagoFunnelsWithDates
+      .map(f => f.launch_end_date || format(new Date(), 'yyyy-MM-dd'))
+      .sort();
+    return { start: starts[0], end: ends[ends.length - 1] };
+  }, [funnels]);
+
+  const { data: pagoMetaInsights = [] } = useQuery({
+    queryKey: ['meta-insights-pago', projectId, pagoInsightRange?.start, pagoInsightRange?.end],
+    queryFn: async () => {
+      if (!projectId || !pagoInsightRange) return [];
+      let all: any[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('meta_insights')
+          .select('campaign_id, spend, date_start')
+          .eq('project_id', projectId)
+          .gte('date_start', pagoInsightRange.start)
+          .lte('date_start', pagoInsightRange.end)
+          .not('ad_id', 'is', null)
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          all = all.concat(data);
+          offset += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      return all;
+    },
+    enabled: !!projectId && !!pagoInsightRange,
+    staleTime: 2 * 60 * 1000,
   });
 
   // Fetch active Meta accounts
@@ -263,18 +409,21 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
     if (funnels.length === 0) return [];
 
     const offerCodes = new Set(mappings.map(m => m.codigo_oferta).filter(Boolean));
-    const launchSales = salesData.filter(s => 
+    const launchSales = salesData.filter(s =>
       s.offer_code && offerCodes.has(s.offer_code)
     );
 
     return funnels.map(funnel => {
+      const isFunnelPago = (funnel as any).funnel_model === 'lancamento_pago';
       const funnelMappings = mappings.filter(m => m.funnel_id === funnel.id);
       const funnelOfferCodes = new Set(funnelMappings.map(m => m.codigo_oferta).filter(Boolean));
-      const funnelSales = launchSales.filter(s => 
+      const funnelSales = launchSales.filter(s =>
         s.offer_code && funnelOfferCodes.has(s.offer_code)
       );
 
       // Calculate spend from campaigns matching pattern
+      // For lancamento_pago: use pagoMetaInsights (funnel-level date range)
+      // For others: use metaInsights (dashboard date range)
       let totalSpend = 0;
       if (funnel.campaign_name_pattern) {
         const pattern = funnel.campaign_name_pattern.toLowerCase();
@@ -282,13 +431,19 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
           .filter(c => c.campaign_name?.toLowerCase().includes(pattern))
           .map(c => c.campaign_id);
 
-        totalSpend = metaInsights
+        const insightsSource = isFunnelPago ? pagoMetaInsights : metaInsights;
+        totalSpend = insightsSource
           .filter(i => matchingCampaignIds.includes(i.campaign_id))
           .reduce((sum, i) => sum + (i.spend || 0), 0);
       }
 
-      const totalRevenue = funnelSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
-      const totalSalesCount = funnelSales.length;
+      // For lancamento_pago: revenue and sales count come from edition-scoped data
+      const totalRevenue = isFunnelPago
+        ? (pagoRevenueByFunnel[funnel.id] ?? 0)
+        : funnelSales.reduce((sum, s) => sum + (s.total_price_brl || 0), 0);
+      const totalSalesCount = isFunnelPago
+        ? (pagoSalesCountByFunnel[funnel.id] ?? 0)
+        : funnelSales.length;
       const avgTicket = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
       const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
       const profit = totalRevenue - totalSpend;
@@ -351,6 +506,7 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
       return {
         funnelId: funnel.id,
         funnelName: funnel.name,
+        funnelModel: (funnel as any).funnel_model ?? null,
         campaignPattern: funnel.campaign_name_pattern,
         roasTarget: funnel.roas_target || 2,
         launchStartDate: funnel.launch_start_date,
@@ -367,7 +523,7 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
         positions,
       };
     });
-  }, [funnels, mappings, salesData, campaigns, metaInsights]);
+  }, [funnels, mappings, salesData, campaigns, metaInsights, pagoRevenueByFunnel, pagoSalesCountByFunnel, pagoMetaInsights]);
 
   // Summary metrics
   const summaryMetrics = useMemo(() => {

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 22/03/2026 (sessão 31 — Fix inconsistências financeiras Camila Leal + cache invalidation CSV)
+> Última atualização: 23/03/2026 (sessão 32 — Onda 2C: RLS + faturamento funil + conversão lancamento_pago)
 
 ---
 
@@ -38,6 +38,19 @@
 
 - [x] Comparativo entre edições — tabela lado a lado com ROAS, faturamento, ingressos, melhor edição destacada ✅
 - [x] `phase_id` em `offer_mappings` — migration + phase selector na aba Produtos (somente `lancamento_pago`) ✅
+
+---
+
+## ✅ Onda 2C — Fixes tela de edição (sessão 32)
+
+- [x] INSERT em `launch_phases` funciona sem erro de RLS ✅
+- [x] INSERT em `launch_products` funciona sem erro de RLS ✅
+- [x] Faturamento e ROAS aparecem corretamente no nível do funil pai ✅
+- [x] Bloco "Funil de Conversão" mostra compradores de ingresso como base ✅
+- [x] TX ingresso→produto calculada corretamente ✅
+- [x] Lançamentos clássicos não foram afetados ✅
+
+---
 
 ## 🔵 Onda 2B — Restante (aguardando dados/priorização)
 

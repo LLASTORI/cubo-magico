@@ -5,8 +5,29 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-22 (sessão 31) — Investigação e correção de inconsistências financeiras no projeto Camila Leal
-- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B (comparativo + phase_id) ✅ | Cache invalidation pós-CSV import ✅
+- **Data:** 2026-03-23 (sessão 32) — Onda 2C: RLS + faturamento funil + conversão lancamento_pago
+- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅
+
+---
+
+### [2026-03-23] Onda 2C — Fixes lancamento_pago (sessão 32) ✅
+
+**Task 1 — RLS `launch_phases` e `launch_products`:**
+Policy `"Managers and owners can manage"` usava `get_user_project_role()` que bloqueava INSERTs (sem WITH CHECK). Substituída por policy simples baseada em `project_members` (igual a `launch_editions`). Migration `20260323100000_fix_rls_launch_phases_products.sql` aplicada.
+
+**Task 2 — Faturamento R$0 no nível do funil `lancamento_pago`:**
+`useLaunchData` usava o date range do dashboard para filtrar `salesData`, que não cobria as datas das edições. Adicionados 3 novos conjuntos de queries:
+- `pagoEditions` — editions do funil
+- `pagoOrdersData` — receita via `funnel_orders_view` com datas das editions
+- `pagoMetaInsights` — spend via `meta_insights` com datas do funil (launch_start_date → launch_end_date)
+`launchMetrics` agora usa dados edition-scoped para `lancamento_pago` sem afetar lançamentos clássicos.
+
+**Task 3 — Bloco "Funil de Conversão" para `lancamento_pago`:**
+Criado `LaunchPagoConversaoBlock.tsx` com:
+- Métricas ingresso→produto (compradores, TX conversão, receita, ticket médio)
+- Identificação de ofertas por `phase_id` (Fase 1 / Fase 4), com fallback para `main_offer_code`
+- Abas UTM (Campanhas/Conjuntos/Fontes/Criativos/Mídias) baseadas em `funnel_orders_view`
+`LaunchEditionAnalysis.tsx` agora renderiza o bloco correto baseado em `funnel.funnel_model`. Lançamentos clássicos não foram afetados.
 
 ---
 

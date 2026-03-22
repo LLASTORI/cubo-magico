@@ -15,6 +15,7 @@ import { useLaunchEditionData } from '@/hooks/useLaunchEditionData';
 import { PassingDiarioChart } from '@/components/launch/PassingDiarioChart';
 import { LaunchProductsSalesBreakdown } from '@/components/launch/LaunchProductsSalesBreakdown';
 import { LaunchConversionAnalysis } from '@/components/launch/LaunchConversionAnalysis';
+import { LaunchPagoConversaoBlock } from '@/components/launch/LaunchPagoConversaoBlock';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_MAP = {
@@ -48,7 +49,7 @@ export default function LaunchEditionAnalysis() {
     queryFn: async () => {
       const { data } = await supabase
         .from('funnels')
-        .select('id, name, launch_tag')
+        .select('id, name, launch_tag, funnel_model')
         .eq('id', funnelId!)
         .single();
       return data;
@@ -189,15 +190,23 @@ export default function LaunchEditionAnalysis() {
             </Card>
           )}
 
-          {/* Análise de conversão lead→comprador */}
+          {/* Análise de conversão — bloco depende do modelo do funil */}
           {funnelId && editionData.start_date && (
-            <LaunchConversionAnalysis
-              funnelId={funnelId}
-              projectId={projectId}
-              launchTag={funnel?.launch_tag ?? null}
-              startDate={startDate}
-              endDate={endDate}
-            />
+            funnel?.funnel_model === 'lancamento_pago' ? (
+              <LaunchPagoConversaoBlock
+                funnelId={funnelId}
+                projectId={projectId}
+                edition={editionData}
+              />
+            ) : (
+              <LaunchConversionAnalysis
+                funnelId={funnelId}
+                projectId={projectId}
+                launchTag={funnel?.launch_tag ?? null}
+                startDate={startDate}
+                endDate={endDate}
+              />
+            )
           )}
         </div>
       </main>

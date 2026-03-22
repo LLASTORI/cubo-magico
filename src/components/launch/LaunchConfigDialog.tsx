@@ -29,6 +29,7 @@ interface LaunchConfigDialogProps {
     launch_end_date?: string | null;
     has_fixed_dates?: boolean;
     launch_tag?: string | null;
+    funnel_model?: string | null;
   };
   trigger?: React.ReactNode;
 }
@@ -47,7 +48,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
   const queryClient = useQueryClient();
   const projectId = funnel.project_id || '';
   
-  const { launchProducts, createLaunchProduct, updateLaunchProduct, deleteLaunchProduct } = useLaunchPhases(projectId, funnel.id);
+  const { phases, launchProducts, createLaunchProduct, updateLaunchProduct, deleteLaunchProduct } = useLaunchPhases(projectId, funnel.id);
 
   // Fetch offer mappings for this funnel
   const { data: offerMappings = [] } = useQuery({
@@ -61,6 +62,22 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
       return data || [];
     },
     enabled: !!projectId && !!funnel.id,
+  });
+
+  // Vincula phase_id em offer_mappings (somente lancamento_pago)
+  const updateOfferMappingPhase = useMutation({
+    mutationFn: async ({ mappingId, phaseId }: { mappingId: string; phaseId: string | null }) => {
+      const { error } = await supabase
+        .from('offer_mappings')
+        .update({ phase_id: phaseId })
+        .eq('id', mappingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['offer-mappings', projectId, funnel.id] });
+      toast.success('Fase vinculada');
+    },
+    onError: (err: Error) => toast.error('Erro ao vincular fase: ' + err.message),
   });
 
   // Update funnel dates
@@ -291,6 +308,37 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                           </div>
                         </div>
                         
+                        {/* Phase selector — somente lancamento_pago */}
+                        {funnel.funnel_model === 'lancamento_pago' && phases.length > 0 && (
+                          <div className="flex items-center gap-2 pt-2 border-t">
+                            <Label className="text-sm text-muted-foreground whitespace-nowrap">Fase:</Label>
+                            <Select
+                              value={(mapping as any).phase_id || 'none'}
+                              onValueChange={(value) =>
+                                updateOfferMappingPhase.mutate({
+                                  mappingId: mapping.id,
+                                  phaseId: value === 'none' ? null : value,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-sm flex-1">
+                                <SelectValue placeholder="Sem fase" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sem fase</SelectItem>
+                                {phases.map((phase) => (
+                                  <SelectItem key={phase.id} value={phase.id}>
+                                    {phase.name}
+                                    <span className="ml-1 text-xs text-muted-foreground">
+                                      ({phase.phase_type})
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
                         {/* Lot Name Field - only show when product is classified */}
                         {linkedProduct && (
                           <div className="flex items-center gap-2 pt-2 border-t">

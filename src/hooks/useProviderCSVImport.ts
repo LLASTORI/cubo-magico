@@ -171,6 +171,9 @@ export function useProviderCSVImport(projectId: string) {
     setResult(accumulated);
     setImporting(false);
     queryClient.invalidateQueries({ queryKey: ['csv-import-batches', projectId] });
+    // Invalidate all funnel/order queries so the UI reflects newly imported data
+    queryClient.invalidateQueries({ queryKey: ['funnel-orders', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['item-revenue', projectId] });
   }
 
   return { preview, fileName, productMatch, importing, progress, result, handleFile, runImport };

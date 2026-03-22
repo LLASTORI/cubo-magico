@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 22/03/2026 (sessão 29/30 — Onda 2A lançamento pago + social listening cron fix)
+> Última atualização: 22/03/2026 (sessão 31 — Fix inconsistências financeiras Camila Leal + cache invalidation CSV)
 
 ---
 
@@ -66,6 +66,7 @@
 
 ## 🟡 Importante — Mas não urgente
 
+- [ ] **Abandonos na Saúde do Funil sempre zerados** — bug de matching: `offer_mappings.id_produto` (UUID interno) vs `crm_transactions.product_code` (ID numérico Hotmart). Nunca batem. Requer mapear `id_produto` para o ID numérico da Hotmart ou buscar `product_code` de outra fonte.
 - [ ] Fechar batches CSV em status `importing` há mais de 24h como `incomplete`
 - [ ] Validar todos os módulos após reconstrução (CRM, automações, mídia paga, quizzes)
 

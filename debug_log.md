@@ -5,8 +5,37 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-22 (sessão 30) — Onda 2A + 2B entregues
-- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B (comparativo + phase_id) ✅
+- **Data:** 2026-03-22 (sessão 31) — Investigação e correção de inconsistências financeiras no projeto Camila Leal
+- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B (comparativo + phase_id) ✅ | Cache invalidation pós-CSV import ✅
+
+---
+
+### [2026-03-22] Inconsistências financeiras — Projeto Camila Leal (sessão 31) ✅
+
+**Sintoma inicial:** Faturamento bruto exibindo ~R$12.588 quando o real era ~R$8.000 no funil "Face | Conteúdo Magnético".
+
+**Causa raiz — Faturamento inflado:**
+CSV importado em 14/03 criou pedidos com `customer_paid` = valor total do parcelamento (2x ou 3x o preço do item), em vez do valor unitário do plano. Webhook da época também tinha o mesmo bug (corrigido ~14-15/03).
+
+**Fix aplicado:**
+Deletados todos os 7.061 pedidos do projeto (cascade em 9.073 order_items + 25.163 ledger_events) e reimportado CSV limpo → R$8.357,46 confirmado correto (133 completed + 63 approved).
+
+**Sintomas secundários identificados (pós-reimportação):**
+Três problemas adicionais, todos causados por **cache desatualizado do React Query** — o browser exibia dados antigos de antes da reimportação:
+
+1. **OB revenue R$0** — `itemRevenueQuery` cacheada quando OBs tinham `item_type='main'` (pré-reimportação). View `offer_item_revenue_view` retornava vazio para `item_type='bump'` → `itemAvgPriceByOfferCode = {}` → `0 × count = R$0`.
+2. **FRONT count 147 em vez de 196** — `ordersQuery` cacheada com dados pré-reimportação. DB confirma 196 pedidos com `main_offer_code='7fbtbile'` em março.
+3. **Saúde do Funil tudo zerado** — `approvedSalesQuery` cacheada com dados antigos → `vendasAprovadas=0` → funil filtrado do resultado → fallback com zeros exibido.
+
+**Fix de código aplicado (`useProviderCSVImport.ts`):**
+Após qualquer importação CSV, agora invalida automaticamente:
+- `['funnel-orders', projectId]` — força refetch dos pedidos do funil
+- `['item-revenue', projectId]` — força refetch da receita por oferta (OB/US/DS)
+
+**Ação imediata para o usuário:** Hard refresh (Ctrl+Shift+R) para limpar o cache e ver dados corretos.
+
+**Observação sobre Abandonos na Saúde do Funil:**
+Bug pré-existente: `offer_mappings.id_produto` guarda UUIDs internos, mas `crm_transactions.product_code` guarda ID numérico da Hotmart (ex: `'4567276'`). Nunca batem → `totalAbandonos = 0` sempre. Reembolsos e cancelamentos funcionam (usam `offer_code`). Requer correção separada no schema ou na lógica de matching.
 
 ---
 

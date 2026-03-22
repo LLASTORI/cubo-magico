@@ -115,33 +115,46 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  // Respond immediately so pg_net doesn't timeout (default 5s, increased to 120s but
+  // function takes >2min). EdgeRuntime.waitUntil keeps the function alive after response.
+  const processingPromise = runCronSync(supabase)
+  if (typeof (globalThis as any).EdgeRuntime?.waitUntil === 'function') {
+    ;(globalThis as any).EdgeRuntime.waitUntil(processingPromise)
+  }
+
+  return new Response(JSON.stringify({ success: true, message: 'Sync started' }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+})
+
+async function runCronSync(supabase: any) {
   const startTime = Date.now()
   console.log('='.repeat(60))
   console.log('[SOCIAL-LISTENING-CRON] Starting automatic sync at', new Date().toISOString())
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
     const { data: activeProjects, error: projectsError } = await supabase
       .from('social_listening_pages')
       .select('project_id, projects!inner(id, name)')
       .eq('is_active', true)
       .order('project_id')
-    
+
     if (projectsError) {
       console.error('[SOCIAL-LISTENING-CRON] Error fetching active projects:', projectsError)
       throw new Error('Erro ao buscar projetos ativos')
     }
 
-    const projectIds = [...new Set((activeProjects || []).map(p => p.project_id))]
+    const projectIds = [...new Set((activeProjects || []).map((p: any) => p.project_id))]
     console.log(`[SOCIAL-LISTENING-CRON] Found ${projectIds.length} projects with active social listening`)
 
     const results: SyncResult[] = []
 
     for (const projectId of projectIds) {
-      const projectInfo = activeProjects?.find(p => p.project_id === projectId)
+      const projectInfo = activeProjects?.find((p: any) => p.project_id === projectId)
       const projectName = (projectInfo?.projects as any)?.name || 'Unknown'
-      
+
       console.log('-'.repeat(40))
       console.log(`[SOCIAL-LISTENING-CRON] Processing project: ${projectName} (${projectId})`)
 
@@ -216,8 +229,8 @@ Deno.serve(async (req) => {
           result.error = `${result.error ? `${result.error}; ` : ''}[sync_ads] ${details || 'Falha sem detalhes'}`
         }
 
-        // Step 6: Process pending comments with AI (max 50 per run)
-        const aiResult = await processAIForProject(supabase, projectId, 50)
+        // Step 6: Process pending comments with AI (max 20 per project per run)
+        const aiResult = await processAIForProject(supabase, projectId, 20)
         result.keywordClassified = aiResult.keywordClassified || 0
         result.aiProcessed = aiResult.aiProcessed || 0
 
@@ -257,30 +270,10 @@ Deno.serve(async (req) => {
     console.log(`[SOCIAL-LISTENING-CRON] Ads: ${totalAdPosts} posts, ${totalAdComments} comments`)
     console.log(`[SOCIAL-LISTENING-CRON] Classification: ${totalKeyword} keyword, ${totalAI} AI`)
 
-    return new Response(JSON.stringify({
-      success: true,
-      duration: `${duration}s`,
-      projectsProcessed: results.length,
-      projectsSuccessful: successCount,
-      totalPostsSynced: totalPosts,
-      totalCommentsSynced: totalComments,
-      totalAdPostsSynced: totalAdPosts,
-      totalAdCommentsSynced: totalAdComments,
-      totalKeywordClassified: totalKeyword,
-      totalAIProcessed: totalAI,
-      results,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
   } catch (error: any) {
     console.error('[SOCIAL-LISTENING-CRON] FATAL ERROR:', error.message)
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
   }
-})
+}
 
 // ============= POST SYNC =============
 

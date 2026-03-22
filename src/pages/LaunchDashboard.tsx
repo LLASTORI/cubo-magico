@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
-import { 
-  RefreshCw, CalendarIcon, Rocket, TrendingUp, DollarSign, 
-  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings, Layers, Calendar as CalendarIconFilled
+import {
+  RefreshCw, CalendarIcon, Rocket, TrendingUp, DollarSign,
+  ShoppingCart, Target, Search, ChevronDown, ChevronUp, Settings, Layers, Calendar as CalendarIconFilled,
+  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProject } from "@/contexts/ProjectContext";
@@ -23,6 +24,8 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths, parseISO, isValid
 import { ptBR } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
 import { useLaunchData, LaunchMetrics } from "@/hooks/useLaunchData";
+import { useEditions } from "@/hooks/useLaunchEditions";
+import { useTenantNavigation } from "@/navigation";
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -365,7 +368,14 @@ const LaunchDashboard = () => {
                             <div className="flex items-center gap-2">
                               <Rocket className="w-4 h-4 text-primary" />
                               <div>
-                                <p className="font-medium">{launch.funnelName}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{launch.funnelName}</p>
+                                  {funnels.find(f => f.id === launch.funnelId)?.funnel_model === 'lancamento_pago' && (
+                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                                      Lançamento Pago
+                                    </Badge>
+                                  )}
+                                </div>
                                 <div className="flex flex-wrap items-center gap-2 mt-0.5">
                                   {launch.hasFixedDates && launch.launchStartDate && launch.launchEndDate && (
                                     <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -446,82 +456,89 @@ const LaunchDashboard = () => {
                         {isExpanded && (
                           <TableRow className="bg-muted/30">
                             <TableCell colSpan={10} className="p-4">
-                              <div className="space-y-6">
-                                {/* Phases Section */}
-                                <LaunchPhasesOverview
-                                  projectId={currentProject?.id || ""}
+                              {funnels.find(f => f.id === launch.funnelId)?.funnel_model === 'lancamento_pago' ? (
+                                <LaunchPagoEditionsRow
                                   funnelId={launch.funnelId}
-                                  startDate={appliedStartDate}
-                                  endDate={appliedEndDate}
+                                  projectId={currentProject?.id || ''}
                                 />
-
-                                {/* Products/Lots Sales Breakdown */}
-                                <LaunchProductsSalesBreakdown
-                                  projectId={currentProject?.id || ""}
-                                  funnelId={launch.funnelId}
-                                  startDate={appliedStartDate}
-                                  endDate={appliedEndDate}
-                                />
-
-                                {/* Lead to Buyer Conversion Analysis */}
-                                <div className="pt-4 border-t">
-                                  <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4" />
-                                    Análise de Conversão Lead → Comprador
-                                  </h4>
-                                  <LaunchConversionAnalysis
-                                    projectId={currentProject?.id}
+                              ) : (
+                                <div className="space-y-6">
+                                  {/* Phases Section */}
+                                  <LaunchPhasesOverview
+                                    projectId={currentProject?.id || ""}
                                     funnelId={launch.funnelId}
-                                    launchTag={launch.launchTag}
                                     startDate={appliedStartDate}
                                     endDate={appliedEndDate}
                                   />
-                                </div>
 
-                                {/* Positions Section */}
-                                {launch.positions.length > 0 && (
-                                  <div className="space-y-4 pt-4 border-t">
-                                    <h4 className="text-sm font-semibold text-foreground">
-                                      Detalhamento por Posição
+                                  {/* Products/Lots Sales Breakdown */}
+                                  <LaunchProductsSalesBreakdown
+                                    projectId={currentProject?.id || ""}
+                                    funnelId={launch.funnelId}
+                                    startDate={appliedStartDate}
+                                    endDate={appliedEndDate}
+                                  />
+
+                                  {/* Lead to Buyer Conversion Analysis */}
+                                  <div className="pt-4 border-t">
+                                    <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                                      <TrendingUp className="w-4 h-4" />
+                                      Análise de Conversão Lead → Comprador
                                     </h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                      {launch.positions.map((pos, idx) => (
-                                        <Card key={idx} className="p-3 bg-card">
-                                          <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                              <Badge variant="outline" className="text-xs">
-                                                {pos.tipo}
-                                              </Badge>
-                                              <p className="text-sm font-medium mt-1">{pos.nome}</p>
-                                            </div>
-                                            <span className="text-xs text-muted-foreground">
-                                              {formatNumber(pos.percentage, 1)}%
-                                            </span>
-                                          </div>
-                                          <div className="grid grid-cols-3 gap-2 text-xs">
-                                            <div>
-                                              <p className="text-muted-foreground">Receita</p>
-                                              <p className="font-semibold">{formatCurrency(pos.revenue)}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-muted-foreground">Vendas</p>
-                                              <p className="font-semibold">{pos.sales}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-muted-foreground">Ticket</p>
-                                              <p className="font-semibold">{formatCurrency(pos.avgTicket)}</p>
-                                            </div>
-                                          </div>
-                                          <Progress 
-                                            value={pos.percentage} 
-                                            className="h-1 mt-2"
-                                          />
-                                        </Card>
-                                      ))}
-                                    </div>
+                                    <LaunchConversionAnalysis
+                                      projectId={currentProject?.id}
+                                      funnelId={launch.funnelId}
+                                      launchTag={launch.launchTag}
+                                      startDate={appliedStartDate}
+                                      endDate={appliedEndDate}
+                                    />
                                   </div>
-                                )}
-                              </div>
+
+                                  {/* Positions Section */}
+                                  {launch.positions.length > 0 && (
+                                    <div className="space-y-4 pt-4 border-t">
+                                      <h4 className="text-sm font-semibold text-foreground">
+                                        Detalhamento por Posição
+                                      </h4>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {launch.positions.map((pos, idx) => (
+                                          <Card key={idx} className="p-3 bg-card">
+                                            <div className="flex justify-between items-start mb-2">
+                                              <div>
+                                                <Badge variant="outline" className="text-xs">
+                                                  {pos.tipo}
+                                                </Badge>
+                                                <p className="text-sm font-medium mt-1">{pos.nome}</p>
+                                              </div>
+                                              <span className="text-xs text-muted-foreground">
+                                                {formatNumber(pos.percentage, 1)}%
+                                              </span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2 text-xs">
+                                              <div>
+                                                <p className="text-muted-foreground">Receita</p>
+                                                <p className="font-semibold">{formatCurrency(pos.revenue)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-muted-foreground">Vendas</p>
+                                                <p className="font-semibold">{pos.sales}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-muted-foreground">Ticket</p>
+                                                <p className="font-semibold">{formatCurrency(pos.avgTicket)}</p>
+                                              </div>
+                                            </div>
+                                            <Progress
+                                              value={pos.percentage}
+                                              className="h-1 mt-2"
+                                            />
+                                          </Card>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </TableCell>
                           </TableRow>
                         )}
@@ -552,5 +569,56 @@ const LaunchDashboard = () => {
     </div>
   );
 };
+
+function EditionStatusBadge({ status }: { status: string }) {
+  const map = {
+    planned: { label: 'Planejada', className: 'bg-slate-100 text-slate-700' },
+    active: { label: 'Ativa', className: 'bg-green-100 text-green-700' },
+    finished: { label: 'Encerrada', className: 'bg-amber-100 text-amber-700' },
+  } as const;
+  const s = map[status as keyof typeof map] ?? map.planned;
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.className}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function LaunchPagoEditionsRow({ funnelId, projectId }: { funnelId: string; projectId: string }) {
+  const { editions } = useEditions(projectId, funnelId);
+  const { navigateTo } = useTenantNavigation();
+
+  if (!editions.length) {
+    return (
+      <div className="py-4 text-center text-sm text-muted-foreground">
+        Nenhuma edição cadastrada. Configure em{' '}
+        <span className="font-medium">Configurar → Edições</span>.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 py-2">
+      {editions.map((edition) => (
+        <button
+          key={edition.id}
+          onClick={() => navigateTo(`/lancamentos/${funnelId}/edicoes/${edition.id}`)}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">{edition.name}</span>
+            <EditionStatusBadge status={edition.status} />
+          </div>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            {edition.event_date && (
+              <span>Evento: {format(new Date(edition.event_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+            )}
+            <ChevronRight className="w-4 h-4" />
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default LaunchDashboard;

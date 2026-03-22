@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LaunchPhaseEditor } from "./LaunchPhaseEditor";
+import { LaunchEditionsTab } from "./LaunchEditionsTab";
 import { useLaunchPhases, PRODUCT_TYPES } from "@/hooks/useLaunchPhases";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -129,10 +130,11 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
         </DialogHeader>
 
         <Tabs defaultValue="period" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="period">Período</TabsTrigger>
             <TabsTrigger value="phases">Fases</TabsTrigger>
             <TabsTrigger value="products">Produtos</TabsTrigger>
+            <TabsTrigger value="editions">Edições</TabsTrigger>
           </TabsList>
 
           <TabsContent value="period" className="space-y-4">
@@ -312,6 +314,10 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                 </div>
               )}
             </Card>
+          </TabsContent>
+
+          <TabsContent value="editions" className="space-y-4">
+            <LaunchEditionsTab projectId={projectId} funnelId={funnel.id} />
           </TabsContent>
         </Tabs>
       </DialogContent>

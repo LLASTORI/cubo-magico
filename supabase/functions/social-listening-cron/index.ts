@@ -19,6 +19,8 @@ interface SyncResult {
   success: boolean
   postsSynced: number
   commentsSynced: number
+  adPostsSynced: number
+  adCommentsSynced: number
   keywordClassified: number
   aiProcessed: number
   stuckReset: number
@@ -149,6 +151,8 @@ Deno.serve(async (req) => {
         success: true,
         postsSynced: 0,
         commentsSynced: 0,
+        adPostsSynced: 0,
+        adCommentsSynced: 0,
         keywordClassified: 0,
         aiProcessed: 0,
         stuckReset: 0,
@@ -202,7 +206,17 @@ Deno.serve(async (req) => {
           result.error = `${result.error ? `${result.error}; ` : ''}[sync_comments] ${details || 'Falha sem detalhes'}`
         }
 
-        // Step 5: Process pending comments with AI (max 50 per run)
+        // Step 5: Sync ad comments (if project has ad accounts)
+        const adResult: SyncOperationResult = await syncAdCommentsForProject(supabase, projectId, credentials.access_token)
+        result.adPostsSynced = (adResult as any).adPostsSynced || 0
+        result.adCommentsSynced = (adResult as any).adCommentsSynced || 0
+        if (!adResult.success || adResult.partialFailure) {
+          result.success = false
+          const details = adResult.errors?.length ? adResult.errors.join(' | ') : adResult.error
+          result.error = `${result.error ? `${result.error}; ` : ''}[sync_ads] ${details || 'Falha sem detalhes'}`
+        }
+
+        // Step 6: Process pending comments with AI (max 50 per run)
         const aiResult = await processAIForProject(supabase, projectId, 50)
         result.keywordClassified = aiResult.keywordClassified || 0
         result.aiProcessed = aiResult.aiProcessed || 0
@@ -210,6 +224,8 @@ Deno.serve(async (req) => {
         console.log(`[SOCIAL-LISTENING-CRON] Project ${projectName} completed:`, {
           posts: result.postsSynced,
           comments: result.commentsSynced,
+          adPosts: result.adPostsSynced,
+          adComments: result.adCommentsSynced,
           keyword: result.keywordClassified,
           ai: result.aiProcessed,
           stuck: result.stuckReset
@@ -229,13 +245,16 @@ Deno.serve(async (req) => {
     const successCount = results.filter(r => r.success).length
     const totalPosts = results.reduce((sum, r) => sum + r.postsSynced, 0)
     const totalComments = results.reduce((sum, r) => sum + r.commentsSynced, 0)
+    const totalAdPosts = results.reduce((sum, r) => sum + r.adPostsSynced, 0)
+    const totalAdComments = results.reduce((sum, r) => sum + r.adCommentsSynced, 0)
     const totalKeyword = results.reduce((sum, r) => sum + r.keywordClassified, 0)
     const totalAI = results.reduce((sum, r) => sum + r.aiProcessed, 0)
 
     console.log('='.repeat(60))
     console.log(`[SOCIAL-LISTENING-CRON] COMPLETED in ${duration}s`)
     console.log(`[SOCIAL-LISTENING-CRON] Projects: ${successCount}/${results.length} successful`)
-    console.log(`[SOCIAL-LISTENING-CRON] Total: ${totalPosts} posts, ${totalComments} comments`)
+    console.log(`[SOCIAL-LISTENING-CRON] Organic: ${totalPosts} posts, ${totalComments} comments`)
+    console.log(`[SOCIAL-LISTENING-CRON] Ads: ${totalAdPosts} posts, ${totalAdComments} comments`)
     console.log(`[SOCIAL-LISTENING-CRON] Classification: ${totalKeyword} keyword, ${totalAI} AI`)
 
     return new Response(JSON.stringify({
@@ -245,6 +264,8 @@ Deno.serve(async (req) => {
       projectsSuccessful: successCount,
       totalPostsSynced: totalPosts,
       totalCommentsSynced: totalComments,
+      totalAdPostsSynced: totalAdPosts,
+      totalAdCommentsSynced: totalAdComments,
       totalKeywordClassified: totalKeyword,
       totalAIProcessed: totalAI,
       results,
@@ -557,6 +578,239 @@ async function upsertCommentIG(supabase: any, projectId: string, postId: string,
 
   if (error) {
     throw new Error(`[upsert_comment_ig] project=${projectId} post=${postId} comment=${comment?.id}: ${error.message}`)
+  }
+}
+
+// ============= AD COMMENT SYNC =============
+
+async function syncAdCommentsForProject(supabase: any, projectId: string, accessToken: string) {
+  const GRAPH_API_VERSION = 'v19.0'
+  const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
+
+  let totalAdPosts = 0
+  let totalComments = 0
+  const errors: string[] = []
+
+  try {
+    // Check if project has active ad accounts
+    const { data: adAccounts } = await supabase
+      .from('meta_ad_accounts')
+      .select('account_id')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+
+    if (!adAccounts?.length) {
+      return { success: true, adPostsSynced: 0, adCommentsSynced: 0 }
+    }
+
+    // Load page tokens
+    const { data: savedPages } = await supabase
+      .from('social_listening_pages')
+      .select('page_id, platform, access_token, instagram_username, page_name')
+      .eq('project_id', projectId)
+
+    const fbPageTokenMap: Record<string, string> = {}
+    let igPageToken: string | null = null
+    const ownAccountFbPageIds = new Set<string>()
+    const ownAccountIgUsernames = new Set<string>()
+
+    for (const page of savedPages || []) {
+      if (!page.access_token) continue
+      const rawId = page.page_id.replace(/_facebook$/, '').replace(/_instagram$/, '')
+      if (page.platform === 'facebook') {
+        fbPageTokenMap[rawId] = page.access_token
+        ownAccountFbPageIds.add(rawId)
+      } else if (page.platform === 'instagram') {
+        igPageToken = page.access_token
+        const igHandle = page.instagram_username || page.page_name?.match(/@([\w.]+)/)?.[1] || null
+        if (igHandle) ownAccountIgUsernames.add(igHandle.toLowerCase().replace(/^@/, '').trim())
+      }
+    }
+
+    const allCommentRows: any[] = []
+
+    for (const account of adAccounts) {
+      try {
+        const adsUrl = `${GRAPH_API_BASE}/${account.account_id}/ads?fields=id,name,effective_status,creative{effective_object_story_id,effective_instagram_story_id}&limit=50&access_token=${accessToken}`
+        const adsResponse = await fetch(adsUrl)
+        const adsData = await adsResponse.json()
+
+        if (adsData.error) {
+          errors.push(`[AD_ACCOUNT] ${account.account_id}: ${adsData.error.message}`)
+          continue
+        }
+
+        const processedFbStories = new Set<string>()
+        const processedIgMedias = new Set<string>()
+
+        for (const ad of adsData.data || []) {
+          const fbStoryId: string | null = ad.creative?.effective_object_story_id || null
+          const igMediaId: string | null = ad.creative?.effective_instagram_story_id || null
+
+          if (!fbStoryId && !igMediaId) continue
+
+          // Facebook feed comments
+          if (fbStoryId && !processedFbStories.has(fbStoryId)) {
+            processedFbStories.add(fbStoryId)
+            try {
+              const storyPageId = fbStoryId.split('_')[0]
+              const fbToken = fbPageTokenMap[storyPageId] || accessToken
+              const postId = await upsertAdPost(supabase, projectId, 'facebook', fbStoryId, ad.name)
+              if (postId) {
+                totalAdPosts++
+                const comments = await fetchAdComments(fbStoryId, 'facebook', fbToken, GRAPH_API_BASE)
+                for (const c of comments) {
+                  allCommentRows.push(buildAdCommentRow(projectId, postId, 'facebook', c, null, ownAccountFbPageIds, ownAccountIgUsernames))
+                  totalComments++
+                }
+              }
+            } catch (e: any) {
+              errors.push(`[AD_FB] ${account.account_id} ad=${ad.id}: ${e.message}`)
+            }
+          }
+
+          // Instagram feed/reels comments
+          if (igMediaId && !processedIgMedias.has(igMediaId)) {
+            processedIgMedias.add(igMediaId)
+            try {
+              const igToken = igPageToken || accessToken
+              const postId = await upsertAdPost(supabase, projectId, 'instagram', igMediaId, ad.name)
+              if (postId) {
+                totalAdPosts++
+                const comments = await fetchAdComments(igMediaId, 'instagram', igToken, GRAPH_API_BASE)
+                for (const c of comments) {
+                  allCommentRows.push(buildAdCommentRow(projectId, postId, 'instagram', c, null, ownAccountFbPageIds, ownAccountIgUsernames))
+                  totalComments++
+                  // replies
+                  if (c.replies?.data) {
+                    for (const reply of c.replies.data) {
+                      allCommentRows.push(buildAdCommentRow(projectId, postId, 'instagram', reply, c.id, ownAccountFbPageIds, ownAccountIgUsernames))
+                      totalComments++
+                    }
+                  }
+                }
+              }
+            } catch (e: any) {
+              errors.push(`[AD_IG] ${account.account_id} ad=${ad.id}: ${e.message}`)
+            }
+          }
+
+          await delay(200)
+        }
+      } catch (accountError: any) {
+        errors.push(`[AD_ACCOUNT] ${account.account_id}: ${accountError.message}`)
+      }
+
+      await delay(500)
+    }
+
+    // Deduplicate and batch upsert
+    const seenKeys = new Set<string>()
+    const dedupedRows = allCommentRows.filter(row => {
+      const key = `${row.platform}:${row.comment_id_meta}`
+      if (seenKeys.has(key)) return false
+      seenKeys.add(key)
+      return true
+    })
+
+    const CHUNK = 200
+    for (let i = 0; i < dedupedRows.length; i += CHUNK) {
+      const chunk = dedupedRows.slice(i, i + CHUNK)
+      const { error } = await supabase
+        .from('social_comments')
+        .upsert(chunk, { onConflict: 'project_id,platform,comment_id_meta' })
+      if (error) {
+        console.error('[SYNC_AD_COMMENTS] Batch upsert error:', error.message)
+        errors.push(`Batch upsert: ${error.message}`)
+      }
+    }
+
+    console.log(`[SYNC_AD_COMMENTS] project=${projectId} adPosts=${totalAdPosts} comments=${totalComments} errors=${errors.length}`)
+    return { success: errors.length === 0, adPostsSynced: totalAdPosts, adCommentsSynced: totalComments, errors, partialFailure: errors.length > 0 }
+  } catch (error: any) {
+    return { success: false, adPostsSynced: 0, adCommentsSynced: 0, error: error.message, errors }
+  }
+}
+
+async function upsertAdPost(supabase: any, projectId: string, platform: string, postIdMeta: string, adName: string): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from('social_posts')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('post_id_meta', postIdMeta)
+    .maybeSingle()
+
+  if (existing) {
+    await supabase.from('social_posts').update({ is_ad: true, post_type: 'ad' }).eq('id', existing.id)
+    return existing.id
+  }
+
+  const { data: newPost } = await supabase
+    .from('social_posts')
+    .insert({ project_id: projectId, platform, post_id_meta: postIdMeta, post_type: 'ad', is_ad: true, message: adName })
+    .select('id')
+    .single()
+
+  return newPost?.id || null
+}
+
+async function fetchAdComments(postIdMeta: string, platform: string, token: string, graphApiBase: string): Promise<any[]> {
+  const MAX_COMMENTS = 500
+  const fields = platform === 'instagram'
+    ? 'id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}'
+    : 'id,message,created_time,from,like_count,comment_count'
+
+  const allComments: any[] = []
+  let nextUrl: string | null = `${graphApiBase}/${postIdMeta}/comments?fields=${fields}&limit=100&access_token=${token}`
+
+  while (nextUrl && allComments.length < MAX_COMMENTS) {
+    const response = await fetch(nextUrl)
+    const data = await response.json()
+    if (data.error) {
+      throw new Error(`code=${data.error.code || 'n/a'} message=${data.error.message}`)
+    }
+    allComments.push(...(data.data || []))
+    nextUrl = data.paging?.next || null
+    if (nextUrl) await delay(200)
+  }
+
+  return allComments
+}
+
+function buildAdCommentRow(
+  projectId: string,
+  postId: string,
+  platform: string,
+  comment: any,
+  parentId: string | null,
+  ownAccountFbPageIds: Set<string>,
+  ownAccountIgUsernames: Set<string>,
+): any {
+  const authorUsername = platform === 'instagram' ? comment.username : comment.from?.name
+  let isOwnAccount = false
+  if (platform === 'instagram') {
+    const igUsername = comment.username?.toLowerCase().replace(/^@/, '').trim()
+    isOwnAccount = igUsername ? ownAccountIgUsernames.has(igUsername) : false
+  } else {
+    const fromId = comment.from?.id
+    isOwnAccount = fromId ? ownAccountFbPageIds.has(String(fromId)) : false
+  }
+
+  return {
+    project_id: projectId,
+    post_id: postId,
+    platform,
+    comment_id_meta: comment.id,
+    parent_meta_id: parentId || null,
+    text: platform === 'instagram' ? comment.text : comment.message,
+    author_username: authorUsername,
+    author_id: platform === 'instagram' ? null : comment.from?.id,
+    likes_count: comment.like_count || 0,
+    replies_count: comment.comment_count || comment.replies?.data?.length || 0,
+    comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
+    is_deleted: false,
+    is_own_account: isOwnAccount,
+    ai_processing_status: isOwnAccount ? 'skipped' : 'pending',
   }
 }
 

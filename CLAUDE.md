@@ -131,11 +131,25 @@ Domínios principais:
 |---|---|
 | Vendas | `hotmart-webhook`, `hotmart-products`, `hotmart-offers-cron` |
 | CSV Import | `provider-csv-import` (v2), `provider-csv-import-revert` (v1) |
-| Meta Ads | `meta-insights-cron`, `meta-oauth-*`, `meta-hierarchy-cron` |
+| Meta Ads | `meta-api` (sync_insights, sync_hierarchy_full), `meta-insights-cron`, `meta-oauth-*`, `meta-hierarchy-cron` |
 | Quiz/Survey | `quiz-public-*`, `quiz-copilot`, `survey-public` |
 | Automações | `automation-engine`, `whatsapp-webhook`, `evolution-api` |
 | Exports | `export-csv-utf8`, `export-orders-sql`, `export-contacts-sql` |
 | Monitoramento | `orders-health-check` (cron diário 08h UTC), `hotmart-offers-cron` (cron segunda 07h UTC) |
+
+## Meta Ads — Sync de Histórico
+
+**Ação:** `sync_insights` em `supabase/functions/meta-api/index.ts`
+
+**Smart cache:** `determineDatesToFetch` — datas já em `meta_insights` há >8 dias são puladas (imutáveis). Datas <7 dias são sempre re-buscadas (janela de atribuição Meta).
+
+**Chunking:** `MAX_DAYS_PER_CHUNK = 15` — qualquer range é dividido em chunks de 15 dias. `PARALLEL_CHUNKS_HISTORICAL = 6` (usado quando `daysFromStart >= 30`), `PARALLEL_CHUNKS_RECENT = 2`.
+
+**Auto-batching no frontend (`MetaAds.tsx`):** Ranges >90 dias são divididos em lotes de 60 dias e disparados sequencialmente com 3s de pausa. O smart cache garante idempotência. Suporta até 2 anos.
+
+**Polling:** ≤30 dias → até 45s; >30 dias → ~4s/dia, máx 10 minutos.
+
+**Reauthenticação:** tokens OAuth Meta expiram em ~60 dias. Reconectar em Configurações → Conexões Meta. Erro detectado automaticamente pelo frontend (toast específico).
 
 ## Sistema de CSV Import (Hotmart)
 

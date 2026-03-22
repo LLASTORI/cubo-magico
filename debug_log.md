@@ -5,8 +5,44 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-21 (sessão 27) — Social Listening: merge Instagram + 3 bugs corrigidos
-- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅
+- **Data:** 2026-03-22 (sessão 28) — Meta Ads histórico + Palavras de Automação fixes
+- **Status geral:** Social Listening 100% operacional ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅ | Meta Ads histórico: desbloqueado ✅
+
+---
+
+### [2026-03-22] Meta Ads — sync histórico desbloqueado (sessão 28) ✅
+
+**Bug 1 — `isHistorical` calculado errado:**
+Em `getInsightsIncremental`, `isHistorical` usava `daysFromEnd` (distância de `dateStop` até hoje). Para um range "90 dias atrás → hoje", `dateStop=hoje` → `daysFromEnd=0` → `isHistorical=false` → apenas 2 chunks paralelos em vez de 6. **3x mais lento do que deveria.**
+Corrigido para usar `daysFromStart` (distância de `dateStart` até hoje).
+
+**Bug 2 — Frontend parava de fazer polling cedo demais:**
+`pollDurationMs` era `Math.min(180000, ...)` — máximo 3 minutos para qualquer range. Para 90 dias o sync levava mais tempo e dados apareciam depois que o frontend já parou de verificar.
+Corrigido: ≤30 dias → até 45s; >30 dias → 4s/dia, máx 10 minutos.
+
+**Auto-batching para ranges > 90 dias:**
+Ranges >90 dias são divididos em lotes de 60 dias, disparados sequencialmente com 3s de pausa entre chamadas. Aproveita o smart cache (datas já salvas puladas). 2 anos = 13 lotes de 60 dias.
+
+**UX:** Novos botões rápidos no `MetaDateFilters`: 90 dias, 6 meses, 1 ano, 2 anos. Toast específico para importação histórica.
+
+**Deploy:** `meta-api` re-deployada. Frontend commitado.
+
+---
+
+### [2026-03-22] Social Listening — Palavras de Automação: 2 bugs (sessão 28) ✅
+
+**Bug 1 — Ignore keywords não filtravam comentários existentes:**
+Root cause: o check de `ignore_keywords` só rodava dentro do `process_ai` para comentários `pending`. Comentários já processados (`completed`), com falha (`failed`) ou recém-sincronizados sem `process_ai` permaneciam com `is_automation=false` e apareciam na lista.
+- Nova ação `apply_ignore_keywords` na edge function: varre TODOS os comentários com `is_automation=false` do projeto e marca os que batem com ignore_keywords como `is_automation=true, ai_processing_status=skipped`
+- `AIKnowledgeBaseSettings.onSuccess` chama a ação automaticamente ao salvar o KB quando há ignore_keywords configuradas
+- Retroativo imediato: 434 comentários da Monaliza Krepe marcados via SQL direto
+
+**Bug 2 — Mensagem genérica para token OAuth expirado:**
+Root cause: erro Meta código 190 ("Invalid OAuth 2.0 Access Token") — `fetchCommentsForPost` tenta pageToken → fallback token → ambos expirados → mensagem genérica "Sincronização parcial" sem indicar o que fazer.
+Fix: `useSocialListening.ts` detecta mensagens OAuth/Access Token e exibe: "Token Meta expirado — reconecte em Configurações → Conexões Meta".
+**Ação necessária para Monaliza Krepe:** reconectar conta Meta para renovar tokens (39 posts afetados).
+
+**Deploy:** `social-comments-api` re-deployada (v44).
 
 ---
 

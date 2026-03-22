@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 21/03/2026 (sessão 27 — Social Listening: merge Instagram + 3 bugs corrigidos)
+> Última atualização: 22/03/2026 (sessão 28 — Meta Ads histórico + fixes Social Listening)
 
 ---
 
@@ -73,6 +73,14 @@
 - [ ] **Enriquecer localização dos contatos via dados do Hotmart**
   - Cruzar `orders` com `crm_contacts` para popular `city`, `state`, `country`, `cep`
 
+## 🟡 Importante — Social Listening
+
+- [ ] **Reconectar conta Meta — Monaliza Krepe**
+  - 39 posts falhando com "Invalid OAuth 2.0 Access Token"
+  - Ir em Configurações → Conexões Meta e refazer o OAuth
+
+---
+
 ## 🟢 Backlog técnico — Social Listening
 
 - [ ] **Publicação real do reply na Meta API** (Graph API POST `/{comment_id}/replies`)
@@ -95,6 +103,25 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Meta Ads — importação histórica até 2 anos (22/03/2026 — sessão 28)
+- [x] Bug: `isHistorical` usava `daysFromEnd` → corrigido para `daysFromStart` (3x mais rápido)
+- [x] Frontend: polling estendido para ranges longos (máx 10 min)
+- [x] Auto-batching: ranges >90 dias → lotes de 60 dias sequenciais
+- [x] Botões: 90 dias, 6 meses, 1 ano, 2 anos no MetaDateFilters
+
+### 🎯 Social Listening — Palavras de Automação fixes (22/03/2026 — sessão 28)
+- [x] Bug: ignore keywords só filtravam comentários `pending` — agora retroativo via `apply_ignore_keywords`
+- [x] `AIKnowledgeBaseSettings`: chama `apply_ignore_keywords` automaticamente ao salvar KB
+- [x] 434 comentários Monaliza Krepe marcados retroativamente como automation
+- [x] Mensagem de OAuth expirado: toast específico com instrução de reconexão
+
+### 🎯 Palavras em Automações — Social Listening (22/03/2026 — sessão 28)
+- [x] Migration `20260321210000`: `ignore_keywords text[]` em `ai_knowledge_base`, `is_automation boolean` em `social_comments`
+- [x] Edge function: check `matchesIgnoreKeywords` antes do `classifyByKeywords` no `process_ai`
+- [x] `getStats`: todas as queries filtram `is_automation=false`
+- [x] Frontend: toggle "Ver automações" + filtro `showAutomation` no `useComments`
+- [x] `AIKnowledgeBaseSettings`: seção "Palavras em Automações" com badge cinza, aviso < 2 chars
 
 ### 🔗 CRM ↔ Social Listening — merge automático por Instagram (21/03/2026 — sessão 27)
 - [x] RPC `merge_instagram_shadow(project_id, instagram, target_id)` — funde shadow profiles com contato rico

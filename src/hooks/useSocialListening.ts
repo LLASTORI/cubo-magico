@@ -256,17 +256,22 @@ export function useSocialListening(projectId: string | undefined) {
       const hasErrors = errors.length > 0;
       const firstError = hasErrors ? String(errors[0]) : null;
       const deletedText = data.deletedComments ? ` ${data.deletedComments} removidos detectados.` : '';
+      const isOAuthError = firstError?.toLowerCase().includes('oauth') || firstError?.toLowerCase().includes('access token');
 
       if (hasErrors && (data.commentsSynced || 0) === 0) {
         toast({
-          title: 'Falha ao sincronizar comentários',
-          description: `${errors.length} fonte(s) falharam.${firstError ? ` Exemplo: ${firstError}` : ''} Verifique permissões/tokens do Meta e tente novamente.`,
+          title: isOAuthError ? 'Token Meta expirado' : 'Falha ao sincronizar comentários',
+          description: isOAuthError
+            ? 'O token de acesso do Meta expirou. Reconecte a conta em Configurações → Conexões Meta.'
+            : `${errors.length} fonte(s) falharam.${firstError ? ` Exemplo: ${firstError}` : ''} Verifique permissões/tokens do Meta e tente novamente.`,
           variant: 'destructive',
         });
       } else if (hasErrors) {
         toast({
           title: 'Sincronização parcial de comentários',
-          description: `${data.commentsSynced} comentários encontrados, mas ${errors.length} fonte(s) falharam.${deletedText}${firstError ? ` Exemplo: ${firstError}` : ''}`,
+          description: isOAuthError
+            ? `${data.commentsSynced} comentários encontrados, mas ${errors.length} post(s) falharam por token expirado. Reconecte em Configurações → Conexões Meta.`
+            : `${data.commentsSynced} comentários encontrados, mas ${errors.length} fonte(s) falharam.${deletedText}${firstError ? ` Exemplo: ${firstError}` : ''}`,
         });
       } else {
         toast({

@@ -451,6 +451,10 @@ Deno.serve(async (req) => {
         result = await processCommentsWithAI(serviceSupabase, projectId, limit || 50)
         break
 
+      case 'apply_ignore_keywords':
+        result = await applyIgnoreKeywordsRetroactively(serviceSupabase, projectId)
+        break
+
       case 'link_crm_contacts':
         result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
         break
@@ -1038,6 +1042,54 @@ async function linkExistingCommentsToCRM(supabase: any, projectId: string) {
 
   console.log(`[LINK_CRM] linked=${linked} created=${created} skipped=${skipped}`)
   return { success: true, linked, created, skipped, totalProcessed: comments.length }
+}
+
+// ============= RETROACTIVE IGNORE KEYWORDS APPLICATION =============
+// Called when ignore_keywords are saved — marks ALL existing matching comments
+// as is_automation=true so they disappear from the list immediately.
+
+async function applyIgnoreKeywordsRetroactively(supabase: any, projectId: string) {
+  const { data: kb } = await supabase
+    .from('ai_knowledge_base')
+    .select('ignore_keywords')
+    .eq('project_id', projectId)
+    .maybeSingle()
+
+  const keywords: string[] = kb?.ignore_keywords ?? []
+  if (!keywords.length) {
+    return { success: true, updated: 0, message: 'Sem palavras de automação configuradas' }
+  }
+
+  // Fetch all non-automation comments (any processing status except already skipped as automation)
+  const { data: comments, error } = await supabase
+    .from('social_comments')
+    .select('id, text')
+    .eq('project_id', projectId)
+    .eq('is_automation', false)
+
+  if (error || !comments?.length) {
+    return { success: true, updated: 0, message: 'Nenhum comentário para verificar' }
+  }
+
+  const toUpdate: string[] = comments
+    .filter((c: any) => matchesIgnoreKeywords(c.text || '', keywords))
+    .map((c: any) => c.id)
+
+  if (!toUpdate.length) {
+    return { success: true, updated: 0, message: 'Nenhum comentário existente corresponde às palavras de automação' }
+  }
+
+  // Update in batches of 100
+  const BATCH = 100
+  for (let i = 0; i < toUpdate.length; i += BATCH) {
+    await supabase
+      .from('social_comments')
+      .update({ is_automation: true, ai_processing_status: 'skipped' })
+      .in('id', toUpdate.slice(i, i + BATCH))
+  }
+
+  console.log(`[APPLY_IGNORE] Marked ${toUpdate.length} comments as automation for project ${projectId}`)
+  return { success: true, updated: toUpdate.length }
 }
 
 // ============= AI PROCESSING (WITH KEYWORDS + OPENAI) =============

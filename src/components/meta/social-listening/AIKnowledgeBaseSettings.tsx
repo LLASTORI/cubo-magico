@@ -160,9 +160,20 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['ai_knowledge_base', projectId] });
       toast.success('Configurações salvas com sucesso!');
+
+      // If ignore_keywords were configured, retroactively mark matching comments
+      if ((formData.ignore_keywords ?? []).length > 0) {
+        const { data } = await supabase.functions.invoke('social-comments-api', {
+          body: { action: 'apply_ignore_keywords', projectId },
+        });
+        if (data?.updated > 0) {
+          toast.info(`${data.updated} comentários de automação ocultados da lista.`);
+          queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
+        }
+      }
     },
     onError: (error) => {
       console.error('Error saving knowledge base:', error);

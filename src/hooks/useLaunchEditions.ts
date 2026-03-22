@@ -14,6 +14,44 @@ const PHASES_COPYABLE_FIELDS = [
   'is_active',
 ] as const;
 
+const FASES_LANCAMENTO_PAGO = [
+  {
+    phase_type: 'captacao',
+    name: 'Ingressos',
+    primary_metric: 'cpa',
+    phase_order: 1,
+    notes: 'Venda de ingressos por lotes. Acompanhar passing diário vs meta.',
+  },
+  {
+    phase_type: 'aquecimento',
+    name: 'Comparecimento',
+    primary_metric: 'show_rate',
+    phase_order: 2,
+    notes: 'Garantir presença no evento. Meta: 70%+ de show rate.',
+  },
+  {
+    phase_type: 'vendas',
+    name: 'Evento',
+    primary_metric: 'conversao',
+    phase_order: 3,
+    notes: 'Evento ao vivo com pitch. Dias 1 e 2.',
+  },
+  {
+    phase_type: 'vendas',
+    name: 'Vendas',
+    primary_metric: 'roas',
+    phase_order: 4,
+    notes: 'Carrinho aberto pós-evento. OBs, upsell, downsell.',
+  },
+] as const;
+
+function calcPhaseDate(base: string | null, offsetDays: number): string | null {
+  if (!base) return null;
+  const d = new Date(base);
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().split('T')[0];
+}
+
 export const useLaunchEditions = (projectId: string | undefined, funnelId?: string) => {
   const queryClient = useQueryClient();
 
@@ -74,6 +112,39 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
         .select()
         .single();
       if (error) throw error;
+
+      // Primeira edição → criar 4 fases padrão de lançamento pago
+      if (!existing?.length) {
+        const { event_date, start_date, end_date } = input as LaunchEditionInsert & {
+          event_date?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
+        };
+        const phaseDates = [
+          { start_date: start_date ?? null, end_date: calcPhaseDate(event_date ?? null, -1) },
+          { start_date: calcPhaseDate(event_date ?? null, -7), end_date: event_date ?? null },
+          { start_date: event_date ?? null, end_date: calcPhaseDate(event_date ?? null, 1) },
+          { start_date: calcPhaseDate(event_date ?? null, 1), end_date: end_date ?? null },
+        ];
+
+        const phasesToInsert = FASES_LANCAMENTO_PAGO.map((fase, i) => ({
+          ...fase,
+          funnel_id: funnelId,
+          project_id: projectId,
+          edition_id: newEdition.id,
+          is_active: true,
+          campaign_name_pattern: null,
+          ...phaseDates[i],
+        }));
+
+        const { error: phasesError } = await supabase
+          .from('launch_phases')
+          .insert(phasesToInsert);
+
+        if (phasesError) {
+          console.error('[useLaunchEditions] Erro ao criar fases padrão:', phasesError);
+        }
+      }
 
       // Copy phases from most recent previous edition (if any)
       if (existing?.length) {
@@ -175,3 +246,27 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
     deleteEdition,
   };
 };
+
+// Standalone hooks para uso em componentes fora do contexto do LaunchConfigDialog
+export const useEditions = (projectId: string, funnelId: string) => {
+  const { editions, isLoading } = useLaunchEditions(projectId, funnelId);
+  return { editions, isLoading };
+};
+
+export const useEdition = (editionId: string | undefined) =>
+  useQuery({
+    queryKey: ['launch-edition', editionId],
+    queryFn: async () => {
+      if (!editionId) return null;
+      const [editionResult, phasesResult] = await Promise.all([
+        supabase.from('launch_editions').select('*').eq('id', editionId).single(),
+        supabase.from('launch_phases').select('*').eq('edition_id', editionId).order('phase_order'),
+      ]);
+      if (editionResult.error) throw editionResult.error;
+      return {
+        ...editionResult.data,
+        phases: (phasesResult.data || []) as LaunchPhase[],
+      } as LaunchEditionWithPhases;
+    },
+    enabled: !!editionId,
+  });

@@ -425,98 +425,160 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
 
   const [estimatedDuration, setEstimatedDuration] = useState(30);
 
+  // Split a date range into batches of `batchDays` days
+  const splitIntoBatches = (rangeStart: string, rangeStop: string, batchDays: number) => {
+    const batches: { start: string; stop: string }[] = [];
+    let current = new Date(rangeStart);
+    const end = new Date(rangeStop);
+    while (current <= end) {
+      const batchEnd = new Date(current);
+      batchEnd.setDate(batchEnd.getDate() + batchDays - 1);
+      if (batchEnd > end) batchEnd.setTime(end.getTime());
+      batches.push({
+        start: current.toISOString().split('T')[0],
+        stop: batchEnd.toISOString().split('T')[0],
+      });
+      current = new Date(batchEnd);
+      current.setDate(current.getDate() + 1);
+    }
+    return batches;
+  };
+
   // Sync data with specific accounts
-  // Sync with forceRefresh option
+  // For ranges >90 days: auto-batches into 60-day chunks to avoid edge function timeout
   const handleSyncWithAccounts = async (accountIds: string[], forceRefresh: boolean = false) => {
     if (!projectId || !metaCredentials || accountIds.length === 0) return;
 
     setSyncing(true);
     const syncDuration = getEstimatedSyncDuration();
     setEstimatedDuration(syncDuration);
-    
+
+    const totalDays = Math.ceil(
+      (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const BATCH_THRESHOLD_DAYS = 90;
+    const BATCH_SIZE_DAYS = 60;
+
     try {
-      console.log('Syncing insights for accounts:', accountIds, 'from', startDate, 'to', endDate, 'forceRefresh:', forceRefresh);
-      const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
-        body: {
-          action: 'sync_insights',
-          projectId: projectId,
-          accountIds: accountIds,
-          dateStart: startDate,
-          dateStop: endDate,
-          forceRefresh: forceRefresh, // Pass force refresh flag
-        },
-      });
+      if (totalDays > BATCH_THRESHOLD_DAYS) {
+        // Large range: split into 60-day batches and fire sequentially
+        const batches = splitIntoBatches(startDate, endDate, BATCH_SIZE_DAYS);
+        console.log(`Large range (${totalDays} days) — using ${batches.length} batches of up to ${BATCH_SIZE_DAYS} days`);
 
-      console.log('Insights sync result:', insightsData);
-      if (insightsError) throw insightsError;
-
-      // Calculate polling duration based on period
-      // Historical ranges (>30 days) need more time — cap at 10 min for very large ranges
-      const periodDays = insightsData?.periodDays || 30;
-      const pollDurationMs = periodDays <= 30
-        ? Math.max(30000, periodDays * 1500)          // ≤30 days: up to 45s
-        : Math.min(600000, periodDays * 4000);         // >30 days: ~4s/day, max 10min
-
-      const estimatedMinutes = Math.ceil(pollDurationMs / 60000);
-      const isLongSync = periodDays > 30;
-
-      toast({
-        title: forceRefresh ? 'Sincronização forçada em andamento...' : 'Sincronização em andamento...',
-        description: isLongSync
-          ? `Range histórico de ${periodDays} dias detectado. Os dados serão carregados aos poucos — pode levar até ${estimatedMinutes} minuto(s).`
-          : (insightsData?.message || `Aguarde até ${estimatedMinutes} minuto(s) para os dados aparecerem.`),
-      });
-
-      // Poll for data every 15 seconds
-      const pollCount = Math.ceil(pollDurationMs / 15000);
-      for (let i = 1; i <= pollCount; i++) {
-        setTimeout(() => {
-          console.log(`[Poll ${i}/${pollCount}] Refreshing data...`);
-          queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
-          queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
-          queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-        }, i * 15000);
-      }
-
-      // Keep syncing state for the duration, then do final refresh
-      setTimeout(async () => {
-        setSyncing(false);
-        
-        // Force refetch all data
-        console.log('[Final refresh] Forcing data reload...');
-        await queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-        await refetchInsights();
-        
         toast({
-          title: 'Sincronização concluída!',
-          description: 'Os dados foram atualizados.',
+          title: 'Importação histórica iniciada',
+          description: `${totalDays} dias divididos em ${batches.length} lotes. Os dados aparecerão gradualmente.`,
         });
-      }, pollDurationMs);
+
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          console.log(`Firing batch ${i + 1}/${batches.length}: ${batch.start} → ${batch.stop}`);
+
+          const { error: batchError } = await supabase.functions.invoke('meta-api', {
+            body: {
+              action: 'sync_insights',
+              projectId,
+              accountIds,
+              dateStart: batch.start,
+              dateStop: batch.stop,
+              forceRefresh,
+            },
+          });
+
+          if (batchError) {
+            console.warn(`Batch ${i + 1} error:`, batchError);
+          }
+
+          // Refresh data after each batch so user sees progress
+          queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+
+          // Short pause between HTTP calls to avoid overloading the function
+          if (i < batches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        }
+
+        toast({
+          title: `${batches.length} lotes enviados`,
+          description: 'Os dados continuarão aparecendo nos próximos minutos enquanto os jobs terminam em background.',
+        });
+
+        // Keep polling for up to 10 minutes after all batches are fired
+        const pollCount = 40; // 40 × 15s = 10 min
+        for (let i = 1; i <= pollCount; i++) {
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+          }, i * 15000);
+        }
+
+        setTimeout(async () => {
+          setSyncing(false);
+          await refetchInsights();
+          toast({ title: 'Importação histórica concluída!', description: 'Os dados foram atualizados.' });
+        }, pollCount * 15000);
+
+      } else {
+        // Standard range (≤90 days): single call
+        console.log('Syncing insights for accounts:', accountIds, 'from', startDate, 'to', endDate, 'forceRefresh:', forceRefresh);
+        const { data: insightsData, error: insightsError } = await supabase.functions.invoke('meta-api', {
+          body: {
+            action: 'sync_insights',
+            projectId,
+            accountIds,
+            dateStart: startDate,
+            dateStop: endDate,
+            forceRefresh,
+          },
+        });
+
+        console.log('Insights sync result:', insightsData);
+        if (insightsError) throw insightsError;
+
+        const periodDays = insightsData?.periodDays || totalDays;
+        const pollDurationMs = periodDays <= 30
+          ? Math.max(30000, periodDays * 1500)
+          : Math.min(600000, periodDays * 4000);
+
+        const estimatedMinutes = Math.ceil(pollDurationMs / 60000);
+
+        toast({
+          title: forceRefresh ? 'Sincronização forçada em andamento...' : 'Sincronização em andamento...',
+          description: periodDays > 30
+            ? `Range histórico de ${periodDays} dias. Os dados serão carregados aos poucos — pode levar até ${estimatedMinutes} minuto(s).`
+            : (insightsData?.message || `Aguarde até ${estimatedMinutes} minuto(s) para os dados aparecerem.`),
+        });
+
+        const pollCount = Math.ceil(pollDurationMs / 15000);
+        for (let i = 1; i <= pollCount; i++) {
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['meta_ad_accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['meta_campaigns'] });
+            queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+          }, i * 15000);
+        }
+
+        setTimeout(async () => {
+          setSyncing(false);
+          await queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
+          await refetchInsights();
+          toast({ title: 'Sincronização concluída!', description: 'Os dados foram atualizados.' });
+        }, pollDurationMs);
+      }
 
       return; // Don't set syncing false immediately
 
     } catch (error: any) {
       console.error('Sync error:', error);
-      
-      // Check if it's a timeout error - the sync might still be running in the background
+
       if (error.message?.includes('Failed to fetch') || error.message?.includes('timeout')) {
         toast({
           title: 'Sincronização pode estar em andamento',
           description: 'A conexão foi interrompida, mas os dados podem estar sendo processados. Atualize a página em alguns minutos.',
         });
-        
-        // Still poll for data in case it completes
-        const pollIntervals = [30000, 60000, 90000, 120000, 150000, 180000];
-        pollIntervals.forEach((delayMs) => {
-          setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: ['meta_insights'] });
-          }, delayMs);
+        [30000, 60000, 90000, 120000].forEach(ms => {
+          setTimeout(() => queryClient.invalidateQueries({ queryKey: ['meta_insights'] }), ms);
         });
-        
-        setTimeout(() => {
-          setSyncing(false);
-          refetchInsights();
-        }, 60000);
+        setTimeout(() => { setSyncing(false); refetchInsights(); }, 60000);
       } else {
         toast({
           title: 'Erro ao sincronizar',

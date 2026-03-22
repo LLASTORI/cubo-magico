@@ -214,6 +214,14 @@ const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChang
         >
           1 ano
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleQuickFilter(730)}
+          className="border-border text-xs"
+        >
+          2 anos
+        </Button>
       </div>
     </div>
   );

@@ -134,6 +134,7 @@ Domínios principais:
 | Meta Ads | `meta-api` (sync_insights, sync_hierarchy_full), `meta-insights-cron`, `meta-oauth-*`, `meta-hierarchy-cron` |
 | Quiz/Survey | `quiz-public-*`, `quiz-copilot`, `survey-public` |
 | Automações | `automation-engine`, `whatsapp-webhook`, `evolution-api` |
+| Social Listening | `social-listening-cron` (cron 30min, todos os projetos), `social-comments-api` (sync manual + fallback token) |
 | Exports | `export-csv-utf8`, `export-orders-sql`, `export-contacts-sql` |
 | Monitoramento | `orders-health-check` (cron diário 08h UTC), `hotmart-offers-cron` (cron segunda 07h UTC) |
 
@@ -172,6 +173,36 @@ Domínios principais:
 - `provider_event_log` NÃO tem coluna `order_id` — não usar para decisões de revert
 - Contatos CRM **não** são revertidos (podem ter sido alterados por outras fontes)
 - Roles para revert: apenas `owner` e `manager` (verificado na edge function via `project_members.role`)
+
+## Social Listening
+
+**Tabelas:** `social_listening_pages` (páginas configuradas por projeto), `social_posts`, `social_comments`, `ai_knowledge_base`
+
+**Sync cron (`social-listening-cron`):** roda a cada 30 min via pg_cron; processa TODOS os projetos ativos. Projetados ordenados por `project_id` (ORDER BY obrigatório — sem ele, projetos no fim da lista podem ser pulados se a função timeout).
+
+**Sync manual (`social-comments-api`):** chamado pelo frontend; tem fallback token: se `pageToken` falha com erro 190/10, retenta com `accessToken` do usuário (`meta_credentials`).
+
+**Token hierarchy:** `social_listening_pages.access_token` (page-level) → fallback para `meta_credentials.access_token` (user-level) em caso de erro 190 ou 10.
+
+**`last_synced_at`** em `social_listening_pages` — atualizado ao final de cada sync bem-sucedido do projeto. Usado no frontend para exibir "última sincronização".
+
+**AI processing:** classificação em dois estágios — 1) keywords (síncrono, sem custo) → 2) OpenAI GPT-4o-mini batch com fallback para Lovable AI. Quota controlada por `check_and_use_ai_quota` RPC.
+
+**Ignore keywords:** salvas em `ai_knowledge_base.ignore_keywords` (jsonb array). Ação `apply_ignore_keywords` na `social-comments-api` aplica retroativamente marcando `is_automation=true`.
+
+## Launch Editions (Onda 2 — Lançamento Pago Recorrente)
+
+**Conceito:** cada ciclo de um lançamento pago é uma "Edição" ou "Turma". Sem isso, métricas de edições diferentes ficam misturadas no mesmo funil.
+
+**Tabelas:**
+- `launch_editions` — id, funnel_id, project_id, name, edition_number (UNIQUE por funnel), event_date, start_date, end_date, status (planned/active/finished)
+- `launch_phases.edition_id` — nullable; NULL = fase não vinculada a edição (retrocompatibilidade)
+
+**Hook:** `src/hooks/useLaunchEditions.ts` — CRUD + auto `edition_number` (MAX+1) + cópia de fases da edição anterior ao criar nova (copia phase_type, name, primary_metric, campaign_name_pattern, notes; **não copia** start_date/end_date)
+
+**UI:** aba "Edições" no `LaunchConfigDialog` (`src/components/launch/LaunchEditionsTab.tsx`)
+
+**Tipos:** `src/types/launch-editions.ts` — `LaunchEdition`, `LaunchEditionInsert`, `LaunchEditionWithPhases`
 
 ## Padrões de Código
 

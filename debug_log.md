@@ -5,8 +5,19 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-22 (sessão 30) — Onda 2A Lançamento Pago concluída
-- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A entregue ✅ | Meta Ads histórico: desbloqueado ✅
+- **Data:** 2026-03-22 (sessão 30) — Onda 2A + 2B entregues
+- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B (comparativo + phase_id) ✅
+
+---
+
+### [2026-03-22] Onda 2B — Comparativo de edições + phase_id (sessão 30) ✅
+
+- `useEditionsComparativo.ts`: `useQueries` paralelo para KPIs de N edições (ingressos, faturamento, ROAS, spend)
+- `EditionsComparativoTable.tsx`: tabela com melhor ROAS destacado em verde + botão "Ver análise" por linha
+- `LaunchDashboard.tsx`: toggle "Edições / Comparativo" em `LaunchPagoEditionsRow`
+- Migration `20260322200000`: `phase_id uuid REFERENCES launch_phases(id)` nullable em `offer_mappings`
+- `LaunchConfigDialog.tsx`: phase selector condicional na aba Produtos para `funnel_model = 'lancamento_pago'`
+- Build: zero erros
 
 ---
 

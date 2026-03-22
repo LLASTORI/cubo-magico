@@ -34,14 +34,16 @@
 
 ---
 
-## 🔵 Onda 2B — Métricas de lançamento pago (próximas etapas)
+## ✅ Onda 2B — Comparativo + phase_id (sessão 30)
 
-- [ ] Show rate — ingressos vendidos vs presentes no evento (requer fonte de dados do evento)
-- [ ] Conversão por fase — TX ingresso→produto principal por canal de origem
+- [x] Comparativo entre edições — tabela lado a lado com ROAS, faturamento, ingressos, melhor edição destacada ✅
+- [x] `phase_id` em `offer_mappings` — migration + phase selector na aba Produtos (somente `lancamento_pago`) ✅
+
+## 🔵 Onda 2B — Restante (aguardando dados/priorização)
+
+- [ ] Show rate — requer fonte de dados de presença no evento
 - [ ] NPS e métricas do evento ao vivo
-- [ ] Comparativo entre edições (ROAS, show rate, aceite de preço)
-- [ ] Planejador integrado — meta de ingressos, meta de ROAS por fase
-- [ ] `phase_id` em `offer_mappings` vinculado à edição correta
+- [ ] Planejador integrado — meta de ingressos e ROAS por fase
 - [ ] Vincular `registered_at` no CSV import de leads
 
 ---

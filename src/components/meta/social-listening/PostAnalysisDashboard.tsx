@@ -323,7 +323,7 @@ export function PostAnalysisDashboard({ projectId, onOpenComments }: PostAnalysi
   };
 
   const openExternal = async (url: string) => {
-    const opened = window.open(url, '_blank', 'noopener,noreferrer') ?? window.top?.open(url, '_blank', 'noopener,noreferrer');
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
 
     // In embedded previews, new tabs can be blocked; offer copy fallback
     if (!opened) {

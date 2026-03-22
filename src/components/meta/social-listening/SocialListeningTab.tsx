@@ -737,7 +737,7 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
   const { toast } = useToast();
 
   const openExternal = async (url: string) => {
-    const opened = window.open(url, '_blank', 'noopener,noreferrer') ?? window.top?.open(url, '_blank', 'noopener,noreferrer');
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
 
     // In embedded previews, popups/new tabs can be blocked; offer copy fallback
     if (!opened) {

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 22/03/2026 (sessão 29 — Onda 2 launch_editions + social listening cron fixes)
+> Última atualização: 22/03/2026 (sessão 29/30 — Onda 2A lançamento pago + social listening cron fix)
 
 ---
 
@@ -21,15 +21,26 @@
 
 ---
 
-## 🔵 Onda 2 — Métricas de lançamento pago (próximas etapas)
+## ✅ Onda 2A — Lançamento Pago: Fases automáticas + Tela de análise (sessão 30)
 
-> Pré-requisito `launch_editions` concluído. Onda 2 desbloqueada.
+- [x] Fases padrão automáticas ao criar 1ª edição (4 fases: Ingressos, Comparecimento, Evento, Vendas) ✅
+- [x] Badge "Lançamento Pago" (amber) no LaunchDashboard ✅
+- [x] Edições colapsáveis ao expandir funil `lancamento_pago` ✅
+- [x] Hook `useLaunchEditionData` — KPIs + passing diário via `funnel_orders_view` ✅
+- [x] Componente `PassingDiarioChart` — barras coloridas (verde/âmbar/vermelho) + linha meta ✅
+- [x] Tela `LaunchEditionAnalysis` — KPIs, passing diário, funil de conversão ✅
+- [x] Rota `/app/:projectCode/lancamentos/:funnelId/edicoes/:editionId` ✅
+- [x] Build: zero erros ✅
 
-- [ ] Passing diário — ritmo de vendas de ingresso vs meta por lote
-- [ ] Show rate — ingressos vendidos vs presentes no evento
+---
+
+## 🔵 Onda 2B — Métricas de lançamento pago (próximas etapas)
+
+- [ ] Show rate — ingressos vendidos vs presentes no evento (requer fonte de dados do evento)
 - [ ] Conversão por fase — TX ingresso→produto principal por canal de origem
 - [ ] NPS e métricas do evento ao vivo
-- [ ] ROAS total por edição — (ingressos + produto + OBs + downsell) / investimento Meta
+- [ ] Comparativo entre edições (ROAS, show rate, aceite de preço)
+- [ ] Planejador integrado — meta de ingressos, meta de ROAS por fase
 - [ ] `phase_id` em `offer_mappings` vinculado à edição correta
 - [ ] Vincular `registered_at` no CSV import de leads
 

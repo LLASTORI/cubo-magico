@@ -5,8 +5,23 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-22 (sessão 29) — Social Listening cron 2 bugs corrigidos
-- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Launch Phases: desbloqueado ✅ | Meta Ads histórico: desbloqueado ✅
+- **Data:** 2026-03-22 (sessão 30) — Onda 2A Lançamento Pago concluída
+- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A entregue ✅ | Meta Ads histórico: desbloqueado ✅
+
+---
+
+### [2026-03-22] Onda 2A — Lançamento Pago completo (sessão 30) ✅
+
+Implementação completa da Onda 2A. Arquivos criados/modificados:
+- `useLaunchEditions.ts`: 4 fases padrão automáticas na 1ª edição (Ingressos/Comparecimento/Evento/Vendas) com datas baseadas em `event_date`
+- `LaunchDashboard.tsx`: badge amber "Lançamento Pago" + `LaunchPagoEditionsRow` ao expandir funis `lancamento_pago`
+- `useLaunchEditionData.ts`: KPIs (ingressos, faturamento, ROAS) + passing diário via `funnel_orders_view`
+- `PassingDiarioChart.tsx`: barras coloridas + linha de meta com Recharts `ComposedChart`
+- `LaunchEditionAnalysis.tsx`: tela completa com header, KPIs, passing, `LaunchProductsSalesBreakdown`, `LaunchConversionAnalysis`
+- `App.tsx`: rota `lancamentos/:funnelId/edicoes/:editionId`
+
+Correções vs plano: `funnel_orders_view` usa `customer_paid` (não `gross_amount`); sem coluna `main_item_type` — usa `.not('main_offer_code', 'is', null)` para identificar pedidos FRONT; props dos componentes reutilizados são `startDate/endDate` (não `dateRange`); `useTenantNavigation` expõe `navigateTo` (não `navigate`).
+Build: zero erros.
 
 ---
 

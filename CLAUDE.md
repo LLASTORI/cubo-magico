@@ -197,12 +197,23 @@ Domínios principais:
 **Tabelas:**
 - `launch_editions` — id, funnel_id, project_id, name, edition_number (UNIQUE por funnel), event_date, start_date, end_date, status (planned/active/finished)
 - `launch_phases.edition_id` — nullable; NULL = fase não vinculada a edição (retrocompatibilidade)
+- `offer_mappings.phase_id` — nullable FK para `launch_phases(id)`; vincula oferta a uma fase específica da edição (ex: Fase 1 = ingressos, Fase 4 = produto principal). Usado em `LaunchConfigDialog` aba Produtos (somente `lancamento_pago`) e em `LaunchPagoConversaoBlock` para identificar ofertas por fase.
 
 **Hook:** `src/hooks/useLaunchEditions.ts` — CRUD + auto `edition_number` (MAX+1) + cópia de fases da edição anterior ao criar nova (copia phase_type, name, primary_metric, campaign_name_pattern, notes; **não copia** start_date/end_date)
 
-**UI:** aba "Edições" no `LaunchConfigDialog` (`src/components/launch/LaunchEditionsTab.tsx`)
+**UI:**
+- Aba "Edições" no `LaunchConfigDialog` (`src/components/launch/LaunchEditionsTab.tsx`)
+- Tela de análise de edição: `src/pages/LaunchEditionAnalysis.tsx` — KPIs, passing diário, bloco de conversão
+- Bloco de conversão `lancamento_pago`: `src/components/launch/LaunchPagoConversaoBlock.tsx` — métricas ingresso→produto + abas UTM por `funnel_orders_view` (não por tag CRM)
+- Bloco de conversão clássico: `src/components/launch/LaunchConversionAnalysis.tsx` — usa `launch_tag` do CRM
 
 **Tipos:** `src/types/launch-editions.ts` — `LaunchEdition`, `LaunchEditionInsert`, `LaunchEditionWithPhases`
+
+**`useLaunchData` — comportamento por `funnel_model`:**
+- Lançamentos clássicos: receita e spend filtrados pelo date range do dashboard
+- `lancamento_pago`: receita somada de **todas as edições** via `funnel_orders_view` (edition-scoped); spend via `meta_insights` com `launch_start_date → launch_end_date` do funil — **ignora o filtro do dashboard**
+
+**RLS `launch_phases` e `launch_products`:** usam política `project_members` (igual a `launch_editions`) — não `get_user_project_role()` (que bloqueava INSERTs sem WITH CHECK).
 
 ## Padrões de Código
 

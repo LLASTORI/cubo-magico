@@ -4,7 +4,7 @@
 > Os benchmarks aqui são **referências observadas em lançamentos reais** — não regras absolutas.
 > O "jeito do Cubo" será construído gradualmente com mais dados ao longo do tempo.
 > Referência principal: metodologia Willian Baldan (@willianbaldan) + debriefings reais
-> Última atualização: 21/03/2026
+> Última atualização: 23/03/2026
 
 ---
 
@@ -63,9 +63,9 @@ Anúncio → Captura (lead gratuito) → Aquecimento → Abertura → Vendas →
 
 ---
 
-## Modelos Novos (a implementar)
+## Modelos Implementados — Fase 2
 
-### 3. Lançamento Pago (`lancamento_pago`) ⭐ PRIORIDADE 1
+### 3. Lançamento Pago (`lancamento_pago`) ✅ IMPLEMENTADO (Ondas 2A/2B/2C)
 
 **Referência:** Metodologia Willian Baldan + debriefings reais observados
 
@@ -199,9 +199,9 @@ ROAS = Receita TOTAL (ingressos + PL + OBs + downsell) / Investimento Meta
 
 ---
 
-### 3.1 Lançamento Pago Recorrente — Conceito de Edições
+### 3.1 Lançamento Pago Recorrente — Conceito de Edições ✅
 
-> Descoberto em sessão 26 (21/03/2026). **Decisão arquitetural pendente antes da Onda 2.**
+> Implementado nas Ondas 2A/2B/2C (sessões 29–32).
 
 #### O que é uma Edição
 

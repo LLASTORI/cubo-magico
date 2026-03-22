@@ -451,12 +451,20 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
       if (insightsError) throw insightsError;
 
       // Calculate polling duration based on period
+      // Historical ranges (>30 days) need more time — cap at 10 min for very large ranges
       const periodDays = insightsData?.periodDays || 30;
-      const pollDurationMs = Math.max(30000, Math.min(180000, periodDays * 1000)); // 30s to 3min
-      
+      const pollDurationMs = periodDays <= 30
+        ? Math.max(30000, periodDays * 1500)          // ≤30 days: up to 45s
+        : Math.min(600000, periodDays * 4000);         // >30 days: ~4s/day, max 10min
+
+      const estimatedMinutes = Math.ceil(pollDurationMs / 60000);
+      const isLongSync = periodDays > 30;
+
       toast({
         title: forceRefresh ? 'Sincronização forçada em andamento...' : 'Sincronização em andamento...',
-        description: insightsData?.message || `Aguarde até ${Math.ceil(pollDurationMs / 60000)} minuto(s) para os dados aparecerem.`,
+        description: isLongSync
+          ? `Range histórico de ${periodDays} dias detectado. Os dados serão carregados aos poucos — pode levar até ${estimatedMinutes} minuto(s).`
+          : (insightsData?.message || `Aguarde até ${estimatedMinutes} minuto(s) para os dados aparecerem.`),
       });
 
       // Poll for data every 15 seconds

@@ -1548,17 +1548,18 @@ async function getInsightsIncremental(
   const dateChunks = splitDateRangeIntoChunks(dateStart, dateStop)
 
   // Determine if this is historical or recent data
+  // Use dateStart age (not dateStop) so "90 days ago → today" correctly enters historical mode
   const today = new Date()
-  const endDate = new Date(dateStop)
-  const daysFromEnd = Math.floor((today.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24))
-  const isHistorical = daysFromEnd >= HISTORICAL_DAYS_THRESHOLD
+  const startDate = new Date(dateStart)
+  const daysFromStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  const isHistorical = daysFromStart >= HISTORICAL_DAYS_THRESHOLD
 
   // Use dynamic parallelism based on data age
   const parallelChunks = isHistorical ? PARALLEL_CHUNKS_HISTORICAL : PARALLEL_CHUNKS_RECENT
   const delayBetweenChunks = isHistorical ? DELAY_BETWEEN_CHUNKS_HISTORICAL_MS : DELAY_BETWEEN_CHUNKS_RECENT_MS
 
   console.log(`\n📊 DYNAMIC PARALLELISM: ${isHistorical ? 'HISTORICAL' : 'RECENT'} mode`)
-  console.log(`   Data ends ${daysFromEnd} days ago (threshold: ${HISTORICAL_DAYS_THRESHOLD} days)`)
+  console.log(`   Data starts ${daysFromStart} days ago (threshold: ${HISTORICAL_DAYS_THRESHOLD} days)`)
   console.log(`   Using ${parallelChunks} parallel chunks, ${delayBetweenChunks}ms delay`)
 
   console.log('Fetching insights with DYNAMIC PARALLEL processing:', {

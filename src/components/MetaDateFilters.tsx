@@ -190,6 +190,30 @@ const MetaDateFilters = ({ startDate, endDate, onStartDateChange, onEndDateChang
         >
           Mês anterior
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleQuickFilter(90)}
+          className="border-border text-xs"
+        >
+          90 dias
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleQuickFilter(180)}
+          className="border-border text-xs"
+        >
+          6 meses
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleQuickFilter(365)}
+          className="border-border text-xs"
+        >
+          1 ano
+        </Button>
       </div>
     </div>
   );

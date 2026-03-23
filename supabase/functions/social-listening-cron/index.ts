@@ -13,6 +13,16 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+async function fetchWithTimeout(url: string, timeoutMs = 30_000, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 interface SyncResult {
   projectId: string
   projectName: string
@@ -302,7 +312,7 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
       try {
         if (page.platform === 'facebook') {
           const url = `${GRAPH_API_BASE}/${originalPageId}/posts?fields=id,message,created_time,permalink_url,status_type,full_picture&limit=20&access_token=${pageToken}`
-          const response = await fetch(url)
+          const response = await fetchWithTimeout(url, 30_000)
           const data = await response.json()
 
           if (data.error) throw new Error(data.error.message)
@@ -315,7 +325,7 @@ async function syncPostsForProject(supabase: any, projectId: string, accessToken
 
         if (page.platform === 'instagram') {
           const url = `${GRAPH_API_BASE}/${originalPageId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=20&access_token=${pageToken}`
-          const response = await fetch(url)
+          const response = await fetchWithTimeout(url, 30_000)
           const data = await response.json()
 
           if (data.error) throw new Error(data.error.message)
@@ -399,7 +409,7 @@ async function fetchCommentsWithFallback(
 
   while (nextUrl && allComments.length < maxComments) {
     const currentUrl = useFallback ? nextUrl.replace(pageToken, fallbackToken) : nextUrl
-    const response = await fetch(currentUrl)
+    const response = await fetchWithTimeout(currentUrl, 30_000)
     const data = await response.json()
 
     if (data.error) {
@@ -625,7 +635,7 @@ async function syncAdCommentsForProject(supabase: any, projectId: string, access
     for (const account of adAccounts) {
       try {
         const adsUrl = `${GRAPH_API_BASE}/${account.account_id}/ads?fields=id,name,effective_status,creative{effective_object_story_id,effective_instagram_story_id}&limit=50&access_token=${accessToken}`
-        const adsResponse = await fetch(adsUrl)
+        const adsResponse = await fetchWithTimeout(adsUrl, 30_000)
         const adsData = await adsResponse.json()
 
         if (adsData.error) {
@@ -757,7 +767,7 @@ async function fetchAdComments(postIdMeta: string, platform: string, token: stri
   let nextUrl: string | null = `${graphApiBase}/${postIdMeta}/comments?fields=${fields}&limit=100&access_token=${token}`
 
   while (nextUrl && allComments.length < MAX_COMMENTS) {
-    const response = await fetch(nextUrl)
+    const response = await fetchWithTimeout(nextUrl, 30_000)
     const data = await response.json()
     if (data.error) {
       throw new Error(`code=${data.error.code || 'n/a'} message=${data.error.message}`)
@@ -1024,7 +1034,7 @@ ${commentsText}
 Responda em JSON array:
 [{"id": "...", "sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}, ...]`
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', 60_000, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -1073,7 +1083,7 @@ Comentário: "${text}"
 
 Responda APENAS em JSON: {"sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}`
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', 60_000, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${LOVABLE_API_KEY}`,

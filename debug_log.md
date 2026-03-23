@@ -5,8 +5,47 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-23 (sessão 32) — Onda 2C: RLS + faturamento funil + conversão lancamento_pago
-- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅
+- **Data:** 2026-03-22 (sessão 33) — Social Listening cron fix + remoção Lovable / migração OpenAI
+- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-22] Remoção Lovable / migração completa para OpenAI (sessão 33) ✅
+
+**Contexto:** projeto foi criado no Lovable mas migrou para Claude Code. Restavam vínculos com Lovable que precisavam ser limpos.
+
+**Remoções (sem impacto funcional):**
+- `lovable-tagger` removido de `vite.config.ts` e `package.json`
+- CORS allowlists de preview Lovable removidas de `auto-sync`, `meta-api`, `meta-oauth-state`, `meta-oauth-callback`
+- Fallback de URL `.lovableproject.com` → URL de produção hard-coded no `meta-oauth-callback`
+- Detecção de domínio preview simplificada em `ExperienceSlugSettings`, `SendSurveyDialog`, `QuizEditor`, `SurveyEditor`
+- Mensagens de erro atualizadas em `useSocialListening.ts`
+
+**Migração AI — Lovable gateway → OpenAI:**
+- `funnel-ai-analysis`: `LOVABLE_API_KEY` → `OPENAI_API_KEY`, endpoint → `api.openai.com`, modelo → `gpt-4o-mini`
+- `quiz-copilot`: mesmo (4 chamadas), modelo `google/gemini-3-flash-preview` → `gpt-4o-mini`
+- `survey-ai-analysis`: mesmo, modelo `google/gemini-2.5-flash` → `gpt-4o-mini`
+- `social-listening-cron`: removida `classifyWithLovableAI()` — OpenAI é agora o único provider AI
+
+**Mantido intacto (correto):** colunas `lovable_credits_*` no banco, RPC `increment_lovable_credits`, `check_and_use_ai_quota` — sem migration necessária. Condição `quotaReason === 'lovable_credits_exhausted'` no hook mantida pois o RPC ainda retorna essa string.
+
+---
+
+### [2026-03-22] Social Listening cron — fix de freeze por timeout ausente (sessão 33) ✅
+
+**Sintoma:** Camila Leal com "última sincronização: há 10h / 56 pendentes". Natalia Canezin também travada.
+
+**Investigação:**
+- `last_synced_at` da Camila atualizado às 13:32 UTC → Steps 1–4 (sync orgânico) completaram normalmente
+- Camila tem `meta_ad_accounts` ativo (`act_312092411354147`) com 0 ad_posts → Step 5 (`syncAdCommentsForProject`) iniciava mas nunca concluía
+- Natalia travada porque o loop processa projetos sequencialmente por UUID (Alice → Monaliza → Leandro → Camila → Natalia)
+
+**Causa raiz:** `fetch()` sem timeout em todas as chamadas externas. Se a Meta API travar (network stall, sem TCP reset), o `await fetch()` aguarda indefinidamente, congelando o bloco `waitUntil` inteiro.
+
+**Fix:** helper `fetchWithTimeout(url, timeoutMs, options?)` com `AbortController` adicionado. Aplicado em:
+- Meta Graph API (posts, comentários orgânicos, ads list, comentários de ads): **30s**
+- OpenAI e Lovable AI (já removida): **60s**
+Deploy realizado — próximo cron (30min) já usará a versão corrigida.
 
 ---
 

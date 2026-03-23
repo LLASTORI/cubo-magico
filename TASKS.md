@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 23/03/2026 (sessão 32 — Onda 2C: RLS + faturamento funil + conversão lancamento_pago)
+> Última atualização: 22/03/2026 (sessão 33 — Social Listening cron fix + remoção Lovable / migração OpenAI)
 
 ---
 
@@ -103,6 +103,10 @@
   - 39 posts falhando com "Invalid OAuth 2.0 Access Token"
   - Ir em Configurações → Conexões Meta e refazer o OAuth
 
+- [ ] **Monitorar cron após fix de timeout (sessão 33)**
+  - Verificar se Camila Leal e Natalia voltaram a sincronizar normalmente
+  - `last_synced_at` das duas deve atualizar a cada ~30min
+
 ---
 
 ## 🟢 Backlog técnico — Social Listening
@@ -127,6 +131,19 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Remoção Lovable + migração para OpenAI (22/03/2026 — sessão 33)
+- [x] `lovable-tagger` removido de `vite.config.ts` e `package.json` ✅
+- [x] CORS allowlists de preview Lovable removidas de 4 edge functions ✅
+- [x] `funnel-ai-analysis`, `quiz-copilot`, `survey-ai-analysis` migrados para OpenAI `gpt-4o-mini` ✅
+- [x] `social-listening-cron`: `classifyWithLovableAI` removida, OpenAI como único provider ✅
+- [x] Frontend: detecção de domínio Lovable preview removida de 4 componentes ✅
+
+### 🎯 Social Listening cron — fix freeze por timeout ausente (22/03/2026 — sessão 33)
+- [x] Root cause: `fetch()` sem timeout travava o `waitUntil` em todos os projetos seguintes ✅
+- [x] `fetchWithTimeout` com `AbortController` (30s API Meta, 60s IA) adicionado ✅
+- [x] Aplicado em todas as chamadas externas: posts, comentários, ads, OpenAI ✅
+- [x] Deploy realizado ✅
 
 ### 🎯 Meta Ads — importação histórica até 2 anos (22/03/2026 — sessão 28)
 - [x] Bug: `isHistorical` usava `daysFromEnd` → corrigido para `daysFromStart` (3x mais rápido)

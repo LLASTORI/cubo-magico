@@ -132,7 +132,8 @@ Domínios principais:
 | Vendas | `hotmart-webhook`, `hotmart-products`, `hotmart-offers-cron` |
 | CSV Import | `provider-csv-import` (v2), `provider-csv-import-revert` (v1) |
 | Meta Ads | `meta-api` (sync_insights, sync_hierarchy_full), `meta-insights-cron`, `meta-oauth-*`, `meta-hierarchy-cron` |
-| Quiz/Survey | `quiz-public-*`, `quiz-copilot`, `survey-public` |
+| Quiz/Survey | `quiz-public-*`, `quiz-copilot` (OpenAI gpt-4o-mini), `survey-public`, `survey-ai-analysis` (OpenAI gpt-4o-mini) |
+| IA Analista | `funnel-ai-analysis` (OpenAI gpt-4o-mini) — requer `OPENAI_API_KEY` configurada no Supabase |
 | Automações | `automation-engine`, `whatsapp-webhook`, `evolution-api` |
 | Social Listening | `social-listening-cron` (cron 30min, todos os projetos), `social-comments-api` (sync manual + fallback token) |
 | Exports | `export-csv-utf8`, `export-orders-sql`, `export-contacts-sql` |
@@ -186,7 +187,9 @@ Domínios principais:
 
 **`last_synced_at`** em `social_listening_pages` — atualizado ao final de cada sync bem-sucedido do projeto. Usado no frontend para exibir "última sincronização".
 
-**AI processing:** classificação em dois estágios — 1) keywords (síncrono, sem custo) → 2) OpenAI GPT-4o-mini batch com fallback para Lovable AI. Quota controlada por `check_and_use_ai_quota` RPC.
+**AI processing:** classificação em dois estágios — 1) keywords (síncrono, sem custo) → 2) OpenAI `gpt-4o-mini` batch. Quota controlada por `check_and_use_ai_quota` RPC. `LOVABLE_API_KEY` foi removida — OpenAI é o único provider de IA.
+
+**Timeout em chamadas externas:** todas as chamadas `fetch()` à Meta API usam `fetchWithTimeout` com `AbortController` (30s). Sem timeout, um hang na API travava o `waitUntil` impedindo projetos subsequentes de serem processados.
 
 **Ignore keywords:** salvas em `ai_knowledge_base.ignore_keywords` (jsonb array). Ação `apply_ignore_keywords` na `social-comments-api` aplica retroativamente marcando `is_automation=true`.
 

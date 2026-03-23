@@ -227,6 +227,9 @@ async function runCronSync(supabase: any) {
           continue
         }
 
+        // Step 2.5: Auto-refresh page tokens if stale (user may have reconnected OAuth)
+        await refreshPageTokensIfNeeded(supabase, projectId, credentials.access_token)
+
         // Step 3: Sync posts
         const postsResult: SyncOperationResult = await syncPostsForProject(supabase, projectId, credentials.access_token)
         result.postsSynced = postsResult.postsSynced || 0
@@ -345,6 +348,103 @@ async function runCronSync(supabase: any) {
         details: { error: error.message, stack: error.stack },
       })
     } catch (_) { /* ignore logging errors */ }
+  }
+}
+
+// ============= AUTO-REFRESH PAGE TOKENS =============
+
+async function refreshPageTokensIfNeeded(supabase: any, projectId: string, userAccessToken: string) {
+  const GRAPH_API_BASE = 'https://graph.facebook.com/v19.0'
+  try {
+    // Check if any page token is stale (updated_at older than user's meta_credentials)
+    const { data: pages } = await supabase
+      .from('social_listening_pages')
+      .select('id, page_id, platform, access_token')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+
+    if (!pages?.length) return
+
+    // Quick validation: try a lightweight API call with first FB page token
+    const fbPage = pages.find((p: any) => p.platform === 'facebook')
+    if (!fbPage?.access_token) return
+
+    const rawId = fbPage.page_id.replace(/_facebook$/, '')
+    const testUrl = `${GRAPH_API_BASE}/${rawId}?fields=id&access_token=${fbPage.access_token}`
+    const testResp = await fetchWithTimeout(testUrl, 10_000)
+    const testData = await testResp.json()
+
+    if (!testData.error) return // Token still valid, nothing to do
+
+    if (testData.error.code !== 190 && testData.error.code !== 10) return // Different error, skip
+
+    console.log(`[SOCIAL-LISTENING-CRON] Page token expired for project ${projectId}, refreshing...`)
+
+    // Fetch fresh page tokens from Meta using the user token
+    const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${userAccessToken}`
+    const pagesResp = await fetchWithTimeout(pagesUrl, 15_000)
+    const pagesData = await pagesResp.json()
+
+    if (pagesData.error || !pagesData.data?.length) {
+      console.log(`[SOCIAL-LISTENING-CRON] Could not refresh page tokens: ${pagesData.error?.message || 'no pages returned'}`)
+      return
+    }
+
+    // Build a map of fresh tokens: pageId → token, igAccountId → token
+    const freshTokens: Record<string, string> = {}
+    for (const p of pagesData.data) {
+      if (p.access_token) {
+        freshTokens[String(p.id)] = p.access_token
+        if (p.instagram_business_account?.id) {
+          freshTokens[String(p.instagram_business_account.id)] = p.access_token
+        }
+      }
+    }
+
+    // Update each saved page's token
+    let refreshed = 0
+    for (const savedPage of pages) {
+      const baseId = savedPage.page_id.replace(/_facebook$/, '').replace(/_instagram$/, '')
+      const freshToken = freshTokens[baseId]
+      if (freshToken && freshToken !== savedPage.access_token) {
+        await supabase
+          .from('social_listening_pages')
+          .update({ access_token: freshToken })
+          .eq('id', savedPage.id)
+        refreshed++
+      }
+    }
+
+    // Log result to system_health_log for visibility
+    try {
+      await supabase.from('system_health_log').insert({
+        check_type: 'social_listening_token_refresh',
+        severity: refreshed > 0 ? 'ok' : 'warning',
+        affected_count: refreshed,
+        details: {
+          project_id: projectId,
+          refreshed,
+          total_pages: pages.length,
+          fresh_tokens_found: Object.keys(freshTokens).length,
+        },
+      })
+    } catch (_) { /* ignore */ }
+
+    if (refreshed > 0) {
+      console.log(`[SOCIAL-LISTENING-CRON] Refreshed ${refreshed} page tokens for project ${projectId}`)
+    }
+  } catch (e: any) {
+    console.error(`[SOCIAL-LISTENING-CRON] Token refresh error for project ${projectId}:`, e.message)
+    // Log error for visibility
+    try {
+      await supabase.from('system_health_log').insert({
+        check_type: 'social_listening_token_refresh',
+        severity: 'critical',
+        affected_count: 0,
+        details: { project_id: projectId, error: e.message },
+      })
+    } catch (_) { /* ignore */ }
+    // Non-fatal: continue with existing tokens
   }
 }
 
@@ -874,8 +974,8 @@ function buildAdCommentRow(
     text: platform === 'instagram' ? comment.text : comment.message,
     author_username: authorUsername,
     author_id: platform === 'instagram' ? null : comment.from?.id,
-    likes_count: comment.like_count || 0,
-    replies_count: comment.comment_count || comment.replies?.data?.length || 0,
+    like_count: comment.like_count || 0,
+    reply_count: comment.comment_count || comment.replies?.data?.length || 0,
     comment_timestamp: platform === 'instagram' ? comment.timestamp : comment.created_time,
     is_deleted: false,
     is_own_account: isOwnAccount,

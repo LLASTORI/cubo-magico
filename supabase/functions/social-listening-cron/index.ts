@@ -158,8 +158,6 @@ async function runCronSync(supabase: any) {
     const allProjectIds = [...new Set((activeProjects || []).map((p: any) => p.project_id))]
 
     // Rotate starting position based on current minute to prevent starvation.
-    // Without this, projects at the end of the list (by UUID) never get processed
-    // because the edge function wall-clock timeout (~400s) is reached first.
     const minuteOfDay = new Date().getUTCHours() * 60 + new Date().getUTCMinutes()
     const rotateIndex = Math.floor(minuteOfDay / 30) % allProjectIds.length
     const projectIds = [
@@ -170,12 +168,21 @@ async function runCronSync(supabase: any) {
 
     const results: SyncResult[] = []
 
+    // Wall-clock guard: stop processing after 120s to avoid waitUntil timeout (~150s)
+    const WALL_CLOCK_LIMIT_MS = 120_000
+
     for (const projectId of projectIds) {
+      const elapsed = Date.now() - startTime
+      if (elapsed > WALL_CLOCK_LIMIT_MS) {
+        console.log(`[SOCIAL-LISTENING-CRON] Wall-clock limit reached (${(elapsed / 1000).toFixed(0)}s). Remaining projects deferred to next cycle.`)
+        break
+      }
+
       const projectInfo = activeProjects?.find((p: any) => p.project_id === projectId)
       const projectName = (projectInfo?.projects as any)?.name || 'Unknown'
 
       console.log('-'.repeat(40))
-      console.log(`[SOCIAL-LISTENING-CRON] Processing project: ${projectName} (${projectId})`)
+      console.log(`[SOCIAL-LISTENING-CRON] Processing project: ${projectName} (${projectId}) [elapsed=${(elapsed / 1000).toFixed(0)}s]`)
 
       const result: SyncResult = {
         projectId,
@@ -263,10 +270,48 @@ async function runCronSync(supabase: any) {
           stuck: result.stuckReset
         })
 
+        // Log per-project result to system_health_log for debugging (no console.log visibility in prod)
+        try {
+          await supabase.from('system_health_log').insert({
+            check_type: 'social_listening_project',
+            severity: result.success ? 'ok' : 'warning',
+            affected_count: result.commentsSynced + result.adCommentsSynced,
+            details: {
+              project_id: projectId,
+              project_name: projectName,
+              posts: result.postsSynced,
+              comments: result.commentsSynced,
+              ad_posts: result.adPostsSynced,
+              ad_comments: result.adCommentsSynced,
+              keyword: result.keywordClassified,
+              ai: result.aiProcessed,
+              stuck: result.stuckReset,
+              error: result.error || null,
+              elapsed_s: ((Date.now() - startTime) / 1000).toFixed(1),
+            },
+          })
+        } catch (_) { /* ignore logging errors */ }
+
       } catch (projectError: any) {
         console.error(`[SOCIAL-LISTENING-CRON] Error processing project ${projectName}:`, projectError.message)
         result.success = false
         result.error = projectError.message
+
+        // Log error to system_health_log
+        try {
+          await supabase.from('system_health_log').insert({
+            check_type: 'social_listening_project',
+            severity: 'critical',
+            affected_count: 0,
+            details: {
+              project_id: projectId,
+              project_name: projectName,
+              error: projectError.message,
+              stack: projectError.stack,
+              elapsed_s: ((Date.now() - startTime) / 1000).toFixed(1),
+            },
+          })
+        } catch (_) { /* ignore logging errors */ }
       }
 
       results.push(result)
@@ -290,7 +335,16 @@ async function runCronSync(supabase: any) {
     console.log(`[SOCIAL-LISTENING-CRON] Classification: ${totalKeyword} keyword, ${totalAI} AI`)
 
   } catch (error: any) {
-    console.error('[SOCIAL-LISTENING-CRON] FATAL ERROR:', error.message)
+    console.error('[SOCIAL-LISTENING-CRON] FATAL ERROR:', error.message, error.stack)
+    // Log to system_health_log so we can debug via SQL
+    try {
+      await supabase.from('system_health_log').insert({
+        check_type: 'social_listening_cron',
+        severity: 'critical',
+        affected_count: 0,
+        details: { error: error.message, stack: error.stack },
+      })
+    } catch (_) { /* ignore logging errors */ }
   }
 }
 
@@ -478,7 +532,7 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
       .select('*')
       .eq('project_id', projectId)
       .order('published_at', { ascending: false })
-      .limit(20)
+      .limit(10) // Keep small for cron (30min cycles); manual sync uses more
 
     if (!posts?.length) {
       return { success: true, commentsSynced: 0, errors, partialFailure: false }

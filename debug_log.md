@@ -5,8 +5,28 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-23 (sessão 34) — Social Listening: 5 bugs corrigidos (investigação forense)
+- **Data:** 2026-03-23 (sessão 35) — Social Listening: cron estabilizado + telemetria por projeto
 - **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-23] Social Listening cron — estabilização + telemetria (sessão 35) ✅
+
+**Sintoma:** Camila Leal (`cm_2nxxd9`) sem sincronizar por >14 horas. Todas as outras contas funcionando.
+
+**Investigação:**
+- Camila era consistentemente pulada pelo cron. Rotação funcionava, mas deploys instáveis (v26-v28) causaram crashes no `waitUntil` background processing.
+- v27 (staleness-based sorting) e v28 (simplificada) crashavam silenciosamente — HTTP 200 mas background morria.
+- Sem visibilidade: `console.log` de Edge Functions não é acessível via `get_logs` MCP (só HTTP-level logs).
+- `meta_credentials.expires_at` NULL para Camila (não causou o problema, token funciona).
+
+**Fixes:**
+1. **v29/v30: revert para rotação original** — `minuteOfDay / 30 % projectCount`. Estável.
+2. **Wall-clock guard de 120s** — `break` no loop de projetos se elapsed > 120s (protege contra timeout de `waitUntil` ~150s).
+3. **Post limit reduzido** — de 20 para 10 posts por página no cron (ciclos de 30min são suficientes).
+4. **v31: telemetria por projeto via `system_health_log`** — cada projeto processado gera entry com `check_type='social_listening_project'`, incluindo contagens e erros. Resolve falta de visibilidade do `console.log`.
+
+**Resultado:** Todos os 6 projetos sincronizaram com sucesso (03:30 UTC). Camila sincronizou pela primeira vez em 14h.
 
 ---
 

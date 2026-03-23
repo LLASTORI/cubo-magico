@@ -104,9 +104,9 @@
   - Sem reconexão: comentários FB continuam sem @perfil
   - Monaliza Krepe: também precisa reconectar por token expirado (39 posts falhando)
 
-- [ ] **Monitorar cron após fix de rotação (sessão 34)**
-  - Camila Leal e Natalia devem voltar a sincronizar com a rotação de projetos
-  - `last_synced_at` de todas as contas deve atualizar a cada ~30-60min
+- [x] **Monitorar cron após fix de rotação (sessão 34/35)** ✅
+  - Todos os 6 projetos sincronizando (confirmado 03:30 UTC 23/03)
+  - v31 inclui telemetria por projeto via `system_health_log` para monitoramento contínuo
 
 ---
 

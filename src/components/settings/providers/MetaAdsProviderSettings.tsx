@@ -72,7 +72,7 @@ export function MetaAdsProviderSettings({ onBack }: MetaAdsProviderSettingsProps
       }
 
       const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`;
-      const scope = 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement';
+      const scope = 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement,pages_read_user_content';
       
       const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${data.state}&scope=${scope}&auth_type=rerequest&response_type=code`;
       

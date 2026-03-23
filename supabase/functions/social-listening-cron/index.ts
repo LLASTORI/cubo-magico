@@ -155,8 +155,18 @@ async function runCronSync(supabase: any) {
       throw new Error('Erro ao buscar projetos ativos')
     }
 
-    const projectIds = [...new Set((activeProjects || []).map((p: any) => p.project_id))]
-    console.log(`[SOCIAL-LISTENING-CRON] Found ${projectIds.length} projects with active social listening`)
+    const allProjectIds = [...new Set((activeProjects || []).map((p: any) => p.project_id))]
+
+    // Rotate starting position based on current minute to prevent starvation.
+    // Without this, projects at the end of the list (by UUID) never get processed
+    // because the edge function wall-clock timeout (~400s) is reached first.
+    const minuteOfDay = new Date().getUTCHours() * 60 + new Date().getUTCMinutes()
+    const rotateIndex = Math.floor(minuteOfDay / 30) % allProjectIds.length
+    const projectIds = [
+      ...allProjectIds.slice(rotateIndex),
+      ...allProjectIds.slice(0, rotateIndex),
+    ]
+    console.log(`[SOCIAL-LISTENING-CRON] Found ${projectIds.length} projects with active social listening (rotation offset=${rotateIndex})`)
 
     const results: SyncResult[] = []
 
@@ -444,8 +454,10 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
       .eq('project_id', projectId)
       .eq('is_active', true)
     
-    // Build lists of connected page IDs and Instagram usernames
-    const connectedPageIds: string[] = (pages || []).map((p: any) => p.page_id).filter(Boolean)
+    // Build lists of connected page IDs (strip _facebook/_instagram suffix) and Instagram usernames
+    const connectedPageIds: string[] = (pages || [])
+      .map((p: any) => String(p.page_id || '').replace(/_facebook$/, '').replace(/_instagram$/, ''))
+      .filter(Boolean)
     const connectedUsernames: string[] = (pages || [])
       .map((p: any) => (p.instagram_username || p.page_name || '').toLowerCase().replace(/^@/, ''))
       .filter(Boolean)
@@ -535,6 +547,7 @@ async function upsertComment(supabase: any, projectId: string, postId: string, p
       platform,
       comment_id_meta: comment.id,
       text: comment.message,
+      author_username: authorName,
       author_name: authorName,
       author_id: authorId,
       likes_count: comment.like_count || 0,

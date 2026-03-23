@@ -5,8 +5,34 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-22 (sessão 33) — Social Listening cron fix + remoção Lovable / migração OpenAI
-- **Status geral:** Social Listening cron corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Lovable removido ✅
+- **Data:** 2026-03-23 (sessão 34) — Social Listening: 5 bugs corrigidos (investigação forense)
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-23] Social Listening — investigação forense + 5 fixes (sessão 34) ✅
+
+**Sintomas reportados:** Projeto Camila Leal (`cm_2nxxd9`) — comentários de Meta Ads não aparecem; @perfil mostra "Anônimo" em comentários do Facebook.
+
+**Investigação:**
+- `last_synced_at` Camila: 13:32 de 22/03 (11h+ atrás). Natalia idem (12h+). Alice/Monaliza/Leandro atualizados normalmente.
+- Cron processa projetos em ordem fixa de UUID. Projetos 1-3 consomem todo o wall-clock timeout (~400s). Camila (4o) e Natalia (5o) nunca são alcançados → **starvation**.
+- 429 comentários Facebook no banco: 0 com `author_name`, 0 com `author_username`, 3 com `author_id`. Campo `from` da Graph API retorna null.
+- Causa do `from` null: permissão `pages_read_user_content` ausente no OAuth scope — sem ela, Graph API v19.0 não retorna `from` em comentários.
+- `upsertComment` no cron (FB orgânico) não incluía `author_username` no objeto de upsert.
+- `connectedPageIds` no cron incluía sufixo `_facebook`/`_instagram` → `isOwnAccount` nunca matchava para FB.
+- `social-comments-api` usava `fetch()` sem timeout em 8 chamadas externas.
+
+**Fixes aplicados:**
+1. **`author_username` adicionado ao upsert FB orgânico** — `social-listening-cron/index.ts` → `upsertComment` agora salva `author_username: authorName`
+2. **Rotação de projetos no cron** — offset baseado em `minuteOfDay / 30` evita que projetos no fim da lista sejam eternamente pulados
+3. **`fetchWithTimeout` em `social-comments-api`** — 8 chamadas `fetch()` substituídas: Meta API (30s), OpenAI (60s)
+4. **`connectedPageIds` suffix fix** — strip `_facebook`/`_instagram` antes de comparar com `comment.from.id`
+5. **`pages_read_user_content` adicionado ao OAuth scope** — 3 fluxos (Settings, MetaAds, MetaAdsProviderSettings). Requer reconexão do Meta para ativar.
+
+**Deploy:** `social-listening-cron` + `social-comments-api` deployados.
+
+**Ação necessária do usuário:** Reconectar conta Meta em Configurações → Conexões Meta para que a nova permissão `pages_read_user_content` seja concedida. Após reconexão, o campo `from` dos comentários FB passará a ser preenchido.
 
 ---
 

@@ -25,6 +25,16 @@ const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 // Delay helper
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+async function fetchWithTimeout(url: string, timeoutMs = 30_000, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // ============= KEYWORD CLASSIFICATION (NO AI) =============
 // Keywords for automatic classification without AI
 
@@ -266,7 +276,7 @@ async function classifyWithOpenAI(comments: Array<{id: string, text: string, pos
 
   const prompt = buildBatchPrompt(comments, knowledgeBase)
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', 60_000, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -595,7 +605,7 @@ async function fetchFacebookPosts(pageId: string, pageToken: string): Promise<an
     const currentUrl = nextUrl
     nextUrl = null
     
-    const fetchResponse: Response = await fetch(currentUrl)
+    const fetchResponse: Response = await fetchWithTimeout(currentUrl, 30_000)
     const fetchData: any = await fetchResponse.json()
 
     if (fetchData.error) {
@@ -623,7 +633,7 @@ async function fetchInstagramPosts(igAccountId: string, pageToken: string, mainA
     const url = `${GRAPH_API_BASE}/${igAccountId}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count&limit=50&access_token=${token}`
 
     try {
-      const response = await fetch(url)
+      const response = await fetchWithTimeout(url, 30_000)
       const data = await response.json()
 
       if (data.error) {
@@ -913,7 +923,7 @@ async function fetchCommentsForPost(post: any, pageToken: string, fallbackToken:
 
   while (nextUrl && allComments.length < MAX_COMMENTS) {
     const url = useFallback ? nextUrl.replace(pageToken, fallbackToken) : nextUrl
-    const response = await fetch(url)
+    const response = await fetchWithTimeout(url, 30_000)
     const data = await response.json()
 
     if (data.error) {
@@ -1424,7 +1434,7 @@ async function getAIQuota(supabase: any, projectId: string) {
 
 async function getAvailablePages(accessToken: string) {
   const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`
-  const response = await fetch(pagesUrl)
+  const response = await fetchWithTimeout(pagesUrl, 30_000)
   const data = await response.json()
 
   if (data.error) {
@@ -1562,7 +1572,7 @@ async function fetchAdPostComments(postIdMeta: string, platform: string, token: 
   let nextUrl: string | null = `${GRAPH_API_BASE}/${postIdMeta}/comments?fields=${fields}&limit=100&access_token=${token}`
 
   while (nextUrl && allComments.length < MAX_COMMENTS) {
-    const response = await fetch(nextUrl)
+    const response = await fetchWithTimeout(nextUrl, 30_000)
     const data = await response.json()
     if (data.error) {
       throw new Error(`code=${data.error.code || 'n/a'} message=${data.error.message}`)
@@ -1625,7 +1635,7 @@ async function syncAdComments(supabase: any, projectId: string, accessToken: str
       try {
         // Request both Facebook story ID and Instagram media ID from each ad creative
         const adsUrl = `${GRAPH_API_BASE}/${account.account_id}/ads?fields=id,name,effective_status,creative{effective_object_story_id,effective_instagram_story_id}&limit=50&access_token=${accessToken}`
-        const adsResponse = await fetch(adsUrl)
+        const adsResponse = await fetchWithTimeout(adsUrl, 30_000)
         const adsData = await adsResponse.json()
 
         if (adsData.error) {
@@ -1789,7 +1799,7 @@ Gere uma resposta de no mÃ¡ximo 2 linhas, adequada para redes sociais. Seja empÃ
   console.log('[GENERATE_REPLY] Using OpenAI')
   let openaiResponse: Response
   try {
-    openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    openaiResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', 60_000, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openAIKey}`,
@@ -1856,7 +1866,7 @@ async function testOpenAIConnection(supabase: any) {
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/models', {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/models', 30_000, {
       headers: { 'Authorization': `Bearer ${key}` },
     })
 

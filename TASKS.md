@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 22/03/2026 (sessão 33 — Social Listening cron fix + remoção Lovable / migração OpenAI)
+> Última atualização: 23/03/2026 (sessão 34 — Social Listening: 5 bugs corrigidos)
 
 ---
 
@@ -99,13 +99,14 @@
 
 ## 🟡 Importante — Social Listening
 
-- [ ] **Reconectar conta Meta — Monaliza Krepe**
-  - 39 posts falhando com "Invalid OAuth 2.0 Access Token"
-  - Ir em Configurações → Conexões Meta e refazer o OAuth
+- [ ] **Reconectar TODAS as contas Meta** (permissão `pages_read_user_content`)
+  - Nova permissão adicionada ao OAuth scope (sessão 34) — necessária para que o campo `from` (autor do comentário) seja retornado pela Graph API v19.0 em comentários do Facebook
+  - Sem reconexão: comentários FB continuam sem @perfil
+  - Monaliza Krepe: também precisa reconectar por token expirado (39 posts falhando)
 
-- [ ] **Monitorar cron após fix de timeout (sessão 33)**
-  - Verificar se Camila Leal e Natalia voltaram a sincronizar normalmente
-  - `last_synced_at` das duas deve atualizar a cada ~30min
+- [ ] **Monitorar cron após fix de rotação (sessão 34)**
+  - Camila Leal e Natalia devem voltar a sincronizar com a rotação de projetos
+  - `last_synced_at` de todas as contas deve atualizar a cada ~30-60min
 
 ---
 
@@ -131,6 +132,14 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Social Listening — investigação forense + 5 fixes (23/03/2026 — sessão 34)
+- [x] Bug: `author_username` não salvo em FB orgânico no cron — corrigido ✅
+- [x] Bug: cron starvation — Camila e Natalia nunca processadas — rotação de projetos implementada ✅
+- [x] Bug: `social-comments-api` sem `fetchWithTimeout` — 8 chamadas corrigidas ✅
+- [x] Bug: `connectedPageIds` com sufixo `_facebook` — isOwnAccount FB nunca matchava ✅
+- [x] `pages_read_user_content` adicionado ao OAuth scope (3 fluxos) ✅
+- [x] Deploy: ambas edge functions deployadas ✅
 
 ### 🎯 Remoção Lovable + migração para OpenAI (22/03/2026 — sessão 33)
 - [x] `lovable-tagger` removido de `vite.config.ts` e `package.json` ✅

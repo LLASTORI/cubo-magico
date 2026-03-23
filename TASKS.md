@@ -102,7 +102,8 @@
 - [ ] **Reconectar TODAS as contas Meta** (permissão `pages_read_user_content`)
   - Nova permissão adicionada ao OAuth scope (sessão 34) — necessária para que o campo `from` (autor do comentário) seja retornado pela Graph API v19.0 em comentários do Facebook
   - Sem reconexão: comentários FB continuam sem @perfil
-  - Monaliza Krepe: também precisa reconectar por token expirado (39 posts falhando)
+  - Auto-refresh de page tokens implementado (sessão 35) — resolve tokens expirados automaticamente
+  - Reconexão ainda necessária para NOVA PERMISSÃO (`pages_read_user_content`)
 
 - [x] **Monitorar cron após fix de rotação (sessão 34/35)** ✅
   - Todos os 6 projetos sincronizando (confirmado 03:30 UTC 23/03)

@@ -28,6 +28,13 @@
 
 **Resultado:** Todos os 6 projetos sincronizaram com sucesso (03:30 UTC). Camila sincronizou pela primeira vez em 14h.
 
+**Investigação adicional (telemetria):**
+- Telemetria v31 revelou erro `Graph API error 190: Invalid OAuth 2.0 Access Token` em TODOS os 6 projetos para comentários FB orgânicos.
+- Causa: page tokens em `social_listening_pages` expirados; quando OAuth é reconectado, `meta_credentials.access_token` é atualizado mas page tokens NÃO são refreshados.
+- Bug `buildAdCommentRow` — `likes_count`/`replies_count` não existem em `social_comments` (colunas corretas: `like_count`/`reply_count`). Natalia tinha 33 ad comments descartados por ciclo. Fix v32.
+- Camila: 40 ad posts mas 0 ad comments (ads genuinamente sem comentários).
+- Auto-refresh de page tokens adicionado em v33/v34: detecta 190, busca tokens frescos via `me/accounts`, atualiza `social_listening_pages`.
+
 ---
 
 ### [2026-03-23] Social Listening — investigação forense + 5 fixes (sessão 34) ✅

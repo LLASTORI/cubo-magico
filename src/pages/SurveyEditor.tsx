@@ -197,14 +197,7 @@ export default function SurveyEditor() {
     setSurveySettings(prev => ({ ...prev, completion }));
   };
 
-  // Use production URL when we're in the preview/sandbox.
-  const getBaseUrl = () => {
-    const origin = window.location.origin;
-    if (origin.includes('lovable.app') || origin.includes('lovableproject.com')) {
-      return 'https://cubomagico.leandrolastori.com.br';
-    }
-    return origin;
-  };
+  const getBaseUrl = () => window.location.origin;
 
   // Generate URLs in multi-tenant format: /s/:code/:slug
   const projectCode = projectData?.public_code;

@@ -1,0 +1,364 @@
+<style>
+  * { box-sizing: border-box; }
+  .demo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .demo-table th {
+    padding: 8px 12px; text-align: left; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: #888; border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .demo-table th.r { text-align: right; }
+  .demo-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: middle; }
+  .demo-table td.r { text-align: right; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .badge-active { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); border-radius: 4px; padding: 1px 6px; font-size: 11px; }
+  .badge-paused { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); border-radius: 4px; padding: 1px 6px; font-size: 11px; }
+  .badge-roas-good { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-family: monospace; }
+  .badge-roas-bad { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-family: monospace; }
+  .progress-bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; }
+  .name-full { color: #e2e8f0; line-height: 1.4; word-break: break-word; }
+  .name-truncated { color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: block; }
+  .name-top { color: #e2e8f0; font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name-sub { color: #64748b; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mock-bg { background: #0f1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; }
+  .spend-red { color: #f87171; }
+  .revenue-green { color: #4ade80; }
+  .pct-text { color: #94a3b8; font-size: 12px; }
+  .row-warn { background: rgba(239,68,68,0.03) !important; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .card-row { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px 14px; margin-bottom: 6px; display: grid; grid-template-columns: 1fr repeat(5, auto); gap: 16px; align-items: center; cursor: pointer; }
+  .card-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
+  .card-row .metric { text-align: right; }
+  .card-row .metric-label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; }
+  .card-row .metric-value { font-size: 13px; color: #e2e8f0; font-weight: 500; }
+  .left-accent { border-left: 3px solid; border-radius: 0 6px 6px 0; }
+  .expand-btn { color: #64748b; font-size: 11px; cursor: pointer; background: none; border: none; padding: 0; margin-left: 4px; }
+  .expand-btn:hover { color: #94a3b8; }
+  .name-row { display: flex; align-items: flex-start; gap: 8px; }
+  .bg-bar-row { position: relative; overflow: hidden; }
+  .bg-bar { position: absolute; top: 0; left: 0; height: 100%; opacity: 0.04; border-radius: 0 2px 2px 0; pointer-events: none; }
+</style>
+
+<h2>Como redesenhar a tabela UTM?</h2>
+<p class="subtitle">Escolha a abordagem que melhor equilibra legibilidade e densidade de informação</p>
+
+<div class="cards">
+
+  <!-- OPTION A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-bg">
+        <div style="font-size:11px;color:#64748b;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em;">
+          Campanha &nbsp;·&nbsp; Nível: Campanha
+        </div>
+        <table class="demo-table" style="width:100%">
+          <thead>
+            <tr>
+              <th style="min-width:200px">Nome</th>
+              <th class="r" style="width:70px">Status</th>
+              <th class="r" style="width:90px">Investimento</th>
+              <th class="r" style="width:80px">Receita</th>
+              <th class="r" style="width:70px">ROAS</th>
+              <th class="r" style="width:55px">Vendas</th>
+              <th class="r" style="width:100px">Participação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="name-row">
+                  <div class="dot" style="background:#6366f1;margin-top:4px"></div>
+                  <div>
+                    <div class="name-top">PERPETUO_MAKEPRATICA13M_VENDA33_CBO</div>
+                    <div class="name-sub" style="font-size:10px;margin-top:2px">ID: 6845240176292 · clique para expandir</div>
+                  </div>
+                  <span style="color:#4f46e5;font-size:11px;flex-shrink:0;margin-top:3px">▶</span>
+                </div>
+              </td>
+              <td class="r"><span class="badge-active">Ativo</span></td>
+              <td class="r"><span>R$2.841</span></td>
+              <td class="r"><span class="revenue-green">R$9.720</span></td>
+              <td class="r"><span class="badge-roas-good">3.42x</span></td>
+              <td class="r">48</td>
+              <td class="r">
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                  <span class="pct-text">62.3%</span>
+                  <div class="progress-bar" style="width:48px">
+                    <div class="progress-fill" style="width:62%;background:#6366f1"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr class="row-warn">
+              <td>
+                <div class="name-row">
+                  <div class="dot" style="background:#f87171;margin-top:4px"></div>
+                  <div>
+                    <div class="name-top">PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB</div>
+                    <div class="name-sub" style="font-size:10px;margin-top:2px">ID: 6845240177422 · ⚠ gasto sem vendas</div>
+                  </div>
+                  <span style="color:#4f46e5;font-size:11px;flex-shrink:0;margin-top:3px">▶</span>
+                </div>
+              </td>
+              <td class="r"><span class="badge-paused">Inativo</span></td>
+              <td class="r"><span class="spend-red">R$412</span></td>
+              <td class="r"><span>R$0</span></td>
+              <td class="r"><span class="badge-roas-bad">0.00x</span></td>
+              <td class="r"><span class="spend-red">0</span></td>
+              <td class="r">
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                  <span class="pct-text">0.0%</span>
+                  <div class="progress-bar" style="width:48px">
+                    <div class="progress-fill" style="width:0%;background:#f87171"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="name-row">
+                  <div class="dot" style="background:#22d3ee;margin-top:4px"></div>
+                  <div>
+                    <div class="name-top">PERPETUO_REMARKETING_VISITANTES_7D</div>
+                    <div class="name-sub" style="font-size:10px;margin-top:2px">ID: 6845240178100 · clique para expandir</div>
+                  </div>
+                  <span style="color:#4f46e5;font-size:11px;flex-shrink:0;margin-top:3px">▶</span>
+                </div>
+              </td>
+              <td class="r"><span class="badge-active">Ativo</span></td>
+              <td class="r"><span>R$983</span></td>
+              <td class="r"><span class="revenue-green">R$5.880</span></td>
+              <td class="r"><span class="badge-roas-good">5.98x</span></td>
+              <td class="r">29</td>
+              <td class="r">
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                  <span class="pct-text">37.7%</span>
+                  <div class="progress-bar" style="width:48px">
+                    <div class="progress-fill" style="width:38%;background:#22d3ee"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Tabela compacta com nome em 2 linhas</h3>
+      <p>Nome principal + ID/contexto em linha menor. Mesma densidade, mais contexto visível. Sem quebra de linha abrupta.</p>
+    </div>
+  </div>
+
+  <!-- OPTION B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-bg">
+        <div style="font-size:11px;color:#64748b;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em;">
+          Campanha &nbsp;·&nbsp; Nível: Campanha
+        </div>
+        <!-- Card rows -->
+        <div class="card-row left-accent" style="border-left-color:#6366f1">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#6366f1;font-size:11px">▶</span>
+              <div>
+                <div style="font-size:12px;font-weight:500;color:#e2e8f0">PERPETUO_MAKEPRATICA13M_VENDA33_CBO</div>
+                <div style="font-size:10px;color:#64748b;margin-top:2px">ANDROMEDA · ID 6845240176292</div>
+              </div>
+            </div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Invest.</div>
+            <div class="metric-value">R$2.841</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Receita</div>
+            <div class="metric-value revenue-green">R$9.720</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">ROAS</div>
+            <div class="metric-value"><span class="badge-roas-good">3.42x</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Vendas</div>
+            <div class="metric-value">48</div>
+          </div>
+          <div class="metric" style="min-width:80px">
+            <div class="metric-label">Participação</div>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+              <span style="font-size:12px;color:#e2e8f0">62.3%</span>
+              <div class="progress-bar" style="width:40px"><div class="progress-fill" style="width:62%;background:#6366f1"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-row left-accent" style="border-left-color:#f87171;background:rgba(239,68,68,0.03)">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#f87171;font-size:11px">⚠</span>
+              <div>
+                <div style="font-size:12px;font-weight:500;color:#e2e8f0">PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB</div>
+                <div style="font-size:10px;color:#64748b;margin-top:2px">INATIVO · Gasto sem vendas</div>
+              </div>
+            </div>
+          </div>
+          <div class="metric"><div class="metric-label">Invest.</div><div class="metric-value spend-red">R$412</div></div>
+          <div class="metric"><div class="metric-label">Receita</div><div class="metric-value" style="color:#64748b">—</div></div>
+          <div class="metric"><div class="metric-label">ROAS</div><div class="metric-value"><span class="badge-roas-bad">0.00x</span></div></div>
+          <div class="metric"><div class="metric-label">Vendas</div><div class="metric-value spend-red">0</div></div>
+          <div class="metric" style="min-width:80px">
+            <div class="metric-label">Participação</div>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+              <span style="font-size:12px;color:#64748b">0.0%</span>
+              <div class="progress-bar" style="width:40px"><div class="progress-fill" style="width:0%;background:#f87171"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-row left-accent" style="border-left-color:#22d3ee">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#22d3ee;font-size:11px">▶</span>
+              <div>
+                <div style="font-size:12px;font-weight:500;color:#e2e8f0">PERPETUO_REMARKETING_VISITANTES_7D</div>
+                <div style="font-size:10px;color:#64748b;margin-top:2px">REMARKETING · ID 6845240178100</div>
+              </div>
+            </div>
+          </div>
+          <div class="metric"><div class="metric-label">Invest.</div><div class="metric-value">R$983</div></div>
+          <div class="metric"><div class="metric-label">Receita</div><div class="metric-value revenue-green">R$5.880</div></div>
+          <div class="metric"><div class="metric-label">ROAS</div><div class="metric-value"><span class="badge-roas-good">5.98x</span></div></div>
+          <div class="metric"><div class="metric-label">Vendas</div><div class="metric-value">29</div></div>
+          <div class="metric" style="min-width:80px">
+            <div class="metric-label">Participação</div>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+              <span style="font-size:12px;color:#e2e8f0">37.7%</span>
+              <div class="progress-bar" style="width:40px"><div class="progress-fill" style="width:38%;background:#22d3ee"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Linhas-card com borda colorida à esquerda</h3>
+      <p>Cada linha vira um mini-card. Métricas com label + valor em coluna. Borda lateral colore o nível de performance. Mais "respirado".</p>
+    </div>
+  </div>
+
+  <!-- OPTION C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-bg">
+        <div style="font-size:11px;color:#64748b;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em;">
+          Campanha &nbsp;·&nbsp; Nível: Campanha
+        </div>
+        <table class="demo-table" style="width:100%">
+          <thead>
+            <tr>
+              <th style="min-width:220px">Nome</th>
+              <th class="r" style="width:60px">Status</th>
+              <th class="r" style="width:90px">Investimento</th>
+              <th class="r" style="width:80px">Receita</th>
+              <th class="r" style="width:70px">ROAS</th>
+              <th class="r" style="width:55px">Vendas</th>
+              <th style="width:110px;padding-left:12px">Participação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="bg-bar-row">
+              <div class="bg-bar" style="width:62%;background:#6366f1"></div>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#6366f1"></div>
+                  <span class="name-truncated" title="PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA_6845240176292">
+                    PERPETUO_MAKEPRATICA13M_VENDA33_CBO
+                  </span>
+                  <span style="color:#4f46e5;font-size:11px">▶</span>
+                </div>
+              </td>
+              <td class="r">
+                <div style="display:flex;align-items:center;justify-content:flex-end">
+                  <div class="status-dot" style="background:#22c55e"></div>
+                </div>
+              </td>
+              <td class="r">R$2.841</td>
+              <td class="r revenue-green">R$9.720</td>
+              <td class="r"><span class="badge-roas-good">3.42x</span></td>
+              <td class="r">48</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
+                    <div style="width:62%;height:100%;background:#6366f1;border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:11px;color:#94a3b8;width:36px;text-align:right">62.3%</span>
+                </div>
+              </td>
+            </tr>
+            <tr class="bg-bar-row row-warn">
+              <div class="bg-bar" style="width:0%;background:#f87171"></div>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#f87171"></div>
+                  <span class="name-truncated" title="PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB_6845240177422">
+                    PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB
+                  </span>
+                </div>
+              </td>
+              <td class="r">
+                <div style="display:flex;align-items:center;justify-content:flex-end">
+                  <div class="status-dot" style="background:#eab308"></div>
+                </div>
+              </td>
+              <td class="r spend-red">R$412</td>
+              <td class="r" style="color:#64748b">—</td>
+              <td class="r"><span class="badge-roas-bad">0.00x</span></td>
+              <td class="r spend-red">0</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
+                    <div style="width:0%;height:100%;background:#f87171;border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:11px;color:#94a3b8;width:36px;text-align:right">0.0%</span>
+                </div>
+              </td>
+            </tr>
+            <tr class="bg-bar-row">
+              <div class="bg-bar" style="width:38%;background:#22d3ee"></div>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#22d3ee"></div>
+                  <span class="name-truncated" title="PERPETUO_REMARKETING_VISITANTES_7D_6845240178100">
+                    PERPETUO_REMARKETING_VISITANTES_7D
+                  </span>
+                  <span style="color:#4f46e5;font-size:11px">▶</span>
+                </div>
+              </td>
+              <td class="r">
+                <div style="display:flex;align-items:center;justify-content:flex-end">
+                  <div class="status-dot" style="background:#22c55e"></div>
+                </div>
+              </td>
+              <td class="r">R$983</td>
+              <td class="r revenue-green">R$5.880</td>
+              <td class="r"><span class="badge-roas-good">5.98x</span></td>
+              <td class="r">29</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
+                    <div style="width:38%;height:100%;background:#22d3ee;border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:11px;color:#94a3b8;width:36px;text-align:right">37.7%</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Tabela densa com barra de fundo + status como dot</h3>
+      <p>Máxima densidade. Nome truncado com tooltip. Status vira um dot colorido (sem texto). Barra de participação mais larga e legível. Barra de fundo sutil na linha.</p>
+    </div>
+  </div>
+
+</div>

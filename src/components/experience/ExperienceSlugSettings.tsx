@@ -111,11 +111,7 @@ export function ExperienceSlugSettings({
     }
   };
 
-  const baseUrl = typeof window !== 'undefined' 
-    ? (window.location.origin.includes('lovable') 
-        ? 'https://cubomagico.leandrolastori.com.br' 
-        : window.location.origin)
-    : '';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   const fullUrl = publicCode && localSlug 
     ? `${baseUrl}/${routePrefix}/${publicCode}/${localSlug}` 

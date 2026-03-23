@@ -8,7 +8,6 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -938,66 +937,14 @@ async function processAIForProject(supabase: any, projectId: string, limit: numb
             }
           }
         } catch (openaiError: any) {
-          console.error('[AI_PROCESS] OpenAI error, falling back:', openaiError.message)
-          
-          // Fallback to Lovable AI
-          for (const comment of commentsForAI) {
-            try {
-              const result = await classifyWithLovableAI(comment.text, comment.postContext, knowledgeBase)
-              
-              await supabase
-                .from('social_comments')
-                .update({
-                  sentiment: result.sentiment,
-                  classification: result.classification,
-                  classification_key: result.classification,
-                  intent_score: result.intent_score,
-                  ai_summary: result.summary,
-                  ai_processing_status: 'completed',
-                  ai_processed_at: new Date().toISOString(),
-                })
-                .eq('id', comment.id)
-
-              aiProcessed++
-            } catch (e: any) {
-              await supabase
-                .from('social_comments')
-                .update({ ai_processing_status: 'failed', ai_error: e.message })
-                .eq('id', comment.id)
-            }
-
-            await delay(200)
-          }
+          console.error('[AI_PROCESS] OpenAI error:', openaiError.message)
+          await supabase
+            .from('social_comments')
+            .update({ ai_processing_status: 'failed', ai_error: openaiError.message })
+            .in('id', commentsForAI.map(c => c.id))
         }
       } else {
-        // No OpenAI, use Lovable AI
-        for (const comment of commentsForAI) {
-          try {
-            const result = await classifyWithLovableAI(comment.text, comment.postContext, knowledgeBase)
-            
-            await supabase
-              .from('social_comments')
-              .update({
-                sentiment: result.sentiment,
-                classification: result.classification,
-                classification_key: result.classification,
-                intent_score: result.intent_score,
-                ai_summary: result.summary,
-                ai_processing_status: 'completed',
-                ai_processed_at: new Date().toISOString(),
-              })
-              .eq('id', comment.id)
-
-            aiProcessed++
-          } catch (e: any) {
-            await supabase
-              .from('social_comments')
-              .update({ ai_processing_status: 'failed', ai_error: e.message })
-              .eq('id', comment.id)
-          }
-
-          await delay(200)
-        }
+        console.warn('[AI_PROCESS] OPENAI_API_KEY not configured — skipping AI classification')
       }
     }
 
@@ -1071,43 +1018,3 @@ Responda em JSON array:
   return { results, inputTokens, outputTokens, cost }
 }
 
-async function classifyWithLovableAI(text: string, postContext: string, knowledgeBase?: any) {
-  const prompt = `Analise o comentário abaixo e forneça em JSON:
-- sentiment: "positive", "neutral" ou "negative"
-- classification: "product_question", "purchase_question", "commercial_interest", "praise", "complaint", "contact_request", "friend_tag", "spam" ou "other"
-- intent_score: 0-100 (intenção comercial)
-- summary: resumo de 1 linha (máx 80 caracteres)
-
-Contexto do post: ${postContext || 'N/A'}
-Comentário: "${text}"
-
-Responda APENAS em JSON: {"sentiment": "...", "classification": "...", "intent_score": 0, "summary": "..."}`
-
-  const response = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', 60_000, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash-lite',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      max_tokens: 300,
-    }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Lovable AI error: ${response.status}`)
-  }
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || ''
-  const jsonMatch = content.match(/\{[\s\S]*\}/)
-
-  if (!jsonMatch) {
-    throw new Error('Invalid AI response')
-  }
-
-  return JSON.parse(jsonMatch[0])
-}

@@ -1,0 +1,268 @@
+<style>
+  * { box-sizing: border-box; }
+  .mock-bg { background: #0f1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; }
+  .comment-row { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .comment-row:last-child { border-bottom: none; }
+  .comment-row:hover { background: rgba(255,255,255,0.02); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .meta { font-size: 11px; color: #64748b; }
+  .comment-text { font-size: 13px; color: #e2e8f0; margin-top: 3px; line-height: 1.4; }
+  .badge-intent { font-size: 10px; padding: 1px 6px; border-radius: 3px; }
+  .badge-buy { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .badge-praise { background: rgba(99,102,241,0.15); color: #818cf8; }
+  .badge-question { background: rgba(234,179,8,0.15); color: #fbbf24; }
+  .badge-pending { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+  .parent-preview { display: flex; align-items: flex-start; gap-6px; margin-bottom: 6px; padding: 5px 8px; background: rgba(255,255,255,0.04); border-left: 2px solid rgba(99,102,241,0.5); border-radius: 0 4px 4px 0; }
+  .parent-preview-text { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reply-icon { color: #6366f1; flex-shrink: 0; margin-right: 5px; }
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .comparison { grid-template-columns: 1fr; } }
+  .label-tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .tag-before { background: rgba(100,116,139,0.2); color: #64748b; }
+  .tag-after { background: rgba(99,102,241,0.2); color: #818cf8; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .chip { font-size: 10px; padding: 1px 5px; border-radius: 3px; border: 1px solid; }
+  .chip-ig { background: rgba(236,72,153,0.1); color: #f472b6; border-color: rgba(236,72,153,0.3); }
+  .chip-fb { background: rgba(59,130,246,0.1); color: #60a5fa; border-color: rgba(59,130,246,0.3); }
+  .action-btn { font-size: 11px; color: #4f46e5; background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 3px; }
+  .action-btn:hover { background: rgba(99,102,241,0.1); }
+  .col-name { min-width: 180px; }
+  .problem-note { font-size: 11px; color: #f87171; margin-top: 6px; padding: 4px 8px; background: rgba(239,68,68,0.08); border-radius: 4px; }
+  .solution-note { font-size: 11px; color: #4ade80; margin-top: 6px; padding: 4px 8px; background: rgba(34,197,94,0.08); border-radius: 4px; }
+</style>
+
+<h2>Contexto do comentário pai nos replies</h2>
+<p class="subtitle">Antes e depois — snapshot denormalizado</p>
+
+<div class="comparison">
+
+  <!-- ANTES -->
+  <div>
+    <span class="label-tag tag-before">Antes — sem contexto</span>
+    <div class="mock-bg">
+
+      <!-- Comentário normal -->
+      <div class="comment-row">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div class="avatar" style="background:rgba(99,102,241,0.2);color:#818cf8">MK</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@mariakowalski</span>
+              <span class="chip chip-ig">IG</span>
+              <span class="meta">há 2h</span>
+              <span class="badge-intent badge-buy">intenção de compra</span>
+            </div>
+            <p class="comment-text">Quanto custa o curso completo? Tem parcelamento?</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <!-- Reply SEM contexto -->
+      <div class="comment-row" style="background:rgba(99,102,241,0.03)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:28px;display:flex;justify-content:center;padding-top:2px">
+            <svg width="12" height="12" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          </div>
+          <div class="avatar" style="background:rgba(239,68,68,0.15);color:#f87171">JS</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@joaosilva99</span>
+              <span class="chip chip-ig">IG</span>
+              <span class="meta">há 1h</span>
+              <span class="badge-intent badge-pending">pendente</span>
+            </div>
+            <!-- SEM preview do pai -->
+            <p class="comment-text">Eu também quero saber! Alguém me responde por favor</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <!-- Outro reply SEM contexto -->
+      <div class="comment-row" style="background:rgba(99,102,241,0.03)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:28px;display:flex;justify-content:center;padding-top:2px">
+            <svg width="12" height="12" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          </div>
+          <div class="avatar" style="background:rgba(34,197,94,0.15);color:#4ade80">AL</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@analuiza</span>
+              <span class="chip chip-ig">IG</span>
+              <span class="meta">há 45min</span>
+              <span class="badge-intent badge-pending">pendente</span>
+            </div>
+            <!-- SEM preview do pai -->
+            <p class="comment-text">Sim, concordo totalmente 👏</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <!-- Reply isolado sem PAI carregado -->
+      <div class="comment-row" style="background:rgba(99,102,241,0.03)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:28px;display:flex;justify-content:center;padding-top:2px">
+            <svg width="12" height="12" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          </div>
+          <div class="avatar" style="background:rgba(234,179,8,0.15);color:#fbbf24">PT</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@pedrotavares</span>
+              <span class="chip chip-fb">FB</span>
+              <span class="meta">há 30min</span>
+              <span class="badge-intent badge-pending">pendente</span>
+            </div>
+            <!-- PAI fora do batch — aparece completamente isolado -->
+            <p class="comment-text">Obrigado pela resposta! Vou aguardar o link</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <div class="problem-note">⚠ Sem contexto: quem é @joaosilva99 respondendo? Quem é @pedrotavares agradecendo? O operador não sabe.</div>
+    </div>
+  </div>
+
+  <!-- DEPOIS -->
+  <div>
+    <span class="label-tag tag-after">Depois — snapshot denormalizado</span>
+    <div class="mock-bg">
+
+      <!-- Comentário normal -->
+      <div class="comment-row">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div class="avatar" style="background:rgba(99,102,241,0.2);color:#818cf8">MK</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@mariakowalski</span>
+              <span class="chip chip-ig">IG</span>
+              <span class="meta">há 2h</span>
+              <span class="badge-intent badge-buy">intenção de compra</span>
+            </div>
+            <p class="comment-text">Quanto custa o curso completo? Tem parcelamento?</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <!-- Reply COM contexto -->
+      <div class="comment-row" style="background:rgba(99,102,241,0.03)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:28px;display:flex;justify-content:center;padding-top:2px">
+            <svg width="12" height="12" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          </div>
+          <div class="avatar" style="background:rgba(239,68,68,0.15);color:#f87171">JS</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@joaosilva99</span>
+              <span class="chip chip-ig">IG</span>
+              <span class="meta">há 1h</span>
+              <span class="badge-intent badge-pending">pendente</span>
+            </div>
+            <!-- COM preview do pai -->
+            <div style="display:flex;align-items:center;margin-bottom:4px;margin-top:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border-left:2px solid rgba(99,102,241,0.4);border-radius:0 4px 4px 0">
+              <svg class="reply-icon" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+              <span style="font-size:11px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:#94a3b8;font-weight:500">@mariakowalski: </span>Quanto custa o curso completo? Tem parcelamento?</span>
+            </div>
+            <p class="comment-text">Eu também quero saber! Alguém me responde por favor</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <!-- Reply COM contexto (pai é own account) -->
+      <div class="comment-row" style="background:rgba(99,102,241,0.03)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:28px;display:flex;justify-content:center;padding-top:2px">
+            <svg width="12" height="12" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          </div>
+          <div class="avatar" style="background:rgba(34,197,94,0.15);color:#4ade80">AL</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@analuiza</span>
+              <span class="chip chip-ig">IG</span>
+              <span class="meta">há 45min</span>
+              <span class="badge-intent badge-pending">pendente</span>
+            </div>
+            <!-- PAI é own account — snapshot salvo no banco, aparece mesmo filtrado -->
+            <div style="display:flex;align-items:center;margin-bottom:4px;margin-top:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border-left:2px solid rgba(99,102,241,0.4);border-radius:0 4px 4px 0">
+              <svg class="reply-icon" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+              <span style="font-size:11px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:#94a3b8;font-weight:500">@minhaempresa: </span>Boa tarde! O curso está com 20% de desconto essa semana 🎉</span>
+            </div>
+            <p class="comment-text">Sim, concordo totalmente 👏</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <!-- Reply COM contexto — pai fora do batch -->
+      <div class="comment-row" style="background:rgba(99,102,241,0.03)">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:28px;display:flex;justify-content:center;padding-top:2px">
+            <svg width="12" height="12" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          </div>
+          <div class="avatar" style="background:rgba(234,179,8,0.15);color:#fbbf24">PT</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500;color:#e2e8f0">@pedrotavares</span>
+              <span class="chip chip-fb">FB</span>
+              <span class="meta">há 30min</span>
+              <span class="badge-intent badge-pending">pendente</span>
+            </div>
+            <!-- PAI fora do batch — mas snapshot salvo, aparece normalmente -->
+            <div style="display:flex;align-items:center;margin-bottom:4px;margin-top:4px;padding:4px 8px;background:rgba(255,255,255,0.04);border-left:2px solid rgba(99,102,241,0.4);border-radius:0 4px 4px 0">
+              <svg class="reply-icon" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+              <span style="font-size:11px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:#94a3b8;font-weight:500">@minhaempresa: </span>Aqui está o link de acesso: [link removido por segurança]</span>
+            </div>
+            <p class="comment-text">Obrigado pela resposta! Vou aguardar o link</p>
+          </div>
+          <button class="action-btn">Responder</button>
+        </div>
+      </div>
+
+      <div class="solution-note">✓ Contexto sempre visível — pai filtrado, fora do batch ou deletado: não importa</div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:20px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:16px">
+  <div style="font-size:12px;font-weight:600;color:#818cf8;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">O que muda no sistema</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:#94a3b8">
+    <div>
+      <div style="color:#e2e8f0;font-weight:500;margin-bottom:4px">Edge function (sync)</div>
+      <div>Salvar <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:11px">parent_text</code> + <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:11px">parent_author</code> no momento do sync — dados já disponíveis em memória</div>
+    </div>
+    <div>
+      <div style="color:#e2e8f0;font-weight:500;margin-bottom:4px">Frontend (UI)</div>
+      <div>Priorizar snapshot do banco. Fallback para lookup em memória se snapshot vazio (retrocompatibilidade)</div>
+    </div>
+    <div>
+      <div style="color:#e2e8f0;font-weight:500;margin-bottom:4px">Migration</div>
+      <div>2 colunas novas: <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:11px">parent_text text</code> + <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:11px">parent_author text</code></div>
+    </div>
+    <div>
+      <div style="color:#e2e8f0;font-weight:500;margin-bottom:4px">Backfill</div>
+      <div>JOIN <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:11px">social_comments</code> por <code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:11px">parent_meta_id</code> para popular dados existentes</div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:16px">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>Aprovado — implementar assim</h3>
+      <p>Snapshot denormalizado, exatamente como mostrado</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tweak" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>Ajustar algo</h3>
+      <p>Vou dizer o que mudar no terminal</p>
+    </div>
+  </div>
+</div>

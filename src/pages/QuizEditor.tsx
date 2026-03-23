@@ -617,14 +617,7 @@ export default function QuizEditor() {
     });
   };
 
-  // Generate URLs for quiz
-  const getBaseUrl = useCallback(() => {
-    const origin = window.location.origin;
-    if (origin.includes('lovable.app') || origin.includes('lovableproject.com')) {
-      return 'https://cubomagico.leandrolastori.com.br';
-    }
-    return origin;
-  }, []);
+  const getBaseUrl = useCallback(() => window.location.origin, []);
 
   const getPublicUrl = useCallback(() => {
     if (!quizId) return '';

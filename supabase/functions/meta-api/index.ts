@@ -249,7 +249,6 @@ async function batchWriteSpendCoreEvents(
 // SECURITY: Restrict CORS to specific origins
 const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
-  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
 ]

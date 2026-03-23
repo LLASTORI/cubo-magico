@@ -314,11 +314,11 @@ export function useSocialListening(projectId: string | undefined) {
         } else if (quotaReason === 'monthly_limit_exceeded') {
           quotaMessage = 'Limite mensal de classificações IA atingido. Aguarde o próximo mês ou aumente seu limite.';
         } else if (quotaReason === 'lovable_credits_exhausted') {
-          quotaMessage = 'Créditos Lovable AI esgotados. Configure uma API Key OpenAI para continuar.';
+          quotaMessage = 'Limite de IA atingido. Configure uma API Key OpenAI para continuar.';
         }
-        
+
         const processedPart = data.processed > 0 ? `${data.processed} classificados. ` : '';
-        
+
         toast({
           title: 'Limite de IA atingido',
           description: `${processedPart}${quotaMessage}`,
@@ -330,12 +330,11 @@ export function useSocialListening(projectId: string | undefined) {
         queryClient.invalidateQueries({ queryKey: ['ai-quota', projectId] });
         return;
       }
-      
-      // Check if no fallback available (Lovable exhausted + no OpenAI key)
+
       if (data.noFallbackAvailable) {
         toast({
           title: 'Créditos de IA esgotados',
-          description: 'Créditos Lovable AI esgotados e nenhuma API Key OpenAI configurada. Configure uma chave nas configurações.',
+          description: 'Limite de IA atingido e nenhuma API Key OpenAI configurada. Configure uma chave nas configurações.',
           variant: 'destructive',
         });
         queryClient.invalidateQueries({ queryKey: ['ai-usage', projectId] });

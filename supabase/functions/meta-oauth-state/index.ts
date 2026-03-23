@@ -4,7 +4,6 @@ import { encode as hexEncode } from 'https://deno.land/std@0.208.0/encoding/hex.
 // SECURITY: Restrict CORS to specific origins
 const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
-  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
 ]
 
 function getCorsHeaders(origin: string | null): Record<string, string> {

@@ -5,7 +5,6 @@ import { Resend } from 'https://esm.sh/resend@2.0.0'
 // SECURITY: Restrict CORS to specific origins
 const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
-  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
 ]
 
 function getCorsHeaders(origin: string | null): Record<string, string> {

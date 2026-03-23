@@ -1,0 +1,277 @@
+<style>
+  * { box-sizing: border-box; }
+  .demo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .demo-table th {
+    padding: 8px 12px; text-align: left; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: #64748b; border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-weight: 500;
+  }
+  .demo-table th.r { text-align: right; }
+  .demo-table td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
+  .demo-table td.r { text-align: right; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .status-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+  .status-dot-sm { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .badge-roas-good { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-family: monospace; display: inline-block; }
+  .badge-roas-bad { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-family: monospace; display: inline-block; }
+  .progress-bar { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; }
+  .name-truncated { color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; display: block; cursor: default; }
+  .mock-bg { background: #0f1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; }
+  .spend-red { color: #f87171; }
+  .revenue-green { color: #4ade80; }
+  .row-warn { background: rgba(239,68,68,0.025) !important; }
+  .row-warn:hover { background: rgba(239,68,68,0.05) !important; }
+  .demo-table tbody tr { transition: background 0.1s; }
+  .demo-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+  .clickable { cursor: pointer; }
+  .chevron { color: #4f46e5; font-size: 11px; flex-shrink: 0; }
+  .pct-label { font-size: 11px; color: #64748b; min-width: 34px; text-align: right; }
+  .mockup-label { font-size: 11px; color: #64748b; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .comparison { grid-template-columns: 1fr; } }
+  .label-tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tag-before { background: rgba(100,116,139,0.2); color: #64748b; }
+  .tag-after { background: rgba(99,102,241,0.2); color: #818cf8; }
+  .change-note { font-size: 11px; color: #94a3b8; margin: 6px 0 12px 0; padding-left: 8px; border-left: 2px solid rgba(99,102,241,0.4); }
+</style>
+
+<h2>Design refinado — Opção C + status textual</h2>
+<p class="subtitle">Comparação antes / depois com as mudanças aplicadas</p>
+
+<div class="section">
+  <div class="comparison">
+
+    <!-- ANTES -->
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="label-tag tag-before">Antes (C puro)</span>
+      </div>
+      <div class="mock-bg">
+        <div class="mockup-label">Campanha · 3 itens</div>
+        <table class="demo-table" style="width:100%">
+          <thead>
+            <tr>
+              <th style="min-width:180px">Nome</th>
+              <th class="r" style="width:50px">Status</th>
+              <th class="r" style="width:85px">Investimento</th>
+              <th class="r" style="width:75px">Receita</th>
+              <th class="r" style="width:65px">ROAS</th>
+              <th class="r" style="width:50px">Vendas</th>
+              <th style="width:100px;padding-left:12px">Participação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="clickable">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#6366f1"></div>
+                  <span class="name-truncated" title="PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA">PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA</span>
+                  <span class="chevron">▶</span>
+                </div>
+              </td>
+              <td class="r">
+                <div style="display:flex;justify-content:flex-end">
+                  <div class="status-dot-sm" style="background:#22c55e"></div>
+                </div>
+              </td>
+              <td class="r">R$2.841</td>
+              <td class="r revenue-green">R$9.720</td>
+              <td class="r"><span class="badge-roas-good">3.42x</span></td>
+              <td class="r">48</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:62%;background:#6366f1"></div></div>
+                  <span class="pct-label">62.3%</span>
+                </div>
+              </td>
+            </tr>
+            <tr class="row-warn">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#f87171"></div>
+                  <span class="name-truncated" title="PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB_6845240177422">PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB_6845240177422</span>
+                </div>
+              </td>
+              <td class="r">
+                <div style="display:flex;justify-content:flex-end">
+                  <div class="status-dot-sm" style="background:#eab308"></div>
+                </div>
+              </td>
+              <td class="r spend-red">R$412</td>
+              <td class="r" style="color:#475569">—</td>
+              <td class="r"><span class="badge-roas-bad">0.00x</span></td>
+              <td class="r spend-red">0</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:0%;background:#f87171"></div></div>
+                  <span class="pct-label">0.0%</span>
+                </div>
+              </td>
+            </tr>
+            <tr class="clickable">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#22d3ee"></div>
+                  <span class="name-truncated" title="PERPETUO_REMARKETING_VISITANTES_7D_6845240178100">PERPETUO_REMARKETING_VISITANTES_7D_6845240178100</span>
+                  <span class="chevron">▶</span>
+                </div>
+              </td>
+              <td class="r">
+                <div style="display:flex;justify-content:flex-end">
+                  <div class="status-dot-sm" style="background:#22c55e"></div>
+                </div>
+              </td>
+              <td class="r">R$983</td>
+              <td class="r revenue-green">R$5.880</td>
+              <td class="r"><span class="badge-roas-good">5.98x</span></td>
+              <td class="r">29</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:38%;background:#22d3ee"></div></div>
+                  <span class="pct-label">37.7%</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top:10px;font-size:11px;color:#475569">
+          ❌ Status: dot ambíguo &nbsp;·&nbsp; ❌ Barra de fundo na linha
+        </div>
+      </div>
+    </div>
+
+    <!-- DEPOIS -->
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="label-tag tag-after">Depois (refinado)</span>
+      </div>
+      <div class="mock-bg">
+        <div class="mockup-label">Campanha · 3 itens</div>
+        <table class="demo-table" style="width:100%">
+          <thead>
+            <tr>
+              <th style="min-width:180px">Nome</th>
+              <th class="r" style="width:72px">Status</th>
+              <th class="r" style="width:85px">Investimento</th>
+              <th class="r" style="width:75px">Receita</th>
+              <th class="r" style="width:65px">ROAS</th>
+              <th class="r" style="width:50px">Vendas</th>
+              <th style="width:100px;padding-left:12px">Participação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="clickable">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#6366f1"></div>
+                  <span class="name-truncated" title="PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA">PERPETUO_MAKEPRATICA13M_VENDA33_CBO_ANDROMEDA</span>
+                  <span class="chevron">▶</span>
+                </div>
+              </td>
+              <td class="r">
+                <span class="status-inline" style="justify-content:flex-end">
+                  <div class="status-dot-sm" style="background:#22c55e"></div>
+                  <span style="color:#4ade80;font-size:12px">Ativo</span>
+                </span>
+              </td>
+              <td class="r">R$2.841</td>
+              <td class="r revenue-green">R$9.720</td>
+              <td class="r"><span class="badge-roas-good">3.42x</span></td>
+              <td class="r">48</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:62%;background:#6366f1"></div></div>
+                  <span class="pct-label">62.3%</span>
+                </div>
+              </td>
+            </tr>
+            <tr class="row-warn">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#f87171"></div>
+                  <span class="name-truncated" title="PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB_6845240177422">PERPETUO_ANDROMEDA_COPY_V2_TESTE_AB_6845240177422</span>
+                </div>
+              </td>
+              <td class="r">
+                <span class="status-inline" style="justify-content:flex-end">
+                  <div class="status-dot-sm" style="background:#eab308"></div>
+                  <span style="color:#fbbf24;font-size:12px">Inativo</span>
+                </span>
+              </td>
+              <td class="r spend-red">R$412</td>
+              <td class="r" style="color:#475569">—</td>
+              <td class="r"><span class="badge-roas-bad">0.00x</span></td>
+              <td class="r spend-red">0</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:0%;background:#f87171"></div></div>
+                  <span class="pct-label">0.0%</span>
+                </div>
+              </td>
+            </tr>
+            <tr class="clickable">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="dot" style="background:#22d3ee"></div>
+                  <span class="name-truncated" title="PERPETUO_REMARKETING_VISITANTES_7D_6845240178100">PERPETUO_REMARKETING_VISITANTES_7D_6845240178100</span>
+                  <span class="chevron">▶</span>
+                </div>
+              </td>
+              <td class="r">
+                <span class="status-inline" style="justify-content:flex-end">
+                  <div class="status-dot-sm" style="background:#22c55e"></div>
+                  <span style="color:#4ade80;font-size:12px">Ativo</span>
+                </span>
+              </td>
+              <td class="r">R$983</td>
+              <td class="r revenue-green">R$5.880</td>
+              <td class="r"><span class="badge-roas-good">5.98x</span></td>
+              <td class="r">29</td>
+              <td style="padding-left:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:38%;background:#22d3ee"></div></div>
+                  <span class="pct-label">37.7%</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top:10px;font-size:11px;color:#4ade80">
+          ✓ Dot + texto sem caixa &nbsp;·&nbsp; ✓ Sem barra de fundo &nbsp;·&nbsp; ✓ Hover sutil
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:20px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:16px">
+    <div style="font-size:12px;font-weight:600;color:#818cf8;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em">Resumo das mudanças</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:#94a3b8">
+      <div>✓ Nome truncado + tooltip no hover</div>
+      <div>✓ Status: dot + texto sem badge box</div>
+      <div>✓ Barra de participação full-width</div>
+      <div>✓ Sem barra de fundo na linha</div>
+      <div>✓ Hover sutil nas linhas clicáveis</div>
+      <div>✓ overflow-x-auto no container</div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:16px">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>Aprovado — implementar assim</h3>
+      <p>Esse é o design final</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tweak" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>Quase — tenho ajustes</h3>
+      <p>Vou dizer o que mudar no terminal</p>
+    </div>
+  </div>
+</div>

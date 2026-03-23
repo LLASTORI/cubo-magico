@@ -4,7 +4,6 @@ import { encode as hexEncode } from "https://deno.land/std@0.208.0/encoding/hex.
 // SECURITY: Restrict CORS to specific origins
 const ALLOWED_ORIGINS = [
   'https://cubomagico.leandrolastori.com.br',
-  'https://id-preview--17d62d10-743a-42e0-8072-f81bc76fe538.lovable.app',
 ]
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
@@ -102,7 +101,7 @@ Deno.serve(async (req) => {
       }
     }
     
-    const baseRedirectUrl = stateData?.redirectUrl || `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
+    const baseRedirectUrl = stateData?.redirectUrl || 'https://cubomagico.leandrolastori.com.br/settings'
 
     if (error) {
       console.error('OAuth error:', error, errorDescription)
@@ -232,7 +231,7 @@ const tokenParams = new URLSearchParams({
   } catch (error) {
     console.error('Unexpected error:', error)
     // Use a fallback URL for unexpected errors
-    const fallbackUrl = `${SUPABASE_URL?.replace('.supabase.co', '.lovableproject.com')}/settings`
+    const fallbackUrl = 'https://cubomagico.leandrolastori.com.br/settings'
     return redirectWithError('Erro inesperado', fallbackUrl, getCorsHeaders(null))
   }
 })

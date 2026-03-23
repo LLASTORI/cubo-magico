@@ -264,9 +264,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const { action, data } = await req.json();
@@ -276,14 +276,14 @@ serve(async (req) => {
       case "analyzeInterview": {
         const interview = data.interview as InterviewAnswers;
         
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "gpt-4o-mini",
             messages: [
               { role: "system", content: INTERVIEW_ANALYSIS_PROMPT },
               { 
@@ -332,14 +332,14 @@ serve(async (req) => {
       case "generateQuiz": {
         const { interview, designRationale } = data;
         
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "gpt-4o-mini",
             messages: [
               { role: "system", content: QUIZ_GENERATION_PROMPT },
               { 
@@ -401,14 +401,14 @@ Número de outcomes: ${designRationale.outcomeCount}`
       case "validateQuiz": {
         const { quiz, interview, designRationale } = data;
         
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "gpt-4o-mini",
             messages: [
               { role: "system", content: VALIDATION_PROMPT },
               { 
@@ -453,14 +453,14 @@ ${JSON.stringify(designRationale, null, 2)}`
       case "refineQuiz": {
         const { quiz, refinementRequest, interview, designRationale } = data;
         
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "gpt-4o-mini",
             messages: [
               { role: "system", content: REFINEMENT_PROMPT },
               { 

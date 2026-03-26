@@ -57,7 +57,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
       const { data, error } = await supabase
         .from('offer_mappings')
         .select('*')
-        .eq('funnel_id', funnel.id)
+        .or(`funnel_id.eq.${funnel.id},id_funil.eq.${funnel.name}`)
         .eq('is_active', true);
       if (error) throw error;
       return data || [];

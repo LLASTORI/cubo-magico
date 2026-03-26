@@ -5,10 +5,40 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-23 (sessão 35) — Social Listening: cron estabilizado + telemetria por projeto
+- **Data:** 2026-03-26 (sessão 35 cont.) — Social Listening: AI classification + CRM linking na cron + keywords retroativas
 - **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Lovable removido ✅
 
 ---
+
+### [2026-03-26] Social Listening cron — AI classification completo (sessão 35 cont.) ✅
+
+**Sintoma (reportado pelo usuário):**
+1. Cron "roda" mas não classifica corretamente — sentimento e intenção ficam como "pendente"
+2. Keywords customizadas (comerciais/elogios/spam) não eram aplicadas a novos comentários
+3. Ao salvar keywords na Base IA, comentários existentes não eram reclassificados automaticamente
+
+**Root causes encontrados (7 bugs):**
+1. `OPENAI_API_KEY` ausente → cron marcava como `processing` e nunca resetava (stuck forever)
+2. Quota excedida → mesmo problema, stuck em `processing`
+3. Erro OpenAI → marcava como `failed` (terminal) em vez de `pending` (retryable)
+4. Custom keywords ignoradas → cron usava apenas keywords hardcoded, não lia `ai_knowledge_base`
+5. Ignore keywords não aplicadas → cron não filtrava automações (ManyChat etc.)
+6. CRM linking ausente → cron não vinculava comentários a contatos CRM
+7. Erro tracking → cron não registrava falhas no `ai_usage_tracking`
+
+**Fixes aplicados:**
+- **v40 `social-listening-cron`**: todos os 7 bugs corrigidos + batch size 20→50
+- **`social-comments-api`**: nova action `apply_custom_keywords` para reclassificação retroativa
+- **`AIKnowledgeBaseSettings.tsx`**: chama `apply_custom_keywords` no onSuccess do save
+
+**Resultado:** Cron agora funciona de forma idêntica ao sync manual. Deploy v40 realizado.
+
+### [2026-03-26] Social Listening — tabela UX redesign + token refresh + filtro ad posts (sessão 35) ✅
+
+- Tabela de comentários: 11 colunas → 7 (Post, Comentário, Autor, Análise, Intenção, Status, Ações)
+- Token refresh: estratégia always-refresh via `me/accounts` (remove teste não confiável)
+- Filtro organic sync: `is_ad.is.false,is_ad.is.null` — dark posts excluídos (evita error 190)
+- PostgREST boolean filter: `is.false` em vez de `eq.false`
 
 ### [2026-03-23] Social Listening cron — estabilização + telemetria (sessão 35) ✅
 

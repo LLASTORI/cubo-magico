@@ -187,11 +187,11 @@ Domínios principais:
 
 **`last_synced_at`** em `social_listening_pages` — atualizado ao final de cada sync bem-sucedido do projeto. Usado no frontend para exibir "última sincronização".
 
-**AI processing:** classificação em dois estágios — 1) keywords (síncrono, sem custo) → 2) OpenAI `gpt-4o-mini` batch. Quota controlada por `check_and_use_ai_quota` RPC. `LOVABLE_API_KEY` foi removida — OpenAI é o único provider de IA.
+**AI processing:** classificação em três fases — 0) ignore keywords (marca `is_automation=true`) → 1) keywords hardcoded + customizadas de `ai_knowledge_base` (síncrono, sem custo) → 2) OpenAI `gpt-4o-mini` batch. Quota controlada por `check_and_use_ai_quota` RPC. OpenAI é o único provider de IA. Tanto cron (50/ciclo) quanto manual sync usam custom keywords (`commercial_keywords`, `praise_keywords`, `spam_keywords`). Cron também faz CRM linking (cria contatos automaticamente). Se `OPENAI_API_KEY` ausente ou quota excedida, comentários ficam como `pending` (não `processing`) para retry.
+
+**Ações do `social-comments-api`:** `sync_comments`, `process_ai`, `apply_ignore_keywords` (retroativo), `apply_custom_keywords` (reclassifica pendentes com keywords atualizadas), `link_crm_contacts`. Frontend chama `apply_custom_keywords` + `apply_ignore_keywords` ao salvar a Base IA.
 
 **Timeout em chamadas externas:** todas as chamadas `fetch()` à Meta API usam `fetchWithTimeout` com `AbortController` (30s). Sem timeout, um hang na API travava o `waitUntil` impedindo projetos subsequentes de serem processados.
-
-**Ignore keywords:** salvas em `ai_knowledge_base.ignore_keywords` (jsonb array). Ação `apply_ignore_keywords` na `social-comments-api` aplica retroativamente marcando `is_automation=true`.
 
 ## Launch Editions (Onda 2 — Lançamento Pago Recorrente)
 

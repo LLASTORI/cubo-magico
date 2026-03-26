@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 23/03/2026 (sessão 34 — Social Listening: 5 bugs corrigidos)
+> Última atualização: 26/03/2026 (sessão 35 cont. — Social Listening: AI classification + CRM linking na cron)
 
 ---
 
@@ -109,6 +109,11 @@
   - Todos os 6 projetos sincronizando (confirmado 03:30 UTC 23/03)
   - v31 inclui telemetria por projeto via `system_health_log` para monitoramento contínuo
 
+- [x] **AI classification na cron não funcionava (sessão 35 cont.)** ✅
+  - 7 bugs corrigidos: stuck processing, custom keywords, ignore keywords, CRM linking, error tracking
+  - Cron v40 alinhada com social-comments-api
+  - Keywords customizadas aplicadas retroativamente ao salvar na Base IA
+
 ---
 
 ## 🟢 Backlog técnico — Social Listening
@@ -133,6 +138,16 @@
 ---
 
 ## ✅ Concluído
+
+### 🎯 Social Listening — AI classification + CRM linking na cron (26/03/2026 — sessão 35 cont.)
+- [x] 7 bugs na AI classification da cron corrigidos (stuck processing, custom keywords, ignore keywords, CRM linking, error tracking) ✅
+- [x] Batch size cron: 20 → 50 comentários por projeto por ciclo ✅
+- [x] Nova action `apply_custom_keywords` no social-comments-api — reclassifica pendentes ao salvar keywords ✅
+- [x] Frontend: `AIKnowledgeBaseSettings` chama apply_custom_keywords + apply_ignore_keywords no save ✅
+- [x] Tabela UX redesign: 11 → 7 colunas ✅
+- [x] Token refresh always-refresh via me/accounts ✅
+- [x] Filtro is_ad em organic sync (evita error 190 em dark posts) ✅
+- [x] Deploy: social-listening-cron v40, social-comments-api atualizada ✅
 
 ### 🎯 Social Listening — investigação forense + 5 fixes (23/03/2026 — sessão 34)
 - [x] Bug: `author_username` não salvo em FB orgânico no cron — corrigido ✅

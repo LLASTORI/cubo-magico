@@ -465,6 +465,10 @@ Deno.serve(async (req) => {
         result = await applyIgnoreKeywordsRetroactively(serviceSupabase, projectId)
         break
 
+      case 'apply_custom_keywords':
+        result = await applyCustomKeywordsRetroactively(serviceSupabase, projectId)
+        break
+
       case 'link_crm_contacts':
         result = await linkExistingCommentsToCRM(serviceSupabase, projectId)
         break
@@ -1100,6 +1104,72 @@ async function applyIgnoreKeywordsRetroactively(supabase: any, projectId: string
 
   console.log(`[APPLY_IGNORE] Marked ${toUpdate.length} comments as automation for project ${projectId}`)
   return { success: true, updated: toUpdate.length }
+}
+
+// Retroactively classify pending comments using custom keywords (commercial, praise, spam).
+// Called when user saves keywords in AIKnowledgeBaseSettings so pending comments
+// get classified immediately without waiting for next cron cycle or manual "Processar IA".
+async function applyCustomKeywordsRetroactively(supabase: any, projectId: string) {
+  const { data: kb } = await supabase
+    .from('ai_knowledge_base')
+    .select('commercial_keywords, praise_keywords, spam_keywords')
+    .eq('project_id', projectId)
+    .maybeSingle()
+
+  const customKeywords: CustomKeywords | undefined = kb ? {
+    commercial: kb.commercial_keywords || [],
+    praise: kb.praise_keywords || [],
+    spam: kb.spam_keywords || [],
+  } : undefined
+
+  const hasAnyKeyword = customKeywords &&
+    (customKeywords.commercial.length > 0 || customKeywords.praise.length > 0 || customKeywords.spam.length > 0)
+
+  if (!hasAnyKeyword) {
+    return { success: true, classified: 0, message: 'Sem palavras-chave configuradas' }
+  }
+
+  // Fetch pending comments (not yet classified)
+  const { data: comments, error } = await supabase
+    .from('social_comments')
+    .select('id, text')
+    .eq('project_id', projectId)
+    .eq('ai_processing_status', 'pending')
+    .eq('is_automation', false)
+    .limit(500)
+
+  if (error || !comments?.length) {
+    return { success: true, classified: 0, message: 'Nenhum comentário pendente' }
+  }
+
+  let classified = 0
+
+  // Batch updates by classification result
+  const BATCH = 50
+  for (let i = 0; i < comments.length; i += BATCH) {
+    const batch = comments.slice(i, i + BATCH)
+    for (const comment of batch) {
+      const result = classifyByKeywords(comment.text || '', customKeywords)
+      if (result.classified) {
+        await supabase
+          .from('social_comments')
+          .update({
+            sentiment: result.sentiment,
+            classification: result.classification,
+            classification_key: result.classification,
+            intent_score: result.intent_score,
+            ai_summary: result.summary,
+            ai_processing_status: 'completed',
+            ai_processed_at: new Date().toISOString(),
+          })
+          .eq('id', comment.id)
+        classified++
+      }
+    }
+  }
+
+  console.log(`[APPLY_KEYWORDS] Classified ${classified}/${comments.length} pending comments for project ${projectId}`)
+  return { success: true, classified, total: comments.length }
 }
 
 // ============= AI PROCESSING (WITH KEYWORDS + OPENAI) =============

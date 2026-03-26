@@ -164,6 +164,8 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
       queryClient.invalidateQueries({ queryKey: ['ai_knowledge_base', projectId] });
       toast.success('Configurações salvas com sucesso!');
 
+      let needsRefresh = false;
+
       // If ignore_keywords were configured, retroactively mark matching comments
       if ((formData.ignore_keywords ?? []).length > 0) {
         const { data } = await supabase.functions.invoke('social-comments-api', {
@@ -171,8 +173,28 @@ export function AIKnowledgeBaseSettings({ projectId }: AIKnowledgeBaseSettingsPr
         });
         if (data?.updated > 0) {
           toast.info(`${data.updated} comentários de automação ocultados da lista.`);
-          queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
+          needsRefresh = true;
         }
+      }
+
+      // Apply custom keywords retroactively to pending comments
+      const hasCustomKeywords =
+        (formData.commercial_keywords?.length ?? 0) > 0 ||
+        (formData.praise_keywords?.length ?? 0) > 0 ||
+        (formData.spam_keywords?.length ?? 0) > 0;
+
+      if (hasCustomKeywords) {
+        const { data } = await supabase.functions.invoke('social-comments-api', {
+          body: { action: 'apply_custom_keywords', projectId },
+        });
+        if (data?.classified > 0) {
+          toast.info(`${data.classified} comentários classificados automaticamente por palavras-chave.`);
+          needsRefresh = true;
+        }
+      }
+
+      if (needsRefresh) {
+        queryClient.invalidateQueries({ queryKey: ['social_comments', projectId] });
       }
     },
     onError: (error) => {

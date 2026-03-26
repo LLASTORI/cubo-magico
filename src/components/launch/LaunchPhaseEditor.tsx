@@ -347,7 +347,9 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PHASE_TYPES.map((type) => (
+                  {PHASE_TYPES
+                    .filter((type) => !(isLancamentoPago && type.value === 'captacao'))
+                    .map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       <div className="flex items-center gap-2">
                         <span>{type.label}</span>

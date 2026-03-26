@@ -319,7 +319,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                                 }
                               }}
                             >
-                              <SelectTrigger className="w-40">
+                              <SelectTrigger className="w-48">
                                 <SelectValue placeholder="Classificar" />
                               </SelectTrigger>
                               <SelectContent>

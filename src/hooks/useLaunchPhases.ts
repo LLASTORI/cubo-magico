@@ -52,9 +52,18 @@ export const PHASE_TYPES = [
 ] as const;
 
 export const PRODUCT_TYPES = [
-  { value: 'main', label: 'Produto Principal', description: 'Produto do lançamento' },
-  { value: 'upsell', label: 'Upsell', description: 'Próximo passo para quem comprou' },
-  { value: 'downsell', label: 'Downsell', description: 'Versão menor para quem não comprou' },
+  { value: 'main', label: 'Produto Principal' },
+  { value: 'bump_1', label: 'Order Bump 1' },
+  { value: 'bump_2', label: 'Order Bump 2' },
+  { value: 'bump_3', label: 'Order Bump 3' },
+  { value: 'bump_4', label: 'Order Bump 4' },
+  { value: 'bump_5', label: 'Order Bump 5' },
+  { value: 'upsell_1', label: 'Upsell 1' },
+  { value: 'upsell_2', label: 'Upsell 2' },
+  { value: 'upsell_3', label: 'Upsell 3' },
+  { value: 'downsell_1', label: 'Downsell 1' },
+  { value: 'downsell_2', label: 'Downsell 2' },
+  { value: 'downsell_3', label: 'Downsell 3' },
 ] as const;
 
 

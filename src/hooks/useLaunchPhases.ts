@@ -40,6 +40,7 @@ export interface LaunchProduct {
 // Phase types with their primary metrics
 export const PHASE_TYPES = [
   { value: 'distribuicao', label: 'Distribuição', metric: 'reach', description: 'Alcance e engajamento' },
+  { value: 'captacao_ingresso', label: 'Ingresso', metric: 'cpa', description: 'Venda de ingressos por lotes' },
   { value: 'captacao', label: 'Captação', metric: 'cpl', description: 'Custo por Lead (CPL)' },
   { value: 'aquecimento', label: 'Aquecimento', metric: 'views', description: 'Views e interações' },
   { value: 'lembrete', label: 'Lembrete', metric: 'frequency', description: 'Alcance e frequência (ex: "é amanhã")' },

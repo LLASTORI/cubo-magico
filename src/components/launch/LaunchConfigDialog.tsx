@@ -57,7 +57,8 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
       const { data, error } = await supabase
         .from('offer_mappings')
         .select('*')
-        .eq('funnel_id', funnel.id);
+        .eq('funnel_id', funnel.id)
+        .eq('is_active', true);
       if (error) throw error;
       return data || [];
     },
@@ -126,6 +127,24 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
 
   const getProductInfo = (offerMappingId: string) => {
     return launchProducts.find(p => p.offer_mapping_id === offerMappingId);
+  };
+
+  const getPositionBadge = (tipoPosicao: string | null | undefined) => {
+    if (!tipoPosicao) return null;
+    const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
+      'FRONT': { label: 'Principal', variant: 'default' },
+      'FE': { label: 'Principal', variant: 'default' },
+      'main': { label: 'Principal', variant: 'default' },
+      'OB': { label: 'Order Bump', variant: 'secondary' },
+      'bump': { label: 'Order Bump', variant: 'secondary' },
+      'US': { label: 'Upsell', variant: 'outline' },
+      'upsell': { label: 'Upsell', variant: 'outline' },
+      'DS': { label: 'Downsell', variant: 'outline' },
+      'downsell': { label: 'Downsell', variant: 'outline' },
+    };
+    const info = map[tipoPosicao];
+    if (!info) return null;
+    return info;
   };
 
   return (
@@ -275,11 +294,18 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                         className="p-3 rounded-lg border bg-card space-y-3"
                       >
                         <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{mapping.nome_oferta || mapping.nome_produto}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <p className="font-medium">{mapping.nome_oferta || mapping.nome_produto}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
+                              </p>
+                            </div>
+                            {getPositionBadge(mapping.tipo_posicao) && (
+                              <Badge variant={getPositionBadge(mapping.tipo_posicao)!.variant} className="text-xs">
+                                {getPositionBadge(mapping.tipo_posicao)!.label}
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <Select

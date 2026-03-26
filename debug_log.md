@@ -5,8 +5,30 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-26 (sessão 35 cont.) — Social Listening: AI classification + CRM linking na cron + keywords retroativas
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Lovable removido ✅
+- **Data:** 2026-03-26 (sessão 36) — Onda 2D: três fixes cirúrgicos
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Onda 2D ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-26] Onda 2D — Três fixes cirúrgicos (sessão 36) ✅
+
+**Fix 1 — `launch_products.product_name` NOT NULL quebrando INSERT:**
+- `product_name`, `product_code`, `position_type` eram NOT NULL no banco (colunas legadas)
+- Frontend usa `offer_mapping_id` no lugar — INSERT falhava
+- Migration `20260326120000`: DROP NOT NULL nas 3 colunas
+- Aplicada no banco via SQL Editor ✅
+
+**Fix 2 — Tipo de fase "Ingresso" ausente:**
+- Adicionado `captacao_ingresso` em `PHASE_TYPES` (`useLaunchPhases.ts`)
+- Posicionado antes de "Captação" — é o tipo principal do lançamento pago
+- Métricas: `cpa`, `passing_diario`, `tx_ob`
+
+**Fix 3 — Aba Produtos mostrando apenas FRONTs:**
+- Query `offer_mappings` agora filtra `is_active = true` (sem filtro por tipo)
+- Badge de posição exibido: Principal (FRONT/FE), Order Bump (OB), Upsell (US), Downsell (DS)
+- OBs, upsells e downsells agora visíveis na aba Produtos
+
+**Build:** zero erros ✅
 
 ---
 

@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 26/03/2026 (sessão 35 cont. — Social Listening: AI classification + CRM linking na cron)
+> Última atualização: 26/03/2026 (sessão 36 — Onda 2D: três fixes cirúrgicos)
 
 ---
 
@@ -49,6 +49,17 @@
 - [x] Bloco "Funil de Conversão" mostra compradores de ingresso como base ✅
 - [x] TX ingresso→produto calculada corretamente ✅
 - [x] Lançamentos clássicos não foram afetados ✅
+
+---
+
+## ✅ Onda 2D — Três fixes cirúrgicos (sessão 36)
+
+- [x] `launch_products.product_name` nullable — INSERT funciona sem erro NOT NULL ✅
+- [x] Tipo "Ingresso" (`captacao_ingresso`) adicionado em PHASE_TYPES ✅
+- [x] Aba Produtos exibe todos os offer_mappings ativos (OB, US, DS inclusos) ✅
+- [x] Badge de posição (Principal/Order Bump/Upsell/Downsell) visível em cada oferta ✅
+- [x] Build: zero erros ✅
+- [x] Migration commitada ✅
 
 ---
 

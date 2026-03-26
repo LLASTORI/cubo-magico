@@ -16,7 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LaunchPhaseEditor } from "./LaunchPhaseEditor";
 import { LaunchEditionsTab } from "./LaunchEditionsTab";
 import { useLaunchPhases, PRODUCT_TYPES } from "@/hooks/useLaunchPhases";
-import { useLaunchEditions } from "@/hooks/useLaunchEditions";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -50,11 +49,6 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
   const projectId = funnel.project_id || '';
   
   const { phases, launchProducts, createLaunchProduct, updateLaunchProduct, deleteLaunchProduct } = useLaunchPhases(projectId, funnel.id);
-  const { editions } = useLaunchEditions(projectId, funnel.id);
-
-  const editionNameById = new Map(
-    editions.map(e => [e.id, e.name])
-  );
 
   // Fetch offer mappings for this funnel
   const { data: offerMappings = [] } = useQuery({
@@ -362,21 +356,11 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">Sem fase</SelectItem>
-                                {phases.map((phase) => {
-                                  const edName = phase.edition_id
-                                    ? editionNameById.get(phase.edition_id)
-                                    : null;
-                                  return (
-                                    <SelectItem key={phase.id} value={phase.id}>
-                                      {phase.name}
-                                      {edName && (
-                                        <span className="ml-1 text-xs text-muted-foreground">
-                                          ({edName})
-                                        </span>
-                                      )}
-                                    </SelectItem>
-                                  );
-                                })}
+                                {phases.map((phase) => (
+                                  <SelectItem key={phase.id} value={phase.id}>
+                                    {phase.name}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>

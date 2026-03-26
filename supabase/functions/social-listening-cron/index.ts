@@ -75,6 +75,12 @@ const IGNORABLE_PATTERNS = [
   /^!+$/,
 ]
 
+interface CustomKeywords {
+  commercial: string[]
+  praise: string[]
+  spam: string[]
+}
+
 interface KeywordResult {
   classified: boolean
   sentiment?: string
@@ -83,7 +89,13 @@ interface KeywordResult {
   summary?: string
 }
 
-function classifyByKeywords(text: string): KeywordResult {
+function matchesIgnoreKeywords(text: string, ignoreKeywords: string[]): boolean {
+  if (!text || !ignoreKeywords?.length) return false
+  const normalized = text.toLowerCase().trim()
+  return ignoreKeywords.some(kw => kw && normalized.includes(kw.toLowerCase()))
+}
+
+function classifyByKeywords(text: string, customKeywords?: CustomKeywords): KeywordResult {
   if (!text || text.trim().length === 0) {
     return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário vazio' }
   }
@@ -100,15 +112,27 @@ function classifyByKeywords(text: string): KeywordResult {
     return { classified: true, sentiment: 'neutral', classification: 'other', intent_score: 0, summary: 'Comentário muito curto' }
   }
 
-  for (const keyword of COMMERCIAL_KEYWORDS) {
-    if (normalizedText.includes(keyword)) {
+  // Check spam keywords first (custom only)
+  const spamKeywords = customKeywords?.spam || []
+  for (const keyword of spamKeywords) {
+    if (keyword && normalizedText.includes(keyword.toLowerCase())) {
+      return { classified: true, sentiment: 'neutral', classification: 'spam', intent_score: 0, summary: 'Spam detectado' }
+    }
+  }
+
+  // Combine hardcoded + custom commercial keywords
+  const allCommercial = [...COMMERCIAL_KEYWORDS, ...(customKeywords?.commercial || [])]
+  for (const keyword of allCommercial) {
+    if (normalizedText.includes(keyword.toLowerCase())) {
       return { classified: true, sentiment: 'positive', classification: 'commercial_interest', intent_score: 95, summary: 'Interesse comercial detectado' }
     }
   }
 
+  // Combine hardcoded + custom praise keywords
+  const allPraise = [...PRAISE_KEYWORDS, ...(customKeywords?.praise || [])]
   if (normalizedText.length <= 50) {
-    for (const keyword of PRAISE_KEYWORDS) {
-      if (normalizedText.includes(keyword) || normalizedText === keyword) {
+    for (const keyword of allPraise) {
+      if (normalizedText.includes(keyword.toLowerCase()) || normalizedText === keyword.toLowerCase()) {
         return { classified: true, sentiment: 'positive', classification: 'praise', intent_score: 20, summary: 'Elogio simples' }
       }
     }
@@ -258,8 +282,8 @@ async function runCronSync(supabase: any) {
           result.error = `${result.error ? `${result.error}; ` : ''}[sync_ads] ${details || 'Falha sem detalhes'}`
         }
 
-        // Step 6: Process pending comments with AI (max 20 per project per run)
-        const aiResult = await processAIForProject(supabase, projectId, 20)
+        // Step 6: Process pending comments with AI (50 per project per run)
+        const aiResult = await processAIForProject(supabase, projectId, 50)
         result.keywordClassified = aiResult.keywordClassified || 0
         result.aiProcessed = aiResult.aiProcessed || 0
 
@@ -270,7 +294,9 @@ async function runCronSync(supabase: any) {
           adComments: result.adCommentsSynced,
           keyword: result.keywordClassified,
           ai: result.aiProcessed,
-          stuck: result.stuckReset
+          ignored: aiResult.ignored || 0,
+          crmLinked: aiResult.crmLinked || 0,
+          stuck: result.stuckReset,
         })
 
         // Log per-project result to system_health_log for debugging (no console.log visibility in prod)
@@ -996,33 +1022,61 @@ function buildAdCommentRow(
 
 async function processAIForProject(supabase: any, projectId: string, limit: number) {
   try {
-    // Get knowledge base
+    // Get knowledge base (custom keywords, ignore keywords, business context)
     const { data: knowledgeBase } = await supabase
       .from('ai_knowledge_base')
       .select('*')
       .eq('project_id', projectId)
       .maybeSingle()
 
-    // Get pending comments
+    // Build custom keywords from knowledge base (same as social-comments-api)
+    const customKeywords: CustomKeywords | undefined = knowledgeBase ? {
+      commercial: knowledgeBase.commercial_keywords || [],
+      praise: knowledgeBase.praise_keywords || [],
+      spam: knowledgeBase.spam_keywords || [],
+    } : undefined
+
+    // Get pending comments (increased batch to 50 for cron efficiency)
     const { data: comments } = await supabase
       .from('social_comments')
-      .select('id, text, post_id, social_posts!inner(message)')
+      .select('id, text, post_id, author_username, author_id, platform, social_posts!inner(message)')
       .eq('project_id', projectId)
       .eq('ai_processing_status', 'pending')
       .limit(limit)
 
     if (!comments?.length) {
-      return { success: true, keywordClassified: 0, aiProcessed: 0 }
+      return { success: true, keywordClassified: 0, aiProcessed: 0, ignored: 0, crmLinked: 0 }
     }
 
     let keywordClassified = 0
     let aiProcessed = 0
+    let ignored = 0
 
-    // Phase 1: Keyword classification
-    const commentsForAI: Array<{id: string, text: string, postContext: string}> = []
+    // Phase 0: Filter ignore keywords (automation triggers like ManyChat)
+    const ignoreKeywords: string[] = knowledgeBase?.ignore_keywords ?? []
+    const commentsAfterIgnore: typeof comments = []
 
     for (const comment of comments) {
-      const keywordResult = classifyByKeywords(comment.text || '')
+      if (matchesIgnoreKeywords(comment.text || '', ignoreKeywords)) {
+        await supabase
+          .from('social_comments')
+          .update({ ai_processing_status: 'skipped', is_automation: true })
+          .eq('id', comment.id)
+        ignored++
+      } else {
+        commentsAfterIgnore.push(comment)
+      }
+    }
+
+    if (ignored > 0) {
+      console.log(`[AI_PROCESS] Ignored ${ignored} automation comments`)
+    }
+
+    // Phase 1: Keyword classification (with custom keywords)
+    const commentsForAI: Array<{id: string, text: string, postContext: string}> = []
+
+    for (const comment of commentsAfterIgnore) {
+      const keywordResult = classifyByKeywords(comment.text || '', customKeywords)
 
       if (keywordResult.classified) {
         await supabase
@@ -1048,11 +1102,18 @@ async function processAIForProject(supabase: any, projectId: string, limit: numb
       }
     }
 
-    console.log(`[AI_PROCESS] Keyword: ${keywordClassified}, Needs AI: ${commentsForAI.length}`)
+    console.log(`[AI_PROCESS] Keyword: ${keywordClassified}, Ignored: ${ignored}, Needs AI: ${commentsForAI.length}`)
 
     // Phase 2: AI classification
     if (commentsForAI.length > 0) {
-      // Check quota
+      // Check if OpenAI is available BEFORE marking as processing
+      if (!OPENAI_API_KEY) {
+        console.warn('[AI_PROCESS] OPENAI_API_KEY not configured — leaving comments as pending for retry')
+        // Do NOT mark as processing — leave as pending so manual sync or next cron with key can pick them up
+        return { success: true, keywordClassified, aiProcessed: 0, ignored, crmLinked: 0 }
+      }
+
+      // Check quota BEFORE marking as processing
       const { data: quotaResult } = await supabase.rpc('check_and_use_ai_quota', {
         p_project_id: projectId,
         p_items_count: commentsForAI.length
@@ -1060,74 +1121,175 @@ async function processAIForProject(supabase: any, projectId: string, limit: numb
 
       if (quotaResult && !quotaResult.allowed) {
         console.log(`[AI_PROCESS] Quota exceeded:`, quotaResult.reason)
-        return { success: true, keywordClassified, aiProcessed: 0, quotaExceeded: true }
+        // Do NOT mark as processing — leave as pending
+        return { success: true, keywordClassified, aiProcessed: 0, ignored, quotaExceeded: true, crmLinked: 0 }
       }
 
-      // Mark as processing
+      // NOW mark as processing (only after confirming we can actually process)
       await supabase
         .from('social_comments')
         .update({ ai_processing_status: 'processing' })
         .in('id', commentsForAI.map(c => c.id))
 
-      // Try OpenAI batch processing
-      if (OPENAI_API_KEY) {
-        try {
-          const batchSize = 15
-          for (let i = 0; i < commentsForAI.length; i += batchSize) {
-            const batch = commentsForAI.slice(i, i + batchSize)
-            const { results, inputTokens, outputTokens, cost } = await classifyBatchWithOpenAI(batch, knowledgeBase)
+      try {
+        const batchSize = 15
+        for (let i = 0; i < commentsForAI.length; i += batchSize) {
+          const batch = commentsForAI.slice(i, i + batchSize)
+          const { results, inputTokens, outputTokens, cost } = await classifyBatchWithOpenAI(batch, knowledgeBase)
 
-            // Track usage
-            await supabase.from('ai_usage_tracking').insert({
-              project_id: projectId,
-              feature: 'social_listening',
-              action: 'batch_classify',
-              provider: 'openai',
-              model: 'gpt-4o-mini',
-              input_tokens: inputTokens,
-              output_tokens: outputTokens,
-              items_processed: batch.length,
-              cost_estimate: cost,
-              success: true
-            })
+          // Track usage on success
+          await supabase.from('ai_usage_tracking').insert({
+            project_id: projectId,
+            feature: 'social_listening',
+            action: 'batch_classify',
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            items_processed: batch.length,
+            cost_estimate: cost,
+            success: true
+          })
 
-            for (const result of results) {
-              await supabase
-                .from('social_comments')
-                .update({
-                  sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
-                  classification: result.classification || 'other',
-                  classification_key: result.classification || 'other',
-                  intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
-                  ai_summary: (result.summary || '').substring(0, 100),
-                  ai_processing_status: 'completed',
-                  ai_processed_at: new Date().toISOString(),
-                })
-                .eq('id', result.id)
+          for (const result of results) {
+            await supabase
+              .from('social_comments')
+              .update({
+                sentiment: ['positive', 'neutral', 'negative'].includes(result.sentiment) ? result.sentiment : 'neutral',
+                classification: result.classification || 'other',
+                classification_key: result.classification || 'other',
+                intent_score: Math.min(100, Math.max(0, parseInt(result.intent_score) || 0)),
+                ai_summary: (result.summary || '').substring(0, 100),
+                ai_processing_status: 'completed',
+                ai_processed_at: new Date().toISOString(),
+              })
+              .eq('id', result.id)
 
-              aiProcessed++
-            }
-
-            if (i + batchSize < commentsForAI.length) {
-              await delay(500)
-            }
+            aiProcessed++
           }
-        } catch (openaiError: any) {
-          console.error('[AI_PROCESS] OpenAI error:', openaiError.message)
-          await supabase
-            .from('social_comments')
-            .update({ ai_processing_status: 'failed', ai_error: openaiError.message })
-            .in('id', commentsForAI.map(c => c.id))
+
+          if (i + batchSize < commentsForAI.length) {
+            await delay(500)
+          }
         }
-      } else {
-        console.warn('[AI_PROCESS] OPENAI_API_KEY not configured — skipping AI classification')
+      } catch (openaiError: any) {
+        console.error('[AI_PROCESS] OpenAI error:', openaiError.message)
+        // Reset to pending (not failed) so they can be retried on next cycle
+        await supabase
+          .from('social_comments')
+          .update({ ai_processing_status: 'pending' })
+          .in('id', commentsForAI.map(c => c.id))
+
+        // Track error in ai_usage_tracking
+        try {
+          await supabase.from('ai_usage_tracking').insert({
+            project_id: projectId,
+            feature: 'social_listening',
+            action: 'batch_classify',
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            input_tokens: 0,
+            output_tokens: 0,
+            items_processed: 0,
+            cost_estimate: 0,
+            success: false,
+            error_message: openaiError.message,
+          })
+        } catch (_) { /* ignore */ }
       }
     }
 
-    return { success: true, keywordClassified, aiProcessed }
+    // Phase 3: CRM linking — link comments to existing/new CRM contacts
+    const crmLinked = await linkCommentsToCRM(supabase, projectId, commentsAfterIgnore)
+
+    return { success: true, keywordClassified, aiProcessed, ignored, crmLinked }
   } catch (error: any) {
     console.error('[AI_PROCESS] Error:', error.message)
-    return { success: false, keywordClassified: 0, aiProcessed: 0, error: error.message }
+    return { success: false, keywordClassified: 0, aiProcessed: 0, ignored: 0, crmLinked: 0, error: error.message }
+  }
+}
+
+// ============= CRM LINKING =============
+
+async function linkCommentsToCRM(supabase: any, projectId: string, comments: any[]): Promise<number> {
+  try {
+    // Only process comments without a CRM contact
+    const unlinked = comments.filter(c => !c.is_own_account && c.author_username)
+    if (!unlinked.length) return 0
+
+    // Pre-load existing CRM contacts
+    const { data: contacts } = await supabase
+      .from('crm_contacts')
+      .select('id, instagram, name')
+      .eq('project_id', projectId)
+
+    const contactByInstagram = new Map<string, string>()
+    const contactByName = new Map<string, string>()
+    for (const contact of contacts || []) {
+      if (contact.instagram) {
+        contactByInstagram.set(contact.instagram.toLowerCase().replace(/^@/, ''), contact.id)
+      }
+      if (contact.name) {
+        contactByName.set(contact.name.toLowerCase().trim(), contact.id)
+      }
+    }
+
+    // Group comments by author
+    const authorComments = new Map<string, string[]>()
+    const authorPlatform = new Map<string, string>()
+    for (const comment of unlinked) {
+      const key = (comment.author_username || '').toLowerCase().replace(/^@/, '').trim()
+      if (!key) continue
+      if (!authorComments.has(key)) authorComments.set(key, [])
+      authorComments.get(key)!.push(comment.id)
+      authorPlatform.set(key, comment.platform)
+    }
+
+    let linked = 0
+    for (const [author, commentIds] of authorComments) {
+      const platform = authorPlatform.get(author) || 'facebook'
+      // Try to find existing contact
+      let contactId = platform === 'instagram'
+        ? contactByInstagram.get(author)
+        : contactByName.get(author)
+
+      // Create new CRM contact if not found
+      if (!contactId) {
+        const newContact: any = {
+          project_id: projectId,
+          name: author,
+          source: 'social_listening',
+          tags: [platform === 'instagram' ? 'social:instagram' : 'social:facebook'],
+        }
+        if (platform === 'instagram') {
+          newContact.instagram = author
+        }
+        const { data: inserted } = await supabase
+          .from('crm_contacts')
+          .insert(newContact)
+          .select('id')
+          .single()
+
+        contactId = inserted?.id
+      }
+
+      if (contactId) {
+        await supabase
+          .from('social_comments')
+          .update({ crm_contact_id: contactId, contact_id: contactId })
+          .in('id', commentIds)
+          .is('crm_contact_id', null)
+        linked += commentIds.length
+      }
+    }
+
+    if (linked > 0) {
+      console.log(`[CRM_LINK] Linked ${linked} comments to CRM contacts for project ${projectId}`)
+    }
+    return linked
+  } catch (e: any) {
+    console.error(`[CRM_LINK] Error:`, e.message)
+    return 0
   }
 }
 

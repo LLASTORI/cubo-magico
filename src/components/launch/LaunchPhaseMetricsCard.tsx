@@ -37,6 +37,8 @@ const getPhaseColor = (phaseType: string) => {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
     distribuicao: { bg: "bg-blue-500/10", text: "text-blue-600", border: "border-blue-500/30" },
     captacao: { bg: "bg-green-500/10", text: "text-green-600", border: "border-green-500/30" },
+    captacao_ingresso: { bg: "bg-green-500/10", text: "text-green-600", border: "border-green-500/30" },
+    single_shot: { bg: "bg-amber-500/10", text: "text-amber-600", border: "border-amber-500/30" },
     aquecimento: { bg: "bg-orange-500/10", text: "text-orange-600", border: "border-orange-500/30" },
     lembrete: { bg: "bg-cyan-500/10", text: "text-cyan-600", border: "border-cyan-500/30" },
     remarketing: { bg: "bg-purple-500/10", text: "text-purple-600", border: "border-purple-500/30" },

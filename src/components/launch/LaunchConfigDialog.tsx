@@ -58,7 +58,7 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
         .from('offer_mappings')
         .select('*')
         .or(`funnel_id.eq.${funnel.id},id_funil.eq.${funnel.name}`)
-        .eq('is_active', true);
+        .ilike('status', 'ativ%');
       if (error) throw error;
       return data || [];
     },

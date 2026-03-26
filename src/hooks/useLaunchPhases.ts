@@ -6,6 +6,7 @@ export interface LaunchPhase {
   id: string;
   funnel_id: string;
   project_id: string;
+  edition_id: string | null;
   phase_type: string;
   name: string;
   start_date: string | null;

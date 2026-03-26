@@ -258,10 +258,11 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
           </TabsContent>
 
           <TabsContent value="phases" className="space-y-4">
-            <LaunchPhaseEditor 
-              projectId={projectId} 
-              funnelId={funnel.id} 
-              funnelName={funnel.name} 
+            <LaunchPhaseEditor
+              projectId={projectId}
+              funnelId={funnel.id}
+              funnelName={funnel.name}
+              funnelModel={funnel.funnel_model || null}
             />
           </TabsContent>
 

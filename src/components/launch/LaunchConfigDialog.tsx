@@ -296,7 +296,10 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div>
-                              <p className="font-medium">{mapping.nome_oferta || mapping.nome_produto}</p>
+                              <p className="font-medium">{mapping.nome_oferta || mapping.codigo_oferta}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {mapping.nome_produto}
+                              </p>
                               <p className="text-xs text-muted-foreground">
                                 {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
                               </p>

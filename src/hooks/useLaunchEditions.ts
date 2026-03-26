@@ -237,6 +237,71 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
     },
   });
 
+  // Clone edition: create new edition + copy phases from a specific source
+  const cloneEdition = useMutation({
+    mutationFn: async ({
+      sourceEditionId,
+      ...input
+    }: Omit<LaunchEditionInsert, 'edition_number'> & { sourceEditionId: string }) => {
+      if (!projectId || !funnelId) throw new Error('project_id e funnel_id obrigatórios');
+
+      // Next edition_number
+      const { data: existing } = await supabase
+        .from('launch_editions')
+        .select('edition_number')
+        .eq('funnel_id', funnelId)
+        .order('edition_number', { ascending: false })
+        .limit(1);
+
+      const nextNumber = existing?.length ? existing[0].edition_number + 1 : 1;
+
+      const { data: newEdition, error } = await supabase
+        .from('launch_editions')
+        .insert({
+          ...input,
+          project_id: projectId,
+          funnel_id: funnelId,
+          edition_number: nextNumber,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Copy phases from source edition (without dates)
+      const { data: sourcePhases } = await supabase
+        .from('launch_phases')
+        .select('*')
+        .eq('edition_id', sourceEditionId)
+        .order('phase_order');
+
+      if (sourcePhases?.length) {
+        const phasesToInsert = sourcePhases.map((p: LaunchPhase) => ({
+          funnel_id: funnelId,
+          project_id: projectId,
+          edition_id: newEdition.id,
+          phase_type: p.phase_type,
+          name: p.name,
+          primary_metric: p.primary_metric,
+          campaign_name_pattern: p.campaign_name_pattern,
+          notes: p.notes,
+          phase_order: p.phase_order,
+          is_active: p.is_active,
+        }));
+        await supabase.from('launch_phases').insert(phasesToInsert);
+      }
+
+      return newEdition as LaunchEdition;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['launch-editions', projectId, funnelId] });
+      queryClient.invalidateQueries({ queryKey: ['launch-phases'] });
+      toast.success(`Edição "${data.name}" clonada`);
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao clonar edição: ' + error.message);
+    },
+  });
+
   return {
     editions,
     isLoading,
@@ -244,6 +309,7 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
     createEdition,
     updateEdition,
     deleteEdition,
+    cloneEdition,
   };
 };
 

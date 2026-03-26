@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Plus, Pencil, Trash2, Info } from 'lucide-react';
+import { CalendarIcon, Plus, Pencil, Trash2, Info, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -85,13 +85,18 @@ function DatePickerField({ label, value, onChange }: DatePickerProps) {
 }
 
 export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
-  const { editions, isLoading, createEdition, updateEdition, deleteEdition } = useLaunchEditions(projectId, funnelId);
+  const { editions, isLoading, createEdition, updateEdition, deleteEdition, cloneEdition } = useLaunchEditions(projectId, funnelId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EditionFormState>(EMPTY_FORM);
   const [justCreated, setJustCreated] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Clone dialog state
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [cloneSourceId, setCloneSourceId] = useState<string | null>(null);
+  const [cloneForm, setCloneForm] = useState<EditionFormState>(EMPTY_FORM);
 
   const openCreate = () => {
     setEditingId(null);
@@ -105,6 +110,32 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
     setForm(editionToForm(edition));
     setJustCreated(false);
     setDialogOpen(true);
+  };
+
+  const openClone = (edition: LaunchEdition) => {
+    setCloneSourceId(edition.id);
+    setCloneForm({
+      ...EMPTY_FORM,
+      name: `${edition.name} - cópia`,
+    });
+    setCloneDialogOpen(true);
+  };
+
+  const handleClone = () => {
+    if (!cloneSourceId || !cloneForm.name.trim() || !cloneForm.start_date || !cloneForm.event_date) return;
+    cloneEdition.mutate({
+      sourceEditionId: cloneSourceId,
+      funnel_id: funnelId,
+      project_id: projectId,
+      name: cloneForm.name.trim(),
+      start_date: format(cloneForm.start_date, 'yyyy-MM-dd'),
+      event_date: format(cloneForm.event_date, 'yyyy-MM-dd'),
+      end_date: cloneForm.end_date ? format(cloneForm.end_date, 'yyyy-MM-dd') : null,
+      status: 'planned',
+      notes: null,
+    }, {
+      onSuccess: () => setCloneDialogOpen(false),
+    });
   };
 
   const handleSave = () => {
@@ -181,6 +212,9 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
                   {sc.label}
                 </Badge>
                 <div className="flex gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" title="Clonar edição" onClick={() => openClone(edition)}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(edition)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
@@ -277,6 +311,58 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
             </Button>
             <Button onClick={handleSave} disabled={!form.name.trim() || isPending}>
               {isPending ? 'Salvando...' : editingId ? 'Salvar' : 'Criar Edição'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clone Dialog */}
+      <Dialog open={cloneDialogOpen} onOpenChange={setCloneDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clonar Edição</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="clone-name">Nome <span className="text-destructive">*</span></Label>
+              <Input
+                id="clone-name"
+                value={cloneForm.name}
+                onChange={(e) => setCloneForm(f => ({ ...f, name: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <DatePickerField
+                label="Início das vendas *"
+                value={cloneForm.start_date}
+                onChange={(d) => setCloneForm(f => ({ ...f, start_date: d }))}
+              />
+              <DatePickerField
+                label="Data do evento *"
+                value={cloneForm.event_date}
+                onChange={(d) => setCloneForm(f => ({ ...f, event_date: d }))}
+              />
+            </div>
+            <DatePickerField
+              label="Encerramento"
+              value={cloneForm.end_date}
+              onChange={(d) => setCloneForm(f => ({ ...f, end_date: d }))}
+            />
+            <div className="flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+              <Info className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>As fases da edição original serão copiadas sem datas. Ajuste as datas de cada fase depois.</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloneDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleClone}
+              disabled={!cloneForm.name.trim() || !cloneForm.start_date || !cloneForm.event_date || cloneEdition.isPending}
+            >
+              {cloneEdition.isPending ? 'Clonando...' : 'Clonar'}
             </Button>
           </DialogFooter>
         </DialogContent>

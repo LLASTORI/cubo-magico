@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Settings, Rocket, Package } from "lucide-react";
@@ -147,6 +147,54 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
     return info;
   };
 
+  // Sort order for product_type classification
+  const CLASSIFICATION_ORDER: Record<string, number> = {
+    main: 0,
+    bump_1: 1, bump_2: 2, bump_3: 3, bump_4: 4, bump_5: 5,
+    upsell_1: 6, upsell_2: 7, upsell_3: 8,
+    downsell_1: 9, downsell_2: 10, downsell_3: 11,
+  };
+
+  // Group offer mappings by phase
+  const groupedMappings = useMemo(() => {
+    const phaseMap = new Map(phases.map(p => [p.id, p.name]));
+
+    const byPhase = new Map<string | null, typeof offerMappings>();
+    for (const m of offerMappings) {
+      const key = (m as any).phase_id || null;
+      if (!byPhase.has(key)) byPhase.set(key, []);
+      byPhase.get(key)!.push(m);
+    }
+
+    const sortMappings = (items: typeof offerMappings) => {
+      return [...items].sort((a, b) => {
+        const typeA = getProductInfo(a.id)?.product_type || '';
+        const typeB = getProductInfo(b.id)?.product_type || '';
+        const orderA = CLASSIFICATION_ORDER[typeA] ?? 99;
+        const orderB = CLASSIFICATION_ORDER[typeB] ?? 99;
+        return orderA - orderB;
+      });
+    };
+
+    const groups: { phaseId: string | null; phaseName: string; mappings: typeof offerMappings }[] = [];
+
+    // Phases in order
+    for (const phase of phases) {
+      const items = byPhase.get(phase.id);
+      if (items?.length) {
+        groups.push({ phaseId: phase.id, phaseName: phase.name, mappings: sortMappings(items) });
+      }
+    }
+
+    // "Sem fase" last
+    const unlinked = byPhase.get(null);
+    if (unlinked?.length) {
+      groups.push({ phaseId: null, phaseName: 'Sem fase', mappings: sortMappings(unlinked) });
+    }
+
+    return groups;
+  }, [offerMappings, phases, launchProducts]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -283,109 +331,118 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
                   Nenhuma oferta mapeada para este funil.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {offerMappings.map((mapping) => {
-                    const linkedProduct = getProductInfo(mapping.id);
-                    const currentType = linkedProduct?.product_type || null;
-                    const currentLot = linkedProduct?.lot_name || '';
-                    
-                    return (
-                      <div 
-                        key={mapping.id}
-                        className="p-3 rounded-lg border bg-card space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div>
-                              <p className="font-medium">{mapping.nome_oferta || mapping.codigo_oferta}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {mapping.nome_produto}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
-                              </p>
-                            </div>
-                            {getPositionBadge(mapping.tipo_posicao) && (
-                              <Badge variant={getPositionBadge(mapping.tipo_posicao)!.variant} className="text-xs">
-                                {getPositionBadge(mapping.tipo_posicao)!.label}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Select
-                              value={currentType || 'none'}
-                              onValueChange={(value) => {
-                                if (linkedProduct) {
-                                  deleteLaunchProduct.mutate(linkedProduct.id);
-                                }
-                                if (value && value !== 'none') {
-                                  handleAddProduct(mapping.id, value, currentLot || null);
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="w-48">
-                                <SelectValue placeholder="Classificar" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sem classificação</SelectItem>
-                                {PRODUCT_TYPES.map((type) => (
-                                  <SelectItem key={type.value} value={type.value}>
-                                    {type.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        
-                        {/* Phase selector — somente lancamento_pago */}
-                        {funnel.funnel_model === 'lancamento_pago' && phases.length > 0 && (
-                          <div className="flex items-center gap-2 pt-2 border-t">
-                            <Label className="text-sm text-muted-foreground whitespace-nowrap">Fase:</Label>
-                            <Select
-                              value={(mapping as any).phase_id || 'none'}
-                              onValueChange={(value) =>
-                                updateOfferMappingPhase.mutate({
-                                  mappingId: mapping.id,
-                                  phaseId: value === 'none' ? null : value,
-                                })
-                              }
-                            >
-                              <SelectTrigger className="h-8 text-sm flex-1">
-                                <SelectValue placeholder="Sem fase" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sem fase</SelectItem>
-                                {phases.map((phase) => (
-                                  <SelectItem key={phase.id} value={phase.id}>
-                                    {phase.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+                <div className="space-y-4">
+                  {groupedMappings.map((group) => (
+                    <div key={group.phaseId || '__none__'} className="space-y-2">
+                      <h4 className="text-sm font-semibold text-muted-foreground px-1">
+                        {group.phaseName}
+                      </h4>
+                      <div className="space-y-3">
+                        {group.mappings.map((mapping) => {
+                          const linkedProduct = getProductInfo(mapping.id);
+                          const currentType = linkedProduct?.product_type || null;
+                          const currentLot = linkedProduct?.lot_name || '';
 
-                        {/* Lot Name Field - only show when product is classified */}
-                        {linkedProduct && (
-                          <div className="flex items-center gap-2 pt-2 border-t">
-                            <Label className="text-sm text-muted-foreground whitespace-nowrap">Lote:</Label>
-                            <Input
-                              placeholder="Ex: Lote 1, Early Bird, VIP..."
-                              value={currentLot}
-                              onChange={(e) => handleUpdateLotName(linkedProduct.id, e.target.value)}
-                              className="h-8 text-sm"
-                            />
-                            {currentLot && (
-                              <Badge variant="secondary" className="whitespace-nowrap">
-                                {currentLot}
-                              </Badge>
-                            )}
-                          </div>
-                        )}
+                          return (
+                            <div
+                              key={mapping.id}
+                              className="p-3 rounded-lg border bg-card space-y-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div>
+                                    <p className="font-medium">{mapping.nome_oferta || mapping.codigo_oferta}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {mapping.nome_produto}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
+                                    </p>
+                                  </div>
+                                  {getPositionBadge(mapping.tipo_posicao) && (
+                                    <Badge variant={getPositionBadge(mapping.tipo_posicao)!.variant} className="text-xs">
+                                      {getPositionBadge(mapping.tipo_posicao)!.label}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={currentType || 'none'}
+                                    onValueChange={(value) => {
+                                      if (linkedProduct) {
+                                        deleteLaunchProduct.mutate(linkedProduct.id);
+                                      }
+                                      if (value && value !== 'none') {
+                                        handleAddProduct(mapping.id, value, currentLot || null);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-48">
+                                      <SelectValue placeholder="Classificar" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Sem classificação</SelectItem>
+                                      {PRODUCT_TYPES.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                          {type.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+
+                              {/* Phase selector — somente lancamento_pago */}
+                              {funnel.funnel_model === 'lancamento_pago' && phases.length > 0 && (
+                                <div className="flex items-center gap-2 pt-2 border-t">
+                                  <Label className="text-sm text-muted-foreground whitespace-nowrap">Fase:</Label>
+                                  <Select
+                                    value={(mapping as any).phase_id || 'none'}
+                                    onValueChange={(value) =>
+                                      updateOfferMappingPhase.mutate({
+                                        mappingId: mapping.id,
+                                        phaseId: value === 'none' ? null : value,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="h-8 text-sm flex-1">
+                                      <SelectValue placeholder="Sem fase" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Sem fase</SelectItem>
+                                      {phases.map((phase) => (
+                                        <SelectItem key={phase.id} value={phase.id}>
+                                          {phase.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+
+                              {/* Lot Name Field - only show when product is classified */}
+                              {linkedProduct && (
+                                <div className="flex items-center gap-2 pt-2 border-t">
+                                  <Label className="text-sm text-muted-foreground whitespace-nowrap">Lote:</Label>
+                                  <Input
+                                    placeholder="Ex: Lote 1, Early Bird, VIP..."
+                                    value={currentLot}
+                                    onChange={(e) => handleUpdateLotName(linkedProduct.id, e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                  {currentLot && (
+                                    <Badge variant="secondary" className="whitespace-nowrap">
+                                      {currentLot}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </Card>

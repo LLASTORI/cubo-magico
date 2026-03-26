@@ -105,10 +105,12 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
       byEdition.get(key)!.push(phase);
     }
 
-    // Editions sorted by edition_number descending (most recent first)
-    const sortedEditions = [...editions].sort(
-      (a, b) => b.edition_number - a.edition_number
-    );
+    // Editions sorted by start_date descending (most recent first)
+    const sortedEditions = [...editions].sort((a, b) => {
+      const dateA = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const dateB = b.start_date ? new Date(b.start_date).getTime() : 0;
+      return dateB - dateA;
+    });
 
     for (const edition of sortedEditions) {
       const edPhases = byEdition.get(edition.id) || [];

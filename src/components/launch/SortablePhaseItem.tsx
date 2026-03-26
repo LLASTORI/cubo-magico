@@ -111,10 +111,10 @@ export const SortablePhaseItem = ({
                 ) : (
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 )}
+                <span className="font-medium">{phase.name}</span>
                 <Badge className={cn("border", getPhaseColor(phase.phase_type))}>
                   {PHASE_TYPES.find(t => t.value === phase.phase_type)?.label || phase.phase_type}
                 </Badge>
-                <span className="font-medium">{phase.name}</span>
                 {phaseLinkedCampaigns.length > 0 && (
                   <Badge variant="outline" className="text-xs">
                     {phaseLinkedCampaigns.length} campanha(s)

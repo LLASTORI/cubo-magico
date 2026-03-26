@@ -508,21 +508,17 @@ export function SocialListeningTab({ projectId }: SocialListeningTabProps) {
               ))}
             </div>
           ) : comments && comments.length > 0 ? (
-            <div className="max-h-[600px] overflow-auto">
+            <div className="max-h-[600px] overflow-y-auto">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead className="w-10">Rede</TableHead>
-                    <TableHead className="w-10">Post</TableHead>
-                    <TableHead className="w-12">Thumb</TableHead>
-                    <TableHead className="w-[30%]">Comentário</TableHead>
-                    <TableHead>Autor</TableHead>
-                    <TableHead>Sentimento</TableHead>
-                    <TableHead>Classificação</TableHead>
-                    <TableHead>Intenção</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    <TableHead className="w-16">Post</TableHead>
+                    <TableHead className="min-w-[260px]">Comentário</TableHead>
+                    <TableHead className="w-28">Autor</TableHead>
+                    <TableHead className="w-40">Análise</TableHead>
+                    <TableHead className="w-20">Intenção</TableHead>
+                    <TableHead className="w-24">Status</TableHead>
+                    <TableHead className="w-16"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -759,51 +755,47 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
 
   return (
     <TableRow>
+      {/* Post: platform icon + thumbnail + external link + AD badge */}
       <TableCell>
         <div className="flex items-center gap-1.5">
-          {comment.platform === 'instagram' ? (
-            <Instagram className="h-4 w-4 text-pink-500" />
+          {postThumbnail ? (
+            <img
+              src={postThumbnail}
+              alt="Thumbnail do post"
+              loading="lazy"
+              className="h-9 w-9 object-cover rounded-md shrink-0"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
           ) : (
-            <Facebook className="h-4 w-4 text-blue-600" />
+            <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center shrink-0">
+              <MessageCircle className="h-4 w-4 text-muted-foreground" />
+            </div>
           )}
-          {isAd && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-900/20">
-              AD
-            </Badge>
-          )}
+          <div className="flex flex-col items-center gap-0.5">
+            {comment.platform === 'instagram' ? (
+              <Instagram className="h-3.5 w-3.5 text-pink-500" />
+            ) : (
+              <Facebook className="h-3.5 w-3.5 text-blue-600" />
+            )}
+            {isAd && (
+              <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-900/20 leading-none">
+                AD
+              </Badge>
+            )}
+            {postUrl && (
+              <button
+                type="button"
+                onClick={() => void openExternal(postUrl)}
+                className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent hover:text-accent-foreground"
+                title="Abrir post"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
       </TableCell>
-      <TableCell>
-        {postUrl ? (
-          <button
-            type="button"
-            onClick={() => void openExternal(postUrl)}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent hover:text-accent-foreground"
-            title="Abrir post (para responder)"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </button>
-        ) : (
-          <span className="text-muted-foreground text-xs">-</span>
-        )}
-      </TableCell>
-      <TableCell>
-        {postThumbnail ? (
-          <img 
-            src={postThumbnail} 
-            alt="Thumbnail do post" 
-            loading="lazy"
-            className="h-9 w-9 object-cover rounded-md"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : (
-          <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center">
-            <MessageCircle className="h-4 w-4 text-muted-foreground" />
-          </div>
-        )}
-      </TableCell>
+      {/* Comentário: reply preview + text + ai_summary + date */}
       <TableCell>
         <div className="max-w-md">
           {parentPreview && (
@@ -818,15 +810,19 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
           )}
           <p className="text-sm line-clamp-2">{comment.text}</p>
           {comment.ai_summary && (
-            <p className="text-xs text-muted-foreground mt-1 italic">
+            <p className="text-xs text-muted-foreground mt-0.5 italic">
               {comment.ai_summary}
             </p>
           )}
+          <span className="text-[11px] text-muted-foreground mt-0.5 block">
+            {format(new Date(comment.comment_timestamp), 'dd/MM/yy HH:mm', { locale: ptBR })}
+          </span>
         </div>
       </TableCell>
+      {/* Autor */}
       <TableCell>
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium truncate max-w-[100px]">
             @{comment.author_username || 'Anônimo'}
           </span>
           {crmContact && (
@@ -835,41 +831,42 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
               className="flex items-center gap-1 text-xs text-primary hover:underline"
             >
               <Users className="h-3 w-3" />
-              {crmContact.name || crmContact.email}
-              <ExternalLink className="h-3 w-3" />
+              <span className="truncate max-w-[80px]">{crmContact.name || crmContact.email}</span>
             </Link>
           )}
         </div>
       </TableCell>
+      {/* Análise: sentimento + classificação stacked */}
       <TableCell>
-        {sentiment ? (
-          <Badge variant="outline" className={`${sentiment.bg} ${sentiment.color} border-0`}>
-            <sentiment.icon className="h-3 w-3 mr-1" />
-            {sentiment.label}
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            Pendente
-          </Badge>
-        )}
+        <div className="flex flex-col gap-1">
+          {sentiment ? (
+            <Badge variant="outline" className={`${sentiment.bg} ${sentiment.color} border-0 text-xs`}>
+              <sentiment.icon className="h-3 w-3 mr-1" />
+              {sentiment.label}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground text-xs">
+              Sentimento?
+            </Badge>
+          )}
+          {classification ? (
+            <Badge variant="outline" className={`${classification.color} text-xs`}>
+              <classification.icon className="h-3 w-3 mr-1" />
+              {classification.label}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground text-xs">
+              Classe?
+            </Badge>
+          )}
+        </div>
       </TableCell>
-      <TableCell>
-        {classification ? (
-          <Badge variant="outline" className={classification.color}>
-            <classification.icon className="h-3 w-3 mr-1" />
-            {classification.label}
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            Pendente
-          </Badge>
-        )}
-      </TableCell>
+      {/* Intenção */}
       <TableCell>
         {comment.intent_score !== null ? (
-          <div className="flex items-center gap-2">
-            <div className="w-12 h-2 bg-muted rounded-full overflow-hidden">
-              <div 
+          <div className="flex items-center gap-1.5">
+            <div className="w-10 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
                 className="h-full bg-primary rounded-full"
                 style={{ width: `${comment.intent_score}%` }}
               />
@@ -880,22 +877,19 @@ function CommentRow({ comment, commentsByMetaId, onOpenReply, onOpenReclassify, 
           <span className="text-xs text-muted-foreground">-</span>
         )}
       </TableCell>
+      {/* Status */}
       <TableCell>
         {replyStatus ? (
-          <Badge variant="outline" className={`border-0 ${replyStatus.color}`}>
+          <Badge variant="outline" className={`border-0 text-xs ${replyStatus.color}`}>
             {replyStatus.label}
           </Badge>
         ) : (
           <span className="text-xs text-muted-foreground">-</span>
         )}
       </TableCell>
+      {/* Actions */}
       <TableCell>
-        <span className="text-xs text-muted-foreground">
-          {format(new Date(comment.comment_timestamp), 'dd/MM/yy HH:mm', { locale: ptBR })}
-        </span>
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon"

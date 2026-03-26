@@ -365,20 +365,10 @@ async function refreshPageTokensIfNeeded(supabase: any, projectId: string, userA
 
     if (!pages?.length) return
 
-    // Quick validation: try a lightweight API call with first FB page token
-    const fbPage = pages.find((p: any) => p.platform === 'facebook')
-    if (!fbPage?.access_token) return
-
-    const rawId = fbPage.page_id.replace(/_facebook$/, '')
-    const testUrl = `${GRAPH_API_BASE}/${rawId}?fields=id&access_token=${fbPage.access_token}`
-    const testResp = await fetchWithTimeout(testUrl, 10_000)
-    const testData = await testResp.json()
-
-    if (!testData.error) return // Token still valid, nothing to do
-
-    if (testData.error.code !== 190 && testData.error.code !== 10) return // Different error, skip
-
-    console.log(`[SOCIAL-LISTENING-CRON] Page token expired for project ${projectId}, refreshing...`)
+    // Always fetch fresh page tokens from me/accounts and update if different.
+    // This is cheap (1 API call per project per 30min cycle) and ensures tokens
+    // stay fresh even when page feeds are public (making token-test endpoints unreliable).
+    console.log(`[SOCIAL-LISTENING-CRON] Refreshing page tokens for project ${projectId} via me/accounts...`)
 
     // Fetch fresh page tokens from Meta using the user token
     const pagesUrl = `${GRAPH_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${userAccessToken}`
@@ -386,7 +376,17 @@ async function refreshPageTokensIfNeeded(supabase: any, projectId: string, userA
     const pagesData = await pagesResp.json()
 
     if (pagesData.error || !pagesData.data?.length) {
-      console.log(`[SOCIAL-LISTENING-CRON] Could not refresh page tokens: ${pagesData.error?.message || 'no pages returned'}`)
+      const reason = pagesData.error?.message || 'no pages returned'
+      console.log(`[SOCIAL-LISTENING-CRON] Could not refresh page tokens: ${reason}`)
+      // Log failure for visibility
+      try {
+        await supabase.from('system_health_log').insert({
+          check_type: 'social_listening_token_refresh',
+          severity: 'critical',
+          affected_count: 0,
+          details: { project_id: projectId, step: 'me_accounts', error_code: pagesData.error?.code, error_message: reason },
+        })
+      } catch (_) { /* ignore */ }
       return
     }
 
@@ -627,12 +627,15 @@ async function syncCommentsForProject(supabase: any, projectId: string, accessTo
       pageTokenMap.set(basePageId, page.access_token)
     }
 
+    // Only sync organic posts — ad posts (dark posts) are handled by syncAdCommentsForProject.
+    // Dark posts return error 190 via Pages API, wasting time and masking real errors.
     const { data: posts } = await supabase
       .from('social_posts')
       .select('*')
       .eq('project_id', projectId)
+      .or('is_ad.is.false,is_ad.is.null')
       .order('published_at', { ascending: false })
-      .limit(10) // Keep small for cron (30min cycles); manual sync uses more
+      .limit(10)
 
     if (!posts?.length) {
       return { success: true, commentsSynced: 0, errors, partialFailure: false }
@@ -797,6 +800,7 @@ async function syncAdCommentsForProject(supabase: any, projectId: string, access
     }
 
     const allCommentRows: any[] = []
+    let diagnosticLogged = false
 
     for (const account of adAccounts) {
       try {
@@ -828,6 +832,11 @@ async function syncAdCommentsForProject(supabase: any, projectId: string, access
               if (postId) {
                 totalAdPosts++
                 const comments = await fetchAdComments(fbStoryId, 'facebook', fbToken, GRAPH_API_BASE)
+                // Diagnostic: log first ad's result per project for debugging
+                if (!diagnosticLogged) {
+                  diagnosticLogged = true
+                  console.log(`[AD_DIAG] project=${projectId} storyId=${fbStoryId} token_source=${fbPageTokenMap[storyPageId] ? 'page' : 'user'} comments_count=${comments.length}`)
+                }
                 for (const c of comments) {
                   allCommentRows.push(buildAdCommentRow(projectId, postId, 'facebook', c, null, ownAccountFbPageIds, ownAccountIgUsernames))
                   totalComments++

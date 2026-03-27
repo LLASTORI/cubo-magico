@@ -10,7 +10,7 @@
 
 ---
 
-## 🔵 Sessão 40 — Sistema de Lotes (em andamento)
+## ✅ Sessão 40 — Sistema de Lotes + Análise por Lote
 
 - [x] Migration `launch_lots` + `launch_lot_offers` — tabelas + RLS + triggers ✅
 - [x] `delete_funnel_safe` atualizada com novas tabelas ✅
@@ -18,10 +18,17 @@
 - [x] Hook `useLaunchLots` — CRUD completo (create, copy, update, delete, addOffer, removeOffer) ✅
 - [x] UI: `LaunchLotsSection` + `LaunchLotCard` + `AddOfferToLotDialog` ✅
 - [x] Integração aba Produtos no `LaunchConfigDialog` (seletor edição + lotes) ✅
+- [x] Edições e Fases migradas de `date` para `timestamptz` (18 arquivos) ✅
+- [x] Status do lote editável (Planejado/Ativo/Finalizado) ✅
+- [x] Nome do produto visível no dialog de adicionar oferta ✅
+- [x] Posição numerada (OB1/OB2/OB3) nos roles dos lotes ✅
+- [x] Hook `useLaunchLotsAnalysis` — agrupa vendas e spend por lote ✅
+- [x] `LaunchProductsSalesBreakdown` refatorado — cards por lote com TX de OBs + tabela comparativa ✅
+- [x] Seletor de lote (tabs) — filtra Passing, UTM, Meta Ads, Pagamentos ✅
+- [x] `TemporalChart` (evolução diária) importado do FunnelAnalysis ✅
+- [x] `PassingDiarioChart` reativo ao lote selecionado ✅
 - [x] Build: zero erros ✅
-- [ ] Refatorar `LaunchProductsSalesBreakdown` para agrupar por `launch_lots`
-- [ ] Atualizar `LaunchEditionAnalysis` para buscar lotes e passar como prop
-- [ ] Testar CRUD completo de lotes com dados reais no browser
+- [x] PRs #60, #61, #62, #63 mergeadas ✅
 
 ---
 

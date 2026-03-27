@@ -57,7 +57,12 @@ CREATE TABLE launch_lot_offers (
   lot_id            uuid NOT NULL REFERENCES launch_lots(id) ON DELETE CASCADE,
   offer_mapping_id  uuid NOT NULL REFERENCES offer_mappings(id) ON DELETE CASCADE,
   role              text NOT NULL DEFAULT 'front'
-                    CHECK (role IN ('front', 'bump', 'upsell', 'downsell')),
+                    CHECK (role IN (
+                      'front',
+                      'bump_1', 'bump_2', 'bump_3', 'bump_4', 'bump_5',
+                      'upsell_1', 'upsell_2', 'upsell_3',
+                      'downsell_1', 'downsell_2', 'downsell_3'
+                    )),
   created_at        timestamptz NOT NULL DEFAULT now()
 );
 

@@ -55,31 +55,21 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const ROLE_CONFIG: Record<
-  LotOfferRole,
-  { label: string; className: string }
-> = {
-  front: {
-    label: 'Principal',
-    className:
-      'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  },
-  bump: {
-    label: 'OB',
-    className:
-      'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  },
-  upsell: {
-    label: 'US',
-    className:
-      'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  },
-  downsell: {
-    label: 'DS',
-    className:
-      'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  },
-};
+function getRoleConfig(role: string): { label: string; className: string } {
+  if (role === 'front') {
+    return { label: 'Principal', className: 'bg-blue-500/15 text-blue-400 border-blue-500/30' };
+  }
+  if (role.startsWith('bump_')) {
+    return { label: `OB${role.slice(5)}`, className: 'bg-purple-500/15 text-purple-400 border-purple-500/30' };
+  }
+  if (role.startsWith('upsell_')) {
+    return { label: `US${role.slice(7)}`, className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
+  }
+  if (role.startsWith('downsell_')) {
+    return { label: `DS${role.slice(9)}`, className: 'bg-orange-500/15 text-orange-400 border-orange-500/30' };
+  }
+  return { label: role, className: 'bg-muted text-muted-foreground' };
+}
 
 /**
  * Convert an ISO timestamptz string to a datetime-local input value
@@ -227,8 +217,7 @@ export const LaunchLotCard = ({
             </p>
           ) : (
             lot.offers.map((offer) => {
-              const rc =
-                ROLE_CONFIG[offer.role] || ROLE_CONFIG.front;
+              const rc = getRoleConfig(offer.role);
               return (
                 <div
                   key={offer.id}
@@ -241,11 +230,16 @@ export const LaunchLotCard = ({
                     >
                       {rc.label}
                     </Badge>
-                    <span className="text-sm truncate">
-                      {offer.nome_oferta || offer.nome_produto}
+                    <span className="text-sm truncate font-medium">
+                      {offer.nome_produto || '—'}
                     </span>
+                    {offer.nome_oferta && offer.nome_oferta !== offer.nome_produto && (
+                      <span className="text-xs text-muted-foreground truncate">
+                        {offer.nome_oferta}
+                      </span>
+                    )}
                     {offer.codigo_oferta && (
-                      <span className="text-xs text-muted-foreground shrink-0">
+                      <span className="text-xs text-muted-foreground font-mono shrink-0">
                         {offer.codigo_oferta}
                       </span>
                     )}

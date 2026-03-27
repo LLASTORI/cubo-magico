@@ -38,19 +38,28 @@ interface Props {
 const ROLE_OPTIONS: {
   value: LotOfferRole;
   label: string;
+  group: string;
 }[] = [
-  { value: 'front', label: 'Principal' },
-  { value: 'bump', label: 'Order Bump' },
-  { value: 'upsell', label: 'Upsell' },
-  { value: 'downsell', label: 'Downsell' },
+  { value: 'front', label: 'Principal', group: 'Principal' },
+  { value: 'bump_1', label: 'Order Bump 1', group: 'Order Bump' },
+  { value: 'bump_2', label: 'Order Bump 2', group: 'Order Bump' },
+  { value: 'bump_3', label: 'Order Bump 3', group: 'Order Bump' },
+  { value: 'bump_4', label: 'Order Bump 4', group: 'Order Bump' },
+  { value: 'bump_5', label: 'Order Bump 5', group: 'Order Bump' },
+  { value: 'upsell_1', label: 'Upsell 1', group: 'Upsell' },
+  { value: 'upsell_2', label: 'Upsell 2', group: 'Upsell' },
+  { value: 'upsell_3', label: 'Upsell 3', group: 'Upsell' },
+  { value: 'downsell_1', label: 'Downsell 1', group: 'Downsell' },
+  { value: 'downsell_2', label: 'Downsell 2', group: 'Downsell' },
+  { value: 'downsell_3', label: 'Downsell 3', group: 'Downsell' },
 ];
 
 const POSICAO_TO_ROLE: Record<string, LotOfferRole> = {
   FRONT: 'front',
   FE: 'front',
-  OB: 'bump',
-  US: 'upsell',
-  DS: 'downsell',
+  OB: 'bump_1',
+  US: 'upsell_1',
+  DS: 'downsell_1',
 };
 
 const POSICAO_BADGE: Record<
@@ -67,18 +76,15 @@ const POSICAO_BADGE: Record<
   },
   OB: {
     label: 'OB',
-    className:
-      'bg-purple-500/15 text-purple-400 border-purple-500/30',
+    className: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   },
   US: {
     label: 'US',
-    className:
-      'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   },
   DS: {
     label: 'DS',
-    className:
-      'bg-orange-500/15 text-orange-400 border-orange-500/30',
+    className: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   },
 };
 
@@ -101,7 +107,6 @@ export const AddOfferToLotDialog = ({
   >(undefined);
   const [role, setRole] = useState<LotOfferRole>('front');
 
-  // Reset state when dialog opens
   useEffect(() => {
     if (open) {
       setSelectedOfferId(undefined);
@@ -109,7 +114,6 @@ export const AddOfferToLotDialog = ({
     }
   }, [open]);
 
-  // Auto-detect role when offer is selected
   useEffect(() => {
     if (!selectedOfferId) return;
     const offer = offerMappings.find(
@@ -168,13 +172,17 @@ export const AddOfferToLotDialog = ({
                         key={offer.id}
                         value={offer.id}
                       >
-                        <span className="flex items-center gap-2">
-                          <span className="truncate">
-                            {offer.nome_oferta ||
-                              offer.nome_produto}
+                        <span className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium truncate max-w-[200px]">
+                            {offer.nome_produto}
                           </span>
+                          {offer.nome_oferta && offer.nome_oferta !== offer.nome_produto && (
+                            <span className="text-xs text-muted-foreground truncate max-w-[160px]">
+                              {offer.nome_oferta}
+                            </span>
+                          )}
                           {offer.codigo_oferta && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground font-mono">
                               {offer.codigo_oferta}
                             </span>
                           )}
@@ -201,7 +209,7 @@ export const AddOfferToLotDialog = ({
             )}
           </div>
 
-          {/* Role select */}
+          {/* Role select with numbered positions */}
           <div className="space-y-1.5">
             <Label>Posição no funil</Label>
             <Select

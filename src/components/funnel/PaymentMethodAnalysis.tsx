@@ -41,6 +41,8 @@ const PAYMENT_COLORS: Record<string, string> = {
   'BILLET': 'hsl(25, 95%, 53%)',
   'PAYPAL': 'hsl(197, 71%, 52%)',
   'GOOGLE_PAY': 'hsl(var(--primary))',
+  'APPLE_PAY': 'hsl(220, 14%, 60%)',
+  'WALLET': 'hsl(339, 82%, 51%)',
   'OTHER': 'hsl(220, 14%, 46%)',
 };
 
@@ -50,6 +52,8 @@ const PAYMENT_LABELS: Record<string, string> = {
   'BILLET': 'Boleto',
   'PAYPAL': 'PayPal',
   'GOOGLE_PAY': 'Google Pay',
+  'APPLE_PAY': 'Apple Pay',
+  'WALLET': 'Carteira Digital',
   'OTHER': 'Outros',
 };
 
@@ -59,8 +63,24 @@ const PAYMENT_ICONS: Record<string, any> = {
   'BILLET': Banknote,
   'PAYPAL': Wallet,
   'GOOGLE_PAY': Wallet,
+  'APPLE_PAY': Wallet,
+  'WALLET': Wallet,
   'OTHER': Wallet,
 };
+
+/** Normaliza payment_method do banco para key canônica (UPPERCASE) */
+function normalizePaymentMethod(raw: string): string {
+  const lower = raw.toLowerCase().trim();
+  if (lower === 'pix') return 'PIX';
+  if (lower === 'credit_card' || lower === 'cartão de crédito' || lower.includes('parcelado')) return 'CREDIT_CARD';
+  if (lower === 'billet' || lower === 'boleto bancário' || lower === 'boleto') return 'BILLET';
+  if (lower === 'paypal') return 'PAYPAL';
+  if (lower === 'google_pay') return 'GOOGLE_PAY';
+  if (lower === 'apple_pay') return 'APPLE_PAY';
+  if (lower === 'wallet') return 'WALLET';
+  if (lower === 'unknown') return 'OTHER';
+  return 'OTHER';
+}
 
 const chartConfig = {
   sales: { label: "Produtos Vendidos", color: "hsl(var(--primary))" },
@@ -97,7 +117,7 @@ const PaymentMethodAnalysis = ({ salesData, funnelOfferCodes }: PaymentMethodAna
     }> = {};
     
     filteredSales.forEach(sale => {
-      const method = sale.payment_method || 'OTHER';
+      const method = normalizePaymentMethod(sale.payment_method || 'OTHER');
       const installments = sale.installment_number || 1;
       const email = sale.buyer_email || '';
       const valueInBRL = sale.gross_amount || 0;

@@ -212,6 +212,60 @@ export default function LaunchEditionAnalysis() {
   const effectiveEndDate = selectedLot?.lot.end_datetime
     ? parseISO(selectedLot.lot.end_datetime) : endDate;
 
+  // Passing diário reativo ao lote (computa do filteredSalesData em memória)
+  const lotPassingDiario = useMemo(() => {
+    if (!selectedLot) return null; // usa passingDiario do hook
+    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    if (!lotStart) return null;
+    const endStr = lotEnd || lotStart;
+
+    // Contar vendas FRONT por dia no range do lote
+    const frontCodes = selectedLot.lot.offers
+      .filter(o => o.role === 'front')
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
+
+    const frontSales = filteredSalesData.filter(
+      s => s.offer_code && frontCodes.includes(s.offer_code)
+    );
+
+    const byDay: Record<string, number> = {};
+    for (const s of frontSales) {
+      if (s.economic_day) {
+        byDay[s.economic_day] = (byDay[s.economic_day] || 0) + 1;
+      }
+    }
+
+    // Gerar range de dias
+    const cur = parseISO(lotStart);
+    const end = parseISO(endStr);
+    let totalDias = 0;
+    const tmp = parseISO(lotStart);
+    while (tmp <= end) { totalDias++; tmp.setDate(tmp.getDate() + 1); }
+
+    const totalIngressos = frontSales.length;
+    const metaDiaria = totalDias > 0 ? totalIngressos / totalDias : 0;
+
+    const result: import('@/hooks/useLaunchEditionData').PassingDiarioItem[] = [];
+    while (cur <= end) {
+      const dateStr = cur.toISOString().split('T')[0];
+      const ingressos = byDay[dateStr] || 0;
+      const pct = metaDiaria > 0 ? ingressos / metaDiaria : 0;
+      result.push({
+        date: dateStr,
+        ingressos,
+        meta: Math.round(metaDiaria),
+        status: pct >= 1 ? 'above' : pct >= 0.7 ? 'near' : 'below',
+      });
+      cur.setDate(cur.getDate() + 1);
+    }
+    return result;
+  }, [selectedLot, filteredSalesData]);
+
+  // Passing efetivo: do lote se selecionado, senão da edição
+  const effectivePassingDiario = lotPassingDiario ?? passingDiario;
+
   // Meta hierarchy (campaigns, adsets, ads)
   const { campaigns, adsets, ads, isLoading: metaHierarchyLoading } = useMetaHierarchy({
     projectId: projectId || undefined,
@@ -372,7 +426,7 @@ export default function LaunchEditionAnalysis() {
                 Carregando...
               </div>
             ) : (
-              <PassingDiarioChart data={passingDiario} />
+              <PassingDiarioChart data={effectivePassingDiario} />
             )}
           </Card>
 

@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, MousePointerClick, Globe, ShoppingCart, CreditCard } from 'lucide-react';
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -27,32 +27,36 @@ function rateStatus(
   return { status: 'danger', label: 'Precisa de ajustes' };
 }
 
-const STATUS_COLORS: Record<Status, {
-  text: string; bg: string; ring: string;
+const STATUS_STYLES: Record<Status, {
+  text: string; bg: string; ring: string; badge: string;
 }> = {
   excellent: {
     text: 'text-green-400',
     bg: 'bg-green-500/10',
-    ring: 'ring-green-500/30',
+    ring: 'ring-1 ring-green-500/30',
+    badge: 'bg-green-500/15 text-green-400 border-green-500/25',
   },
   good: {
     text: 'text-blue-400',
     bg: 'bg-blue-500/10',
-    ring: 'ring-blue-500/30',
+    ring: 'ring-1 ring-blue-500/30',
+    badge: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
   },
   warning: {
     text: 'text-yellow-400',
     bg: 'bg-yellow-500/10',
-    ring: 'ring-yellow-500/30',
+    ring: 'ring-1 ring-yellow-500/30',
+    badge: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
   },
   danger: {
     text: 'text-red-400',
     bg: 'bg-red-500/10',
-    ring: 'ring-red-500/30',
+    ring: 'ring-1 ring-red-500/30',
+    badge: 'bg-red-500/15 text-red-400 border-red-500/25',
   },
 };
 
-const fmt = (v: number) =>
+const fmtNum = (v: number) =>
   v >= 1000
     ? `${(v / 1000).toFixed(1).replace('.0', '')}k`
     : String(v);
@@ -66,105 +70,139 @@ interface Props {
 export function MetaConversionFunnel({ data }: Props) {
   if (data.linkClicks === 0) return null;
 
-  const connectInfo = rateStatus(
-    data.connectRate, [81, 70, 55],
-  );
-  const txPagInfo = rateStatus(
-    data.txPaginaCheckout, [35, 25, 15],
-  );
-  const txChkInfo = rateStatus(
-    data.txCheckoutCompra, [50, 35, 20],
-  );
+  const connectInfo = rateStatus(data.connectRate, [81, 70, 55]);
+  const txPagInfo = rateStatus(data.txPaginaCheckout, [35, 25, 15]);
+  const txChkInfo = rateStatus(data.txCheckoutCompra, [50, 35, 20]);
 
-  const steps: {
-    label: string;
-    value: string;
-    sub?: string;
-    rate?: { pct: string; status: Status; label: string };
-    color: string;
-  }[] = [
+  // TX end-to-end: Página → Compra
+  const txPagCompra = data.landingPageViews > 0
+    ? (data.purchases / data.landingPageViews) * 100 : 0;
+  const txPagCompraInfo = rateStatus(txPagCompra, [15, 8, 3]);
+
+  const steps = [
     {
+      icon: <MousePointerClick className="w-4 h-4" />,
       label: 'Cliques',
-      value: fmt(data.linkClicks),
-      color: 'bg-blue-500/10 text-blue-400',
+      value: fmtNum(data.linkClicks),
+      iconColor: 'text-blue-400',
     },
     {
+      icon: <Globe className="w-4 h-4" />,
       label: 'Visitas Página',
-      value: fmt(data.landingPageViews),
+      value: fmtNum(data.landingPageViews),
+      iconColor: 'text-purple-400',
       rate: {
         pct: `${data.connectRate.toFixed(1)}%`,
-        status: connectInfo.status,
-        label: connectInfo.label,
+        ...connectInfo,
       },
-      color: 'bg-purple-500/10 text-purple-400',
     },
     {
+      icon: <ShoppingCart className="w-4 h-4" />,
       label: 'Checkouts',
-      value: fmt(data.initiateCheckouts),
+      value: fmtNum(data.initiateCheckouts),
+      iconColor: 'text-orange-400',
       rate: {
         pct: `${data.txPaginaCheckout.toFixed(1)}%`,
-        status: txPagInfo.status,
-        label: txPagInfo.label,
+        ...txPagInfo,
       },
-      color: 'bg-orange-500/10 text-orange-400',
     },
     {
+      icon: <CreditCard className="w-4 h-4" />,
       label: 'Compras',
-      value: fmt(data.purchases),
+      value: fmtNum(data.purchases),
+      iconColor: 'text-green-400',
       rate: {
         pct: `${data.txCheckoutCompra.toFixed(1)}%`,
-        status: txChkInfo.status,
-        label: txChkInfo.label,
+        ...txChkInfo,
       },
-      color: 'bg-green-500/10 text-green-400',
     },
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {steps.map((step, i) => (
-        <div key={step.label} className="contents">
-          {/* Arrow between steps */}
-          {i > 0 && (
-            <div className="flex flex-col items-center gap-0.5 shrink-0">
-              {step.rate && (
-                <span className={`
-                  text-[10px] font-bold tabular-nums
-                  ${STATUS_COLORS[step.rate.status].text}
-                `}>
-                  {step.rate.pct}
-                </span>
-              )}
-              <ArrowRight className="w-4 h-4 text-muted-foreground/40" />
-              {step.rate && (
-                <span className={`
-                  text-[9px]
-                  ${STATUS_COLORS[step.rate.status].text}
-                `}>
-                  {step.rate.label}
-                </span>
-              )}
-            </div>
-          )}
+    <div className="space-y-4">
+      {/* Funnel steps */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {steps.map((step, i) => (
+          <div key={step.label} className="relative">
+            {/* Rate badge between cards (mobile: hidden) */}
+            {i > 0 && step.rate && (
+              <div className="hidden sm:flex absolute -left-[18px] top-1/2 -translate-y-1/2 z-10 flex-col items-center">
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/30" />
+              </div>
+            )}
 
-          {/* Step card */}
-          <div className={`
-            flex-1 min-w-[100px] max-w-[160px]
-            rounded-lg border border-border/40 p-3
-            ${step.rate
-              ? `ring-1 ${STATUS_COLORS[step.rate.status].ring}`
-              : ''
-            }
-          `}>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              {step.label}
-            </p>
-            <p className={`text-xl font-extrabold tabular-nums mt-0.5 ${step.color.split(' ')[1]}`}>
-              {step.value}
-            </p>
+            <div className={`
+              rounded-xl border border-border/50 p-4
+              bg-card
+              ${step.rate ? STATUS_STYLES[step.rate.status].ring : ''}
+            `}>
+              {/* Rate label above card */}
+              {step.rate && (
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`
+                    inline-flex items-center px-2 py-0.5 rounded-md
+                    text-[10px] font-semibold border
+                    ${STATUS_STYLES[step.rate.status].badge}
+                  `}>
+                    {step.rate.label}
+                  </span>
+                  <span className={`
+                    text-lg font-bold tabular-nums
+                    ${STATUS_STYLES[step.rate.status].text}
+                  `}>
+                    {step.rate.pct}
+                  </span>
+                </div>
+              )}
+
+              {/* Icon + Label */}
+              <div className="flex items-center gap-2 mb-1">
+                <span className={step.iconColor}>{step.icon}</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                  {step.label}
+                </span>
+              </div>
+
+              {/* Value */}
+              <p className={`text-3xl font-extrabold tabular-nums ${step.iconColor}`}>
+                {step.value}
+              </p>
+            </div>
           </div>
+        ))}
+      </div>
+
+      {/* End-to-end metric */}
+      <div className={`
+        flex items-center justify-between
+        rounded-lg border p-3
+        ${STATUS_STYLES[txPagCompraInfo.status].ring}
+        ${STATUS_STYLES[txPagCompraInfo.status].bg}
+      `}>
+        <div className="flex items-center gap-2">
+          <Globe className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium">
+            TX Página → Compra (end-to-end)
+          </span>
         </div>
-      ))}
+        <div className="flex items-center gap-3">
+          <span className={`
+            text-xs px-2 py-0.5 rounded border font-medium
+            ${STATUS_STYLES[txPagCompraInfo.status].badge}
+          `}>
+            {txPagCompraInfo.label}
+          </span>
+          <span className={`
+            text-xl font-bold tabular-nums
+            ${STATUS_STYLES[txPagCompraInfo.status].text}
+          `}>
+            {txPagCompra.toFixed(1)}%
+          </span>
+          <span className="text-xs text-muted-foreground">
+            ({data.purchases} de {fmtNum(data.landingPageViews)} visitas)
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

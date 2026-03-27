@@ -62,6 +62,13 @@ const STATUS_RING = {
   base: '',
 };
 
+const STATUS_COLOR = {
+  success: 'text-green-400',
+  warning: 'text-yellow-400',
+  danger: 'text-red-400',
+  base: 'text-foreground',
+};
+
 /* ── Component ───────────────────────────────────────── */
 
 interface Props {
@@ -85,8 +92,8 @@ export function FunnelFlowCards({
   });
 
   return (
-    <div className="flex flex-wrap gap-3">
-      {sorted.map((pos, i) => {
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+      {sorted.map((pos) => {
         const key = `${pos.tipo}${pos.ordem || 1}`;
         const label = pos.tipo === 'FRONT' || pos.tipo === 'FE'
           ? 'FRONT' : key;
@@ -95,15 +102,21 @@ export function FunnelFlowCards({
         const gradient = GRADIENTS[pos.tipo] || 'from-gray-500 to-gray-400';
         const isFront = pos.tipo === 'FRONT' || pos.tipo === 'FE';
 
-        // Potential revenue calculation
+        // Primary product name
+        const primaryProduct = pos.produtos[0]?.nome_produto || '';
+        const truncatedName = primaryProduct.length > 30
+          ? primaryProduct.slice(0, 28) + '...'
+          : primaryProduct;
+
+        // Potential revenue
         let potentialMsg = '';
         if (ideal && pos.taxaConversao < ideal.min && vendasFront > 0) {
           const gap = ideal.min - pos.taxaConversao;
-          const vendasPotenciais = Math.round(vendasFront * (gap / 100));
+          const vendasPot = Math.round(vendasFront * (gap / 100));
           const ticketPos = pos.vendas > 0 ? pos.receita / pos.vendas : 0;
-          const receitaPot = vendasPotenciais * ticketPos;
+          const receitaPot = vendasPot * ticketPos;
           if (receitaPot > 0) {
-            potentialMsg = `Receita potencial: +${fmt(receitaPot)} (${vendasPotenciais} vendas a mais)`;
+            potentialMsg = `+${fmt(receitaPot)} (${vendasPot} vendas a mais)`;
           }
         }
 
@@ -112,133 +125,124 @@ export function FunnelFlowCards({
             <TooltipTrigger asChild>
               <div
                 className={`
-                  relative flex-shrink-0 w-[140px] rounded-xl
-                  bg-card border border-border/50 p-3
+                  relative rounded-xl
+                  bg-card border border-border/50 p-4
                   transition-all duration-200
                   hover:-translate-y-0.5 cursor-help
                   ${STATUS_RING[status]}
                 `}
               >
-                {/* Header gradient bar */}
-                <div className={`
-                  h-1 w-12 rounded-full mb-2
-                  bg-gradient-to-r ${gradient}
-                `} />
-
-                {/* Label */}
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
-                  {label}
-                </p>
-
-                {/* Sales count */}
-                <p className="text-xl font-extrabold tabular-nums mt-1 text-foreground">
-                  {pos.vendas}
-                  <span className="text-[10px] font-normal text-muted-foreground ml-1">
-                    vendas
-                  </span>
-                </p>
-
-                {/* Conversion rate */}
-                {!isFront && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Percent className="w-3 h-3 text-muted-foreground" />
-                    <span className={`
-                      text-sm font-bold tabular-nums
-                      ${status === 'success' ? 'text-green-400'
-                        : status === 'warning' ? 'text-yellow-400'
-                          : status === 'danger' ? 'text-red-400'
-                            : 'text-foreground'}
-                    `}>
-                      {pos.taxaConversao.toFixed(1)}%
+                {/* Header: gradient bar + label */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`
+                      h-1.5 w-10 rounded-full
+                      bg-gradient-to-r ${gradient}
+                    `} />
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                      {label}
                     </span>
                   </div>
+                  {status === 'danger' && (
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                  )}
+                  {status === 'success' && (
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  )}
+                </div>
+
+                {/* Product name */}
+                {truncatedName && (
+                  <p className="text-sm font-medium text-foreground mb-2 leading-tight">
+                    {truncatedName}
+                  </p>
                 )}
+
+                {/* Metrics row */}
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <p className="text-2xl font-extrabold tabular-nums text-foreground leading-none">
+                      {pos.vendas}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      vendas
+                    </p>
+                  </div>
+
+                  {!isFront && (
+                    <div className="text-right">
+                      <p className={`
+                        text-xl font-bold tabular-nums leading-none
+                        ${STATUS_COLOR[status]}
+                      `}>
+                        {pos.taxaConversao.toFixed(1)}%
+                      </p>
+                      {ideal && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          ideal {ideal.min}–{ideal.max}%
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Revenue */}
-                <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
-                  {fmt(pos.receita)}
-                </p>
+                <div className="mt-2 pt-2 border-t border-border/30">
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    Receita: <span className="text-foreground font-medium">{fmt(pos.receita)}</span>
+                  </p>
+                </div>
 
-                {/* Status icon */}
-                {status === 'danger' && (
-                  <AlertTriangle className="absolute top-2 right-2 w-3 h-3 text-red-400" />
-                )}
-                {status === 'success' && (
-                  <CheckCircle2 className="absolute top-2 right-2 w-3 h-3 text-green-400" />
+                {/* Potential revenue hint */}
+                {potentialMsg && (
+                  <div className="mt-1.5 flex items-start gap-1">
+                    <TrendingUp className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-amber-400 leading-tight">
+                      {potentialMsg}
+                    </p>
+                  </div>
                 )}
               </div>
             </TooltipTrigger>
             <TooltipContent
               side="bottom"
-              className="max-w-[280px] bg-[#1a1f2e] border-border p-3"
+              className="max-w-[300px] bg-[#1a1f2e] border-border p-3"
             >
-              <p className="font-semibold text-sm mb-1">
+              <p className="font-semibold text-sm mb-2">
                 {ideal?.desc || label}
               </p>
 
-              {/* Products */}
+              {/* All products */}
               {pos.produtos.length > 0 && (
-                <div className="text-xs text-muted-foreground mb-2">
+                <div className="text-xs space-y-1 mb-2">
                   {pos.produtos.map((p, j) => (
-                    <p key={j}>
-                      {p.nome_produto || p.codigo_oferta || '—'}
-                      {' — '}
-                      <span className="text-foreground font-medium">
+                    <div key={j} className="flex justify-between gap-3">
+                      <span className="text-muted-foreground truncate">
+                        {p.nome_produto || p.codigo_oferta || '—'}
+                      </span>
+                      <span className="text-foreground font-medium shrink-0">
                         {p.vendas} vendas
                       </span>
-                    </p>
+                    </div>
                   ))}
                 </div>
               )}
 
-              {/* Benchmark */}
               {ideal && (
-                <div className="space-y-1 text-xs">
-                  <p>
-                    <span className="text-muted-foreground">
-                      Taxa ideal:
-                    </span>{' '}
+                <div className="space-y-1 text-xs border-t border-border/50 pt-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Taxa ideal</span>
                     <span className="text-green-400 font-medium">
                       {ideal.min}–{ideal.max}%
                     </span>
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">
-                      Taxa atual:
-                    </span>{' '}
-                    <span className={`font-medium ${
-                      status === 'success' ? 'text-green-400'
-                        : status === 'warning' ? 'text-yellow-400'
-                          : 'text-red-400'
-                    }`}>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Taxa atual</span>
+                    <span className={`font-medium ${STATUS_COLOR[status]}`}>
                       {pos.taxaConversao.toFixed(1)}%
                     </span>
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">
-                      Receita:
-                    </span>{' '}
-                    <span className="text-foreground font-medium">
-                      {fmt(pos.receita)}
-                    </span>
-                  </p>
+                  </div>
                 </div>
-              )}
-
-              {/* Actionable insight */}
-              {potentialMsg && (
-                <div className="mt-2 pt-2 border-t border-border/50 flex items-start gap-1.5">
-                  <TrendingUp className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
-                  <p className="text-[11px] text-amber-400">
-                    {potentialMsg}
-                  </p>
-                </div>
-              )}
-
-              {status === 'success' && (
-                <p className="mt-2 pt-2 border-t border-border/50 text-[11px] text-green-400">
-                  Acima do benchmark. Continue otimizando!
-                </p>
               )}
             </TooltipContent>
           </Tooltip>

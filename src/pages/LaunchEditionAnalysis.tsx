@@ -177,7 +177,7 @@ export default function LaunchEditionAnalysis() {
         <AppHeader />
         <main className="container mx-auto px-6 py-8 flex flex-col items-center gap-4">
           <p className="text-muted-foreground">Edição não encontrada.</p>
-          <Button variant="outline" onClick={() => navigateTo('/lancamentos')}>
+          <Button variant="outline" onClick={() => navigateTo('/launch-dashboard')}>
             Voltar para Lançamentos
           </Button>
         </main>
@@ -201,7 +201,7 @@ export default function LaunchEditionAnalysis() {
               variant="ghost"
               size="icon"
               className="mt-1 shrink-0"
-              onClick={() => navigateTo('/lancamentos')}
+              onClick={() => navigateTo('/launch-dashboard')}
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>

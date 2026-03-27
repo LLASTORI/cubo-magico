@@ -212,6 +212,24 @@ Domínios principais:
 
 **Tipos:** `src/types/launch-editions.ts` — `LaunchEdition`, `LaunchEditionInsert`, `LaunchEditionWithPhases`
 
+## Launch Lots (Lotes de Preço por Edição)
+
+**Conceito:** cada edição pode ter múltiplos lotes com preços crescentes. Cada lote é uma entidade com datas (timestamptz, virada por hora) e ofertas vinculadas (N:N). O FRONT muda por lote (nova oferta ou preço), OBs podem ser adicionados/removidos entre lotes.
+
+**Tabelas:**
+- `launch_lots` — id, edition_id, funnel_id, project_id, lot_number (UNIQUE por edição), name, start_datetime (timestamptz), end_datetime, status (planned/active/finished)
+- `launch_lot_offers` — id, lot_id, offer_mapping_id, role (front/bump/upsell/downsell). Relação N:N — mesma oferta pode estar em múltiplos lotes.
+
+**Hook:** `src/hooks/useLaunchLots.ts` — CRUD: create (auto lot_number), copy (duplica ofertas, start = end do anterior), update, delete, addOffer, removeOffer
+
+**Atribuição de vendas ao lote:** híbrida por data (`economic_day` dentro do range do lote) + oferta (cadastrada no lote via `launch_lot_offers`).
+
+**UI:** Aba Produtos no `LaunchConfigDialog` mostra `LaunchLotsSection` para `lancamento_pago` (seletor de edição + cards de lote com ofertas + botão copiar).
+
+**Tipos:** `src/types/launch-lots.ts` — `LaunchLot`, `LaunchLotOffer`, `LaunchLotWithOffers`
+
+**Status:** Schema + CRUD + UI prontos. Falta: integrar na tela de análise (`LaunchProductsSalesBreakdown` agrupar por lotes).
+
 **`useLaunchData` — comportamento por `funnel_model`:**
 - Lançamentos clássicos: receita e spend filtrados pelo date range do dashboard
 - `lancamento_pago`: receita somada de **todas as edições** via `funnel_orders_view` (edition-scoped); spend via `meta_insights` com `launch_start_date → launch_end_date` do funil — **ignora o filtro do dashboard**

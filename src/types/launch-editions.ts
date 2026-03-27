@@ -8,9 +8,9 @@ export interface LaunchEdition {
   project_id: string;
   name: string;
   edition_number: number;
-  event_date: string | null;
-  start_date: string | null;
-  end_date: string | null;
+  event_datetime: string | null;
+  start_datetime: string | null;
+  end_datetime: string | null;
   status: EditionStatus;
   notes: string | null;
   created_at: string;
@@ -22,9 +22,9 @@ export interface LaunchEditionInsert {
   project_id: string;
   name: string;
   edition_number?: number;
-  event_date?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
+  event_datetime?: string | null;
+  start_datetime?: string | null;
+  end_datetime?: string | null;
   status?: EditionStatus;
   notes?: string | null;
 }

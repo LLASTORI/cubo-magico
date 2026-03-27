@@ -23,8 +23,8 @@ import { PaidMediaDomain } from "@/domains/paid-media";
 interface PagoEdition {
   id: string;
   funnel_id: string;
-  start_date: string | null;
-  end_date: string | null;
+  start_datetime: string | null;
+  end_datetime: string | null;
 }
 
 interface UseLaunchDataProps {
@@ -110,7 +110,7 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
       if (!projectId || pagoFunnelIds.length === 0) return [];
       const { data, error } = await supabase
         .from('launch_editions')
-        .select('id, funnel_id, start_date, end_date')
+        .select('id, funnel_id, start_datetime, end_datetime')
         .in('funnel_id', pagoFunnelIds);
       if (error) throw error;
       return (data || []) as PagoEdition[];
@@ -123,14 +123,16 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
   const pagoFunnelDateRanges = useMemo(() => {
     const ranges: Record<string, { start: string; end: string }> = {};
     for (const e of pagoEditions) {
-      const edEnd = e.end_date || e.event_date;
-      if (!e.start_date || !edEnd) continue;
+      // Extract date portion for economic_day comparisons
+      const startDay = e.start_datetime?.slice(0, 10) ?? null;
+      const endDay = e.end_datetime?.slice(0, 10) ?? null;
+      if (!startDay || !endDay) continue;
       const existing = ranges[e.funnel_id];
       if (!existing) {
-        ranges[e.funnel_id] = { start: e.start_date, end: edEnd };
+        ranges[e.funnel_id] = { start: startDay, end: endDay };
       } else {
-        if (e.start_date < existing.start) existing.start = e.start_date;
-        if (edEnd > existing.end) existing.end = edEnd;
+        if (startDay < existing.start) existing.start = startDay;
+        if (endDay > existing.end) existing.end = endDay;
       }
     }
     return ranges;

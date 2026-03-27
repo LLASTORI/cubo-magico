@@ -67,8 +67,8 @@ export function EditionsComparativoTable({ projectId, funnelId }: Props) {
                   <Badge className={status.className}>{status.label}</Badge>
                 </TableCell>
                 <TableCell className="text-right text-sm text-muted-foreground">
-                  {edition.event_date
-                    ? format(parseISO(edition.event_date), 'dd/MM/yy', { locale: ptBR })
+                  {edition.event_datetime
+                    ? format(parseISO(edition.event_datetime), 'dd/MM/yy', { locale: ptBR })
                     : '—'}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">

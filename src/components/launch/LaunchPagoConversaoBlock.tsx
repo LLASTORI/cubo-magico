@@ -22,10 +22,16 @@ const formatPercent = (v: number) => `${v.toFixed(1)}%`;
 // Data hooks
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** Extract YYYY-MM-DD from an ISO datetime string */
+function toDateStr(iso: string | null): string | null {
+  if (!iso) return null;
+  return iso.slice(0, 10);
+}
+
 function useConversaoData(projectId: string, funnelId: string, edition: LaunchEdition) {
-  const startDate = edition.start_date;
-  const endDate = edition.end_date;
-  const eventDate = edition.event_date;
+  const startDate = toDateStr(edition.start_datetime);
+  const endDate = toDateStr(edition.end_datetime);
+  const eventDate = toDateStr(edition.event_datetime);
 
   // Phases for this edition (by phase_type)
   const { data: phases = [], isLoading: phasesLoading } = useQuery({
@@ -86,7 +92,7 @@ function useConversaoData(projectId: string, funnelId: string, edition: LaunchEd
 
   // Compradores de ingresso
   // With mapping: offer codes from Fase 1, full edition period
-  // Fallback: main_offer_code IS NOT NULL, start_date → event_date
+  // Fallback: main_offer_code IS NOT NULL, start_datetime → event_datetime
   const fase1End = eventDate || endDate;
   const fase4Start = eventDate || startDate;
 
@@ -162,13 +168,15 @@ function useUTMData(projectId: string, funnelId: string, edition: LaunchEdition)
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId)
         .not('main_offer_code', 'is', null);
-      if (edition.start_date) q = q.gte('economic_day', edition.start_date);
-      if (edition.end_date) q = q.lte('economic_day', edition.end_date);
+      const sd = toDateStr(edition.start_datetime);
+      const ed = toDateStr(edition.end_datetime);
+      if (sd) q = q.gte('economic_day', sd);
+      if (ed) q = q.lte('economic_day', ed);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId && !!funnelId && !!edition.start_date,
+    enabled: !!projectId && !!funnelId && !!edition.start_datetime,
     staleTime: 2 * 60 * 1000,
   });
 

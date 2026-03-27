@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -23,13 +23,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLaunchPhases, PHASE_TYPES, LaunchPhase } from "@/hooks/useLaunchPhases";
 import { useLaunchEditions } from "@/hooks/useLaunchEditions";
 import { SortablePhaseItem } from "./SortablePhaseItem";
+import { isoToDatetimeLocal, datetimeLocalToIso } from "@/lib/datetimeHelpers";
 
 interface LaunchPhaseEditorProps {
   projectId: string;
@@ -52,8 +51,8 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
     phase_type: '',
     name: '',
     edition_id: '' as string,
-    start_date: null as Date | null,
-    end_date: null as Date | null,
+    start_datetime: '' as string,
+    end_datetime: '' as string,
     notes: '',
   });
 
@@ -105,10 +104,10 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
       byEdition.get(key)!.push(phase);
     }
 
-    // Editions sorted by start_date descending (most recent first)
+    // Editions sorted by start_datetime descending (most recent first)
     const sortedEditions = [...editions].sort((a, b) => {
-      const dateA = a.start_date ? parseISO(a.start_date).getTime() : 0;
-      const dateB = b.start_date ? parseISO(b.start_date).getTime() : 0;
+      const dateA = a.start_datetime ? parseISO(a.start_datetime).getTime() : 0;
+      const dateB = b.start_datetime ? parseISO(b.start_datetime).getTime() : 0;
       return dateB - dateA;
     });
 
@@ -116,8 +115,8 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
       const edPhases = byEdition.get(edition.id) || [];
       if (edPhases.length === 0) continue;
       const dates = [
-        edition.start_date ? format(parseISO(edition.start_date), 'dd/MM/yy', { locale: ptBR }) : null,
-        edition.end_date ? format(parseISO(edition.end_date), 'dd/MM/yy', { locale: ptBR }) : null,
+        edition.start_datetime ? format(parseISO(edition.start_datetime), 'dd/MM/yy', { locale: ptBR }) : null,
+        edition.end_datetime ? format(parseISO(edition.end_datetime), 'dd/MM/yy', { locale: ptBR }) : null,
       ].filter(Boolean).join(' → ');
       groups.push({
         editionId: edition.id,
@@ -186,8 +185,8 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
       edition_id: editionId,
       phase_type: newPhase.phase_type,
       name: newPhase.name,
-      start_date: newPhase.start_date ? format(newPhase.start_date, 'yyyy-MM-dd') : null,
-      end_date: newPhase.end_date ? format(newPhase.end_date, 'yyyy-MM-dd') : null,
+      start_datetime: newPhase.start_datetime ? datetimeLocalToIso(newPhase.start_datetime) : null,
+      end_datetime: newPhase.end_datetime ? datetimeLocalToIso(newPhase.end_datetime) : null,
       primary_metric: phaseType?.metric || 'spend',
       is_active: true,
       phase_order: phases.length,
@@ -195,7 +194,7 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
       campaign_name_pattern: null,
     });
 
-    setNewPhase({ phase_type: '', name: '', edition_id: '', start_date: null, end_date: null, notes: '' });
+    setNewPhase({ phase_type: '', name: '', edition_id: '', start_datetime: '', end_datetime: '', notes: '' });
     setShowAddPhase(false);
   };
 
@@ -204,8 +203,8 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
     updatePhase.mutate({
       id: editingPhase.id,
       name: editingPhase.name,
-      start_date: editingPhase.start_date,
-      end_date: editingPhase.end_date,
+      start_datetime: editingPhase.start_datetime,
+      end_datetime: editingPhase.end_datetime,
       is_active: editingPhase.is_active,
       notes: editingPhase.notes,
     });
@@ -374,48 +373,22 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Data Início (opcional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      {newPhase.start_date
-                        ? format(newPhase.start_date, 'dd/MM/yyyy', { locale: ptBR })
-                        : 'Selecionar'
-                      }
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={newPhase.start_date || undefined}
-                      onSelect={(date) => setNewPhase(prev => ({ ...prev, start_date: date || null }))}
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Label>Data/Hora Início (opcional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={newPhase.start_datetime}
+                  onChange={(e) => setNewPhase(prev => ({ ...prev, start_datetime: e.target.value }))}
+                  className="w-full"
+                />
               </div>
               <div className="space-y-2">
-                <Label>Data Fim (opcional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      {newPhase.end_date
-                        ? format(newPhase.end_date, 'dd/MM/yyyy', { locale: ptBR })
-                        : 'Selecionar'
-                      }
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={newPhase.end_date || undefined}
-                      onSelect={(date) => setNewPhase(prev => ({ ...prev, end_date: date || null }))}
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Label>Data/Hora Fim (opcional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={newPhase.end_datetime}
+                  onChange={(e) => setNewPhase(prev => ({ ...prev, end_datetime: e.target.value }))}
+                  className="w-full"
+                />
               </div>
             </div>
 

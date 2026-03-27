@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Plus, Pencil, Trash2, Info, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, Info, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLaunchEditions } from '@/hooks/useLaunchEditions';
 import { LaunchEdition, EditionStatus } from '@/types/launch-editions';
+import { isoToDatetimeLocal, datetimeLocalToIso } from '@/lib/datetimeHelpers';
 
 interface Props {
   projectId: string;
@@ -25,25 +24,25 @@ const STATUS_CONFIG: Record<EditionStatus, { label: string; variant: 'default' |
   finished: { label: 'Finalizada', variant: 'secondary',  className: '' },
 };
 
-function formatDate(d: string | null) {
+function formatDatetime(d: string | null) {
   if (!d) return '—';
-  return format(parseISO(d), 'dd/MM/yyyy', { locale: ptBR });
+  return format(parseISO(d), 'dd/MM/yyyy HH:mm', { locale: ptBR });
 }
 
 interface EditionFormState {
   name: string;
-  event_date: Date | undefined;
-  start_date: Date | undefined;
-  end_date: Date | undefined;
+  event_datetime: string;   // ISO string or ''
+  start_datetime: string;   // ISO string or ''
+  end_datetime: string;     // ISO string or ''
   status: EditionStatus;
   notes: string;
 }
 
 const EMPTY_FORM: EditionFormState = {
   name: '',
-  event_date: undefined,
-  start_date: undefined,
-  end_date: undefined,
+  event_datetime: '',
+  start_datetime: '',
+  end_datetime: '',
   status: 'planned',
   notes: '',
 };
@@ -51,35 +50,30 @@ const EMPTY_FORM: EditionFormState = {
 function editionToForm(e: LaunchEdition): EditionFormState {
   return {
     name: e.name,
-    event_date: e.event_date ? parseISO(e.event_date) : undefined,
-    start_date: e.start_date ? parseISO(e.start_date) : undefined,
-    end_date: e.end_date ? parseISO(e.end_date) : undefined,
+    event_datetime: e.event_datetime || '',
+    start_datetime: e.start_datetime || '',
+    end_datetime: e.end_datetime || '',
     status: e.status,
     notes: e.notes || '',
   };
 }
 
-interface DatePickerProps {
+interface DatetimeFieldProps {
   label: string;
-  value: Date | undefined;
-  onChange: (d: Date | undefined) => void;
+  value: string; // datetime-local string
+  onChange: (v: string) => void;
 }
 
-function DatePickerField({ label, value, onChange }: DatePickerProps) {
+function DatetimeField({ label, value, onChange }: DatetimeFieldProps) {
   return (
     <div className="space-y-1.5">
       <Label className="text-sm">{label}</Label>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className="w-full justify-start font-normal">
-            <CalendarIcon className="w-4 h-4 mr-2 text-muted-foreground" />
-            {value ? format(value, 'dd/MM/yyyy', { locale: ptBR }) : 'Selecionar'}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar mode="single" selected={value} onSelect={onChange} locale={ptBR} />
-        </PopoverContent>
-      </Popover>
+      <Input
+        type="datetime-local"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full"
+      />
     </div>
   );
 }
@@ -122,15 +116,15 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
   };
 
   const handleClone = () => {
-    if (!cloneSourceId || !cloneForm.name.trim() || !cloneForm.start_date || !cloneForm.event_date) return;
+    if (!cloneSourceId || !cloneForm.name.trim() || !cloneForm.start_datetime || !cloneForm.event_datetime) return;
     cloneEdition.mutate({
       sourceEditionId: cloneSourceId,
       funnel_id: funnelId,
       project_id: projectId,
       name: cloneForm.name.trim(),
-      start_date: format(cloneForm.start_date, 'yyyy-MM-dd'),
-      event_date: format(cloneForm.event_date, 'yyyy-MM-dd'),
-      end_date: cloneForm.end_date ? format(cloneForm.end_date, 'yyyy-MM-dd') : null,
+      start_datetime: datetimeLocalToIso(cloneForm.start_datetime),
+      event_datetime: datetimeLocalToIso(cloneForm.event_datetime),
+      end_datetime: cloneForm.end_datetime ? datetimeLocalToIso(cloneForm.end_datetime) : null,
       status: 'planned',
       notes: null,
     }, {
@@ -141,9 +135,9 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
   const handleSave = () => {
     const payload = {
       name: form.name.trim(),
-      event_date: form.event_date ? format(form.event_date, 'yyyy-MM-dd') : null,
-      start_date: form.start_date ? format(form.start_date, 'yyyy-MM-dd') : null,
-      end_date: form.end_date ? format(form.end_date, 'yyyy-MM-dd') : null,
+      event_datetime: form.event_datetime ? datetimeLocalToIso(form.event_datetime) : null,
+      start_datetime: form.start_datetime ? datetimeLocalToIso(form.start_datetime) : null,
+      end_datetime: form.end_datetime ? datetimeLocalToIso(form.end_datetime) : null,
       status: form.status,
       notes: form.notes.trim() || null,
     };
@@ -200,10 +194,10 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{edition.name}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-                    {edition.start_date && <span>Início: {formatDate(edition.start_date)}</span>}
-                    {edition.event_date && <span>Evento: {formatDate(edition.event_date)}</span>}
-                    {edition.end_date && <span>Fim: {formatDate(edition.end_date)}</span>}
-                    {!edition.start_date && !edition.event_date && !edition.end_date && (
+                    {edition.start_datetime && <span>Início: {formatDatetime(edition.start_datetime)}</span>}
+                    {edition.event_datetime && <span>Evento: {formatDatetime(edition.event_datetime)}</span>}
+                    {edition.end_datetime && <span>Fim: {formatDatetime(edition.end_datetime)}</span>}
+                    {!edition.start_datetime && !edition.event_datetime && !edition.end_datetime && (
                       <span>Sem datas definidas</span>
                     )}
                   </div>
@@ -253,22 +247,22 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <DatePickerField
+              <DatetimeField
                 label="Início das vendas"
-                value={form.start_date}
-                onChange={(d) => setForm(f => ({ ...f, start_date: d }))}
+                value={isoToDatetimeLocal(form.start_datetime || null)}
+                onChange={(v) => setForm(f => ({ ...f, start_datetime: v }))}
               />
-              <DatePickerField
+              <DatetimeField
                 label="Data do evento"
-                value={form.event_date}
-                onChange={(d) => setForm(f => ({ ...f, event_date: d }))}
+                value={isoToDatetimeLocal(form.event_datetime || null)}
+                onChange={(v) => setForm(f => ({ ...f, event_datetime: v }))}
               />
             </div>
 
-            <DatePickerField
+            <DatetimeField
               label="Encerramento"
-              value={form.end_date}
-              onChange={(d) => setForm(f => ({ ...f, end_date: d }))}
+              value={isoToDatetimeLocal(form.end_datetime || null)}
+              onChange={(v) => setForm(f => ({ ...f, end_datetime: v }))}
             />
 
             <div className="space-y-1.5">
@@ -333,21 +327,21 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <DatePickerField
+              <DatetimeField
                 label="Início das vendas *"
-                value={cloneForm.start_date}
-                onChange={(d) => setCloneForm(f => ({ ...f, start_date: d }))}
+                value={isoToDatetimeLocal(cloneForm.start_datetime || null)}
+                onChange={(v) => setCloneForm(f => ({ ...f, start_datetime: v }))}
               />
-              <DatePickerField
+              <DatetimeField
                 label="Data do evento *"
-                value={cloneForm.event_date}
-                onChange={(d) => setCloneForm(f => ({ ...f, event_date: d }))}
+                value={isoToDatetimeLocal(cloneForm.event_datetime || null)}
+                onChange={(v) => setCloneForm(f => ({ ...f, event_datetime: v }))}
               />
             </div>
-            <DatePickerField
+            <DatetimeField
               label="Encerramento"
-              value={cloneForm.end_date}
-              onChange={(d) => setCloneForm(f => ({ ...f, end_date: d }))}
+              value={isoToDatetimeLocal(cloneForm.end_datetime || null)}
+              onChange={(v) => setCloneForm(f => ({ ...f, end_datetime: v }))}
             />
             <div className="flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
               <Info className="h-4 w-4 mt-0.5 shrink-0" />
@@ -360,7 +354,7 @@ export const LaunchEditionsTab = ({ projectId, funnelId }: Props) => {
             </Button>
             <Button
               onClick={handleClone}
-              disabled={!cloneForm.name.trim() || !cloneForm.start_date || !cloneForm.event_date || cloneEdition.isPending}
+              disabled={!cloneForm.name.trim() || !cloneForm.start_datetime || !cloneForm.event_datetime || cloneEdition.isPending}
             >
               {cloneEdition.isPending ? 'Clonando...' : 'Clonar'}
             </Button>

@@ -45,11 +45,11 @@ const FASES_LANCAMENTO_PAGO = [
   },
 ] as const;
 
-function calcPhaseDate(base: string | null, offsetDays: number): string | null {
+function calcPhaseDatetime(base: string | null, offsetDays: number): string | null {
   if (!base) return null;
   const d = new Date(base);
   d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().split('T')[0];
+  return d.toISOString();
 }
 
 export const useLaunchEditions = (projectId: string | undefined, funnelId?: string) => {
@@ -115,16 +115,16 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
 
       // Primeira edição → criar 4 fases padrão de lançamento pago
       if (!existing?.length) {
-        const { event_date, start_date, end_date } = input as LaunchEditionInsert & {
-          event_date?: string | null;
-          start_date?: string | null;
-          end_date?: string | null;
+        const { event_datetime, start_datetime, end_datetime } = input as LaunchEditionInsert & {
+          event_datetime?: string | null;
+          start_datetime?: string | null;
+          end_datetime?: string | null;
         };
         const phaseDates = [
-          { start_date: start_date ?? null, end_date: calcPhaseDate(event_date ?? null, -1) },
-          { start_date: calcPhaseDate(event_date ?? null, -7), end_date: event_date ?? null },
-          { start_date: event_date ?? null, end_date: calcPhaseDate(event_date ?? null, 1) },
-          { start_date: calcPhaseDate(event_date ?? null, 1), end_date: end_date ?? null },
+          { start_datetime: start_datetime ?? null, end_datetime: calcPhaseDatetime(event_datetime ?? null, -1) },
+          { start_datetime: calcPhaseDatetime(event_datetime ?? null, -7), end_datetime: event_datetime ?? null },
+          { start_datetime: event_datetime ?? null, end_datetime: calcPhaseDatetime(event_datetime ?? null, 1) },
+          { start_datetime: calcPhaseDatetime(event_datetime ?? null, 1), end_datetime: end_datetime ?? null },
         ];
 
         const phasesToInsert = FASES_LANCAMENTO_PAGO.map((fase, i) => ({
@@ -177,7 +177,7 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
               notes: p.notes,
               phase_order: p.phase_order,
               is_active: p.is_active,
-              // start_date / end_date are NOT copied — user defines new dates
+              // start_datetime / end_datetime are NOT copied — user defines new dates
             }));
 
             await supabase.from('launch_phases').insert(phasesToInsert);

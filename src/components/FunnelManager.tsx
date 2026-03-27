@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -173,6 +174,7 @@ const formatCurrency = (value: number | null) => {
 };
 
 export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps) {
+  const queryClient = useQueryClient();
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [loading, setLoading] = useState(true);
   const [newFunnelName, setNewFunnelName] = useState('');
@@ -584,6 +586,9 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
 
       fetchFunnels();
       onFunnelChange?.();
+      // Invalidate React Query caches so other pages (LaunchDashboard etc.) refresh
+      queryClient.invalidateQueries({ queryKey: ['funnels-lancamento'] });
+      queryClient.invalidateQueries({ queryKey: ['funnels-health'] });
     } catch (error: any) {
       console.error('Error deleting funnel:', error);
       toast({

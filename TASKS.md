@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 27/03/2026 (sessão 40 — Sistema de Lotes parte 1)
+> Última atualização: 27/03/2026 (sessão 40 — 12 PRs: Lotes + Análise + Debriefing)
 
 ---
 
@@ -29,6 +29,16 @@
 - [x] `PassingDiarioChart` reativo ao lote selecionado ✅
 - [x] Build: zero erros ✅
 - [x] PRs #60, #61, #62, #63 mergeadas ✅
+- [x] Tabela Diária (investimento + faturamento + FRONT + OBs por dia) ✅
+- [x] Performance de Campanhas (spend Meta × vendas Hotmart via UTM) ✅
+- [x] 8 KPIs expandidos (Invest, Fat, Lucro, ROAS, Vendas, CPA, Ticket, Show Rate) ✅
+- [x] ROAS real por criativo no MetaHierarchyAnalysis (sem pie charts) ✅
+- [x] `instagram_permalink` no sync de ads (edge function + migration) ✅
+- [x] Hook `useCrossPhaseConversion` — cruzamento Ingresso→Produto Principal ✅
+- [x] `CrossPhaseConversionCard` — funil visual + breakdowns ✅
+- [x] Tabs reordenadas: Fontes → Campanhas → Conjuntos → Criativos → Mídias ✅
+- [x] Cores nas formas de pagamento (normalização uppercase) ✅
+- [x] PRs #60-#71 mergeadas (12 PRs na sessão) ✅
 
 ---
 
@@ -138,6 +148,26 @@
 - [x] **Order bumps**: matching OB/US/DS via `all_offer_codes.includes()` + receita = preço unitário × count ✅
 - [x] **Dashboard 30→222**: `useLaunchData` — fallback `end_date || event_date` para edições sem end_date ✅
 - [x] Build: zero erros ✅
+
+---
+
+## 🔵 Sessão 41 — Redesign + Pendências da Tela de Edição
+
+### Design (prioridade)
+- [ ] **Redesign completo da `LaunchEditionAnalysis`** — design premium, não parecer app feito por IA
+- [ ] Funil visual mais atrativo (inspirar no debriefing "Posicionamento Lucrativo")
+- [ ] Cards de KPI com design moderno e hierarquia visual clara
+- [ ] Tabelas com hover states, cores contextuais e densidade informacional
+- [ ] Breakdowns de lote visualmente ricos (não só tabelas flat)
+
+### Lógica pendente
+- [ ] **Status automático** de lotes e edições (baseado nas datas vs hoje)
+- [ ] **Score do funil** — health score (existe no perpétuo, falta trazer)
+- [ ] **PeriodComparison** — comparar sub-períodos dentro da edição
+- [ ] **LTVAnalysis** — lifetime value dos compradores
+
+### Deploy pendente
+- [ ] `supabase functions deploy meta-api` — ativa `instagram_permalink`
 
 ---
 

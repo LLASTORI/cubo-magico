@@ -4,6 +4,18 @@
 
 ---
 
+### [2026-03-27] Sessão 40 — Sistema de Lotes completo + Análise por Lote — ✅ OK
+
+**Datetime migration:** Edições e fases migradas de `date` para `timestamptz`. 18 arquivos, helpers compartilhados em `src/lib/datetimeHelpers.ts`. Inputs usam `datetime-local` (com hora). PR #60.
+
+**Lotes na análise:** Hook `useLaunchLotsAnalysis` agrupa vendas e spend por lote (date range + offers vinculadas). TX de conversão OBs = count_ob / count_front × 100. PR #61.
+
+**Seletor de lote:** Tabs "Todos / Lote 1 / Lote 2" filtram UTM, Meta Ads, Pagamentos, Passing Diário. TemporalChart (evolução diária) importado. PRs #62, #63.
+
+**Observação:** Métricas de "meta total", "%atingido", "média/dia" no Passing são baseadas em cálculo simples (total ÷ dias), não em alvo declarado. Planejamento com metas virá em feature futura.
+
+---
+
 ## 📅 Última atualização
 - **Data:** 2026-03-27 (sessão 40) — Sistema de Lotes para Lançamento Pago (parte 1)
 - **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Lotes: schema + CRUD + UI ✅ (integração análise pendente)

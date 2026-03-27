@@ -228,7 +228,11 @@ Domínios principais:
 
 **Tipos:** `src/types/launch-lots.ts` — `LaunchLot`, `LaunchLotOffer`, `LaunchLotWithOffers`
 
-**Status:** Schema + CRUD + UI prontos. Falta: integrar na tela de análise (`LaunchProductsSalesBreakdown` agrupar por lotes).
+**Status:** Schema + CRUD + UI + Análise por lote ✅ completos.
+
+**Análise por lote:** Hook `useLaunchLotsAnalysis` agrupa vendas e spend por lote. `LaunchProductsSalesBreakdown` mostra cards por lote com TX de OBs + tabela comparativa. Seletor de lote filtra Passing, UTM, Meta Ads, Pagamentos. TemporalChart (evolução diária) integrado.
+
+**Helpers datetime:** `src/lib/datetimeHelpers.ts` — `isoToDatetimeLocal()` e `datetimeLocalToIso()` compartilhados entre lotes, edições e fases.
 
 **`useLaunchData` — comportamento por `funnel_model`:**
 - Lançamentos clássicos: receita e spend filtrados pelo date range do dashboard

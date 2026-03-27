@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 26/03/2026 (sessão 36 — Onda 2E: blocos reutilizáveis na edição)
+> Última atualização: 26/03/2026 (sessão 36 — Onda 2E + fix meta_insights escopo)
 
 ---
 
@@ -72,6 +72,7 @@
 - [x] UTMAnalysis renderizado com dados Meta ✅
 - [x] MetaHierarchyAnalysis renderizado com campanhas/adsets/ads ✅
 - [x] Passo 6 (filtrar lancamento_pago de FunnelAnalysis) — já resolvido nativamente ✅
+- [x] Fix: meta_insights escopado por campaign_ids das vendas (campanhas PERPETUO removidas) ✅
 - [x] Build: zero erros ✅
 
 ---

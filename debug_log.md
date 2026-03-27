@@ -10,6 +10,16 @@
 
 ---
 
+### [2026-03-26] Fix: meta_insights vazando campanhas PERPETUO na edição (sessão 36) ✅
+
+**Sintoma:** Blocos UTMAnalysis e MetaHierarchyAnalysis na LaunchEditionAnalysis mostravam campanhas com nome PERPETUO que não pertencem ao lançamento.
+
+**Root cause:** Query `editionMetaInsights` filtrava apenas por `project_id` + date range (`date_start` entre start/end da edição). Como `meta_insights` é project-wide, qualquer campanha ativa no mesmo período aparecia.
+
+**Fix:** Extrair `meta_campaign_id` das vendas da edição (`editionSalesData`) e adicionar `.in('campaign_id', editionCampaignIds)` na query. Agora só campanhas que geraram vendas nesta edição são incluídas. Query também só roda quando `editionCampaignIds.length > 0`.
+
+---
+
 ### [2026-03-26] Onda 2E — Blocos reutilizáveis na LaunchEditionAnalysis (sessão 36) ✅
 
 **Objetivo:** Adicionar 4 blocos de análise reutilizáveis na tela de edição do lançamento pago.
@@ -17,7 +27,8 @@
 **Implementado em `src/pages/LaunchEditionAnalysis.tsx`:**
 - `editionSalesData` — query a `funnel_orders_view` filtrada pelo período da edição
 - `funnelOfferCodes` — memo com todos os offer codes da edição
-- `editionMetaInsights` — query a `meta_insights` filtrada pelo período
+- `editionCampaignIds` — campaign IDs extraídos das vendas (escopo para meta_insights)
+- `editionMetaInsights` — query a `meta_insights` filtrada pelo período + campaign_ids
 - `useMetaHierarchy` — campanhas/adsets/ads do Meta
 - `useFunnelHealthMetrics` — saúde do funil (nota: ainda usa `hotmart_sales`, TODO migrar)
 

@@ -15,7 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LaunchPhaseEditor } from "./LaunchPhaseEditor";
 import { LaunchEditionsTab } from "./LaunchEditionsTab";
+import { LaunchLotsSection } from "./LaunchLotsSection";
 import { useLaunchPhases, PRODUCT_TYPES } from "@/hooks/useLaunchPhases";
+import { useLaunchEditions } from "@/hooks/useLaunchEditions";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -47,7 +49,10 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
   
   const queryClient = useQueryClient();
   const projectId = funnel.project_id || '';
-  
+  const isLancamentoPago = funnel.funnel_model === 'lancamento_pago';
+  const [selectedEditionId, setSelectedEditionId] = useState<string | null>(null);
+
+  const { editions } = useLaunchEditions(projectId, funnel.id);
   const { phases, launchProducts, createLaunchProduct, updateLaunchProduct, deleteLaunchProduct } = useLaunchPhases(projectId, funnel.id);
 
   // Fetch offer mappings for this funnel
@@ -315,137 +320,155 @@ export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps)
           </TabsContent>
 
           <TabsContent value="products" className="space-y-4">
-            <Card className="p-4 space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  Produtos do Lançamento
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Classifique as ofertas como Principal, Upsell ou Downsell
-                </p>
-              </div>
-
-              {offerMappings.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhuma oferta mapeada para este funil.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {groupedMappings.map((group) => (
-                    <div key={group.phaseId || '__none__'} className="space-y-2">
-                      <h4 className="text-sm font-semibold text-muted-foreground px-1">
-                        {group.phaseName}
-                      </h4>
-                      <div className="space-y-3">
-                        {group.mappings.map((mapping) => {
-                          const linkedProduct = getProductInfo(mapping.id);
-                          const currentType = linkedProduct?.product_type || null;
-                          const currentLot = linkedProduct?.lot_name || '';
-
-                          return (
-                            <div
-                              key={mapping.id}
-                              className="p-3 rounded-lg border bg-card space-y-3"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div>
-                                    <p className="font-medium">{mapping.nome_oferta || mapping.codigo_oferta}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {mapping.nome_produto}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
-                                    </p>
-                                  </div>
-                                  {getPositionBadge(mapping.tipo_posicao) && (
-                                    <Badge variant={getPositionBadge(mapping.tipo_posicao)!.variant} className="text-xs">
-                                      {getPositionBadge(mapping.tipo_posicao)!.label}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Select
-                                    value={currentType || 'none'}
-                                    onValueChange={(value) => {
-                                      if (linkedProduct) {
-                                        deleteLaunchProduct.mutate(linkedProduct.id);
-                                      }
-                                      if (value && value !== 'none') {
-                                        handleAddProduct(mapping.id, value, currentLot || null);
-                                      }
-                                    }}
-                                  >
-                                    <SelectTrigger className="w-48">
-                                      <SelectValue placeholder="Classificar" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">Sem classificação</SelectItem>
-                                      {PRODUCT_TYPES.map((type) => (
-                                        <SelectItem key={type.value} value={type.value}>
-                                          {type.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              {/* Phase selector — somente lancamento_pago */}
-                              {funnel.funnel_model === 'lancamento_pago' && phases.length > 0 && (
-                                <div className="flex items-center gap-2 pt-2 border-t">
-                                  <Label className="text-sm text-muted-foreground whitespace-nowrap">Fase:</Label>
-                                  <Select
-                                    value={(mapping as any).phase_id || 'none'}
-                                    onValueChange={(value) =>
-                                      updateOfferMappingPhase.mutate({
-                                        mappingId: mapping.id,
-                                        phaseId: value === 'none' ? null : value,
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger className="h-8 text-sm flex-1">
-                                      <SelectValue placeholder="Sem fase" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">Sem fase</SelectItem>
-                                      {phases.map((phase) => (
-                                        <SelectItem key={phase.id} value={phase.id}>
-                                          {phase.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              )}
-
-                              {/* Lot Name Field - only show when product is classified */}
-                              {linkedProduct && (
-                                <div className="flex items-center gap-2 pt-2 border-t">
-                                  <Label className="text-sm text-muted-foreground whitespace-nowrap">Lote:</Label>
-                                  <Input
-                                    placeholder="Ex: Lote 1, Early Bird, VIP..."
-                                    value={currentLot}
-                                    onChange={(e) => handleUpdateLotName(linkedProduct.id, e.target.value)}
-                                    className="h-8 text-sm"
-                                  />
-                                  {currentLot && (
-                                    <Badge variant="secondary" className="whitespace-nowrap">
-                                      {currentLot}
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+            {isLancamentoPago ? (
+              /* Lançamento Pago: UI de Lotes com CRUD */
+              <div className="space-y-4">
+                {editions.length === 0 ? (
+                  <Card className="p-6 text-center text-muted-foreground">
+                    Crie uma edição na aba "Edições" para configurar lotes.
+                  </Card>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm whitespace-nowrap">Edição:</Label>
+                      <Select
+                        value={selectedEditionId || editions[editions.length - 1]?.id || ''}
+                        onValueChange={setSelectedEditionId}
+                      >
+                        <SelectTrigger className="w-64">
+                          <SelectValue placeholder="Selecionar edição" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {editions.map((ed) => (
+                            <SelectItem key={ed.id} value={ed.id}>
+                              #{ed.edition_number} — {ed.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  ))}
+                    <LaunchLotsSection
+                      projectId={projectId}
+                      funnelId={funnel.id}
+                      editionId={selectedEditionId || editions[editions.length - 1]?.id || ''}
+                      offerMappings={offerMappings.map(m => ({
+                        id: m.id,
+                        nome_oferta: m.nome_oferta,
+                        nome_produto: m.nome_produto,
+                        codigo_oferta: m.codigo_oferta,
+                        tipo_posicao: m.tipo_posicao,
+                        valor: m.valor ? Number(m.valor) : null,
+                      }))}
+                    />
+                  </>
+                )}
+              </div>
+            ) : (
+              /* Outros modelos: UI original com fase + tipo + lote texto */
+              <Card className="p-4 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    Produtos do Lançamento
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Classifique as ofertas como Principal, Upsell ou Downsell
+                  </p>
                 </div>
-              )}
-            </Card>
+
+                {offerMappings.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhuma oferta mapeada para este funil.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {groupedMappings.map((group) => (
+                      <div key={group.phaseId || '__none__'} className="space-y-2">
+                        <h4 className="text-sm font-semibold text-muted-foreground px-1">
+                          {group.phaseName}
+                        </h4>
+                        <div className="space-y-3">
+                          {group.mappings.map((mapping) => {
+                            const linkedProduct = getProductInfo(mapping.id);
+                            const currentType = linkedProduct?.product_type || null;
+                            const currentLot = linkedProduct?.lot_name || '';
+
+                            return (
+                              <div
+                                key={mapping.id}
+                                className="p-3 rounded-lg border bg-card space-y-3"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div>
+                                      <p className="font-medium">{mapping.nome_oferta || mapping.codigo_oferta}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {mapping.nome_produto}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {mapping.codigo_oferta} • {mapping.tipo_posicao || 'Sem posição'}
+                                      </p>
+                                    </div>
+                                    {getPositionBadge(mapping.tipo_posicao) && (
+                                      <Badge variant={getPositionBadge(mapping.tipo_posicao)!.variant} className="text-xs">
+                                        {getPositionBadge(mapping.tipo_posicao)!.label}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Select
+                                      value={currentType || 'none'}
+                                      onValueChange={(value) => {
+                                        if (linkedProduct) {
+                                          deleteLaunchProduct.mutate(linkedProduct.id);
+                                        }
+                                        if (value && value !== 'none') {
+                                          handleAddProduct(mapping.id, value, currentLot || null);
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-48">
+                                        <SelectValue placeholder="Classificar" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">Sem classificação</SelectItem>
+                                        {PRODUCT_TYPES.map((type) => (
+                                          <SelectItem key={type.value} value={type.value}>
+                                            {type.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+
+                                {/* Lot Name Field - only show when product is classified */}
+                                {linkedProduct && (
+                                  <div className="flex items-center gap-2 pt-2 border-t">
+                                    <Label className="text-sm text-muted-foreground whitespace-nowrap">Lote:</Label>
+                                    <Input
+                                      placeholder="Ex: Lote 1, Early Bird, VIP..."
+                                      value={currentLot}
+                                      onChange={(e) => handleUpdateLotName(linkedProduct.id, e.target.value)}
+                                      className="h-8 text-sm"
+                                    />
+                                    {currentLot && (
+                                      <Badge variant="secondary" className="whitespace-nowrap">
+                                        {currentLot}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="editions" className="space-y-4">

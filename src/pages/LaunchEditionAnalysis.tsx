@@ -8,7 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Calendar, TrendingUp, DollarSign,
   Target, ShoppingCart, CreditCard, BarChart3,
-  Megaphone, Layers, Activity,
+  Megaphone, Layers, Activity, Users,
   Wallet, Tag, LayoutGrid, Ticket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,8 @@ import { CrossPhaseConversionCard } from '@/components/launch/CrossPhaseConversi
 import { useCrossPhaseConversion } from '@/hooks/useCrossPhaseConversion';
 import { usePeriodComparison } from '@/hooks/usePeriodComparison';
 import { PeriodComparisonTable } from '@/components/launch/PeriodComparisonTable';
+import { useLTVAnalysis } from '@/hooks/useLTVAnalysis';
+import { LTVAnalysisCard } from '@/components/launch/LTVAnalysisCard';
 import { useFunnelScore } from '@/hooks/useFunnelScore';
 import type { PositionBreakdown } from '@/hooks/useFunnelScore';
 import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
@@ -375,6 +377,9 @@ export default function LaunchEditionAnalysis() {
   const funnelScore = useFunnelScore(
     positionBreakdown, editionMetaInsights,
   );
+
+  // LTV dos compradores
+  const ltvData = useLTVAnalysis(editionSalesData, funnelOffers);
 
   // Comparação semanal
   const periodComparison = usePeriodComparison(
@@ -974,6 +979,17 @@ export default function LaunchEditionAnalysis() {
               <PaymentMethodAnalysis
                 salesData={filteredSalesData}
               />
+            )}
+
+            {/* ═══════════ LTV ═══════════ */}
+            {ltvData && (
+              <Section
+                icon={<Users className="w-4 h-4" />}
+                title="Lifetime Value"
+                description="Valor total por comprador e adoção de OBs/USs"
+              >
+                <LTVAnalysisCard data={ltvData} />
+              </Section>
             )}
 
             {/* ═══════════ SAÚDE ═══════════ */}

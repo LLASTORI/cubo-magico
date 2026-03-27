@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { LaunchEdition } from '@/types/launch-editions';
 
@@ -110,10 +111,10 @@ export function useLaunchEditionData(
       }
 
       const totalIngressos = orders.length;
-      const cur = new Date(startDate);
-      const end = new Date(endDate);
+      const cur = parseISO(startDate);
+      const end = parseISO(endDate);
       let totalDias = 0;
-      const tempCur = new Date(startDate);
+      const tempCur = parseISO(startDate);
       while (tempCur <= end) { totalDias++; tempCur.setDate(tempCur.getDate() + 1); }
       const metaDiaria = totalDias > 0 ? totalIngressos / totalDias : 0;
 

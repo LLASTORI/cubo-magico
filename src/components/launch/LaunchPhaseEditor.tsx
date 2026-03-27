@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Plus } from "lucide-react";
 import {
@@ -107,8 +107,8 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
 
     // Editions sorted by start_date descending (most recent first)
     const sortedEditions = [...editions].sort((a, b) => {
-      const dateA = a.start_date ? new Date(a.start_date).getTime() : 0;
-      const dateB = b.start_date ? new Date(b.start_date).getTime() : 0;
+      const dateA = a.start_date ? parseISO(a.start_date).getTime() : 0;
+      const dateB = b.start_date ? parseISO(b.start_date).getTime() : 0;
       return dateB - dateA;
     });
 
@@ -116,8 +116,8 @@ export const LaunchPhaseEditor = ({ projectId, funnelId, funnelName, funnelModel
       const edPhases = byEdition.get(edition.id) || [];
       if (edPhases.length === 0) continue;
       const dates = [
-        edition.start_date ? format(new Date(edition.start_date), 'dd/MM/yy', { locale: ptBR }) : null,
-        edition.end_date ? format(new Date(edition.end_date), 'dd/MM/yy', { locale: ptBR }) : null,
+        edition.start_date ? format(parseISO(edition.start_date), 'dd/MM/yy', { locale: ptBR }) : null,
+        edition.end_date ? format(parseISO(edition.end_date), 'dd/MM/yy', { locale: ptBR }) : null,
       ].filter(Boolean).join(' → ');
       groups.push({
         editionId: edition.id,

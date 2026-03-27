@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Trash2, GripVertical, Settings2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -125,11 +125,11 @@ export const SortablePhaseItem = ({
               <div className="col-span-3 text-sm text-muted-foreground">
                 {phase.start_date && phase.end_date ? (
                   <>
-                    {format(new Date(phase.start_date), 'dd/MM', { locale: ptBR })} -{' '}
-                    {format(new Date(phase.end_date), 'dd/MM', { locale: ptBR })}
+                    {format(parseISO(phase.start_date), 'dd/MM', { locale: ptBR })} -{' '}
+                    {format(parseISO(phase.end_date), 'dd/MM', { locale: ptBR })}
                   </>
                 ) : phase.start_date ? (
-                  <>A partir de {format(new Date(phase.start_date), 'dd/MM', { locale: ptBR })}</>
+                  <>A partir de {format(parseISO(phase.start_date), 'dd/MM', { locale: ptBR })}</>
                 ) : (
                   <span className="text-muted-foreground/50">Sem datas</span>
                 )}
@@ -184,7 +184,7 @@ export const SortablePhaseItem = ({
                                 <Button variant="outline" className="w-full justify-start">
                                   <CalendarIcon className="w-4 h-4 mr-2" />
                                   {editingPhase.start_date
-                                    ? format(new Date(editingPhase.start_date), 'dd/MM/yyyy', { locale: ptBR })
+                                    ? format(parseISO(editingPhase.start_date), 'dd/MM/yyyy', { locale: ptBR })
                                     : 'Selecionar'
                                   }
                                 </Button>
@@ -192,7 +192,7 @@ export const SortablePhaseItem = ({
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
-                                  selected={editingPhase.start_date ? new Date(editingPhase.start_date) : undefined}
+                                  selected={editingPhase.start_date ? parseISO(editingPhase.start_date) : undefined}
                                   onSelect={(date) =>
                                     setEditingPhase({ ...editingPhase, start_date: date ? format(date, 'yyyy-MM-dd') : null })
                                   }
@@ -208,7 +208,7 @@ export const SortablePhaseItem = ({
                                 <Button variant="outline" className="w-full justify-start">
                                   <CalendarIcon className="w-4 h-4 mr-2" />
                                   {editingPhase.end_date
-                                    ? format(new Date(editingPhase.end_date), 'dd/MM/yyyy', { locale: ptBR })
+                                    ? format(parseISO(editingPhase.end_date), 'dd/MM/yyyy', { locale: ptBR })
                                     : 'Selecionar'
                                   }
                                 </Button>
@@ -216,7 +216,7 @@ export const SortablePhaseItem = ({
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
-                                  selected={editingPhase.end_date ? new Date(editingPhase.end_date) : undefined}
+                                  selected={editingPhase.end_date ? parseISO(editingPhase.end_date) : undefined}
                                   onSelect={(date) =>
                                     setEditingPhase({ ...editingPhase, end_date: date ? format(date, 'yyyy-MM-dd') : null })
                                   }

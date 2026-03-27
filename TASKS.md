@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 26/03/2026 (sessão 38 — data desatualizada + ingressos inconsistentes)
+> Última atualização: 27/03/2026 (sessão 39 cont. — timezone + bumps + dashboard)
 
 ---
 
@@ -98,12 +98,23 @@
 
 ---
 
-## ✅ Sessão 38 — Data desatualizada + ingressos inconsistentes
+## ✅ Sessão 38 — Data desatualizada + ingressos inconsistentes (parcial)
 
 - [x] Cache invalidation: `updateEdition` agora invalida `['launch-edition', id]` ✅
 - [x] QueryKeys com datas: `edition-sales`, `edition-meta-insights`, `edition-kpis`, `edition-passing` ✅
 - [x] `LaunchProductsSalesBreakdown`: migrado de `finance_tracking_view` → `funnel_orders_view` ✅
 - [x] `PaymentMethodAnalysis`: `funnelOfferCodes` opcional — sem filtro extra na edição ✅
+- [x] Build: zero erros ✅
+
+---
+
+## ✅ Sessão 39 — Ingressos + timezone + bumps + dashboard
+
+- [x] `LaunchProductsSalesBreakdown`: removida query interna — recebe `salesData` como prop ✅
+- [x] `editionSalesData`: adicionado `.not('main_offer_code', 'is', null)` — alinha com KPI ✅
+- [x] **Timezone**: `new Date(dateStr)` → `parseISO(dateStr)` em 19 instâncias / 5 arquivos ✅
+- [x] **Order bumps**: matching OB/US/DS via `all_offer_codes.includes()` + receita = preço unitário × count ✅
+- [x] **Dashboard 30→222**: `useLaunchData` — fallback `end_date || event_date` para edições sem end_date ✅
 - [x] Build: zero erros ✅
 
 ---

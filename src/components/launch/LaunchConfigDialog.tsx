@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Settings, Rocket, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,10 @@ interface LaunchConfigDialogProps {
 export const LaunchConfigDialog = ({ funnel, trigger }: LaunchConfigDialogProps) => {
   const [open, setOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    funnel.launch_start_date ? new Date(funnel.launch_start_date) : undefined
+    funnel.launch_start_date ? parseISO(funnel.launch_start_date) : undefined
   );
   const [endDate, setEndDate] = useState<Date | undefined>(
-    funnel.launch_end_date ? new Date(funnel.launch_end_date) : undefined
+    funnel.launch_end_date ? parseISO(funnel.launch_end_date) : undefined
   );
   const [hasFixedDates, setHasFixedDates] = useState(funnel.has_fixed_dates ?? true);
   const [launchTag, setLaunchTag] = useState(funnel.launch_tag || '');

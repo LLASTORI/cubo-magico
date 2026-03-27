@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ArrowLeft, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -69,8 +69,11 @@ export default function LaunchEditionAnalysis() {
 
   // Datas da edição (usadas por múltiplos hooks abaixo)
   const editionEndDate = editionData?.end_date || editionData?.event_date || editionData?.start_date;
-  const startDate = editionData?.start_date ? new Date(editionData.start_date) : new Date();
-  const endDate = editionEndDate ? new Date(editionEndDate) : new Date();
+  // fase1End = event_date (se existe) senão end_date — mesmo range do KPI "Ingressos"
+  const fase1End = editionData?.event_date || editionEndDate;
+  const startDate = editionData?.start_date ? parseISO(editionData.start_date) : new Date();
+  const endDate = editionEndDate ? parseISO(editionEndDate) : new Date();
+  const fase1EndDate = fase1End ? parseISO(fase1End) : endDate;
 
   // Sales data completo para blocos reutilizáveis
   const { data: editionSalesData = [] } = useQuery({
@@ -82,7 +85,7 @@ export default function LaunchEditionAnalysis() {
         .select('order_id, customer_paid, producer_net, main_offer_code, all_offer_codes, buyer_email, economic_day, payment_method, meta_campaign_id, meta_adset_id, meta_ad_id, utm_source, utm_medium, utm_campaign, utm_content, utm_adset, utm_placement, checkout_origin, main_revenue, status')
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId!)
-        .in('status', ['approved', 'completed', 'partial_refund'])
+        .not('main_offer_code', 'is', null)
         .gte('economic_day', editionData!.start_date!)
         .lte('economic_day', editionEndDate!);
       if (error) throw error;
@@ -187,7 +190,7 @@ export default function LaunchEditionAnalysis() {
 
   const status = STATUS_MAP[editionData.status as keyof typeof STATUS_MAP] ?? STATUS_MAP.planned;
   const fmtDate = (d: string | null) =>
-    d ? format(new Date(d), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+    d ? format(parseISO(d), 'dd/MM/yyyy', { locale: ptBR }) : '—';
 
   return (
     <div className="min-h-screen bg-background">
@@ -282,8 +285,7 @@ export default function LaunchEditionAnalysis() {
               <LaunchProductsSalesBreakdown
                 funnelId={funnelId}
                 projectId={projectId}
-                startDate={startDate}
-                endDate={endDate}
+                salesData={editionSalesData}
               />
             </Card>
           )}

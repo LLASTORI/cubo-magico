@@ -6,13 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Package, Tag, Layers } from "lucide-react";
-import { format } from "date-fns";
+
+interface SaleRecord {
+  offer_code?: string | null;
+  gross_amount: number;
+  all_offer_codes?: string[] | null;
+}
 
 interface LaunchProductsSalesBreakdownProps {
   projectId: string;
   funnelId: string;
-  startDate: Date;
-  endDate: Date;
+  salesData: SaleRecord[];
 }
 
 const formatCurrency = (value: number) => {
@@ -25,8 +29,7 @@ const formatCurrency = (value: number) => {
 export const LaunchProductsSalesBreakdown = ({
   projectId,
   funnelId,
-  startDate,
-  endDate,
+  salesData,
 }: LaunchProductsSalesBreakdownProps) => {
   // Fetch launch products with offer mappings
   const { data: launchProducts = [] } = useQuery({
@@ -48,46 +51,11 @@ export const LaunchProductsSalesBreakdown = ({
         `)
         .eq('funnel_id', funnelId)
         .eq('project_id', projectId);
-      
+
       if (error) throw error;
       return data || [];
     },
     enabled: !!funnelId && !!projectId,
-  });
-
-  // Fetch sales data via funnel_orders_view (fonte canônica)
-  const startStr = format(startDate, 'yyyy-MM-dd');
-  const endStr = format(endDate, 'yyyy-MM-dd');
-
-  const { data: salesData = [] } = useQuery({
-    queryKey: ['edition-products-sales', projectId, funnelId, startStr, endStr],
-    queryFn: async () => {
-      if (!projectId || launchProducts.length === 0) return [];
-
-      const offerCodes = launchProducts
-        .map(lp => lp.offer_mappings?.codigo_oferta)
-        .filter(Boolean);
-
-      if (offerCodes.length === 0) return [];
-
-      const { data, error } = await supabase
-        .from('funnel_orders_view')
-        .select('main_offer_code, economic_day, customer_paid')
-        .eq('project_id', projectId)
-        .eq('funnel_id', funnelId)
-        .in('main_offer_code', offerCodes)
-        .gte('economic_day', startStr)
-        .lte('economic_day', endStr)
-        .in('status', ['approved', 'completed', 'partial_refund']);
-
-      if (error) throw error;
-      return (data || []).map(r => ({
-        offer_code: r.main_offer_code,
-        purchase_date: r.economic_day,
-        gross_amount: Number(r.customer_paid) || 0,
-      }));
-    },
-    enabled: !!projectId && launchProducts.length > 0,
   });
 
   // Group products by lot and product type
@@ -124,9 +92,16 @@ export const LaunchProductsSalesBreakdown = ({
       if (!offerMapping) return;
 
       const offerCode = offerMapping.codigo_oferta;
-      const productSales = salesData.filter(s => s.offer_code === offerCode);
-      const revenue = productSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0);
+      const isMainProduct = offerMapping.tipo_posicao === 'FRONT' || offerMapping.tipo_posicao === 'FE';
+      // FRONT: match por main_offer_code; OB/US/DS: match por all_offer_codes
+      const productSales = isMainProduct
+        ? salesData.filter(s => s.offer_code === offerCode)
+        : salesData.filter(s => s.all_offer_codes?.includes(offerCode));
       const salesCount = productSales.length;
+      // Receita: FRONT usa gross_amount (customer_paid); bumps usam preço unitário × count
+      const revenue = isMainProduct
+        ? productSales.reduce((sum, s) => sum + (s.gross_amount || 0), 0)
+        : salesCount * (offerMapping.valor || 0);
 
       if (!lotGroups[lotName]) {
         lotGroups[lotName] = {

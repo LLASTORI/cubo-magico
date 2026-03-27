@@ -5,24 +5,61 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-26 (sessão 38) — fixes: data desatualizada + ingressos inconsistentes
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37–38 ✅ | Lovable removido ✅
+- **Data:** 2026-03-27 (sessão 39 cont.) — 3 bugs: timezone, order bumps, dashboard totals
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37–39 ✅ | Lovable removido ✅
 
 ---
 
-### [2026-03-26] Sessão 38 — Data desatualizada + ingressos inconsistentes ✅
+### [2026-03-27] Sessão 39 cont. — 3 bugs: timezone, bumps, dashboard ✅
 
-**Bug 1 — Data de início desatualizada após edição:**
+**Bug 1 — Datas exibidas 1 dia atrás (23 vs 24):**
+- Root cause: `new Date("2026-03-24")` = UTC midnight → BRT: 23/03 às 21h → `format()` mostra 23
+- Fix: substituir `new Date(dateStr)` por `parseISO(dateStr)` em 19 instâncias / 5 arquivos:
+  - `LaunchEditionAnalysis.tsx` (4 instâncias)
+  - `useLaunchEditionData.ts` (3 instâncias)
+  - `LaunchPhaseEditor.tsx` (4 instâncias)
+  - `SortablePhaseItem.tsx` (7 instâncias)
+  - `LaunchConfigDialog.tsx` (2 instâncias)
+
+**Bug 2 — Order bumps = 0 vendas no Detalhamento:**
+- Root cause: matching só por `offer_code` (= `main_offer_code`) — bumps NUNCA aparecem como `main_offer_code`
+- Dados: 29 pedidos, muitos com 2-4 items (bumps em `all_offer_codes`)
+- Fix: `LaunchProductsSalesBreakdown` agora matcha FRONT via `offer_code`, OB/US/DS via `all_offer_codes.includes()`
+- Receita bump: `count × offer_mapping.valor` (preço unitário, não `customer_paid` que é total do pedido)
+
+**Bug 3 — Dashboard mostrando 30 (deveria ser 193+29=222):**
+- Root cause: `pagoFunnelDateRanges` em `useLaunchData.ts` tinha `if (!e.end_date) continue` — Mar_26 tem `end_date=null` → edição PULADA
+- Fix: usar `e.end_date || e.event_date` como fallback (Mar_26 tem `event_date=2026-03-23`)
+
+**Bug 4 (anterior) — Fonte única de dados:**
+- `LaunchProductsSalesBreakdown`: removida query interna, recebe `salesData` como prop
+- `editionSalesData`: adicionado `.not('main_offer_code', 'is', null)`
+
+**Build:** zero erros ✅
+
+---
+
+### [2026-03-26] Sessão 39 — Fix ingressos inconsistentes ⚠️ Parcial
+
+**Contexto:** Bug 2 da sessão 38 persistia — KPI=29, Detalhamento=62, Pagamento=30.
+- Status filter removido (alinhamento com KPI)
+- Date range alinhado (fase1End)
+- Mas persistiram: timezone, bumps=0, dashboard=30
+- Corrigidos na continuação da sessão 39 (acima)
+
+---
+
+### [2026-03-26] Sessão 38 — Data desatualizada + ingressos inconsistentes ⚠️ Parcial
+
+**Bug 1 — Data de início desatualizada após edição:** ✅
 - Root cause 1: `updateEdition` invalidava `['launch-editions']` (lista) mas NÃO `['launch-edition', id]` (query individual usada pela página de análise)
 - Root cause 2: queryKeys de `editionSalesData`, `editionMetaInsights`, `edition-kpis`, `edition-passing` usavam apenas `edition.id`, não as datas. Se datas mudaram com mesmo ID, cache stale.
 - Fix: invalidação de `['launch-edition', data.id]` no `updateEdition` + datas adicionadas a todas as queryKeys dependentes
 
-**Bug 2 — Três números diferentes para ingressos (28 vs 50 vs 24):**
-- KPI (28): `useLaunchEditionData` → `funnel_orders_view`, `main_offer_code IS NOT NULL`, período `start → event_date` — correto
-- Detalhamento (50): `LaunchProductsSalesBreakdown` → usava `finance_tracking_view` (legado!) com `purchase_date` + `hotmart_status` — fonte diferente
-  - Fix: migrado para `funnel_orders_view` com `economic_day` + `status IN (approved, completed, partial_refund)` + filtro por `funnel_id`
-- Formas de Pagamento (24): `PaymentMethodAnalysis` filtrava por `funnelOfferCodes`, excluindo vendas com `offer_code = null`
-  - Fix: `funnelOfferCodes` tornado opcional; quando ausente, usa todos os sales (já escopados por funnel_id + datas)
+**Bug 2 — Três números diferentes para ingressos (28 vs 50 vs 24):** ⚠️ Parcial
+- Migração de `finance_tracking_view` → `funnel_orders_view` corrigiu fonte legada (50→24)
+- `funnelOfferCodes` tornado opcional
+- **Persistiu:** status filter + date range desalinhados → corrigido na sessão 39
 
 **Build:** zero erros ✅
 

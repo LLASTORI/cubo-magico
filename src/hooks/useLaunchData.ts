@@ -123,13 +123,14 @@ export const useLaunchData = ({ projectId, startDate, endDate }: UseLaunchDataPr
   const pagoFunnelDateRanges = useMemo(() => {
     const ranges: Record<string, { start: string; end: string }> = {};
     for (const e of pagoEditions) {
-      if (!e.start_date || !e.end_date) continue;
+      const edEnd = e.end_date || e.event_date;
+      if (!e.start_date || !edEnd) continue;
       const existing = ranges[e.funnel_id];
       if (!existing) {
-        ranges[e.funnel_id] = { start: e.start_date, end: e.end_date };
+        ranges[e.funnel_id] = { start: e.start_date, end: edEnd };
       } else {
         if (e.start_date < existing.start) existing.start = e.start_date;
-        if (e.end_date > existing.end) existing.end = e.end_date;
+        if (edEnd > existing.end) existing.end = edEnd;
       }
     }
     return ranges;

@@ -239,10 +239,10 @@ export function useFunnelScore(
     const worstScore = allScores.length > 0
       ? Math.min(...allScores) : 100;
 
-    if (worstScore < 40) {
-      // Penalidade: reduz até 20 pontos proporcionalmente
+    if (worstScore < 50) {
+      // Penalidade: reduz até 25 pontos proporcionalmente
       const penalty = Math.round(
-        ((40 - worstScore) / 40) * 20,
+        ((50 - worstScore) / 50) * 25,
       );
       rawScore = Math.max(0, rawScore - penalty);
     }

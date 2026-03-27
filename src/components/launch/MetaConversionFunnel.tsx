@@ -75,10 +75,10 @@ export function MetaConversionFunnel({ data }: Props) {
   const txChkInfo = rateStatus(data.txCheckoutCompra, [50, 35, 20]);
 
   // TX end-to-end: Página → Compra
-  // Benchmark: ≥10% excelente, ≥7% bom, ≥3% pode melhorar, <3% precisa de ajustes
+  // Benchmark: ≥10% excelente, ≥8% bom, ≥7% pode melhorar, <7% ruim
   const txPagCompra = data.landingPageViews > 0
     ? (data.purchases / data.landingPageViews) * 100 : 0;
-  const txPagCompraInfo = rateStatus(txPagCompra, [10, 7, 3]);
+  const txPagCompraInfo = rateStatus(txPagCompra, [10, 8, 7]);
 
   const steps = [
     {

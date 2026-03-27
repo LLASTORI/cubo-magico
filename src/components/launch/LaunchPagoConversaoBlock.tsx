@@ -296,22 +296,22 @@ export function LaunchPagoConversaoBlock({
       )}
 
       {/* UTM tabs */}
-      <Tabs defaultValue="campanhas" className="w-full">
+      <Tabs defaultValue="fontes" className="w-full">
         <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="fontes">Fontes</TabsTrigger>
           <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
           <TabsTrigger value="conjuntos">Conjuntos</TabsTrigger>
-          <TabsTrigger value="fontes">Fontes</TabsTrigger>
           <TabsTrigger value="conteudos">Criativos</TabsTrigger>
           <TabsTrigger value="midias">Mídias</TabsTrigger>
         </TabsList>
+        <TabsContent value="fontes">
+          {utm.isLoading ? <Skeleton className="h-32 w-full mt-2" /> : <UTMTable rows={utm.sources} label="Fonte" />}
+        </TabsContent>
         <TabsContent value="campanhas">
           {utm.isLoading ? <Skeleton className="h-32 w-full mt-2" /> : <UTMTable rows={utm.campaigns} label="Campanha" />}
         </TabsContent>
         <TabsContent value="conjuntos">
           {utm.isLoading ? <Skeleton className="h-32 w-full mt-2" /> : <UTMTable rows={utm.adsets} label="Conjunto" />}
-        </TabsContent>
-        <TabsContent value="fontes">
-          {utm.isLoading ? <Skeleton className="h-32 w-full mt-2" /> : <UTMTable rows={utm.sources} label="Fonte" />}
         </TabsContent>
         <TabsContent value="conteudos">
           {utm.isLoading ? <Skeleton className="h-32 w-full mt-2" /> : <UTMTable rows={utm.contents} label="Conteúdo" />}

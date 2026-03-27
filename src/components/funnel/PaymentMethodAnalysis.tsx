@@ -233,7 +233,15 @@ const PaymentMethodAnalysis = ({ salesData, funnelOfferCodes }: PaymentMethodAna
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <span>{metric.percentage.toFixed(1)}%</span>
-                          <Progress value={metric.percentage} className="w-16 h-2" />
+                          <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(metric.percentage, 100)}%`,
+                                backgroundColor: PAYMENT_COLORS[metric.method] || PAYMENT_COLORS['OTHER'],
+                              }}
+                            />
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>

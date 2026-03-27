@@ -118,15 +118,25 @@ export default function LaunchEditionAnalysis() {
     return Array.from(codes);
   }, [editionSalesData]);
 
-  // Meta insights filtrados pelo período da edição
+  // Campaign IDs presentes nas vendas da edição — escopa Meta insights
+  const editionCampaignIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of editionSalesData) {
+      if (s.meta_campaign_id) ids.add(s.meta_campaign_id);
+    }
+    return Array.from(ids);
+  }, [editionSalesData]);
+
+  // Meta insights filtrados pelo período da edição E pelas campanhas da edição
   const { data: editionMetaInsights = [] } = useQuery({
-    queryKey: ['edition-meta-insights', projectId, editionData?.id],
-    enabled: !!editionData?.start_date && !!projectId,
+    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionCampaignIds],
+    enabled: !!editionData?.start_date && !!projectId && editionCampaignIds.length > 0,
     queryFn: async () => {
       let q = supabase
         .from('meta_insights')
         .select('*')
-        .eq('project_id', projectId);
+        .eq('project_id', projectId)
+        .in('campaign_id', editionCampaignIds);
       if (editionData!.start_date) q = q.gte('date_start', editionData!.start_date);
       if (editionEndDate) q = q.lte('date_start', editionEndDate);
       const { data, error } = await q;

@@ -7,12 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { PieChart, Pie, Cell } from "recharts";
 
 interface MetaInsight {
   id: string;
@@ -56,6 +50,13 @@ interface MetaAd {
   thumbnail_url?: string | null;
 }
 
+interface SalesDataItem {
+  meta_campaign_id?: string | null;
+  meta_adset_id?: string | null;
+  meta_ad_id?: string | null;
+  gross_amount: number;
+}
+
 interface MetaHierarchyAnalysisProps {
   insights: MetaInsight[];
   campaigns: MetaCampaign[];
@@ -63,6 +64,7 @@ interface MetaHierarchyAnalysisProps {
   ads: MetaAd[];
   loading?: boolean;
   onRefresh?: () => void;
+  salesData?: SalesDataItem[];
 }
 
 interface HierarchyMetrics {
@@ -79,6 +81,10 @@ interface HierarchyMetrics {
   cpc: number;
   cpm: number;
   percentage: number;
+  sales: number;
+  revenue: number;
+  roasReal: number;
+  cpa: number;
 }
 
 interface DrilldownPath {
@@ -86,43 +92,27 @@ interface DrilldownPath {
   adset?: { id: string; name: string };
 }
 
-const COLORS = [
-  'hsl(var(--primary))',
-  'hsl(142, 76%, 36%)',
-  'hsl(262, 83%, 58%)',
-  'hsl(25, 95%, 53%)',
-  'hsl(197, 71%, 52%)',
-  'hsl(339, 82%, 51%)',
-  'hsl(48, 96%, 53%)',
-  'hsl(174, 72%, 40%)',
-];
-
-const chartConfig = {
-  spend: { label: "Gasto", color: "hsl(var(--primary))" },
-  clicks: { label: "Cliques", color: "hsl(142, 76%, 36%)" },
-};
-
 const HIERARCHY = ['campaign', 'adset', 'ad'] as const;
 type HierarchyLevel = typeof HIERARCHY[number];
 
-const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: any }> = {
+const LEVEL_CONFIG: Record<HierarchyLevel, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   campaign: { label: 'Campanha', icon: Megaphone },
   adset: { label: 'Conjunto', icon: Layers },
   ad: { label: 'Anúncio', icon: FileImage },
 };
 
-export const MetaHierarchyAnalysis = ({ 
-  insights, 
-  campaigns, 
+export const MetaHierarchyAnalysis = ({
+  insights,
+  campaigns,
   adsets,
   ads,
   loading,
-  onRefresh 
+  onRefresh,
+  salesData,
 }: MetaHierarchyAnalysisProps) => {
   const [drilldownPath, setDrilldownPath] = useState<DrilldownPath>({});
-  
-  // Debug log
-  console.log(`[MetaHierarchy] Received: ${campaigns.length} campaigns, ${adsets.length} adsets, ${ads.length} ads, ${insights.length} insights`);
+
+  const hasSalesData = !!salesData && salesData.length > 0;
 
   const currentLevel = useMemo(() => {
     if (!drilldownPath.campaign) return 0;
@@ -133,26 +123,133 @@ export const MetaHierarchyAnalysis = ({
   const currentField = HIERARCHY[currentLevel];
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
   };
 
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat('pt-BR').format(value);
   };
 
+  // Pre-compute sales aggregations by each level for O(1) lookups
+  const salesByCampaign = useMemo(() => {
+    if (!salesData) return new Map<string, { count: number; revenue: number }>();
+    const map = new Map<string, { count: number; revenue: number }>();
+    for (const sale of salesData) {
+      const key = sale.meta_campaign_id;
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.revenue += sale.gross_amount;
+      } else {
+        map.set(key, { count: 1, revenue: sale.gross_amount });
+      }
+    }
+    return map;
+  }, [salesData]);
+
+  const salesByAdset = useMemo(() => {
+    if (!salesData) return new Map<string, { count: number; revenue: number }>();
+    const map = new Map<string, { count: number; revenue: number }>();
+    for (const sale of salesData) {
+      const key = sale.meta_adset_id;
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.revenue += sale.gross_amount;
+      } else {
+        map.set(key, { count: 1, revenue: sale.gross_amount });
+      }
+    }
+    return map;
+  }, [salesData]);
+
+  const salesByAd = useMemo(() => {
+    if (!salesData) return new Map<string, { count: number; revenue: number }>();
+    const map = new Map<string, { count: number; revenue: number }>();
+    for (const sale of salesData) {
+      const key = sale.meta_ad_id;
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.revenue += sale.gross_amount;
+      } else {
+        map.set(key, { count: 1, revenue: sale.gross_amount });
+      }
+    }
+    return map;
+  }, [salesData]);
+
+  const getSalesForLevel = (
+    level: number,
+    id: string,
+  ): { sales: number; revenue: number } => {
+    let map: Map<string, { count: number; revenue: number }>;
+    if (level === 0) map = salesByCampaign;
+    else if (level === 1) map = salesByAdset;
+    else map = salesByAd;
+    const entry = map.get(id);
+    return entry
+      ? { sales: entry.count, revenue: entry.revenue }
+      : { sales: 0, revenue: 0 };
+  };
+
   // All insights are now at AD LEVEL ONLY
   // We aggregate UP to campaign and adset levels from ad-level data
-  
+
   // Get only ad-level insights (the only type we have now)
   const adLevelInsights = useMemo(() => {
     return insights.filter(i => i.ad_id !== null);
   }, [insights]);
 
+  // Helper to build HierarchyMetrics with sales data
+  const buildMetrics = (
+    id: string,
+    name: string,
+    status: string | null | undefined,
+    data: { spend: number; impressions: number; clicks: number; reach: number },
+    totalSpend: number,
+    level: number,
+    previewUrl?: string | null,
+    thumbnailUrl?: string | null,
+  ): HierarchyMetrics => {
+    const { sales, revenue } = getSalesForLevel(level, id);
+    return {
+      id,
+      name,
+      status,
+      previewUrl,
+      thumbnailUrl,
+      spend: data.spend,
+      impressions: data.impressions,
+      clicks: data.clicks,
+      reach: data.reach,
+      ctr: data.impressions > 0
+        ? (data.clicks / data.impressions) * 100
+        : 0,
+      cpc: data.clicks > 0 ? data.spend / data.clicks : 0,
+      cpm: data.impressions > 0
+        ? (data.spend / data.impressions) * 1000
+        : 0,
+      percentage: totalSpend > 0
+        ? (data.spend / totalSpend) * 100
+        : 0,
+      sales,
+      revenue,
+      roasReal: data.spend > 0 ? revenue / data.spend : 0,
+      cpa: sales > 0 ? data.spend / sales : 0,
+    };
+  };
+
   // Calculate metrics by campaign - AGGREGATE from ad-level insights
   const campaignMetrics = useMemo((): HierarchyMetrics[] => {
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
-    
-    // Aggregate all ad-level insights by campaign_id
+
     adLevelInsights.forEach(insight => {
       const campaignId = insight.campaign_id || 'unknown';
       if (!groups[campaignId]) {
@@ -168,35 +265,21 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const campaign = campaigns.find(c => c.campaign_id === id);
-      // Mostra ID como primário para consistência com a página de Análise de Funil
-      const displayName = campaign?.campaign_name 
+      const displayName = campaign?.campaign_name
         ? `${id.slice(-8)} - ${campaign.campaign_name}`
         : id;
-      return {
-        id,
-        name: displayName,
-        status: campaign?.status,
-        spend: data.spend,
-        impressions: data.impressions,
-        clicks: data.clicks,
-        reach: data.reach,
-        ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
-        cpc: data.clicks > 0 ? data.spend / data.clicks : 0,
-        cpm: data.impressions > 0 ? (data.spend / data.impressions) * 1000 : 0,
-        percentage: totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0,
-      };
+      return buildMetrics(id, displayName, campaign?.status, data, totalSpend, 0);
     }).sort((a, b) => b.spend - a.spend);
-  }, [adLevelInsights, campaigns]);
+  }, [adLevelInsights, campaigns, salesByCampaign]);
 
   // Calculate metrics by adset - AGGREGATE from ad-level insights
   const adsetMetrics = useMemo((): HierarchyMetrics[] => {
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
-    
-    // Aggregate all ad-level insights by adset_id
+
     adLevelInsights.forEach(insight => {
       const adsetId = insight.adset_id;
       if (!adsetId) return;
-      
+
       if (!groups[adsetId]) {
         groups[adsetId] = { spend: 0, impressions: 0, clicks: 0, reach: 0 };
       }
@@ -210,30 +293,17 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const adset = adsets.find(a => a.adset_id === id);
-      // Mostra ID como primário para consistência com a página de Análise de Funil
-      const displayName = adset?.adset_name 
+      const displayName = adset?.adset_name
         ? `${id.slice(-8)} - ${adset.adset_name}`
         : id;
-      return {
-        id,
-        name: displayName,
-        status: adset?.status,
-        spend: data.spend,
-        impressions: data.impressions,
-        clicks: data.clicks,
-        reach: data.reach,
-        ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
-        cpc: data.clicks > 0 ? data.spend / data.clicks : 0,
-        cpm: data.impressions > 0 ? (data.spend / data.impressions) * 1000 : 0,
-        percentage: totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0,
-      };
+      return buildMetrics(id, displayName, adset?.status, data, totalSpend, 1);
     }).sort((a, b) => b.spend - a.spend);
-  }, [adLevelInsights, adsets]);
+  }, [adLevelInsights, adsets, salesByAdset]);
 
   // Calculate metrics by ad - directly use ad-level insights
   const adMetrics = useMemo((): HierarchyMetrics[] => {
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
-    
+
     adLevelInsights.forEach(insight => {
       const adId = insight.ad_id!;
       if (!groups[adId]) {
@@ -249,44 +319,33 @@ export const MetaHierarchyAnalysis = ({
 
     return Object.entries(groups).map(([id, data]) => {
       const ad = ads.find(a => a.ad_id === id);
-      // Mostra ID como primário para consistência com a página de Análise de Funil
-      const displayName = ad?.ad_name 
+      const displayName = ad?.ad_name
         ? `${id.slice(-8)} - ${ad.ad_name}`
         : id;
-      return {
-        id,
-        name: displayName,
-        status: ad?.status,
-        previewUrl: ad?.preview_url,
-        thumbnailUrl: ad?.thumbnail_url,
-        spend: data.spend,
-        impressions: data.impressions,
-        clicks: data.clicks,
-        reach: data.reach,
-        ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
-        cpc: data.clicks > 0 ? data.spend / data.clicks : 0,
-        cpm: data.impressions > 0 ? (data.spend / data.impressions) * 1000 : 0,
-        percentage: totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0,
-      };
+      return buildMetrics(
+        id, displayName, ad?.status, data, totalSpend, 2,
+        ad?.preview_url, ad?.thumbnail_url,
+      );
     }).sort((a, b) => b.spend - a.spend);
-  }, [adLevelInsights, ads]);
+  }, [adLevelInsights, ads, salesByAd]);
 
   // Hierarchical drilldown analysis - ALL from ad-level insights
   const drilldownAnalysis = useMemo(() => {
-    // Start with ad-level insights only
     let filteredInsights = [...adLevelInsights];
 
-    // Apply drilldown filters
     if (drilldownPath.campaign) {
-      filteredInsights = filteredInsights.filter(i => i.campaign_id === drilldownPath.campaign?.id);
+      filteredInsights = filteredInsights.filter(
+        i => i.campaign_id === drilldownPath.campaign?.id,
+      );
     }
     if (drilldownPath.adset) {
-      filteredInsights = filteredInsights.filter(i => i.adset_id === drilldownPath.adset?.id);
+      filteredInsights = filteredInsights.filter(
+        i => i.adset_id === drilldownPath.adset?.id,
+      );
     }
 
-    // Group by current level (aggregate from ad-level data)
     const groups: Record<string, { spend: number; impressions: number; clicks: number; reach: number }> = {};
-    
+
     filteredInsights.forEach(insight => {
       let id: string | null = null;
       if (currentLevel === 0) {
@@ -320,22 +379,19 @@ export const MetaHierarchyAnalysis = ({
 
       if (currentLevel === 0) {
         const campaign = campaigns.find(c => c.campaign_id === id);
-        // Mostra ID como primário para consistência
-        name = campaign?.campaign_name 
+        name = campaign?.campaign_name
           ? `${id.slice(-8)} - ${campaign.campaign_name}`
           : id;
         status = campaign?.status || null;
       } else if (currentLevel === 1) {
         const adset = adsets.find(a => a.adset_id === id);
-        // Mostra ID como primário para consistência
-        name = adset?.adset_name 
+        name = adset?.adset_name
           ? `${id.slice(-8)} - ${adset.adset_name}`
           : id;
         status = adset?.status || null;
       } else {
         const ad = ads.find(a => a.ad_id === id);
-        // Mostra ID como primário para consistência
-        name = ad?.ad_name 
+        name = ad?.ad_name
           ? `${id.slice(-8)} - ${ad.ad_name}`
           : id;
         status = ad?.status || null;
@@ -343,33 +399,29 @@ export const MetaHierarchyAnalysis = ({
         thumbnailUrl = ad?.thumbnail_url || null;
       }
 
-      return {
-        id,
-        name,
-        status,
-        previewUrl,
-        thumbnailUrl,
-        spend: d.spend,
-        impressions: d.impressions,
-        clicks: d.clicks,
-        reach: d.reach,
-        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-        cpc: d.clicks > 0 ? d.spend / d.clicks : 0,
-        cpm: d.impressions > 0 ? (d.spend / d.impressions) * 1000 : 0,
-        percentage: totalSpend > 0 ? (d.spend / totalSpend) * 100 : 0,
-      };
+      return buildMetrics(
+        id, name, status, d, totalSpend, currentLevel,
+        previewUrl, thumbnailUrl,
+      );
     }).sort((a, b) => b.spend - a.spend);
 
     return { data, totalSpend, totalImpressions, totalClicks };
-  }, [adLevelInsights, campaigns, adsets, ads, drilldownPath, currentLevel]);
+  }, [
+    adLevelInsights, campaigns, adsets, ads,
+    drilldownPath, currentLevel,
+    salesByCampaign, salesByAdset, salesByAd,
+  ]);
 
   const handleDrilldown = (item: HierarchyMetrics) => {
-    if (currentLevel >= 2) return; // Max level reached
+    if (currentLevel >= 2) return;
 
     if (currentLevel === 0) {
       setDrilldownPath({ campaign: { id: item.id, name: item.name } });
     } else if (currentLevel === 1) {
-      setDrilldownPath(prev => ({ ...prev, adset: { id: item.id, name: item.name } }));
+      setDrilldownPath(prev => ({
+        ...prev,
+        adset: { id: item.id, name: item.name },
+      }));
     }
   };
 
@@ -385,13 +437,15 @@ export const MetaHierarchyAnalysis = ({
     if (!status) return null;
     const isActive = status === 'ACTIVE';
     return (
-      <Badge variant={isActive ? "default" : "secondary"} className="ml-2 text-[10px] px-1.5 py-0">
+      <Badge
+        variant={isActive ? "default" : "secondary"}
+        className="ml-2 text-[10px] px-1.5 py-0"
+      >
         {status}
       </Badge>
     );
   };
 
-  // State for copied ID feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopyId = (id: string, e: React.MouseEvent) => {
@@ -401,21 +455,28 @@ export const MetaHierarchyAnalysis = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleOpenAd = (adId: string, previewUrl?: string | null, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    // Use preview URL from Meta API if available, otherwise fallback to Ads Library
-    const url = previewUrl || `https://www.facebook.com/ads/library/?id=${adId}`;
-    window.open(url, '_blank');
+  const getRoasColor = (roas: number): string => {
+    if (roas >= 1) return 'text-green-600';
+    if (roas >= 0.5) return 'text-amber-600';
+    return 'text-red-600';
+  };
+
+  // Column count for empty state
+  const getColSpan = (showAdActions: boolean) => {
+    let cols = 6; // Nome, Gasto, Cliques, CTR, CPC, % Gasto
+    if (showAdActions) cols += 2; // Preview, ID do Anúncio
+    if (hasSalesData) cols += 3; // Vendas, ROAS Real, CPA
+    return cols;
   };
 
   // Table component
-  const MetricsTable = ({ 
-    data, 
+  const MetricsTable = ({
+    data,
     showDrilldown = false,
     showAdActions = false,
-    onRowClick 
-  }: { 
-    data: HierarchyMetrics[]; 
+    onRowClick,
+  }: {
+    data: HierarchyMetrics[];
     showDrilldown?: boolean;
     showAdActions?: boolean;
     onRowClick?: (item: HierarchyMetrics) => void;
@@ -423,29 +484,46 @@ export const MetaHierarchyAnalysis = ({
     <Table>
       <TableHeader>
         <TableRow>
-          {showAdActions && <TableHead className="w-[60px]">Preview</TableHead>}
+          {showAdActions && (
+            <TableHead className="w-[60px]">Preview</TableHead>
+          )}
           <TableHead className="w-[240px]">Nome</TableHead>
-          {showAdActions && <TableHead className="w-[140px]">ID do Anúncio</TableHead>}
+          {showAdActions && (
+            <TableHead className="w-[140px]">ID do Anúncio</TableHead>
+          )}
           <TableHead className="text-right">Gasto</TableHead>
-          <TableHead className="text-right">Impressões</TableHead>
+          {hasSalesData && (
+            <TableHead className="text-right">Vendas</TableHead>
+          )}
+          {hasSalesData && (
+            <TableHead className="text-right">ROAS Real</TableHead>
+          )}
+          {hasSalesData && (
+            <TableHead className="text-right">CPA</TableHead>
+          )}
           <TableHead className="text-right">Cliques</TableHead>
           <TableHead className="text-right">CTR</TableHead>
           <TableHead className="text-right">CPC</TableHead>
-          <TableHead className="text-right">CPM</TableHead>
           <TableHead className="w-[100px]">% Gasto</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {data.slice(0, 20).map((item, index) => (
-          <TableRow 
+        {data.slice(0, 20).map((item) => (
+          <TableRow
             key={item.id}
-            className={cn(showDrilldown && currentLevel < 2 && "cursor-pointer hover:bg-muted/50")}
+            className={cn(
+              showDrilldown && currentLevel < 2
+                && "cursor-pointer hover:bg-muted/50",
+            )}
             onClick={() => showDrilldown && onRowClick?.(item)}
           >
             {showAdActions && (
               <TableCell className="p-1">
                 <a
-                  href={item.previewUrl || `https://www.facebook.com/ads/library/?id=${item.id}`}
+                  href={
+                    item.previewUrl
+                    || `https://www.facebook.com/ads/library/?id=${item.id}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
@@ -460,11 +538,10 @@ export const MetaHierarchyAnalysis = ({
             )}
             <TableCell className="font-medium">
               <div className="flex items-center gap-2">
-                <div 
-                  className="w-3 h-3 rounded-full flex-shrink-0" 
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                />
-                <span className="truncate max-w-[180px]" title={item.name}>
+                <span
+                  className="truncate max-w-[200px]"
+                  title={item.name}
+                >
                   {item.name}
                 </span>
                 {getStatusBadge(item.status)}
@@ -495,12 +572,42 @@ export const MetaHierarchyAnalysis = ({
                 </div>
               </TableCell>
             )}
-            <TableCell className="text-right font-medium">{formatCurrency(item.spend)}</TableCell>
-            <TableCell className="text-right">{formatNumber(item.impressions)}</TableCell>
-            <TableCell className="text-right">{formatNumber(item.clicks)}</TableCell>
-            <TableCell className="text-right">{item.ctr.toFixed(2)}%</TableCell>
-            <TableCell className="text-right">{formatCurrency(item.cpc)}</TableCell>
-            <TableCell className="text-right">{formatCurrency(item.cpm)}</TableCell>
+            <TableCell className="text-right font-medium">
+              {formatCurrency(item.spend)}
+            </TableCell>
+            {hasSalesData && (
+              <TableCell className="text-right font-bold">
+                {item.sales > 0 ? formatNumber(item.sales) : '—'}
+              </TableCell>
+            )}
+            {hasSalesData && (
+              <TableCell className={cn(
+                "text-right font-semibold",
+                item.sales > 0
+                  ? getRoasColor(item.roasReal)
+                  : 'text-muted-foreground',
+              )}>
+                {item.sales > 0
+                  ? `${item.roasReal.toFixed(2)}x`
+                  : '—'}
+              </TableCell>
+            )}
+            {hasSalesData && (
+              <TableCell className="text-right">
+                {item.sales > 0
+                  ? formatCurrency(item.cpa)
+                  : '—'}
+              </TableCell>
+            )}
+            <TableCell className="text-right">
+              {formatNumber(item.clicks)}
+            </TableCell>
+            <TableCell className="text-right">
+              {item.ctr.toFixed(2)}%
+            </TableCell>
+            <TableCell className="text-right">
+              {formatCurrency(item.cpc)}
+            </TableCell>
             <TableCell>
               <div className="flex items-center gap-2">
                 <Progress value={item.percentage} className="h-2" />
@@ -513,7 +620,10 @@ export const MetaHierarchyAnalysis = ({
         ))}
         {data.length === 0 && (
           <TableRow>
-            <TableCell colSpan={showAdActions ? 10 : 8} className="text-center text-muted-foreground py-8">
+            <TableCell
+              colSpan={getColSpan(showAdActions)}
+              className="text-center text-muted-foreground py-8"
+            >
               Nenhum dado disponível
             </TableCell>
           </TableRow>
@@ -528,8 +638,10 @@ export const MetaHierarchyAnalysis = ({
     return (
       <Card className="p-6">
         <div className="flex flex-col items-center justify-center py-16 gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-sm text-muted-foreground">Carregando dados...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          <p className="text-sm text-muted-foreground">
+            Carregando dados...
+          </p>
         </div>
       </Card>
     );
@@ -539,12 +651,24 @@ export const MetaHierarchyAnalysis = ({
     <Card className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold">Análise Hierárquica</h3>
-          <p className="text-sm text-muted-foreground">Performance por Campanha, Conjunto e Anúncio</p>
+          <h3 className="text-lg font-semibold">
+            Análise Hierárquica
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Performance por Campanha, Conjunto e Anúncio
+          </p>
         </div>
         {onRefresh && (
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-            <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={cn(
+              "w-4 h-4 mr-2",
+              loading && "animate-spin",
+            )} />
             Atualizar
           </Button>
         )}
@@ -574,41 +698,51 @@ export const MetaHierarchyAnalysis = ({
         <TabsContent value="hierarchy" className="space-y-6">
           {/* Breadcrumb Navigation */}
           <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg flex-wrap">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => handleBreadcrumbClick(-1)}
-              className={cn("gap-1", currentLevel === 0 && "bg-primary/10 text-primary")}
+              className={cn(
+                "gap-1",
+                currentLevel === 0 && "bg-primary/10 text-primary",
+              )}
             >
               <Home className="w-4 h-4" />
               Todos
             </Button>
-            
+
             {drilldownPath.campaign && (
               <>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleBreadcrumbClick(0)}
-                  className={cn("gap-1", currentLevel === 1 && "bg-primary/10 text-primary")}
+                  className={cn(
+                    "gap-1",
+                    currentLevel === 1 && "bg-primary/10 text-primary",
+                  )}
                 >
                   <Megaphone className="w-3 h-3" />
-                  <span className="max-w-[150px] truncate">{drilldownPath.campaign.name}</span>
+                  <span className="max-w-[150px] truncate">
+                    {drilldownPath.campaign.name}
+                  </span>
                 </Button>
               </>
             )}
-            
+
             {drilldownPath.adset && (
               <>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   className="gap-1 bg-primary/10 text-primary"
                 >
                   <Layers className="w-3 h-3" />
-                  <span className="max-w-[150px] truncate">{drilldownPath.adset.name}</span>
+                  <span className="max-w-[150px] truncate">
+                    {drilldownPath.adset.name}
+                  </span>
                 </Button>
               </>
             )}
@@ -617,16 +751,28 @@ export const MetaHierarchyAnalysis = ({
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-4 bg-muted/20">
-              <p className="text-sm text-muted-foreground">Gasto Total</p>
-              <p className="text-2xl font-bold">{formatCurrency(drilldownAnalysis.totalSpend)}</p>
+              <p className="text-sm text-muted-foreground">
+                Gasto Total
+              </p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(drilldownAnalysis.totalSpend)}
+              </p>
             </Card>
             <Card className="p-4 bg-muted/20">
-              <p className="text-sm text-muted-foreground">Impressões</p>
-              <p className="text-2xl font-bold">{formatNumber(drilldownAnalysis.totalImpressions)}</p>
+              <p className="text-sm text-muted-foreground">
+                Impressões
+              </p>
+              <p className="text-2xl font-bold">
+                {formatNumber(drilldownAnalysis.totalImpressions)}
+              </p>
             </Card>
             <Card className="p-4 bg-muted/20">
-              <p className="text-sm text-muted-foreground">Cliques</p>
-              <p className="text-2xl font-bold">{formatNumber(drilldownAnalysis.totalClicks)}</p>
+              <p className="text-sm text-muted-foreground">
+                Cliques
+              </p>
+              <p className="text-2xl font-bold">
+                {formatNumber(drilldownAnalysis.totalClicks)}
+              </p>
             </Card>
           </div>
 
@@ -635,176 +781,53 @@ export const MetaHierarchyAnalysis = ({
             <CurrentIcon className="w-5 h-5 text-primary" />
             <h4 className="font-semibold">
               {LEVEL_CONFIG[currentField].label}s
-              {currentLevel < 2 && <span className="text-muted-foreground font-normal ml-2">(clique para detalhar)</span>}
+              {currentLevel < 2 && (
+                <span className="text-muted-foreground font-normal ml-2">
+                  (clique para detalhar)
+                </span>
+              )}
             </h4>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <MetricsTable 
-                data={drilldownAnalysis.data} 
-                showDrilldown={true}
-                showAdActions={currentLevel === 2}
-                onRowClick={handleDrilldown}
-              />
-            </div>
-            
-            <div className="flex items-center justify-center">
-              {drilldownAnalysis.data.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={drilldownAnalysis.data.slice(0, 8)}
-                      dataKey="spend"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={100}
-                      paddingAngle={2}
-                    >
-                      {drilldownAnalysis.data.slice(0, 8).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip 
-                      content={<ChartTooltipContent 
-                        formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
-                      />} 
-                    />
-                  </PieChart>
-                </ChartContainer>
-              ) : (
-                <p className="text-muted-foreground">Sem dados</p>
-              )}
-            </div>
-          </div>
+          <MetricsTable
+            data={drilldownAnalysis.data}
+            showDrilldown={true}
+            showAdActions={currentLevel === 2}
+            onRowClick={handleDrilldown}
+          />
         </TabsContent>
 
         {/* Campaigns Tab */}
         <TabsContent value="campaigns" className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
             <Megaphone className="w-5 h-5 text-primary" />
-            <h4 className="font-semibold">Todas as Campanhas ({campaignMetrics.length})</h4>
+            <h4 className="font-semibold">
+              Todas as Campanhas ({campaignMetrics.length})
+            </h4>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <MetricsTable data={campaignMetrics} />
-            </div>
-            <div className="flex items-center justify-center">
-              {campaignMetrics.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={campaignMetrics.slice(0, 8)}
-                      dataKey="spend"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={100}
-                      paddingAngle={2}
-                    >
-                      {campaignMetrics.slice(0, 8).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip 
-                      content={<ChartTooltipContent 
-                        formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
-                      />} 
-                    />
-                  </PieChart>
-                </ChartContainer>
-              ) : (
-                <p className="text-muted-foreground">Sem dados</p>
-              )}
-            </div>
-          </div>
+          <MetricsTable data={campaignMetrics} />
         </TabsContent>
 
         {/* Adsets Tab */}
         <TabsContent value="adsets" className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-5 h-5 text-primary" />
-            <h4 className="font-semibold">Todos os Conjuntos ({adsetMetrics.length})</h4>
+            <h4 className="font-semibold">
+              Todos os Conjuntos ({adsetMetrics.length})
+            </h4>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <MetricsTable data={adsetMetrics} />
-            </div>
-            <div className="flex items-center justify-center">
-              {adsetMetrics.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={adsetMetrics.slice(0, 8)}
-                      dataKey="spend"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={100}
-                      paddingAngle={2}
-                    >
-                      {adsetMetrics.slice(0, 8).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip 
-                      content={<ChartTooltipContent 
-                        formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
-                      />} 
-                    />
-                  </PieChart>
-                </ChartContainer>
-              ) : (
-                <p className="text-muted-foreground">Sem dados</p>
-              )}
-            </div>
-          </div>
+          <MetricsTable data={adsetMetrics} />
         </TabsContent>
 
         {/* Ads Tab */}
         <TabsContent value="ads" className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
             <FileImage className="w-5 h-5 text-primary" />
-            <h4 className="font-semibold">Todos os Anúncios ({adMetrics.length})</h4>
+            <h4 className="font-semibold">
+              Todos os Anúncios ({adMetrics.length})
+            </h4>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <MetricsTable data={adMetrics} showAdActions />
-            </div>
-            <div className="flex items-center justify-center">
-              {adMetrics.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={adMetrics.slice(0, 8)}
-                      dataKey="spend"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={100}
-                      paddingAngle={2}
-                    >
-                      {adMetrics.slice(0, 8).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip 
-                      content={<ChartTooltipContent 
-                        formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
-                      />} 
-                    />
-                  </PieChart>
-                </ChartContainer>
-              ) : (
-                <p className="text-muted-foreground">Sem dados</p>
-              )}
-            </div>
-          </div>
+          <MetricsTable data={adMetrics} showAdActions />
         </TabsContent>
       </Tabs>
     </Card>

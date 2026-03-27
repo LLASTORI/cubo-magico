@@ -4,15 +4,28 @@
 
 ---
 
-### [2026-03-27] Sessão 40 — Sistema de Lotes completo + Análise por Lote — ✅ OK
+### [2026-03-27] Sessão 40 — 12 PRs: Lotes + Análise + Debriefing — ✅ OK
 
-**Datetime migration:** Edições e fases migradas de `date` para `timestamptz`. 18 arquivos, helpers compartilhados em `src/lib/datetimeHelpers.ts`. Inputs usam `datetime-local` (com hora). PR #60.
+**PRs #60-#71 (12 PRs mergeadas):**
 
-**Lotes na análise:** Hook `useLaunchLotsAnalysis` agrupa vendas e spend por lote (date range + offers vinculadas). TX de conversão OBs = count_ob / count_front × 100. PR #61.
+1. #60 — Datetime nas edições/fases (timestamptz)
+2. #61 — Hook `useLaunchLotsAnalysis` + breakdown por lote com TX OBs
+3. #62 — Seletor de lote (tabs) + TemporalChart
+4. #63 — PassingDiarioChart reativo ao lote
+5. #64 — Docs atualizados
+6. #65 — Tabela diária + Performance campanhas + 8 KPIs expandidos
+7. #66 — ROAS real por criativo (Meta × Hotmart), remove pie charts
+8. #67 — `instagram_permalink` nos criativos (edge function + migration)
+9. #68 — Conversão Ingresso → Produto Principal (cross-phase, aguarda dados)
+10. #69 — Tabs reordenadas (Fontes primeiro)
+11. #70 — Remove card wrapper duplo em PaymentMethodAnalysis
+12. #71 — Normalização payment_method para cores corretas
 
-**Seletor de lote:** Tabs "Todos / Lote 1 / Lote 2" filtram UTM, Meta Ads, Pagamentos, Passing Diário. TemporalChart (evolução diária) importado. PRs #62, #63.
+**Regra documentada:** Spend = Meta Ads (confiável). Vendas = Hotmart (confiável). Cruzamento via UTM. Nunca usar valores de vendas do Meta Ads.
 
-**Observação:** Métricas de "meta total", "%atingido", "média/dia" no Passing são baseadas em cálculo simples (total ÷ dias), não em alvo declarado. Planejamento com metas virá em feature futura.
+**Deploy pendente:** `supabase functions deploy meta-api` para ativar instagram_permalink.
+
+**Próxima sessão (41):** Redesign premium da tela com skills `cubo-design` + `frontend-design`.
 
 ---
 

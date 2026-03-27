@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 26/03/2026 (sessão 37 cont. — delete funnel + cache + rota)
+> Última atualização: 26/03/2026 (sessão 38 — data desatualizada + ingressos inconsistentes)
 
 ---
 
@@ -94,6 +94,16 @@
 - [x] Fallback frontend atualizado com mesma ordem de deleção ✅
 - [x] Cache invalidation: `queryClient.invalidateQueries(['funnels-lancamento'])` após exclusão ✅
 - [x] Rota "Voltar" na LaunchEditionAnalysis: `/lancamentos` → `/launch-dashboard` ✅
+- [x] Build: zero erros ✅
+
+---
+
+## ✅ Sessão 38 — Data desatualizada + ingressos inconsistentes
+
+- [x] Cache invalidation: `updateEdition` agora invalida `['launch-edition', id]` ✅
+- [x] QueryKeys com datas: `edition-sales`, `edition-meta-insights`, `edition-kpis`, `edition-passing` ✅
+- [x] `LaunchProductsSalesBreakdown`: migrado de `finance_tracking_view` → `funnel_orders_view` ✅
+- [x] `PaymentMethodAnalysis`: `funnelOfferCodes` opcional — sem filtro extra na edição ✅
 - [x] Build: zero erros ✅
 
 ---

@@ -7,7 +7,6 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Package, Tag, Layers } from "lucide-react";
 import { format } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
 
 interface LaunchProductsSalesBreakdownProps {
   projectId: string;
@@ -56,17 +55,14 @@ export const LaunchProductsSalesBreakdown = ({
     enabled: !!funnelId && !!projectId,
   });
 
-  // Fetch sales data
+  // Fetch sales data via funnel_orders_view (fonte canônica)
+  const startStr = format(startDate, 'yyyy-MM-dd');
+  const endStr = format(endDate, 'yyyy-MM-dd');
+
   const { data: salesData = [] } = useQuery({
-    queryKey: ['hotmart-sales-products', projectId, funnelId, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
+    queryKey: ['edition-products-sales', projectId, funnelId, startStr, endStr],
     queryFn: async () => {
       if (!projectId || launchProducts.length === 0) return [];
-
-      const brazilTz = 'America/Sao_Paulo';
-      const startInBrazil = toZonedTime(startDate, brazilTz);
-      startInBrazil.setHours(0, 0, 0, 0);
-      const endInBrazil = toZonedTime(endDate, brazilTz);
-      endInBrazil.setHours(23, 59, 59, 999);
 
       const offerCodes = launchProducts
         .map(lp => lp.offer_mappings?.codigo_oferta)
@@ -75,16 +71,21 @@ export const LaunchProductsSalesBreakdown = ({
       if (offerCodes.length === 0) return [];
 
       const { data, error } = await supabase
-        .from('finance_tracking_view')
-        .select('offer_code, purchase_date, gross_amount, hotmart_status')
+        .from('funnel_orders_view')
+        .select('main_offer_code, economic_day, customer_paid')
         .eq('project_id', projectId)
-        .in('offer_code', offerCodes)
-        .gte('purchase_date', startInBrazil.toISOString())
-        .lte('purchase_date', endInBrazil.toISOString())
-        .in('hotmart_status', ['APPROVED', 'COMPLETE']);
+        .eq('funnel_id', funnelId)
+        .in('main_offer_code', offerCodes)
+        .gte('economic_day', startStr)
+        .lte('economic_day', endStr)
+        .in('status', ['approved', 'completed', 'partial_refund']);
 
       if (error) throw error;
-      return data || [];
+      return (data || []).map(r => ({
+        offer_code: r.main_offer_code,
+        purchase_date: r.economic_day,
+        gross_amount: Number(r.customer_paid) || 0,
+      }));
     },
     enabled: !!projectId && launchProducts.length > 0,
   });

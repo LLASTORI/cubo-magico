@@ -24,7 +24,7 @@ export function useLaunchEditionData(
   const enabled = !!edition && !!projectId && !!funnelId;
 
   const { data: kpis, isLoading: kpisLoading } = useQuery({
-    queryKey: ['edition-kpis', projectId, funnelId, edition?.id],
+    queryKey: ['edition-kpis', projectId, funnelId, edition?.id, edition?.start_date, edition?.end_date],
     enabled,
     queryFn: async (): Promise<EditionKPIs> => {
       const startDate = edition!.start_date;
@@ -83,7 +83,7 @@ export function useLaunchEditionData(
 
   // Passing diário — agrupa por economic_day na fase 1 (start_date → event_date)
   const { data: passingDiario, isLoading: passingLoading } = useQuery({
-    queryKey: ['edition-passing', projectId, funnelId, edition?.id],
+    queryKey: ['edition-passing', projectId, funnelId, edition?.id, edition?.start_date, edition?.end_date],
     enabled,
     queryFn: async (): Promise<PassingDiarioItem[]> => {
       const startDate = edition!.start_date;

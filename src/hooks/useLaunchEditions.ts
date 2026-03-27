@@ -209,8 +209,9 @@ export const useLaunchEditions = (projectId: string | undefined, funnelId?: stri
       if (error) throw error;
       return data as LaunchEdition;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['launch-editions', projectId, funnelId] });
+      queryClient.invalidateQueries({ queryKey: ['launch-edition', data.id] });
       toast.success('Edição atualizada');
     },
     onError: (error: Error) => {

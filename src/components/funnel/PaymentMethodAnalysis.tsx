@@ -21,7 +21,7 @@ interface SaleData {
 
 interface PaymentMethodAnalysisProps {
   salesData: SaleData[];
-  funnelOfferCodes: string[];
+  funnelOfferCodes?: string[];
 }
 
 interface PaymentMetrics {
@@ -70,7 +70,8 @@ const chartConfig = {
 const PaymentMethodAnalysis = ({ salesData, funnelOfferCodes }: PaymentMethodAnalysisProps) => {
   // Filter sales by funnel offer codes
   const filteredSales = useMemo(() => {
-    return salesData.filter(sale => 
+    if (!funnelOfferCodes || funnelOfferCodes.length === 0) return salesData;
+    return salesData.filter(sale =>
       funnelOfferCodes.includes(sale.offer_code || '')
     );
   }, [salesData, funnelOfferCodes]);

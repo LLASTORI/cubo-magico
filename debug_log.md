@@ -5,8 +5,26 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-26 (sessão 37 cont.) — fixes: delete_funnel_safe, cache invalidation, rota voltar
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37 ✅ | Lovable removido ✅
+- **Data:** 2026-03-26 (sessão 38) — fixes: data desatualizada + ingressos inconsistentes
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37–38 ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-26] Sessão 38 — Data desatualizada + ingressos inconsistentes ✅
+
+**Bug 1 — Data de início desatualizada após edição:**
+- Root cause 1: `updateEdition` invalidava `['launch-editions']` (lista) mas NÃO `['launch-edition', id]` (query individual usada pela página de análise)
+- Root cause 2: queryKeys de `editionSalesData`, `editionMetaInsights`, `edition-kpis`, `edition-passing` usavam apenas `edition.id`, não as datas. Se datas mudaram com mesmo ID, cache stale.
+- Fix: invalidação de `['launch-edition', data.id]` no `updateEdition` + datas adicionadas a todas as queryKeys dependentes
+
+**Bug 2 — Três números diferentes para ingressos (28 vs 50 vs 24):**
+- KPI (28): `useLaunchEditionData` → `funnel_orders_view`, `main_offer_code IS NOT NULL`, período `start → event_date` — correto
+- Detalhamento (50): `LaunchProductsSalesBreakdown` → usava `finance_tracking_view` (legado!) com `purchase_date` + `hotmart_status` — fonte diferente
+  - Fix: migrado para `funnel_orders_view` com `economic_day` + `status IN (approved, completed, partial_refund)` + filtro por `funnel_id`
+- Formas de Pagamento (24): `PaymentMethodAnalysis` filtrava por `funnelOfferCodes`, excluindo vendas com `offer_code = null`
+  - Fix: `funnelOfferCodes` tornado opcional; quando ausente, usa todos os sales (já escopados por funnel_id + datas)
+
+**Build:** zero erros ✅
 
 ---
 

@@ -74,7 +74,7 @@ export default function LaunchEditionAnalysis() {
 
   // Sales data completo para blocos reutilizáveis
   const { data: editionSalesData = [] } = useQuery({
-    queryKey: ['edition-sales', projectId, funnelId, editionData?.id],
+    queryKey: ['edition-sales', projectId, funnelId, editionData?.id, editionData?.start_date, editionEndDate],
     enabled: !!editionData?.start_date && !!projectId && !!funnelId,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -129,7 +129,7 @@ export default function LaunchEditionAnalysis() {
 
   // Meta insights filtrados pelo período da edição E pelas campanhas da edição
   const { data: editionMetaInsights = [] } = useQuery({
-    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionCampaignIds],
+    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionData?.start_date, editionEndDate, editionCampaignIds],
     enabled: !!editionData?.start_date && !!projectId && editionCampaignIds.length > 0,
     queryFn: async () => {
       let q = supabase
@@ -313,7 +313,6 @@ export default function LaunchEditionAnalysis() {
               <h2 className="font-semibold">Formas de Pagamento</h2>
               <PaymentMethodAnalysis
                 salesData={editionSalesData}
-                funnelOfferCodes={funnelOfferCodes}
               />
             </Card>
           )}

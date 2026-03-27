@@ -516,92 +516,158 @@ export default function LaunchEditionAnalysis() {
       <div className="min-h-screen bg-background">
         <AppHeader />
 
+        {/* Inline styles for effects not possible in Tailwind */}
+        <style>{`
+          @keyframes glow-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+          }
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .kpi-glow {
+            text-shadow: 0 0 20px currentColor;
+          }
+          .hero-grid {
+            background-image:
+              linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+          }
+          .section-accent {
+            background: linear-gradient(180deg, #22d3ee 0%, #2563eb 50%, transparent 100%);
+          }
+          .lot-active {
+            background: linear-gradient(135deg, rgba(34,211,238,0.15), rgba(37,99,235,0.1));
+            box-shadow: 0 0 20px rgba(34,211,238,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
+          }
+          .kpi-card-border {
+            position: relative;
+          }
+          .kpi-card-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(
+              135deg,
+              var(--kpi-accent, rgba(34,211,238,0.2)),
+              transparent 60%
+            );
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 200ms ease;
+          }
+          .kpi-card-border:hover::before {
+            opacity: 1;
+          }
+        `}</style>
+
         <main className="container mx-auto px-4 sm:px-6 py-6">
           <div className="space-y-5">
 
             {/* ═══════════ HERO HEADER ═══════════ */}
-            <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-[#1a1f2e] via-[#1e2a4a] to-[#1a1f2e]">
-              {/* Glow decorativo */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/8 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+            <div className="relative overflow-hidden rounded-xl border border-[#2a3050]">
+              {/* Deep layered background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#0c1020] via-[#131b35] to-[#0f1525]" />
+              {/* Grid pattern overlay */}
+              <div className="absolute inset-0 hero-grid" />
+              {/* Glow orbs */}
+              <div className="absolute -top-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-60 h-60 bg-cyan-500/8 rounded-full blur-[80px] pointer-events-none" />
+              {/* Top accent line */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
 
-              <div className="relative px-5 py-5 sm:px-6">
-                <div className="flex items-start gap-3">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="mt-0.5 shrink-0 text-slate-400 hover:text-white hover:bg-white/10"
+              <div className="relative px-6 py-6 sm:px-8">
+                <div className="flex items-start gap-4">
+                  <button
                     onClick={() => navigateTo('/launch-dashboard')}
+                    className="mt-1 shrink-0 w-8 h-8 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                  </Button>
+                  </button>
 
-                  <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex-1 min-w-0 space-y-3">
                     {/* Breadcrumb */}
                     {funnel?.name && (
-                      <p className="text-xs text-slate-500 tracking-wide uppercase">
-                        {funnel.name}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-cyan-500/60" />
+                        <p className="text-[11px] text-cyan-500/60 tracking-[0.15em] uppercase font-medium">
+                          {funnel.name}
+                        </p>
+                      </div>
                     )}
 
                     {/* Title + Status */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h1 className="text-2xl font-bold text-white tracking-tight">
+                    <div className="flex flex-wrap items-baseline gap-4">
+                      <h1 className="text-3xl font-extrabold text-white tracking-tight leading-none">
                         {editionData.name}
                       </h1>
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusCfg.badge}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
-                        {statusCfg.label}
-                      </span>
-                      {editionData.edition_number && (
-                        <span className="text-xs text-slate-500 font-mono">
-                          #{editionData.edition_number}
+                      <div className="flex items-center gap-3">
+                        <span className={`
+                          inline-flex items-center gap-2 px-3 py-1
+                          rounded-md text-xs font-semibold uppercase tracking-wider
+                          border backdrop-blur-sm
+                          ${statusCfg.badge}
+                        `}>
+                          <span className={`w-2 h-2 rounded-full ${statusCfg.dot}`} />
+                          {statusCfg.label}
                         </span>
-                      )}
+                        {editionData.edition_number && (
+                          <span className="text-sm text-slate-600 font-mono font-bold">
+                            #{editionData.edition_number}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Dates bar */}
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                    {/* Dates as tags */}
+                    <div className="flex flex-wrap items-center gap-2">
                       {editionData.start_datetime && (
-                        <span className="flex items-center gap-1.5 text-slate-400">
-                          <Calendar className="w-3.5 h-3.5 text-blue-400/70" />
-                          <span className="text-slate-500">Início</span>
-                          <span className="text-slate-300 font-medium">
-                            {fmtDate(editionData.start_datetime)}
-                          </span>
-                        </span>
+                        <DateTag
+                          icon={<Calendar className="w-3 h-3" />}
+                          label="Início"
+                          value={fmtDate(editionData.start_datetime)}
+                          color="blue"
+                        />
                       )}
                       {editionData.event_datetime && (
-                        <span className="flex items-center gap-1.5 text-slate-400">
-                          <Target className="w-3.5 h-3.5 text-amber-400/70" />
-                          <span className="text-slate-500">Evento</span>
-                          <span className="text-slate-300 font-medium">
-                            {fmtDate(editionData.event_datetime)}
-                          </span>
-                        </span>
+                        <DateTag
+                          icon={<Target className="w-3 h-3" />}
+                          label="Evento"
+                          value={fmtDate(editionData.event_datetime)}
+                          color="amber"
+                        />
                       )}
                       {editionData.end_datetime && (
-                        <span className="flex items-center gap-1.5 text-slate-400">
-                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                          <span className="text-slate-500">Fim</span>
-                          <span className="text-slate-300 font-medium">
-                            {fmtDate(editionData.end_datetime)}
-                          </span>
-                        </span>
+                        <DateTag
+                          icon={<Calendar className="w-3 h-3" />}
+                          label="Fim"
+                          value={fmtDate(editionData.end_datetime)}
+                          color="slate"
+                        />
                       )}
                     </div>
                   </div>
                 </div>
               </div>
+
+              {/* Bottom accent line */}
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
             </div>
 
             {/* ═══════════ KPIs ═══════════ */}
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
               <KpiCard
                 icon={<DollarSign className="w-3.5 h-3.5" />}
                 label="Investimento"
                 value={kpisLoading ? '—' : formatCurrency(inv)}
-                tooltip="Total investido em Meta Ads no período"
+                tooltip="Total investido em Meta Ads"
                 variant="spend"
               />
               <KpiCard
@@ -623,8 +689,11 @@ export default function LaunchEditionAnalysis() {
                 label="ROAS"
                 value={kpisLoading ? '—' : `${roas.toFixed(2)}x`}
                 tooltip="Return on Ad Spend"
-                variant={roas >= 2 ? 'profit' : roas >= 1 ? 'default' : 'danger'}
-                highlight={roas >= 2}
+                variant={
+                  roas >= 2 ? 'epic'
+                    : roas >= 1 ? 'default'
+                      : 'danger'
+                }
               />
               <KpiCard
                 icon={<Ticket className="w-3.5 h-3.5" />}
@@ -657,11 +726,12 @@ export default function LaunchEditionAnalysis() {
 
             {/* ═══════════ LOT SELECTOR ═══════════ */}
             {lotsAnalysis.length > 0 && (
-              <div className="flex items-center gap-3 py-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              <div className="flex items-center gap-3 py-0.5">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 shrink-0 uppercase tracking-wider font-medium">
                   <Layers className="w-3.5 h-3.5" />
-                  <span>Lote:</span>
+                  Lote
                 </div>
+                <div className="h-4 w-px bg-border" />
                 <div className="flex flex-wrap gap-1.5">
                   <LotPill
                     active={!selectedLotId}
@@ -681,6 +751,7 @@ export default function LaunchEditionAnalysis() {
                         active={selectedLotId === la.lot.id}
                         onClick={() => setSelectedLotId(la.lot.id)}
                         status={lotStatus}
+                        count={la.totalTickets}
                       >
                         {la.lot.name}
                       </LotPill>
@@ -855,6 +926,33 @@ export default function LaunchEditionAnalysis() {
   );
 }
 
+/* ── Date Tag (hero header) ──────────────────────────── */
+
+function DateTag({
+  icon, label, value, color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  color: 'blue' | 'amber' | 'slate';
+}) {
+  const colors = {
+    blue: 'border-blue-500/20 text-blue-400/80 bg-blue-500/5',
+    amber: 'border-amber-500/20 text-amber-400/80 bg-amber-500/5',
+    slate: 'border-slate-500/20 text-slate-400/80 bg-slate-500/5',
+  };
+  return (
+    <span className={`
+      inline-flex items-center gap-1.5 px-2.5 py-1
+      rounded-md text-xs border ${colors[color]}
+    `}>
+      {icon}
+      <span className="opacity-60">{label}</span>
+      <span className="font-semibold text-slate-200">{value}</span>
+    </span>
+  );
+}
+
 /* ── Section wrapper ─────────────────────────────────── */
 
 function Section({
@@ -866,24 +964,33 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="overflow-hidden border-border/60">
-      <div className="border-l-2 border-cyan-500/40">
-        <div className="px-5 pt-4 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-cyan-400/70">{icon}</span>
-            <h2 className="font-semibold text-sm tracking-tight">
+    <div className="relative rounded-xl border border-border/50 bg-card overflow-hidden">
+      {/* Left accent gradient bar */}
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] section-accent opacity-60" />
+
+      <div className="pl-5 pr-5 pt-4 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+            {icon}
+          </div>
+          <div>
+            <h2 className="font-bold text-[13px] tracking-tight text-slate-200">
               {title}
             </h2>
+            {description && (
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {description}
+              </p>
+            )}
           </div>
-          {description && (
-            <p className="text-xs text-muted-foreground mt-0.5 ml-6">
-              {description}
-            </p>
-          )}
         </div>
-        <div className="px-5 pb-5">{children}</div>
       </div>
-    </Card>
+
+      {/* Subtle separator */}
+      <div className="mx-5 h-px bg-gradient-to-r from-border/50 via-border/30 to-transparent" />
+
+      <div className="p-5">{children}</div>
+    </div>
   );
 }
 
@@ -894,11 +1001,12 @@ type KpiVariant =
   | 'revenue'
   | 'spend'
   | 'danger'
-  | 'profit';
+  | 'profit'
+  | 'epic';
 
 function KpiCard({
   icon, label, value, subtitle, muted, tooltip,
-  variant = 'default', highlight,
+  variant = 'default',
 }: {
   icon: React.ReactNode;
   label: string;
@@ -907,81 +1015,98 @@ function KpiCard({
   muted?: boolean;
   tooltip?: string;
   variant?: KpiVariant;
-  highlight?: boolean;
 }) {
-  const styles: Record<KpiVariant, {
+  const themes: Record<KpiVariant, {
     value: string;
     icon: string;
-    glow: string;
+    accent: string;
+    glow: boolean;
   }> = {
     default: {
       value: 'text-cyan-400',
-      icon: 'text-cyan-400/50 bg-cyan-500/10',
-      glow: 'hover:shadow-[0_0_15px_rgba(34,211,238,0.08)]',
+      icon: 'text-cyan-400 bg-cyan-500/10',
+      accent: 'rgba(34,211,238,0.3)',
+      glow: false,
     },
     revenue: {
       value: 'text-emerald-400',
-      icon: 'text-emerald-400/50 bg-emerald-500/10',
-      glow: 'hover:shadow-[0_0_15px_rgba(52,211,153,0.08)]',
+      icon: 'text-emerald-400 bg-emerald-500/10',
+      accent: 'rgba(52,211,153,0.3)',
+      glow: false,
     },
     spend: {
       value: 'text-red-400',
-      icon: 'text-red-400/50 bg-red-500/10',
-      glow: 'hover:shadow-[0_0_15px_rgba(248,113,113,0.08)]',
+      icon: 'text-red-400 bg-red-500/10',
+      accent: 'rgba(248,113,113,0.3)',
+      glow: false,
     },
     danger: {
       value: 'text-red-500',
-      icon: 'text-red-500/50 bg-red-500/10',
-      glow: 'hover:shadow-[0_0_15px_rgba(239,68,68,0.08)]',
+      icon: 'text-red-500 bg-red-500/10',
+      accent: 'rgba(239,68,68,0.3)',
+      glow: false,
     },
     profit: {
       value: 'text-emerald-400',
-      icon: 'text-emerald-400/50 bg-emerald-500/10',
-      glow: 'hover:shadow-[0_0_15px_rgba(52,211,153,0.08)]',
+      icon: 'text-emerald-400 bg-emerald-500/10',
+      accent: 'rgba(52,211,153,0.3)',
+      glow: false,
+    },
+    epic: {
+      value: 'text-amber-400 kpi-glow',
+      icon: 'text-amber-400 bg-amber-500/15',
+      accent: 'rgba(251,191,36,0.4)',
+      glow: true,
     },
   };
 
-  const s = muted
+  const t = muted
     ? {
       value: 'text-muted-foreground',
-      icon: 'text-muted-foreground/40 bg-muted/30',
-      glow: '',
+      icon: 'text-muted-foreground/40 bg-muted/20',
+      accent: 'transparent',
+      glow: false,
     }
-    : styles[variant];
+    : themes[variant];
 
   const card = (
-    <Card
-      className={`
-        relative p-3 transition-all duration-150
-        hover:border-cyan-500/30
-        ${s.glow}
-        ${highlight ? 'ring-1 ring-cyan-500/20' : ''}
-      `}
+    <div
+      className="kpi-card-border rounded-xl border border-border/40 bg-card p-3 transition-all duration-200 hover:-translate-y-0.5 cursor-default group"
+      style={{ '--kpi-accent': t.accent } as React.CSSProperties}
     >
-      {/* Icon badge */}
-      <div className={`
-        inline-flex items-center justify-center
-        w-6 h-6 rounded-md mb-1.5
-        ${s.icon}
-      `}>
-        {icon}
+      {/* Top row: icon + label */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className={`
+          w-5 h-5 rounded-md flex items-center justify-center
+          transition-transform duration-200 group-hover:scale-110
+          ${t.icon}
+        `}>
+          {icon}
+        </div>
+        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium leading-none">
+          {label}
+        </span>
       </div>
 
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-none">
-        {label}
-      </p>
+      {/* Value */}
       <p className={`
-        text-lg font-bold tabular-nums mt-1 leading-none
-        ${s.value}
+        text-xl font-extrabold tabular-nums leading-none
+        ${t.value}
       `}>
         {value}
       </p>
+
       {subtitle && (
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[10px] text-muted-foreground mt-1.5">
           {subtitle}
         </p>
       )}
-    </Card>
+
+      {/* Epic glow effect for outstanding metrics */}
+      {t.glow && (
+        <div className="absolute -inset-px rounded-xl bg-gradient-to-t from-amber-500/5 to-transparent pointer-events-none" />
+      )}
+    </div>
   );
 
   if (!tooltip) return card;
@@ -989,7 +1114,10 @@ function KpiCard({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{card}</TooltipTrigger>
-      <TooltipContent side="bottom" className="text-xs max-w-48">
+      <TooltipContent
+        side="bottom"
+        className="text-xs max-w-48 bg-[#1a1f2e] border-border"
+      >
         {tooltip}
       </TooltipContent>
     </Tooltip>
@@ -999,11 +1127,12 @@ function KpiCard({
 /* ── Lot Pill ────────────────────────────────────────── */
 
 function LotPill({
-  active, onClick, status, children,
+  active, onClick, status, count, children,
 }: {
   active: boolean;
   onClick: () => void;
   status?: 'planned' | 'active' | 'finished';
+  count?: number;
   children: React.ReactNode;
 }) {
   const dotColor = status
@@ -1013,12 +1142,12 @@ function LotPill({
       onClick={onClick}
       className={`
         inline-flex items-center gap-1.5
-        px-3 py-1 rounded-full text-xs font-medium
-        transition-all duration-150 cursor-pointer
+        px-3 py-1.5 rounded-lg text-xs font-semibold
+        transition-all duration-200 cursor-pointer
         border
         ${active
-          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.1)]'
-          : 'bg-card text-muted-foreground border-border hover:border-cyan-500/20 hover:text-cyan-400/80'
+          ? 'lot-active text-cyan-300 border-cyan-500/30'
+          : 'bg-transparent text-slate-400 border-border/50 hover:border-cyan-500/20 hover:text-slate-300 hover:bg-white/[0.02]'
         }
       `}
     >
@@ -1026,6 +1155,14 @@ function LotPill({
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
       )}
       {children}
+      {count !== undefined && count > 0 && (
+        <span className={`
+          text-[10px] tabular-nums
+          ${active ? 'text-cyan-400/60' : 'text-slate-600'}
+        `}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }

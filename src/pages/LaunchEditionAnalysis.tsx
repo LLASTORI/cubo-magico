@@ -1,13 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import {
+  format, parseISO, isAfter, isBefore,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Calendar, Filter } from 'lucide-react';
+import {
+  ArrowLeft, Calendar, TrendingUp, DollarSign,
+  Target, ShoppingCart, CreditCard, BarChart3,
+  Megaphone, Layers, Activity,
+  Wallet, Tag, LayoutGrid, Ticket,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { AppHeader } from '@/components/AppHeader';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useTenantNavigation } from '@/navigation';
@@ -32,11 +44,7 @@ import { CrossPhaseConversionCard } from '@/components/launch/CrossPhaseConversi
 import { useCrossPhaseConversion } from '@/hooks/useCrossPhaseConversion';
 import { supabase } from '@/integrations/supabase/client';
 
-const STATUS_MAP = {
-  planned: { label: 'Planejada', className: 'bg-slate-100 text-slate-700' },
-  active: { label: 'Ativa', className: 'bg-green-100 text-green-700' },
-  finished: { label: 'Encerrada', className: 'bg-amber-100 text-amber-700' },
-} as const;
+/* ── helpers ─────────────────────────────────────────── */
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -46,8 +54,48 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+/** Status automático baseado em datas vs hoje */
+function computeAutoStatus(
+  startDatetime?: string | null,
+  endDatetime?: string | null,
+  eventDatetime?: string | null,
+): 'planned' | 'active' | 'finished' {
+  const now = new Date();
+  const effectiveEnd = endDatetime || eventDatetime;
+  if (!startDatetime) return 'planned';
+  const start = parseISO(startDatetime);
+  if (isBefore(now, start)) return 'planned';
+  if (effectiveEnd && isAfter(now, parseISO(effectiveEnd))) {
+    return 'finished';
+  }
+  return 'active';
+}
+
+const STATUS_CONFIG = {
+  planned: {
+    label: 'Planejada',
+    dot: 'bg-slate-400',
+    badge: 'bg-slate-500/15 text-slate-400 border-slate-500/25',
+  },
+  active: {
+    label: 'Ativa',
+    dot: 'bg-green-400 animate-pulse',
+    badge: 'bg-green-500/15 text-green-400 border-green-500/25',
+  },
+  finished: {
+    label: 'Encerrada',
+    dot: 'bg-amber-400',
+    badge: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  },
+} as const;
+
+/* ── main component ──────────────────────────────────── */
+
 export default function LaunchEditionAnalysis() {
-  const { funnelId, editionId } = useParams<{ funnelId: string; editionId: string }>();
+  const { funnelId, editionId } = useParams<{
+    funnelId: string;
+    editionId: string;
+  }>();
   const { navigateTo } = useTenantNavigation();
   const { currentProject } = useProject();
   const projectId = currentProject?.id || '';
@@ -56,7 +104,6 @@ export default function LaunchEditionAnalysis() {
   const editionData = edition.data;
   const editionLoading = edition.isLoading;
 
-  // Fetch funnel's launch_tag for conversion analysis
   const { data: funnel } = useQuery({
     queryKey: ['funnel-tag', funnelId],
     enabled: !!funnelId && !!projectId,
@@ -70,30 +117,46 @@ export default function LaunchEditionAnalysis() {
     },
   });
 
-  const { kpis, kpisLoading, passingDiario, passingLoading } = useLaunchEditionData(
-    projectId, funnelId!, editionData
-  );
+  const {
+    kpis, kpisLoading, passingDiario, passingLoading,
+  } = useLaunchEditionData(projectId, funnelId!, editionData);
 
-  // Datas da edição (usadas por múltiplos hooks abaixo)
-  const editionEndDate = editionData?.end_datetime || editionData?.event_datetime || editionData?.start_datetime;
-  // fase1End = event_datetime (se existe) senão end_datetime — mesmo range do KPI "Ingressos"
-  const fase1End = editionData?.event_datetime || editionEndDate;
-  const startDate = editionData?.start_datetime ? parseISO(editionData.start_datetime) : new Date();
-  const endDate = editionEndDate ? parseISO(editionEndDate) : new Date();
-  const fase1EndDate = fase1End ? parseISO(fase1End) : endDate;
+  const editionEndDate =
+    editionData?.end_datetime ||
+    editionData?.event_datetime ||
+    editionData?.start_datetime;
+  const startDate = editionData?.start_datetime
+    ? parseISO(editionData.start_datetime) : new Date();
+  const endDate = editionEndDate
+    ? parseISO(editionEndDate) : new Date();
 
-  // Sales data completo para blocos reutilizáveis
   const { data: editionSalesData = [] } = useQuery({
-    queryKey: ['edition-sales', projectId, funnelId, editionData?.id, editionData?.start_datetime, editionEndDate],
-    enabled: !!editionData?.start_datetime && !!projectId && !!funnelId,
+    queryKey: [
+      'edition-sales', projectId, funnelId,
+      editionData?.id, editionData?.start_datetime,
+      editionEndDate,
+    ],
+    enabled: !!editionData?.start_datetime
+      && !!projectId && !!funnelId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnel_orders_view')
-        .select('order_id, customer_paid, producer_net, main_offer_code, all_offer_codes, buyer_email, economic_day, payment_method, meta_campaign_id, meta_adset_id, meta_ad_id, utm_source, utm_medium, utm_campaign, utm_content, utm_adset, utm_placement, checkout_origin, main_revenue, status')
+        .select(`
+          order_id, customer_paid, producer_net,
+          main_offer_code, all_offer_codes, buyer_email,
+          economic_day, payment_method,
+          meta_campaign_id, meta_adset_id, meta_ad_id,
+          utm_source, utm_medium, utm_campaign,
+          utm_content, utm_adset, utm_placement,
+          checkout_origin, main_revenue, status
+        `)
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId!)
         .not('main_offer_code', 'is', null)
-        .gte('economic_day', editionData!.start_datetime!.slice(0, 10))
+        .gte(
+          'economic_day',
+          editionData!.start_datetime!.slice(0, 10),
+        )
         .lte('economic_day', editionEndDate!.slice(0, 10));
       if (error) throw error;
       return (data || []).map(r => ({
@@ -123,12 +186,13 @@ export default function LaunchEditionAnalysis() {
     const codes = new Set<string>();
     for (const s of editionSalesData) {
       if (s.offer_code) codes.add(s.offer_code);
-      if (s.all_offer_codes) s.all_offer_codes.forEach((c: string) => codes.add(c));
+      if (s.all_offer_codes) {
+        s.all_offer_codes.forEach((c: string) => codes.add(c));
+      }
     }
     return Array.from(codes);
   }, [editionSalesData]);
 
-  // Campaign IDs presentes nas vendas da edição — escopa Meta insights
   const editionCampaignIds = useMemo(() => {
     const ids = new Set<string>();
     for (const s of editionSalesData) {
@@ -137,43 +201,54 @@ export default function LaunchEditionAnalysis() {
     return Array.from(ids);
   }, [editionSalesData]);
 
-  // Meta insights filtrados pelo período da edição E pelas campanhas da edição
   const { data: editionMetaInsights = [] } = useQuery({
-    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionData?.start_datetime, editionEndDate, editionCampaignIds],
-    enabled: !!editionData?.start_datetime && !!projectId && editionCampaignIds.length > 0,
+    queryKey: [
+      'edition-meta-insights', projectId, editionData?.id,
+      editionData?.start_datetime, editionEndDate,
+      editionCampaignIds,
+    ],
+    enabled: !!editionData?.start_datetime
+      && !!projectId && editionCampaignIds.length > 0,
     queryFn: async () => {
       let q = supabase
         .from('meta_insights')
         .select('*')
         .eq('project_id', projectId)
         .in('campaign_id', editionCampaignIds);
-      if (editionData!.start_datetime) q = q.gte('date_start', editionData!.start_datetime.slice(0, 10));
-      if (editionEndDate) q = q.lte('date_start', editionEndDate.slice(0, 10));
+      if (editionData!.start_datetime) {
+        q = q.gte(
+          'date_start',
+          editionData!.start_datetime.slice(0, 10),
+        );
+      }
+      if (editionEndDate) {
+        q = q.lte('date_start', editionEndDate.slice(0, 10));
+      }
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
 
-  // Análise por lote — agrupa vendas e spend por lote configurado
   const {
-    lotsAnalysis,
-    editionTotals,
+    lotsAnalysis, editionTotals,
     unassigned: unassignedSales,
-  } = useLaunchLotsAnalysis(editionData?.id, editionSalesData, editionMetaInsights);
+  } = useLaunchLotsAnalysis(
+    editionData?.id, editionSalesData, editionMetaInsights,
+  );
 
-  // Vendas do produto principal (fase vendas) — para cruzamento
   const { data: produtoSalesData = [] } = useQuery({
-    queryKey: ['edition-produto-sales', projectId, funnelId, editionData?.id],
+    queryKey: [
+      'edition-produto-sales', projectId, funnelId,
+      editionData?.id,
+    ],
     enabled: !!editionData && !!projectId && !!funnelId,
     queryFn: async () => {
-      // Buscar offer_mappings vinculados a fases do tipo "vendas"
       const { data: phases } = await supabase
         .from('launch_phases')
         .select('id')
         .eq('edition_id', editionData!.id)
         .in('phase_type', ['vendas', 'pitch', 'single_shot']);
-
       if (!phases?.length) return [];
 
       const phaseIds = phases.map(p => p.id);
@@ -182,31 +257,33 @@ export default function LaunchEditionAnalysis() {
         .select('codigo_oferta')
         .in('phase_id', phaseIds)
         .eq('is_active', true);
-
       if (!offers?.length) return [];
 
       const offerCodes = offers
         .map(o => o.codigo_oferta)
         .filter(Boolean) as string[];
-
       if (offerCodes.length === 0) return [];
 
-      const startDate = editionData!.start_datetime?.slice(0, 10);
-      const endDate = (editionData!.end_datetime || editionData!.event_datetime)?.slice(0, 10);
+      const sd = editionData!.start_datetime?.slice(0, 10);
+      const ed = (
+        editionData!.end_datetime ||
+        editionData!.event_datetime
+      )?.slice(0, 10);
 
       let q = supabase
         .from('funnel_orders_view')
-        .select('order_id, customer_paid, buyer_email, economic_day, main_offer_code')
+        .select(`
+          order_id, customer_paid, buyer_email,
+          economic_day, main_offer_code
+        `)
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId!)
         .in('main_offer_code', offerCodes);
-
-      if (startDate) q = q.gte('economic_day', startDate);
-      if (endDate) q = q.lte('economic_day', endDate);
+      if (sd) q = q.gte('economic_day', sd);
+      if (ed) q = q.lte('economic_day', ed);
 
       const { data, error } = await q;
       if (error) throw error;
-
       return (data || []).map(r => ({
         offer_code: r.main_offer_code,
         gross_amount: Number(r.customer_paid) || 0,
@@ -216,41 +293,54 @@ export default function LaunchEditionAnalysis() {
     },
   });
 
-  // Cruzamento Ingresso → Produto Principal
   const crossPhaseData = useCrossPhaseConversion(
-    editionSalesData, produtoSalesData, lotsAnalysis
+    editionSalesData, produtoSalesData, lotsAnalysis,
   );
 
-  // Seletor de lote — filtra blocos abaixo
-  const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
+  const [selectedLotId, setSelectedLotId] = useState<
+    string | null
+  >(null);
 
   const selectedLot = useMemo(
-    () => lotsAnalysis.find(la => la.lot.id === selectedLotId) ?? null,
-    [lotsAnalysis, selectedLotId]
+    () =>
+      lotsAnalysis.find(la => la.lot.id === selectedLotId)
+      ?? null,
+    [lotsAnalysis, selectedLotId],
   );
 
-  // Dados filtrados pelo lote selecionado (ou edição inteira se "all")
   const filteredSalesData = useMemo(() => {
     if (!selectedLot) return editionSalesData;
-    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
-    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    const lotStart =
+      selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd =
+      selectedLot.lot.end_datetime?.slice(0, 10);
     const lotOfferCodes = selectedLot.lot.offers
-      .map(o => o.codigo_oferta).filter(Boolean) as string[];
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
     return editionSalesData.filter(s => {
       const day = s.economic_day;
       if (!day || !lotStart) return false;
       if (day < lotStart) return false;
       if (lotEnd && day > lotEnd) return false;
-      if (s.offer_code && lotOfferCodes.includes(s.offer_code)) return true;
-      if (s.all_offer_codes?.some(c => lotOfferCodes.includes(c))) return true;
+      if (
+        s.offer_code &&
+        lotOfferCodes.includes(s.offer_code)
+      ) return true;
+      if (
+        s.all_offer_codes?.some(
+          (c: string) => lotOfferCodes.includes(c),
+        )
+      ) return true;
       return false;
     });
   }, [selectedLot, editionSalesData]);
 
   const filteredMetaInsights = useMemo(() => {
     if (!selectedLot) return editionMetaInsights;
-    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
-    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    const lotStart =
+      selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd =
+      selectedLot.lot.end_datetime?.slice(0, 10);
     return editionMetaInsights.filter(m => {
       const d = m.date_start?.slice(0, 10);
       if (!d || !lotStart) return false;
@@ -264,92 +354,110 @@ export default function LaunchEditionAnalysis() {
     const codes = new Set<string>();
     for (const s of filteredSalesData) {
       if (s.offer_code) codes.add(s.offer_code);
-      if (s.all_offer_codes) s.all_offer_codes.forEach((c: string) => codes.add(c));
+      if (s.all_offer_codes) {
+        s.all_offer_codes.forEach(
+          (c: string) => codes.add(c),
+        );
+      }
     }
     return Array.from(codes);
   }, [filteredSalesData]);
 
-  // Datas efetivas (lote selecionado ou edição)
   const effectiveStartDate = selectedLot?.lot.start_datetime
     ? parseISO(selectedLot.lot.start_datetime) : startDate;
   const effectiveEndDate = selectedLot?.lot.end_datetime
     ? parseISO(selectedLot.lot.end_datetime) : endDate;
 
-  // Passing diário reativo ao lote (computa do filteredSalesData em memória)
   const lotPassingDiario = useMemo(() => {
-    if (!selectedLot) return null; // usa passingDiario do hook
-    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
-    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    if (!selectedLot) return null;
+    const lotStart =
+      selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd =
+      selectedLot.lot.end_datetime?.slice(0, 10);
     if (!lotStart) return null;
     const endStr = lotEnd || lotStart;
 
-    // Contar vendas FRONT por dia no range do lote
     const frontCodes = selectedLot.lot.offers
       .filter(o => o.role === 'front')
       .map(o => o.codigo_oferta)
       .filter(Boolean) as string[];
-
     const frontSales = filteredSalesData.filter(
-      s => s.offer_code && frontCodes.includes(s.offer_code)
+      s => s.offer_code && frontCodes.includes(s.offer_code),
     );
 
     const byDay: Record<string, number> = {};
     for (const s of frontSales) {
       if (s.economic_day) {
-        byDay[s.economic_day] = (byDay[s.economic_day] || 0) + 1;
+        byDay[s.economic_day] =
+          (byDay[s.economic_day] || 0) + 1;
       }
     }
 
-    // Gerar range de dias
     const cur = parseISO(lotStart);
     const end = parseISO(endStr);
     let totalDias = 0;
     const tmp = parseISO(lotStart);
-    while (tmp <= end) { totalDias++; tmp.setDate(tmp.getDate() + 1); }
+    while (tmp <= end) {
+      totalDias++;
+      tmp.setDate(tmp.getDate() + 1);
+    }
 
     const totalIngressos = frontSales.length;
-    const metaDiaria = totalDias > 0 ? totalIngressos / totalDias : 0;
+    const metaDiaria =
+      totalDias > 0 ? totalIngressos / totalDias : 0;
 
-    const result: import('@/hooks/useLaunchEditionData').PassingDiarioItem[] = [];
+    const result: import(
+      '@/hooks/useLaunchEditionData'
+    ).PassingDiarioItem[] = [];
     while (cur <= end) {
       const dateStr = cur.toISOString().split('T')[0];
       const ingressos = byDay[dateStr] || 0;
-      const pct = metaDiaria > 0 ? ingressos / metaDiaria : 0;
+      const pct =
+        metaDiaria > 0 ? ingressos / metaDiaria : 0;
       result.push({
         date: dateStr,
         ingressos,
         meta: Math.round(metaDiaria),
-        status: pct >= 1 ? 'above' : pct >= 0.7 ? 'near' : 'below',
+        status:
+          pct >= 1 ? 'above' : pct >= 0.7 ? 'near' : 'below',
       });
       cur.setDate(cur.getDate() + 1);
     }
     return result;
   }, [selectedLot, filteredSalesData]);
 
-  // Passing efetivo: do lote se selecionado, senão da edição
-  const effectivePassingDiario = lotPassingDiario ?? passingDiario;
+  const effectivePassingDiario =
+    lotPassingDiario ?? passingDiario;
 
-  // Meta hierarchy (campaigns, adsets, ads)
-  const { campaigns, adsets, ads, isLoading: metaHierarchyLoading } = useMetaHierarchy({
+  const {
+    campaigns, adsets, ads,
+    isLoading: metaHierarchyLoading,
+  } = useMetaHierarchy({
     projectId: projectId || undefined,
     insights: editionMetaInsights,
     enabled: editionMetaInsights.length > 0,
   });
 
-  // Saúde do funil (abandonos, reembolsos, chargebacks via crm_transactions)
-  const { healthMetrics, isLoading: healthLoading } = useFunnelHealthMetrics({
+  const {
+    healthMetrics, isLoading: healthLoading,
+  } = useFunnelHealthMetrics({
     projectId: projectId || undefined,
     funnelId,
     startDate,
     endDate,
   });
 
+  /* ── loading / error states ── */
+
   if (editionLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
         <main className="container mx-auto px-6 py-8 flex justify-center">
-          <CubeLoader message="Carregando edição..." size="lg" />
+          <CubeLoader
+            message="Carregando edição..."
+            size="lg"
+          />
         </main>
       </div>
     );
@@ -360,8 +468,13 @@ export default function LaunchEditionAnalysis() {
       <div className="min-h-screen bg-background">
         <AppHeader />
         <main className="container mx-auto px-6 py-8 flex flex-col items-center gap-4">
-          <p className="text-muted-foreground">Edição não encontrada.</p>
-          <Button variant="outline" onClick={() => navigateTo('/launch-dashboard')}>
+          <p className="text-muted-foreground">
+            Edição não encontrada.
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => navigateTo('/launch-dashboard')}
+          >
             Voltar para Lançamentos
           </Button>
         </main>
@@ -369,323 +482,550 @@ export default function LaunchEditionAnalysis() {
     );
   }
 
-  const status = STATUS_MAP[editionData.status as keyof typeof STATUS_MAP] ?? STATUS_MAP.planned;
+  /* ── computed values for render ── */
+
+  const autoStatus = computeAutoStatus(
+    editionData.start_datetime,
+    editionData.end_datetime,
+    editionData.event_datetime,
+  );
+  const statusKey = (
+    editionData.status === 'planned' ||
+    editionData.status === 'active' ||
+    editionData.status === 'finished'
+  ) ? autoStatus : 'planned';
+  const statusCfg = STATUS_CONFIG[statusKey];
+
   const fmtDate = (d: string | null) =>
-    d ? format(parseISO(d), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+    d
+      ? format(parseISO(d), "dd 'de' MMM", { locale: ptBR })
+      : '—';
+  const inv = kpis?.totalSpend ?? 0;
+  const fat = kpis?.faturamentoTotal ?? 0;
+  const vendas = kpis?.totalIngressos ?? 0;
+  const lucro = fat - inv;
+  const cpa = vendas > 0 ? inv / vendas : 0;
+  const ticket = vendas > 0 ? fat / vendas : 0;
+  const roas = kpis?.roas ?? 0;
+
+  const lotLabel = selectedLot
+    ? ` — ${selectedLot.lot.name}` : '';
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader />
+    <TooltipProvider>
+      <div className="min-h-screen bg-background">
+        <AppHeader />
 
-      <main className="container mx-auto px-6 py-8">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-start gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="mt-1 shrink-0"
-              onClick={() => navigateTo('/launch-dashboard')}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                {funnel?.name && (
-                  <span className="text-sm text-muted-foreground">{funnel.name} —</span>
-                )}
-                <h1 className="text-xl font-semibold truncate">{editionData.name}</h1>
-                <Badge className={status.className}>{status.label}</Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-muted-foreground">
-                {editionData.start_datetime && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    Início: {fmtDate(editionData.start_datetime)}
-                  </span>
-                )}
-                {editionData.event_datetime && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    Evento: {fmtDate(editionData.event_datetime)}
-                  </span>
-                )}
-                {editionData.end_datetime && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    Encerramento: {fmtDate(editionData.end_datetime)}
-                  </span>
-                )}
+        <main className="container mx-auto px-4 sm:px-6 py-6">
+          <div className="space-y-5">
+
+            {/* ═══════════ HERO HEADER ═══════════ */}
+            <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-[#1a1f2e] via-[#1e2a4a] to-[#1a1f2e]">
+              {/* Glow decorativo */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/8 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+
+              <div className="relative px-5 py-5 sm:px-6">
+                <div className="flex items-start gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mt-0.5 shrink-0 text-slate-400 hover:text-white hover:bg-white/10"
+                    onClick={() => navigateTo('/launch-dashboard')}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {/* Breadcrumb */}
+                    {funnel?.name && (
+                      <p className="text-xs text-slate-500 tracking-wide uppercase">
+                        {funnel.name}
+                      </p>
+                    )}
+
+                    {/* Title + Status */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h1 className="text-2xl font-bold text-white tracking-tight">
+                        {editionData.name}
+                      </h1>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusCfg.badge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
+                        {statusCfg.label}
+                      </span>
+                      {editionData.edition_number && (
+                        <span className="text-xs text-slate-500 font-mono">
+                          #{editionData.edition_number}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Dates bar */}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                      {editionData.start_datetime && (
+                        <span className="flex items-center gap-1.5 text-slate-400">
+                          <Calendar className="w-3.5 h-3.5 text-blue-400/70" />
+                          <span className="text-slate-500">Início</span>
+                          <span className="text-slate-300 font-medium">
+                            {fmtDate(editionData.start_datetime)}
+                          </span>
+                        </span>
+                      )}
+                      {editionData.event_datetime && (
+                        <span className="flex items-center gap-1.5 text-slate-400">
+                          <Target className="w-3.5 h-3.5 text-amber-400/70" />
+                          <span className="text-slate-500">Evento</span>
+                          <span className="text-slate-300 font-medium">
+                            {fmtDate(editionData.event_datetime)}
+                          </span>
+                        </span>
+                      )}
+                      {editionData.end_datetime && (
+                        <span className="flex items-center gap-1.5 text-slate-400">
+                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                          <span className="text-slate-500">Fim</span>
+                          <span className="text-slate-300 font-medium">
+                            {fmtDate(editionData.end_datetime)}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* KPIs */}
-          {(() => {
-            const inv = kpis?.totalSpend ?? 0;
-            const fat = kpis?.faturamentoTotal ?? 0;
-            const vendas = kpis?.totalIngressos ?? 0;
-            const lucro = fat - inv;
-            const cpa = vendas > 0 ? inv / vendas : 0;
-            const ticket = vendas > 0 ? fat / vendas : 0;
-            const roas = kpis?.roas ?? 0;
-            return (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-                <KpiCard
-                  label="Investimento"
-                  value={kpisLoading ? '—' : formatCurrency(inv)}
-                  variant="spend"
-                />
-                <KpiCard
-                  label="Faturamento"
-                  value={kpisLoading ? '—' : formatCurrency(fat)}
-                  variant="revenue"
-                />
-                <KpiCard
-                  label="Lucro"
-                  value={kpisLoading ? '—' : formatCurrency(lucro)}
-                  variant={lucro >= 0 ? 'revenue' : 'danger'}
-                />
-                <KpiCard
-                  label="ROAS"
-                  value={kpisLoading ? '—' : `${roas.toFixed(2)}x`}
-                  variant={roas >= 1 ? 'default' : 'danger'}
-                />
-                <KpiCard
-                  label="Vendas FRONT"
-                  value={kpisLoading ? '—' : String(vendas)}
-                />
-                <KpiCard
-                  label="CPA"
-                  value={kpisLoading ? '—' : formatCurrency(cpa)}
-                  variant="spend"
-                />
-                <KpiCard
-                  label="Ticket Médio"
-                  value={kpisLoading ? '—' : formatCurrency(ticket)}
-                />
-                <KpiCard
-                  label="Show rate"
-                  value="—"
-                  subtitle="Sem dados"
-                  muted
-                />
-              </div>
-            );
-          })()}
+            {/* ═══════════ KPIs ═══════════ */}
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
+              <KpiCard
+                icon={<DollarSign className="w-3.5 h-3.5" />}
+                label="Investimento"
+                value={kpisLoading ? '—' : formatCurrency(inv)}
+                tooltip="Total investido em Meta Ads no período"
+                variant="spend"
+              />
+              <KpiCard
+                icon={<TrendingUp className="w-3.5 h-3.5" />}
+                label="Faturamento"
+                value={kpisLoading ? '—' : formatCurrency(fat)}
+                tooltip="Receita bruta (customer_paid)"
+                variant="revenue"
+              />
+              <KpiCard
+                icon={<Wallet className="w-3.5 h-3.5" />}
+                label="Lucro"
+                value={kpisLoading ? '—' : formatCurrency(lucro)}
+                tooltip="Faturamento - Investimento"
+                variant={lucro >= 0 ? 'profit' : 'danger'}
+              />
+              <KpiCard
+                icon={<BarChart3 className="w-3.5 h-3.5" />}
+                label="ROAS"
+                value={kpisLoading ? '—' : `${roas.toFixed(2)}x`}
+                tooltip="Return on Ad Spend"
+                variant={roas >= 2 ? 'profit' : roas >= 1 ? 'default' : 'danger'}
+                highlight={roas >= 2}
+              />
+              <KpiCard
+                icon={<Ticket className="w-3.5 h-3.5" />}
+                label="Vendas FRONT"
+                value={kpisLoading ? '—' : String(vendas)}
+                tooltip="Total de vendas da oferta principal"
+              />
+              <KpiCard
+                icon={<ShoppingCart className="w-3.5 h-3.5" />}
+                label="CPA"
+                value={kpisLoading ? '—' : formatCurrency(cpa)}
+                tooltip="Custo por Aquisição"
+                variant="spend"
+              />
+              <KpiCard
+                icon={<CreditCard className="w-3.5 h-3.5" />}
+                label="Ticket Médio"
+                value={kpisLoading ? '—' : formatCurrency(ticket)}
+                tooltip="Faturamento / Vendas"
+              />
+              <KpiCard
+                icon={<Target className="w-3.5 h-3.5" />}
+                label="Show Rate"
+                value="—"
+                subtitle="Em breve"
+                muted
+                tooltip="Requer dados de presença no evento"
+              />
+            </div>
 
-          {/* Seletor de lote */}
-          {lotsAnalysis.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Filtrar por lote:</span>
-              <Tabs
-                value={selectedLotId || 'all'}
-                onValueChange={(v) => setSelectedLotId(v === 'all' ? null : v)}
-              >
-                <TabsList className="h-8">
-                  <TabsTrigger value="all" className="text-xs px-3 h-7">
+            {/* ═══════════ LOT SELECTOR ═══════════ */}
+            {lotsAnalysis.length > 0 && (
+              <div className="flex items-center gap-3 py-1">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Lote:</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <LotPill
+                    active={!selectedLotId}
+                    onClick={() => setSelectedLotId(null)}
+                  >
                     Todos
-                  </TabsTrigger>
-                  {lotsAnalysis.map((la) => (
-                    <TabsTrigger
-                      key={la.lot.id}
-                      value={la.lot.id}
-                      className="text-xs px-3 h-7"
-                    >
-                      {la.lot.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            </div>
-          )}
-
-          {/* Passing diário */}
-          <Card className="p-4 space-y-3">
-            <div>
-              <h2 className="font-semibold">
-                Passing Diário — Ingressos
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Vendas diárias vs meta. Verde ≥ meta · Âmbar 70–99% · Vermelho &lt; 70%
-              </p>
-            </div>
-            {passingLoading ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
-                Carregando...
+                  </LotPill>
+                  {lotsAnalysis.map((la) => {
+                    const lotStatus = computeAutoStatus(
+                      la.lot.start_datetime,
+                      la.lot.end_datetime,
+                      null,
+                    );
+                    return (
+                      <LotPill
+                        key={la.lot.id}
+                        active={selectedLotId === la.lot.id}
+                        onClick={() => setSelectedLotId(la.lot.id)}
+                        status={lotStatus}
+                      >
+                        {la.lot.name}
+                      </LotPill>
+                    );
+                  })}
+                </div>
               </div>
-            ) : (
-              <PassingDiarioChart data={effectivePassingDiario} />
             )}
-          </Card>
 
-          {/* Evolução diária */}
-          {filteredSalesData.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">
-                Evolução Diária
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <TemporalChart
+            {/* ═══════════ PASSING DIÁRIO ═══════════ */}
+            <Section
+              icon={<Activity className="w-4 h-4" />}
+              title={`Passing Diário${lotLabel}`}
+              description="Vendas diárias vs meta distribuída"
+            >
+              {passingLoading ? (
+                <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
+                  Carregando...
+                </div>
+              ) : (
+                <PassingDiarioChart
+                  data={effectivePassingDiario}
+                />
+              )}
+            </Section>
+
+            {/* ═══════════ EVOLUÇÃO DIÁRIA ═══════════ */}
+            {filteredSalesData.length > 0 && (
+              <Section
+                icon={<TrendingUp className="w-4 h-4" />}
+                title={`Evolução Diária${lotLabel}`}
+                description="Faturamento e vendas ao longo do tempo"
+              >
+                <TemporalChart
+                  salesData={filteredSalesData}
+                  funnelOfferCodes={filteredOfferCodes}
+                  startDate={effectiveStartDate}
+                  endDate={effectiveEndDate}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ TABELA DIÁRIA ═══════════ */}
+            {filteredSalesData.length > 0 &&
+              editionData.start_datetime && (
+                <DailyBreakdownTable
+                  salesData={filteredSalesData}
+                  metaInsights={filteredMetaInsights}
+                  lotsAnalysis={lotsAnalysis}
+                  startDate={
+                    selectedLot?.lot.start_datetime ||
+                    editionData.start_datetime
+                  }
+                  endDate={
+                    selectedLot?.lot.end_datetime ||
+                    editionEndDate ||
+                    editionData.start_datetime
+                  }
+                />
+              )}
+
+            {/* ═══════════ CAMPANHAS ═══════════ */}
+            {filteredMetaInsights.length > 0 && (
+              <CampaignPerformanceTable
                 salesData={filteredSalesData}
-                funnelOfferCodes={filteredOfferCodes}
-                startDate={effectiveStartDate}
-                endDate={effectiveEndDate}
-              />
-            </Card>
-          )}
-
-          {/* Acompanhamento Diário */}
-          {filteredSalesData.length > 0 && editionData.start_datetime && (
-            <DailyBreakdownTable
-              salesData={filteredSalesData}
-              metaInsights={filteredMetaInsights}
-              lotsAnalysis={lotsAnalysis}
-              startDate={selectedLot?.lot.start_datetime || editionData.start_datetime}
-              endDate={selectedLot?.lot.end_datetime || editionEndDate || editionData.start_datetime}
-            />
-          )}
-
-          {/* Performance de Campanhas */}
-          {filteredMetaInsights.length > 0 && (
-            <CampaignPerformanceTable
-              salesData={filteredSalesData}
-              metaInsights={filteredMetaInsights}
-            />
-          )}
-
-          {/* Detalhamento por Lote */}
-          {funnelId && editionData.start_datetime && (
-            <Card className="p-4 space-y-3">
-              <LaunchProductsSalesBreakdown
-                lotsAnalysis={lotsAnalysis}
-                editionTotals={editionTotals}
-                unassignedSales={unassignedSales}
-              />
-            </Card>
-          )}
-
-          {/* Análise de conversão — bloco depende do modelo do funil */}
-          {funnelId && editionData.start_datetime && (
-            funnel?.funnel_model === 'lancamento_pago' ? (
-              <LaunchPagoConversaoBlock
-                funnelId={funnelId}
-                projectId={projectId}
-                edition={editionData}
-              />
-            ) : (
-              <LaunchConversionAnalysis
-                funnelId={funnelId}
-                projectId={projectId}
-                launchTag={funnel?.launch_tag ?? null}
-                startDate={startDate}
-                endDate={endDate}
-              />
-            )
-          )}
-
-          {/* Conversão Ingresso → Produto Principal */}
-          {funnel?.funnel_model === 'lancamento_pago' && (
-            <CrossPhaseConversionCard data={crossPhaseData} />
-          )}
-
-          {/* Formas de Pagamento */}
-          {filteredSalesData.length > 0 && (
-            <PaymentMethodAnalysis
-              salesData={filteredSalesData}
-            />
-          )}
-
-          {/* Saúde do Funil */}
-          {!healthLoading && healthMetrics && healthMetrics.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">Saúde do Funil</h2>
-              <FunnelHealthMetrics healthData={healthMetrics[0]} />
-            </Card>
-          )}
-
-          {/* UTM / Criativos */}
-          {filteredSalesData.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">
-                UTM / Criativos
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <UTMAnalysis
-                salesData={filteredSalesData}
-                funnelOfferCodes={filteredOfferCodes}
                 metaInsights={filteredMetaInsights}
-                metaCampaigns={campaigns}
-                metaAdsets={adsets}
-                metaAds={ads}
               />
-            </Card>
-          )}
+            )}
 
-          {/* Meta Ads — Campanhas */}
-          {filteredMetaInsights.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">
-                Meta Ads — Campanhas
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <MetaHierarchyAnalysis
-                insights={filteredMetaInsights}
-                campaigns={campaigns}
-                adsets={adsets}
-                ads={ads}
-                loading={metaHierarchyLoading}
+            {/* ═══════════ DETALHAMENTO POR LOTE ═══════════ */}
+            {funnelId && editionData.start_datetime && (
+              <Section
+                icon={<LayoutGrid className="w-4 h-4" />}
+                title="Detalhamento por Lote"
+                description="Receita, vendas e TX de OBs por lote"
+              >
+                <LaunchProductsSalesBreakdown
+                  lotsAnalysis={lotsAnalysis}
+                  editionTotals={editionTotals}
+                  unassignedSales={unassignedSales}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ CONVERSÃO ═══════════ */}
+            {funnelId && editionData.start_datetime && (
+              funnel?.funnel_model === 'lancamento_pago'
+                ? (
+                  <LaunchPagoConversaoBlock
+                    funnelId={funnelId}
+                    projectId={projectId}
+                    edition={editionData}
+                  />
+                ) : (
+                  <LaunchConversionAnalysis
+                    funnelId={funnelId}
+                    projectId={projectId}
+                    launchTag={funnel?.launch_tag ?? null}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                )
+            )}
+
+            {/* ═══════════ CROSS-PHASE ═══════════ */}
+            {funnel?.funnel_model === 'lancamento_pago' && (
+              <CrossPhaseConversionCard data={crossPhaseData} />
+            )}
+
+            {/* ═══════════ PAGAMENTOS ═══════════ */}
+            {filteredSalesData.length > 0 && (
+              <PaymentMethodAnalysis
                 salesData={filteredSalesData}
               />
-            </Card>
-          )}
-        </div>
-      </main>
-    </div>
+            )}
+
+            {/* ═══════════ SAÚDE ═══════════ */}
+            {!healthLoading &&
+              healthMetrics &&
+              healthMetrics.length > 0 && (
+                <Section
+                  icon={<Activity className="w-4 h-4" />}
+                  title="Saúde do Funil"
+                  description="Abandonos, reembolsos e chargebacks"
+                >
+                  <FunnelHealthMetrics
+                    healthData={healthMetrics[0]}
+                  />
+                </Section>
+              )}
+
+            {/* ═══════════ UTM ═══════════ */}
+            {filteredSalesData.length > 0 && (
+              <Section
+                icon={<Tag className="w-4 h-4" />}
+                title={`Fontes e Criativos${lotLabel}`}
+                description="Atribuição de vendas por UTM e criativos"
+              >
+                <UTMAnalysis
+                  salesData={filteredSalesData}
+                  funnelOfferCodes={filteredOfferCodes}
+                  metaInsights={filteredMetaInsights}
+                  metaCampaigns={campaigns}
+                  metaAdsets={adsets}
+                  metaAds={ads}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ META ADS ═══════════ */}
+            {filteredMetaInsights.length > 0 && (
+              <Section
+                icon={<Megaphone className="w-4 h-4" />}
+                title={`Meta Ads${lotLabel}`}
+                description="Campanhas, conjuntos e criativos"
+              >
+                <MetaHierarchyAnalysis
+                  insights={filteredMetaInsights}
+                  campaigns={campaigns}
+                  adsets={adsets}
+                  ads={ads}
+                  loading={metaHierarchyLoading}
+                  salesData={filteredSalesData}
+                />
+              </Section>
+            )}
+
+          </div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }
 
-function KpiCard({
-  label, value, subtitle, muted, variant = 'default',
+/* ── Section wrapper ─────────────────────────────────── */
+
+function Section({
+  icon, title, description, children,
 }: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden border-border/60">
+      <div className="border-l-2 border-cyan-500/40">
+        <div className="px-5 pt-4 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-cyan-400/70">{icon}</span>
+            <h2 className="font-semibold text-sm tracking-tight">
+              {title}
+            </h2>
+          </div>
+          {description && (
+            <p className="text-xs text-muted-foreground mt-0.5 ml-6">
+              {description}
+            </p>
+          )}
+        </div>
+        <div className="px-5 pb-5">{children}</div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── KPI Card ────────────────────────────────────────── */
+
+type KpiVariant =
+  | 'default'
+  | 'revenue'
+  | 'spend'
+  | 'danger'
+  | 'profit';
+
+function KpiCard({
+  icon, label, value, subtitle, muted, tooltip,
+  variant = 'default', highlight,
+}: {
+  icon: React.ReactNode;
   label: string;
   value: string;
   subtitle?: string;
   muted?: boolean;
-  variant?: 'default' | 'revenue' | 'spend' | 'danger';
+  tooltip?: string;
+  variant?: KpiVariant;
+  highlight?: boolean;
 }) {
-  const colorMap = {
-    default: 'text-cyan-400',
-    revenue: 'text-green-400',
-    spend: 'text-red-400',
-    danger: 'text-red-500',
+  const styles: Record<KpiVariant, {
+    value: string;
+    icon: string;
+    glow: string;
+  }> = {
+    default: {
+      value: 'text-cyan-400',
+      icon: 'text-cyan-400/50 bg-cyan-500/10',
+      glow: 'hover:shadow-[0_0_15px_rgba(34,211,238,0.08)]',
+    },
+    revenue: {
+      value: 'text-emerald-400',
+      icon: 'text-emerald-400/50 bg-emerald-500/10',
+      glow: 'hover:shadow-[0_0_15px_rgba(52,211,153,0.08)]',
+    },
+    spend: {
+      value: 'text-red-400',
+      icon: 'text-red-400/50 bg-red-500/10',
+      glow: 'hover:shadow-[0_0_15px_rgba(248,113,113,0.08)]',
+    },
+    danger: {
+      value: 'text-red-500',
+      icon: 'text-red-500/50 bg-red-500/10',
+      glow: 'hover:shadow-[0_0_15px_rgba(239,68,68,0.08)]',
+    },
+    profit: {
+      value: 'text-emerald-400',
+      icon: 'text-emerald-400/50 bg-emerald-500/10',
+      glow: 'hover:shadow-[0_0_15px_rgba(52,211,153,0.08)]',
+    },
   };
-  const color = muted ? 'text-muted-foreground' : colorMap[variant];
-  return (
-    <Card className="p-3 hover:border-cyan-500/40 transition-colors">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className={`text-lg font-bold tabular-nums mt-0.5 ${color}`}>
+
+  const s = muted
+    ? {
+      value: 'text-muted-foreground',
+      icon: 'text-muted-foreground/40 bg-muted/30',
+      glow: '',
+    }
+    : styles[variant];
+
+  const card = (
+    <Card
+      className={`
+        relative p-3 transition-all duration-150
+        hover:border-cyan-500/30
+        ${s.glow}
+        ${highlight ? 'ring-1 ring-cyan-500/20' : ''}
+      `}
+    >
+      {/* Icon badge */}
+      <div className={`
+        inline-flex items-center justify-center
+        w-6 h-6 rounded-md mb-1.5
+        ${s.icon}
+      `}>
+        {icon}
+      </div>
+
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-none">
+        {label}
+      </p>
+      <p className={`
+        text-lg font-bold tabular-nums mt-1 leading-none
+        ${s.value}
+      `}>
         {value}
       </p>
-      {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
+      {subtitle && (
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {subtitle}
+        </p>
+      )}
     </Card>
+  );
+
+  if (!tooltip) return card;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{card}</TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs max-w-48">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/* ── Lot Pill ────────────────────────────────────────── */
+
+function LotPill({
+  active, onClick, status, children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  status?: 'planned' | 'active' | 'finished';
+  children: React.ReactNode;
+}) {
+  const dotColor = status
+    ? STATUS_CONFIG[status].dot : undefined;
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        inline-flex items-center gap-1.5
+        px-3 py-1 rounded-full text-xs font-medium
+        transition-all duration-150 cursor-pointer
+        border
+        ${active
+          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.1)]'
+          : 'bg-card text-muted-foreground border-border hover:border-cyan-500/20 hover:text-cyan-400/80'
+        }
+      `}
+    >
+      {dotColor && (
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+      )}
+      {children}
+    </button>
   );
 }

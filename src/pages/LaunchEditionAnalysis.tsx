@@ -28,6 +28,8 @@ import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import TemporalChart from '@/components/funnel/TemporalChart';
 import { DailyBreakdownTable } from '@/components/launch/DailyBreakdownTable';
 import { CampaignPerformanceTable } from '@/components/launch/CampaignPerformanceTable';
+import { CrossPhaseConversionCard } from '@/components/launch/CrossPhaseConversionCard';
+import { useCrossPhaseConversion } from '@/hooks/useCrossPhaseConversion';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_MAP = {
@@ -159,6 +161,65 @@ export default function LaunchEditionAnalysis() {
     editionTotals,
     unassigned: unassignedSales,
   } = useLaunchLotsAnalysis(editionData?.id, editionSalesData, editionMetaInsights);
+
+  // Vendas do produto principal (fase vendas) — para cruzamento
+  const { data: produtoSalesData = [] } = useQuery({
+    queryKey: ['edition-produto-sales', projectId, funnelId, editionData?.id],
+    enabled: !!editionData && !!projectId && !!funnelId,
+    queryFn: async () => {
+      // Buscar offer_mappings vinculados a fases do tipo "vendas"
+      const { data: phases } = await supabase
+        .from('launch_phases')
+        .select('id')
+        .eq('edition_id', editionData!.id)
+        .in('phase_type', ['vendas', 'pitch', 'single_shot']);
+
+      if (!phases?.length) return [];
+
+      const phaseIds = phases.map(p => p.id);
+      const { data: offers } = await supabase
+        .from('offer_mappings')
+        .select('codigo_oferta')
+        .in('phase_id', phaseIds)
+        .eq('is_active', true);
+
+      if (!offers?.length) return [];
+
+      const offerCodes = offers
+        .map(o => o.codigo_oferta)
+        .filter(Boolean) as string[];
+
+      if (offerCodes.length === 0) return [];
+
+      const startDate = editionData!.start_datetime?.slice(0, 10);
+      const endDate = (editionData!.end_datetime || editionData!.event_datetime)?.slice(0, 10);
+
+      let q = supabase
+        .from('funnel_orders_view')
+        .select('order_id, customer_paid, buyer_email, economic_day, main_offer_code')
+        .eq('project_id', projectId)
+        .eq('funnel_id', funnelId!)
+        .in('main_offer_code', offerCodes);
+
+      if (startDate) q = q.gte('economic_day', startDate);
+      if (endDate) q = q.lte('economic_day', endDate);
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      return (data || []).map(r => ({
+        offer_code: r.main_offer_code,
+        gross_amount: Number(r.customer_paid) || 0,
+        buyer_email: r.buyer_email,
+        economic_day: r.economic_day,
+      }));
+    },
+  });
+
+  // Cruzamento Ingresso → Produto Principal
+  const crossPhaseData = useCrossPhaseConversion(
+    editionSalesData, produtoSalesData, lotsAnalysis
+  );
 
   // Seletor de lote — filtra blocos abaixo
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
@@ -531,6 +592,11 @@ export default function LaunchEditionAnalysis() {
                 endDate={endDate}
               />
             )
+          )}
+
+          {/* Conversão Ingresso → Produto Principal */}
+          {funnel?.funnel_model === 'lancamento_pago' && (
+            <CrossPhaseConversionCard data={crossPhaseData} />
           )}
 
           {/* Formas de Pagamento */}

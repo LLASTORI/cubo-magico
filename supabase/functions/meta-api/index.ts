@@ -1149,10 +1149,11 @@ async function getAdsetsForAccountWithPagination(accessToken: string, accountId:
 // Fetch ads directly from Meta API with pagination
 async function getAdsForAccountWithPagination(accessToken: string, accountId: string) {
   const allAds: any[] = []
-  // Request effective_object_story_id for public post link and thumbnail_url for preview image
+  // Request effective_object_story_id for public post link, thumbnail_url for preview image,
+  // and effective_instagram_media_id for Instagram permalink
   // effective_object_story_id format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
   const effectiveStatus = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED"]')
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,adset_id,status,effective_status,campaign_id,creative{id,effective_object_story_id,thumbnail_url},created_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,adset_id,status,effective_status,campaign_id,creative{id,effective_object_story_id,thumbnail_url,effective_instagram_media_id},created_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
 
@@ -1186,11 +1187,15 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
         // Get thumbnail URL for inline preview
         const thumbnailUrl = a.creative?.thumbnail_url || null
 
+        // Get effective_instagram_media_id for Instagram permalink lookup
+        const igMediaId = a.creative?.effective_instagram_media_id || null
+
         return {
           ...a,
           ad_account_id: accountId,
           preview_url: previewUrl,
           thumbnail_url: thumbnailUrl,
+          effective_instagram_media_id: igMediaId,
         }
       })
       allAds.push(...ads)
@@ -1273,6 +1278,93 @@ async function syncAdsets(
   return { success: true, synced, errors, total: allAdsets.length }
 }
 
+// Batch-fetch Instagram permalinks for ads that have effective_instagram_media_id
+// Uses Graph API batch requests to avoid individual calls per ad
+async function fetchInstagramPermalinks(
+  accessToken: string,
+  ads: any[]
+): Promise<Map<string, string>> {
+  const permalinkMap = new Map<string, string>()
+
+  // Collect ads that have an Instagram media ID
+  const adsWithIgMedia = ads.filter(ad => ad.effective_instagram_media_id)
+  if (adsWithIgMedia.length === 0) return permalinkMap
+
+  console.log(`Fetching Instagram permalinks for ${adsWithIgMedia.length} ads...`)
+
+  // Process in batches of 50 (Graph API batch limit)
+  const BATCH_SIZE = 50
+  const CONCURRENCY = 3
+
+  for (let i = 0; i < adsWithIgMedia.length; i += BATCH_SIZE * CONCURRENCY) {
+    const chunks: any[][] = []
+    for (let j = 0; j < CONCURRENCY; j++) {
+      const start = i + j * BATCH_SIZE
+      const chunk = adsWithIgMedia.slice(start, start + BATCH_SIZE)
+      if (chunk.length > 0) chunks.push(chunk)
+    }
+
+    const results = await Promise.allSettled(
+      chunks.map(async (chunk) => {
+        // Build batch request body
+        const batchPayload = chunk.map((ad, idx) => ({
+          method: 'GET',
+          relative_url: `${ad.effective_instagram_media_id}?fields=permalink`,
+        }))
+
+        try {
+          const resp = await fetch(
+            `${GRAPH_API_BASE}/`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                access_token: accessToken,
+                batch: JSON.stringify(batchPayload),
+              }),
+            }
+          )
+
+          if (!resp.ok) {
+            console.error(`IG permalink batch error: ${resp.status}`)
+            return
+          }
+
+          const batchResults = await resp.json()
+
+          if (Array.isArray(batchResults)) {
+            batchResults.forEach((result: any, idx: number) => {
+              if (result.code === 200 && result.body) {
+                try {
+                  const body = JSON.parse(result.body)
+                  if (body.permalink) {
+                    permalinkMap.set(
+                      chunk[idx].effective_instagram_media_id,
+                      body.permalink
+                    )
+                  }
+                } catch {
+                  // skip unparseable responses
+                }
+              }
+            })
+          }
+        } catch (err) {
+          console.error('IG permalink batch fetch error:', err)
+        }
+      })
+    )
+
+    // Small delay between concurrent batches
+    if (i + BATCH_SIZE * CONCURRENCY < adsWithIgMedia.length) {
+      await delay(500)
+    }
+  }
+
+  console.log(`Instagram permalinks resolved: ${permalinkMap.size}/${adsWithIgMedia.length}`)
+  return permalinkMap
+}
+
 // Sync ads to database - use ad_id as primary key (globally unique in Meta)
 async function syncAds(
   supabase: any,
@@ -1299,22 +1391,33 @@ async function syncAds(
 
   console.log(`Total ads fetched: ${allAds.length}`)
 
+  // Batch-fetch Instagram permalinks for ads with effective_instagram_media_id
+  const igPermalinkMap = await fetchInstagramPermalinks(accessToken, allAds)
+
   // Upsert handles duplicates - no need to delete first
   // This removes the race condition that was causing duplicate key errors
 
-  const adRecords = allAds.map(ad => ({
-    project_id: projectId,
-    ad_account_id: ad.ad_account_id,
-    campaign_id: ad.campaign_id,
-    adset_id: ad.adset_id,
-    ad_id: ad.id,
-    ad_name: ad.name || null,
-    status: ad.status || null,
-    creative_id: ad.creative?.id || null,
-    preview_url: ad.preview_url || null, // Public Facebook post URL
-    thumbnail_url: ad.thumbnail_url || null, // Thumbnail image for inline preview
-    updated_at: new Date().toISOString(),
-  }))
+  const adRecords = allAds.map(ad => {
+    const igMediaId = ad.effective_instagram_media_id
+    const igPermalink = igMediaId
+      ? (igPermalinkMap.get(igMediaId) || null)
+      : null
+
+    return {
+      project_id: projectId,
+      ad_account_id: ad.ad_account_id,
+      campaign_id: ad.campaign_id,
+      adset_id: ad.adset_id,
+      ad_id: ad.id,
+      ad_name: ad.name || null,
+      status: ad.status || null,
+      creative_id: ad.creative?.id || null,
+      preview_url: ad.preview_url || null, // Public Facebook post URL
+      thumbnail_url: ad.thumbnail_url || null, // Thumbnail image for inline preview
+      instagram_permalink: igPermalink, // Instagram post permalink
+      updated_at: new Date().toISOString(),
+    }
+  })
 
   // Use upsert to avoid duplicate key errors
   for (let i = 0; i < adRecords.length; i += DB_INSERT_BATCH_SIZE) {

@@ -27,6 +27,7 @@ interface MetaAd {
   status: string | null;
   preview_url: string | null;
   thumbnail_url: string | null;
+  instagram_permalink: string | null;
 }
 
 interface MetaInsight {
@@ -176,7 +177,7 @@ export const useMetaHierarchy = ({
         const batch = insightIds.adIds.slice(i, i + batchSize);
         const { data, error } = await supabase
           .from('meta_ads')
-          .select('id, ad_id, ad_name, adset_id, campaign_id, status, preview_url, thumbnail_url')
+          .select('id, ad_id, ad_name, adset_id, campaign_id, status, preview_url, thumbnail_url, instagram_permalink')
           .eq('project_id', projectId!)
           .in('ad_id', batch);
         if (error) throw error;

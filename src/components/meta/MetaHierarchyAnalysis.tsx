@@ -48,6 +48,7 @@ interface MetaAd {
   status: string | null;
   preview_url: string | null;
   thumbnail_url?: string | null;
+  instagram_permalink?: string | null;
 }
 
 interface SalesDataItem {
@@ -73,6 +74,7 @@ interface HierarchyMetrics {
   status?: string | null;
   previewUrl?: string | null;
   thumbnailUrl?: string | null;
+  instagramPermalink?: string | null;
   spend: number;
   impressions: number;
   clicks: number;
@@ -217,6 +219,7 @@ export const MetaHierarchyAnalysis = ({
     level: number,
     previewUrl?: string | null,
     thumbnailUrl?: string | null,
+    instagramPermalink?: string | null,
   ): HierarchyMetrics => {
     const { sales, revenue } = getSalesForLevel(level, id);
     return {
@@ -225,6 +228,7 @@ export const MetaHierarchyAnalysis = ({
       status,
       previewUrl,
       thumbnailUrl,
+      instagramPermalink,
       spend: data.spend,
       impressions: data.impressions,
       clicks: data.clicks,
@@ -325,6 +329,7 @@ export const MetaHierarchyAnalysis = ({
       return buildMetrics(
         id, displayName, ad?.status, data, totalSpend, 2,
         ad?.preview_url, ad?.thumbnail_url,
+        ad?.instagram_permalink,
       );
     }).sort((a, b) => b.spend - a.spend);
   }, [adLevelInsights, ads, salesByAd]);
@@ -376,6 +381,7 @@ export const MetaHierarchyAnalysis = ({
       let status: string | null = null;
       let previewUrl: string | null = null;
       let thumbnailUrl: string | null = null;
+      let instagramPermalink: string | null = null;
 
       if (currentLevel === 0) {
         const campaign = campaigns.find(c => c.campaign_id === id);
@@ -397,11 +403,12 @@ export const MetaHierarchyAnalysis = ({
         status = ad?.status || null;
         previewUrl = ad?.preview_url || null;
         thumbnailUrl = ad?.thumbnail_url || null;
+        instagramPermalink = ad?.instagram_permalink || null;
       }
 
       return buildMetrics(
         id, name, status, d, totalSpend, currentLevel,
-        previewUrl, thumbnailUrl,
+        previewUrl, thumbnailUrl, instagramPermalink,
       );
     }).sort((a, b) => b.spend - a.spend);
 
@@ -521,14 +528,21 @@ export const MetaHierarchyAnalysis = ({
               <TableCell className="p-1">
                 <a
                   href={
-                    item.previewUrl
+                    item.instagramPermalink
+                    || item.previewUrl
                     || `https://www.facebook.com/ads/library/?id=${item.id}`
                   }
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   className="block group"
-                  title="Abrir na Biblioteca de Anúncios"
+                  title={
+                    item.instagramPermalink
+                      ? 'Abrir post no Instagram'
+                      : item.previewUrl
+                        ? 'Abrir post no Facebook'
+                        : 'Abrir na Biblioteca de Anúncios'
+                  }
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded border flex items-center justify-center group-hover:opacity-80 transition-opacity cursor-pointer">
                     <ExternalLink className="w-5 h-5 text-white" />

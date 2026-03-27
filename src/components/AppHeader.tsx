@@ -106,7 +106,7 @@ export const AppHeader = ({
       case '/': return 'Visão Geral do Projeto';
       case '/busca-rapida': return 'Busca Rápida - Hotmart';
       case '/meta-ads': return 'Meta Ads';
-      case '/funnel-analysis': return 'Análise de Funil';
+      case '/funnel-analysis': return 'Análise de Perpétuos';
       case '/analise-mensal': return 'Análise Mensal';
       case '/agencia': return 'Visão da Agência';
       case '/undefined-offers': return 'Ofertas a Definir';
@@ -222,7 +222,7 @@ export const AppHeader = ({
                             className={`gap-2 cursor-pointer ${currentPath.includes('/funnel-analysis') ? 'bg-muted' : ''}`}
                           >
                             <BarChart3 className="w-4 h-4" />
-                            Análise de Funil
+                            Análise de Perpétuos
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => navigateToProject('/analise-mensal')} 

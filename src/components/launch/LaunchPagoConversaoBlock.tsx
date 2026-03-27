@@ -27,15 +27,17 @@ function useConversaoData(projectId: string, funnelId: string, edition: LaunchEd
   const endDate = edition.end_date;
   const eventDate = edition.event_date;
 
-  // Phases for this funnel (by phase_order)
+  // Phases for this edition (by phase_type)
   const { data: phases = [], isLoading: phasesLoading } = useQuery({
-    queryKey: ['pago-phases-conv', funnelId],
+    queryKey: ['pago-phases-conv', funnelId, edition.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('launch_phases')
-        .select('id, phase_order')
+        .select('id, phase_order, phase_type')
         .eq('funnel_id', funnelId)
         .order('phase_order');
+      if (edition.id) q = q.eq('edition_id', edition.id);
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
@@ -58,21 +60,26 @@ function useConversaoData(projectId: string, funnelId: string, edition: LaunchEd
     staleTime: 5 * 60 * 1000,
   });
 
-  const phase1 = phases.find(p => p.phase_order === 1);
-  const phase4 = phases.find(p => p.phase_order === 4);
+  const INGRESSO_TYPES = ['captacao_ingresso', 'captacao'];
+  const PRODUTO_TYPES = ['vendas', 'pitch', 'single_shot'];
+
+  const phaseIngresso = phases.find(p => INGRESSO_TYPES.includes(p.phase_type));
+  const phaseProduto = phases.find(p => PRODUTO_TYPES.includes(p.phase_type));
 
   const ingressoOfferCodes = useMemo(
-    () => phase1
-      ? offerMappings.filter(m => m.phase_id === phase1.id).map(m => m.codigo_oferta).filter(Boolean)
+    () => phaseIngresso
+      ? offerMappings.filter(m => m.phase_id === phaseIngresso.id).map(m => m.codigo_oferta).filter(Boolean)
       : [],
-    [phase1, offerMappings],
+    [phaseIngresso, offerMappings],
   );
   const produtoOfferCodes = useMemo(
-    () => phase4
-      ? offerMappings.filter(m => m.phase_id === phase4.id).map(m => m.codigo_oferta).filter(Boolean)
+    () => phaseProduto
+      ? offerMappings.filter(m => m.phase_id === phaseProduto.id).map(m => m.codigo_oferta).filter(Boolean)
       : [],
-    [phase4, offerMappings],
+    [phaseProduto, offerMappings],
   );
+
+  const hasProdutoPhase = !!phaseProduto;
 
   const useMainFallbackIngresso = ingressoOfferCodes.length === 0;
   const useMainFallbackProduto  = produtoOfferCodes.length === 0;
@@ -141,7 +148,7 @@ function useConversaoData(projectId: string, funnelId: string, edition: LaunchEd
   const txConversao = compradores > 0 ? (compradoresProduto / compradores) * 100 : 0;
   const ticketMedio = compradoresProduto > 0 ? receitaProduto / compradoresProduto : 0;
 
-  return { compradores, compradoresProduto, txConversao, receitaProduto, ticketMedio, isLoading };
+  return { compradores, compradoresProduto, txConversao, receitaProduto, ticketMedio, isLoading, hasProdutoPhase };
 }
 
 // UTM data for orders in the edition period (for produto principal)
@@ -232,16 +239,18 @@ export function LaunchPagoConversaoBlock({
     receitaProduto,
     ticketMedio,
     isLoading,
+    hasProdutoPhase,
   } = useConversaoData(projectId, funnelId, edition);
 
   const utm = useUTMData(projectId, funnelId, edition);
 
+  const noProduto = !hasProdutoPhase || (compradoresProduto === 0 && !isLoading);
   const rows = [
     { label: 'Compradores de ingresso', value: isLoading ? null : compradores },
-    { label: 'Compradores do produto principal', value: isLoading ? null : compradoresProduto },
-    { label: 'TX ingresso→produto', value: isLoading ? null : formatPercent(txConversao), isPercent: true },
-    { label: 'Receita produto principal', value: isLoading ? null : formatCurrency(receitaProduto), isCurrency: true },
-    { label: 'Ticket médio', value: isLoading ? null : formatCurrency(ticketMedio), isCurrency: true },
+    { label: 'Compradores do produto principal', value: isLoading ? null : (noProduto && !hasProdutoPhase ? '—' : compradoresProduto) },
+    { label: 'TX ingresso→produto', value: isLoading ? null : (noProduto && !hasProdutoPhase ? '—' : formatPercent(txConversao)), isPercent: true },
+    { label: 'Receita produto principal', value: isLoading ? null : (noProduto && !hasProdutoPhase ? '—' : formatCurrency(receitaProduto)), isCurrency: true },
+    { label: 'Ticket médio', value: isLoading ? null : (noProduto && !hasProdutoPhase ? '—' : formatCurrency(ticketMedio)), isCurrency: true },
   ];
 
   return (
@@ -271,6 +280,12 @@ export function LaunchPagoConversaoBlock({
           ))}
         </TableBody>
       </Table>
+
+      {!isLoading && !hasProdutoPhase && (
+        <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+          Esta edição não possui fase de Vendas configurada. Métricas de produto principal ficam indisponíveis até que uma fase do tipo "Vendas" seja criada e tenha ofertas vinculadas.
+        </p>
+      )}
 
       {/* UTM tabs */}
       <Tabs defaultValue="campanhas" className="w-full">

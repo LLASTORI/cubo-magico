@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 26/03/2026 (sessão 36 — Onda 2E + fix meta_insights escopo)
+> Última atualização: 26/03/2026 (sessão 37 — health metrics + renomear menu + fix conversão + UX)
 
 ---
 
@@ -68,11 +68,21 @@
 - [x] `editionSalesData` via `funnel_orders_view` filtrado pelo período da edição ✅
 - [x] `funnelOfferCodes` computado via useMemo ✅
 - [x] PaymentMethodAnalysis renderizado na tela de edição ✅
-- [x] FunnelHealthMetrics renderizado (nota: hook usa `hotmart_sales` — TODO migrar) ✅
+- [x] FunnelHealthMetrics renderizado ✅
 - [x] UTMAnalysis renderizado com dados Meta ✅
 - [x] MetaHierarchyAnalysis renderizado com campanhas/adsets/ads ✅
 - [x] Passo 6 (filtrar lancamento_pago de FunnelAnalysis) — já resolvido nativamente ✅
 - [x] Fix: meta_insights escopado por campaign_ids das vendas (campanhas PERPETUO removidas) ✅
+- [x] Build: zero erros ✅
+
+---
+
+## ✅ Sessão 37 — 4 tarefas em sequência
+
+- [x] `useFunnelHealthMetrics`: param `funnelId` opcional — suporta lancamento_pago ✅
+- [x] Menu: "Análise de Funil" → "Análise de Perpétuos" ✅
+- [x] `LaunchPagoConversaoBlock`: lookup por `phase_type` + filtro `edition_id` (fix TX 0%) ✅
+- [x] UX: KPI cards com `text-cyan-400`, hover cyan, show rate muted ✅
 - [x] Build: zero erros ✅
 
 ---

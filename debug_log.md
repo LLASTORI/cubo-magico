@@ -5,8 +5,39 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-26 (sessão 36) — Onda 2E: blocos reutilizáveis na edição
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Onda 2D ✅ | Onda 2E ✅ | Lovable removido ✅
+- **Data:** 2026-03-26 (sessão 37) — 4 tarefas: health metrics, renomear menu, fix conversão, UX
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37 ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-26] Sessão 37 — 4 tarefas em sequência ✅
+
+**Tarefa 1 — useFunnelHealthMetrics: suporte a funnelId**
+- Hook já usava `crm_transactions` (não `hotmart_sales` — TODO enganoso)
+- Bug real: query buscava apenas `funnel_type = 'perpetuo'`, ignorando funis lancamento_pago
+- Fix: adicionado param `funnelId` opcional; quando presente, busca esse funil específico
+- Caller `LaunchEditionAnalysis` agora passa `funnelId` → dados de saúde aparecem corretamente
+- Caller `CuboMagicoDashboard` não afetado (não passa funnelId, continua buscando perpétuos)
+
+**Tarefa 2 — Renomear "Análise de Funil" → "Análise de Perpétuos"**
+- AppHeader: título da página e item do menu dropdown
+- FunnelAnalysis: lockedMessage da IA
+- Apenas textos visíveis alterados, nenhum nome de rota/hook/componente
+
+**Tarefa 3 — TX ingresso→produto 0% no LaunchPagoConversaoBlock**
+- Diagnóstico SQL: fases tinham `phase_order` não sequencial (8 para Mar_26, 4/5/6 para Abril_26)
+- Bug: componente usava `phase_order === 1` e `phase_order === 4` hardcoded
+- Fix: agora usa `phase_type` (`captacao_ingresso` para ingresso, `vendas`/`pitch` para produto)
+- Query de fases filtrada por `edition_id` (antes pegava todas as edições)
+- Mar_26 não tem fase "Vendas" → legitimamente sem produto → mensagem informativa exibida
+
+**Tarefa 4 — Refinamentos visuais/UX**
+- KPI values: `text-cyan-400` (cubo-design), labels `uppercase tracking-wider`
+- KPI cards: `hover:border-cyan-500/40 transition-colors`
+- Show rate: `"—"` + `"Requer dados de presença"` (muted) em vez de `"N/A"` bruto
+- Espaçamento já era `space-y-6` — OK
+
+**Build:** zero erros ✅
 
 ---
 

@@ -763,7 +763,7 @@ const FunnelAnalysis = () => {
                 <FeatureGate 
                   featureKey="ai_analysis.funnel" 
                   showLocked 
-                  lockedMessage="Análise de Funil com IA requer ativação do módulo ou upgrade do plano"
+                  lockedMessage="Análise de Perpétuos com IA requer ativação do módulo ou upgrade do plano"
                 >
                   {funnels.length > 0 ? (
                     <AIInsightsTab 

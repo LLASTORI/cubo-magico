@@ -152,10 +152,10 @@ export default function LaunchEditionAnalysis() {
     enabled: editionMetaInsights.length > 0,
   });
 
-  // Saúde do funil
-  // TODO: useFunnelHealthMetrics ainda usa hotmart_sales — migrar para funnel_orders_view
+  // Saúde do funil (abandonos, reembolsos, chargebacks via crm_transactions)
   const { healthMetrics, isLoading: healthLoading } = useFunnelHealthMetrics({
     projectId: projectId || undefined,
+    funnelId,
     startDate,
     endDate,
   });
@@ -252,8 +252,9 @@ export default function LaunchEditionAnalysis() {
             />
             <KpiCard
               label="Show rate"
-              value="N/A"
-              subtitle="Disponível em breve"
+              value="—"
+              subtitle="Requer dados de presença"
+              muted
             />
           </div>
 
@@ -318,7 +319,6 @@ export default function LaunchEditionAnalysis() {
           )}
 
           {/* Saúde do Funil */}
-          {/* TODO: useFunnelHealthMetrics ainda usa hotmart_sales — migrar para funnel_orders_view */}
           {!healthLoading && healthMetrics && healthMetrics.length > 0 && (
             <Card className="p-4 space-y-3">
               <h2 className="font-semibold">Saúde do Funil</h2>
@@ -361,12 +361,14 @@ export default function LaunchEditionAnalysis() {
 }
 
 function KpiCard({
-  label, value, subtitle,
-}: { label: string; value: string; subtitle?: string }) {
+  label, value, subtitle, muted,
+}: { label: string; value: string; subtitle?: string; muted?: boolean }) {
   return (
-    <Card className="p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-2xl font-bold tabular-nums mt-1">{value}</p>
+    <Card className="p-4 hover:border-cyan-500/40 transition-colors">
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className={`text-2xl font-bold tabular-nums mt-1 ${muted ? 'text-muted-foreground' : 'text-cyan-400'}`}>
+        {value}
+      </p>
       {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
     </Card>
   );

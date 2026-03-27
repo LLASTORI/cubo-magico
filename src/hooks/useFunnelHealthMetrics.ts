@@ -7,6 +7,7 @@ interface UseFunnelHealthMetricsProps {
   projectId: string | undefined;
   startDate: Date;
   endDate: Date;
+  funnelId?: string;
 }
 
 interface AbandonedSale {
@@ -63,7 +64,7 @@ export interface FunnelHealthData {
   abandonoAtribuivel: boolean;
 }
 
-export const useFunnelHealthMetrics = ({ projectId, startDate, endDate }: UseFunnelHealthMetricsProps) => {
+export const useFunnelHealthMetrics = ({ projectId, startDate, endDate, funnelId }: UseFunnelHealthMetricsProps) => {
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
   const enabled = !!projectId;
@@ -75,15 +76,20 @@ export const useFunnelHealthMetrics = ({ projectId, startDate, endDate }: UseFun
   const adjustedEndDate = endDateObj.toISOString().split('T')[0];
   const adjustedEndTimestamp = `${adjustedEndDate}T02:59:59.999Z`;
 
-  // Fetch perpetuo funnels
+  // Fetch funnels — specific funnel or all perpetuo funnels
   const funnelsQuery = useQuery({
-    queryKey: ['funnels-health-perpetuo', projectId],
+    queryKey: ['funnels-health', projectId, funnelId || 'perpetuo'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('funnels')
         .select('id, name')
-        .eq('project_id', projectId!)
-        .eq('funnel_type', 'perpetuo');
+        .eq('project_id', projectId!);
+      if (funnelId) {
+        q = q.eq('id', funnelId);
+      } else {
+        q = q.eq('funnel_type', 'perpetuo');
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },

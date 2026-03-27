@@ -15,6 +15,7 @@ import { useEdition } from '@/hooks/useLaunchEditions';
 import { useLaunchEditionData } from '@/hooks/useLaunchEditionData';
 import { useFunnelHealthMetrics } from '@/hooks/useFunnelHealthMetrics';
 import { useMetaHierarchy } from '@/hooks/useMetaHierarchy';
+import { useLaunchLotsAnalysis } from '@/hooks/useLaunchLotsAnalysis';
 import { PassingDiarioChart } from '@/components/launch/PassingDiarioChart';
 import { LaunchProductsSalesBreakdown } from '@/components/launch/LaunchProductsSalesBreakdown';
 import { LaunchConversionAnalysis } from '@/components/launch/LaunchConversionAnalysis';
@@ -148,6 +149,13 @@ export default function LaunchEditionAnalysis() {
     },
   });
 
+  // Análise por lote — agrupa vendas e spend por lote configurado
+  const {
+    lotsAnalysis,
+    editionTotals,
+    unassigned: unassignedSales,
+  } = useLaunchLotsAnalysis(editionData?.id, editionSalesData, editionMetaInsights);
+
   // Meta hierarchy (campaigns, adsets, ads)
   const { campaigns, adsets, ads, isLoading: metaHierarchyLoading } = useMetaHierarchy({
     projectId: projectId || undefined,
@@ -278,14 +286,13 @@ export default function LaunchEditionAnalysis() {
             )}
           </Card>
 
-          {/* Funil de conversão */}
+          {/* Detalhamento por Lote */}
           {funnelId && editionData.start_datetime && (
             <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">Funil de Conversão</h2>
               <LaunchProductsSalesBreakdown
-                funnelId={funnelId}
-                projectId={projectId}
-                salesData={editionSalesData}
+                lotsAnalysis={lotsAnalysis}
+                editionTotals={editionTotals}
+                unassignedSales={unassignedSales}
               />
             </Card>
           )}

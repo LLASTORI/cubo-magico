@@ -49,3 +49,36 @@ export interface LaunchLotOffer {
 export interface LaunchLotWithOffers extends LaunchLot {
   offers: LaunchLotOffer[];
 }
+
+// --- Tipos de Análise por Lote ---
+
+export interface OfferMetric {
+  offerMappingId: string;
+  role: LotOfferRole;
+  nomeProduto: string;
+  nomeOferta: string;
+  codigoOferta: string;
+  valor: number;
+  salesCount: number;
+  revenue: number;
+  /** TX de conversão vs FRONT do mesmo lote (0-100) */
+  conversionRate: number;
+}
+
+export interface LotAnalysis {
+  lot: LaunchLotWithOffers;
+  totalRevenue: number;
+  totalTickets: number; // count FRONT
+  totalSpend: number;
+  roas: number;
+  avgTicket: number;
+  offerMetrics: OfferMetric[];
+}
+
+export interface EditionTotals {
+  totalRevenue: number;
+  totalTickets: number;
+  totalSpend: number;
+  roas: number;
+  avgTicket: number;
+}

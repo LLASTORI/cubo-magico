@@ -1,12 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Calendar } from 'lucide-react';
+import { ArrowLeft, Calendar, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppHeader } from '@/components/AppHeader';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useTenantNavigation } from '@/navigation';
@@ -24,6 +25,7 @@ import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
 import UTMAnalysis from '@/components/funnel/UTMAnalysis';
 import { FunnelHealthMetrics } from '@/components/funnel/FunnelHealthMetrics';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
+import TemporalChart from '@/components/funnel/TemporalChart';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_MAP = {
@@ -156,6 +158,60 @@ export default function LaunchEditionAnalysis() {
     unassigned: unassignedSales,
   } = useLaunchLotsAnalysis(editionData?.id, editionSalesData, editionMetaInsights);
 
+  // Seletor de lote — filtra blocos abaixo
+  const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
+
+  const selectedLot = useMemo(
+    () => lotsAnalysis.find(la => la.lot.id === selectedLotId) ?? null,
+    [lotsAnalysis, selectedLotId]
+  );
+
+  // Dados filtrados pelo lote selecionado (ou edição inteira se "all")
+  const filteredSalesData = useMemo(() => {
+    if (!selectedLot) return editionSalesData;
+    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    const lotOfferCodes = selectedLot.lot.offers
+      .map(o => o.codigo_oferta).filter(Boolean) as string[];
+    return editionSalesData.filter(s => {
+      const day = s.economic_day;
+      if (!day || !lotStart) return false;
+      if (day < lotStart) return false;
+      if (lotEnd && day > lotEnd) return false;
+      if (s.offer_code && lotOfferCodes.includes(s.offer_code)) return true;
+      if (s.all_offer_codes?.some(c => lotOfferCodes.includes(c))) return true;
+      return false;
+    });
+  }, [selectedLot, editionSalesData]);
+
+  const filteredMetaInsights = useMemo(() => {
+    if (!selectedLot) return editionMetaInsights;
+    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    return editionMetaInsights.filter(m => {
+      const d = m.date_start?.slice(0, 10);
+      if (!d || !lotStart) return false;
+      if (d < lotStart) return false;
+      if (lotEnd && d > lotEnd) return false;
+      return true;
+    });
+  }, [selectedLot, editionMetaInsights]);
+
+  const filteredOfferCodes = useMemo(() => {
+    const codes = new Set<string>();
+    for (const s of filteredSalesData) {
+      if (s.offer_code) codes.add(s.offer_code);
+      if (s.all_offer_codes) s.all_offer_codes.forEach((c: string) => codes.add(c));
+    }
+    return Array.from(codes);
+  }, [filteredSalesData]);
+
+  // Datas efetivas (lote selecionado ou edição)
+  const effectiveStartDate = selectedLot?.lot.start_datetime
+    ? parseISO(selectedLot.lot.start_datetime) : startDate;
+  const effectiveEndDate = selectedLot?.lot.end_datetime
+    ? parseISO(selectedLot.lot.end_datetime) : endDate;
+
   // Meta hierarchy (campaigns, adsets, ads)
   const { campaigns, adsets, ads, isLoading: metaHierarchyLoading } = useMetaHierarchy({
     projectId: projectId || undefined,
@@ -269,10 +325,44 @@ export default function LaunchEditionAnalysis() {
             />
           </div>
 
+          {/* Seletor de lote */}
+          {lotsAnalysis.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Filtrar por lote:</span>
+              <Tabs
+                value={selectedLotId || 'all'}
+                onValueChange={(v) => setSelectedLotId(v === 'all' ? null : v)}
+              >
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-xs px-3 h-7">
+                    Todos
+                  </TabsTrigger>
+                  {lotsAnalysis.map((la) => (
+                    <TabsTrigger
+                      key={la.lot.id}
+                      value={la.lot.id}
+                      className="text-xs px-3 h-7"
+                    >
+                      {la.lot.name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+
           {/* Passing diário */}
           <Card className="p-4 space-y-3">
             <div>
-              <h2 className="font-semibold">Passing Diário — Ingressos</h2>
+              <h2 className="font-semibold">
+                Passing Diário — Ingressos
+                {selectedLot && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({selectedLot.lot.name})
+                  </span>
+                )}
+              </h2>
               <p className="text-sm text-muted-foreground">
                 Vendas diárias vs meta. Verde ≥ meta · Âmbar 70–99% · Vermelho &lt; 70%
               </p>
@@ -285,6 +375,26 @@ export default function LaunchEditionAnalysis() {
               <PassingDiarioChart data={passingDiario} />
             )}
           </Card>
+
+          {/* Evolução diária */}
+          {filteredSalesData.length > 0 && (
+            <Card className="p-4 space-y-3">
+              <h2 className="font-semibold">
+                Evolução Diária
+                {selectedLot && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({selectedLot.lot.name})
+                  </span>
+                )}
+              </h2>
+              <TemporalChart
+                salesData={filteredSalesData}
+                funnelOfferCodes={filteredOfferCodes}
+                startDate={effectiveStartDate}
+                endDate={effectiveEndDate}
+              />
+            </Card>
+          )}
 
           {/* Detalhamento por Lote */}
           {funnelId && editionData.start_datetime && (
@@ -317,11 +427,11 @@ export default function LaunchEditionAnalysis() {
           )}
 
           {/* Formas de Pagamento */}
-          {editionSalesData.length > 0 && (
+          {filteredSalesData.length > 0 && (
             <Card className="p-4 space-y-3">
               <h2 className="font-semibold">Formas de Pagamento</h2>
               <PaymentMethodAnalysis
-                salesData={editionSalesData}
+                salesData={filteredSalesData}
               />
             </Card>
           )}
@@ -335,13 +445,20 @@ export default function LaunchEditionAnalysis() {
           )}
 
           {/* UTM / Criativos */}
-          {editionSalesData.length > 0 && (
+          {filteredSalesData.length > 0 && (
             <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">UTM / Criativos</h2>
+              <h2 className="font-semibold">
+                UTM / Criativos
+                {selectedLot && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({selectedLot.lot.name})
+                  </span>
+                )}
+              </h2>
               <UTMAnalysis
-                salesData={editionSalesData}
-                funnelOfferCodes={funnelOfferCodes}
-                metaInsights={editionMetaInsights}
+                salesData={filteredSalesData}
+                funnelOfferCodes={filteredOfferCodes}
+                metaInsights={filteredMetaInsights}
                 metaCampaigns={campaigns}
                 metaAdsets={adsets}
                 metaAds={ads}
@@ -350,11 +467,18 @@ export default function LaunchEditionAnalysis() {
           )}
 
           {/* Meta Ads — Campanhas */}
-          {editionMetaInsights.length > 0 && (
+          {filteredMetaInsights.length > 0 && (
             <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">Meta Ads — Campanhas</h2>
+              <h2 className="font-semibold">
+                Meta Ads — Campanhas
+                {selectedLot && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({selectedLot.lot.name})
+                  </span>
+                )}
+              </h2>
               <MetaHierarchyAnalysis
-                insights={editionMetaInsights}
+                insights={filteredMetaInsights}
                 campaigns={campaigns}
                 adsets={adsets}
                 ads={ads}

@@ -42,6 +42,9 @@ import { DailyBreakdownTable } from '@/components/launch/DailyBreakdownTable';
 import { CampaignPerformanceTable } from '@/components/launch/CampaignPerformanceTable';
 import { CrossPhaseConversionCard } from '@/components/launch/CrossPhaseConversionCard';
 import { useCrossPhaseConversion } from '@/hooks/useCrossPhaseConversion';
+import { useFunnelScore } from '@/hooks/useFunnelScore';
+import type { PositionBreakdown } from '@/hooks/useFunnelScore';
+import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 
 /* ── helpers ─────────────────────────────────────────── */
@@ -295,6 +298,80 @@ export default function LaunchEditionAnalysis() {
 
   const crossPhaseData = useCrossPhaseConversion(
     editionSalesData, produtoSalesData, lotsAnalysis,
+  );
+
+  // Offer mappings do funil — para positionBreakdown
+  const { data: funnelOffers = [] } = useQuery({
+    queryKey: ['edition-offers', funnelId],
+    enabled: !!funnelId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('offer_mappings')
+        .select(
+          'codigo_oferta, tipo_posicao, ordem_posicao',
+        )
+        .eq('funnel_id', funnelId!)
+        .eq('is_active', true);
+      return data || [];
+    },
+  });
+
+  // Position breakdown para o Funnel Score
+  const positionBreakdown = useMemo((): PositionBreakdown[] => {
+    if (!funnelOffers.length || !editionSalesData.length) {
+      return [];
+    }
+    const frontCodes = funnelOffers
+      .filter(o =>
+        o.tipo_posicao === 'FRONT' ||
+        o.tipo_posicao === 'FE',
+      )
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
+    const frontCount = editionSalesData.filter(
+      s => s.offer_code && frontCodes.includes(s.offer_code),
+    ).length;
+    if (frontCount === 0) return [];
+
+    const posMap = new Map<string, {
+      tipo: string;
+      ordem: number;
+      vendas: number;
+    }>();
+
+    for (const offer of funnelOffers) {
+      const tipo = offer.tipo_posicao || 'OTHER';
+      if (tipo === 'FRONT' || tipo === 'FE') continue;
+      const ordem = offer.ordem_posicao || 1;
+      const key = `${tipo}${ordem}`;
+      const code = offer.codigo_oferta;
+      if (!code) continue;
+
+      const sales = editionSalesData.filter(
+        s => s.all_offer_codes?.includes(code),
+      ).length;
+
+      const existing = posMap.get(key);
+      if (existing) {
+        existing.vendas += sales;
+      } else {
+        posMap.set(key, { tipo, ordem, vendas: sales });
+      }
+    }
+
+    return Array.from(posMap.values()).map(p => ({
+      ...p,
+      receita: 0,
+      taxaConversao:
+        frontCount > 0
+          ? (p.vendas / frontCount) * 100
+          : 0,
+    }));
+  }, [funnelOffers, editionSalesData]);
+
+  // Funnel Score (0-100)
+  const funnelScore = useFunnelScore(
+    positionBreakdown, editionMetaInsights,
   );
 
   const [selectedLotId, setSelectedLotId] = useState<
@@ -723,6 +800,14 @@ export default function LaunchEditionAnalysis() {
                 tooltip="Requer dados de presença no evento"
               />
             </div>
+
+            {/* ═══════════ FUNNEL SCORE ═══════════ */}
+            {funnelScore && (
+              <FunnelScoreCard
+                score={funnelScore}
+                funnelName={funnel?.name}
+              />
+            )}
 
             {/* ═══════════ LOT SELECTOR ═══════════ */}
             {lotsAnalysis.length > 0 && (

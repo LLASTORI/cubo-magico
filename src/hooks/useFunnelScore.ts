@@ -227,7 +227,27 @@ export function useFunnelScore(
 
     if (totalWeight === 0) return null;
 
-    const finalScore = Math.round(totalScore / totalWeight);
+    let rawScore = Math.round(totalScore / totalWeight);
+
+    // Penalidade de gargalo: se qualquer sub-score < 40,
+    // o score total é penalizado proporcionalmente ao pior
+    // gargalo. Isso impede que um funil com um problema
+    // crítico pareça saudável.
+    const allScores = [
+      posScore, connScore, txPagScore, txChkScore,
+    ].filter((s): s is number => s !== null);
+    const worstScore = allScores.length > 0
+      ? Math.min(...allScores) : 100;
+
+    if (worstScore < 40) {
+      // Penalidade: reduz até 20 pontos proporcionalmente
+      const penalty = Math.round(
+        ((40 - worstScore) / 40) * 20,
+      );
+      rawScore = Math.max(0, rawScore - penalty);
+    }
+
+    const finalScore = rawScore;
     const meta = statusFromScore(finalScore);
 
     return {

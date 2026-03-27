@@ -75,9 +75,10 @@ export function MetaConversionFunnel({ data }: Props) {
   const txChkInfo = rateStatus(data.txCheckoutCompra, [50, 35, 20]);
 
   // TX end-to-end: Página → Compra
+  // Benchmark: ≥10% excelente, ≥7% bom, ≥3% pode melhorar, <3% precisa de ajustes
   const txPagCompra = data.landingPageViews > 0
     ? (data.purchases / data.landingPageViews) * 100 : 0;
-  const txPagCompraInfo = rateStatus(txPagCompra, [15, 8, 3]);
+  const txPagCompraInfo = rateStatus(txPagCompra, [10, 7, 3]);
 
   const steps = [
     {
@@ -174,33 +175,47 @@ export function MetaConversionFunnel({ data }: Props) {
 
       {/* End-to-end metric */}
       <div className={`
-        flex items-center justify-between
-        rounded-lg border p-3
+        rounded-xl border p-4
         ${STATUS_STYLES[txPagCompraInfo.status].ring}
         ${STATUS_STYLES[txPagCompraInfo.status].bg}
       `}>
-        <div className="flex items-center gap-2">
-          <Globe className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium">
-            TX Página → Compra (end-to-end)
-          </span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-semibold">
+              TX Página → Compra (end-to-end)
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`
+              text-xs px-2 py-0.5 rounded border font-semibold
+              ${STATUS_STYLES[txPagCompraInfo.status].badge}
+            `}>
+              {txPagCompraInfo.label}
+            </span>
+            <span className={`
+              text-2xl font-extrabold tabular-nums
+              ${STATUS_STYLES[txPagCompraInfo.status].text}
+            `}>
+              {txPagCompra.toFixed(1)}%
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={`
-            text-xs px-2 py-0.5 rounded border font-medium
-            ${STATUS_STYLES[txPagCompraInfo.status].badge}
-          `}>
-            {txPagCompraInfo.label}
-          </span>
-          <span className={`
-            text-xl font-bold tabular-nums
-            ${STATUS_STYLES[txPagCompraInfo.status].text}
-          `}>
-            {txPagCompra.toFixed(1)}%
-          </span>
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
           <span className="text-xs text-muted-foreground">
-            ({data.purchases} de {fmtNum(data.landingPageViews)} visitas)
+            {data.purchases} compras de {fmtNum(data.landingPageViews)} visitas
           </span>
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <span>
+              <span className="text-red-400 font-medium">&lt;7%</span> ruim
+            </span>
+            <span>
+              <span className="text-blue-400 font-medium">7–10%</span> bom
+            </span>
+            <span>
+              <span className="text-green-400 font-medium">&gt;10%</span> excelente
+            </span>
+          </div>
         </div>
       </div>
     </div>

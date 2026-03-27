@@ -46,6 +46,8 @@ import { usePeriodComparison } from '@/hooks/usePeriodComparison';
 import { PeriodComparisonTable } from '@/components/launch/PeriodComparisonTable';
 import { useLTVAnalysis } from '@/hooks/useLTVAnalysis';
 import { LTVAnalysisCard } from '@/components/launch/LTVAnalysisCard';
+import { FunnelFlowCards } from '@/components/launch/FunnelFlowCards';
+import { MetaConversionFunnel } from '@/components/launch/MetaConversionFunnel';
 import { useFunnelScore } from '@/hooks/useFunnelScore';
 import type { PositionBreakdown } from '@/hooks/useFunnelScore';
 import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
@@ -312,7 +314,7 @@ export default function LaunchEditionAnalysis() {
       const { data } = await supabase
         .from('offer_mappings')
         .select(
-          'codigo_oferta, tipo_posicao, ordem_posicao',
+          'codigo_oferta, tipo_posicao, ordem_posicao, nome_produto, nome_oferta',
         )
         .eq('funnel_id', funnelId!)
         .eq('is_active', true);
@@ -321,6 +323,7 @@ export default function LaunchEditionAnalysis() {
   });
 
   // Position breakdown para o Funnel Score
+  // Position breakdown enriquecido (com FRONT + produtos + receita)
   const positionBreakdown = useMemo((): PositionBreakdown[] => {
     if (!funnelOffers.length || !editionSalesData.length) {
       return [];
@@ -372,6 +375,148 @@ export default function LaunchEditionAnalysis() {
           : 0,
     }));
   }, [funnelOffers, editionSalesData]);
+
+  // Position cards enriquecidos (com FRONT + produtos)
+  const positionCards = useMemo((): import(
+    '@/components/launch/FunnelFlowCards'
+  ).PositionCard[] => {
+    if (!funnelOffers.length || !editionSalesData.length) {
+      return [];
+    }
+    const frontCodes = funnelOffers
+      .filter(o =>
+        o.tipo_posicao === 'FRONT' ||
+        o.tipo_posicao === 'FE',
+      )
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
+    const frontCount = editionSalesData.filter(
+      s => s.offer_code && frontCodes.includes(s.offer_code),
+    ).length;
+
+    const posMap = new Map<string, import(
+      '@/components/launch/FunnelFlowCards'
+    ).PositionCard>();
+
+    for (const offer of funnelOffers) {
+      const tipo = offer.tipo_posicao || 'OTHER';
+      const ordem = offer.ordem_posicao || 1;
+      const key = `${tipo}${ordem}`;
+      const code = offer.codigo_oferta;
+      if (!code) continue;
+
+      const isFront =
+        tipo === 'FRONT' || tipo === 'FE';
+      const matchingSales = isFront
+        ? editionSalesData.filter(
+            s => s.offer_code === code,
+          )
+        : editionSalesData.filter(
+            s => s.all_offer_codes?.includes(code),
+          );
+      const salesCount = matchingSales.length;
+      const revenue = isFront
+        ? matchingSales.reduce(
+            (s, sale) => s + (sale.main_revenue || sale.gross_amount || 0), 0,
+          )
+        : 0;
+
+      const existing = posMap.get(key);
+      if (existing) {
+        existing.vendas += salesCount;
+        existing.receita += revenue;
+        existing.produtos.push({
+          nome_produto: (offer as any).nome_produto || code,
+          nome_oferta: (offer as any).nome_oferta || null,
+          codigo_oferta: code,
+          vendas: salesCount,
+        });
+      } else {
+        posMap.set(key, {
+          tipo,
+          ordem,
+          vendas: salesCount,
+          receita: revenue,
+          taxaConversao: isFront
+            ? 100
+            : frontCount > 0
+              ? (salesCount / frontCount) * 100
+              : 0,
+          produtos: [{
+            nome_produto: (offer as any).nome_produto || code,
+            nome_oferta: (offer as any).nome_oferta || null,
+            codigo_oferta: code,
+            vendas: salesCount,
+          }],
+        });
+      }
+    }
+
+    return Array.from(posMap.values());
+  }, [funnelOffers, editionSalesData]);
+
+  const vendasFront = useMemo(() => {
+    const frontCodes = funnelOffers
+      .filter(o =>
+        o.tipo_posicao === 'FRONT' ||
+        o.tipo_posicao === 'FE',
+      )
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
+    return editionSalesData.filter(
+      s => s.offer_code && frontCodes.includes(s.offer_code),
+    ).length;
+  }, [funnelOffers, editionSalesData]);
+
+  // Meta Ads conversion funnel data
+  const metaFunnelData = useMemo(() => {
+    if (editionMetaInsights.length === 0) return null;
+
+    const getAction = (
+      actions: any[] | null, type: string,
+    ): number => {
+      if (!actions || !Array.isArray(actions)) return 0;
+      const a = actions.find(
+        (x: any) => x.action_type === type,
+      );
+      return a ? parseInt(a.value || '0', 10) : 0;
+    };
+
+    const seen = new Map<string, {
+      lc: number; lp: number; ic: number; p: number;
+    }>();
+    for (const i of editionMetaInsights) {
+      if (!i.ad_id) continue;
+      const key = `${i.ad_id}_${i.date_start}`;
+      if (seen.has(key)) continue;
+      seen.set(key, {
+        lc: getAction(i.actions, 'link_click'),
+        lp: getAction(i.actions, 'landing_page_view')
+          || getAction(i.actions, 'omni_landing_page_view'),
+        ic: getAction(i.actions, 'initiate_checkout')
+          || getAction(i.actions, 'omni_initiated_checkout'),
+        p: getAction(i.actions, 'purchase')
+          || getAction(i.actions, 'omni_purchase'),
+      });
+    }
+
+    let lc = 0, lp = 0, ic = 0, p = 0;
+    for (const v of seen.values()) {
+      lc += v.lc; lp += v.lp; ic += v.ic; p += v.p;
+    }
+
+    if (lc === 0) return null;
+
+    return {
+      linkClicks: lc,
+      landingPageViews: lp,
+      initiateCheckouts: ic,
+      purchases: p,
+      connectRate: lc > 0 ? (lp / lc) * 100 : 0,
+      txPaginaCheckout: lp > 0 ? (ic / lp) * 100 : 0,
+      txCheckoutCompra: ic > 0 ? (p / ic) * 100 : 0,
+    };
+  }, [editionMetaInsights]);
 
   // Funnel Score (0-100)
   const funnelScore = useFunnelScore(
@@ -822,6 +967,31 @@ export default function LaunchEditionAnalysis() {
                 score={funnelScore}
                 funnelName={funnel?.name}
               />
+            )}
+
+            {/* ═══════════ FLUXO DO FUNIL ═══════════ */}
+            {positionCards.length > 0 && (
+              <Section
+                icon={<LayoutGrid className="w-4 h-4" />}
+                title="Fluxo do Funil"
+                description="Posições com benchmark. Passe o mouse para ver métricas e receita potencial."
+              >
+                <FunnelFlowCards
+                  positions={positionCards}
+                  vendasFront={vendasFront}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ FUNIL DE CONVERSÃO META ═══════════ */}
+            {metaFunnelData && (
+              <Section
+                icon={<Megaphone className="w-4 h-4" />}
+                title="Funil de Conversão (Meta Ads)"
+                description="Cliques → Página → Checkout → Compra"
+              >
+                <MetaConversionFunnel data={metaFunnelData} />
+              </Section>
             )}
 
             {/* ═══════════ LOT SELECTOR ═══════════ */}

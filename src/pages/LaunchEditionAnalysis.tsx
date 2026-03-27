@@ -590,6 +590,7 @@ export default function LaunchEditionAnalysis() {
                 adsets={adsets}
                 ads={ads}
                 loading={metaHierarchyLoading}
+                salesData={filteredSalesData}
               />
             </Card>
           )}

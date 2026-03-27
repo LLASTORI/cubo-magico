@@ -601,12 +601,9 @@ export default function LaunchEditionAnalysis() {
 
           {/* Formas de Pagamento */}
           {filteredSalesData.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">Formas de Pagamento</h2>
-              <PaymentMethodAnalysis
-                salesData={filteredSalesData}
-              />
-            </Card>
+            <PaymentMethodAnalysis
+              salesData={filteredSalesData}
+            />
           )}
 
           {/* Saúde do Funil */}

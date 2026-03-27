@@ -522,6 +522,42 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
 
         if (!isMissingDeleteFunction) throw rpcError;
 
+        // Fallback: delete all FK-dependent rows manually
+        const fid = funnelToDelete.id;
+
+        // Get phase IDs for this funnel (needed for phase_campaigns + offer_mappings.phase_id)
+        const phaseIds = (
+          await supabase.from('launch_phases').select('id').eq('funnel_id', fid)
+        ).data?.map(p => p.id) || [];
+
+        if (phaseIds.length > 0) {
+          // Detach offer_mappings from phases
+          await supabase
+            .from('offer_mappings')
+            .update({ phase_id: null })
+            .in('phase_id', phaseIds);
+
+          // Delete phase_campaigns (FK via phase_id, not funnel_id)
+          await supabase
+            .from('phase_campaigns')
+            .delete()
+            .in('phase_id', phaseIds);
+        }
+
+        // Delete child tables that have funnel_id directly
+        for (const table of [
+          'launch_phases',
+          'launch_editions',
+          'launch_products',
+          'funnel_meta_accounts',
+          'funnel_changes',
+          'funnel_experiments',
+          'funnel_score_history',
+        ] as const) {
+          await supabase.from(table).delete().eq('funnel_id' as any, fid);
+        }
+
+        // Detach offer_mappings from funnel
         const { error: detachOffersError } = await supabase
           .from('offer_mappings')
           .update({
@@ -529,14 +565,14 @@ export function FunnelManager({ projectId, onFunnelChange }: FunnelManagerProps)
             id_funil: 'A Definir',
             updated_at: new Date().toISOString(),
           })
-          .eq('funnel_id', funnelToDelete.id);
+          .eq('funnel_id', fid);
 
         if (detachOffersError) throw detachOffersError;
 
         const { error: deleteError } = await supabase
           .from('funnels')
           .delete()
-          .eq('id', funnelToDelete.id);
+          .eq('id', fid);
 
         if (deleteError) throw deleteError;
       }

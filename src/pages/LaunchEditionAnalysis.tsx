@@ -42,6 +42,8 @@ import { DailyBreakdownTable } from '@/components/launch/DailyBreakdownTable';
 import { CampaignPerformanceTable } from '@/components/launch/CampaignPerformanceTable';
 import { CrossPhaseConversionCard } from '@/components/launch/CrossPhaseConversionCard';
 import { useCrossPhaseConversion } from '@/hooks/useCrossPhaseConversion';
+import { usePeriodComparison } from '@/hooks/usePeriodComparison';
+import { PeriodComparisonTable } from '@/components/launch/PeriodComparisonTable';
 import { useFunnelScore } from '@/hooks/useFunnelScore';
 import type { PositionBreakdown } from '@/hooks/useFunnelScore';
 import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
@@ -372,6 +374,14 @@ export default function LaunchEditionAnalysis() {
   // Funnel Score (0-100)
   const funnelScore = useFunnelScore(
     positionBreakdown, editionMetaInsights,
+  );
+
+  // Comparação semanal
+  const periodComparison = usePeriodComparison(
+    editionSalesData,
+    editionMetaInsights,
+    editionData?.start_datetime,
+    editionEndDate,
   );
 
   const [selectedLotId, setSelectedLotId] = useState<
@@ -897,6 +907,19 @@ export default function LaunchEditionAnalysis() {
                   }
                 />
               )}
+
+            {/* ═══════════ COMPARATIVO SEMANAL ═══════════ */}
+            {periodComparison.length >= 2 && (
+              <Section
+                icon={<BarChart3 className="w-4 h-4" />}
+                title="Comparativo Semanal"
+                description="Performance semana a semana com tendências"
+              >
+                <PeriodComparisonTable
+                  periods={periodComparison}
+                />
+              </Section>
+            )}
 
             {/* ═══════════ CAMPANHAS ═══════════ */}
             {filteredMetaInsights.length > 0 && (

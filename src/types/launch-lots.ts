@@ -1,5 +1,9 @@
 export type LotStatus = 'planned' | 'active' | 'finished';
-export type LotOfferRole = 'front' | 'bump' | 'upsell' | 'downsell';
+export type LotOfferRole =
+  | 'front'
+  | 'bump_1' | 'bump_2' | 'bump_3' | 'bump_4' | 'bump_5'
+  | 'upsell_1' | 'upsell_2' | 'upsell_3'
+  | 'downsell_1' | 'downsell_2' | 'downsell_3';
 
 export interface LaunchLot {
   id: string;

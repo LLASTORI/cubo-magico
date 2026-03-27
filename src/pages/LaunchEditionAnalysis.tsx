@@ -26,6 +26,8 @@ import UTMAnalysis from '@/components/funnel/UTMAnalysis';
 import { FunnelHealthMetrics } from '@/components/funnel/FunnelHealthMetrics';
 import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import TemporalChart from '@/components/funnel/TemporalChart';
+import { DailyBreakdownTable } from '@/components/launch/DailyBreakdownTable';
+import { CampaignPerformanceTable } from '@/components/launch/CampaignPerformanceTable';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_MAP = {
@@ -358,26 +360,58 @@ export default function LaunchEditionAnalysis() {
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KpiCard
-              label="Ingressos vendidos"
-              value={kpisLoading ? '—' : String(kpis?.totalIngressos ?? 0)}
-            />
-            <KpiCard
-              label="Faturamento total"
-              value={kpisLoading ? '—' : formatCurrency(kpis?.faturamentoTotal ?? 0)}
-            />
-            <KpiCard
-              label="ROAS da edição"
-              value={kpisLoading ? '—' : `${(kpis?.roas ?? 0).toFixed(2)}x`}
-            />
-            <KpiCard
-              label="Show rate"
-              value="—"
-              subtitle="Requer dados de presença"
-              muted
-            />
-          </div>
+          {(() => {
+            const inv = kpis?.totalSpend ?? 0;
+            const fat = kpis?.faturamentoTotal ?? 0;
+            const vendas = kpis?.totalIngressos ?? 0;
+            const lucro = fat - inv;
+            const cpa = vendas > 0 ? inv / vendas : 0;
+            const ticket = vendas > 0 ? fat / vendas : 0;
+            const roas = kpis?.roas ?? 0;
+            return (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+                <KpiCard
+                  label="Investimento"
+                  value={kpisLoading ? '—' : formatCurrency(inv)}
+                  variant="spend"
+                />
+                <KpiCard
+                  label="Faturamento"
+                  value={kpisLoading ? '—' : formatCurrency(fat)}
+                  variant="revenue"
+                />
+                <KpiCard
+                  label="Lucro"
+                  value={kpisLoading ? '—' : formatCurrency(lucro)}
+                  variant={lucro >= 0 ? 'revenue' : 'danger'}
+                />
+                <KpiCard
+                  label="ROAS"
+                  value={kpisLoading ? '—' : `${roas.toFixed(2)}x`}
+                  variant={roas >= 1 ? 'default' : 'danger'}
+                />
+                <KpiCard
+                  label="Vendas FRONT"
+                  value={kpisLoading ? '—' : String(vendas)}
+                />
+                <KpiCard
+                  label="CPA"
+                  value={kpisLoading ? '—' : formatCurrency(cpa)}
+                  variant="spend"
+                />
+                <KpiCard
+                  label="Ticket Médio"
+                  value={kpisLoading ? '—' : formatCurrency(ticket)}
+                />
+                <KpiCard
+                  label="Show rate"
+                  value="—"
+                  subtitle="Sem dados"
+                  muted
+                />
+              </div>
+            );
+          })()}
 
           {/* Seletor de lote */}
           {lotsAnalysis.length > 0 && (
@@ -448,6 +482,25 @@ export default function LaunchEditionAnalysis() {
                 endDate={effectiveEndDate}
               />
             </Card>
+          )}
+
+          {/* Acompanhamento Diário */}
+          {filteredSalesData.length > 0 && editionData.start_datetime && (
+            <DailyBreakdownTable
+              salesData={filteredSalesData}
+              metaInsights={filteredMetaInsights}
+              lotsAnalysis={lotsAnalysis}
+              startDate={selectedLot?.lot.start_datetime || editionData.start_datetime}
+              endDate={selectedLot?.lot.end_datetime || editionEndDate || editionData.start_datetime}
+            />
+          )}
+
+          {/* Performance de Campanhas */}
+          {filteredMetaInsights.length > 0 && (
+            <CampaignPerformanceTable
+              salesData={filteredSalesData}
+              metaInsights={filteredMetaInsights}
+            />
           )}
 
           {/* Detalhamento por Lote */}
@@ -547,15 +600,28 @@ export default function LaunchEditionAnalysis() {
 }
 
 function KpiCard({
-  label, value, subtitle, muted,
-}: { label: string; value: string; subtitle?: string; muted?: boolean }) {
+  label, value, subtitle, muted, variant = 'default',
+}: {
+  label: string;
+  value: string;
+  subtitle?: string;
+  muted?: boolean;
+  variant?: 'default' | 'revenue' | 'spend' | 'danger';
+}) {
+  const colorMap = {
+    default: 'text-cyan-400',
+    revenue: 'text-green-400',
+    spend: 'text-red-400',
+    danger: 'text-red-500',
+  };
+  const color = muted ? 'text-muted-foreground' : colorMap[variant];
   return (
-    <Card className="p-4 hover:border-cyan-500/40 transition-colors">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-bold tabular-nums mt-1 ${muted ? 'text-muted-foreground' : 'text-cyan-400'}`}>
+    <Card className="p-3 hover:border-cyan-500/40 transition-colors">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className={`text-lg font-bold tabular-nums mt-0.5 ${color}`}>
         {value}
       </p>
-      {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+      {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
     </Card>
   );
 }

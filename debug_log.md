@@ -5,8 +5,27 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-26 (sessão 37) — 4 tarefas: health metrics, renomear menu, fix conversão, UX
+- **Data:** 2026-03-26 (sessão 37 cont.) — fixes: delete_funnel_safe, cache invalidation, rota voltar
 - **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37 ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-26] Fix: delete_funnel_safe FK violations + cache + rota (sessão 37 cont.) ✅
+
+**Bug 1 — FK violation ao excluir funil:**
+- Erro: `update or delete on table funnels violates foreign key constraint funnel_meta_accounts_funnel_id_fkey`
+- Root cause: RPC `delete_funnel_safe` só tratava `offer_mappings`, mas 8 tabelas têm FK para `funnels`
+- Tabelas mapeadas via `information_schema`: `funnel_meta_accounts`, `funnel_changes`, `funnel_experiments`, `funnel_score_history`, `launch_editions`, `launch_phases`, `launch_products`, `offer_mappings`
+- Sub-FKs: `phase_campaigns` → `launch_phases`, `offer_mappings.phase_id` → `launch_phases`
+- Fix: RPC reescrita com deleção em ordem correta (filhos antes do pai). Migration `20260326200000`. Fallback frontend também atualizado.
+
+**Bug 2 — Funil deletado ainda aparece na tela de lançamentos:**
+- Root cause: `FunnelManager.handleDelete` fazia `fetchFunnels()` (estado local) mas não invalidava o cache React Query `['funnels-lancamento']` usado por `useLaunchData` no LaunchDashboard (`staleTime: 5min`)
+- Fix: adicionado `queryClient.invalidateQueries({ queryKey: ['funnels-lancamento'] })` após exclusão
+
+**Bug 3 — Botão "Voltar" na tela de edição dava 404:**
+- Root cause: `navigateTo('/lancamentos')` — rota inexistente. Rota real é `/launch-dashboard`
+- Fix: corrigido nos 2 pontos de navegação em `LaunchEditionAnalysis.tsx`
 
 ---
 

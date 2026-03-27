@@ -5,8 +5,38 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-27 (sessão 39 cont.) — 3 bugs: timezone, order bumps, dashboard totals
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Sessão 37–39 ✅ | Lovable removido ✅
+- **Data:** 2026-03-27 (sessão 40) — Sistema de Lotes para Lançamento Pago (parte 1)
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Lotes: schema + CRUD + UI ✅ (integração análise pendente)
+
+---
+
+### [2026-03-27] Sessão 40 — Sistema de Lotes para Lançamento Pago (parte 1) ✅
+
+**Contexto:** Lotes eram campo texto (`lot_name` em `launch_products`). Na prática, cada lote é uma entidade com datas (virada por hora), ofertas específicas (FRONT muda, OBs podem mudar), e métricas próprias (TX conversão, participação na receita por lote).
+
+**Decisão arquitetural:**
+- Nova tabela `launch_lots` com `start_datetime`/`end_datetime` (timestamptz, não date)
+- Nova tabela `launch_lot_offers` — relação N:N (mesma oferta em múltiplos lotes)
+- Atribuição de vendas: híbrida por **data** + **oferta cadastrada no lote**
+- Botão "Copiar Lote" duplica ofertas, incrementa número, start = end do anterior
+
+**Implementado:**
+- Migration `20260327140000`: `launch_lots` + `launch_lot_offers` + RLS + triggers + índices
+- `delete_funnel_safe` atualizada (passos 3-4: lot_offers e lots antes de phases/editions)
+- `src/types/launch-lots.ts`: LaunchLot, LaunchLotOffer, LaunchLotWithOffers
+- `src/hooks/useLaunchLots.ts`: create, copy, update, delete, addOffer, removeOffer
+- `src/components/launch/LaunchLotsSection.tsx`: container com lista + botão "+ Novo Lote"
+- `src/components/launch/LaunchLotCard.tsx`: card com datetime inputs, offers, ações
+- `src/components/launch/AddOfferToLotDialog.tsx`: dialog para vincular oferta + role
+- `LaunchConfigDialog.tsx`: aba Produtos mostra `LaunchLotsSection` para `lancamento_pago`
+- Verificado no browser: seletor de edição + empty state renderizando corretamente
+
+**Pendente (parte 2):**
+- Refatorar `LaunchProductsSalesBreakdown` para agrupar por `launch_lots`
+- Atualizar `LaunchEditionAnalysis` para buscar lotes e passar como prop
+- Testar CRUD completo de lotes com dados reais
+
+**Build:** zero erros ✅
 
 ---
 

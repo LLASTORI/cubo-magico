@@ -1,12 +1,27 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 27/03/2026 (sessão 39 cont. — timezone + bumps + dashboard)
+> Última atualização: 27/03/2026 (sessão 40 — Sistema de Lotes parte 1)
 
 ---
 
 ## 🚨 Emergência
 > Nenhuma. Pipeline 100% restaurado. ✅
+
+---
+
+## 🔵 Sessão 40 — Sistema de Lotes (em andamento)
+
+- [x] Migration `launch_lots` + `launch_lot_offers` — tabelas + RLS + triggers ✅
+- [x] `delete_funnel_safe` atualizada com novas tabelas ✅
+- [x] Tipos TypeScript `src/types/launch-lots.ts` ✅
+- [x] Hook `useLaunchLots` — CRUD completo (create, copy, update, delete, addOffer, removeOffer) ✅
+- [x] UI: `LaunchLotsSection` + `LaunchLotCard` + `AddOfferToLotDialog` ✅
+- [x] Integração aba Produtos no `LaunchConfigDialog` (seletor edição + lotes) ✅
+- [x] Build: zero erros ✅
+- [ ] Refatorar `LaunchProductsSalesBreakdown` para agrupar por `launch_lots`
+- [ ] Atualizar `LaunchEditionAnalysis` para buscar lotes e passar como prop
+- [ ] Testar CRUD completo de lotes com dados reais no browser
 
 ---
 

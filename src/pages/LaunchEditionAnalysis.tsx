@@ -376,97 +376,103 @@ export default function LaunchEditionAnalysis() {
     }));
   }, [funnelOffers, editionSalesData]);
 
-  // Position cards enriquecidos (com FRONT + produtos)
-  const positionCards = useMemo((): import(
-    '@/components/launch/FunnelFlowCards'
-  ).PositionCard[] => {
-    if (!funnelOffers.length || !editionSalesData.length) {
-      return [];
-    }
-    const frontCodes = funnelOffers
-      .filter(o =>
-        o.tipo_posicao === 'FRONT' ||
-        o.tipo_posicao === 'FE',
-      )
-      .map(o => o.codigo_oferta)
-      .filter(Boolean) as string[];
-    const frontCount = editionSalesData.filter(
-      s => s.offer_code && frontCodes.includes(s.offer_code),
-    ).length;
-
-    const posMap = new Map<string, import(
+  // Position cards derivados dos lotsAnalysis (fonte canônica)
+  const { positionCards, vendasFront: vendasFrontCalc } = useMemo(() => {
+    type PC = import(
       '@/components/launch/FunnelFlowCards'
-    ).PositionCard>();
+    ).PositionCard;
 
-    for (const offer of funnelOffers) {
-      const tipo = offer.tipo_posicao || 'OTHER';
-      const ordem = offer.ordem_posicao || 1;
-      const key = `${tipo}${ordem}`;
-      const code = offer.codigo_oferta;
-      if (!code) continue;
+    if (lotsAnalysis.length === 0) {
+      return { positionCards: [] as PC[], vendasFront: 0 };
+    }
 
-      const isFront =
-        tipo === 'FRONT' || tipo === 'FE';
-      const matchingSales = isFront
-        ? editionSalesData.filter(
-            s => s.offer_code === code,
-          )
-        : editionSalesData.filter(
-            s => s.all_offer_codes?.includes(code),
-          );
-      const salesCount = matchingSales.length;
-      const revenue = isFront
-        ? matchingSales.reduce(
-            (s, sale) => s + (sale.main_revenue || sale.gross_amount || 0), 0,
-          )
-        : 0;
+    // Agregar offerMetrics de todos os lotes
+    // Roles: front, bump_1, bump_2, upsell_1, downsell_1
+    function parseRole(role: string): {
+      tipo: string; ordem: number;
+    } {
+      if (role === 'front') return { tipo: 'FRONT', ordem: 1 };
+      if (role.startsWith('bump')) {
+        const n = parseInt(role.split('_')[1] || '1', 10);
+        return { tipo: 'OB', ordem: n };
+      }
+      if (role.startsWith('upsell')) {
+        const n = parseInt(role.split('_')[1] || '1', 10);
+        return { tipo: 'US', ordem: n };
+      }
+      if (role.startsWith('downsell')) {
+        const n = parseInt(role.split('_')[1] || '1', 10);
+        return { tipo: 'DS', ordem: n };
+      }
+      return { tipo: 'OTHER', ordem: 1 };
+    }
 
-      const existing = posMap.get(key);
-      if (existing) {
-        existing.vendas += salesCount;
-        existing.receita += revenue;
-        existing.produtos.push({
-          nome_produto: (offer as any).nome_produto || code,
-          nome_oferta: (offer as any).nome_oferta || null,
-          codigo_oferta: code,
-          vendas: salesCount,
-        });
-      } else {
-        posMap.set(key, {
-          tipo,
-          ordem,
-          vendas: salesCount,
-          receita: revenue,
-          taxaConversao: isFront
-            ? 100
-            : frontCount > 0
-              ? (salesCount / frontCount) * 100
-              : 0,
-          produtos: [{
-            nome_produto: (offer as any).nome_produto || code,
-            nome_oferta: (offer as any).nome_oferta || null,
-            codigo_oferta: code,
-            vendas: salesCount,
-          }],
-        });
+    let totalFront = 0;
+    const posMap = new Map<string, PC>();
+
+    for (const la of lotsAnalysis) {
+      for (const om of la.offerMetrics) {
+        const { tipo, ordem } = parseRole(om.role);
+        const isFront = tipo === 'FRONT';
+
+        if (isFront) {
+          totalFront += om.salesCount;
+        }
+
+        // Chave: tipo + ordem (agrupa mesma posição cross-lotes)
+        const posKey = `${tipo}${ordem}`;
+        const existing = posMap.get(posKey);
+
+        if (existing) {
+          existing.vendas += om.salesCount;
+          existing.receita += om.revenue;
+          // Adicionar produto se não duplicado
+          if (!existing.produtos.some(
+            p => p.codigo_oferta === om.codigoOferta,
+          )) {
+            existing.produtos.push({
+              nome_produto: om.nomeProduto || om.codigoOferta,
+              nome_oferta: om.nomeOferta || null,
+              codigo_oferta: om.codigoOferta,
+              vendas: om.salesCount,
+            });
+          }
+        } else {
+          posMap.set(posKey, {
+            tipo,
+            ordem,
+            vendas: om.salesCount,
+            receita: om.revenue,
+            taxaConversao: isFront
+              ? 100
+              : totalFront > 0
+                ? (om.salesCount / totalFront) * 100
+                : 0,
+            produtos: [{
+              nome_produto: om.nomeProduto || om.codigoOferta,
+              nome_oferta: om.nomeOferta || null,
+              codigo_oferta: om.codigoOferta,
+              vendas: om.salesCount,
+            }],
+          });
+        }
       }
     }
 
-    return Array.from(posMap.values());
-  }, [funnelOffers, editionSalesData]);
+    // Recalcular TX para cards agregados
+    const cards = Array.from(posMap.values());
+    for (const c of cards) {
+      if (c.tipo !== 'FRONT') {
+        c.taxaConversao = totalFront > 0
+          ? (c.vendas / totalFront) * 100 : 0;
+      }
+    }
 
-  const vendasFront = useMemo(() => {
-    const frontCodes = funnelOffers
-      .filter(o =>
-        o.tipo_posicao === 'FRONT' ||
-        o.tipo_posicao === 'FE',
-      )
-      .map(o => o.codigo_oferta)
-      .filter(Boolean) as string[];
-    return editionSalesData.filter(
-      s => s.offer_code && frontCodes.includes(s.offer_code),
-    ).length;
-  }, [funnelOffers, editionSalesData]);
+    return {
+      positionCards: cards.filter(c => c.vendas > 0),
+      vendasFront: totalFront,
+    };
+  }, [lotsAnalysis]);
 
   // Meta Ads conversion funnel data
   const metaFunnelData = useMemo(() => {
@@ -978,7 +984,7 @@ export default function LaunchEditionAnalysis() {
               >
                 <FunnelFlowCards
                   positions={positionCards}
-                  vendasFront={vendasFront}
+                  vendasFront={vendasFrontCalc}
                 />
               </Section>
             )}

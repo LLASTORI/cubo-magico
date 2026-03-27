@@ -68,17 +68,17 @@ export default function LaunchEditionAnalysis() {
   );
 
   // Datas da edição (usadas por múltiplos hooks abaixo)
-  const editionEndDate = editionData?.end_date || editionData?.event_date || editionData?.start_date;
-  // fase1End = event_date (se existe) senão end_date — mesmo range do KPI "Ingressos"
-  const fase1End = editionData?.event_date || editionEndDate;
-  const startDate = editionData?.start_date ? parseISO(editionData.start_date) : new Date();
+  const editionEndDate = editionData?.end_datetime || editionData?.event_datetime || editionData?.start_datetime;
+  // fase1End = event_datetime (se existe) senão end_datetime — mesmo range do KPI "Ingressos"
+  const fase1End = editionData?.event_datetime || editionEndDate;
+  const startDate = editionData?.start_datetime ? parseISO(editionData.start_datetime) : new Date();
   const endDate = editionEndDate ? parseISO(editionEndDate) : new Date();
   const fase1EndDate = fase1End ? parseISO(fase1End) : endDate;
 
   // Sales data completo para blocos reutilizáveis
   const { data: editionSalesData = [] } = useQuery({
-    queryKey: ['edition-sales', projectId, funnelId, editionData?.id, editionData?.start_date, editionEndDate],
-    enabled: !!editionData?.start_date && !!projectId && !!funnelId,
+    queryKey: ['edition-sales', projectId, funnelId, editionData?.id, editionData?.start_datetime, editionEndDate],
+    enabled: !!editionData?.start_datetime && !!projectId && !!funnelId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnel_orders_view')
@@ -86,8 +86,8 @@ export default function LaunchEditionAnalysis() {
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId!)
         .not('main_offer_code', 'is', null)
-        .gte('economic_day', editionData!.start_date!)
-        .lte('economic_day', editionEndDate!);
+        .gte('economic_day', editionData!.start_datetime!.slice(0, 10))
+        .lte('economic_day', editionEndDate!.slice(0, 10));
       if (error) throw error;
       return (data || []).map(r => ({
         offer_code: r.main_offer_code,
@@ -132,16 +132,16 @@ export default function LaunchEditionAnalysis() {
 
   // Meta insights filtrados pelo período da edição E pelas campanhas da edição
   const { data: editionMetaInsights = [] } = useQuery({
-    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionData?.start_date, editionEndDate, editionCampaignIds],
-    enabled: !!editionData?.start_date && !!projectId && editionCampaignIds.length > 0,
+    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionData?.start_datetime, editionEndDate, editionCampaignIds],
+    enabled: !!editionData?.start_datetime && !!projectId && editionCampaignIds.length > 0,
     queryFn: async () => {
       let q = supabase
         .from('meta_insights')
         .select('*')
         .eq('project_id', projectId)
         .in('campaign_id', editionCampaignIds);
-      if (editionData!.start_date) q = q.gte('date_start', editionData!.start_date);
-      if (editionEndDate) q = q.lte('date_start', editionEndDate);
+      if (editionData!.start_datetime) q = q.gte('date_start', editionData!.start_datetime.slice(0, 10));
+      if (editionEndDate) q = q.lte('date_start', editionEndDate.slice(0, 10));
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
@@ -217,22 +217,22 @@ export default function LaunchEditionAnalysis() {
                 <Badge className={status.className}>{status.label}</Badge>
               </div>
               <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-muted-foreground">
-                {editionData.start_date && (
+                {editionData.start_datetime && (
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
-                    Início: {fmtDate(editionData.start_date)}
+                    Início: {fmtDate(editionData.start_datetime)}
                   </span>
                 )}
-                {editionData.event_date && (
+                {editionData.event_datetime && (
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
-                    Evento: {fmtDate(editionData.event_date)}
+                    Evento: {fmtDate(editionData.event_datetime)}
                   </span>
                 )}
-                {editionData.end_date && (
+                {editionData.end_datetime && (
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
-                    Encerramento: {fmtDate(editionData.end_date)}
+                    Encerramento: {fmtDate(editionData.end_datetime)}
                   </span>
                 )}
               </div>
@@ -279,7 +279,7 @@ export default function LaunchEditionAnalysis() {
           </Card>
 
           {/* Funil de conversão */}
-          {funnelId && editionData.start_date && (
+          {funnelId && editionData.start_datetime && (
             <Card className="p-4 space-y-3">
               <h2 className="font-semibold">Funil de Conversão</h2>
               <LaunchProductsSalesBreakdown
@@ -291,7 +291,7 @@ export default function LaunchEditionAnalysis() {
           )}
 
           {/* Análise de conversão — bloco depende do modelo do funil */}
-          {funnelId && editionData.start_date && (
+          {funnelId && editionData.start_datetime && (
             funnel?.funnel_model === 'lancamento_pago' ? (
               <LaunchPagoConversaoBlock
                 funnelId={funnelId}

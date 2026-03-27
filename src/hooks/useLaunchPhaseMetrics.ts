@@ -18,8 +18,8 @@ export interface PhaseMetrics {
   phaseOrder: number;
   primaryMetric: string;
   isActive: boolean;
-  startDate: string | null;
-  endDate: string | null;
+  startDatetime: string | null;
+  endDatetime: string | null;
   campaignPattern: string | null;
   // Meta metrics
   spend: number;
@@ -251,8 +251,8 @@ export const useLaunchPhaseMetrics = ({
         phaseOrder: phase.phase_order,
         primaryMetric: phase.primary_metric,
         isActive: phase.is_active,
-        startDate: phase.start_date,
-        endDate: phase.end_date,
+        startDatetime: phase.start_datetime,
+        endDatetime: phase.end_datetime,
         campaignPattern: phase.campaign_name_pattern,
         spend,
         impressions,

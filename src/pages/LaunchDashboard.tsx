@@ -641,8 +641,8 @@ function LaunchPagoEditionsRow({ funnelId, projectId }: { funnelId: string; proj
                     <EditionStatusBadge status={edition.status} />
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    {edition.event_date && (
-                      <span>Evento: {format(new Date(edition.event_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                    {edition.event_datetime && (
+                      <span>Evento: {format(new Date(edition.event_datetime), 'dd/MM/yyyy', { locale: ptBR })}</span>
                     )}
                     <ChevronRight className="w-4 h-4" />
                   </div>

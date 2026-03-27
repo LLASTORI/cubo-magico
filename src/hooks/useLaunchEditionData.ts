@@ -17,6 +17,12 @@ export interface PassingDiarioItem {
   status: 'above' | 'near' | 'below';
 }
 
+/** Extract YYYY-MM-DD from an ISO datetime string */
+function toDateStr(iso: string | null): string | null {
+  if (!iso) return null;
+  return iso.slice(0, 10);
+}
+
 export function useLaunchEditionData(
   projectId: string,
   funnelId: string,
@@ -25,11 +31,11 @@ export function useLaunchEditionData(
   const enabled = !!edition && !!projectId && !!funnelId;
 
   const { data: kpis, isLoading: kpisLoading } = useQuery({
-    queryKey: ['edition-kpis', projectId, funnelId, edition?.id, edition?.start_date, edition?.end_date],
+    queryKey: ['edition-kpis', projectId, funnelId, edition?.id, edition?.start_datetime, edition?.end_datetime],
     enabled,
     queryFn: async (): Promise<EditionKPIs> => {
-      const startDate = edition!.start_date;
-      const endDate = edition!.end_date;
+      const startDate = toDateStr(edition!.start_datetime);
+      const endDate = toDateStr(edition!.end_datetime);
 
       // Faturamento total via funnel_orders_view (customer_paid é a coluna canônica)
       let revenueQuery = supabase
@@ -46,9 +52,9 @@ export function useLaunchEditionData(
         (sum, o) => sum + (Number(o.customer_paid) || 0), 0
       );
 
-      // Ingressos (FRONT) na fase 1 — start_date → event_date
+      // Ingressos (FRONT) na fase 1 — start_datetime → event_datetime
       // main_offer_code não-nulo = pedido com item 'main'
-      const fase1End = edition!.event_date || endDate;
+      const fase1End = toDateStr(edition!.event_datetime) || endDate;
       let ingressosQuery = supabase
         .from('funnel_orders_view')
         .select('order_id')
@@ -82,13 +88,13 @@ export function useLaunchEditionData(
     },
   });
 
-  // Passing diário — agrupa por economic_day na fase 1 (start_date → event_date)
+  // Passing diário — agrupa por economic_day na fase 1 (start_datetime → event_datetime)
   const { data: passingDiario, isLoading: passingLoading } = useQuery({
-    queryKey: ['edition-passing', projectId, funnelId, edition?.id, edition?.start_date, edition?.end_date],
+    queryKey: ['edition-passing', projectId, funnelId, edition?.id, edition?.start_datetime, edition?.end_datetime],
     enabled,
     queryFn: async (): Promise<PassingDiarioItem[]> => {
-      const startDate = edition!.start_date;
-      const endDate = edition!.event_date || edition!.end_date;
+      const startDate = toDateStr(edition!.start_datetime);
+      const endDate = toDateStr(edition!.event_datetime) || toDateStr(edition!.end_datetime);
       if (!startDate || !endDate) return [];
 
       const { data: orders } = await supabase

@@ -5,12 +5,20 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   LaunchLot,
   LaunchLotWithOffers,
   LotOfferRole,
   LotStatus,
 } from '@/types/launch-lots';
 import { AddOfferToLotDialog } from './AddOfferToLotDialog';
+import { isoToDatetimeLocal, datetimeLocalToIso } from '@/lib/datetimeHelpers';
 
 interface OfferMapping {
   id: string;
@@ -75,22 +83,7 @@ function getRoleConfig(role: string): { label: string; className: string } {
  * Convert an ISO timestamptz string to a datetime-local input value
  * in the user's local timezone (São Paulo UTC-3).
  */
-function isoToDatetimeLocal(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const offset = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-/**
- * Convert a datetime-local input value back to an ISO string
- * with the local timezone offset.
- */
-function datetimeLocalToIso(value: string): string {
-  const d = new Date(value);
-  return d.toISOString();
-}
+// isoToDatetimeLocal and datetimeLocalToIso imported from @/lib/datetimeHelpers
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -144,12 +137,19 @@ export const LaunchLotCard = ({
             >
               #{lot.lot_number}
             </Badge>
-            <Badge
-              variant="outline"
-              className={`text-xs shrink-0 ${sc.className}`}
+            <Select
+              value={lot.status}
+              onValueChange={(v) => onUpdate({ id: lot.id, status: v as LotStatus })}
             >
-              {sc.label}
-            </Badge>
+              <SelectTrigger className={`h-6 w-auto text-xs border px-2 gap-1 ${sc.className}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="planned">Planejado</SelectItem>
+                <SelectItem value="active">Ativo</SelectItem>
+                <SelectItem value="finished">Finalizado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Button

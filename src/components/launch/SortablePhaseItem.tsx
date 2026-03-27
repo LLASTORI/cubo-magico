@@ -2,7 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Trash2, GripVertical, Settings2, ChevronDown, ChevronRight } from "lucide-react";
+import { Trash2, GripVertical, Settings2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,13 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { LaunchPhase, PHASE_TYPES, PhaseCampaign } from "@/hooks/useLaunchPhases";
 import { PhaseCampaignsManager } from "./PhaseCampaignsManager";
+import { isoToDatetimeLocal, datetimeLocalToIso } from "@/lib/datetimeHelpers";
 
 interface SortablePhaseItemProps {
   phase: LaunchPhase;
@@ -123,13 +122,13 @@ export const SortablePhaseItem = ({
               </div>
 
               <div className="col-span-3 text-sm text-muted-foreground">
-                {phase.start_date && phase.end_date ? (
+                {phase.start_datetime && phase.end_datetime ? (
                   <>
-                    {format(parseISO(phase.start_date), 'dd/MM', { locale: ptBR })} -{' '}
-                    {format(parseISO(phase.end_date), 'dd/MM', { locale: ptBR })}
+                    {format(parseISO(phase.start_datetime), 'dd/MM HH:mm', { locale: ptBR })} -{' '}
+                    {format(parseISO(phase.end_datetime), 'dd/MM HH:mm', { locale: ptBR })}
                   </>
-                ) : phase.start_date ? (
-                  <>A partir de {format(parseISO(phase.start_date), 'dd/MM', { locale: ptBR })}</>
+                ) : phase.start_datetime ? (
+                  <>A partir de {format(parseISO(phase.start_datetime), 'dd/MM HH:mm', { locale: ptBR })}</>
                 ) : (
                   <span className="text-muted-foreground/50">Sem datas</span>
                 )}
@@ -178,52 +177,26 @@ export const SortablePhaseItem = ({
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label>Data Início</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start">
-                                  <CalendarIcon className="w-4 h-4 mr-2" />
-                                  {editingPhase.start_date
-                                    ? format(parseISO(editingPhase.start_date), 'dd/MM/yyyy', { locale: ptBR })
-                                    : 'Selecionar'
-                                  }
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={editingPhase.start_date ? parseISO(editingPhase.start_date) : undefined}
-                                  onSelect={(date) =>
-                                    setEditingPhase({ ...editingPhase, start_date: date ? format(date, 'yyyy-MM-dd') : null })
-                                  }
-                                  locale={ptBR}
-                                />
-                              </PopoverContent>
-                            </Popover>
+                            <Label>Data/Hora Início</Label>
+                            <Input
+                              type="datetime-local"
+                              value={isoToDatetimeLocal(editingPhase.start_datetime)}
+                              onChange={(e) =>
+                                setEditingPhase({ ...editingPhase, start_datetime: e.target.value ? datetimeLocalToIso(e.target.value) : null })
+                              }
+                              className="w-full"
+                            />
                           </div>
                           <div className="space-y-2">
-                            <Label>Data Fim</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start">
-                                  <CalendarIcon className="w-4 h-4 mr-2" />
-                                  {editingPhase.end_date
-                                    ? format(parseISO(editingPhase.end_date), 'dd/MM/yyyy', { locale: ptBR })
-                                    : 'Selecionar'
-                                  }
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={editingPhase.end_date ? parseISO(editingPhase.end_date) : undefined}
-                                  onSelect={(date) =>
-                                    setEditingPhase({ ...editingPhase, end_date: date ? format(date, 'yyyy-MM-dd') : null })
-                                  }
-                                  locale={ptBR}
-                                />
-                              </PopoverContent>
-                            </Popover>
+                            <Label>Data/Hora Fim</Label>
+                            <Input
+                              type="datetime-local"
+                              value={isoToDatetimeLocal(editingPhase.end_datetime)}
+                              onChange={(e) =>
+                                setEditingPhase({ ...editingPhase, end_datetime: e.target.value ? datetimeLocalToIso(e.target.value) : null })
+                              }
+                              className="w-full"
+                            />
                           </div>
                         </div>
                         <div className="space-y-2">

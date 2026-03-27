@@ -203,15 +203,15 @@ export const LaunchPhaseMetricsCard = ({
       </div>
 
       {/* Dates if available */}
-      {(metrics.startDate || metrics.endDate) && (
+      {(metrics.startDatetime || metrics.endDatetime) && (
         <div className="mt-3 pt-2 border-t text-xs text-muted-foreground">
-          {metrics.startDate && metrics.endDate ? (
+          {metrics.startDatetime && metrics.endDatetime ? (
             <>
-              {format(new Date(metrics.startDate), "dd/MM", { locale: ptBR })} -{" "}
-              {format(new Date(metrics.endDate), "dd/MM", { locale: ptBR })}
+              {format(new Date(metrics.startDatetime), "dd/MM", { locale: ptBR })} -{" "}
+              {format(new Date(metrics.endDatetime), "dd/MM", { locale: ptBR })}
             </>
-          ) : metrics.startDate ? (
-            <>A partir de {format(new Date(metrics.startDate), "dd/MM", { locale: ptBR })}</>
+          ) : metrics.startDatetime ? (
+            <>A partir de {format(new Date(metrics.startDatetime), "dd/MM", { locale: ptBR })}</>
           ) : null}
         </div>
       )}

@@ -9,8 +9,8 @@ export interface LaunchPhase {
   edition_id: string | null;
   phase_type: string;
   name: string;
-  start_date: string | null;
-  end_date: string | null;
+  start_datetime: string | null;
+  end_datetime: string | null;
   primary_metric: string;
   is_active: boolean;
   phase_order: number;

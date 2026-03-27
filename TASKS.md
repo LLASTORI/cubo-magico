@@ -1,7 +1,7 @@
 # 🧩 Cubo Mágico — Quadro de Tarefas
 
 > Gestão estratégica de tarefas. Atualizar aqui no Claude.ai e levar pro Cursor quando for executar.
-> Última atualização: 26/03/2026 (sessão 36 — Onda 2D: três fixes cirúrgicos)
+> Última atualização: 26/03/2026 (sessão 36 — Onda 2E: blocos reutilizáveis na edição)
 
 ---
 
@@ -60,6 +60,19 @@
 - [x] Badge de posição (Principal/Order Bump/Upsell/Downsell) visível em cada oferta ✅
 - [x] Build: zero erros ✅
 - [x] Migration commitada ✅
+
+---
+
+## ✅ Onda 2E — Blocos reutilizáveis na edição (sessão 36)
+
+- [x] `editionSalesData` via `funnel_orders_view` filtrado pelo período da edição ✅
+- [x] `funnelOfferCodes` computado via useMemo ✅
+- [x] PaymentMethodAnalysis renderizado na tela de edição ✅
+- [x] FunnelHealthMetrics renderizado (nota: hook usa `hotmart_sales` — TODO migrar) ✅
+- [x] UTMAnalysis renderizado com dados Meta ✅
+- [x] MetaHierarchyAnalysis renderizado com campanhas/adsets/ads ✅
+- [x] Passo 6 (filtrar lancamento_pago de FunnelAnalysis) — já resolvido nativamente ✅
+- [x] Build: zero erros ✅
 
 ---
 

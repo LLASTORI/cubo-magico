@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -12,10 +13,16 @@ import { useTenantNavigation } from '@/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 import { useEdition } from '@/hooks/useLaunchEditions';
 import { useLaunchEditionData } from '@/hooks/useLaunchEditionData';
+import { useFunnelHealthMetrics } from '@/hooks/useFunnelHealthMetrics';
+import { useMetaHierarchy } from '@/hooks/useMetaHierarchy';
 import { PassingDiarioChart } from '@/components/launch/PassingDiarioChart';
 import { LaunchProductsSalesBreakdown } from '@/components/launch/LaunchProductsSalesBreakdown';
 import { LaunchConversionAnalysis } from '@/components/launch/LaunchConversionAnalysis';
 import { LaunchPagoConversaoBlock } from '@/components/launch/LaunchPagoConversaoBlock';
+import PaymentMethodAnalysis from '@/components/funnel/PaymentMethodAnalysis';
+import UTMAnalysis from '@/components/funnel/UTMAnalysis';
+import { FunnelHealthMetrics } from '@/components/funnel/FunnelHealthMetrics';
+import { MetaHierarchyAnalysis } from '@/components/meta/MetaHierarchyAnalysis';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_MAP = {
@@ -60,6 +67,89 @@ export default function LaunchEditionAnalysis() {
     projectId, funnelId!, editionData
   );
 
+  // Datas da edição (usadas por múltiplos hooks abaixo)
+  const editionEndDate = editionData?.end_date || editionData?.event_date || editionData?.start_date;
+  const startDate = editionData?.start_date ? new Date(editionData.start_date) : new Date();
+  const endDate = editionEndDate ? new Date(editionEndDate) : new Date();
+
+  // Sales data completo para blocos reutilizáveis
+  const { data: editionSalesData = [] } = useQuery({
+    queryKey: ['edition-sales', projectId, funnelId, editionData?.id],
+    enabled: !!editionData?.start_date && !!projectId && !!funnelId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funnel_orders_view')
+        .select('order_id, customer_paid, producer_net, main_offer_code, all_offer_codes, buyer_email, economic_day, payment_method, meta_campaign_id, meta_adset_id, meta_ad_id, utm_source, utm_medium, utm_campaign, utm_content, utm_adset, utm_placement, checkout_origin, main_revenue, status')
+        .eq('project_id', projectId)
+        .eq('funnel_id', funnelId!)
+        .in('status', ['approved', 'completed', 'partial_refund'])
+        .gte('economic_day', editionData!.start_date!)
+        .lte('economic_day', editionEndDate!);
+      if (error) throw error;
+      return (data || []).map(r => ({
+        offer_code: r.main_offer_code,
+        gross_amount: Number(r.customer_paid) || 0,
+        net_amount: Number(r.producer_net) || 0,
+        buyer_email: r.buyer_email,
+        payment_method: r.payment_method,
+        economic_day: r.economic_day,
+        meta_campaign_id: r.meta_campaign_id,
+        meta_adset_id: r.meta_adset_id,
+        meta_ad_id: r.meta_ad_id,
+        utm_source: r.utm_source,
+        utm_medium: r.utm_medium,
+        utm_campaign: r.utm_campaign,
+        utm_content: r.utm_content,
+        utm_adset: r.utm_adset,
+        utm_placement: r.utm_placement,
+        checkout_origin: r.checkout_origin,
+        main_revenue: Number(r.main_revenue) || 0,
+        all_offer_codes: r.all_offer_codes,
+      }));
+    },
+  });
+
+  const funnelOfferCodes = useMemo(() => {
+    const codes = new Set<string>();
+    for (const s of editionSalesData) {
+      if (s.offer_code) codes.add(s.offer_code);
+      if (s.all_offer_codes) s.all_offer_codes.forEach((c: string) => codes.add(c));
+    }
+    return Array.from(codes);
+  }, [editionSalesData]);
+
+  // Meta insights filtrados pelo período da edição
+  const { data: editionMetaInsights = [] } = useQuery({
+    queryKey: ['edition-meta-insights', projectId, editionData?.id],
+    enabled: !!editionData?.start_date && !!projectId,
+    queryFn: async () => {
+      let q = supabase
+        .from('meta_insights')
+        .select('*')
+        .eq('project_id', projectId);
+      if (editionData!.start_date) q = q.gte('date_start', editionData!.start_date);
+      if (editionEndDate) q = q.lte('date_start', editionEndDate);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Meta hierarchy (campaigns, adsets, ads)
+  const { campaigns, adsets, ads, isLoading: metaHierarchyLoading } = useMetaHierarchy({
+    projectId: projectId || undefined,
+    insights: editionMetaInsights,
+    enabled: editionMetaInsights.length > 0,
+  });
+
+  // Saúde do funil
+  // TODO: useFunnelHealthMetrics ainda usa hotmart_sales — migrar para funnel_orders_view
+  const { healthMetrics, isLoading: healthLoading } = useFunnelHealthMetrics({
+    projectId: projectId || undefined,
+    startDate,
+    endDate,
+  });
+
   if (editionLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -88,9 +178,6 @@ export default function LaunchEditionAnalysis() {
   const status = STATUS_MAP[editionData.status as keyof typeof STATUS_MAP] ?? STATUS_MAP.planned;
   const fmtDate = (d: string | null) =>
     d ? format(new Date(d), 'dd/MM/yyyy', { locale: ptBR }) : '—';
-
-  const startDate = editionData.start_date ? new Date(editionData.start_date) : new Date();
-  const endDate = editionData.end_date ? new Date(editionData.end_date) : new Date();
 
   return (
     <div className="min-h-screen bg-background">
@@ -207,6 +294,55 @@ export default function LaunchEditionAnalysis() {
                 endDate={endDate}
               />
             )
+          )}
+
+          {/* Formas de Pagamento */}
+          {editionSalesData.length > 0 && (
+            <Card className="p-4 space-y-3">
+              <h2 className="font-semibold">Formas de Pagamento</h2>
+              <PaymentMethodAnalysis
+                salesData={editionSalesData}
+                funnelOfferCodes={funnelOfferCodes}
+              />
+            </Card>
+          )}
+
+          {/* Saúde do Funil */}
+          {/* TODO: useFunnelHealthMetrics ainda usa hotmart_sales — migrar para funnel_orders_view */}
+          {!healthLoading && healthMetrics && healthMetrics.length > 0 && (
+            <Card className="p-4 space-y-3">
+              <h2 className="font-semibold">Saúde do Funil</h2>
+              <FunnelHealthMetrics healthData={healthMetrics[0]} />
+            </Card>
+          )}
+
+          {/* UTM / Criativos */}
+          {editionSalesData.length > 0 && (
+            <Card className="p-4 space-y-3">
+              <h2 className="font-semibold">UTM / Criativos</h2>
+              <UTMAnalysis
+                salesData={editionSalesData}
+                funnelOfferCodes={funnelOfferCodes}
+                metaInsights={editionMetaInsights}
+                metaCampaigns={campaigns}
+                metaAdsets={adsets}
+                metaAds={ads}
+              />
+            </Card>
+          )}
+
+          {/* Meta Ads — Campanhas */}
+          {editionMetaInsights.length > 0 && (
+            <Card className="p-4 space-y-3">
+              <h2 className="font-semibold">Meta Ads — Campanhas</h2>
+              <MetaHierarchyAnalysis
+                insights={editionMetaInsights}
+                campaigns={campaigns}
+                adsets={adsets}
+                ads={ads}
+                loading={metaHierarchyLoading}
+              />
+            </Card>
           )}
         </div>
       </main>

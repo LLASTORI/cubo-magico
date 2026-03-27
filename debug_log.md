@@ -5,8 +5,31 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-26 (sessão 36) — Onda 2D: três fixes cirúrgicos
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Onda 2D ✅ | Lovable removido ✅
+- **Data:** 2026-03-26 (sessão 36) — Onda 2E: blocos reutilizáveis na edição
+- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A ✅ | Onda 2B ✅ | Onda 2C ✅ | Onda 2D ✅ | Onda 2E ✅ | Lovable removido ✅
+
+---
+
+### [2026-03-26] Onda 2E — Blocos reutilizáveis na LaunchEditionAnalysis (sessão 36) ✅
+
+**Objetivo:** Adicionar 4 blocos de análise reutilizáveis na tela de edição do lançamento pago.
+
+**Implementado em `src/pages/LaunchEditionAnalysis.tsx`:**
+- `editionSalesData` — query a `funnel_orders_view` filtrada pelo período da edição
+- `funnelOfferCodes` — memo com todos os offer codes da edição
+- `editionMetaInsights` — query a `meta_insights` filtrada pelo período
+- `useMetaHierarchy` — campanhas/adsets/ads do Meta
+- `useFunnelHealthMetrics` — saúde do funil (nota: ainda usa `hotmart_sales`, TODO migrar)
+
+**Blocos renderizados:**
+1. PaymentMethodAnalysis — formas de pagamento
+2. FunnelHealthMetrics — saúde do funil (pode retornar vazio por dívida técnica)
+3. UTMAnalysis — UTM/criativos com dados Meta
+4. MetaHierarchyAnalysis — campanhas Meta Ads
+
+**Passo 6 (filtrar lancamento_pago de FunnelAnalysis):** já resolvido nativamente — `useFunnelData` filtra por `PERPETUO_TYPE_VARIANTS` e funis `lancamento_pago` têm `funnel_type = 'lancamento'`.
+
+**Build:** zero erros ✅
 
 ---
 

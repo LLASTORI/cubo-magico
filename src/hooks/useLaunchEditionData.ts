@@ -27,34 +27,48 @@ export function useLaunchEditionData(
   projectId: string,
   funnelId: string,
   edition: LaunchEdition | null | undefined,
+  campaignIds?: string[],
 ) {
   const enabled = !!edition && !!projectId && !!funnelId;
 
   const { data: kpis, isLoading: kpisLoading } = useQuery({
-    queryKey: ['edition-kpis', projectId, funnelId, edition?.id, edition?.start_datetime, edition?.end_datetime],
+    queryKey: [
+      'edition-kpis', projectId, funnelId,
+      edition?.id, edition?.start_datetime,
+      edition?.end_datetime, campaignIds,
+    ],
     enabled,
     queryFn: async (): Promise<EditionKPIs> => {
       const startDate = toDateStr(edition!.start_datetime);
       const endDate = toDateStr(edition!.end_datetime);
 
-      // Faturamento total via funnel_orders_view (customer_paid é a coluna canônica)
+      // Faturamento total via funnel_orders_view
       let revenueQuery = supabase
         .from('funnel_orders_view')
         .select('customer_paid')
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId);
 
-      if (startDate) revenueQuery = revenueQuery.gte('economic_day', startDate);
-      if (endDate) revenueQuery = revenueQuery.lte('economic_day', endDate);
+      if (startDate) {
+        revenueQuery = revenueQuery.gte(
+          'economic_day', startDate,
+        );
+      }
+      if (endDate) {
+        revenueQuery = revenueQuery.lte(
+          'economic_day', endDate,
+        );
+      }
 
       const { data: orders } = await revenueQuery;
       const faturamentoTotal = (orders || []).reduce(
-        (sum, o) => sum + (Number(o.customer_paid) || 0), 0
+        (sum, o) => sum + (Number(o.customer_paid) || 0),
+        0,
       );
 
-      // Ingressos (FRONT) na fase 1 — start_datetime → event_datetime
-      // main_offer_code não-nulo = pedido com item 'main'
-      const fase1End = toDateStr(edition!.event_datetime) || endDate;
+      // Ingressos (FRONT) — start → event_datetime
+      const fase1End =
+        toDateStr(edition!.event_datetime) || endDate;
       let ingressosQuery = supabase
         .from('funnel_orders_view')
         .select('order_id')
@@ -62,29 +76,53 @@ export function useLaunchEditionData(
         .eq('funnel_id', funnelId)
         .not('main_offer_code', 'is', null);
 
-      if (startDate) ingressosQuery = ingressosQuery.gte('economic_day', startDate);
-      if (fase1End) ingressosQuery = ingressosQuery.lte('economic_day', fase1End);
+      if (startDate) {
+        ingressosQuery = ingressosQuery.gte(
+          'economic_day', startDate,
+        );
+      }
+      if (fase1End) {
+        ingressosQuery = ingressosQuery.lte(
+          'economic_day', fase1End,
+        );
+      }
 
       const { data: ingressosRows } = await ingressosQuery;
       const totalIngressos = ingressosRows?.length || 0;
 
-      // Investimento Meta no período
-      let spendQuery = supabase
-        .from('meta_insights')
-        .select('spend')
-        .eq('project_id', projectId);
+      // Investimento Meta — filtrado por campaign_ids da edição
+      let totalSpend = 0;
+      if (campaignIds && campaignIds.length > 0) {
+        let spendQuery = supabase
+          .from('meta_insights')
+          .select('spend')
+          .eq('project_id', projectId)
+          .in('campaign_id', campaignIds);
+        if (startDate) {
+          spendQuery = spendQuery.gte(
+            'date_start', startDate,
+          );
+        }
+        if (endDate) {
+          spendQuery = spendQuery.lte(
+            'date_start', endDate,
+          );
+        }
+        const { data: spendRows } = await spendQuery;
+        totalSpend = (spendRows || []).reduce(
+          (sum, r) =>
+            sum + (parseFloat(String(r.spend)) || 0),
+          0,
+        );
+      }
 
-      if (startDate) spendQuery = spendQuery.gte('date_start', startDate);
-      if (endDate) spendQuery = spendQuery.lte('date_start', endDate);
+      const roas = totalSpend > 0
+        ? faturamentoTotal / totalSpend : 0;
 
-      const { data: spendRows } = await spendQuery;
-      const totalSpend = (spendRows || []).reduce(
-        (sum, r) => sum + (parseFloat(String(r.spend)) || 0), 0
-      );
-
-      const roas = totalSpend > 0 ? faturamentoTotal / totalSpend : 0;
-
-      return { totalIngressos, faturamentoTotal, totalSpend, roas };
+      return {
+        totalIngressos, faturamentoTotal,
+        totalSpend, roas,
+      };
     },
   });
 

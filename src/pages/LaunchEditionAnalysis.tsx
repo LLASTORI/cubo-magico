@@ -127,10 +127,7 @@ export default function LaunchEditionAnalysis() {
     },
   });
 
-  const {
-    kpis, kpisLoading, passingDiario, passingLoading,
-  } = useLaunchEditionData(projectId, funnelId!, editionData);
-
+  // Datas da edição (usadas por múltiplos hooks)
   const editionEndDate =
     editionData?.end_datetime ||
     editionData?.event_datetime ||
@@ -140,6 +137,7 @@ export default function LaunchEditionAnalysis() {
   const endDate = editionEndDate
     ? parseISO(editionEndDate) : new Date();
 
+  // Sales data — definido ANTES dos KPIs para extrair campaignIds
   const { data: editionSalesData = [] } = useQuery({
     queryKey: [
       'edition-sales', projectId, funnelId,
@@ -203,6 +201,7 @@ export default function LaunchEditionAnalysis() {
     return Array.from(codes);
   }, [editionSalesData]);
 
+  // Campaign IDs das vendas — escopa Meta insights
   const editionCampaignIds = useMemo(() => {
     const ids = new Set<string>();
     for (const s of editionSalesData) {
@@ -210,6 +209,13 @@ export default function LaunchEditionAnalysis() {
     }
     return Array.from(ids);
   }, [editionSalesData]);
+
+  // KPIs — usa campaignIds para filtrar spend corretamente
+  const {
+    kpis, kpisLoading, passingDiario, passingLoading,
+  } = useLaunchEditionData(
+    projectId, funnelId!, editionData, editionCampaignIds,
+  );
 
   const { data: editionMetaInsights = [] } = useQuery({
     queryKey: [

@@ -49,6 +49,8 @@ import { LTVAnalysisCard } from '@/components/launch/LTVAnalysisCard';
 import { FunnelFlowCards } from '@/components/launch/FunnelFlowCards';
 import { MetaConversionFunnel } from '@/components/launch/MetaConversionFunnel';
 import { CreativeDiagnostic } from '@/components/launch/CreativeDiagnostic';
+import { useROASTimeline } from '@/hooks/useROASTimeline';
+import { ROASTimelineChart } from '@/components/launch/ROASTimelineChart';
 import { useFunnelScore } from '@/hooks/useFunnelScore';
 import type { PositionBreakdown } from '@/hooks/useFunnelScore';
 import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
@@ -541,6 +543,14 @@ export default function LaunchEditionAnalysis() {
 
   // Comparação semanal
   const periodComparison = usePeriodComparison(
+    editionSalesData,
+    editionMetaInsights,
+    editionData?.start_datetime,
+    editionEndDate,
+  );
+
+  // Curva de ROAS diário
+  const roasTimeline = useROASTimeline(
     editionSalesData,
     editionMetaInsights,
     editionData?.start_datetime,
@@ -1085,6 +1095,17 @@ export default function LaunchEditionAnalysis() {
                 />
               )}
             </Section>
+
+            {/* ═══════════ CURVA DE ROAS ═══════════ */}
+            {roasTimeline.length >= 2 && (
+              <Section
+                icon={<TrendingUp className="w-4 h-4" />}
+                title="Curva de ROAS"
+                description="Evolução diária: faturamento vs investimento com ROAS acumulado"
+              >
+                <ROASTimelineChart data={roasTimeline} />
+              </Section>
+            )}
 
             {/* ═══════════ EVOLUÇÃO DIÁRIA ═══════════ */}
             {filteredSalesData.length > 0 && (

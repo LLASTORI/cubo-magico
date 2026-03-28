@@ -4,6 +4,35 @@
 
 ---
 
+### [2026-03-27] Sessão 41 — Redesign + Diagnóstico Inteligente (PR #73, 21 commits) — ✅ OK
+
+**Tema central:** Transformar a tela de "mostrar dados" para "dizer o que fazer".
+
+**Features implementadas:**
+1. Redesign premium: hero gradient, KPI cards com ícones/glow, sections colapsáveis
+2. AppHeader sticky com backdrop-blur (global, todas as páginas)
+3. Funnel Score (0-100) com penalidade de gargalo + diagnóstico textual automático
+4. Fluxo do Funil: cards por posição com benchmarks (OB1 30-40%, OB2 20-30%, etc.)
+5. Funil de Conversão Meta: 4 steps + TX end-to-end com benchmark
+6. **Ad Pulse Score** (nome próprio): score multi-dimensional por criativo
+   - 6 dimensões: ROAS 40-45% + CTR 15-20% + CPM 10% + Hook 10% + Freq 10% + Vol 15%
+   - 5 ações: Modelar/Escalar/Manter/Observar/Desligar
+   - Filtros interativos nos badges, tooltip com breakdown, nomes reais
+7. Comparativo Semanal com trends (setas + cores contextuais)
+8. LTV Analysis com buckets por comportamento + top 5
+9. Status automático de edições/lotes (computeAutoStatus)
+
+**Fix crítico:** KPI Investimento filtrado por campaign_ids (R$ 8.142 → R$ 5.816)
+
+**Deploy:** `meta-api` com `instagram_permalink` + sync hierarquia no botão Meta Ads
+
+**Pendência:** `instagram_permalink` não populou após sync manual — investigar na sessão 42.
+
+**Arquivos novos (hooks):** `useFunnelScore`, `usePeriodComparison`, `useLTVAnalysis`
+**Arquivos novos (componentes):** `FunnelScoreCard`, `FunnelFlowCards`, `MetaConversionFunnel`, `PeriodComparisonTable`, `LTVAnalysisCard`, `CreativeDiagnostic`
+
+---
+
 ### [2026-03-27] Sessão 40 — 12 PRs: Lotes + Análise + Debriefing — ✅ OK
 
 **PRs #60-#71 (12 PRs mergeadas):**
@@ -30,8 +59,8 @@
 ---
 
 ## 📅 Última atualização
-- **Data:** 2026-03-27 (sessão 40) — Sistema de Lotes para Lançamento Pago (parte 1)
-- **Status geral:** Social Listening corrigido ✅ | Pipeline financeiro estável ✅ | Onda 2A–2E ✅ | Lotes: schema + CRUD + UI ✅ (integração análise pendente)
+- **Data:** 2026-03-27 (sessão 41) — Redesign + Diagnóstico Inteligente
+- **Status geral:** Social Listening ✅ | Pipeline ✅ | Onda 2A–2E ✅ | Lotes ✅ | Diagnóstico de Funil + Ad Pulse Score ✅
 
 ---
 

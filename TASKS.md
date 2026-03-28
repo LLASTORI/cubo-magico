@@ -151,23 +151,53 @@
 
 ---
 
-## 🔵 Sessão 41 — Redesign + Pendências da Tela de Edição
+## ✅ Sessão 41 — Redesign + Diagnóstico Inteligente (21 PRs em 1)
 
-### Design (prioridade)
-- [ ] **Redesign completo da `LaunchEditionAnalysis`** — design premium, não parecer app feito por IA
-- [ ] Funil visual mais atrativo (inspirar no debriefing "Posicionamento Lucrativo")
-- [ ] Cards de KPI com design moderno e hierarquia visual clara
-- [ ] Tabelas com hover states, cores contextuais e densidade informacional
-- [ ] Breakdowns de lote visualmente ricos (não só tabelas flat)
+### Design
+- [x] Redesign premium: hero gradient, KPI cards com ícones/glow, section wrapper ✅
+- [x] Visual Dota 2: grid pattern, gradient borders, lot pills com status ✅
+- [x] Seções colapsáveis (defaultOpen=false para pesadas) ✅
+- [x] AppHeader sticky top-0 com backdrop-blur ✅
 
-### Lógica pendente
-- [ ] **Status automático** de lotes e edições (baseado nas datas vs hoje)
-- [ ] **Score do funil** — health score (existe no perpétuo, falta trazer)
-- [ ] **PeriodComparison** — comparar sub-períodos dentro da edição
-- [ ] **LTVAnalysis** — lifetime value dos compradores
+### Funnel Score + Diagnóstico
+- [x] `useFunnelScore` — hook reutilizável extraído do CuboMagicoDashboard ✅
+- [x] `FunnelScoreCard` — ring SVG + breakdown colorido com taxas reais ✅
+- [x] Penalidade de gargalo (sub-score <50 penaliza total) ✅
+- [x] Diagnóstico automático: "TX Página→Checkout em 10.2% — revise a copy..." ✅
 
-### Deploy pendente
-- [ ] `supabase functions deploy meta-api` — ativa `instagram_permalink`
+### Fluxo do Funil + Funil Meta
+- [x] `FunnelFlowCards` — cards por posição (FRONT/OB/US/DS) com benchmarks ✅
+- [x] Dados derivados de `lotsAnalysis` (bump_1→OB1, etc.) ✅
+- [x] `MetaConversionFunnel` — Cliques→Página→Checkout→Compra com status ✅
+- [x] TX Página→Compra end-to-end com benchmark (<7% ruim, 7-10% bom, >10% excelente) ✅
+- [x] Diagnóstico do gargalo inline no funil ✅
+
+### Ad Pulse Score (nome próprio Cubo)
+- [x] Score multi-dimensional: ROAS 40-45% + CTR 15-20% + CPM 10% + Hook 10% + Freq 10% + Volume 15% ✅
+- [x] Pesos adaptáveis: imagens redistribuem hook para ROAS/CTR ✅
+- [x] 5 ações: Modelar (alto score + ≥10 vendas), Escalar, Manter, Observar, Desligar ✅
+- [x] Filtros interativos nos badges (clique filtra lista) ✅
+- [x] Tooltip no score badge com breakdown completo ✅
+- [x] Nomes reais dos criativos via meta_ads + ID visível ✅
+- [x] Link Instagram (permalink) preparado — aguardando re-sync ✅
+
+### Outras features
+- [x] `usePeriodComparison` + `PeriodComparisonTable` — comparativo semanal com trends ✅
+- [x] `useLTVAnalysis` + `LTVAnalysisCard` — LTV por comprador, buckets, top 5 ✅
+- [x] Status automático de edições/lotes (computeAutoStatus) ✅
+- [x] Deploy `meta-api` com `instagram_permalink` ✅
+- [x] Sync hierarquia no botão de sync do Meta Ads (fire-and-forget) ✅
+
+### Fix crítico
+- [x] KPI Investimento filtrado por campaign_ids da edição (R$ 8.142 → R$ 5.816) ✅
+
+### Pendente (sessão 42)
+- [ ] **instagram_permalink não populou** — investigar edge function `syncAds`/`fetchInstagramPermalinks`
+- [ ] Design premium fase 2: 3D, glassmorphism, gauges (ver memória `project_design_vision.md`)
+- [ ] Resumo Executivo com IA (bloco de texto no topo)
+- [ ] Comparação entre edições (esta vs anterior)
+- [ ] Curva de ROAS diário (evolução temporal)
+- [ ] Hold Rate no Ad Pulse Score (precisa sync thruplay do Meta)
 
 ---
 

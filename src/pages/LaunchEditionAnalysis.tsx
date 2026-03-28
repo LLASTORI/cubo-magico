@@ -705,17 +705,19 @@ export default function LaunchEditionAnalysis() {
     queryFn: async () => {
       const { data } = await supabase
         .from('meta_ads')
-        .select('ad_id, ad_name, instagram_permalink')
+        .select('ad_id, ad_name, instagram_permalink, status')
         .eq('project_id', projectId);
       const map: Record<string, {
         name: string;
         permalink: string | null;
+        status: string | null;
       }> = {};
       for (const a of data || []) {
         if (a.ad_id) {
           map[a.ad_id] = {
             name: a.ad_name || a.ad_id,
             permalink: a.instagram_permalink,
+            status: a.status,
           };
         }
       }

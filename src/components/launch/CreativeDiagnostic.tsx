@@ -508,6 +508,52 @@ export function CreativeDiagnostic({
         </div>
       </div>
 
+      {/* Column headers with tooltips */}
+      <div className="flex items-center gap-3 px-3 py-1.5 text-[10px] text-muted-foreground uppercase tracking-wider">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="w-8 text-center cursor-help">Score</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-[220px] text-xs bg-[#1a1f2e] border-border">
+            <p className="font-semibold mb-1">Ad Pulse Score (0-100)</p>
+            <p className="text-muted-foreground">Vídeos: ROAS 40% + CTR 15% + CPM 10% + Hook 10% + Freq 10% + Vol 15%</p>
+            <p className="text-muted-foreground mt-0.5">Imagens: ROAS 45% + CTR 20% + CPM 10% + Freq 10% + Vol 15%</p>
+          </TooltipContent>
+        </Tooltip>
+        <span className="w-[70px]">Ação</span>
+        <span className="flex-1">Criativo</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-[60px] text-right cursor-help">Invest.</span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs bg-[#1a1f2e] border-border">
+              Gasto no Meta Ads (fonte: meta_insights)
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-[40px] text-right cursor-help">Vendas</span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs bg-[#1a1f2e] border-border max-w-[200px]">
+              Vendas atribuídas via UTM (fonte: Hotmart). Inclui todas as posições do pedido (FRONT + OBs).
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-[44px] text-right cursor-help">ROAS</span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs bg-[#1a1f2e] border-border max-w-[200px]">
+              Receita Hotmart / Investimento Meta Ads. Nunca usa dados de vendas do Meta.
+            </TooltipContent>
+          </Tooltip>
+          <span className="w-[40px] text-right hidden xl:block">CTR</span>
+          <span className="w-[40px] text-right hidden xl:block">Hook</span>
+          <span className="w-[32px] text-right hidden xl:block">Freq</span>
+        </div>
+        <span className="w-[180px] hidden lg:block" />
+      </div>
+
       {/* Creative list */}
       <div className="space-y-1.5">
         {filtered.map(c => (
@@ -578,14 +624,52 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
           side="right"
           className="text-xs bg-[#1a1f2e] border-border p-2.5 max-w-[200px]"
         >
-          <p className="font-semibold mb-1">Ad Pulse Score: {c.score}/100</p>
-          <div className="space-y-0.5 text-muted-foreground">
-            <p>ROAS: {c.roas.toFixed(2)}x</p>
-            <p>CTR: {c.ctr.toFixed(2)}%</p>
-            <p>CPM: R$ {c.cpm.toFixed(0)}</p>
-            {c.hookRate > 0 && <p>Hook Rate: {c.hookRate.toFixed(0)}%</p>}
-            {c.frequency > 0 && <p>Frequência: {c.frequency.toFixed(1)}</p>}
-            <p>Volume: {c.purchases} vendas</p>
+          <p className="font-semibold mb-1.5">Ad Pulse Score: {c.score}/100</p>
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">ROAS</span>
+              <span className={c.roas >= 2 ? 'text-green-400 font-medium' : c.roas >= 1 ? 'text-blue-400' : 'text-red-400'}>
+                {c.roas.toFixed(2)}x
+              </span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">CTR</span>
+              <span className={c.ctr >= 2 ? 'text-green-400 font-medium' : c.ctr >= 1 ? 'text-foreground' : 'text-red-400'}>
+                {c.ctr.toFixed(2)}%
+              </span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">CPM</span>
+              <span className={c.cpm <= 25 ? 'text-green-400' : c.cpm <= 40 ? 'text-foreground' : 'text-red-400'}>
+                R$ {c.cpm.toFixed(0)}
+              </span>
+            </div>
+            {c.hookRate > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Hook Rate</span>
+                <span className={c.hookRate >= 20 ? 'text-green-400' : c.hookRate >= 10 ? 'text-foreground' : 'text-red-400'}>
+                  {c.hookRate.toFixed(0)}%
+                </span>
+              </div>
+            )}
+            {c.frequency > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Frequência</span>
+                <span className={c.frequency <= 2.5 ? 'text-green-400' : c.frequency <= 3.5 ? 'text-yellow-400' : 'text-red-400'}>
+                  {c.frequency.toFixed(1)}x
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between gap-3 border-t border-border/30 pt-1">
+              <span className="text-muted-foreground">Volume</span>
+              <span className="text-foreground font-medium">{c.purchases} vendas</span>
+            </div>
+            {c.cpa > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">CPA</span>
+                <span className="text-foreground">R$ {c.cpa.toFixed(0)}</span>
+              </div>
+            )}
           </div>
         </TooltipContent>
       </Tooltip>

@@ -240,6 +240,28 @@ Domínios principais:
 
 **RLS `launch_phases` e `launch_products`:** usam política `project_members` (igual a `launch_editions`) — não `get_user_project_role()` (que bloqueava INSERTs sem WITH CHECK).
 
+## Funnel Score + Ad Pulse Score
+
+**Funnel Score (0-100)** — `src/hooks/useFunnelScore.ts`:
+- Pesos: Posições 40% + Connect Rate 20% + TX Pág→Checkout 20% + TX Checkout→Compra 20%
+- Penalidade de gargalo: sub-score < 50 reduz total proporcionalmente
+- Diagnóstico automático: `identifyBottleneck()` gera texto acionável
+- Componente: `FunnelScoreCard` — ring SVG + breakdown + barra diagnóstica
+
+**Ad Pulse Score (0-100)** — `src/components/launch/CreativeDiagnostic.tsx`:
+- Score por criativo com 6 dimensões:
+  - Vídeos: ROAS 40% + CTR 15% + CPM 10% + Hook Rate 10% + Frequência 10% + Volume 15%
+  - Imagens: ROAS 45% + CTR 20% + CPM 10% + Frequência 10% + Volume 15% (hook redistribuído)
+- 5 ações: Modelar (≥70 + ≥10 vendas) | Escalar (≥75) | Manter (≥55) | Observar | Desligar (<35)
+- Hook Rate = `video_view / impressions` (actions do meta_insights)
+- Hold Rate = aguardando sync de `thruplay` (não existe no schema ainda)
+- Nomes dos criativos: `meta_ads.ad_name` (join por ad_id)
+- Links Instagram: `meta_ads.instagram_permalink` (populado via sync hierarquia)
+
+**`meta_ads`** — tabela de hierarquia de anúncios:
+- `ad_id`, `ad_name`, `campaign_id`, `adset_id`, `instagram_permalink`, `thumbnail_url`
+- Populada por `sync_hierarchy_full` (cron diário 6h UTC + botão sync no Meta Ads)
+
 ## Padrões de Código
 
 **TypeScript**: strict mode sempre; sem `any`; tipos explícitos.

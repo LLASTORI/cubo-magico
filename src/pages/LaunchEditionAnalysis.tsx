@@ -1,13 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import {
+  format, parseISO, isAfter, isBefore,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Calendar, Filter } from 'lucide-react';
+import {
+  ArrowLeft, Calendar, TrendingUp, DollarSign,
+  Target, ShoppingCart, CreditCard, BarChart3,
+  Megaphone, Layers, Activity, Users, ChevronDown,
+  Wallet, Tag, LayoutGrid, Ticket, CalendarDays,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { AppHeader } from '@/components/AppHeader';
 import { CubeLoader } from '@/components/CubeLoader';
 import { useTenantNavigation } from '@/navigation';
@@ -30,13 +42,19 @@ import { DailyBreakdownTable } from '@/components/launch/DailyBreakdownTable';
 import { CampaignPerformanceTable } from '@/components/launch/CampaignPerformanceTable';
 import { CrossPhaseConversionCard } from '@/components/launch/CrossPhaseConversionCard';
 import { useCrossPhaseConversion } from '@/hooks/useCrossPhaseConversion';
+import { usePeriodComparison } from '@/hooks/usePeriodComparison';
+import { PeriodComparisonTable } from '@/components/launch/PeriodComparisonTable';
+import { useLTVAnalysis } from '@/hooks/useLTVAnalysis';
+import { LTVAnalysisCard } from '@/components/launch/LTVAnalysisCard';
+import { FunnelFlowCards } from '@/components/launch/FunnelFlowCards';
+import { MetaConversionFunnel } from '@/components/launch/MetaConversionFunnel';
+import { CreativeDiagnostic } from '@/components/launch/CreativeDiagnostic';
+import { useFunnelScore } from '@/hooks/useFunnelScore';
+import type { PositionBreakdown } from '@/hooks/useFunnelScore';
+import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 
-const STATUS_MAP = {
-  planned: { label: 'Planejada', className: 'bg-slate-100 text-slate-700' },
-  active: { label: 'Ativa', className: 'bg-green-100 text-green-700' },
-  finished: { label: 'Encerrada', className: 'bg-amber-100 text-amber-700' },
-} as const;
+/* ── helpers ─────────────────────────────────────────── */
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -46,8 +64,48 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+/** Status automático baseado em datas vs hoje */
+function computeAutoStatus(
+  startDatetime?: string | null,
+  endDatetime?: string | null,
+  eventDatetime?: string | null,
+): 'planned' | 'active' | 'finished' {
+  const now = new Date();
+  const effectiveEnd = endDatetime || eventDatetime;
+  if (!startDatetime) return 'planned';
+  const start = parseISO(startDatetime);
+  if (isBefore(now, start)) return 'planned';
+  if (effectiveEnd && isAfter(now, parseISO(effectiveEnd))) {
+    return 'finished';
+  }
+  return 'active';
+}
+
+const STATUS_CONFIG = {
+  planned: {
+    label: 'Planejada',
+    dot: 'bg-slate-400',
+    badge: 'bg-slate-500/15 text-slate-400 border-slate-500/25',
+  },
+  active: {
+    label: 'Ativa',
+    dot: 'bg-green-400 animate-pulse',
+    badge: 'bg-green-500/15 text-green-400 border-green-500/25',
+  },
+  finished: {
+    label: 'Encerrada',
+    dot: 'bg-amber-400',
+    badge: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  },
+} as const;
+
+/* ── main component ──────────────────────────────────── */
+
 export default function LaunchEditionAnalysis() {
-  const { funnelId, editionId } = useParams<{ funnelId: string; editionId: string }>();
+  const { funnelId, editionId } = useParams<{
+    funnelId: string;
+    editionId: string;
+  }>();
   const { navigateTo } = useTenantNavigation();
   const { currentProject } = useProject();
   const projectId = currentProject?.id || '';
@@ -56,7 +114,6 @@ export default function LaunchEditionAnalysis() {
   const editionData = edition.data;
   const editionLoading = edition.isLoading;
 
-  // Fetch funnel's launch_tag for conversion analysis
   const { data: funnel } = useQuery({
     queryKey: ['funnel-tag', funnelId],
     enabled: !!funnelId && !!projectId,
@@ -70,30 +127,44 @@ export default function LaunchEditionAnalysis() {
     },
   });
 
-  const { kpis, kpisLoading, passingDiario, passingLoading } = useLaunchEditionData(
-    projectId, funnelId!, editionData
-  );
+  // Datas da edição (usadas por múltiplos hooks)
+  const editionEndDate =
+    editionData?.end_datetime ||
+    editionData?.event_datetime ||
+    editionData?.start_datetime;
+  const startDate = editionData?.start_datetime
+    ? parseISO(editionData.start_datetime) : new Date();
+  const endDate = editionEndDate
+    ? parseISO(editionEndDate) : new Date();
 
-  // Datas da edição (usadas por múltiplos hooks abaixo)
-  const editionEndDate = editionData?.end_datetime || editionData?.event_datetime || editionData?.start_datetime;
-  // fase1End = event_datetime (se existe) senão end_datetime — mesmo range do KPI "Ingressos"
-  const fase1End = editionData?.event_datetime || editionEndDate;
-  const startDate = editionData?.start_datetime ? parseISO(editionData.start_datetime) : new Date();
-  const endDate = editionEndDate ? parseISO(editionEndDate) : new Date();
-  const fase1EndDate = fase1End ? parseISO(fase1End) : endDate;
-
-  // Sales data completo para blocos reutilizáveis
+  // Sales data — definido ANTES dos KPIs para extrair campaignIds
   const { data: editionSalesData = [] } = useQuery({
-    queryKey: ['edition-sales', projectId, funnelId, editionData?.id, editionData?.start_datetime, editionEndDate],
-    enabled: !!editionData?.start_datetime && !!projectId && !!funnelId,
+    queryKey: [
+      'edition-sales', projectId, funnelId,
+      editionData?.id, editionData?.start_datetime,
+      editionEndDate,
+    ],
+    enabled: !!editionData?.start_datetime
+      && !!projectId && !!funnelId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('funnel_orders_view')
-        .select('order_id, customer_paid, producer_net, main_offer_code, all_offer_codes, buyer_email, economic_day, payment_method, meta_campaign_id, meta_adset_id, meta_ad_id, utm_source, utm_medium, utm_campaign, utm_content, utm_adset, utm_placement, checkout_origin, main_revenue, status')
+        .select(`
+          order_id, customer_paid, producer_net,
+          main_offer_code, all_offer_codes, buyer_email,
+          economic_day, payment_method,
+          meta_campaign_id, meta_adset_id, meta_ad_id,
+          utm_source, utm_medium, utm_campaign,
+          utm_content, utm_adset, utm_placement,
+          checkout_origin, main_revenue, status
+        `)
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId!)
         .not('main_offer_code', 'is', null)
-        .gte('economic_day', editionData!.start_datetime!.slice(0, 10))
+        .gte(
+          'economic_day',
+          editionData!.start_datetime!.slice(0, 10),
+        )
         .lte('economic_day', editionEndDate!.slice(0, 10));
       if (error) throw error;
       return (data || []).map(r => ({
@@ -123,12 +194,14 @@ export default function LaunchEditionAnalysis() {
     const codes = new Set<string>();
     for (const s of editionSalesData) {
       if (s.offer_code) codes.add(s.offer_code);
-      if (s.all_offer_codes) s.all_offer_codes.forEach((c: string) => codes.add(c));
+      if (s.all_offer_codes) {
+        s.all_offer_codes.forEach((c: string) => codes.add(c));
+      }
     }
     return Array.from(codes);
   }, [editionSalesData]);
 
-  // Campaign IDs presentes nas vendas da edição — escopa Meta insights
+  // Campaign IDs das vendas — escopa Meta insights
   const editionCampaignIds = useMemo(() => {
     const ids = new Set<string>();
     for (const s of editionSalesData) {
@@ -137,43 +210,61 @@ export default function LaunchEditionAnalysis() {
     return Array.from(ids);
   }, [editionSalesData]);
 
-  // Meta insights filtrados pelo período da edição E pelas campanhas da edição
+  // KPIs — usa campaignIds para filtrar spend corretamente
+  const {
+    kpis, kpisLoading, passingDiario, passingLoading,
+  } = useLaunchEditionData(
+    projectId, funnelId!, editionData, editionCampaignIds,
+  );
+
   const { data: editionMetaInsights = [] } = useQuery({
-    queryKey: ['edition-meta-insights', projectId, editionData?.id, editionData?.start_datetime, editionEndDate, editionCampaignIds],
-    enabled: !!editionData?.start_datetime && !!projectId && editionCampaignIds.length > 0,
+    queryKey: [
+      'edition-meta-insights', projectId, editionData?.id,
+      editionData?.start_datetime, editionEndDate,
+      editionCampaignIds,
+    ],
+    enabled: !!editionData?.start_datetime
+      && !!projectId && editionCampaignIds.length > 0,
     queryFn: async () => {
       let q = supabase
         .from('meta_insights')
         .select('*')
         .eq('project_id', projectId)
         .in('campaign_id', editionCampaignIds);
-      if (editionData!.start_datetime) q = q.gte('date_start', editionData!.start_datetime.slice(0, 10));
-      if (editionEndDate) q = q.lte('date_start', editionEndDate.slice(0, 10));
+      if (editionData!.start_datetime) {
+        q = q.gte(
+          'date_start',
+          editionData!.start_datetime.slice(0, 10),
+        );
+      }
+      if (editionEndDate) {
+        q = q.lte('date_start', editionEndDate.slice(0, 10));
+      }
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
 
-  // Análise por lote — agrupa vendas e spend por lote configurado
   const {
-    lotsAnalysis,
-    editionTotals,
+    lotsAnalysis, editionTotals,
     unassigned: unassignedSales,
-  } = useLaunchLotsAnalysis(editionData?.id, editionSalesData, editionMetaInsights);
+  } = useLaunchLotsAnalysis(
+    editionData?.id, editionSalesData, editionMetaInsights,
+  );
 
-  // Vendas do produto principal (fase vendas) — para cruzamento
   const { data: produtoSalesData = [] } = useQuery({
-    queryKey: ['edition-produto-sales', projectId, funnelId, editionData?.id],
+    queryKey: [
+      'edition-produto-sales', projectId, funnelId,
+      editionData?.id,
+    ],
     enabled: !!editionData && !!projectId && !!funnelId,
     queryFn: async () => {
-      // Buscar offer_mappings vinculados a fases do tipo "vendas"
       const { data: phases } = await supabase
         .from('launch_phases')
         .select('id')
         .eq('edition_id', editionData!.id)
         .in('phase_type', ['vendas', 'pitch', 'single_shot']);
-
       if (!phases?.length) return [];
 
       const phaseIds = phases.map(p => p.id);
@@ -182,31 +273,33 @@ export default function LaunchEditionAnalysis() {
         .select('codigo_oferta')
         .in('phase_id', phaseIds)
         .eq('is_active', true);
-
       if (!offers?.length) return [];
 
       const offerCodes = offers
         .map(o => o.codigo_oferta)
         .filter(Boolean) as string[];
-
       if (offerCodes.length === 0) return [];
 
-      const startDate = editionData!.start_datetime?.slice(0, 10);
-      const endDate = (editionData!.end_datetime || editionData!.event_datetime)?.slice(0, 10);
+      const sd = editionData!.start_datetime?.slice(0, 10);
+      const ed = (
+        editionData!.end_datetime ||
+        editionData!.event_datetime
+      )?.slice(0, 10);
 
       let q = supabase
         .from('funnel_orders_view')
-        .select('order_id, customer_paid, buyer_email, economic_day, main_offer_code')
+        .select(`
+          order_id, customer_paid, buyer_email,
+          economic_day, main_offer_code
+        `)
         .eq('project_id', projectId)
         .eq('funnel_id', funnelId!)
         .in('main_offer_code', offerCodes);
-
-      if (startDate) q = q.gte('economic_day', startDate);
-      if (endDate) q = q.lte('economic_day', endDate);
+      if (sd) q = q.gte('economic_day', sd);
+      if (ed) q = q.lte('economic_day', ed);
 
       const { data, error } = await q;
       if (error) throw error;
-
       return (data || []).map(r => ({
         offer_code: r.main_offer_code,
         gross_amount: Number(r.customer_paid) || 0,
@@ -216,41 +309,288 @@ export default function LaunchEditionAnalysis() {
     },
   });
 
-  // Cruzamento Ingresso → Produto Principal
   const crossPhaseData = useCrossPhaseConversion(
-    editionSalesData, produtoSalesData, lotsAnalysis
+    editionSalesData, produtoSalesData, lotsAnalysis,
   );
 
-  // Seletor de lote — filtra blocos abaixo
-  const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
+  // Offer mappings do funil — para positionBreakdown
+  const { data: funnelOffers = [] } = useQuery({
+    queryKey: ['edition-offers', funnelId],
+    enabled: !!funnelId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('offer_mappings')
+        .select(
+          'codigo_oferta, tipo_posicao, ordem_posicao, nome_produto, nome_oferta',
+        )
+        .eq('funnel_id', funnelId!)
+        .eq('is_active', true);
+      return data || [];
+    },
+  });
+
+  // Position breakdown para o Funnel Score
+  // Position breakdown enriquecido (com FRONT + produtos + receita)
+  const positionBreakdown = useMemo((): PositionBreakdown[] => {
+    if (!funnelOffers.length || !editionSalesData.length) {
+      return [];
+    }
+    const frontCodes = funnelOffers
+      .filter(o =>
+        o.tipo_posicao === 'FRONT' ||
+        o.tipo_posicao === 'FE',
+      )
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
+    const frontCount = editionSalesData.filter(
+      s => s.offer_code && frontCodes.includes(s.offer_code),
+    ).length;
+    if (frontCount === 0) return [];
+
+    const posMap = new Map<string, {
+      tipo: string;
+      ordem: number;
+      vendas: number;
+    }>();
+
+    for (const offer of funnelOffers) {
+      const tipo = offer.tipo_posicao || 'OTHER';
+      if (tipo === 'FRONT' || tipo === 'FE') continue;
+      const ordem = offer.ordem_posicao || 1;
+      const key = `${tipo}${ordem}`;
+      const code = offer.codigo_oferta;
+      if (!code) continue;
+
+      const sales = editionSalesData.filter(
+        s => s.all_offer_codes?.includes(code),
+      ).length;
+
+      const existing = posMap.get(key);
+      if (existing) {
+        existing.vendas += sales;
+      } else {
+        posMap.set(key, { tipo, ordem, vendas: sales });
+      }
+    }
+
+    return Array.from(posMap.values()).map(p => ({
+      ...p,
+      receita: 0,
+      taxaConversao:
+        frontCount > 0
+          ? (p.vendas / frontCount) * 100
+          : 0,
+    }));
+  }, [funnelOffers, editionSalesData]);
+
+  // Position cards derivados dos lotsAnalysis (fonte canônica)
+  const { positionCards, vendasFront: vendasFrontCalc } = useMemo(() => {
+    type PC = import(
+      '@/components/launch/FunnelFlowCards'
+    ).PositionCard;
+
+    if (lotsAnalysis.length === 0) {
+      return { positionCards: [] as PC[], vendasFront: 0 };
+    }
+
+    // Agregar offerMetrics de todos os lotes
+    // Roles: front, bump_1, bump_2, upsell_1, downsell_1
+    function parseRole(role: string): {
+      tipo: string; ordem: number;
+    } {
+      if (role === 'front') return { tipo: 'FRONT', ordem: 1 };
+      if (role.startsWith('bump')) {
+        const n = parseInt(role.split('_')[1] || '1', 10);
+        return { tipo: 'OB', ordem: n };
+      }
+      if (role.startsWith('upsell')) {
+        const n = parseInt(role.split('_')[1] || '1', 10);
+        return { tipo: 'US', ordem: n };
+      }
+      if (role.startsWith('downsell')) {
+        const n = parseInt(role.split('_')[1] || '1', 10);
+        return { tipo: 'DS', ordem: n };
+      }
+      return { tipo: 'OTHER', ordem: 1 };
+    }
+
+    let totalFront = 0;
+    const posMap = new Map<string, PC>();
+
+    for (const la of lotsAnalysis) {
+      for (const om of la.offerMetrics) {
+        const { tipo, ordem } = parseRole(om.role);
+        const isFront = tipo === 'FRONT';
+
+        if (isFront) {
+          totalFront += om.salesCount;
+        }
+
+        // Chave: tipo + ordem (agrupa mesma posição cross-lotes)
+        const posKey = `${tipo}${ordem}`;
+        const existing = posMap.get(posKey);
+
+        if (existing) {
+          existing.vendas += om.salesCount;
+          existing.receita += om.revenue;
+          // Adicionar produto se não duplicado
+          if (!existing.produtos.some(
+            p => p.codigo_oferta === om.codigoOferta,
+          )) {
+            existing.produtos.push({
+              nome_produto: om.nomeProduto || om.codigoOferta,
+              nome_oferta: om.nomeOferta || null,
+              codigo_oferta: om.codigoOferta,
+              vendas: om.salesCount,
+            });
+          }
+        } else {
+          posMap.set(posKey, {
+            tipo,
+            ordem,
+            vendas: om.salesCount,
+            receita: om.revenue,
+            taxaConversao: isFront
+              ? 100
+              : totalFront > 0
+                ? (om.salesCount / totalFront) * 100
+                : 0,
+            produtos: [{
+              nome_produto: om.nomeProduto || om.codigoOferta,
+              nome_oferta: om.nomeOferta || null,
+              codigo_oferta: om.codigoOferta,
+              vendas: om.salesCount,
+            }],
+          });
+        }
+      }
+    }
+
+    // Recalcular TX para cards agregados
+    const cards = Array.from(posMap.values());
+    for (const c of cards) {
+      if (c.tipo !== 'FRONT') {
+        c.taxaConversao = totalFront > 0
+          ? (c.vendas / totalFront) * 100 : 0;
+      }
+    }
+
+    return {
+      positionCards: cards.filter(c => c.vendas > 0),
+      vendasFront: totalFront,
+    };
+  }, [lotsAnalysis]);
+
+  // Meta Ads conversion funnel data
+  const metaFunnelData = useMemo(() => {
+    if (editionMetaInsights.length === 0) return null;
+
+    const getAction = (
+      actions: any[] | null, type: string,
+    ): number => {
+      if (!actions || !Array.isArray(actions)) return 0;
+      const a = actions.find(
+        (x: any) => x.action_type === type,
+      );
+      return a ? parseInt(a.value || '0', 10) : 0;
+    };
+
+    const seen = new Map<string, {
+      lc: number; lp: number; ic: number; p: number;
+    }>();
+    for (const i of editionMetaInsights) {
+      if (!i.ad_id) continue;
+      const key = `${i.ad_id}_${i.date_start}`;
+      if (seen.has(key)) continue;
+      seen.set(key, {
+        lc: getAction(i.actions, 'link_click'),
+        lp: getAction(i.actions, 'landing_page_view')
+          || getAction(i.actions, 'omni_landing_page_view'),
+        ic: getAction(i.actions, 'initiate_checkout')
+          || getAction(i.actions, 'omni_initiated_checkout'),
+        p: getAction(i.actions, 'purchase')
+          || getAction(i.actions, 'omni_purchase'),
+      });
+    }
+
+    let lc = 0, lp = 0, ic = 0, p = 0;
+    for (const v of seen.values()) {
+      lc += v.lc; lp += v.lp; ic += v.ic; p += v.p;
+    }
+
+    if (lc === 0) return null;
+
+    return {
+      linkClicks: lc,
+      landingPageViews: lp,
+      initiateCheckouts: ic,
+      purchases: p,
+      connectRate: lc > 0 ? (lp / lc) * 100 : 0,
+      txPaginaCheckout: lp > 0 ? (ic / lp) * 100 : 0,
+      txCheckoutCompra: ic > 0 ? (p / ic) * 100 : 0,
+    };
+  }, [editionMetaInsights]);
+
+  // Funnel Score (0-100)
+  const funnelScore = useFunnelScore(
+    positionBreakdown, editionMetaInsights,
+  );
+
+  // LTV dos compradores
+  const ltvData = useLTVAnalysis(editionSalesData, funnelOffers);
+
+  // Comparação semanal
+  const periodComparison = usePeriodComparison(
+    editionSalesData,
+    editionMetaInsights,
+    editionData?.start_datetime,
+    editionEndDate,
+  );
+
+  const [selectedLotId, setSelectedLotId] = useState<
+    string | null
+  >(null);
 
   const selectedLot = useMemo(
-    () => lotsAnalysis.find(la => la.lot.id === selectedLotId) ?? null,
-    [lotsAnalysis, selectedLotId]
+    () =>
+      lotsAnalysis.find(la => la.lot.id === selectedLotId)
+      ?? null,
+    [lotsAnalysis, selectedLotId],
   );
 
-  // Dados filtrados pelo lote selecionado (ou edição inteira se "all")
   const filteredSalesData = useMemo(() => {
     if (!selectedLot) return editionSalesData;
-    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
-    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    const lotStart =
+      selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd =
+      selectedLot.lot.end_datetime?.slice(0, 10);
     const lotOfferCodes = selectedLot.lot.offers
-      .map(o => o.codigo_oferta).filter(Boolean) as string[];
+      .map(o => o.codigo_oferta)
+      .filter(Boolean) as string[];
     return editionSalesData.filter(s => {
       const day = s.economic_day;
       if (!day || !lotStart) return false;
       if (day < lotStart) return false;
       if (lotEnd && day > lotEnd) return false;
-      if (s.offer_code && lotOfferCodes.includes(s.offer_code)) return true;
-      if (s.all_offer_codes?.some(c => lotOfferCodes.includes(c))) return true;
+      if (
+        s.offer_code &&
+        lotOfferCodes.includes(s.offer_code)
+      ) return true;
+      if (
+        s.all_offer_codes?.some(
+          (c: string) => lotOfferCodes.includes(c),
+        )
+      ) return true;
       return false;
     });
   }, [selectedLot, editionSalesData]);
 
   const filteredMetaInsights = useMemo(() => {
     if (!selectedLot) return editionMetaInsights;
-    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
-    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    const lotStart =
+      selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd =
+      selectedLot.lot.end_datetime?.slice(0, 10);
     return editionMetaInsights.filter(m => {
       const d = m.date_start?.slice(0, 10);
       if (!d || !lotStart) return false;
@@ -264,92 +604,135 @@ export default function LaunchEditionAnalysis() {
     const codes = new Set<string>();
     for (const s of filteredSalesData) {
       if (s.offer_code) codes.add(s.offer_code);
-      if (s.all_offer_codes) s.all_offer_codes.forEach((c: string) => codes.add(c));
+      if (s.all_offer_codes) {
+        s.all_offer_codes.forEach(
+          (c: string) => codes.add(c),
+        );
+      }
     }
     return Array.from(codes);
   }, [filteredSalesData]);
 
-  // Datas efetivas (lote selecionado ou edição)
   const effectiveStartDate = selectedLot?.lot.start_datetime
     ? parseISO(selectedLot.lot.start_datetime) : startDate;
   const effectiveEndDate = selectedLot?.lot.end_datetime
     ? parseISO(selectedLot.lot.end_datetime) : endDate;
 
-  // Passing diário reativo ao lote (computa do filteredSalesData em memória)
   const lotPassingDiario = useMemo(() => {
-    if (!selectedLot) return null; // usa passingDiario do hook
-    const lotStart = selectedLot.lot.start_datetime?.slice(0, 10);
-    const lotEnd = selectedLot.lot.end_datetime?.slice(0, 10);
+    if (!selectedLot) return null;
+    const lotStart =
+      selectedLot.lot.start_datetime?.slice(0, 10);
+    const lotEnd =
+      selectedLot.lot.end_datetime?.slice(0, 10);
     if (!lotStart) return null;
     const endStr = lotEnd || lotStart;
 
-    // Contar vendas FRONT por dia no range do lote
     const frontCodes = selectedLot.lot.offers
       .filter(o => o.role === 'front')
       .map(o => o.codigo_oferta)
       .filter(Boolean) as string[];
-
     const frontSales = filteredSalesData.filter(
-      s => s.offer_code && frontCodes.includes(s.offer_code)
+      s => s.offer_code && frontCodes.includes(s.offer_code),
     );
 
     const byDay: Record<string, number> = {};
     for (const s of frontSales) {
       if (s.economic_day) {
-        byDay[s.economic_day] = (byDay[s.economic_day] || 0) + 1;
+        byDay[s.economic_day] =
+          (byDay[s.economic_day] || 0) + 1;
       }
     }
 
-    // Gerar range de dias
     const cur = parseISO(lotStart);
     const end = parseISO(endStr);
     let totalDias = 0;
     const tmp = parseISO(lotStart);
-    while (tmp <= end) { totalDias++; tmp.setDate(tmp.getDate() + 1); }
+    while (tmp <= end) {
+      totalDias++;
+      tmp.setDate(tmp.getDate() + 1);
+    }
 
     const totalIngressos = frontSales.length;
-    const metaDiaria = totalDias > 0 ? totalIngressos / totalDias : 0;
+    const metaDiaria =
+      totalDias > 0 ? totalIngressos / totalDias : 0;
 
-    const result: import('@/hooks/useLaunchEditionData').PassingDiarioItem[] = [];
+    const result: import(
+      '@/hooks/useLaunchEditionData'
+    ).PassingDiarioItem[] = [];
     while (cur <= end) {
       const dateStr = cur.toISOString().split('T')[0];
       const ingressos = byDay[dateStr] || 0;
-      const pct = metaDiaria > 0 ? ingressos / metaDiaria : 0;
+      const pct =
+        metaDiaria > 0 ? ingressos / metaDiaria : 0;
       result.push({
         date: dateStr,
         ingressos,
         meta: Math.round(metaDiaria),
-        status: pct >= 1 ? 'above' : pct >= 0.7 ? 'near' : 'below',
+        status:
+          pct >= 1 ? 'above' : pct >= 0.7 ? 'near' : 'below',
       });
       cur.setDate(cur.getDate() + 1);
     }
     return result;
   }, [selectedLot, filteredSalesData]);
 
-  // Passing efetivo: do lote se selecionado, senão da edição
-  const effectivePassingDiario = lotPassingDiario ?? passingDiario;
+  const effectivePassingDiario =
+    lotPassingDiario ?? passingDiario;
 
-  // Meta hierarchy (campaigns, adsets, ads)
-  const { campaigns, adsets, ads, isLoading: metaHierarchyLoading } = useMetaHierarchy({
+  const {
+    campaigns, adsets, ads,
+    isLoading: metaHierarchyLoading,
+  } = useMetaHierarchy({
     projectId: projectId || undefined,
     insights: editionMetaInsights,
     enabled: editionMetaInsights.length > 0,
   });
 
-  // Saúde do funil (abandonos, reembolsos, chargebacks via crm_transactions)
-  const { healthMetrics, isLoading: healthLoading } = useFunnelHealthMetrics({
+  // Meta ads metadata (nomes, permalinks)
+  const { data: metaAdsMap = {} } = useQuery({
+    queryKey: ['edition-meta-ads', projectId],
+    enabled: !!projectId && editionMetaInsights.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('meta_ads')
+        .select('ad_id, ad_name, instagram_permalink')
+        .eq('project_id', projectId);
+      const map: Record<string, {
+        name: string;
+        permalink: string | null;
+      }> = {};
+      for (const a of data || []) {
+        if (a.ad_id) {
+          map[a.ad_id] = {
+            name: a.ad_name || a.ad_id,
+            permalink: a.instagram_permalink,
+          };
+        }
+      }
+      return map;
+    },
+  });
+
+  const {
+    healthMetrics, isLoading: healthLoading,
+  } = useFunnelHealthMetrics({
     projectId: projectId || undefined,
     funnelId,
     startDate,
     endDate,
   });
 
+  /* ── loading / error states ── */
+
   if (editionLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
         <main className="container mx-auto px-6 py-8 flex justify-center">
-          <CubeLoader message="Carregando edição..." size="lg" />
+          <CubeLoader
+            message="Carregando edição..."
+            size="lg"
+          />
         </main>
       </div>
     );
@@ -360,8 +743,13 @@ export default function LaunchEditionAnalysis() {
       <div className="min-h-screen bg-background">
         <AppHeader />
         <main className="container mx-auto px-6 py-8 flex flex-col items-center gap-4">
-          <p className="text-muted-foreground">Edição não encontrada.</p>
-          <Button variant="outline" onClick={() => navigateTo('/launch-dashboard')}>
+          <p className="text-muted-foreground">
+            Edição não encontrada.
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => navigateTo('/launch-dashboard')}
+          >
             Voltar para Lançamentos
           </Button>
         </main>
@@ -369,323 +757,778 @@ export default function LaunchEditionAnalysis() {
     );
   }
 
-  const status = STATUS_MAP[editionData.status as keyof typeof STATUS_MAP] ?? STATUS_MAP.planned;
+  /* ── computed values for render ── */
+
+  const autoStatus = computeAutoStatus(
+    editionData.start_datetime,
+    editionData.end_datetime,
+    editionData.event_datetime,
+  );
+  const statusKey = (
+    editionData.status === 'planned' ||
+    editionData.status === 'active' ||
+    editionData.status === 'finished'
+  ) ? autoStatus : 'planned';
+  const statusCfg = STATUS_CONFIG[statusKey];
+
   const fmtDate = (d: string | null) =>
-    d ? format(parseISO(d), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+    d
+      ? format(parseISO(d), "dd 'de' MMM", { locale: ptBR })
+      : '—';
+  const inv = kpis?.totalSpend ?? 0;
+  const fat = kpis?.faturamentoTotal ?? 0;
+  const vendas = kpis?.totalIngressos ?? 0;
+  const lucro = fat - inv;
+  const cpa = vendas > 0 ? inv / vendas : 0;
+  const ticket = vendas > 0 ? fat / vendas : 0;
+  const roas = kpis?.roas ?? 0;
+
+  const lotLabel = selectedLot
+    ? ` — ${selectedLot.lot.name}` : '';
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader />
+    <TooltipProvider>
+      <div className="min-h-screen bg-background">
+        <AppHeader />
 
-      <main className="container mx-auto px-6 py-8">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-start gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="mt-1 shrink-0"
-              onClick={() => navigateTo('/launch-dashboard')}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                {funnel?.name && (
-                  <span className="text-sm text-muted-foreground">{funnel.name} —</span>
-                )}
-                <h1 className="text-xl font-semibold truncate">{editionData.name}</h1>
-                <Badge className={status.className}>{status.label}</Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-muted-foreground">
-                {editionData.start_datetime && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    Início: {fmtDate(editionData.start_datetime)}
-                  </span>
-                )}
-                {editionData.event_datetime && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    Evento: {fmtDate(editionData.event_datetime)}
-                  </span>
-                )}
-                {editionData.end_datetime && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    Encerramento: {fmtDate(editionData.end_datetime)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* KPIs */}
-          {(() => {
-            const inv = kpis?.totalSpend ?? 0;
-            const fat = kpis?.faturamentoTotal ?? 0;
-            const vendas = kpis?.totalIngressos ?? 0;
-            const lucro = fat - inv;
-            const cpa = vendas > 0 ? inv / vendas : 0;
-            const ticket = vendas > 0 ? fat / vendas : 0;
-            const roas = kpis?.roas ?? 0;
-            return (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-                <KpiCard
-                  label="Investimento"
-                  value={kpisLoading ? '—' : formatCurrency(inv)}
-                  variant="spend"
-                />
-                <KpiCard
-                  label="Faturamento"
-                  value={kpisLoading ? '—' : formatCurrency(fat)}
-                  variant="revenue"
-                />
-                <KpiCard
-                  label="Lucro"
-                  value={kpisLoading ? '—' : formatCurrency(lucro)}
-                  variant={lucro >= 0 ? 'revenue' : 'danger'}
-                />
-                <KpiCard
-                  label="ROAS"
-                  value={kpisLoading ? '—' : `${roas.toFixed(2)}x`}
-                  variant={roas >= 1 ? 'default' : 'danger'}
-                />
-                <KpiCard
-                  label="Vendas FRONT"
-                  value={kpisLoading ? '—' : String(vendas)}
-                />
-                <KpiCard
-                  label="CPA"
-                  value={kpisLoading ? '—' : formatCurrency(cpa)}
-                  variant="spend"
-                />
-                <KpiCard
-                  label="Ticket Médio"
-                  value={kpisLoading ? '—' : formatCurrency(ticket)}
-                />
-                <KpiCard
-                  label="Show rate"
-                  value="—"
-                  subtitle="Sem dados"
-                  muted
-                />
-              </div>
+        {/* Inline styles for effects not possible in Tailwind */}
+        <style>{`
+          @keyframes glow-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+          }
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .kpi-glow {
+            text-shadow: 0 0 20px currentColor;
+          }
+          .hero-grid {
+            background-image:
+              linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+          }
+          .section-accent {
+            background: linear-gradient(180deg, #22d3ee 0%, #2563eb 50%, transparent 100%);
+          }
+          .lot-active {
+            background: linear-gradient(135deg, rgba(34,211,238,0.15), rgba(37,99,235,0.1));
+            box-shadow: 0 0 20px rgba(34,211,238,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
+          }
+          .kpi-card-border {
+            position: relative;
+          }
+          .kpi-card-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(
+              135deg,
+              var(--kpi-accent, rgba(34,211,238,0.2)),
+              transparent 60%
             );
-          })()}
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 200ms ease;
+          }
+          .kpi-card-border:hover::before {
+            opacity: 1;
+          }
+        `}</style>
 
-          {/* Seletor de lote */}
-          {lotsAnalysis.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Filtrar por lote:</span>
-              <Tabs
-                value={selectedLotId || 'all'}
-                onValueChange={(v) => setSelectedLotId(v === 'all' ? null : v)}
-              >
-                <TabsList className="h-8">
-                  <TabsTrigger value="all" className="text-xs px-3 h-7">
-                    Todos
-                  </TabsTrigger>
-                  {lotsAnalysis.map((la) => (
-                    <TabsTrigger
-                      key={la.lot.id}
-                      value={la.lot.id}
-                      className="text-xs px-3 h-7"
-                    >
-                      {la.lot.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            </div>
-          )}
+        <main className="container mx-auto px-4 sm:px-6 py-6">
+          <div className="space-y-5">
 
-          {/* Passing diário */}
-          <Card className="p-4 space-y-3">
-            <div>
-              <h2 className="font-semibold">
-                Passing Diário — Ingressos
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Vendas diárias vs meta. Verde ≥ meta · Âmbar 70–99% · Vermelho &lt; 70%
-              </p>
-            </div>
-            {passingLoading ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
-                Carregando...
+            {/* ═══════════ HERO HEADER ═══════════ */}
+            <div className="relative overflow-hidden rounded-xl border border-[#2a3050]">
+              {/* Deep layered background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#0c1020] via-[#131b35] to-[#0f1525]" />
+              {/* Grid pattern overlay */}
+              <div className="absolute inset-0 hero-grid" />
+              {/* Glow orbs */}
+              <div className="absolute -top-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-60 h-60 bg-cyan-500/8 rounded-full blur-[80px] pointer-events-none" />
+              {/* Top accent line */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+
+              <div className="relative px-6 py-6 sm:px-8">
+                <div className="flex items-start gap-4">
+                  <button
+                    onClick={() => navigateTo('/launch-dashboard')}
+                    className="mt-1 shrink-0 w-8 h-8 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex-1 min-w-0 space-y-3">
+                    {/* Breadcrumb */}
+                    {funnel?.name && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-cyan-500/60" />
+                        <p className="text-[11px] text-cyan-500/60 tracking-[0.15em] uppercase font-medium">
+                          {funnel.name}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Title + Status */}
+                    <div className="flex flex-wrap items-baseline gap-4">
+                      <h1 className="text-3xl font-extrabold text-white tracking-tight leading-none">
+                        {editionData.name}
+                      </h1>
+                      <div className="flex items-center gap-3">
+                        <span className={`
+                          inline-flex items-center gap-2 px-3 py-1
+                          rounded-md text-xs font-semibold uppercase tracking-wider
+                          border backdrop-blur-sm
+                          ${statusCfg.badge}
+                        `}>
+                          <span className={`w-2 h-2 rounded-full ${statusCfg.dot}`} />
+                          {statusCfg.label}
+                        </span>
+                        {editionData.edition_number && (
+                          <span className="text-sm text-slate-600 font-mono font-bold">
+                            #{editionData.edition_number}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dates as tags */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {editionData.start_datetime && (
+                        <DateTag
+                          icon={<Calendar className="w-3 h-3" />}
+                          label="Início"
+                          value={fmtDate(editionData.start_datetime)}
+                          color="blue"
+                        />
+                      )}
+                      {editionData.event_datetime && (
+                        <DateTag
+                          icon={<Target className="w-3 h-3" />}
+                          label="Evento"
+                          value={fmtDate(editionData.event_datetime)}
+                          color="amber"
+                        />
+                      )}
+                      {editionData.end_datetime && (
+                        <DateTag
+                          icon={<Calendar className="w-3 h-3" />}
+                          label="Fim"
+                          value={fmtDate(editionData.end_datetime)}
+                          color="slate"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <PassingDiarioChart data={effectivePassingDiario} />
+
+              {/* Bottom accent line */}
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+            </div>
+
+            {/* ═══════════ KPIs ═══════════ */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+              <KpiCard
+                icon={<DollarSign className="w-3.5 h-3.5" />}
+                label="Investimento"
+                value={kpisLoading ? '—' : formatCurrency(inv)}
+                tooltip="Total investido em Meta Ads"
+                variant="spend"
+              />
+              <KpiCard
+                icon={<TrendingUp className="w-3.5 h-3.5" />}
+                label="Faturamento"
+                value={kpisLoading ? '—' : formatCurrency(fat)}
+                tooltip="Receita bruta (customer_paid)"
+                variant="revenue"
+              />
+              <KpiCard
+                icon={<Wallet className="w-3.5 h-3.5" />}
+                label="Lucro"
+                value={kpisLoading ? '—' : formatCurrency(lucro)}
+                tooltip="Faturamento - Investimento"
+                variant={lucro >= 0 ? 'profit' : 'danger'}
+              />
+              <KpiCard
+                icon={<BarChart3 className="w-3.5 h-3.5" />}
+                label="ROAS"
+                value={kpisLoading ? '—' : `${roas.toFixed(2)}x`}
+                tooltip="Return on Ad Spend"
+                variant={
+                  roas >= 2 ? 'epic'
+                    : roas >= 1 ? 'default'
+                      : 'danger'
+                }
+              />
+              <KpiCard
+                icon={<Ticket className="w-3.5 h-3.5" />}
+                label="Vendas FRONT"
+                value={kpisLoading ? '—' : String(vendas)}
+                tooltip="Total de vendas da oferta principal"
+              />
+              <KpiCard
+                icon={<ShoppingCart className="w-3.5 h-3.5" />}
+                label="CPA"
+                value={kpisLoading ? '—' : formatCurrency(cpa)}
+                tooltip="Custo por Aquisição"
+                variant="spend"
+              />
+              <KpiCard
+                icon={<CreditCard className="w-3.5 h-3.5" />}
+                label="Ticket Médio"
+                value={kpisLoading ? '—' : formatCurrency(ticket)}
+                tooltip="Faturamento / Vendas"
+              />
+              <KpiCard
+                icon={<Target className="w-3.5 h-3.5" />}
+                label="Show Rate"
+                value="—"
+                subtitle="Em breve"
+                muted
+                tooltip="Requer dados de presença no evento"
+              />
+            </div>
+
+            {/* ═══════════ FUNNEL SCORE ═══════════ */}
+            {funnelScore && (
+              <FunnelScoreCard
+                score={funnelScore}
+                funnelName={funnel?.name}
+              />
             )}
-          </Card>
 
-          {/* Evolução diária */}
-          {filteredSalesData.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">
-                Evolução Diária
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <TemporalChart
+            {/* ═══════════ FLUXO DO FUNIL ═══════════ */}
+            {positionCards.length > 0 && (
+              <Section
+                icon={<LayoutGrid className="w-4 h-4" />}
+                title="Fluxo do Funil"
+                description="Posições com benchmark. Passe o mouse para ver métricas e receita potencial."
+              >
+                <FunnelFlowCards
+                  positions={positionCards}
+                  vendasFront={vendasFrontCalc}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ FUNIL DE CONVERSÃO META ═══════════ */}
+            {metaFunnelData && (
+              <Section
+                icon={<Megaphone className="w-4 h-4" />}
+                title="Funil de Conversão (Meta Ads)"
+                description="Cliques → Página → Checkout → Compra"
+              >
+                <MetaConversionFunnel data={metaFunnelData} />
+              </Section>
+            )}
+
+            {/* ═══════════ LOT SELECTOR ═══════════ */}
+            {lotsAnalysis.length > 0 && (
+              <div className="flex items-center gap-3 py-0.5">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 shrink-0 uppercase tracking-wider font-medium">
+                  <Layers className="w-3.5 h-3.5" />
+                  Lote
+                </div>
+                <div className="h-4 w-px bg-border" />
+                <div className="flex flex-wrap gap-1.5">
+                  <LotPill
+                    active={!selectedLotId}
+                    onClick={() => setSelectedLotId(null)}
+                  >
+                    Todos
+                  </LotPill>
+                  {lotsAnalysis.map((la) => {
+                    const lotStatus = computeAutoStatus(
+                      la.lot.start_datetime,
+                      la.lot.end_datetime,
+                      null,
+                    );
+                    return (
+                      <LotPill
+                        key={la.lot.id}
+                        active={selectedLotId === la.lot.id}
+                        onClick={() => setSelectedLotId(la.lot.id)}
+                        status={lotStatus}
+                        count={la.totalTickets}
+                      >
+                        {la.lot.name}
+                      </LotPill>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════ PASSING DIÁRIO ═══════════ */}
+            <Section
+              icon={<Activity className="w-4 h-4" />}
+              title={`Passing Diário${lotLabel}`}
+              description="Vendas diárias vs meta distribuída"
+            >
+              {passingLoading ? (
+                <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
+                  Carregando...
+                </div>
+              ) : (
+                <PassingDiarioChart
+                  data={effectivePassingDiario}
+                />
+              )}
+            </Section>
+
+            {/* ═══════════ EVOLUÇÃO DIÁRIA ═══════════ */}
+            {filteredSalesData.length > 0 && (
+              <Section
+                icon={<TrendingUp className="w-4 h-4" />}
+                title={`Evolução Diária${lotLabel}`}
+                defaultOpen={false}
+                description="Faturamento e vendas ao longo do tempo"
+              >
+                <TemporalChart
+                  salesData={filteredSalesData}
+                  funnelOfferCodes={filteredOfferCodes}
+                  startDate={effectiveStartDate}
+                  endDate={effectiveEndDate}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ TABELA DIÁRIA ═══════════ */}
+            {filteredSalesData.length > 0 &&
+              editionData.start_datetime && (
+                <Section
+                  icon={<CalendarDays className="w-4 h-4" />}
+                  title="Acompanhamento Diário"
+                  description="Investimento, faturamento e vendas por dia"
+                  defaultOpen={false}
+                >
+                  <DailyBreakdownTable
+                    salesData={filteredSalesData}
+                    metaInsights={filteredMetaInsights}
+                    lotsAnalysis={lotsAnalysis}
+                    startDate={
+                      selectedLot?.lot.start_datetime ||
+                      editionData.start_datetime
+                    }
+                    endDate={
+                      selectedLot?.lot.end_datetime ||
+                      editionEndDate ||
+                      editionData.start_datetime
+                    }
+                  />
+                </Section>
+              )}
+
+            {/* ═══════════ COMPARATIVO SEMANAL ═══════════ */}
+            {periodComparison.length >= 2 && (
+              <Section
+                icon={<BarChart3 className="w-4 h-4" />}
+                title="Comparativo Semanal"
+                defaultOpen={false}
+                description="Performance semana a semana com tendências"
+              >
+                <PeriodComparisonTable
+                  periods={periodComparison}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ DIAGNÓSTICO DE CRIATIVOS ═══════════ */}
+            {filteredMetaInsights.length > 0 && (
+              <Section
+                icon={<Megaphone className="w-4 h-4" />}
+                title={`Ad Pulse Score${lotLabel}`}
+                defaultOpen={false}
+                description="Score multi-dimensional por criativo: ROAS + CTR + CPM + Hook Rate + Volume"
+              >
+                <CreativeDiagnostic
+                  salesData={filteredSalesData}
+                  metaInsights={filteredMetaInsights}
+                  adsMetadata={metaAdsMap}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ DETALHAMENTO POR LOTE ═══════════ */}
+            {funnelId && editionData.start_datetime && (
+              <Section
+                icon={<LayoutGrid className="w-4 h-4" />}
+                title="Detalhamento por Lote"
+                defaultOpen={false}
+                description="Receita, vendas e TX de OBs por lote"
+              >
+                <LaunchProductsSalesBreakdown
+                  lotsAnalysis={lotsAnalysis}
+                  editionTotals={editionTotals}
+                  unassignedSales={unassignedSales}
+                />
+              </Section>
+            )}
+
+            {/* ═══════════ CONVERSÃO ═══════════ */}
+            {funnelId && editionData.start_datetime && (
+              funnel?.funnel_model === 'lancamento_pago'
+                ? (
+                  <LaunchPagoConversaoBlock
+                    funnelId={funnelId}
+                    projectId={projectId}
+                    edition={editionData}
+                  />
+                ) : (
+                  <LaunchConversionAnalysis
+                    funnelId={funnelId}
+                    projectId={projectId}
+                    launchTag={funnel?.launch_tag ?? null}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                )
+            )}
+
+            {/* ═══════════ CROSS-PHASE ═══════════ */}
+            {funnel?.funnel_model === 'lancamento_pago' && (
+              <CrossPhaseConversionCard data={crossPhaseData} />
+            )}
+
+            {/* ═══════════ PAGAMENTOS ═══════════ */}
+            {filteredSalesData.length > 0 && (
+              <PaymentMethodAnalysis
                 salesData={filteredSalesData}
-                funnelOfferCodes={filteredOfferCodes}
-                startDate={effectiveStartDate}
-                endDate={effectiveEndDate}
               />
-            </Card>
-          )}
+            )}
 
-          {/* Acompanhamento Diário */}
-          {filteredSalesData.length > 0 && editionData.start_datetime && (
-            <DailyBreakdownTable
-              salesData={filteredSalesData}
-              metaInsights={filteredMetaInsights}
-              lotsAnalysis={lotsAnalysis}
-              startDate={selectedLot?.lot.start_datetime || editionData.start_datetime}
-              endDate={selectedLot?.lot.end_datetime || editionEndDate || editionData.start_datetime}
-            />
-          )}
+            {/* ═══════════ LTV ═══════════ */}
+            {ltvData && (
+              <Section
+                icon={<Users className="w-4 h-4" />}
+                title="Lifetime Value"
+                defaultOpen={false}
+                description="Valor total por comprador e adoção de OBs/USs"
+              >
+                <LTVAnalysisCard data={ltvData} />
+              </Section>
+            )}
 
-          {/* Performance de Campanhas */}
-          {filteredMetaInsights.length > 0 && (
-            <CampaignPerformanceTable
-              salesData={filteredSalesData}
-              metaInsights={filteredMetaInsights}
-            />
-          )}
+            {/* ═══════════ SAÚDE ═══════════ */}
+            {!healthLoading &&
+              healthMetrics &&
+              healthMetrics.length > 0 && (
+                <Section
+                  icon={<Activity className="w-4 h-4" />}
+                  title="Saúde do Funil"
+                  defaultOpen={false}
+                  description="Abandonos, reembolsos e chargebacks"
+                >
+                  <FunnelHealthMetrics
+                    healthData={healthMetrics[0]}
+                  />
+                </Section>
+              )}
 
-          {/* Detalhamento por Lote */}
-          {funnelId && editionData.start_datetime && (
-            <Card className="p-4 space-y-3">
-              <LaunchProductsSalesBreakdown
-                lotsAnalysis={lotsAnalysis}
-                editionTotals={editionTotals}
-                unassignedSales={unassignedSales}
-              />
-            </Card>
-          )}
+            {/* ═══════════ UTM ═══════════ */}
+            {filteredSalesData.length > 0 && (
+              <Section
+                icon={<Tag className="w-4 h-4" />}
+                title={`Fontes e Criativos${lotLabel}`}
+                defaultOpen={false}
+                description="Atribuição de vendas por UTM e criativos"
+              >
+                <UTMAnalysis
+                  salesData={filteredSalesData}
+                  funnelOfferCodes={filteredOfferCodes}
+                  metaInsights={filteredMetaInsights}
+                  metaCampaigns={campaigns}
+                  metaAdsets={adsets}
+                  metaAds={ads}
+                />
+              </Section>
+            )}
 
-          {/* Análise de conversão — bloco depende do modelo do funil */}
-          {funnelId && editionData.start_datetime && (
-            funnel?.funnel_model === 'lancamento_pago' ? (
-              <LaunchPagoConversaoBlock
-                funnelId={funnelId}
-                projectId={projectId}
-                edition={editionData}
-              />
-            ) : (
-              <LaunchConversionAnalysis
-                funnelId={funnelId}
-                projectId={projectId}
-                launchTag={funnel?.launch_tag ?? null}
-                startDate={startDate}
-                endDate={endDate}
-              />
-            )
-          )}
+            {/* ═══════════ META ADS ═══════════ */}
+            {filteredMetaInsights.length > 0 && (
+              <Section
+                icon={<Megaphone className="w-4 h-4" />}
+                title={`Meta Ads${lotLabel}`}
+                defaultOpen={false}
+                description="Campanhas, conjuntos e criativos"
+              >
+                <MetaHierarchyAnalysis
+                  insights={filteredMetaInsights}
+                  campaigns={campaigns}
+                  adsets={adsets}
+                  ads={ads}
+                  loading={metaHierarchyLoading}
+                  salesData={filteredSalesData}
+                />
+              </Section>
+            )}
 
-          {/* Conversão Ingresso → Produto Principal */}
-          {funnel?.funnel_model === 'lancamento_pago' && (
-            <CrossPhaseConversionCard data={crossPhaseData} />
-          )}
+          </div>
+        </main>
+      </div>
+    </TooltipProvider>
+  );
+}
 
-          {/* Formas de Pagamento */}
-          {filteredSalesData.length > 0 && (
-            <PaymentMethodAnalysis
-              salesData={filteredSalesData}
-            />
-          )}
+/* ── Date Tag (hero header) ──────────────────────────── */
 
-          {/* Saúde do Funil */}
-          {!healthLoading && healthMetrics && healthMetrics.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">Saúde do Funil</h2>
-              <FunnelHealthMetrics healthData={healthMetrics[0]} />
-            </Card>
-          )}
+function DateTag({
+  icon, label, value, color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  color: 'blue' | 'amber' | 'slate';
+}) {
+  const colors = {
+    blue: 'border-blue-500/20 text-blue-400/80 bg-blue-500/5',
+    amber: 'border-amber-500/20 text-amber-400/80 bg-amber-500/5',
+    slate: 'border-slate-500/20 text-slate-400/80 bg-slate-500/5',
+  };
+  return (
+    <span className={`
+      inline-flex items-center gap-1.5 px-2.5 py-1
+      rounded-md text-xs border ${colors[color]}
+    `}>
+      {icon}
+      <span className="opacity-60">{label}</span>
+      <span className="font-semibold text-slate-200">{value}</span>
+    </span>
+  );
+}
 
-          {/* UTM / Criativos */}
-          {filteredSalesData.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">
-                UTM / Criativos
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <UTMAnalysis
-                salesData={filteredSalesData}
-                funnelOfferCodes={filteredOfferCodes}
-                metaInsights={filteredMetaInsights}
-                metaCampaigns={campaigns}
-                metaAdsets={adsets}
-                metaAds={ads}
-              />
-            </Card>
-          )}
+/* ── Section wrapper ─────────────────────────────────── */
 
-          {/* Meta Ads — Campanhas */}
-          {filteredMetaInsights.length > 0 && (
-            <Card className="p-4 space-y-3">
-              <h2 className="font-semibold">
-                Meta Ads — Campanhas
-                {selectedLot && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    ({selectedLot.lot.name})
-                  </span>
-                )}
-              </h2>
-              <MetaHierarchyAnalysis
-                insights={filteredMetaInsights}
-                campaigns={campaigns}
-                adsets={adsets}
-                ads={ads}
-                loading={metaHierarchyLoading}
-                salesData={filteredSalesData}
-              />
-            </Card>
-          )}
+function Section({
+  icon, title, description, children,
+  defaultOpen = true,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="relative rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] section-accent opacity-60" />
+
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full pl-5 pr-5 pt-4 pb-3 flex items-center justify-between cursor-pointer hover:bg-muted/10 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+            {icon}
+          </div>
+          <div className="text-left">
+            <h2 className="font-bold text-[13px] tracking-tight text-slate-200">
+              {title}
+            </h2>
+            {description && (
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {description}
+              </p>
+            )}
+          </div>
         </div>
-      </main>
+        <ChevronDown className={`
+          w-4 h-4 text-muted-foreground transition-transform duration-200
+          ${open ? 'rotate-180' : ''}
+        `} />
+      </button>
+
+      {open && (
+        <>
+          <div className="mx-5 h-px bg-gradient-to-r from-border/50 via-border/30 to-transparent" />
+          <div className="p-5">{children}</div>
+        </>
+      )}
     </div>
   );
 }
 
+/* ── KPI Card ────────────────────────────────────────── */
+
+type KpiVariant =
+  | 'default'
+  | 'revenue'
+  | 'spend'
+  | 'danger'
+  | 'profit'
+  | 'epic';
+
 function KpiCard({
-  label, value, subtitle, muted, variant = 'default',
+  icon, label, value, subtitle, muted, tooltip,
+  variant = 'default',
 }: {
+  icon: React.ReactNode;
   label: string;
   value: string;
   subtitle?: string;
   muted?: boolean;
-  variant?: 'default' | 'revenue' | 'spend' | 'danger';
+  tooltip?: string;
+  variant?: KpiVariant;
 }) {
-  const colorMap = {
-    default: 'text-cyan-400',
-    revenue: 'text-green-400',
-    spend: 'text-red-400',
-    danger: 'text-red-500',
+  const themes: Record<KpiVariant, {
+    value: string;
+    icon: string;
+    accent: string;
+    glow: boolean;
+  }> = {
+    default: {
+      value: 'text-cyan-400',
+      icon: 'text-cyan-400 bg-cyan-500/10',
+      accent: 'rgba(34,211,238,0.3)',
+      glow: false,
+    },
+    revenue: {
+      value: 'text-emerald-400',
+      icon: 'text-emerald-400 bg-emerald-500/10',
+      accent: 'rgba(52,211,153,0.3)',
+      glow: false,
+    },
+    spend: {
+      value: 'text-red-400',
+      icon: 'text-red-400 bg-red-500/10',
+      accent: 'rgba(248,113,113,0.3)',
+      glow: false,
+    },
+    danger: {
+      value: 'text-red-500',
+      icon: 'text-red-500 bg-red-500/10',
+      accent: 'rgba(239,68,68,0.3)',
+      glow: false,
+    },
+    profit: {
+      value: 'text-emerald-400',
+      icon: 'text-emerald-400 bg-emerald-500/10',
+      accent: 'rgba(52,211,153,0.3)',
+      glow: false,
+    },
+    epic: {
+      value: 'text-amber-400 kpi-glow',
+      icon: 'text-amber-400 bg-amber-500/15',
+      accent: 'rgba(251,191,36,0.4)',
+      glow: true,
+    },
   };
-  const color = muted ? 'text-muted-foreground' : colorMap[variant];
-  return (
-    <Card className="p-3 hover:border-cyan-500/40 transition-colors">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className={`text-lg font-bold tabular-nums mt-0.5 ${color}`}>
+
+  const t = muted
+    ? {
+      value: 'text-muted-foreground',
+      icon: 'text-muted-foreground/40 bg-muted/20',
+      accent: 'transparent',
+      glow: false,
+    }
+    : themes[variant];
+
+  const card = (
+    <div
+      className="kpi-card-border rounded-xl border border-border/40 bg-card p-3 transition-all duration-200 hover:-translate-y-0.5 cursor-default group"
+      style={{ '--kpi-accent': t.accent } as React.CSSProperties}
+    >
+      {/* Top row: icon + label */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className={`
+          w-5 h-5 rounded-md flex items-center justify-center
+          transition-transform duration-200 group-hover:scale-110
+          ${t.icon}
+        `}>
+          {icon}
+        </div>
+        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium leading-none">
+          {label}
+        </span>
+      </div>
+
+      {/* Value */}
+      <p className={`
+        text-xl font-extrabold tabular-nums leading-none
+        ${t.value}
+      `}>
         {value}
       </p>
-      {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
-    </Card>
+
+      {subtitle && (
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          {subtitle}
+        </p>
+      )}
+
+      {/* Epic glow effect for outstanding metrics */}
+      {t.glow && (
+        <div className="absolute -inset-px rounded-xl bg-gradient-to-t from-amber-500/5 to-transparent pointer-events-none" />
+      )}
+    </div>
+  );
+
+  if (!tooltip) return card;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{card}</TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        className="text-xs max-w-48 bg-[#1a1f2e] border-border"
+      >
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/* ── Lot Pill ────────────────────────────────────────── */
+
+function LotPill({
+  active, onClick, status, count, children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  status?: 'planned' | 'active' | 'finished';
+  count?: number;
+  children: React.ReactNode;
+}) {
+  const dotColor = status
+    ? STATUS_CONFIG[status].dot : undefined;
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        inline-flex items-center gap-1.5
+        px-3 py-1.5 rounded-lg text-xs font-semibold
+        transition-all duration-200 cursor-pointer
+        border
+        ${active
+          ? 'lot-active text-cyan-300 border-cyan-500/30'
+          : 'bg-transparent text-slate-400 border-border/50 hover:border-cyan-500/20 hover:text-slate-300 hover:bg-white/[0.02]'
+        }
+      `}
+    >
+      {dotColor && (
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+      )}
+      {children}
+      {count !== undefined && count > 0 && (
+        <span className={`
+          text-[10px] tabular-nums
+          ${active ? 'text-cyan-400/60' : 'text-slate-600'}
+        `}>
+          {count}
+        </span>
+      )}
+    </button>
   );
 }

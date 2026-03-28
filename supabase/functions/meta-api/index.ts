@@ -784,35 +784,28 @@ Deno.serve(async (req) => {
         break
 
       case 'sync_hierarchy_full':
-        console.log('Running full Meta hierarchy sync in parallel (background)')
+        console.log('Running full Meta hierarchy sync (synchronous)')
 
-        const backgroundHierarchyTask = async () => {
-          try {
-            await Promise.all([
-              syncCampaigns(supabase, projectId, accessToken, accountIds),
-              syncAdsets(supabase, projectId, accessToken, accountIds),
-              syncAds(supabase, projectId, accessToken, accountIds)
-            ])
-            console.log('Background hierarchy sync completed successfully!')
-          } catch (err) {
-            console.error('Background hierarchy sync error:', err)
+        try {
+          const [campResult, adsetResult, adsResult] = await Promise.all([
+            syncCampaigns(supabase, projectId, accessToken, accountIds),
+            syncAdsets(supabase, projectId, accessToken, accountIds),
+            syncAds(supabase, projectId, accessToken, accountIds)
+          ])
+          console.log('Hierarchy sync completed:', { campResult, adsetResult, adsResult })
+          result = {
+            success: true,
+            message: 'Hierarquia sincronizada com sucesso.',
+            campaigns: campResult,
+            adsets: adsetResult,
+            ads: adsResult,
           }
-        }
-
-        // Use EdgeRuntime.waitUntil to keep the function running after response
-        // deno-lint-ignore no-explicit-any
-        const runtimeHierarchy = (globalThis as any).EdgeRuntime
-        if (runtimeHierarchy && typeof runtimeHierarchy.waitUntil === 'function') {
-          runtimeHierarchy.waitUntil(backgroundHierarchyTask())
-        } else {
-          // Fallback
-          backgroundHierarchyTask()
-        }
-
-        result = {
-          success: true,
-          message: 'Sincronização de hierarquia iniciada em background.',
-          background: true
+        } catch (err) {
+          console.error('Hierarchy sync error:', err)
+          result = {
+            success: false,
+            error: String(err),
+          }
         }
         break
 
@@ -1153,7 +1146,7 @@ async function getAdsForAccountWithPagination(accessToken: string, accountId: st
   // and effective_instagram_media_id for Instagram permalink
   // effective_object_story_id format: {page_id}_{post_id} -> https://www.facebook.com/{page_id}/posts/{post_id}
   const effectiveStatus = encodeURIComponent('["ACTIVE","PAUSED","ARCHIVED"]')
-  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,adset_id,status,effective_status,campaign_id,creative{id,effective_object_story_id,thumbnail_url,effective_instagram_media_id},created_time&effective_status=${effectiveStatus}&limit=500&access_token=${accessToken}`
+  let nextUrl: string | null = `${GRAPH_API_BASE}/${accountId}/ads?fields=id,name,adset_id,status,effective_status,campaign_id,creative{id,effective_object_story_id,thumbnail_url,effective_instagram_media_id},created_time&effective_status=${effectiveStatus}&limit=100&access_token=${accessToken}`
   let pageCount = 0
   const maxPages = 50
 
@@ -1377,7 +1370,7 @@ async function syncAds(
     typeof acc === 'string' ? acc : (acc?.account_id || acc)
   ).filter(Boolean)
 
-  console.log('Syncing ads for accounts:', accountIds)
+  console.log('Syncing ads for accounts:', accountIds.length, 'accounts')
 
   const allAds: any[] = []
   let synced = 0
@@ -1412,12 +1405,15 @@ async function syncAds(
       ad_name: ad.name || null,
       status: ad.status || null,
       creative_id: ad.creative?.id || null,
-      preview_url: ad.preview_url || null, // Public Facebook post URL
-      thumbnail_url: ad.thumbnail_url || null, // Thumbnail image for inline preview
-      instagram_permalink: igPermalink, // Instagram post permalink
+      preview_url: ad.preview_url || null,
+      thumbnail_url: ad.thumbnail_url || null,
+      instagram_permalink: igPermalink,
       updated_at: new Date().toISOString(),
     }
   })
+
+  const withPermalink = adRecords.filter(r => r.instagram_permalink).length
+  console.log(`Instagram permalinks: ${withPermalink}/${adRecords.length} ads`)
 
   // Use upsert to avoid duplicate key errors
   for (let i = 0; i < adRecords.length; i += DB_INSERT_BATCH_SIZE) {

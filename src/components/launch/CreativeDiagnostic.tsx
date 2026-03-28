@@ -24,6 +24,7 @@ interface CreativeMetric {
   ctr: number;
   cpm: number;
   hookRate: number;
+  holdRate: number;
   frequency: number;
   score: number;
   permalink: string | null;
@@ -115,17 +116,16 @@ const getActionValue = (
 /**
  * Ad Pulse Score (0-100) — score multi-dimensional por criativo.
  *
- * Vídeos: ROAS 40% + CTR 15% + CPM 10% + Hook 10% + Freq 10% + Volume 15%
+ * Vídeos: ROAS 40% + CTR 15% + CPM 10% + Hook 10% + Hold 10% + Freq 5% + Vol 10%
  * Imagens: ROAS 45% + CTR 20% + CPM 10% + Freq 10% + Volume 15%
- * (Hook redistribuído para ROAS +5% e CTR +5% em imagens)
- *
- * Volume = confiança estatística (mais vendas = mais confiável)
+ * (Hook+Hold redistribuído para ROAS +5% e CTR +5% em imagens)
  */
 function calcAdPulseScore(
   roas: number,
   ctr: number,
   cpm: number,
   hookRate: number,
+  holdRate: number,
   frequency: number,
   purchases: number,
   hasVideo: boolean,
@@ -164,6 +164,17 @@ function calcAdPulseScore(
     else hookScore = Math.max(0, hookRate * 8);
   }
 
+  // Hold Rate score — thruplay / video_view
+  // Benchmarks: ≥15% excelente, ≥10% bom, ≥5% ok
+  let holdScore = 0;
+  if (hasVideo && holdRate > 0) {
+    if (holdRate >= 20) holdScore = 100;
+    else if (holdRate >= 15) holdScore = 85;
+    else if (holdRate >= 10) holdScore = 65;
+    else if (holdRate >= 5) holdScore = 40;
+    else holdScore = Math.max(0, holdRate * 8);
+  }
+
   // Frequency penalty — >3 = saturado
   let freqScore: number;
   if (frequency <= 1.5) freqScore = 100;
@@ -183,6 +194,20 @@ function calcAdPulseScore(
 
   // Pesos diferentes para vídeo vs imagem
   if (hasVideo) {
+    const hasHoldData = holdRate > 0;
+    if (hasHoldData) {
+      // Com Hold Rate: ROAS 40% + CTR 15% + CPM 10% + Hook 10% + Hold 10% + Freq 5% + Vol 10%
+      return Math.round(
+        roasScore * 0.40 +
+        ctrScore * 0.15 +
+        cpmScore * 0.10 +
+        hookScore * 0.10 +
+        holdScore * 0.10 +
+        freqScore * 0.05 +
+        volScore * 0.10
+      );
+    }
+    // Sem Hold Rate: ROAS 40% + CTR 15% + CPM 10% + Hook 10% + Freq 10% + Vol 15%
     return Math.round(
       roasScore * 0.40 +
       ctrScore * 0.15 +
@@ -192,7 +217,7 @@ function calcAdPulseScore(
       volScore * 0.15
     );
   }
-  // Imagem: hook redistribuído para ROAS e CTR
+  // Imagem: ROAS 45% + CTR 20% + CPM 10% + Freq 10% + Vol 15%
   return Math.round(
     roasScore * 0.45 +
     ctrScore * 0.20 +
@@ -290,6 +315,7 @@ export function CreativeDiagnostic({
       impressions: number;
       clicks: number;
       videoViews: number;
+      thruplay: number;
       frequency: number;
       dayCount: number;
     }>();
@@ -306,6 +332,7 @@ export function CreativeDiagnostic({
       const imp = Number(i.impressions) || 0;
       const clk = Number(i.clicks) || 0;
       const vv = getActionValue(i.actions, 'video_view');
+      const tp = getActionValue(i.actions, 'thruplay');
       const freq = Number(i.frequency) || 0;
 
       if (existing) {
@@ -313,6 +340,7 @@ export function CreativeDiagnostic({
         existing.impressions += imp;
         existing.clicks += clk;
         existing.videoViews += vv;
+        existing.thruplay += tp;
         existing.frequency += freq;
         existing.dayCount++;
       } else {
@@ -324,6 +352,7 @@ export function CreativeDiagnostic({
           impressions: imp,
           clicks: clk,
           videoViews: vv,
+          thruplay: tp,
           frequency: freq,
           dayCount: 1,
         });
@@ -377,12 +406,15 @@ export function CreativeDiagnostic({
         ? (ad.spend / ad.impressions) * 1000 : 0;
       const hookRate = ad.impressions > 0
         ? (ad.videoViews / ad.impressions) * 100 : 0;
+      const holdRate = ad.videoViews > 0
+        ? (ad.thruplay / ad.videoViews) * 100 : 0;
       const avgFreq = ad.dayCount > 0
         ? ad.frequency / ad.dayCount : 0;
       const hasVideo = ad.videoViews > 0;
 
       const score = calcAdPulseScore(
-        roas, ctr, cpm, hookRate, avgFreq, pCount, hasVideo,
+        roas, ctr, cpm, hookRate, holdRate,
+        avgFreq, pCount, hasVideo,
       );
 
       const { action, reason } = classifyCreative(
@@ -401,6 +433,7 @@ export function CreativeDiagnostic({
         ctr,
         cpm,
         hookRate,
+        holdRate,
         frequency: avgFreq,
         score,
         permalink: adsMetadata?.[adId]?.permalink || null,
@@ -564,6 +597,7 @@ export function CreativeDiagnostic({
           </Tooltip>
           <span className="w-[40px] text-right hidden xl:block">CTR</span>
           <span className="w-[40px] text-right hidden xl:block">Hook</span>
+          <span className="w-[40px] text-right hidden xl:block">Hold</span>
           <span className="w-[32px] text-right hidden xl:block">Freq</span>
         </div>
         <span className="w-[180px] hidden lg:block" />
@@ -664,6 +698,14 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
                 <span className="text-muted-foreground">Hook Rate</span>
                 <span className={c.hookRate >= 20 ? 'text-green-400' : c.hookRate >= 10 ? 'text-foreground' : 'text-red-400'}>
                   {c.hookRate.toFixed(0)}%
+                </span>
+              </div>
+            )}
+            {c.holdRate > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Hold Rate</span>
+                <span className={c.holdRate >= 15 ? 'text-green-400' : c.holdRate >= 8 ? 'text-foreground' : 'text-red-400'}>
+                  {c.holdRate.toFixed(0)}%
                 </span>
               </div>
             )}
@@ -771,6 +813,18 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
           <div className="text-right w-[40px] hidden xl:block">
             <p className="text-foreground">{c.hookRate.toFixed(0)}%</p>
             <p className="text-[10px] text-muted-foreground">Hook</p>
+          </div>
+        )}
+        {c.holdRate > 0 && (
+          <div className="text-right w-[40px] hidden xl:block">
+            <p className={`${
+              c.holdRate >= 15 ? 'text-green-400'
+                : c.holdRate >= 8 ? 'text-foreground'
+                  : 'text-red-400'
+            }`}>
+              {c.holdRate.toFixed(0)}%
+            </p>
+            <p className="text-[10px] text-muted-foreground">Hold</p>
           </div>
         )}
         {c.frequency > 0 && (

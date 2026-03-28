@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import {
   Rocket, Power, Eye, AlertOctagon,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, Copy,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 /* ── Types ───────────────────────────────────────────── */
 
-type Action = 'scale' | 'keep' | 'watch' | 'kill';
+type Action = 'model' | 'scale' | 'keep' | 'watch' | 'kill';
 
 interface CreativeMetric {
   adId: string;
@@ -55,6 +55,12 @@ const ACTION_CONFIG: Record<Action, {
   badge: string;
   border: string;
 }> = {
+  model: {
+    label: 'Modelar',
+    icon: <Copy className="w-3.5 h-3.5" />,
+    badge: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
+    border: 'border-l-cyan-500/50',
+  },
   scale: {
     label: 'Escalar',
     icon: <Rocket className="w-3.5 h-3.5" />,
@@ -221,6 +227,13 @@ function classifyCreative(
   }
 
   // Score-based classification
+  // "Modelar" = alto score + alto volume → referência para novos criativos
+  if (score >= 70 && purchases >= 10) {
+    return {
+      action: 'model',
+      reason: `Score ${score} + ${purchases} vendas — modelar e duplicar`,
+    };
+  }
   if (score >= 75) {
     return {
       action: 'scale',
@@ -379,7 +392,7 @@ export function CreativeDiagnostic({
 
     // Sort: scale first, then keep, kill, watch. Within each: by spend desc
     const ORDER: Record<Action, number> = {
-      scale: 0, keep: 1, kill: 2, watch: 3,
+      model: 0, scale: 1, keep: 2, kill: 3, watch: 4,
     };
     result.sort((a, b) => {
       if (ORDER[a.action] !== ORDER[b.action]) {
@@ -398,6 +411,7 @@ export function CreativeDiagnostic({
 
   // Summary
   const summary = {
+    model: creatives.filter(c => c.action === 'model'),
     scale: creatives.filter(c => c.action === 'scale'),
     keep: creatives.filter(c => c.action === 'keep'),
     watch: creatives.filter(c => c.action === 'watch'),
@@ -412,6 +426,12 @@ export function CreativeDiagnostic({
     <div className="space-y-4">
       {/* Summary badges */}
       <div className="flex flex-wrap items-center gap-2">
+        {summary.model.length > 0 && (
+          <SummaryBadge
+            action="model"
+            count={summary.model.length}
+          />
+        )}
         {summary.scale.length > 0 && (
           <SummaryBadge
             action="scale"

@@ -1,9 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Rocket, Power, Eye, AlertOctagon,
   TrendingUp, TrendingDown, Copy, ExternalLink,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -414,56 +417,58 @@ export function CreativeDiagnostic({
     );
   }, [salesData, metaInsights]);
 
+  const [activeFilter, setActiveFilter] = useState<
+    Action | null
+  >(null);
+
   if (creatives.length === 0) return null;
 
-  // Summary
-  const summary = {
-    model: creatives.filter(c => c.action === 'model'),
-    scale: creatives.filter(c => c.action === 'scale'),
-    keep: creatives.filter(c => c.action === 'keep'),
-    watch: creatives.filter(c => c.action === 'watch'),
-    kill: creatives.filter(c => c.action === 'kill'),
+  // Summary counts
+  const counts: Record<Action, number> = {
+    model: 0, scale: 0, keep: 0, watch: 0, kill: 0,
   };
+  for (const c of creatives) counts[c.action]++;
 
-  const wastedSpend = summary.kill.reduce(
-    (s, c) => s + c.spend, 0,
-  );
+  const wastedSpend = creatives
+    .filter(c => c.action === 'kill')
+    .reduce((s, c) => s + c.spend, 0);
+
+  // Filtered list
+  const filtered = activeFilter
+    ? creatives.filter(c => c.action === activeFilter)
+    : creatives.filter(c => c.action !== 'watch');
+  const watchCount = counts.watch;
 
   return (
     <div className="space-y-4">
-      {/* Summary badges */}
+      {/* Summary badges — clickable filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {summary.model.length > 0 && (
-          <SummaryBadge
-            action="model"
-            count={summary.model.length}
-          />
+        {(
+          ['model', 'scale', 'keep', 'watch', 'kill'] as Action[]
+        ).map(action => {
+          if (counts[action] === 0) return null;
+          const isActive = activeFilter === action;
+          return (
+            <FilterBadge
+              key={action}
+              action={action}
+              count={counts[action]}
+              active={isActive}
+              onClick={() =>
+                setActiveFilter(isActive ? null : action)
+              }
+            />
+          );
+        })}
+        {activeFilter && (
+          <button
+            onClick={() => setActiveFilter(null)}
+            className="text-[10px] text-muted-foreground hover:text-foreground ml-1 underline cursor-pointer"
+          >
+            limpar filtro
+          </button>
         )}
-        {summary.scale.length > 0 && (
-          <SummaryBadge
-            action="scale"
-            count={summary.scale.length}
-          />
-        )}
-        {summary.keep.length > 0 && (
-          <SummaryBadge
-            action="keep"
-            count={summary.keep.length}
-          />
-        )}
-        {summary.watch.length > 0 && (
-          <SummaryBadge
-            action="watch"
-            count={summary.watch.length}
-          />
-        )}
-        {summary.kill.length > 0 && (
-          <SummaryBadge
-            action="kill"
-            count={summary.kill.length}
-          />
-        )}
-        {wastedSpend > 0 && (
+        {wastedSpend > 0 && !activeFilter && (
           <span className="text-xs text-red-400 ml-2">
             <TrendingDown className="w-3 h-3 inline mr-0.5" />
             {fmt(wastedSpend)} em criativos para desligar
@@ -471,33 +476,31 @@ export function CreativeDiagnostic({
         )}
       </div>
 
-      {/* Creative list — show actionable ones, collapse "watch" */}
-      {(() => {
-        const actionable = creatives.filter(
-          c => c.action !== 'watch',
-        );
-        const watching = creatives.filter(
-          c => c.action === 'watch',
-        );
-        return (
-          <div className="space-y-1.5">
-            {actionable.map(c => (
-              <CreativeRow key={c.adId} creative={c} />
-            ))}
-            {watching.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border/30 border-l-[3px] border-l-yellow-500/30 bg-muted/10">
-                <Eye className="w-3.5 h-3.5 text-yellow-400" />
-                <span className="text-xs text-muted-foreground">
-                  <span className="font-medium text-yellow-400">
-                    {watching.length} criativos
-                  </span>
-                  {' em observação (pouco investimento para concluir)'}
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {/* Creative list */}
+      <div className="space-y-1.5">
+        {filtered.map(c => (
+          <CreativeRow key={c.adId} creative={c} />
+        ))}
+        {!activeFilter && watchCount > 0 && (
+          <button
+            onClick={() => setActiveFilter('watch')}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border/30 border-l-[3px] border-l-yellow-500/30 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer"
+          >
+            <Eye className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="text-xs text-muted-foreground">
+              <span className="font-medium text-yellow-400">
+                {watchCount} criativos
+              </span>
+              {' em observação — clique para ver'}
+            </span>
+          </button>
+        )}
+        {filtered.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            Nenhum criativo nesta categoria.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -525,16 +528,35 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         rounded-lg border border-border/40
         border-l-[3px] ${cfg.border}
         bg-card hover:bg-muted/20 transition-colors
+        group
       `}
     >
-      {/* Score badge */}
-      <span className={`
-        w-8 h-8 rounded-lg flex items-center justify-center
-        text-xs font-bold tabular-nums shrink-0
-        ${scoreBg(c.score)} ${scoreColor(c.score)}
-      `}>
-        {c.score}
-      </span>
+      {/* Score badge with tooltip */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`
+            w-8 h-8 rounded-lg flex items-center justify-center
+            text-xs font-bold tabular-nums shrink-0 cursor-help
+            ${scoreBg(c.score)} ${scoreColor(c.score)}
+          `}>
+            {c.score}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          className="text-xs bg-[#1a1f2e] border-border p-2.5 max-w-[200px]"
+        >
+          <p className="font-semibold mb-1">Ad Pulse Score: {c.score}/100</p>
+          <div className="space-y-0.5 text-muted-foreground">
+            <p>ROAS: {c.roas.toFixed(2)}x</p>
+            <p>CTR: {c.ctr.toFixed(2)}%</p>
+            <p>CPM: R$ {c.cpm.toFixed(0)}</p>
+            {c.hookRate > 0 && <p>Hook Rate: {c.hookRate.toFixed(0)}%</p>}
+            {c.frequency > 0 && <p>Frequência: {c.frequency.toFixed(1)}</p>}
+            <p>Volume: {c.purchases} vendas</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
 
       {/* Action badge */}
       <span className={`
@@ -546,7 +568,7 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         {cfg.label}
       </span>
 
-      {/* Name + link */}
+      {/* Name + ID + link */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {c.permalink ? (
@@ -566,11 +588,12 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
             </p>
           )}
         </div>
-        {c.campaignName && (
-          <p className="text-[10px] text-muted-foreground truncate">
-            {c.campaignName}
-          </p>
-        )}
+        <p className="text-[10px] text-muted-foreground truncate">
+          {c.campaignName && `${c.campaignName} · `}
+          <span className="font-mono opacity-60">
+            {c.adId}
+          </span>
+        </p>
       </div>
 
       {/* Metrics */}
@@ -618,29 +641,39 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         )}
       </div>
 
-      {/* Reason */}
-      <p className="text-[11px] text-muted-foreground max-w-[180px] shrink-0 hidden lg:block">
+      {/* Reason — visible on hover */}
+      <p className="text-[11px] text-muted-foreground max-w-[180px] shrink-0 hidden lg:block opacity-0 group-hover:opacity-100 transition-opacity">
         {c.reason}
       </p>
     </div>
   );
 }
 
-function SummaryBadge({
-  action, count,
+function FilterBadge({
+  action, count, active, onClick,
 }: {
   action: Action;
   count: number;
+  active: boolean;
+  onClick: () => void;
 }) {
   const cfg = ACTION_CONFIG[action];
   return (
-    <span className={`
-      inline-flex items-center gap-1.5 px-2.5 py-1
-      rounded-md text-xs font-semibold border
-      ${cfg.badge}
-    `}>
+    <button
+      onClick={onClick}
+      className={`
+        inline-flex items-center gap-1.5 px-2.5 py-1
+        rounded-md text-xs font-semibold border
+        cursor-pointer transition-all
+        ${cfg.badge}
+        ${active
+          ? 'ring-2 ring-offset-1 ring-offset-background ring-current scale-105'
+          : 'opacity-80 hover:opacity-100 hover:scale-[1.02]'
+        }
+      `}
+    >
       {cfg.icon}
       {count} {cfg.label}
-    </span>
+    </button>
   );
 }

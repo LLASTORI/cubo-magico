@@ -174,37 +174,50 @@ export function MetaConversionFunnel({ data }: Props) {
       </div>
 
       {/* End-to-end metric */}
-      <div className={`
-        rounded-xl border p-4
-        ${STATUS_STYLES[txPagCompraInfo.status].ring}
-        ${STATUS_STYLES[txPagCompraInfo.status].bg}
-      `}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">
-              TX Página → Compra (end-to-end)
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`
-              text-xs px-2 py-0.5 rounded border font-semibold
-              ${STATUS_STYLES[txPagCompraInfo.status].badge}
-            `}>
-              {txPagCompraInfo.label}
-            </span>
-            <span className={`
-              text-2xl font-extrabold tabular-nums
-              ${STATUS_STYLES[txPagCompraInfo.status].text}
-            `}>
-              {txPagCompra.toFixed(1)}%
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-          <span className="text-xs text-muted-foreground">
-            {data.purchases} compras de {fmtNum(data.landingPageViews)} visitas
-          </span>
+      {(() => {
+        // Identify worst step for diagnostic
+        const stepsAnalysis = [
+          { name: 'Connect Rate', rate: data.connectRate, info: connectInfo, ideal: 81, action: 'Verifique velocidade da página e congruência anúncio→LP' },
+          { name: 'Página→Checkout', rate: data.txPaginaCheckout, info: txPagInfo, ideal: 35, action: 'Revise a copy, oferta, preço e prova social da página de vendas' },
+          { name: 'Checkout→Compra', rate: data.txCheckoutCompra, info: txChkInfo, ideal: 50, action: 'Verifique formas de pagamento, parcelamento e fricção no checkout' },
+        ];
+        const worstStep = stepsAnalysis
+          .filter(s => s.info.status === 'danger' || s.info.status === 'warning')
+          .sort((a, b) => a.rate - b.rate)[0];
+
+        return (
+          <div className={`
+            rounded-xl border p-4
+            ${STATUS_STYLES[txPagCompraInfo.status].ring}
+            ${STATUS_STYLES[txPagCompraInfo.status].bg}
+          `}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">
+                  TX Página → Compra (end-to-end)
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`
+                  text-xs px-2 py-0.5 rounded border font-semibold
+                  ${STATUS_STYLES[txPagCompraInfo.status].badge}
+                `}>
+                  {txPagCompraInfo.label}
+                </span>
+                <span className={`
+                  text-2xl font-extrabold tabular-nums
+                  ${STATUS_STYLES[txPagCompraInfo.status].text}
+                `}>
+                  {txPagCompra.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
+              <span className="text-xs text-muted-foreground">
+                {data.purchases} compras de {fmtNum(data.landingPageViews)} visitas
+              </span>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             <span>
               <span className="text-red-400 font-medium">&lt;7%</span> ruim
@@ -217,7 +230,25 @@ export function MetaConversionFunnel({ data }: Props) {
             </span>
           </div>
         </div>
-      </div>
+
+            {/* Bottleneck diagnostic */}
+            {worstStep && (
+              <div className="mt-2 pt-2 border-t border-border/30 flex items-start gap-2">
+                <span className="text-xs text-amber-400 font-semibold shrink-0">
+                  Gargalo:
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  <span className={`font-semibold ${STATUS_STYLES[worstStep.info.status].text}`}>
+                    {worstStep.name} ({worstStep.rate.toFixed(1)}%)
+                  </span>
+                  {' — '}
+                  {worstStep.action}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

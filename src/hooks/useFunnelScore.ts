@@ -16,6 +16,12 @@ export type ScoreStatus =
   | 'attention'
   | 'danger';
 
+export interface BreakdownItem {
+  score: number | null;
+  rate: number | null;
+  label: string;
+}
+
 export interface FunnelScoreResult {
   score: number;
   status: ScoreStatus;
@@ -28,6 +34,15 @@ export interface FunnelScoreResult {
     txPaginaScore: number | null;
     txCheckoutScore: number | null;
   };
+  /** Taxas reais + scores para exibição */
+  details: {
+    connect: BreakdownItem;
+    txPagina: BreakdownItem;
+    txCheckout: BreakdownItem;
+    positions: BreakdownItem;
+  };
+  /** Diagnóstico textual do principal gargalo */
+  bottleneck: string | null;
 }
 
 /* ── Helpers ─────────────────────────────────────────── */
@@ -263,6 +278,82 @@ export function useFunnelScore(
         txCheckoutScore: txChkScore !== null
           ? Math.round(txChkScore) : null,
       },
+      details: {
+        connect: {
+          score: connScore !== null ? Math.round(connScore) : null,
+          rate: linkClicks > 0 ? connectRate : null,
+          label: 'Connect Rate',
+        },
+        txPagina: {
+          score: txPagScore !== null ? Math.round(txPagScore) : null,
+          rate: landingPageViews > 0 ? txPaginaCheckout : null,
+          label: 'TX Pág→Checkout',
+        },
+        txCheckout: {
+          score: txChkScore !== null ? Math.round(txChkScore) : null,
+          rate: initiateCheckouts > 0 ? txCheckoutCompra : null,
+          label: 'TX Checkout→Compra',
+        },
+        positions: {
+          score: posScore !== null ? Math.round(posScore) : null,
+          rate: null,
+          label: 'Posições',
+        },
+      },
+      bottleneck: identifyBottleneck(
+        connScore, txPagScore, txChkScore, posScore,
+        connectRate, txPaginaCheckout, txCheckoutCompra,
+      ),
     };
   }, [positionBreakdown, metaInsights]);
+}
+
+function identifyBottleneck(
+  connScore: number | null,
+  txPagScore: number | null,
+  txChkScore: number | null,
+  posScore: number | null,
+  connectRate: number,
+  txPagina: number,
+  txCheckout: number,
+): string | null {
+  // Find the worst-scoring metric
+  const candidates: {
+    name: string; score: number; msg: string;
+  }[] = [];
+
+  if (connScore !== null && connScore < 60) {
+    candidates.push({
+      name: 'connect',
+      score: connScore,
+      msg: `Connect Rate em ${connectRate.toFixed(1)}% — muitas visitas não chegam à página. Verifique a velocidade de carregamento e a congruência entre anúncio e landing page.`,
+    });
+  }
+  if (txPagScore !== null && txPagScore < 60) {
+    candidates.push({
+      name: 'txPagina',
+      score: txPagScore,
+      msg: `TX Página→Checkout em ${txPagina.toFixed(1)}% — a página de vendas não está convertendo. Revise a copy, oferta, preço e prova social.`,
+    });
+  }
+  if (txChkScore !== null && txChkScore < 60) {
+    candidates.push({
+      name: 'txCheckout',
+      score: txChkScore,
+      msg: `TX Checkout→Compra em ${txCheckout.toFixed(1)}% — muitos abandonam o checkout. Verifique formas de pagamento, parcelamento e fricção no checkout.`,
+    });
+  }
+  if (posScore !== null && posScore < 60) {
+    candidates.push({
+      name: 'positions',
+      score: posScore,
+      msg: 'Taxas de OBs/USs abaixo do benchmark. Revise preços, copy e posicionamento das ofertas complementares.',
+    });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Return the worst one
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates[0].msg;
 }

@@ -9,7 +9,7 @@ import {
   ArrowLeft, Calendar, TrendingUp, DollarSign,
   Target, ShoppingCart, CreditCard, BarChart3,
   Megaphone, Layers, Activity, Users, ChevronDown,
-  Wallet, Tag, LayoutGrid, Ticket,
+  Wallet, Tag, LayoutGrid, Ticket, CalendarDays,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1075,20 +1075,27 @@ export default function LaunchEditionAnalysis() {
             {/* ═══════════ TABELA DIÁRIA ═══════════ */}
             {filteredSalesData.length > 0 &&
               editionData.start_datetime && (
-                <DailyBreakdownTable
-                  salesData={filteredSalesData}
-                  metaInsights={filteredMetaInsights}
-                  lotsAnalysis={lotsAnalysis}
-                  startDate={
-                    selectedLot?.lot.start_datetime ||
-                    editionData.start_datetime
-                  }
-                  endDate={
-                    selectedLot?.lot.end_datetime ||
-                    editionEndDate ||
-                    editionData.start_datetime
-                  }
-                />
+                <Section
+                  icon={<CalendarDays className="w-4 h-4" />}
+                  title="Acompanhamento Diário"
+                  description="Investimento, faturamento e vendas por dia"
+                  defaultOpen={false}
+                >
+                  <DailyBreakdownTable
+                    salesData={filteredSalesData}
+                    metaInsights={filteredMetaInsights}
+                    lotsAnalysis={lotsAnalysis}
+                    startDate={
+                      selectedLot?.lot.start_datetime ||
+                      editionData.start_datetime
+                    }
+                    endDate={
+                      selectedLot?.lot.end_datetime ||
+                      editionEndDate ||
+                      editionData.start_datetime
+                    }
+                  />
+                </Section>
               )}
 
             {/* ═══════════ COMPARATIVO SEMANAL ═══════════ */}

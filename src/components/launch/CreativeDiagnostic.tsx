@@ -17,6 +17,11 @@ interface CreativeMetric {
   purchases: number;
   roas: number;
   cpa: number;
+  ctr: number;
+  cpm: number;
+  hookRate: number;
+  frequency: number;
+  score: number;
   action: Action;
   reason: string;
 }
@@ -32,6 +37,12 @@ interface MetaInsight {
   ad_name?: string | null;
   campaign_name?: string | null;
   spend?: number | string;
+  impressions?: number | string;
+  clicks?: number | string;
+  ctr?: number | string;
+  cpm?: number | string;
+  frequency?: number | string;
+  actions?: any[];
   date_start?: string;
   [key: string]: any;
 }
@@ -76,15 +87,93 @@ const fmt = (v: number) =>
     minimumFractionDigits: 0, maximumFractionDigits: 0,
   }).format(v);
 
-/* ── Logic ───────────────────────────────────────────── */
+const getActionValue = (
+  actions: any[] | null | undefined,
+  type: string,
+): number => {
+  if (!actions || !Array.isArray(actions)) return 0;
+  const a = actions.find(
+    (x: any) => x.action_type === type,
+  );
+  return a ? parseInt(a.value || '0', 10) : 0;
+};
+
+/* ── Creative Score ──────────────────────────────────── */
+
+/**
+ * Score 0-100 multi-dimensional.
+ * Pesos: ROAS 35% + CTR 20% + CPM 15% + Hook Rate 15% + Frequência 15%
+ */
+function calcCreativeScore(
+  roas: number,
+  ctr: number,
+  cpm: number,
+  hookRate: number,
+  frequency: number,
+  hasVideo: boolean,
+): number {
+  // ROAS score (35%)
+  let roasScore: number;
+  if (roas >= 3) roasScore = 100;
+  else if (roas >= 2) roasScore = 85;
+  else if (roas >= 1) roasScore = 70;
+  else if (roas >= 0.5) roasScore = 40;
+  else roasScore = Math.max(0, roas * 40);
+
+  // CTR score (20%) — benchmarks: >2% ótimo, >1% bom
+  let ctrScore: number;
+  if (ctr >= 3) ctrScore = 100;
+  else if (ctr >= 2) ctrScore = 85;
+  else if (ctr >= 1) ctrScore = 65;
+  else if (ctr >= 0.5) ctrScore = 40;
+  else ctrScore = Math.max(0, ctr * 80);
+
+  // CPM score (15%) — invertido, menor é melhor
+  // Benchmarks BR: <R$20 ótimo, <R$40 bom, <R$60 ok
+  let cpmScore: number;
+  if (cpm <= 15) cpmScore = 100;
+  else if (cpm <= 25) cpmScore = 85;
+  else if (cpm <= 40) cpmScore = 65;
+  else if (cpm <= 60) cpmScore = 40;
+  else cpmScore = Math.max(0, 40 - ((cpm - 60) / 60) * 40);
+
+  // Hook Rate score (15%) — video_view / impressions
+  // Benchmarks: >25% ótimo, >15% bom, >8% ok
+  let hookScore: number;
+  if (!hasVideo) {
+    hookScore = 60; // neutro para não-vídeos
+  } else if (hookRate >= 30) hookScore = 100;
+  else if (hookRate >= 20) hookScore = 85;
+  else if (hookRate >= 10) hookScore = 65;
+  else if (hookRate >= 5) hookScore = 40;
+  else hookScore = Math.max(0, hookRate * 8);
+
+  // Frequency penalty (15%) — >3 = saturado
+  let freqScore: number;
+  if (frequency <= 1.5) freqScore = 100;
+  else if (frequency <= 2.5) freqScore = 80;
+  else if (frequency <= 3.5) freqScore = 50;
+  else if (frequency <= 5) freqScore = 25;
+  else freqScore = 0;
+
+  return Math.round(
+    roasScore * 0.35 +
+    ctrScore * 0.20 +
+    cpmScore * 0.15 +
+    hookScore * 0.15 +
+    freqScore * 0.15
+  );
+}
+
+/* ── Classification ──────────────────────────────────── */
 
 function classifyCreative(
+  score: number,
   spend: number,
   purchases: number,
   roas: number,
   avgSpend: number,
 ): { action: Action; reason: string } {
-  // Low spend = not enough data
   if (spend < avgSpend * 0.15 && purchases === 0) {
     return {
       action: 'watch',
@@ -92,7 +181,6 @@ function classifyCreative(
     };
   }
 
-  // Zero sales with significant spend
   if (purchases === 0 && spend > avgSpend * 0.3) {
     return {
       action: 'kill',
@@ -107,28 +195,28 @@ function classifyCreative(
     };
   }
 
-  // Has sales — classify by ROAS
-  if (roas >= 2) {
+  // Score-based classification
+  if (score >= 75) {
     return {
       action: 'scale',
-      reason: `ROAS ${roas.toFixed(1)}x — alto retorno, aumentar investimento`,
+      reason: `Score ${score} — performance excelente, escalar`,
     };
   }
-  if (roas >= 1) {
+  if (score >= 55) {
     return {
       action: 'keep',
-      reason: `ROAS ${roas.toFixed(1)}x — rentável, manter ativo`,
+      reason: `Score ${score} — bom desempenho, manter`,
     };
   }
-  if (roas >= 0.5) {
+  if (score >= 35) {
     return {
       action: 'watch',
-      reason: `ROAS ${roas.toFixed(1)}x — no limite, otimizar ou pausar`,
+      reason: `Score ${score} — otimizar ou pausar`,
     };
   }
   return {
     action: 'kill',
-    reason: `ROAS ${roas.toFixed(1)}x — prejuízo, desligar`,
+    reason: `Score ${score} — desempenho ruim, desligar`,
   };
 }
 
@@ -145,11 +233,16 @@ export function CreativeDiagnostic({
   const creatives = useMemo(() => {
     if (metaInsights.length === 0) return [];
 
-    // Aggregate spend by ad_id (deduplicate by ad_id + date)
-    const adSpend = new Map<string, {
+    // Aggregate metrics by ad_id (deduplicate by ad_id + date)
+    const adData = new Map<string, {
       name: string;
       campaignName: string;
       spend: number;
+      impressions: number;
+      clicks: number;
+      videoViews: number;
+      frequency: number;
+      dayCount: number;
     }>();
     const seen = new Set<string>();
 
@@ -159,15 +252,30 @@ export function CreativeDiagnostic({
       if (seen.has(dedup)) continue;
       seen.add(dedup);
 
-      const existing = adSpend.get(i.ad_id);
+      const existing = adData.get(i.ad_id);
       const s = Number(i.spend) || 0;
+      const imp = Number(i.impressions) || 0;
+      const clk = Number(i.clicks) || 0;
+      const vv = getActionValue(i.actions, 'video_view');
+      const freq = Number(i.frequency) || 0;
+
       if (existing) {
         existing.spend += s;
+        existing.impressions += imp;
+        existing.clicks += clk;
+        existing.videoViews += vv;
+        existing.frequency += freq;
+        existing.dayCount++;
       } else {
-        adSpend.set(i.ad_id, {
+        adData.set(i.ad_id, {
           name: i.ad_name || i.ad_id,
           campaignName: i.campaign_name || '',
           spend: s,
+          impressions: imp,
+          clicks: clk,
+          videoViews: vv,
+          frequency: freq,
+          dayCount: 1,
         });
       }
     }
@@ -192,7 +300,7 @@ export function CreativeDiagnostic({
     }
 
     // Average spend for classification thresholds
-    const allSpends = Array.from(adSpend.values())
+    const allSpends = Array.from(adData.values())
       .map(a => a.spend);
     const avgSpend = allSpends.length > 0
       ? allSpends.reduce((s, v) => s + v, 0) / allSpends.length
@@ -200,15 +308,30 @@ export function CreativeDiagnostic({
 
     // Build metrics
     const result: CreativeMetric[] = [];
-    for (const [adId, ad] of adSpend) {
+    for (const [adId, ad] of adData) {
       const purchases = adPurchases.get(adId);
       const pCount = purchases?.count || 0;
       const pRevenue = purchases?.revenue || 0;
       const roas = ad.spend > 0 ? pRevenue / ad.spend : 0;
       const cpa = pCount > 0 ? ad.spend / pCount : 0;
 
+      // Derived metrics
+      const ctr = ad.impressions > 0
+        ? (ad.clicks / ad.impressions) * 100 : 0;
+      const cpm = ad.impressions > 0
+        ? (ad.spend / ad.impressions) * 1000 : 0;
+      const hookRate = ad.impressions > 0
+        ? (ad.videoViews / ad.impressions) * 100 : 0;
+      const avgFreq = ad.dayCount > 0
+        ? ad.frequency / ad.dayCount : 0;
+      const hasVideo = ad.videoViews > 0;
+
+      const score = calcCreativeScore(
+        roas, ctr, cpm, hookRate, avgFreq, hasVideo,
+      );
+
       const { action, reason } = classifyCreative(
-        ad.spend, pCount, roas, avgSpend,
+        score, ad.spend, pCount, roas, avgSpend,
       );
 
       result.push({
@@ -219,6 +342,11 @@ export function CreativeDiagnostic({
         purchases: pCount,
         roas,
         cpa,
+        ctr,
+        cpm,
+        hookRate,
+        frequency: avgFreq,
+        score,
         action,
         reason,
       });
@@ -322,6 +450,20 @@ export function CreativeDiagnostic({
   );
 }
 
+function scoreColor(s: number): string {
+  if (s >= 75) return 'text-green-400';
+  if (s >= 55) return 'text-blue-400';
+  if (s >= 35) return 'text-yellow-400';
+  return 'text-red-400';
+}
+
+function scoreBg(s: number): string {
+  if (s >= 75) return 'bg-green-500/15';
+  if (s >= 55) return 'bg-blue-500/15';
+  if (s >= 35) return 'bg-yellow-500/15';
+  return 'bg-red-500/15';
+}
+
 function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
   const cfg = ACTION_CONFIG[c.action];
   return (
@@ -333,6 +475,16 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         bg-card hover:bg-muted/20 transition-colors
       `}
     >
+      {/* Score badge */}
+      <span className={`
+        w-8 h-8 rounded-lg flex items-center justify-center
+        text-xs font-bold tabular-nums shrink-0
+        ${scoreBg(c.score)} ${scoreColor(c.score)}
+      `}>
+        {c.score}
+      </span>
+
+      {/* Action badge */}
       <span className={`
         inline-flex items-center gap-1 px-2 py-0.5
         rounded text-[10px] font-semibold border
@@ -342,6 +494,7 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         {cfg.label}
       </span>
 
+      {/* Name */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">
           {c.adName}
@@ -353,7 +506,8 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         )}
       </div>
 
-      <div className="flex items-center gap-4 shrink-0 text-xs tabular-nums">
+      {/* Metrics */}
+      <div className="flex items-center gap-3 shrink-0 text-xs tabular-nums">
         <div className="text-right">
           <p className="text-red-400 font-medium">{fmt(c.spend)}</p>
           <p className="text-[10px] text-muted-foreground">gasto</p>
@@ -362,7 +516,7 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
           <p className="text-foreground font-medium">{c.purchases}</p>
           <p className="text-[10px] text-muted-foreground">vendas</p>
         </div>
-        <div className="text-right w-[50px]">
+        <div className="text-right w-[44px]">
           <p className={`font-bold ${
             c.roas >= 2 ? 'text-green-400'
               : c.roas >= 1 ? 'text-blue-400'
@@ -373,9 +527,32 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
           </p>
           <p className="text-[10px] text-muted-foreground">ROAS</p>
         </div>
+        <div className="text-right w-[40px] hidden xl:block">
+          <p className="text-foreground">{c.ctr.toFixed(1)}%</p>
+          <p className="text-[10px] text-muted-foreground">CTR</p>
+        </div>
+        {c.hookRate > 0 && (
+          <div className="text-right w-[40px] hidden xl:block">
+            <p className="text-foreground">{c.hookRate.toFixed(0)}%</p>
+            <p className="text-[10px] text-muted-foreground">Hook</p>
+          </div>
+        )}
+        {c.frequency > 0 && (
+          <div className="text-right w-[32px] hidden xl:block">
+            <p className={`${
+              c.frequency > 3.5 ? 'text-red-400'
+                : c.frequency > 2.5 ? 'text-yellow-400'
+                  : 'text-foreground'
+            }`}>
+              {c.frequency.toFixed(1)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Freq</p>
+          </div>
+        )}
       </div>
 
-      <p className="text-[11px] text-muted-foreground max-w-[220px] shrink-0 hidden lg:block">
+      {/* Reason */}
+      <p className="text-[11px] text-muted-foreground max-w-[180px] shrink-0 hidden lg:block">
         {c.reason}
       </p>
     </div>

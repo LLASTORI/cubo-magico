@@ -350,6 +350,26 @@ function splitDateRangeIntoChunks(dateStart: string, dateStop: string): Array<{ 
   return chunks
 }
 
+// Merge video_thruplay_watched_actions into the actions array
+// so frontend can read it with getActionValue(actions, 'thruplay')
+function mergeThruplayIntoActions(
+  actions: any[] | null,
+  thruplayActions: any[] | null,
+): any[] | null {
+  const merged = [...(actions || [])]
+  if (thruplayActions && Array.isArray(thruplayActions)) {
+    // Sum all thruplay values (usually just one entry)
+    let total = 0
+    for (const t of thruplayActions) {
+      total += parseInt(t.value || '0', 10)
+    }
+    if (total > 0) {
+      merged.push({ action_type: 'thruplay', value: String(total) })
+    }
+  }
+  return merged.length > 0 ? merged : null
+}
+
 // Fetch with exponential backoff retry for rate limits
 async function fetchWithRetry(
   url: string,
@@ -1448,7 +1468,7 @@ async function getInsightsForAccountOnce(
   dateStop: string,
   level: string
 ): Promise<{ insights: any[]; errorCode?: number; errorMessage?: string }> {
-  const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type'
+  const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,actions,cost_per_action_type,video_thruplay_watched_actions'
 
   const allInsights: any[] = []
 
@@ -1885,7 +1905,10 @@ async function syncInsightsSmartOptimized(
         cpm: insight.cpm ? parseFloat(insight.cpm) : null,
         ctr: insight.ctr ? parseFloat(insight.ctr) : null,
         frequency: insight.frequency ? parseFloat(insight.frequency) : null,
-        actions: insight.actions || null,
+        actions: mergeThruplayIntoActions(
+          insight.actions,
+          insight.video_thruplay_watched_actions,
+        ),
         cost_per_action_type: insight.cost_per_action_type || null,
         updated_at: new Date().toISOString(),
       }))

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   Rocket, Power, Eye, AlertOctagon,
-  TrendingUp, TrendingDown, Copy,
+  TrendingUp, TrendingDown, Copy, ExternalLink,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -22,6 +22,7 @@ interface CreativeMetric {
   hookRate: number;
   frequency: number;
   score: number;
+  permalink: string | null;
   action: Action;
   reason: string;
 }
@@ -263,10 +264,14 @@ function classifyCreative(
 interface Props {
   salesData: SaleRecord[];
   metaInsights: MetaInsight[];
+  adsMetadata?: Record<string, {
+    name: string;
+    permalink: string | null;
+  }>;
 }
 
 export function CreativeDiagnostic({
-  salesData, metaInsights,
+  salesData, metaInsights, adsMetadata,
 }: Props) {
   const creatives = useMemo(() => {
     if (metaInsights.length === 0) return [];
@@ -305,8 +310,9 @@ export function CreativeDiagnostic({
         existing.frequency += freq;
         existing.dayCount++;
       } else {
+        const adMeta = adsMetadata?.[i.ad_id];
         adData.set(i.ad_id, {
-          name: i.ad_name || i.ad_id,
+          name: adMeta?.name || i.ad_name || i.ad_id,
           campaignName: i.campaign_name || '',
           spend: s,
           impressions: imp,
@@ -385,6 +391,7 @@ export function CreativeDiagnostic({
         hookRate,
         frequency: avgFreq,
         score,
+        permalink: adsMetadata?.[adId]?.permalink || null,
         action,
         reason,
       });
@@ -539,11 +546,26 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         {cfg.label}
       </span>
 
-      {/* Name */}
+      {/* Name + link */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">
-          {c.adName}
-        </p>
+        <div className="flex items-center gap-1.5">
+          {c.permalink ? (
+            <a
+              href={c.permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium truncate hover:text-cyan-400 transition-colors"
+              title="Abrir no Instagram"
+            >
+              {c.adName}
+              <ExternalLink className="w-3 h-3 inline ml-1 opacity-50" />
+            </a>
+          ) : (
+            <p className="text-sm font-medium truncate">
+              {c.adName}
+            </p>
+          )}
+        </div>
         {c.campaignName && (
           <p className="text-[10px] text-muted-foreground truncate">
             {c.campaignName}

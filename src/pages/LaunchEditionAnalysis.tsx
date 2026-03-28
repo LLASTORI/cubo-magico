@@ -688,6 +688,31 @@ export default function LaunchEditionAnalysis() {
     enabled: editionMetaInsights.length > 0,
   });
 
+  // Meta ads metadata (nomes, permalinks)
+  const { data: metaAdsMap = {} } = useQuery({
+    queryKey: ['edition-meta-ads', projectId],
+    enabled: !!projectId && editionMetaInsights.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('meta_ads')
+        .select('ad_id, ad_name, instagram_permalink')
+        .eq('project_id', projectId);
+      const map: Record<string, {
+        name: string;
+        permalink: string | null;
+      }> = {};
+      for (const a of data || []) {
+        if (a.ad_id) {
+          map[a.ad_id] = {
+            name: a.ad_name || a.ad_id,
+            permalink: a.instagram_permalink,
+          };
+        }
+      }
+      return map;
+    },
+  });
+
   const {
     healthMetrics, isLoading: healthLoading,
   } = useFunnelHealthMetrics({
@@ -1129,6 +1154,7 @@ export default function LaunchEditionAnalysis() {
                 <CreativeDiagnostic
                   salesData={filteredSalesData}
                   metaInsights={filteredMetaInsights}
+                  adsMetadata={metaAdsMap}
                 />
               </Section>
             )}

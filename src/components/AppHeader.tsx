@@ -126,7 +126,7 @@ export const AppHeader = ({
   const hasAnyInsights = canAccessInsights || canAccessPesquisas || canAccessSocialListening;
 
   return (
-    <header className="border-b border-border bg-card shadow-sm">
+    <header className="border-b border-border bg-card/95 backdrop-blur-sm shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Left side - Logo and Project Info */}

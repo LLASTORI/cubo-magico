@@ -8,7 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Calendar, TrendingUp, DollarSign,
   Target, ShoppingCart, CreditCard, BarChart3,
-  Megaphone, Layers, Activity, Users,
+  Megaphone, Layers, Activity, Users, ChevronDown,
   Wallet, Tag, LayoutGrid, Ticket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -1060,6 +1060,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<TrendingUp className="w-4 h-4" />}
                 title={`Evolução Diária${lotLabel}`}
+                defaultOpen={false}
                 description="Faturamento e vendas ao longo do tempo"
               >
                 <TemporalChart
@@ -1095,6 +1096,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<BarChart3 className="w-4 h-4" />}
                 title="Comparativo Semanal"
+                defaultOpen={false}
                 description="Performance semana a semana com tendências"
               >
                 <PeriodComparisonTable
@@ -1108,6 +1110,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<Megaphone className="w-4 h-4" />}
                 title={`Diagnóstico de Criativos${lotLabel}`}
+                defaultOpen={false}
                 description="Ação recomendada por criativo: escalar, manter, observar ou desligar"
               >
                 <CreativeDiagnostic
@@ -1122,6 +1125,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<LayoutGrid className="w-4 h-4" />}
                 title="Detalhamento por Lote"
+                defaultOpen={false}
                 description="Receita, vendas e TX de OBs por lote"
               >
                 <LaunchProductsSalesBreakdown
@@ -1169,6 +1173,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<Users className="w-4 h-4" />}
                 title="Lifetime Value"
+                defaultOpen={false}
                 description="Valor total por comprador e adoção de OBs/USs"
               >
                 <LTVAnalysisCard data={ltvData} />
@@ -1182,6 +1187,7 @@ export default function LaunchEditionAnalysis() {
                 <Section
                   icon={<Activity className="w-4 h-4" />}
                   title="Saúde do Funil"
+                  defaultOpen={false}
                   description="Abandonos, reembolsos e chargebacks"
                 >
                   <FunnelHealthMetrics
@@ -1195,6 +1201,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<Tag className="w-4 h-4" />}
                 title={`Fontes e Criativos${lotLabel}`}
+                defaultOpen={false}
                 description="Atribuição de vendas por UTM e criativos"
               >
                 <UTMAnalysis
@@ -1213,6 +1220,7 @@ export default function LaunchEditionAnalysis() {
               <Section
                 icon={<Megaphone className="w-4 h-4" />}
                 title={`Meta Ads${lotLabel}`}
+                defaultOpen={false}
                 description="Campanhas, conjuntos e criativos"
               >
                 <MetaHierarchyAnalysis
@@ -1264,23 +1272,29 @@ function DateTag({
 
 function Section({
   icon, title, description, children,
+  defaultOpen = true,
 }: {
   icon: React.ReactNode;
   title: string;
   description?: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
     <div className="relative rounded-xl border border-border/50 bg-card overflow-hidden">
-      {/* Left accent gradient bar */}
       <div className="absolute left-0 top-0 bottom-0 w-[3px] section-accent opacity-60" />
 
-      <div className="pl-5 pr-5 pt-4 pb-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full pl-5 pr-5 pt-4 pb-3 flex items-center justify-between cursor-pointer hover:bg-muted/10 transition-colors"
+      >
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
             {icon}
           </div>
-          <div>
+          <div className="text-left">
             <h2 className="font-bold text-[13px] tracking-tight text-slate-200">
               {title}
             </h2>
@@ -1291,12 +1305,18 @@ function Section({
             )}
           </div>
         </div>
-      </div>
+        <ChevronDown className={`
+          w-4 h-4 text-muted-foreground transition-transform duration-200
+          ${open ? 'rotate-180' : ''}
+        `} />
+      </button>
 
-      {/* Subtle separator */}
-      <div className="mx-5 h-px bg-gradient-to-r from-border/50 via-border/30 to-transparent" />
-
-      <div className="p-5">{children}</div>
+      {open && (
+        <>
+          <div className="mx-5 h-px bg-gradient-to-r from-border/50 via-border/30 to-transparent" />
+          <div className="p-5">{children}</div>
+        </>
+      )}
     </div>
   );
 }

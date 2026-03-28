@@ -18,6 +18,7 @@ interface CreativeMetric {
   campaignName: string;
   spend: number;
   purchases: number;
+  products: number;
   roas: number;
   cpa: number;
   ctr: number;
@@ -330,20 +331,24 @@ export function CreativeDiagnostic({
     }
 
     // Count purchases by ad_id (via UTM)
+    // count = vendas FRONT, products = total de produtos (FRONT + OBs)
     const adPurchases = new Map<string, {
       count: number;
+      products: number;
       revenue: number;
     }>();
     for (const s of salesData) {
       if (!s.meta_ad_id) continue;
-      const existing = adPurchases.get(s.meta_ad_id);
       const rev = s.gross_amount || 0;
+      const prodCount = s.all_offer_codes?.length || 1;
+      const existing = adPurchases.get(s.meta_ad_id);
       if (existing) {
         existing.count++;
+        existing.products += prodCount;
         existing.revenue += rev;
       } else {
         adPurchases.set(s.meta_ad_id, {
-          count: 1, revenue: rev,
+          count: 1, products: prodCount, revenue: rev,
         });
       }
     }
@@ -360,6 +365,7 @@ export function CreativeDiagnostic({
     for (const [adId, ad] of adData) {
       const purchases = adPurchases.get(adId);
       const pCount = purchases?.count || 0;
+      const pProducts = purchases?.products || 0;
       const pRevenue = purchases?.revenue || 0;
       const roas = ad.spend > 0 ? pRevenue / ad.spend : 0;
       const cpa = pCount > 0 ? ad.spend / pCount : 0;
@@ -389,6 +395,7 @@ export function CreativeDiagnostic({
         campaignName: ad.campaignName,
         spend: ad.spend,
         purchases: pCount,
+        products: pProducts,
         roas,
         cpa,
         ctr,
@@ -536,7 +543,15 @@ export function CreativeDiagnostic({
               <span className="w-[40px] text-right cursor-help">Vendas</span>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs bg-[#1a1f2e] border-border max-w-[200px]">
-              Vendas atribuídas via UTM (fonte: Hotmart). Inclui todas as posições do pedido (FRONT + OBs).
+              Vendas FRONT atribuídas via UTM (fonte: Hotmart)
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-[36px] text-right cursor-help">Prods</span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs bg-[#1a1f2e] border-border max-w-[200px]">
+              Total de produtos vendidos (FRONT + OBs + USs)
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -732,6 +747,10 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         <div className="text-right">
           <p className="text-foreground font-medium">{c.purchases}</p>
           <p className="text-[10px] text-muted-foreground">vendas</p>
+        </div>
+        <div className="text-right w-[36px]">
+          <p className="text-foreground font-medium">{c.products}</p>
+          <p className="text-[10px] text-muted-foreground">prods</p>
         </div>
         <div className="text-right w-[44px]">
           <p className={`font-bold ${

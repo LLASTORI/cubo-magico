@@ -460,6 +460,18 @@ const MetaAdsContent = ({ projectId }: { projectId: string }) => {
     const BATCH_SIZE_DAYS = 60;
 
     try {
+      // Sync hierarquia em background (ads, permalinks)
+      // Fire-and-forget — não bloqueia o sync de insights
+      supabase.functions.invoke('meta-api', {
+        body: {
+          action: 'sync_hierarchy_full',
+          projectId,
+          accountIds,
+        },
+      }).catch(err =>
+        console.warn('Hierarchy sync error (non-blocking):', err),
+      );
+
       if (totalDays > BATCH_THRESHOLD_DAYS) {
         // Large range: split into 60-day batches and fire sequentially
         const batches = splitIntoBatches(startDate, endDate, BATCH_SIZE_DAYS);

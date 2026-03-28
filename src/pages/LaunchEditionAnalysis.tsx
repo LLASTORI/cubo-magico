@@ -51,6 +51,8 @@ import { MetaConversionFunnel } from '@/components/launch/MetaConversionFunnel';
 import { CreativeDiagnostic } from '@/components/launch/CreativeDiagnostic';
 import { useROASTimeline } from '@/hooks/useROASTimeline';
 import { ROASTimelineChart } from '@/components/launch/ROASTimelineChart';
+import { useConversionTimeline } from '@/hooks/useConversionTimeline';
+import { ConversionTimelineChart } from '@/components/launch/ConversionTimelineChart';
 import { useFunnelScore } from '@/hooks/useFunnelScore';
 import type { PositionBreakdown } from '@/hooks/useFunnelScore';
 import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
@@ -557,6 +559,13 @@ export default function LaunchEditionAnalysis() {
     editionEndDate,
   );
 
+  // TX de conversão diária
+  const conversionTimeline = useConversionTimeline(
+    editionMetaInsights,
+    editionData?.start_datetime,
+    editionEndDate,
+  );
+
   const [selectedLotId, setSelectedLotId] = useState<
     string | null
   >(null);
@@ -705,17 +714,19 @@ export default function LaunchEditionAnalysis() {
     queryFn: async () => {
       const { data } = await supabase
         .from('meta_ads')
-        .select('ad_id, ad_name, instagram_permalink')
+        .select('ad_id, ad_name, instagram_permalink, status')
         .eq('project_id', projectId);
       const map: Record<string, {
         name: string;
         permalink: string | null;
+        status: string | null;
       }> = {};
       for (const a of data || []) {
         if (a.ad_id) {
           map[a.ad_id] = {
             name: a.ad_name || a.ad_id,
             permalink: a.instagram_permalink,
+            status: a.status,
           };
         }
       }
@@ -1039,6 +1050,17 @@ export default function LaunchEditionAnalysis() {
                 description="Cliques → Página → Checkout → Compra"
               >
                 <MetaConversionFunnel data={metaFunnelData} />
+                {conversionTimeline.days.length >= 2 && (
+                  <div className="mt-4 pt-4 border-t border-border/30">
+                    <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider">
+                      Evolução diária da conversão
+                    </p>
+                    <ConversionTimelineChart
+                      data={conversionTimeline.days}
+                      avgTxPagCompra={conversionTimeline.avgTxPagCompra}
+                    />
+                  </div>
+                )}
               </Section>
             )}
 

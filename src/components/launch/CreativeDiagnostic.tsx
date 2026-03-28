@@ -26,6 +26,7 @@ interface CreativeMetric {
   frequency: number;
   score: number;
   permalink: string | null;
+  adStatus: string | null;
   action: Action;
   reason: string;
 }
@@ -270,6 +271,7 @@ interface Props {
   adsMetadata?: Record<string, {
     name: string;
     permalink: string | null;
+    status: string | null;
   }>;
 }
 
@@ -395,6 +397,7 @@ export function CreativeDiagnostic({
         frequency: avgFreq,
         score,
         permalink: adsMetadata?.[adId]?.permalink || null,
+        adStatus: adsMetadata?.[adId]?.status || null,
         action,
         reason,
       });
@@ -420,6 +423,7 @@ export function CreativeDiagnostic({
   const [activeFilter, setActiveFilter] = useState<
     Action | null
   >(null);
+  const [onlyActive, setOnlyActive] = useState(true);
 
   if (creatives.length === 0) return null;
 
@@ -434,10 +438,18 @@ export function CreativeDiagnostic({
     .reduce((s, c) => s + c.spend, 0);
 
   // Filtered list
+  // Apply status filter first, then action filter
+  const statusFiltered = onlyActive
+    ? creatives.filter(c => !c.adStatus || c.adStatus === 'ACTIVE')
+    : creatives;
+  const inactiveCount = creatives.length - statusFiltered.length;
+
   const filtered = activeFilter
-    ? creatives.filter(c => c.action === activeFilter)
-    : creatives.filter(c => c.action !== 'watch');
-  const watchCount = counts.watch;
+    ? statusFiltered.filter(c => c.action === activeFilter)
+    : statusFiltered.filter(c => c.action !== 'watch');
+  const watchCount = statusFiltered.filter(
+    c => c.action === 'watch',
+  ).length;
 
   return (
     <div className="space-y-4">
@@ -474,6 +486,26 @@ export function CreativeDiagnostic({
             {fmt(wastedSpend)} em criativos para desligar
           </span>
         )}
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            onClick={() => setOnlyActive(v => !v)}
+            className={`
+              text-[10px] px-2 py-0.5 rounded border cursor-pointer
+              transition-colors
+              ${onlyActive
+                ? 'bg-green-500/15 text-green-400 border-green-500/25'
+                : 'bg-muted/30 text-muted-foreground border-border/50'
+              }
+            `}
+          >
+            {onlyActive ? 'Só ativos' : 'Todos'}
+          </button>
+          {inactiveCount > 0 && onlyActive && (
+            <span className="text-[10px] text-muted-foreground">
+              {inactiveCount} inativos ocultos
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Creative list */}
@@ -568,7 +600,7 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
         {cfg.label}
       </span>
 
-      {/* Name + ID + link */}
+      {/* Name + ID + status + link */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {c.permalink ? (
@@ -586,6 +618,17 @@ function CreativeRow({ creative: c }: { creative: CreativeMetric }) {
             <p className="text-sm font-medium truncate">
               {c.adName}
             </p>
+          )}
+          {c.adStatus && c.adStatus !== 'ACTIVE' && (
+            <span className={`
+              text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0
+              ${c.adStatus === 'PAUSED'
+                ? 'bg-yellow-500/15 text-yellow-400'
+                : 'bg-slate-500/15 text-slate-400'
+              }
+            `}>
+              {c.adStatus === 'PAUSED' ? 'Pausado' : 'Arquivado'}
+            </span>
           )}
         </div>
         <p className="text-[10px] text-muted-foreground truncate">

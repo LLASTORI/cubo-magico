@@ -48,6 +48,7 @@ import { useLTVAnalysis } from '@/hooks/useLTVAnalysis';
 import { LTVAnalysisCard } from '@/components/launch/LTVAnalysisCard';
 import { FunnelFlowCards } from '@/components/launch/FunnelFlowCards';
 import { MetaConversionFunnel } from '@/components/launch/MetaConversionFunnel';
+import { CreativeDiagnostic } from '@/components/launch/CreativeDiagnostic';
 import { useFunnelScore } from '@/hooks/useFunnelScore';
 import type { PositionBreakdown } from '@/hooks/useFunnelScore';
 import { FunnelScoreCard } from '@/components/funnel/FunnelScoreCard';
@@ -1102,12 +1103,18 @@ export default function LaunchEditionAnalysis() {
               </Section>
             )}
 
-            {/* ═══════════ CAMPANHAS ═══════════ */}
+            {/* ═══════════ DIAGNÓSTICO DE CRIATIVOS ═══════════ */}
             {filteredMetaInsights.length > 0 && (
-              <CampaignPerformanceTable
-                salesData={filteredSalesData}
-                metaInsights={filteredMetaInsights}
-              />
+              <Section
+                icon={<Megaphone className="w-4 h-4" />}
+                title={`Diagnóstico de Criativos${lotLabel}`}
+                description="Ação recomendada por criativo: escalar, manter, observar ou desligar"
+              >
+                <CreativeDiagnostic
+                  salesData={filteredSalesData}
+                  metaInsights={filteredMetaInsights}
+                />
+              </Section>
             )}
 
             {/* ═══════════ DETALHAMENTO POR LOTE ═══════════ */}

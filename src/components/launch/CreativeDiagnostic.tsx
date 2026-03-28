@@ -98,21 +98,27 @@ const getActionValue = (
   return a ? parseInt(a.value || '0', 10) : 0;
 };
 
-/* ── Creative Score ──────────────────────────────────── */
+/* ── Ad Pulse Score ───────────────────────────────────── */
 
 /**
- * Score 0-100 multi-dimensional.
- * Pesos: ROAS 35% + CTR 20% + CPM 15% + Hook Rate 15% + Frequência 15%
+ * Ad Pulse Score (0-100) — score multi-dimensional por criativo.
+ *
+ * Vídeos: ROAS 40% + CTR 15% + CPM 10% + Hook 10% + Freq 10% + Volume 15%
+ * Imagens: ROAS 45% + CTR 20% + CPM 10% + Freq 10% + Volume 15%
+ * (Hook redistribuído para ROAS +5% e CTR +5% em imagens)
+ *
+ * Volume = confiança estatística (mais vendas = mais confiável)
  */
-function calcCreativeScore(
+function calcAdPulseScore(
   roas: number,
   ctr: number,
   cpm: number,
   hookRate: number,
   frequency: number,
+  purchases: number,
   hasVideo: boolean,
 ): number {
-  // ROAS score (35%)
+  // ROAS score
   let roasScore: number;
   if (roas >= 3) roasScore = 100;
   else if (roas >= 2) roasScore = 85;
@@ -120,7 +126,7 @@ function calcCreativeScore(
   else if (roas >= 0.5) roasScore = 40;
   else roasScore = Math.max(0, roas * 40);
 
-  // CTR score (20%) — benchmarks: >2% ótimo, >1% bom
+  // CTR score — >2% ótimo, >1% bom
   let ctrScore: number;
   if (ctr >= 3) ctrScore = 100;
   else if (ctr >= 2) ctrScore = 85;
@@ -128,8 +134,7 @@ function calcCreativeScore(
   else if (ctr >= 0.5) ctrScore = 40;
   else ctrScore = Math.max(0, ctr * 80);
 
-  // CPM score (15%) — invertido, menor é melhor
-  // Benchmarks BR: <R$20 ótimo, <R$40 bom, <R$60 ok
+  // CPM score — invertido, menor é melhor
   let cpmScore: number;
   if (cpm <= 15) cpmScore = 100;
   else if (cpm <= 25) cpmScore = 85;
@@ -137,18 +142,17 @@ function calcCreativeScore(
   else if (cpm <= 60) cpmScore = 40;
   else cpmScore = Math.max(0, 40 - ((cpm - 60) / 60) * 40);
 
-  // Hook Rate score (15%) — video_view / impressions
-  // Benchmarks: >25% ótimo, >15% bom, >8% ok
-  let hookScore: number;
-  if (!hasVideo) {
-    hookScore = 60; // neutro para não-vídeos
-  } else if (hookRate >= 30) hookScore = 100;
-  else if (hookRate >= 20) hookScore = 85;
-  else if (hookRate >= 10) hookScore = 65;
-  else if (hookRate >= 5) hookScore = 40;
-  else hookScore = Math.max(0, hookRate * 8);
+  // Hook Rate score — video_view / impressions
+  let hookScore = 0;
+  if (hasVideo) {
+    if (hookRate >= 30) hookScore = 100;
+    else if (hookRate >= 20) hookScore = 85;
+    else if (hookRate >= 10) hookScore = 65;
+    else if (hookRate >= 5) hookScore = 40;
+    else hookScore = Math.max(0, hookRate * 8);
+  }
 
-  // Frequency penalty (15%) — >3 = saturado
+  // Frequency penalty — >3 = saturado
   let freqScore: number;
   if (frequency <= 1.5) freqScore = 100;
   else if (frequency <= 2.5) freqScore = 80;
@@ -156,12 +160,33 @@ function calcCreativeScore(
   else if (frequency <= 5) freqScore = 25;
   else freqScore = 0;
 
+  // Volume score — confiança estatística
+  let volScore: number;
+  if (purchases >= 20) volScore = 100;
+  else if (purchases >= 10) volScore = 85;
+  else if (purchases >= 5) volScore = 65;
+  else if (purchases >= 2) volScore = 45;
+  else if (purchases >= 1) volScore = 30;
+  else volScore = 0;
+
+  // Pesos diferentes para vídeo vs imagem
+  if (hasVideo) {
+    return Math.round(
+      roasScore * 0.40 +
+      ctrScore * 0.15 +
+      cpmScore * 0.10 +
+      hookScore * 0.10 +
+      freqScore * 0.10 +
+      volScore * 0.15
+    );
+  }
+  // Imagem: hook redistribuído para ROAS e CTR
   return Math.round(
-    roasScore * 0.35 +
+    roasScore * 0.45 +
     ctrScore * 0.20 +
-    cpmScore * 0.15 +
-    hookScore * 0.15 +
-    freqScore * 0.15
+    cpmScore * 0.10 +
+    freqScore * 0.10 +
+    volScore * 0.15
   );
 }
 
@@ -326,8 +351,8 @@ export function CreativeDiagnostic({
         ? ad.frequency / ad.dayCount : 0;
       const hasVideo = ad.videoViews > 0;
 
-      const score = calcCreativeScore(
-        roas, ctr, cpm, hookRate, avgFreq, hasVideo,
+      const score = calcAdPulseScore(
+        roas, ctr, cpm, hookRate, avgFreq, pCount, hasVideo,
       );
 
       const { action, reason } = classifyCreative(

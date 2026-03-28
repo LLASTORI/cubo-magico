@@ -1122,9 +1122,9 @@ export default function LaunchEditionAnalysis() {
             {filteredMetaInsights.length > 0 && (
               <Section
                 icon={<Megaphone className="w-4 h-4" />}
-                title={`Diagnóstico de Criativos${lotLabel}`}
+                title={`Ad Pulse Score${lotLabel}`}
                 defaultOpen={false}
-                description="Ação recomendada por criativo: escalar, manter, observar ou desligar"
+                description="Score multi-dimensional por criativo: ROAS + CTR + CPM + Hook Rate + Volume"
               >
                 <CreativeDiagnostic
                   salesData={filteredSalesData}

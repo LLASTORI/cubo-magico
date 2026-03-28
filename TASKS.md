@@ -191,21 +191,50 @@
 ### Fix crítico
 - [x] KPI Investimento filtrado por campaign_ids da edição (R$ 8.142 → R$ 5.816) ✅
 
-### Pendente (sessão 42)
-- [ ] **instagram_permalink não populou** — investigar edge function `syncAds`/`fetchInstagramPermalinks`
-- [ ] Design premium fase 2: 3D, glassmorphism, gauges (ver memória `project_design_vision.md`)
-- [ ] Resumo Executivo com IA (bloco de texto no topo)
-- [ ] Comparação entre edições (esta vs anterior)
-- [ ] Curva de ROAS diário (evolução temporal)
-- [ ] Hold Rate no Ad Pulse Score (precisa sync thruplay do Meta)
+---
+
+## ✅ Sessão 42 — syncAds fix + Hold Rate + TX diário (PRs #74-#78)
+
+### Fixes críticos
+- [x] **syncAds limit 500→100** — resolve 0 ads retornados, 765 permalinks populados ✅
+- [x] **sync_hierarchy_full síncrono** — waitUntil não funcionava ✅
+- [x] Ordem Investimento→Faturamento em toda UI (regra salva na memória) ✅
+
+### Ad Pulse Score evolução
+- [x] Status do ad (Pausado/Arquivado) + filtro "Só ativos" ✅
+- [x] Tooltips explicativos nos headers (Score, Invest, Vendas, ROAS) ✅
+- [x] Colunas Vendas FRONT + Produtos separadas ✅
+- [x] **Hold Rate** — thruplay no sync insights + nova dimensão no score ✅
+- [x] Nomes reais + instagram_permalink funcionando (765 links) ✅
+
+### Novos gráficos
+- [x] **Curva de ROAS diário** — barras invest/fat + linhas ROAS dia/acum + breakeven ✅
+- [x] **TX end-to-end diário + média** — ConversionTimelineChart dentro do Funil Meta ✅
+
+### Deploy
+- [x] `meta-api` com thruplay + syncAds fix + sync síncrono ✅
 
 ---
 
-## 🔵 Onda 2B — Restante (aguardando dados/priorização)
+## 🔵 Sessão 43 — Planejador de Lançamentos
 
+### Planejador de Lançamento Pago
+- [ ] **Tela de planejamento** — metas por fase (ingressos, show rate, vendas produto)
+- [ ] Metas de ROAS, CPA, faturamento por lote
+- [ ] Projeção "vai bater a meta?" baseada no ritmo atual
+- [ ] Integração com Resumo Executivo IA (só após planejador pronto)
+
+### Planejador por modelo de funil
+- [ ] Lançamento clássico — metas de leads, CPL, vendas, ROAS
+- [ ] Perpétuo — metas de vendas diárias, CPA, ROAS
+- [ ] Outros modelos — conforme FUNNEL_MODELS.md
+
+### Pendente (sem prioridade definida)
+- [ ] Resumo Executivo com IA (depende do planejador)
+- [ ] Comparação entre edições
+- [ ] Desligar criativos pelo app (Decision Engine)
+- [ ] Design premium fase 2: 3D, glassmorphism
 - [ ] Show rate — requer fonte de dados de presença no evento
-- [ ] NPS e métricas do evento ao vivo
-- [ ] Planejador integrado — meta de ingressos e ROAS por fase
 - [ ] Vincular `registered_at` no CSV import de leads
 
 ---

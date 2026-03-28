@@ -4,6 +4,29 @@
 
 ---
 
+### [2026-03-28] Sessão 42 — syncAds fix + Hold Rate + TX diário (PRs #74-#78) — ✅ OK
+
+**Bug crítico resolvido — syncAds retornava 0 ads:**
+- Root cause: Meta API retornava erro silencioso com `limit=500` para contas com 1500+ ads
+- Fix: `limit=100` — pagina corretamente em ~15 páginas
+- Resultado: 800 ads atualizados, 765 com instagram_permalink
+- Descoberta: `waitUntil` do Supabase Edge Functions não executa background tasks → mudado para síncrono
+
+**Features implementadas:**
+1. Curva de ROAS diário (barras invest/fat + linhas ROAS dia/acum + breakeven)
+2. TX end-to-end diário + média (ConversionTimelineChart)
+3. Hold Rate no Ad Pulse Score (thruplay/video_views)
+4. Status ads (Pausado/Arquivado) + filtro "Só ativos"
+5. Colunas Vendas FRONT + Produtos separadas
+6. Tooltips explicativos + header de colunas
+7. Ordem Investimento→Faturamento (regra global)
+
+**Deploy:** meta-api com thruplay + syncAds fix + sync síncrono
+
+**Próxima sessão (43):** Planejador de Lançamentos (metas por fase, projeção)
+
+---
+
 ### [2026-03-27] Sessão 41 — Redesign + Diagnóstico Inteligente (PR #73, 21 commits) — ✅ OK
 
 **Tema central:** Transformar a tela de "mostrar dados" para "dizer o que fazer".

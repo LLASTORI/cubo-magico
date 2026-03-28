@@ -249,18 +249,22 @@ Domínios principais:
 - Componente: `FunnelScoreCard` — ring SVG + breakdown + barra diagnóstica
 
 **Ad Pulse Score (0-100)** — `src/components/launch/CreativeDiagnostic.tsx`:
-- Score por criativo com 6 dimensões:
-  - Vídeos: ROAS 40% + CTR 15% + CPM 10% + Hook Rate 10% + Frequência 10% + Volume 15%
+- Score por criativo com 7 dimensões:
+  - Vídeos (com hold): ROAS 40% + CTR 15% + CPM 10% + Hook Rate 10% + Hold Rate 10% + Frequência 5% + Volume 10%
+  - Vídeos (sem hold): ROAS 40% + CTR 15% + CPM 10% + Hook Rate 10% + Frequência 10% + Volume 15%
   - Imagens: ROAS 45% + CTR 20% + CPM 10% + Frequência 10% + Volume 15% (hook redistribuído)
 - 5 ações: Modelar (≥70 + ≥10 vendas) | Escalar (≥75) | Manter (≥55) | Observar | Desligar (<35)
 - Hook Rate = `video_view / impressions` (actions do meta_insights)
-- Hold Rate = aguardando sync de `thruplay` (não existe no schema ainda)
+- Hold Rate = `thruplay / video_view` (thruplay injetado no actions via `mergeThruplayIntoActions`)
 - Nomes dos criativos: `meta_ads.ad_name` (join por ad_id)
 - Links Instagram: `meta_ads.instagram_permalink` (populado via sync hierarquia)
+- Colunas: Vendas (FRONT) + Produtos (FRONT+OBs) separadas
+- Status: badge Pausado/Arquivado + filtro "Só ativos"
 
 **`meta_ads`** — tabela de hierarquia de anúncios:
 - `ad_id`, `ad_name`, `campaign_id`, `adset_id`, `instagram_permalink`, `thumbnail_url`
-- Populada por `sync_hierarchy_full` (cron diário 6h UTC + botão sync no Meta Ads)
+- Populada por `sync_hierarchy_full` (síncrono, limit=100 por página)
+- Sync: cron diário 6h UTC + botão sync no Meta Ads
 
 ## Padrões de Código
 
